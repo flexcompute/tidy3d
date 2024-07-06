@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
+import scipy.interpolate
 import scipy.ndimage
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
@@ -10,6 +11,7 @@ from tidy3d.plugins.autograd.functions import (
     grey_dilation,
     grey_erosion,
     grey_opening,
+    interpn,
     morphological_gradient,
     morphological_gradient_external,
     morphological_gradient_internal,
@@ -300,3 +302,38 @@ def test_threshold_exceptions(array, vmin, vmax, level, expected_message):
     """Test threshold function for expected exceptions."""
     with pytest.raises(ValueError, match=expected_message):
         threshold(array, vmin, vmax, level)
+
+
+@pytest.mark.parametrize("dim", [1, 2, 3, 4])
+@pytest.mark.parametrize("method", ["linear", "nearest"])
+class TestInterpn:
+    @staticmethod
+    def generate_points_values_xi(rng, dim):
+        points = tuple(np.linspace(0, 1, 10) for _ in range(dim))
+        values = rng.random([p.size for p in points])
+        xi = tuple(np.linspace(0, 1, 5) for _ in range(dim))
+        return points, values, xi
+
+    def test_interpn_val(self, rng, dim, method):
+        points, values, xi = self.generate_points_values_xi(rng, dim)
+        xi_grid = np.meshgrid(*xi, indexing="ij")
+
+        result_custom = interpn(points, values, xi, method=method)
+        result_scipy = scipy.interpolate.interpn(points, values, tuple(xi_grid), method=method)
+        npt.assert_allclose(result_custom, result_scipy)
+
+    @pytest.mark.parametrize("order", [1, 2])
+    @pytest.mark.parametrize("mode", ["fwd", "rev"])
+    def test_interpn_values_grad(self, rng, dim, method, order, mode):
+        points, values, xi = self.generate_points_values_xi(rng, dim)
+        check_grads(lambda v: interpn(points, v, xi, method=method), modes=[mode], order=order)(
+            values
+        )
+
+
+class TestInterpnExceptions:
+    def test_invalid_method(self, rng):
+        """Test that an exception is raised for an invalid interpolation method."""
+        points, values, xi = TestInterpn.generate_points_values_xi(rng, 2)
+        with pytest.raises(ValueError, match="interpolation method"):
+            interpn(points, values, xi, method="invalid_method")

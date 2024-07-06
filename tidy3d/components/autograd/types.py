@@ -43,6 +43,8 @@ AutogradTraced = typing.Union[Box, ArrayLike]
 PathType = tuple[typing.Union[int, str], ...]
 AutogradFieldMap = dict_ag[PathType, AutogradTraced]
 
+InterpolationType = typing.Literal["nearest", "linear"]
+
 __all__ = [
     "TracedFloat",
     "TracedSize1D",

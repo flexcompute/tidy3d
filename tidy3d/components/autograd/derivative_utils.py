@@ -118,7 +118,6 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
 
     # uses trapezoidal rule
     # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html
-
     dims_integrate = [dim for dim in dims if len(_arr.coords[dim]) > 1]
     return _arr.integrate(coord=dims_integrate)
 

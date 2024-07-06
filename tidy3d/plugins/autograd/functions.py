@@ -2,8 +2,26 @@ from typing import Iterable, List, Literal, Tuple, Union
 
 import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag
+from numpy.typing import NDArray
+
+from tidy3d.components.autograd.functions import interpn
 
 from .types import PaddingType
+
+__all__ = [
+    "interpn",
+    "pad",
+    "convolve",
+    "grey_dilation",
+    "grey_erosion",
+    "grey_opening",
+    "grey_closing",
+    "morphological_gradient",
+    "morphological_gradient_internal",
+    "morphological_gradient_external",
+    "rescale",
+    "threshold",
+]
 
 
 def _make_slices(rule: Union[int, slice], ndim: int, axis: int) -> Tuple[slice, ...]:
@@ -27,13 +45,13 @@ def _make_slices(rule: Union[int, slice], ndim: int, axis: int) -> Tuple[slice, 
 
 
 def _constant_pad(
-    array: np.ndarray, pad_width: Tuple[int, int], axis: int, *, constant_value: float = 0.0
-) -> np.ndarray:
+    array: NDArray, pad_width: Tuple[int, int], axis: int, *, constant_value: float = 0.0
+) -> NDArray:
     """Pad an array with a constant value along a specified axis.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to pad.
     pad_width : Tuple[int, int]
         The number of values padded to the edges of each axis.
@@ -44,19 +62,19 @@ def _constant_pad(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The padded array.
     """
     p = [(pad_width[0], pad_width[1]) if ax == axis else (0, 0) for ax in range(array.ndim)]
     return np.pad(array, p, mode="constant", constant_values=constant_value)
 
 
-def _edge_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.ndarray:
+def _edge_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
     """Pad an array using the `edge` mode along a specified axis.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to pad.
     pad_width : Tuple[int, int]
         The number of values padded to the edges of each axis.
@@ -65,7 +83,7 @@ def _edge_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.nd
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The padded array.
     """
     left, right = (_make_slices(rule, array.ndim, axis) for rule in (0, -1))
@@ -80,12 +98,12 @@ def _edge_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.nd
     return np.concatenate(cat_arys, axis=axis)
 
 
-def _reflect_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.ndarray:
+def _reflect_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
     """Pad an array using the `reflect` mode along a specified axis.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to pad.
     pad_width : Tuple[int, int]
         The number of values padded to the edges of each axis.
@@ -94,7 +112,7 @@ def _reflect_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The padded array.
     """
     left, right = (
@@ -104,12 +122,12 @@ def _reflect_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np
     return np.concatenate([array[left], array, array[right]], axis=axis)
 
 
-def _symmetric_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.ndarray:
+def _symmetric_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
     """Pad an array using the `symmetric` mode along a specified axis.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to pad.
     pad_width : Tuple[int, int]
         The number of values padded to the edges of each axis.
@@ -118,7 +136,7 @@ def _symmetric_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> 
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The padded array.
     """
     left, right = (
@@ -131,12 +149,12 @@ def _symmetric_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> 
     return np.concatenate([array[left], array, array[right]], axis=axis)
 
 
-def _wrap_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.ndarray:
+def _wrap_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
     """Pad an array using the `wrap` mode along a specified axis.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to pad.
     pad_width : Tuple[int, int]
         The number of values padded to the edges of each axis.
@@ -145,7 +163,7 @@ def _wrap_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.nd
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The padded array.
     """
     left, right = (
@@ -159,18 +177,18 @@ def _wrap_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.nd
 
 
 def pad(
-    array: np.ndarray,
+    array: NDArray,
     pad_width: Union[int, Tuple[int, int]],
     *,
     mode: PaddingType = "constant",
     axis: Union[int, Iterable[int], None] = None,
     constant_value: float = 0.0,
-) -> np.ndarray:
+) -> NDArray:
     """Pad an array along a specified axis with a given mode and padding width.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to pad.
     pad_width : Union[int, Tuple[int, int]]
         The number of values padded to the edges of each axis. If an integer is provided,
@@ -185,7 +203,7 @@ def pad(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The padded array.
 
     Raises
@@ -257,20 +275,20 @@ def pad(
 
 
 def convolve(
-    array: np.ndarray,
-    kernel: np.ndarray,
+    array: NDArray,
+    kernel: NDArray,
     *,
     padding: PaddingType = "constant",
     axes: Union[Tuple[List[int], List[int]], None] = None,
     mode: Literal["full", "valid", "same"] = "same",
-) -> np.ndarray:
+) -> NDArray:
     """Convolve an array with a given kernel.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to be convolved.
-    kernel : np.ndarray
+    kernel : NDArray
         The kernel to convolve with the input array. All dimensions of the kernel must be odd.
     padding : _pad_modes, optional
         The padding mode to use. Default is "constant".
@@ -281,7 +299,7 @@ def convolve(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The result of the convolution.
 
     Raises
@@ -309,23 +327,23 @@ def convolve(
 
 
 def grey_dilation(
-    array: np.ndarray,
+    array: NDArray,
     size: Union[Union[int, Tuple[int, int]], None] = None,
-    structure: Union[np.ndarray, None] = None,
+    structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
-) -> np.ndarray:
+) -> NDArray:
     """Perform grey dilation on an array.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to perform grey dilation on.
     size : Union[Union[int, Tuple[int, int]], None], optional
         The size of the structuring element. If None, `structure` must be provided.
         Default is None.
-    structure : Union[np.ndarray, None], optional
+    structure : Union[NDArray, None], optional
         The structuring element. If None, `size` must be provided. Default is None.
     mode : _pad_modes, optional
         The padding mode to use. Default is "reflect".
@@ -334,7 +352,7 @@ def grey_dilation(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The result of the grey dilation operation.
 
     Raises
@@ -364,23 +382,23 @@ def grey_dilation(
 
 
 def grey_erosion(
-    array: np.ndarray,
+    array: NDArray,
     size: Union[Union[int, Tuple[int, int]], None] = None,
-    structure: Union[np.ndarray, None] = None,
+    structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
-) -> np.ndarray:
+) -> NDArray:
     """Perform grey erosion on an array.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to perform grey dilation on.
     size : Union[Union[int, Tuple[int, int]], None], optional
         The size of the structuring element. If None, `structure` must be provided.
         Default is None.
-    structure : Union[np.ndarray, None], optional
+    structure : Union[NDArray, None], optional
         The structuring element. If None, `size` must be provided. Default is None.
     mode : _pad_modes, optional
         The padding mode to use. Default is "reflect".
@@ -389,7 +407,7 @@ def grey_erosion(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The result of the grey dilation operation.
 
     Raises
@@ -419,23 +437,23 @@ def grey_erosion(
 
 
 def grey_opening(
-    array: np.ndarray,
+    array: NDArray,
     size: Union[Union[int, Tuple[int, int]], None] = None,
-    structure: Union[np.ndarray, None] = None,
+    structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
-) -> np.ndarray:
+) -> NDArray:
     """Perform grey opening on an array.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to perform grey opening on.
     size : Union[Union[int, Tuple[int, int]], None], optional
         The size of the structuring element. If None, `structure` must be provided.
         Default is None.
-    structure : Union[np.ndarray, None], optional
+    structure : Union[NDArray, None], optional
         The structuring element. If None, `size` must be provided. Default is None.
     mode : _pad_modes, optional
         The padding mode to use. Default is "reflect".
@@ -444,7 +462,7 @@ def grey_opening(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The result of the grey opening operation.
     """
     array = grey_erosion(array, size, structure, mode=mode, maxval=maxval)
@@ -453,23 +471,23 @@ def grey_opening(
 
 
 def grey_closing(
-    array: np.ndarray,
+    array: NDArray,
     size: Union[Union[int, Tuple[int, int]], None] = None,
-    structure: Union[np.ndarray, None] = None,
+    structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
-) -> np.ndarray:
+) -> NDArray:
     """Perform grey closing on an array.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to perform grey closing on.
     size : Union[Union[int, Tuple[int, int]], None], optional
         The size of the structuring element. If None, `structure` must be provided.
         Default is None.
-    structure : Union[np.ndarray, None], optional
+    structure : Union[NDArray, None], optional
         The structuring element. If None, `size` must be provided. Default is None.
     mode : _pad_modes, optional
         The padding mode to use. Default is "reflect".
@@ -478,7 +496,7 @@ def grey_closing(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The result of the grey closing operation.
     """
     array = grey_dilation(array, size, structure, mode=mode, maxval=maxval)
@@ -487,23 +505,23 @@ def grey_closing(
 
 
 def morphological_gradient(
-    array: np.ndarray,
+    array: NDArray,
     size: Union[Union[int, Tuple[int, int]], None] = None,
-    structure: Union[np.ndarray, None] = None,
+    structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
-) -> np.ndarray:
+) -> NDArray:
     """Compute the morphological gradient of an array.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to compute the morphological gradient of.
     size : Union[Union[int, Tuple[int, int]], None], optional
         The size of the structuring element. If None, `structure` must be provided.
         Default is None.
-    structure : Union[np.ndarray, None], optional
+    structure : Union[NDArray, None], optional
         The structuring element. If None, `size` must be provided. Default is None.
     mode : _pad_modes, optional
         The padding mode to use. Default is "reflect".
@@ -512,7 +530,7 @@ def morphological_gradient(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The morphological gradient of the input array.
     """
     return grey_dilation(array, size, structure, mode=mode, maxval=maxval) - grey_erosion(
@@ -521,23 +539,23 @@ def morphological_gradient(
 
 
 def morphological_gradient_internal(
-    array: np.ndarray,
+    array: NDArray,
     size: Union[Union[int, Tuple[int, int]], None] = None,
-    structure: Union[np.ndarray, None] = None,
+    structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
-) -> np.ndarray:
+) -> NDArray:
     """Compute the internal morphological gradient of an array.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to compute the internal morphological gradient of.
     size : Union[Union[int, Tuple[int, int]], None], optional
         The size of the structuring element. If None, `structure` must be provided.
         Default is None.
-    structure : Union[np.ndarray, None], optional
+    structure : Union[NDArray, None], optional
         The structuring element. If None, `size` must be provided. Default is None.
     mode : _pad_modes, optional
         The padding mode to use. Default is "reflect".
@@ -546,30 +564,30 @@ def morphological_gradient_internal(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The internal morphological gradient of the input array.
     """
     return array - grey_erosion(array, size, structure, mode=mode, maxval=maxval)
 
 
 def morphological_gradient_external(
-    array: np.ndarray,
+    array: NDArray,
     size: Union[Union[int, Tuple[int, int]], None] = None,
-    structure: Union[np.ndarray, None] = None,
+    structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
     maxval: float = 1e4,
-) -> np.ndarray:
+) -> NDArray:
     """Compute the external morphological gradient of an array.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to compute the external morphological gradient of.
     size : Union[Union[int, Tuple[int, int]], None], optional
         The size of the structuring element. If None, `structure` must be provided.
         Default is None.
-    structure : Union[np.ndarray, None], optional
+    structure : Union[NDArray, None], optional
         The structuring element. If None, `size` must be provided. Default is None.
     mode : _pad_modes, optional
         The padding mode to use. Default is "reflect".
@@ -578,21 +596,21 @@ def morphological_gradient_external(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The external morphological gradient of the input array.
     """
     return grey_dilation(array, size, structure, mode=mode, maxval=maxval) - array
 
 
 def rescale(
-    array: np.ndarray, out_min: float, out_max: float, in_min: float = 0.0, in_max: float = 1.0
-) -> np.ndarray:
+    array: NDArray, out_min: float, out_max: float, in_min: float = 0.0, in_max: float = 1.0
+) -> NDArray:
     """
     Rescale an array from an arbitrary input range to an arbitrary output range.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to be rescaled.
     out_min : float
         The minimum value of the output range.
@@ -605,7 +623,7 @@ def rescale(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The rescaled array.
     """
 
@@ -624,13 +642,13 @@ def rescale(
 
 
 def threshold(
-    array: np.ndarray, vmin: float = 0.0, vmax: float = 1.0, level: Union[float, None] = None
-) -> np.ndarray:
+    array: NDArray, vmin: float = 0.0, vmax: float = 1.0, level: Union[float, None] = None
+) -> NDArray:
     """Apply a threshold to an array, setting values below the threshold to `vmin` and values above to `vmax`.
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to be thresholded.
     vmin : float, optional
         The value to assign to elements below the threshold. Default is 0.0.
@@ -641,7 +659,7 @@ def threshold(
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The thresholded array.
     """
     if vmin >= vmax:

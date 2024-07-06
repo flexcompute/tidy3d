@@ -393,7 +393,7 @@ custom_sellmeier_u = td.CustomSellmeier(
 # Make a few autograd ArrayBoxes for testing
 start_node = VJPNode.new_root()
 tracer = new_box(1.0, 0, start_node)
-tracer_arr = new_box([[[1.0]]], 0, start_node)
+tracer_arr = new_box(np.array([[[1.0]]]), 0, start_node)
 
 SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),
@@ -852,6 +852,24 @@ SIM_FULL = td.Simulation(
 )
 
 
+def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, field_name: str):
+    """Returns MonitorData coordinates associated with a Monitor object"""
+    grid = simulation.discretize_monitor(monitor)
+    spatial_coords = grid.boundaries if monitor.colocate else grid[field_name]
+    spatial_coords_dict = spatial_coords.dict()
+
+    coords = {}
+    for axis, dim in enumerate("xyz"):
+        if monitor.size[axis] == 0:
+            coords[dim] = [monitor.center[axis]]
+        elif monitor.colocate:
+            coords[dim] = spatial_coords_dict[dim][:-1]
+        else:
+            coords[dim] = spatial_coords_dict[dim]
+
+    return coords
+
+
 def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
     """Emulates a simulation run."""
     from scipy.ndimage.filters import gaussian_filter
@@ -872,19 +890,11 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     def make_field_data(monitor: td.FieldMonitor) -> td.FieldData:
         """make a random FieldData from a FieldMonitor."""
         field_cmps = {}
-        coords = {}
         grid = simulation.discretize_monitor(monitor)
-
         for field_name in monitor.fields:
-            spatial_coords_dict = grid[field_name].dict()
-
-            for axis, dim in enumerate("xyz"):
-                if monitor.size[axis] == 0:
-                    coords[dim] = [monitor.center[axis]]
-                else:
-                    coords[dim] = np.array(spatial_coords_dict[dim])
-
+            coords = get_spatial_coords_dict(simulation, monitor, field_name)
             coords["f"] = list(monitor.freqs)
+
             field_cmps[field_name] = make_data(
                 coords=coords, data_array_type=td.ScalarFieldDataArray, is_complex=True
             )
@@ -900,17 +910,10 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     def make_field_time_data(monitor: td.FieldTimeMonitor) -> td.FieldTimeData:
         """make a random FieldTimeData from a FieldTimeMonitor."""
         field_cmps = {}
-        coords = {}
         grid = simulation.discretize_monitor(monitor)
         tmesh = simulation.tmesh
         for field_name in monitor.fields:
-            spatial_coords_dict = grid[field_name].dict()
-
-            for axis, dim in enumerate("xyz"):
-                if monitor.size[axis] == 0:
-                    coords[dim] = [monitor.center[axis]]
-                else:
-                    coords[dim] = np.array(spatial_coords_dict[dim])
+            coords = get_spatial_coords_dict(simulation, monitor, field_name)
 
             (idx_begin, idx_end) = monitor.time_inds(tmesh)
             tcoords = tmesh[idx_begin:idx_end]
@@ -930,7 +933,6 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     def make_mode_solver_data(monitor: td.ModeSolverMonitor) -> td.ModeSolverData:
         """make a random ModeSolverData from a ModeSolverMonitor."""
         field_cmps = {}
-        coords = {}
         grid = simulation.discretize_monitor(monitor)
         index_coords = {}
         index_coords["f"] = list(monitor.freqs)
@@ -940,16 +942,10 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             (1 + 1j) * np.random.random(index_data_shape), coords=index_coords
         )
         for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
-            spatial_coords_dict = grid[field_name].dict()
-
-            for axis, dim in enumerate("xyz"):
-                if monitor.size[axis] == 0:
-                    coords[dim] = [monitor.center[axis]]
-                else:
-                    coords[dim] = np.array(spatial_coords_dict[dim])
-
+            coords = get_spatial_coords_dict(simulation, monitor, field_name)
             coords["f"] = list(monitor.freqs)
             coords["mode_index"] = index_coords["mode_index"]
+
             field_cmps[field_name] = make_data(
                 coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
             )

@@ -587,8 +587,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
 
-        e1_h2 = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
-        e2_h1 = tan_fields["E" + dim2] * tan_fields["H" + dim1].conj()
+        e1 = tan_fields["E" + dim1]
+        e2 = tan_fields["E" + dim2]
+        h1 = tan_fields["H" + dim1]
+        h2 = tan_fields["H" + dim2]
+
+        e1_h2 = e1 * h2.conj()
+        e2_h1 = e2 * h1.conj()
 
         e_x_h_star = e1_h2 - e2_h1
         poynting = 0.5 * np.real(e_x_h_star)
