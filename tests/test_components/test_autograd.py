@@ -344,7 +344,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
             value += abs(anp.sum(val.values))
         intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
         value += intensity
-        # value += anp.sum(mnt_data.flux.values) # not yet supported
+        value += anp.sum(mnt_data.flux.values)
         return value
 
     field_point = td.FieldMonitor(
@@ -745,6 +745,35 @@ def test_too_many_traced_structures(monkeypatch, log_capture, use_emulated_run):
 
     with pytest.raises(ValueError):
         ag.grad(objective)(params0)
+
+
+@pytest.mark.parametrize("colocate", [True, False])
+@pytest.mark.parametrize("objtype", ["flux", "intensity"])
+def test_interp_objectives(use_emulated_run, colocate, objtype):
+    monitor = td.FieldMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[FREQ0],
+        name="monitor",
+        colocate=colocate,
+    )
+
+    def objective(args):
+        structures_traced_dict = make_structures(args)
+        structures = list(SIM_BASE.structures)
+        for structure_key in structure_keys_:
+            structures.append(structures_traced_dict[structure_key])
+
+        sim = SIM_BASE.updated_copy(monitors=[monitor], structures=structures)
+        data = run(sim, task_name="autograd_test", verbose=False)
+
+        if objtype == "flux":
+            return anp.sum(data[monitor.name].flux.values)
+        elif objtype == "intensity":
+            return anp.sum(data.get_intensity(monitor.name).values)
+
+    grads = ag.grad(objective)(params0)
+    assert np.any(grads > 0)
 
 
 def test_autograd_deepcopy():

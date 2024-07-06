@@ -18,7 +18,7 @@ from tidy3d.plugins.microwave import (
 )
 from tidy3d.plugins.microwave.models import coupled_microstrip, microstrip
 
-from ..utils import run_emulated
+from ..utils import get_spatial_coords_dict, run_emulated
 
 # Using similar code as "test_data/test_data_arrays.py"
 MON_SIZE = (2, 1, 0)
@@ -28,9 +28,7 @@ FSTOP = 1.5e9
 F0 = (FSTART + FSTOP) / 2
 FWIDTH = FSTOP - FSTART
 FS = np.linspace(FSTART, FSTOP, 3)
-FIELD_MONITOR = td.FieldMonitor(
-    size=MON_SIZE, fields=FIELDS, name="strip_field", freqs=FS, colocate=False
-)
+FIELD_MONITOR = td.FieldMonitor(size=MON_SIZE, fields=FIELDS, name="strip_field", freqs=FS)
 STRIP_WIDTH = 1.5
 STRIP_HEIGHT = 0.5
 
@@ -39,7 +37,7 @@ SIM_Z = td.Simulation(
     grid_spec=td.GridSpec.uniform(dl=0.04),
     monitors=[
         FIELD_MONITOR,
-        td.FieldMonitor(center=(0, 0, 0), size=(1, 1, 1), freqs=FS, name="field"),
+        td.FieldMonitor(center=(0, 0, 0), size=(1, 1, 1), freqs=FS, name="field", colocate=False),
         td.FieldMonitor(
             center=(0, 0, 0), size=(1, 1, 1), freqs=FS, fields=["Ex", "Hx"], name="ExHx"
         ),
@@ -67,17 +65,9 @@ SIM_Z_DATA = run_emulated(SIM_Z)
 """ Generate the data arrays for testing path integral computations """
 
 
-def get_xyz(
-    monitor: td.components.monitor.MonitorType, grid_key: str
-) -> tuple[list[float], list[float], list[float]]:
-    grid = SIM_Z.discretize_monitor(monitor)
-    x, y, z = grid[grid_key].to_list
-    return x, y, z
-
-
 def make_stripline_scalar_field_data_array(grid_key: str):
     """Populate FIELD_MONITOR with a idealized stripline mode, where fringing fields are assumed 0."""
-    XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key)
+    XS, YS, ZS = get_spatial_coords_dict(SIM_Z, FIELD_MONITOR, grid_key).values()
     XGRID, YGRID = np.meshgrid(XS, YS, indexing="ij")
     XGRID = XGRID.reshape((len(XS), len(YS), 1, 1))
     YGRID = YGRID.reshape((len(XS), len(YS), 1, 1))

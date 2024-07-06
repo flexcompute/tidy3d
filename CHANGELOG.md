@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for differentiation with respect to `GeometryGroup.geometries` elements.
 - Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
 - `ModeSolver` methods to plot the mode plane simulation components, including `.plot()`, `.plot_eps()`, `.plot_structures_eps()`, `.plot_grid()`, and `.plot_pml()`.
+- Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
 
 ### Changed
 

@@ -1,3 +1,4 @@
+from .functions import interpn
 from .types import (
     AutogradFieldMap,
     AutogradTraced,
@@ -18,6 +19,5 @@ __all__ = [
     "AutogradTraced",
     "AutogradFieldMap",
     "get_static",
-    "integrate_within_bounds",
-    "DerivativeInfo",
+    "interpn",
 ]
