@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Support for differentiation with respect to `GeometryGroup.geometries` elements.
 - Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
+- Convenience function for converting from wavelength (um) to frequency (Hz) using `td.wvl_to_freq(wvl)`
 
 ### Changed
 
