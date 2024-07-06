@@ -208,3 +208,11 @@ GLANCING_CUTOFF = 0.1
 """
 if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning.
 """
+
+
+def wvl_to_freq(wavelength):
+    return C_0 / wavelength
+"""
+Converts wavelength [um] to frequency [Hz]
+"""
+

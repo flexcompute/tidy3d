@@ -20,7 +20,7 @@ from ...components.source import GaussianPulse, ModeSource
 from ...components.structure import Structure
 from ...components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D
 from ...components.viz import add_ax_if_none
-from ...constants import C_0, MICROMETER, RADIAN, inf
+from ...constants import C_0, wvl_to_freq, MICROMETER, RADIAN, inf
 from ...exceptions import Tidy3dError, ValidationError
 from ...log import log
 from ..mode.mode_solver import ModeSolver
@@ -251,7 +251,7 @@ class RectangularDielectric(Tidy3dBaseModel):
                     return values
                 if isinstance(medium, tuple):
                     medium = medium[0]
-                n = numpy.array([medium.nk_model(f)[0] for f in C_0 / wavelength])
+                n = numpy.array([medium.nk_model(f)[0] for f in wvl_to_freq(wavelength)])
                 lda = wavelength / n
                 values[side + "_thickness"] = EVANESCENT_TAIL * lda.max()
             elif isinstance(val, float):
@@ -409,7 +409,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         # and decrease for evanescent tail regions).
         scale_factor = 1.5
 
-        freqs = C_0 / self.wavelength
+        freqs = wvl_to_freq(self.wavelength)
         nk_core = numpy.array([self.core_medium.nk_model(f) for f in freqs])
         # Dimensions: (medium, wavelength, n/k)
         nk_clad = numpy.array([[m.nk_model(f) for f in freqs] for m in self._clad_medium])
@@ -737,7 +737,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         array([[2.4554183, 1.7839471]], dtype=float32)
 
         """
-        freqs = C_0 / self.wavelength
+        freqs = wvl_to_freq(self.wavelength)
         f_max = freqs.max()
         f_min = freqs.min()
         freq0 = 0.5 * (f_max + f_min)

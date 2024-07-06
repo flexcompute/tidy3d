@@ -86,11 +86,11 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     Example
     -------
-    >>> from tidy3d import Box, Medium, Structure, C_0, inf
+    >>> from tidy3d import Box, Medium, Structure, C_0, wvl_to_freq, inf
     >>> from tidy3d import EMEModeSpec, EMEUniformGrid, GridSpec
     >>> from tidy3d import EMEFieldMonitor
     >>> lambda0 = 1
-    >>> freq0 = C_0 / lambda0
+    >>> freq0 = wvl_to_freq(lambda0)
     >>> sim_size = 3*lambda0, 3*lambda0, 3*lambda0
     >>> waveguide_size = (lambda0/2, lambda0, inf)
     >>> waveguide = Structure(

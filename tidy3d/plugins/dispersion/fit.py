@@ -18,7 +18,7 @@ from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_
 from ...components.medium import AbstractMedium, PoleResidue
 from ...components.types import ArrayFloat1D, Ax
 from ...components.viz import add_ax_if_none
-from ...constants import C_0, HBAR, MICROMETER
+from ...constants import C_0, wvl_to_freq, HBAR, MICROMETER
 from ...exceptions import SetupError, ValidationError, WebError
 from ...log import get_logging_console, log
 
@@ -139,7 +139,7 @@ class DispersionFitter(Tidy3dBaseModel):
         """
 
         wvl_um, _, _ = self.data_in_range
-        return C_0 / wvl_um
+        return wvl_to_freq(wvl_um)
 
     @property
     def frequency_range(self) -> Tuple[float, float]:
@@ -500,7 +500,7 @@ class DispersionFitter(Tidy3dBaseModel):
         if medium:
             if wvl_um is None:
                 wvl_um = C_0 / self.freqs
-            eps_model = medium.eps_model(C_0 / wvl_um)
+            eps_model = medium.eps_model(wvl_to_freq(wvl_um))
             n_model, k_model = AbstractMedium.eps_complex_to_nk(eps_model)
             ax.plot(wvl_um, n_model, label="n (model)")
             if self.lossy:

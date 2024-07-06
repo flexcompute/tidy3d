@@ -209,7 +209,7 @@ def test_medium_dispersion_create():
 def test_sellmeier_from_dispersion():
     n = 3.5
     wvl = 0.5
-    freq = td.C_0 / wvl
+    freq = td.wvl_to_freq(wvl)
     dn_dwvl = -0.1
     with pytest.raises(ValidationError):
         # Check that postivie dispersion raises an error
@@ -292,7 +292,7 @@ def test_epsilon_eval():
     eps_compare(material, expected)
 
     # Constant n and k at a given frequency
-    material = td.Medium.from_nk(n=1.5, k=0.1, freq=td.C_0 / 0.8)
+    material = td.Medium.from_nk(n=1.5, k=0.1, freq=td.wvl_to_freq(0.8))
     expected = {
         2e14: 2.24 + 0.5621108598392753j,
         5e14: 2.24 + 0.22484434393571015j,
@@ -596,7 +596,7 @@ def test_nonlinear_medium(log_capture):
 
     # automatic detection of n0 and freq0
     n0 = 2
-    freq0 = td.C_0 / 1
+    freq0 = td.wvl_to_freq(1)
     nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)])
     medium = td.Sellmeier.from_dispersion(n=n0, freq=freq0, dn_dwvl=-0.2).updated_copy(
         nonlinear_spec=nonlinear_spec

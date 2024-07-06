@@ -37,7 +37,7 @@ pml_spacing = 2
 def make_coupler():
     # wavelength / frequency
     lambda0 = 1.550  # all length scales in microns
-    freq0 = td.constants.C_0 / lambda0
+    freq0 = td.constants.wvl_to_freq(lambda0)
     freqs = [freq0, freq0 * 1.1]
     fwidth = freq0 / 10
 
