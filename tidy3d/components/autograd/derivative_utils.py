@@ -70,6 +70,12 @@ class DerivativeInfo(Tidy3dBaseModel):
         description="Bounds corresponding to the structure, used in ``Medium`` calculations.",
     )
 
+    frequency: float = pd.Field(
+        ...,
+        title="Frequency of adjoint simulation",
+        description="Frequency at which the adjoint gradient is computed.",
+    )
+
     eps_approx: bool = pd.Field(
         False,
         title="Use Permittivity Approximation",
@@ -112,7 +118,9 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
 
     # uses trapezoidal rule
     # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html
-    return _arr.integrate(coord=dims)
+
+    dims_integrate = [dim for dim in dims if len(_arr.coords[dim]) > 1]
+    return _arr.integrate(coord=dims_integrate)
 
 
 __all__ = [
