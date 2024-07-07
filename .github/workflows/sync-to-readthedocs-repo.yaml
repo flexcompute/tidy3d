@@ -8,7 +8,7 @@ on:
       - latest
       - develop
       - 'pre/*'
-      - 'production/test/*'
+      - 'demo/test/*'
     tags:
       - 'v*'
       - 'demo/*'
@@ -63,11 +63,6 @@ jobs:
           access_token: ${{ secrets.GH_PAT }}
           new_branch_ref: default_clean_sync_branch
           ignore_branch_exists: true
-
-      - name: Tag and push
-        if: contains(github.ref, 'refs/tags/')
-        run: |
-          git push --force --tags https://${{ secrets.GH_PAT }}@github.com/flexcompute-readthedocs/tidy3d-docs.git
 
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
