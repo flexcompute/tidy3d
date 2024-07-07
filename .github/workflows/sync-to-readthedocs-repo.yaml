@@ -8,7 +8,7 @@ on:
       - latest
       - develop
       - 'pre/*'
-      - 'demo/test/*'
+      - 'demo/*'
     tags:
       - 'v*'
       - 'demo/*'
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Conditional Checkout for Branch
-      - name: Checkout Branch
+      - name: Checkout Branch if branch-triggered-sync
         if: contains(github.ref, 'refs/heads/')
         uses: actions/checkout@v3
         with:
@@ -43,7 +43,7 @@ jobs:
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
 
       # Conditional Checkout for Tag
-      - name: Checkout Tag
+      - name: Checkout Tag if tag-triggered-sync
         if: contains(github.ref, 'refs/tags/')
         uses: actions/checkout@v3
         with:
@@ -53,7 +53,7 @@ jobs:
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           fetch-tags: true
 
-      - name: Create new branch or tag
+      - name: Create new branch or tag only if branch-triggered-sync
         uses: GuillaumeFalourd/create-other-repo-branch-action@v1.5
         if: contains(github.ref, 'refs/heads/')
         with:
@@ -64,7 +64,9 @@ jobs:
           new_branch_ref: default_clean_sync_branch
           ignore_branch_exists: true
 
-      - uses: JamesIves/github-pages-deploy-action@v4
+      - name: Push branch only if branch-triggered-sync
+        uses: JamesIves/github-pages-deploy-action@v4
+        if: contains(github.ref, 'refs/heads/')
         with:
           folder: .
           token: ${{ secrets.GH_PAT }}
@@ -72,3 +74,15 @@ jobs:
           target-folder: .
           branch: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           force: true
+
+      - name: Push branch and tag if tag-triggered-sync
+        uses: JamesIves/github-pages-deploy-action@v4
+        if: contains(github.ref, 'refs/tags/')
+        with:
+          folder: .
+          token: ${{ secrets.GH_PAT }}
+          repository-name: flexcompute-readthedocs/tidy3d-docs
+          target-folder: .
+          branch: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
+          force: true
+          tag: true
