@@ -77,26 +77,8 @@ jobs:
 
       - name: Push tag if tag-triggered-sync
         if: contains(github.ref, 'refs/tags/')
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const owner = 'flexcompute-readthedocs';
-            const repo = 'tidy3d-docs';
-            const tagName = '${{ needs.extract_branch_or_tag.outputs.ref_name }}';
-            const sha = '${{ github.event.after }}';  // Using the SHA from the GitHub event
-
-            console.log(`Creating tag: refs/tags/${tagName} for SHA: ${sha}`);
-
-            try {
-              const response = await github.rest.git.createRef({
-                owner,
-                repo,
-                ref: `refs/tags/${tagName}`,
-                sha
-              });
-              console.log('Tag creation response:', response);
-            } catch (error) {
-              console.error('Error creating tag:', error);
-              throw error;
-            }
-          github-token: ${{ secrets.GH_PAT }}
+        run: |
+          git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
+          git push --mirror mirror
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
