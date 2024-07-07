@@ -83,12 +83,20 @@ jobs:
             const owner = 'flexcompute-readthedocs';
             const repo = 'tidy3d-docs';
             const tagName = '${{ needs.extract_branch_or_tag.outputs.ref_name }}';
-            const sha = context.sha;
+            const sha = '${{ github.event.after }}';  // Using the SHA from the GitHub event
 
-            await github.rest.git.createRef({
-              owner,
-              repo,
-              ref: `refs/tags/${tagName}`,
-              sha
-            });
+            console.log(`Creating tag: refs/tags/${tagName} for SHA: ${sha}`);
+
+            try {
+              const response = await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/tags/${tagName}`,
+                sha
+              });
+              console.log('Tag creation response:', response);
+            } catch (error) {
+              console.error('Error creating tag:', error);
+              throw error;
+            }
           github-token: ${{ secrets.GH_PAT }}
