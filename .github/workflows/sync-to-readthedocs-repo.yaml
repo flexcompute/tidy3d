@@ -79,6 +79,6 @@ jobs:
         if: contains(github.ref, 'refs/tags/')
         run: |
           git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
-          git push --mirror mirror
+          git push --mirror mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
