@@ -8,7 +8,7 @@ on:
       - latest
       - develop
       - 'pre/*'
-      - 'production/test/*'
+      - 'demo/test/*'
     tags:
       - 'v*'
       - 'demo/*'
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Conditional Checkout for Branch
-      - name: Checkout Branch
+      - name: Checkout Branch if branch-triggered-sync
         if: contains(github.ref, 'refs/heads/')
         uses: actions/checkout@v3
         with:
@@ -43,7 +43,7 @@ jobs:
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
 
       # Conditional Checkout for Tag
-      - name: Checkout Tag
+      - name: Checkout Tag if tag-triggered-sync
         if: contains(github.ref, 'refs/tags/')
         uses: actions/checkout@v3
         with:
@@ -53,27 +53,9 @@ jobs:
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           fetch-tags: true
 
-      - name: Create new branch or tag
-        uses: GuillaumeFalourd/create-other-repo-branch-action@v1.5
-        if: contains(github.ref, 'refs/heads/')
-        with:
-          repository_owner: flexcompute-readthedocs
-          repository_name: tidy3d-docs
-          new_branch_name: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-          access_token: ${{ secrets.GH_PAT }}
-          new_branch_ref: default_clean_sync_branch
-          ignore_branch_exists: true
-
-      - name: Tag and push
-        if: contains(github.ref, 'refs/tags/')
+      - name: Push corresponding reference to mirror repo
         run: |
-          git push --force --tags https://${{ secrets.GH_PAT }}@github.com/flexcompute-readthedocs/tidy3d-docs.git
-
-      - uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: .
-          token: ${{ secrets.GH_PAT }}
-          repository-name: flexcompute-readthedocs/tidy3d-docs
-          target-folder: .
-          branch: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-          force: true
+          git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
+          git push mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }} --force # overwrites always
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
