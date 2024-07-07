@@ -75,14 +75,20 @@ jobs:
           branch: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           force: true
 
-      - name: Push branch and tag if tag-triggered-sync
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Push tag if tag-triggered-sync
         if: contains(github.ref, 'refs/tags/')
+        uses: actions/github-script@v5
         with:
-          folder: .
+          script: |
+            const owner = 'flexcompute-readthedocs';
+            const repo = 'tidy3d-docs';
+            const tagName = '${{ needs.extract_branch_or_tag.outputs.ref_name }}';
+            const sha = context.sha;
+
+            github.rest.git.createRef({
+              owner,
+              repo,
+              ref: `refs/tags/${tagName}`,
+              sha
+            });
           token: ${{ secrets.GH_PAT }}
-          repository-name: flexcompute-readthedocs/tidy3d-docs
-          target-folder: .
-          branch: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-          force: true
-          tag: true
