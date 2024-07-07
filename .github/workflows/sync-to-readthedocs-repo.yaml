@@ -85,10 +85,10 @@ jobs:
             const tagName = '${{ needs.extract_branch_or_tag.outputs.ref_name }}';
             const sha = context.sha;
 
-            github.rest.git.createRef({
+            await github.rest.git.createRef({
               owner,
               repo,
               ref: `refs/tags/${tagName}`,
               sha
             });
-          token: ${{ secrets.GH_PAT }}
+          github-token: ${{ secrets.GH_PAT }}
