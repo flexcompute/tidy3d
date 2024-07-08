@@ -2474,10 +2474,21 @@ def test_sim_subsection(unstructured, nz):
         # compare
         assert np.allclose(red_grid, full_grid[ind : ind + len(red_grid)])
 
+    subsection_monitors = [mnt for mnt in SIM_FULL.monitors if region_xy.intersects(mnt)]
     sim_red = SIM_FULL.subsection(
         region=region_xy,
         grid_spec="identical",
         boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        # Set theta to 'pi/2' for 2D simulation in the x-y plane
+        monitors=[
+            mnt.updated_copy(theta=np.pi / 2)
+            if isinstance(mnt, td.FieldProjectionAngleMonitor)
+            else mnt
+            for mnt in subsection_monitors
+            if not isinstance(
+                mnt, (td.FieldProjectionCartesianMonitor, td.FieldProjectionKSpaceMonitor)
+            )
+        ],
     )
     assert sim_red.size[2] == 0
     assert isinstance(sim_red.boundary_spec.z.minus, td.Periodic)

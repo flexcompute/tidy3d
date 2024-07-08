@@ -2040,6 +2040,12 @@ class AbstractFieldProjectionData(MonitorData):
         discriminator=TYPE_TAG_STR,
     )
 
+    is_2d_simulation: bool = pd.Field(
+        False,
+        title="2D Simulation",
+        description="Indicates whether the monitor data is for a 2D simulation.",
+    )
+
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to their associated data."""
@@ -2149,10 +2155,14 @@ class AbstractFieldProjectionData(MonitorData):
         return ETA_0 / np.sqrt(eps_complex)
 
     @staticmethod
-    def propagation_phase(dist: Union[float, None], k: complex) -> complex:
-        """Phase associated with propagation of a distance with a given wavenumber."""
+    def propagation_factor(dist: Union[float, None], k: complex, is_2d_simulation: bool) -> complex:
+        """A normalization factor that includes both phase and amplitude decay associated with propagation over a distance with a given wavenumber."""
         if dist is None:
             return 1.0
+
+        if is_2d_simulation:
+            return -np.exp(1j * k * dist) * np.sqrt(1j * k / (8 * np.pi * dist))
+
         return -1j * k * np.exp(1j * k * dist) / (4 * np.pi * dist)
 
     @property
@@ -2232,14 +2242,19 @@ class AbstractFieldProjectionData(MonitorData):
         k = self.k[None, None, None, ...]
         eta = self.eta[None, None, None, ...]
 
-        constant = k**2 / (8 * np.pi * eta)
+        if self.is_2d_simulation:
+            constant = k**2 / (16 * np.pi * eta)
+        else:
+            constant = k**2 / (8 * np.pi * eta)
 
         # normalize fields by the distance-based phase factor
         coords_sph = self.coords_spherical
         if coords_sph["r"] is None:
             phase = 1.0
         else:
-            phase = self.propagation_phase(dist=coords_sph["r"][..., None], k=k)
+            phase = self.propagation_factor(
+                dist=coords_sph["r"][..., None], k=k, is_2d_simulation=self.is_2d_simulation
+            )
         Etheta = self.Etheta.values / phase
         Ephi = self.Ephi.values / phase
         rcs_data = constant * (np.abs(Etheta) ** 2 + np.abs(Ephi) ** 2)
@@ -2351,10 +2366,14 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
 
         # the phase factor associated with the old distance must be removed
         r = self.coords_spherical["r"][..., None]
-        old_phase = self.propagation_phase(dist=r, k=self.k[None, None, None, :])
+        old_phase = self.propagation_factor(
+            dist=r, k=self.k[None, None, None, :], is_2d_simulation=self.is_2d_simulation
+        )
 
         # the phase factor associated with the new distance must be applied
-        new_phase = self.propagation_phase(dist=proj_distance, k=self.k)
+        new_phase = self.propagation_factor(
+            dist=proj_distance, k=self.k, is_2d_simulation=self.is_2d_simulation
+        )
 
         # net phase
         phase = new_phase[None, None, None, :] / old_phase
@@ -2470,7 +2489,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         # the phase factor associated with the old distance must be removed
         k = self.k[None, None, None, :]
         r = self.coords_spherical["r"][..., None]
-        old_phase = self.propagation_phase(dist=r, k=k)
+        old_phase = self.propagation_factor(dist=r, k=k, is_2d_simulation=self.is_2d_simulation)
 
         # update the field components' projection distance
         norm_dir, _ = self.monitor.pop_axis(["x", "y", "z"], axis=self.monitor.proj_axis)
@@ -2479,7 +2498,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
 
         # the phase factor associated with the new distance must be applied
         r = self.coords_spherical["r"][..., None]
-        new_phase = self.propagation_phase(dist=r, k=k)
+        new_phase = self.propagation_factor(dist=r, k=k, is_2d_simulation=self.is_2d_simulation)
 
         # net phase
         phase = new_phase / old_phase
@@ -2593,10 +2612,14 @@ class FieldProjectionKSpaceData(AbstractFieldProjectionData):
 
         # the phase factor associated with the old distance must be removed
         r = self.coords_spherical["r"][..., None]
-        old_phase = self.propagation_phase(dist=r, k=self.k[None, None, None, :])
+        old_phase = self.propagation_factor(
+            dist=r, k=self.k[None, None, None, :], is_2d_simulation=self.is_2d_simulation
+        )
 
         # the phase factor associated with the new distance must be applied
-        new_phase = self.propagation_phase(dist=proj_distance, k=self.k)
+        new_phase = self.propagation_factor(
+            dist=proj_distance, k=self.k, is_2d_simulation=self.is_2d_simulation
+        )
 
         # net phase
         phase = new_phase[None, None, None, :] / old_phase

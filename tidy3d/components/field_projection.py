@@ -98,6 +98,11 @@ class FieldProjector(Tidy3dBaseModel):
         "surface current densities.",
     )
 
+    @cached_property
+    def is_2d_simulation(self) -> bool:
+        non_zero_dims = sum(1 for size in self.sim_data.simulation.size if size != 0)
+        return non_zero_dims == 2
+
     @pydantic.validator("origin", always=True)
     @skip_if_fields_missing(["surfaces"])
     def set_origin(cls, val, values):
@@ -344,11 +349,20 @@ class FieldProjector(Tidy3dBaseModel):
                 colocation_points[idx] = points
 
         for idx, points in enumerate(colocation_points):
-            if np.array(points).size == 1:
+            if np.array(points).size <= 1:
                 colocation_points[idx] = None
 
         currents = currents.colocate(*colocation_points)
         return currents
+
+    def integrate_1d(
+        self,
+        function: np.ndarray,
+        phase: np.ndarray,
+        pts_u: np.ndarray,
+    ):
+        """Trapezoidal integration in two dimensions."""
+        return np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)
 
     def integrate_2d(
         self,
@@ -405,6 +419,12 @@ class FieldProjector(Tidy3dBaseModel):
         idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
         _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
+        # integration dimension for 2d far field projection
+        zero_dim = (dim for dim, size in enumerate(self.sim_data.simulation.size) if size == 0)
+        if self.is_2d_simulation:
+            integration_axis = {0, 1, 2} - {zero_dim, surface.axis}
+            idx_int_1d = integration_axis.pop()  # Get the remaining axis as an integer
+
         idx_u, idx_v = idx_uv
         cmp_1, cmp_2 = source_names
 
@@ -434,21 +454,38 @@ class FieldProjector(Tidy3dBaseModel):
 
                 phase_ij = phase[idx_u][:, None] * phase[idx_v][None, :] * phase[idx_w]
 
-                J[idx_u, i_th, j_ph] = self.integrate_2d(
-                    currents_f[f"E{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                )
+                if self.is_2d_simulation:
+                    J[idx_u, i_th, j_ph] = self.integrate_1d(
+                        currents_f[f"E{cmp_1}"].values, phase_ij, pts[idx_int_1d]
+                    )
 
-                J[idx_v, i_th, j_ph] = self.integrate_2d(
-                    currents_f[f"E{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                )
+                    J[idx_v, i_th, j_ph] = self.integrate_1d(
+                        currents_f[f"E{cmp_2}"].values, phase_ij, pts[idx_int_1d]
+                    )
 
-                M[idx_u, i_th, j_ph] = self.integrate_2d(
-                    currents_f[f"H{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                )
+                    M[idx_u, i_th, j_ph] = self.integrate_1d(
+                        currents_f[f"H{cmp_1}"].values, phase_ij, pts[idx_int_1d]
+                    )
 
-                M[idx_v, i_th, j_ph] = self.integrate_2d(
-                    currents_f[f"H{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                )
+                    M[idx_v, i_th, j_ph] = self.integrate_1d(
+                        currents_f[f"H{cmp_2}"].values, phase_ij, pts[idx_int_1d]
+                    )
+                else:
+                    J[idx_u, i_th, j_ph] = self.integrate_2d(
+                        currents_f[f"E{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
+                    )
+
+                    J[idx_v, i_th, j_ph] = self.integrate_2d(
+                        currents_f[f"E{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
+                    )
+
+                    M[idx_u, i_th, j_ph] = self.integrate_2d(
+                        currents_f[f"H{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
+                    )
+
+                    M[idx_v, i_th, j_ph] = self.integrate_2d(
+                        currents_f[f"H{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
+                    )
 
         if len(theta) < 2:
             integrate_for_one_theta(0)
@@ -576,7 +613,9 @@ class FieldProjector(Tidy3dBaseModel):
         medium = monitor.medium if monitor.medium else self.medium
         k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
         phase = np.atleast_1d(
-            AbstractFieldProjectionData.propagation_phase(dist=monitor.proj_distance, k=k)
+            AbstractFieldProjectionData.propagation_factor(
+                dist=monitor.proj_distance, k=k, is_2d_simulation=self.is_2d_simulation
+            )
         )
 
         for surface in self.surfaces:
@@ -619,7 +658,11 @@ class FieldProjector(Tidy3dBaseModel):
             for name, field in zip(field_names, fields)
         }
         return FieldProjectionAngleData(
-            monitor=monitor, projection_surfaces=self.surfaces, medium=medium, **fields
+            monitor=monitor,
+            projection_surfaces=self.surfaces,
+            medium=medium,
+            is_2d_simulation=self.is_2d_simulation,
+            **fields,
         )
 
     def _project_fields_cartesian(
@@ -666,7 +709,9 @@ class FieldProjector(Tidy3dBaseModel):
         ):
             r, theta, phi = monitor.car_2_sph(_x, _y, _z)
             phase = np.atleast_1d(
-                AbstractFieldProjectionData.propagation_phase(dist=r, k=wavenumber)
+                AbstractFieldProjectionData.propagation_factor(
+                    dist=r, k=wavenumber, is_2d_simulation=self.is_2d_simulation
+                )
             )
 
             for surface in self.surfaces:
@@ -730,7 +775,9 @@ class FieldProjector(Tidy3dBaseModel):
         medium = monitor.medium if monitor.medium else self.medium
         k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
         phase = np.atleast_1d(
-            AbstractFieldProjectionData.propagation_phase(dist=monitor.proj_distance, k=k)
+            AbstractFieldProjectionData.propagation_factor(
+                dist=monitor.proj_distance, k=k, is_2d_simulation=self.is_2d_simulation
+            )
         )
 
         # Zip together all combinations of observation points for better progress tracking
