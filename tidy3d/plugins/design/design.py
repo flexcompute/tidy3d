@@ -58,10 +58,12 @@ class DesignSpace(Tidy3dBaseModel):
     )
 
     folder_name: str = pd.Field(
-        None,
+        "default",
         title="Folder Name",
         description="Folder path where the simulation will be uploaded in the Tidy3D Workspace. Will use 'default' if no path is set.",
     )
+
+    _dict_name: str = pd.PrivateAttr(default=None)
 
     _task_names: list = pd.PrivateAttr(default=[])
 
@@ -109,10 +111,16 @@ class DesignSpace(Tidy3dBaseModel):
         counter = 0
 
         while True:
-            if self.task_name is not None:
-                task_name = f"{self.task_name}_{counter}"
+            # Check if user has supplied a dict key
+            if self._dict_name is not None:
+                suffix = f"{self._dict_name}_{counter}"
             else:
-                task_name = f"{counter}"
+                suffix = f"{counter}"
+
+            if self.task_name is not None:
+                task_name = f"{self.task_name}_{suffix}"
+            else:
+                task_name = f"{suffix}"
 
             yield (task_name)
             counter += 1
@@ -142,6 +150,7 @@ class DesignSpace(Tidy3dBaseModel):
         """
 
         self._name_generator = self._create_name_generator()
+        next(self._name_generator)
 
         # Run based on how many functions the user provides
         if fn_post is None:
@@ -207,8 +216,6 @@ class DesignSpace(Tidy3dBaseModel):
     def fn_mid(self, pre_out: Any) -> Any:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
 
-        # name_generator = self._create_name_generator()
-
         # Convert list of sim inputs to dict of dict before passing through checks
         was_list = False
         if all(isinstance(sim, List) for sim in pre_out.values()) and any(
@@ -234,6 +241,7 @@ class DesignSpace(Tidy3dBaseModel):
             # Flatten dict of dicts whilst storing combined keys for later
             flattened_sims = {}
             original_structure = {}
+            dict_keys = []
             for dict_idx, sub_dict in pre_out.items():
                 sub_structure = {}
                 for sub_dict_idx, sim_like in sub_dict.items():
@@ -242,13 +250,22 @@ class DesignSpace(Tidy3dBaseModel):
                         task_name = f"{dict_idx}_{sub_dict_idx}"
                         flattened_sims[task_name] = sim_like
                         sub_structure[sub_dict_idx] = None
+
+                        # Add user specified keys to the naming if a dict was supplied
+                        if not was_list:
+                            dict_keys.append(sub_dict_idx)
+                        else:
+                            dict_keys.append(None)
                     else:
                         sub_structure[sub_dict_idx] = sim_like
 
                 original_structure[dict_idx] = sub_structure
 
             # Run sims with flattened dict
-            named_sims = {next(self._name_generator): sim for sim in flattened_sims.values()}
+            named_sims = {}
+            for sim, key_name in zip(flattened_sims.values(), dict_keys):
+                self._dict_name = key_name
+                named_sims[next(self._name_generator)] = sim
             translation_dict = dict(zip(named_sims, flattened_sims))
             self._task_names.extend(list(named_sims.keys()))
             batch_out = web.Batch(simulations=named_sims, folder_name=self.folder_name).run(
