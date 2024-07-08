@@ -30,7 +30,14 @@ class Parameter(Tidy3dBaseModel, ABC):
     def _values_unique(cls, val):
         """Supplied unique values."""
         if (val is not None) and (len(set(val)) != len(val)):
-            raise pd.ValidationError("Supplied 'values' were not unique.")
+            raise pd.ValidationError(
+                model=Parameter,
+                errors=[
+                    pd.error_wrappers.ErrorWrapper(
+                        ValueError("Supplied 'values' were not unique."), "/Parameter"
+                    )
+                ],
+            )
         return val
 
     def sample_grid(self) -> List[Any]:
@@ -67,7 +74,15 @@ class ParameterNumeric(Parameter, ABC):
         span_min, span_max = val
         if span_min > span_max:
             raise pd.ValidationError(
-                f"Given invalid span '{val}'. The 1st value can't be greater than the 2nd value."
+                model=ParameterNumeric,
+                errors=[
+                    pd.error_wrappers.ErrorWrapper(
+                        ValueError(
+                            f"Given invalid span '{val}'. The 1st value can't be greater than the 2nd value."
+                        ),
+                        "/ParameterNumeric",
+                    )
+                ],
             )
         return val
 
@@ -179,14 +194,30 @@ class ParameterAny(Parameter):
     def _given_any_allowed_values(cls, val):
         """Need at least one allowed value."""
         if not len(val):
-            raise pd.ValidationError("Given empty tuple of allowed values. Must have at least one.")
+            raise pd.ValidationError(
+                model=ParameterAny,
+                errors=[
+                    pd.error_wrappers.ErrorWrapper(
+                        ValueError("Given empty tuple of allowed values. Must have at least one."),
+                        "/ParameterAny",
+                    )
+                ],
+            )
         return val
 
     @pd.validator("allowed_values", always=True)
     def _no_duplicate_allowed_values(cls, val):
         """No duplicates in allowed_values."""
         if len(val) != len(set(val)):
-            raise pd.ValidationError("'allowed_values' has duplicate entries, must be unique.")
+            raise pd.ValidationError(
+                model=ParameterAny,
+                errors=[
+                    pd.error_wrappers.ErrorWrapper(
+                        ValueError("'allowed_values' has duplicate entries, must be unique."),
+                        "/ParameterAny",
+                    )
+                ],
+            )
         return val
 
     def sample_random(self, num_samples: int) -> List[Any]:

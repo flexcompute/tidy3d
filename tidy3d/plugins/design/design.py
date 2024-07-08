@@ -74,11 +74,6 @@ class DesignSpace(Tidy3dBaseModel):
         """dimensions defined by the design parameter names."""
         return tuple(param.name for param in self.parameters)
 
-    @cached_property
-    def design_parameter_dict(self) -> Dict[str, ParameterType]:
-        """Mapping of design parameter name to design parameter."""
-        return dict(zip(self.dims, self.parameters))
-
     def _package_run_results(
         self,
         fn_args: Dict[str, tuple],

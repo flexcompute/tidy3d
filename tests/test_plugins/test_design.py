@@ -14,7 +14,7 @@ SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
     monte_carlo=tdd.MethodMonteCarlo(num_points=3, rng_seed=1),
     custom=tdd.MethodRandomCustom(
-        num_points=10, sampler=qmc.Halton, sampler_kwargs={"d": 3}, rng_seed=1
+        num_points=10, sampler=qmc.Halton, sampler_kwargs={"d": 3, "seed": 1}
     ),
     random=tdd.MethodRandom(num_points=5, rng_seed=1),  # TODO: remove this if not used
     bay_opt=tdd.MethodBayOpt(initial_iter=2, n_iter=2, rng_seed=1),
@@ -518,57 +518,93 @@ def test_optimise_specific(sweep_method, monkeypatch):
     with pytest.raises(ValueError):
         ts_sim_complex = design_space.run(scs_pre, scs_post_complex_return)
 
+    # Test that wrongly formatted aux outputs throw an error
+    def bad_format_non_td_aux_post(res):
+        """Uses the same float_non_td_pre as pre"""
+        return ["not a float", int(res), ["any", "other", "data"]]
 
-# def test_method_custom_validators():
-#     """Test the MethodRandomCustom validation performs as expected."""
+    with pytest.raises(ValueError):
+        bad_format_td_aux_sweep = design_space.run(float_non_td_pre, bad_format_non_td_aux_post)
 
-#     d = 3
 
-#     # expected case
-#     class SamplerWorks:
-#         def random(self, n):
-#             return np.random.random((n, d))
+def test_method_custom_validators():
+    """Test the MethodRandomCustom validation performs as expected."""
 
-#     tdd.MethodRandomCustom(num_points=5, sampler=SamplerWorks())
+    radius_variable = tdd.ParameterFloat(
+        name="radius",
+        span=(0, 1.5),
+        num_points=5,  # note: only used for MethodGrid
+    )
 
-#     # missing random method case
-#     class SamplerNoRandom:
-#         pass
+    num_spheres_variable = tdd.ParameterInt(
+        name="num_spheres",
+        span=(0, 3),
+    )
 
-#     with pytest.raises(ValueError):
-#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerNoRandom())
+    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2", "tag3"))
 
-#     # random method gives a list
-#     class SamplerList:
-#         def random(self, n):
-#             return np.random.random((n, d)).tolist()
+    parameters = (radius_variable, num_spheres_variable, tag_variable)
 
-#     with pytest.raises(ValueError):
-#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerList())
+    d = 3
 
-#     # random method gives wrong number of dimensions
-#     class SamplerWrongDims:
-#         def random(self, n):
-#             return np.random.random((n, d, d))
+    # expected case
+    class SamplerWorks:
+        def random(self, n):
+            return np.random.random((n, d))
 
-#     with pytest.raises(ValueError):
-#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongDims())
+    working_sampler = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWorks)
+    working_sampler.get_sampler(parameters)
 
-#     # random method gives wrong first dimension length
-#     class SamplerWrongShape:
-#         def random(self, n):
-#             return np.random.random((n + 1, d))
+    # missing random method case
+    class SamplerNoRandom:
+        pass
 
-#     with pytest.raises(ValueError):
-#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongShape())
+    with pytest.raises(ValueError):
+        no_random = tdd.MethodRandomCustom(num_points=5, sampler=SamplerNoRandom)
+        no_random.get_sampler(parameters)
 
-#     # random method gives floats outside of range of 0, 1
-#     class SamplerOutOfRange:
-#         def random(self, n):
-#             return 3 * np.random.random((n, d)) - 1
+    # random method gives a list
+    class SamplerList:
+        def random(self, n):
+            return np.random.random((n, d)).tolist()
 
-#     with pytest.raises(ValueError):
-#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerOutOfRange())
+    with pytest.raises(ValueError):
+        gives_list = tdd.MethodRandomCustom(num_points=5, sampler=SamplerList)
+        gives_list.get_sampler(parameters)
+
+    # random method gives wrong number of dimensions
+    class SamplerWrongDims:
+        def random(self, n):
+            return np.random.random((n, d, d))
+
+    with pytest.raises(ValueError):
+        wrong_dim = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongDims)
+        wrong_dim.get_sampler(parameters)
+
+    # random method gives wrong first dimension length
+    class SamplerWrongShape:
+        def random(self, n):
+            return np.random.random((n + 1, d))
+
+    with pytest.raises(ValueError):
+        wrong_shape = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongShape)
+        wrong_shape.get_sampler(parameters)
+
+    # random method gives floats outside of range of 0, 1
+    class SamplerOutOfRange:
+        def random(self, n):
+            return 3 * np.random.random((n, d)) - 1
+
+    with pytest.raises(ValueError):
+        out_range = tdd.MethodRandomCustom(num_points=5, sampler=SamplerOutOfRange)
+        out_range.get_sampler(parameters)
+
+    # wrong number of dims given to sampler
+    d = 2
+
+    with pytest.raises(ValueError):
+        failing_sampler = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWorks)
+        failing_sampler.get_sampler(parameters)
 
 
 @pytest.mark.parametrize(
@@ -595,3 +631,94 @@ def test_method_random_warning(log_capture, monte_carlo_warning, log_level_expec
 def test_random_sampling(parameter):
     """just make sure sample_random still works in case we need it."""
     parameter.sample_random(10)
+
+
+# Test bad parameter setup
+def test_bad_parameters():
+    # span min bigger than max
+    with pytest.raises(
+        ValueError
+    ):  # Is raised as a pd.ValidationError but pytest catches it as a ValueError
+        bad_span = tdd.ParameterInt(name="bad_span", span=(3, 1))
+
+    # not unique values in Parameter
+    with pytest.raises(ValueError):
+        not_unique1 = tdd.ParameterFloat(name="not_unique1", values=(1.2, 2.2, 1.2))
+
+    # not unique allowed_values in ParameterAny
+    with pytest.raises(ValueError):
+        not_unique2 = tdd.ParameterAny(name="not_unique2", allowed_values=("a", "b", "a"))
+
+    # no values
+    with pytest.raises(ValueError):
+        no_values = tdd.ParameterAny(name="no_values", allowed_values=())
+
+
+# Test bad result setup
+def test_bad_result():
+    # Too many coords, not enough dims
+    with pytest.raises(ValueError):
+        bad_dims = tdd.result.Result(
+            dims=("test_param",),
+            values=[1, 2],
+            coords=[(1, 2), (3, 4)],
+            fn_source="",
+            task_ids=None,
+            aux_values=None,
+        )
+
+    # Too many coords, not enough values
+    with pytest.raises(ValueError):
+        bad_values = tdd.result.Result(
+            dims=("test_param", "test_param2"),
+            values=(1,),
+            coords=[(1, 2), (3, 4)],
+            fn_source="",
+            task_ids=None,
+            aux_values=None,
+        )
+
+    # Combine tests
+    # Different sources
+    with pytest.raises(ValueError):
+        source_1 = tdd.result.Result(
+            dims=("test_param", "test_param2"),
+            values=(1, 2),
+            coords=[(1, 2), (3, 4)],
+            fn_source="Uh",
+            task_ids=None,
+            aux_values=None,
+        )
+
+        source_2 = tdd.result.Result(
+            dims=("test_param", "test_param2"),
+            values=(1, 2),
+            coords=[(1, 2), (3, 4)],
+            fn_source="Oh",
+            task_ids=None,
+            aux_values=None,
+        )
+
+        source_1.combine(source_2)
+
+    # Different output names
+    with pytest.raises(ValueError):
+        dim_1 = tdd.result.Result(
+            dims=("test_paramX", "test_paramY"),
+            values=(1, 2),
+            coords=[(1, 2), (3, 4)],
+            fn_source="",
+            task_ids=None,
+            aux_values=None,
+        )
+
+        dim_2 = tdd.result.Result(
+            dims=("test_param1", "test_param2"),
+            values=(1, 2),
+            coords=[(1, 2), (3, 4)],
+            fn_source="",
+            task_ids=None,
+            aux_values=None,
+        )
+
+        dim_1.combine(dim_2)

@@ -32,30 +32,6 @@ class Method(Tidy3dBaseModel, ABC):
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
-    # @staticmethod
-    # def assert_hashable(fn_args: dict) -> None:
-    #     """Raise error if the function arguments aren't hashable (do before computation)."""
-    #     fn_args_tuple = tuple(fn_args)
-    #     try:
-    #         hash(fn_args_tuple)
-    #     except TypeError:
-    #         raise ValueError(
-    #             "Function arguments must be hashable. "
-    #             "Parameter sweep tool won't work with sets of lists, dicts or numpy arrays. "
-    #             "Convert these to 'tuple' for a workaround."
-    #         )
-
-    # @staticmethod
-    # def assert_num_points(fn_args: Dict[str, tuple]) -> int:
-    #     """Compute number of points from the function arguments and do error checking."""
-    #     num_points_each_dim = [len(val) for val in fn_args.values()]
-    #     if len(set(num_points_each_dim)) != 1:
-    #         raise ValueError(
-    #             f"Found different number of points: {num_points_each_dim} along each dimension. "
-    #             "This suggests a bug in the parameter sweep tool. "
-    #             "Please raise an issue on the front end GitHub repository."
-    #         )
-
     def _force_int(self, next_point: dict, parameters: list):
         """Convert a float asigned to an int parameter to be an int. Update dict in place."""
 
@@ -148,9 +124,9 @@ class MethodGrid(MethodSample):
 
         # sample each dimension individually
         vals_each_dim = {}
-        for design_var in parameters:
-            vals = design_var.sample_grid()
-            vals_each_dim[design_var.name] = vals
+        for param in parameters:
+            vals = param.sample_grid()
+            vals_each_dim[param.name] = vals
 
         # meshgrid each dimension's results and combine them all
         vals_grid = np.meshgrid(*vals_each_dim.values())
@@ -729,7 +705,7 @@ class MethodRandomCustom(AbstractMethodRandom):
     def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
-        loaded_sampler = self.sampler(**self.sampler_kwargs, seed=self.rng_seed)
+        loaded_sampler = self.sampler(**self.sampler_kwargs)
         self._check_sampler(loaded_sampler)
         num_dims_vars = len(parameters)
         num_dims_sampler = loaded_sampler.random(1).size
