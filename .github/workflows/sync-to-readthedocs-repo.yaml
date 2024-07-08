@@ -56,6 +56,6 @@ jobs:
       - name: Push corresponding reference to mirror repo
         run: |
           git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
-          git push mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }}
+          git push mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }} --force # overwrites always
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
