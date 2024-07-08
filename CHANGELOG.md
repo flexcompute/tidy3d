@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ModeSolver` methods to plot the mode plane simulation components, including `.plot()`, `.plot_eps()`, `.plot_structures_eps()`, `.plot_grid()`, and `.plot_pml()`.
 - Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
 - Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
+- Support for `FieldProjectionAngleMonitor` for 2D simulations with `far_field_approx = True`.
+
+### Changed
+- Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
 
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.

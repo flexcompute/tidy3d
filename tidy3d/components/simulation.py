@@ -56,6 +56,7 @@ from .monitor import (
     DiffractionMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     FieldTimeMonitor,
     FreqMonitor,
@@ -2654,6 +2655,85 @@ class Simulation(AbstractYeeGridSimulation):
                             "projections via the 'FieldProjector' class, where higher precision is "
                             "available.",
                             custom_loc=["monitors", idx, "proj_distance"],
+                        )
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["size"])
+    def _projection_monitors_2d(cls, val, values):
+        """
+        Validate if the field projection monitor is set up for a 2D simulation and
+        ensure the observation angle is configured correctly.
+
+        - For a 2D simulation in the x-y plane, 'theta' should be set to 'pi/2'.
+        - For a 2D simulation in the y-z plane, 'phi' should be set to 'pi/2'.
+        - For a 2D simulation in the x-z plane, 'phi' should be set to '0'.
+
+        Note: Exact far field projection is not available yet. Currently, only
+        'far_field_approx = True' is supported.
+        """
+
+        if val is None:
+            return val
+
+        sim_size = values.get("size")
+
+        # Validation if is 3D simulation
+        non_zero_dims = sum(1 for size in sim_size if size != 0)
+        if non_zero_dims == 3:
+            return val
+
+        plane = None
+        phi_value = None
+        theta_value = None
+
+        if sim_size[0] == 0:
+            plane = "y-z"
+            phi_value = np.pi / 2
+        elif sim_size[1] == 0:
+            plane = "x-z"
+            phi_value = 0
+        elif sim_size[2] == 0:
+            plane = "x-y"
+            theta_value = np.pi / 2
+
+        for monitor in val:
+            if isinstance(monitor, AbstractFieldProjectionMonitor):
+                if non_zero_dims == 1:
+                    raise SetupError(
+                        f"Monitor '{monitor.name}' is not supported in 1D simulations."
+                    )
+
+                if isinstance(
+                    monitor, (FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor)
+                ):
+                    raise SetupError(
+                        f"Monitor '{monitor.name}' in 2D simulations is coming soon. "
+                        "Please use 'FieldProjectionAngleMonitor' instead."
+                    )
+
+                if isinstance(monitor, FieldProjectionAngleMonitor):
+                    if not monitor.far_field_approx:
+                        raise SetupError(
+                            "Exact far field projection in 2D simulations is coming soon."
+                            "Please set 'far_field_approx = True'."
+                        )
+                    if plane == "y-z" and (len(monitor.phi) != 1 or monitor.phi[0] != phi_value):
+                        raise SetupError(
+                            "For a 2D simulation in the y-z plane, the observation angle 'phi' "
+                            f"of monitor '{monitor.name}' should be set to 'np.pi/2'."
+                        )
+                    elif plane == "x-z" and (len(monitor.phi) != 1 or monitor.phi[0] != phi_value):
+                        raise SetupError(
+                            "For a 2D simulation in the x-z plane, the observation angle 'phi' "
+                            f"of monitor '{monitor.name}' should be set to '0'."
+                        )
+                    elif plane == "x-y" and (
+                        len(monitor.theta) != 1 or monitor.theta[0] != theta_value
+                    ):
+                        raise SetupError(
+                            "For a 2D simulation in the x-y plane, the observation angle 'theta' "
+                            f"of monitor '{monitor.name}' should be set to 'np.pi/2'."
                         )
         return val
 
