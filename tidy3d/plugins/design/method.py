@@ -65,25 +65,34 @@ class Method(Tidy3dBaseModel, ABC):
                 next_point[param.name] = int(round(next_point[param.name], 0))
 
     @staticmethod
-    def _extract_output(output: list) -> Tuple:
+    def _extract_output(output: list, sampler: bool = False) -> Tuple:
         """Format the user function output for further optimisation and result storage."""
+        if sampler:
+            return output
+
         if all(isinstance(val, (float, int)) for val in output):
             # No aux_out
             return (output, None)
 
-        elif all(isinstance(val[0], (float, int)) for val in output):
-            float_out = []
-            aux_out = []
-            for val in output:
-                float_out.append(val[0])
-                aux_out.append(val[1])
+        if all(isinstance(val, (list, Tuple)) for val in output):
+            if all(isinstance(val[0], (float, int)) for val in output):
+                float_out = []
+                aux_out = []
+                for val in output:
+                    float_out.append(val[0])
+                    aux_out.append(val[1])
 
-            # Float with aux_out
-            return (float_out, aux_out)
+                # Float with aux_out
+                return (float_out, aux_out)
+
+            else:
+                raise ValueError(
+                    "Unrecognised output from supplied run function. The first element in the iterable object should be a float."
+                )
 
         else:
             raise ValueError(
-                "Unrecognised output from supplied run function. Output should be a float or a float and iterable object."
+                "Unrecognised output from supplied run function. Output should be a float or an iterable object."
             )
 
     @staticmethod
@@ -120,9 +129,9 @@ class MethodSample(Method, ABC):
         fn_args = self._assemble_args(parameters)
 
         # Run user function on sampled args
-        results, aux_out = self._extract_output(run_fn(fn_args))
+        results = self._extract_output(run_fn(fn_args), sampler=True)
 
-        return fn_args, results, aux_out
+        return fn_args, results, None
 
 
 class MethodGrid(MethodSample):

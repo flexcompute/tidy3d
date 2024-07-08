@@ -10,6 +10,8 @@ import pydantic.v1 as pd
 
 from ...components.base import Tidy3dBaseModel, cached_property
 
+# NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming
+
 
 class Result(Tidy3dBaseModel):
     """Stores the result of a run over a ``DesignSpace``.
@@ -132,7 +134,7 @@ class Result(Tidy3dBaseModel):
 
         # if array-like, ith output has key "output {i}"
         if isinstance(value, (tuple, list, np.ndarray)):
-            return tuple(f"output {i}" for i in range(len(value)))
+            return tuple(f"output_{i}" for i in range(len(value)))
 
         # if simply single value (float, int, bool, etc) just label "output"
         return ("output",)
@@ -164,7 +166,7 @@ class Result(Tidy3dBaseModel):
         coords_tuple = tuple(kwargs[dim] for dim in self.dims)
         return self.get_value(coords_tuple)
 
-    def to_dataframe(self, include_auxs: bool = False) -> pandas.DataFrame:
+    def to_dataframe(self, include_aux: bool = False) -> pandas.DataFrame:
         """Data as a `pandas.DataFrame`.
 
         Returns
@@ -183,7 +185,7 @@ class Result(Tidy3dBaseModel):
 
         columns = list(self.dims) + val_keys
 
-        if include_auxs:
+        if include_aux:
             if self.aux_values is not None:
                 # Can use [0] for aux keys as the function is assumed producing the same structure of output each run
                 if all(isinstance(auxs, dict) for auxs in self.aux_values):

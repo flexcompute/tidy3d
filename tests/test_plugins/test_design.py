@@ -23,6 +23,27 @@ SWEEP_METHODS = dict(
 )
 
 
+def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
+    data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()}
+    task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
+    task_paths = dict(zip(simulations.simulations.keys(), simulations.simulations.keys()))
+
+    class BatchDataEmulated(web.BatchData):
+        """Emulated BatchData object that just returns stored emulated data."""
+
+        data_dict: dict
+        # task_ids: dict
+        # task_paths: dict
+
+        def items(self):
+            yield from self.data_dict.items()
+
+        def __getitem__(self, task_name):
+            return self.data_dict[task_name]
+
+    return BatchDataEmulated(data_dict=data_dict, task_ids=task_ids, task_paths=task_paths)
+
+
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values())
 def test_sweep(sweep_method, monkeypatch):
     # Problem, simulate scattering cross section of sphere ensemble
@@ -32,57 +53,31 @@ def test_sweep(sweep_method, monkeypatch):
 
     monkeypatch.setattr(web, "run", run_emulated)
 
-    def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
-        data_dict = {
-            task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()
-        }
-        task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
-        task_paths = dict(zip(simulations.simulations.keys(), simulations.simulations.keys()))
-
-        class BatchDataEmulated(web.BatchData):
-            """Emulated BatchData object that just returns stored emulated data."""
-
-            data_dict: dict
-            # task_ids: dict
-            # task_paths: dict
-
-            def items(self):
-                yield from self.data_dict.items()
-
-            def __getitem__(self, task_name):
-                return self.data_dict[task_name]
-
-        return BatchDataEmulated(data_dict=data_dict, task_ids=task_ids, task_paths=task_paths)
-
     monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
 
     # STEP1: define your design function (inputs and outputs)
 
     # Non td function testing
-    def float_non_td_pre_func(radius, num_spheres, tag):
+    def float_non_td_pre(radius, num_spheres, tag):
         return radius + num_spheres * 1.1
 
-    def float_non_td_post_func(res):
+    def float_non_td_post(res):
         return int(res)
 
     def float_non_td_combined(radius, num_spheres, tag):
         return int(radius + num_spheres * 1.1)
 
-    def list_non_td_pre_func(radius, num_spheres, tag):
+    def list_non_td_pre(radius, num_spheres, tag):
         return [radius, num_spheres, radius + num_spheres * 1.1]
 
-    def list_non_td_post_func(res):
+    def list_non_td_post(res):
         return int(sum(res))
 
-    def dict_non_td_pre_func(radius, num_spheres, tag):
+    def dict_non_td_pre(radius, num_spheres, tag):
         return {"rad": radius, "num": num_spheres, "sum": radius + num_spheres * 1.1}
 
-    def dict_non_td_post_func(res):
+    def dict_non_td_post(res):
         return int(sum(res.values()))
-
-    def float_non_td_aux_post_func(res):
-        """Uses the same float_non_td_pre_func as pre"""
-        return [int(res), ["any", "other", "data"]]
 
     # Functions with td elements
     def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
@@ -226,16 +221,6 @@ def test_sweep(sweep_method, monkeypatch):
         assert isinstance(consts, str)  # Included for testing
         return sum(sim_data)
 
-    def scs_post_aux(sim_data):
-        """Uses scs_pre for pre function"""
-        mnt_data = sim_data["field"]
-        ex_values = mnt_data.Ex.values
-
-        return (
-            np.sum(np.square(np.abs(ex_values))),
-            {"test1": True, "test2": None, "test3": "a great success", "test4": 3.14},
-        )
-
     # STEP2: define your design problem
 
     radius_variable = tdd.ParameterFloat(
@@ -263,21 +248,15 @@ def test_sweep(sweep_method, monkeypatch):
     # Try a basic non-td function
     # Ensure output of combined and pre-post functions is the same
     non_td_sweep1 = design_space.run(float_non_td_combined)
-    non_td_sweep2 = design_space.run(float_non_td_pre_func, float_non_td_post_func)
+    non_td_sweep2 = design_space.run(float_non_td_pre, float_non_td_post)
 
     assert non_td_sweep1.values == non_td_sweep2.values
 
     # Ensure output of list and dict pre funcs is the same
-    list_non_td_sweep = design_space.run(list_non_td_pre_func, list_non_td_post_func)
-    dict_non_td_sweep = design_space.run(dict_non_td_pre_func, dict_non_td_post_func)
+    list_non_td_sweep = design_space.run(list_non_td_pre, list_non_td_post)
+    dict_non_td_sweep = design_space.run(dict_non_td_pre, dict_non_td_post)
 
     assert list_non_td_sweep.values == dict_non_td_sweep.values
-
-    # Include auxiliary data in list format in the output for non_td run
-    aux_not_td_sweep = design_space.run(float_non_td_pre_func, float_non_td_aux_post_func)
-    aux_not_td_df = aux_not_td_sweep.to_dataframe(include_auxs=True)
-
-    assert aux_not_td_df["aux_key_2"][0] == "data"
 
     # Try functions that include td objects
     # Ensure output of combined and pre-post functions is the same
@@ -303,12 +282,6 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Test with dict of sims and non-sim constant values
     ts_sim_dict_const = design_space.run(scs_pre_dict_const, scs_post_dict_const)
-
-    # Test for auxiliary values as dict format in output of td function
-    ts_sim_aux = design_space.run(scs_pre, scs_post_aux)
-    ts_sim_aux_df = ts_sim_aux.to_dataframe(include_auxs=True)
-
-    assert ts_sim_aux_df["test4"][0] == 3.14
 
     sel_kwargs_0 = dict(zip(td_sweep1.dims, td_sweep1.coords[0]))
     td_sweep1.sel(**sel_kwargs_0)
@@ -345,6 +318,205 @@ def test_sweep(sweep_method, monkeypatch):
     # make sure returning a float uses the proper output column header
     float_label = tdd.Result.default_value_keys(1.0)[0]
     assert float_label in sweep_results_df, "didn't assign column header properly for float"
+
+
+# Split testing sweeps
+def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
+    """Preprocessing function (make simulation)"""
+
+    # set up simulation
+    spheres = []
+
+    for _ in range(int(num_spheres)):
+        spheres.append(
+            td.Structure(
+                geometry=td.Sphere(radius=radius),
+                medium=td.PEC,
+            )
+        )
+
+    mnt = td.FieldMonitor(
+        size=(0, 0, 0),
+        center=(0, 0, 0),
+        freqs=[2e14],
+        name="field",
+    )
+
+    return td.Simulation(
+        size=(1, 1, 1),
+        structures=spheres,
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        monitors=[mnt],
+    )
+
+
+def scs_post_complex_return(sim_data):
+    """Uses scs_pre for pre function"""
+    mnt_data = sim_data["field"]
+    ex_values = mnt_data.Ex.values
+
+    return {
+        "test1": [True, False],
+        "test2": None,
+        "test3": "a great success",
+        "test4": 3.14,
+        "output_val": np.sum(np.square(np.abs(ex_values))),
+        "np_arr": np.zeros(shape=(1, 2)),
+    }
+
+
+@pytest.mark.parametrize(
+    "sweep_method",
+    [
+        SWEEP_METHODS["grid"],
+        SWEEP_METHODS["monte_carlo"],
+        SWEEP_METHODS["custom"],
+        SWEEP_METHODS["random"],
+    ],
+)
+def test_sample_specific(sweep_method, monkeypatch):
+    """Run tests that are only relevant to MethodSample"""
+
+    monkeypatch.setattr(web, "run", run_emulated)
+
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    def float_non_td_pre(radius, num_spheres, tag):
+        return radius + num_spheres * 1.1
+
+    def float_non_td_complex_return_post(res):
+        """Uses the same float_non_td_pre as pre"""
+        return ["any", "other", "data", int(res), {"any1": 2.1}, np.ones(shape=(1, 2))]
+
+    # Setup Designspace
+    radius_variable = tdd.ParameterFloat(
+        name="radius",
+        span=(0, 1.5),
+        num_points=5,  # note: only used for MethodGrid
+    )
+
+    num_spheres_variable = tdd.ParameterInt(
+        name="num_spheres",
+        span=(0, 3),
+    )
+
+    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2", "tag3"))
+
+    design_space = tdd.DesignSpace(
+        parameters=[radius_variable, num_spheres_variable, tag_variable],
+        method=sweep_method,
+        name="sphere CS",
+        task_name=f"{sweep_method.type}",
+    )
+
+    # Test for complex output shape in the output for non_td run
+    complex_not_td_sweep = design_space.run(float_non_td_pre, float_non_td_complex_return_post)
+    complex_not_td_df = complex_not_td_sweep.to_dataframe(include_aux=True)
+
+    assert complex_not_td_df["output_2"][0] == "data"
+
+    # Test for complex output shape in output of td function
+    ts_sim_complex = design_space.run(scs_pre, scs_post_complex_return)
+    ts_sim_complex_df = ts_sim_complex.to_dataframe(include_aux=True)
+
+    assert ts_sim_complex_df["test4"][0] == 3.14
+
+
+@pytest.mark.parametrize(
+    "sweep_method",
+    [SWEEP_METHODS["bay_opt"], SWEEP_METHODS["gen_alg"], SWEEP_METHODS["part_swarm"]],
+)
+def test_optimise_specific(sweep_method, monkeypatch):
+    """Run tests that are only relevant to MethodOptimise"""
+
+    monkeypatch.setattr(web, "run", run_emulated)
+
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    # Setup simulations
+    def float_non_td_pre(radius, num_spheres, tag):
+        return radius + num_spheres * 1.1
+
+    def float_non_td_aux_post(res):
+        """Uses the same float_non_td_pre as pre"""
+        return [int(res), ["any", "other", "data"]]
+
+    def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
+        """Preprocessing function (make simulation)"""
+
+        # set up simulation
+        spheres = []
+
+        for _ in range(int(num_spheres)):
+            spheres.append(
+                td.Structure(
+                    geometry=td.Sphere(radius=radius),
+                    medium=td.PEC,
+                )
+            )
+
+        mnt = td.FieldMonitor(
+            size=(0, 0, 0),
+            center=(0, 0, 0),
+            freqs=[2e14],
+            name="field",
+        )
+
+        return td.Simulation(
+            size=(1, 1, 1),
+            structures=spheres,
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            monitors=[mnt],
+        )
+
+    def scs_post_aux(sim_data):
+        """Uses scs_pre for pre function"""
+        mnt_data = sim_data["field"]
+        ex_values = mnt_data.Ex.values
+
+        return (
+            np.sum(np.square(np.abs(ex_values))),
+            {"test1": True, "test2": None, "test3": "a great success", "test4": 3.14},
+        )
+
+    # Setup Designspace
+    radius_variable = tdd.ParameterFloat(
+        name="radius",
+        span=(0, 1.5),
+        num_points=5,  # note: only used for MethodGrid
+    )
+
+    num_spheres_variable = tdd.ParameterInt(
+        name="num_spheres",
+        span=(0, 3),
+    )
+
+    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2", "tag3"))
+
+    design_space = tdd.DesignSpace(
+        parameters=[radius_variable, num_spheres_variable, tag_variable],
+        method=sweep_method,
+        name="sphere CS",
+        task_name=f"{sweep_method.type}",
+    )
+
+    # Include auxiliary data in list format in the output for non_td run
+    aux_not_td_sweep = design_space.run(float_non_td_pre, float_non_td_aux_post)
+    aux_not_td_df = aux_not_td_sweep.to_dataframe(include_aux=True)
+
+    assert aux_not_td_df["aux_key_2"][0] == "data"
+
+    # Test for auxiliary values as dict format in output of td function
+    ts_sim_aux = design_space.run(scs_pre, scs_post_aux)
+    ts_sim_aux_df = ts_sim_aux.to_dataframe(include_aux=True)
+
+    assert ts_sim_aux_df["test4"][0] == 3.14
+
+    # Test that sampler style complex input fails properly
+    with pytest.raises(ValueError):
+        ts_sim_complex = design_space.run(scs_pre, scs_post_complex_return)
 
 
 # def test_method_custom_validators():
