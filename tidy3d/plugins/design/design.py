@@ -48,7 +48,19 @@ class DesignSpace(Tidy3dBaseModel):
     task_name: str = pd.Field(
         None,
         title="Task Name",
-        description="Task name assigned to tasks along with a simulation counter.",
+        description="Task name assigned to tasks along with a simulation counter. Only used when pre-post functions are supplied.",
+    )
+
+    path_dir: str = pd.Field(
+        ".",
+        title="Path Directory",
+        description="Directory for files to output to. Only used when pre-post functions are supplied.",
+    )
+
+    folder_name: str = pd.Field(
+        None,
+        title="Folder Name",
+        description="Folder path where the simulation will be uploaded in the Tidy3D Workspace. Will use 'default' if no path is set.",
     )
 
     _task_names: list = pd.PrivateAttr(default=[])
@@ -211,7 +223,9 @@ class DesignSpace(Tidy3dBaseModel):
         if all(isinstance(sim, Simulation) for sim in pre_out.values()):
             named_sims = {next(self._name_generator): sim for sim in pre_out.values()}
             self._task_names.extend(list(named_sims.keys()))
-            data = web.Batch(simulations=named_sims).run()
+            data = web.Batch(simulations=named_sims, folder_name=self.folder_name).run(
+                path_dir=self.path_dir
+            )
 
         # Can "index" dict here because fn_combined uses idx as the key
         elif all(isinstance(sim, Dict) for sim in pre_out.values()) and any(
@@ -237,7 +251,9 @@ class DesignSpace(Tidy3dBaseModel):
             named_sims = {next(self._name_generator): sim for sim in flattened_sims.values()}
             translation_dict = dict(zip(named_sims, flattened_sims))
             self._task_names.extend(list(named_sims.keys()))
-            batch_out = web.Batch(simulations=named_sims).run()
+            batch_out = web.Batch(simulations=named_sims, folder_name=self.folder_name).run(
+                path_dir=self.path_dir
+            )
 
             # Unflatten structure whilst running fn_post
             for task_id in batch_out.task_ids:
