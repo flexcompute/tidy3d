@@ -487,7 +487,7 @@ def _run_bwd(
     def vjp(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
 
-        sim_adj, post_norm_amps = setup_adj(
+        sim_adj = setup_adj(
             data_fields_vjp=data_fields_vjp,
             sim_data_orig=sim_data_orig,
             sim_data_fwd=sim_data_fwd,
@@ -503,7 +503,6 @@ def _run_bwd(
             sim_data_orig=sim_data_orig,
             sim_data_fwd=sim_data_fwd,
             sim_fields_original=sim_fields_original,
-            post_norm_amps=post_norm_amps,
         )
 
     return vjp
@@ -536,21 +535,19 @@ def _run_async_bwd(
         task_names_adj = {task_name + "_adjoint" for task_name in task_names}
 
         sims_adj = {}
-        post_norm_amps_dict = {}
         for task_name, task_name_adj in zip(task_names, task_names_adj):
             data_fields_vjp = data_fields_dict_vjp[task_name]
             sim_data_orig = sim_data_orig_dict[task_name]
             sim_data_fwd = sim_data_fwd_dict[task_name]
             sim_fields_original = sim_fields_original_dict[task_name]
 
-            sim_adj, post_norm_amps = setup_adj(
+            sim_adj = setup_adj(
                 data_fields_vjp=data_fields_vjp,
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_original=sim_fields_original,
             )
             sims_adj[task_name_adj] = sim_adj
-            post_norm_amps_dict[task_name_adj] = post_norm_amps
 
             # TODO: handle case where no adjoint sources?
 
@@ -560,7 +557,6 @@ def _run_async_bwd(
         sim_fields_vjp_dict = {}
         for task_name, task_name_adj in zip(task_names, task_names_adj):
             sim_data_adj = batch_data_adj[task_name_adj]
-            post_norm_amps = post_norm_amps_dict[task_name_adj]
             sim_data_orig = sim_data_orig_dict[task_name]
             sim_data_fwd = sim_data_fwd_dict[task_name]
             sim_fields_original = sim_fields_original_dict[task_name]
@@ -569,7 +565,6 @@ def _run_async_bwd(
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_original=sim_fields_original,
-                post_norm_amps=post_norm_amps,
             )
             sim_fields_vjp_dict[task_name] = sim_fields_vjp
 
@@ -598,13 +593,13 @@ def setup_adj(
 
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())
-    sim_adj, post_norm_amps = sim_data_vjp.make_adjoint_sim(
+    sim_adj = sim_data_vjp.make_adjoint_sim(
         data_vjp_paths=data_vjp_paths, adjoint_monitors=sim_data_fwd.simulation.monitors
     )
 
     td.log.info(f"Adjoint simulation created with {len(sim_adj.sources)} sources.")
 
-    return sim_adj, post_norm_amps
+    return sim_adj
 
 
 def postprocess_adj(
@@ -612,7 +607,6 @@ def postprocess_adj(
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
     sim_fields_original: AutogradFieldMap,
-    post_norm_amps: xr.DataArray,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
@@ -630,13 +624,6 @@ def postprocess_adj(
         eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
         fld_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
         eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
-
-        # post normalize the adjoint fields if a single, broadband source
-        if post_norm_amps is not None:
-            fwd_flds_normed = {
-                key: val * post_norm_amps for key, val in fld_adj.field_components.items()
-            }
-            fld_adj = fld_adj.updated_copy(**fwd_flds_normed)
 
         # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
         der_maps = get_derivative_maps(

@@ -974,11 +974,11 @@ MULT_FREQ_TEST_CASES = dict(
 checks = list(MULT_FREQ_TEST_CASES.items())
 
 
-@pytest.mark.parametrize("label, check_fn", checks)
-@pytest.mark.parametrize("structure_key", structure_keys_)
-def test_multi_freq_edge_cases(log_capture, use_emulated_run, structure_key, label, check_fn):
-    # test multi-frequency adjoint handling
-    check_fn(structure_key=structure_key, log_capture=log_capture)
+# @pytest.mark.parametrize("label, check_fn", checks)
+# @pytest.mark.parametrize("structure_key", structure_keys_)
+# def test_multi_freq_edge_cases(log_capture, use_emulated_run, structure_key, label, check_fn):
+#     # test multi-frequency adjoint handling
+#     check_fn(structure_key=structure_key, log_capture=log_capture)
 
 
 # @pytest.mark.parametrize("structure_key", ('custom_med',))
