@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
 - Users can specify the background medium for a structure in automatic differentiation by supplying `Structure.autograd_background_permittivity`.
 - `DirectivityMonitor` to compute antenna directivity.
+- Added `plot_length_units` to `Simulation` and `Scene` to allow for specifying units, which improves axis labels and scaling when plotting.
 
 ### Changed
 

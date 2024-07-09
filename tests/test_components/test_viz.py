@@ -3,8 +3,9 @@
 import matplotlib.pyplot as plt
 import pytest
 import tidy3d as td
-from tidy3d.components.viz import Polygon
+from tidy3d.components.viz import Polygon, set_default_labels_and_title
 from tidy3d.constants import inf
+from tidy3d.exceptions import Tidy3dKeyError
 
 
 def test_make_polygon_dict():
@@ -79,3 +80,23 @@ def test_2d_boundary_plot():
 
     # should have a non-infinite size as x is specified
     assert pml_box.size[0] != inf
+
+
+def test_set_default_labels_title():
+    """
+    Ensure labels are correctly added to axes, and test that plot_units are validated.
+    """
+    box = td.Box(center=(0, 0, 0), size=(0.01, 0.01, 0.01))
+    ax = box.plot(z=0)
+    axis_labels = box._get_plot_labels(2)
+
+    ax = set_default_labels_and_title(axis_labels=axis_labels, axis=2, position=0, ax=ax)
+
+    ax = set_default_labels_and_title(
+        axis_labels=axis_labels, axis=2, position=0, ax=ax, plot_length_units="nm"
+    )
+
+    with pytest.raises(Tidy3dKeyError):
+        ax = set_default_labels_and_title(
+            axis_labels=axis_labels, axis=2, position=0, ax=ax, plot_length_units="inches"
+        )

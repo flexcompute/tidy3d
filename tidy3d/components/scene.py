@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import autograd.numpy as np
 import matplotlib as mpl
@@ -34,7 +34,16 @@ from .medium import (
     MediumType3D,
 )
 from .structure import Structure
-from .types import TYPE_TAG_STR, Ax, Bound, Coordinate, InterpMethod, Shapely, Size
+from .types import (
+    TYPE_TAG_STR,
+    Ax,
+    Bound,
+    Coordinate,
+    InterpMethod,
+    LengthUnit,
+    Shapely,
+    Size,
+)
 from .validators import assert_unique_names
 from .viz import (
     MEDIUM_CMAP,
@@ -85,6 +94,14 @@ class Scene(Tidy3dBaseModel):
         description="Tuple of structures present in scene. "
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
+    )
+
+    plot_length_units: Optional[LengthUnit] = pd.Field(
+        "μm",
+        title="Plot Units",
+        description="When set to a supported ``LengthUnit``, "
+        "plots will be produced with proper scaling of axes and "
+        "include the desired unit specifier in labels.",
     )
 
     """ Validating setup """
@@ -408,12 +425,13 @@ class Scene(Tidy3dBaseModel):
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
 
         # clean up the axis display
-        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-
+        axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.box.add_ax_lims(axis=axis, ax=ax)
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     def _plot_shape_structure(self, medium: Medium, mat_index: int, shape: Shapely, ax: Ax) -> Ax:
@@ -821,12 +839,13 @@ class Scene(Tidy3dBaseModel):
             self._add_cbar_eps(eps_min=eps_min, eps_max=eps_max, ax=ax)
 
         # clean up the axis display
-        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-
+        axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.box.add_ax_lims(axis=axis, ax=ax)
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     @staticmethod
@@ -1298,13 +1317,15 @@ class Scene(Tidy3dBaseModel):
                 cmap=STRUCTURE_HEAT_COND_CMAP,
                 ax=ax,
             )
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
-        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-
+        axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.box.add_ax_lims(axis=axis, ax=ax)
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     def heat_charge_property_bounds(self, property) -> Tuple[float, float]:

@@ -10,6 +10,8 @@ Attributes:
     Q_e (float): funamental charge [C]
 """
 
+from types import MappingProxyType
+
 import numpy as np
 
 # fundamental constants (https://physics.nist.gov)
@@ -212,3 +214,15 @@ GLANCING_CUTOFF = 0.1
 """
 if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning.
 """
+
+UnitScaling = MappingProxyType(
+    {
+        "nm": 1e3,
+        "μm": 1e0,
+        "um": 1e0,
+        "mm": 1e-3,
+        "cm": 1e-4,
+        "m": 1e-6,
+    }
+)
+"""Immutable dictionary for converting a unit specification to a scaling factor."""

@@ -657,11 +657,12 @@ class HeatChargeSimulation(AbstractSimulation):
             ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax)
 
         # clean up the axis display
-        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-
+        ax = self.add_ax_lims(axis=axis, ax=ax)
         ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
 
         return ax
 
@@ -1064,11 +1065,12 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
 
         # clean up the axis display
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-
+        ax = self.add_ax_lims(axis=axis, ax=ax)
         ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     def _add_source_cbar(self, ax: Ax, property: str = "heat_conductivity"):

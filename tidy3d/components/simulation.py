@@ -575,6 +575,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     # candidate for removal in 3.0
@@ -783,7 +787,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
-
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     @equal_aspect
@@ -900,7 +907,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         ax.set_xlim([ulim_minus, ulim_plus])
         ax.set_ylim([vlim_minus, vlim_plus])
-
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     # TODO: not yet supported
