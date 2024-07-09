@@ -2934,3 +2934,55 @@ def test_validate_sources_monitors_in_bounds():
             grid_spec=td.GridSpec(wavelength=1.0),
             monitors=[mode_monitor],
         )
+
+
+def test_plot_transpose():
+    """Transpose the axes on a simulation.plot call"""
+    L = 5  # length of simulation on all sides
+
+    # make random list of structures
+    structures = [
+        td.Structure(
+            geometry=td.Sphere(center=(0 + i / 10, 0 + i / 10, 0 + i / 10), radius=1),
+            medium=td.Medium(permittivity=np.random.choice([2.0, 2.5, 3.0, 3.5, 4.0])),
+        )
+        for i in range(10)
+    ]
+
+    source = td.UniformCurrentSource(
+        center=(0, 0, -L / 3),
+        size=(L, L / 2, 0),
+        polarization="Ex",
+        source_time=td.GaussianPulse(
+            freq0=100e14,
+            fwidth=10e14,
+        ),
+    )
+
+    monitor = td.FieldMonitor(
+        center=(-L / 4, 0, 0), size=(L / 2, L, 0), freqs=[100e14], name="fields"
+    )
+
+    # make simulation from structures
+    sim = td.Simulation(
+        size=(L, L, L),
+        grid_spec=td.GridSpec.auto(wavelength=4),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=10),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(num_layers=10),
+        ),
+        structures=structures,
+        sources=[source],
+        monitors=[monitor],
+        run_time=1e-12,
+    )
+
+    # plot_out = sim.plot(x=0)
+    # plt.show()
+
+    t_plot_out = sim.plot(x=0, transpose=True)
+    plt.show()
+
+    # sim.plot_eps(x=0)
+    # sim.plot_eps(x=0, transpose=True)
