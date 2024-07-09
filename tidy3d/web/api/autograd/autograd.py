@@ -632,7 +632,7 @@ def postprocess_adj(
         eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
-        if False and post_norm_amps is not None:
+        if post_norm_amps is not None:
             fwd_flds_normed = {
                 key: val * post_norm_amps for key, val in fld_adj.field_components.items()
             }

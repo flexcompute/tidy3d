@@ -21,7 +21,7 @@ from ..base_sim.data.sim_data import AbstractSimulationData
 from ..file_util import replace_values
 from ..monitor import Monitor
 from ..simulation import Simulation
-from ..source import GaussianPulse, ModeSource, Source
+from ..source import ModeSource, Source
 from ..structure import Structure
 from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
 from ..viz import add_ax_if_none, equal_aspect
@@ -1104,19 +1104,22 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return [src_broadband], post_norm_amps
 
-    @staticmethod
-    def _make_broadband_source(adj_srcs: List[Source], num_fwidth: float = 0.5) -> Source:
+    # @staticmethod
+    def _make_broadband_source(self, adj_srcs: List[Source], num_fwidth: float = 0.5) -> Source:
         """Make a broadband source for a set of adjoint sources."""
 
         # compute an unnormalized source that covers the whole spectrum needed
-        freq_ranges = np.array(
-            [src.source_time.frequency_range(num_fwidth=num_fwidth) for src in adj_srcs]
-        )
-        fmin = np.min(freq_ranges[:, 0], axis=-1)
-        fmax = np.max(freq_ranges[:, 1], axis=-1)
-        freq0 = (fmin + fmax) / 2.0
-        fwidth = (fmax - fmin) / 2.0 / num_fwidth
-        src_time_base = GaussianPulse(freq0=freq0, fwidth=fwidth)
+        # freq_ranges = np.array(
+        #     [src.source_time.frequency_range(num_fwidth=num_fwidth) for src in adj_srcs]
+        # )
+        # fmin = np.min(freq_ranges[:, 0], axis=-1)
+        # fmax = np.max(freq_ranges[:, 1], axis=-1)
+        # freq0 = (fmin + fmax) / 2.0
+        # fwidth = (fmax - fmin) / 2.0 / num_fwidth
+        # src_time_base = GaussianPulse(freq0=freq0, fwidth=fwidth)
+
+        source_index = self.normalize_index or 0
+        src_time_base = self.simulation.sources[source_index].source_time.copy()
         src_broadband = adj_srcs[0].updated_copy(source_time=src_time_base)
 
         # TODO: make this a broadband mode source, if applicable

@@ -2491,7 +2491,10 @@ class CustomMedium(AbstractCustomMedium):
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
         E_der_dim = E_der_map[f"E{dim}"]
         E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
+
+        # HI
         E_der_dim_interp = E_der_dim_interp.sum("f")
+
         vjp_array = np.array(E_der_dim_interp.values).astype(float)
         vjp_array = vjp_array.reshape(eps_data.shape)
 
