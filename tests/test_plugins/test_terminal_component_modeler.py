@@ -3,6 +3,7 @@ import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
+from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
@@ -290,3 +291,52 @@ def test_coaxial_port_snapping(tmp_path):
         path_dir=str(tmp_path), port_refinement=False, grid_spec=grid_spec
     )
     check_lumped_port_components_snapped_correctly(modeler=modeler)
+
+
+def test_power_delivered_helper(monkeypatch, tmp_path):
+    """Test computations involving power waves are correct by manually setting voltage and current
+    at ports using monkeypatch.
+    """
+    modeler = make_coaxial_component_modeler(path_dir=str(tmp_path))
+    port1 = modeler.ports[0]
+    port_impedance = port1.impedance
+    freqs = np.linspace(1e9, 10e9, 11)
+    # Emulate perfect power transmission
+    voltage_amplitude = 1.0
+    current_amplitude = voltage_amplitude / port_impedance
+    # Average power assuming no reflections
+    avg_power = 0.5 * voltage_amplitude * np.conj(current_amplitude)
+
+    voltage = np.ones_like(freqs) * voltage_amplitude
+    current = np.ones_like(freqs) * current_amplitude
+
+    def compute_voltage_patch(self, sim_data):
+        return FreqDataArray(voltage, coords=dict(f=freqs))
+
+    def compute_current_patch(self, sim_data):
+        return FreqDataArray(current, coords=dict(f=freqs))
+
+    monkeypatch.setattr(CoaxialLumpedPort, "compute_voltage", compute_voltage_patch)
+    monkeypatch.setattr(CoaxialLumpedPort, "compute_current", compute_current_patch)
+
+    # First test should give complete power transfer into the network
+    power = TerminalComponentModeler.compute_power_delivered_by_port(sim_data=None, port=port1)
+    assert np.allclose(power.values, avg_power)
+
+    # Second test is complete reflecton
+    current = np.ones_like(freqs) * 0
+    power = TerminalComponentModeler.compute_power_delivered_by_port(sim_data=None, port=port1)
+    assert np.allclose(power.values, 0)
+
+    # Third test is a custom test using equation 4.60 and 4.61 from
+    # Microwave engineering/David M. Pozar.—4th ed.
+    power_a = 2.0
+    power_b = 1.0
+    Zr = port_impedance
+    Rr = np.sqrt(np.real(port_impedance))
+    voltage_amplitude = (np.conj(Zr) * power_a + Zr * power_b) / Rr
+    current_amplitude = (power_a - power_b) / Rr
+    voltage = np.ones_like(freqs) * voltage_amplitude
+    current = np.ones_like(freqs) * current_amplitude
+    power = TerminalComponentModeler.compute_power_delivered_by_port(sim_data=None, port=port1)
+    assert np.allclose(power.values, 0.5 * (power_a**2 - power_b**2))

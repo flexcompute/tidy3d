@@ -8,6 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from ....components.base import cached_property
+from ....components.data.data_array import FreqDataArray
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.utils_2d import snap_coordinate_to_grid
 from ....components.simulation import Simulation
@@ -198,21 +199,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
         a_matrix = LumpedPortDataArray(values, coords=coords)
         b_matrix = a_matrix.copy(deep=True)
 
-        def port_ab(port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData):
-            """Helper to compute the port incident and reflected power waves."""
-            voltage = port.compute_voltage(sim_data)
-            current = port.compute_current(sim_data)
-
-            power_a = (voltage + port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
-            power_b = (voltage - port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
-            return power_a, power_b
-
         # loop through source ports
         for port_in in self.ports:
             sim_data = batch_data[self._task_name(port=port_in)]
 
             for port_out in self.ports:
-                a_out, b_out = port_ab(port_out, sim_data)
+                a_out, b_out = TerminalComponentModeler.compute_power_wave_amplitudes(
+                    port_out, sim_data
+                )
                 a_matrix.loc[
                     dict(
                         port_in=port_in.name,
@@ -249,3 +243,28 @@ class TerminalComponentModeler(AbstractComponentModeler):
         yee_grid = simulation.grid.yee
         for port in ports:
             port._check_grid_size(yee_grid)
+
+    @staticmethod
+    def compute_power_wave_amplitudes(
+        port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData
+    ) -> tuple[FreqDataArray, FreqDataArray]:
+        """Helper to compute the incident and reflected power wave amplitudes at a port for a given
+        simulation result. The computed amplitudes have not been normalized.
+        """
+        voltage = port.compute_voltage(sim_data)
+        current = port.compute_current(sim_data)
+        # Amplitudes for the incident and reflected power waves
+        a = (voltage + port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
+        b = (voltage - port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
+        return a, b
+
+    @staticmethod
+    def compute_power_delivered_by_port(
+        port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData
+    ) -> FreqDataArray:
+        """Helper to compute the total power delivered to the network by a port for a given
+        simulation result. Units of power are Watts.
+        """
+        a, b = TerminalComponentModeler.compute_power_wave_amplitudes(sim_data=sim_data, port=port)
+        # Power delivered is the incident power minus the reflected power
+        return 0.5 * (np.abs(a) ** 2 - np.abs(b) ** 2)
