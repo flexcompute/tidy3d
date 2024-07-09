@@ -36,6 +36,7 @@ from ..types import (
     ClipOperationType,
     Coordinate,
     Coordinate2D,
+    LengthUnit,
     MatrixReal4x4,
     PlanePosition,
     Shapely,
@@ -51,6 +52,7 @@ from ..viz import (
     equal_aspect,
     plot_params_geometry,
     polygon_patch,
+    set_default_labels_and_title,
 )
 
 POLY_GRID_SIZE = 1e-12
@@ -438,7 +440,13 @@ class Geometry(Tidy3dBaseModel, ABC):
     @equal_aspect
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        plot_length_units: LengthUnit = None,
+        **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 
@@ -452,6 +460,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        plot_length_units : LengthUnit = None
+            Specify units to use for axis labels, tick labels, and the title.
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -474,9 +484,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
 
         # clean up the axis display
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        ax = self.add_ax_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units)
         return ax
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
@@ -523,7 +534,8 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return False
 
-    def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
+    @staticmethod
+    def _get_plot_labels(axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
 
         Parameters
@@ -536,7 +548,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         str, str
             Labels of plot, packaged as ``(xlabel, ylabel)``.
         """
-        _, (xlabel, ylabel) = self.pop_axis("xyz", axis=axis)
+        _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis)
         return xlabel, ylabel
 
     def _get_plot_limits(
@@ -559,8 +571,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
 
-    def add_ax_labels_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER) -> Ax:
-        """Sets the x,y labels based on ``axis`` and the extends based on ``self.bounds``.
+    def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER) -> Ax:
+        """Sets the x,y limits based on ``self.bounds``.
 
         Parameters
         ----------
@@ -576,7 +588,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        xlabel, ylabel = self._get_plot_labels(axis=axis)
         (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer)
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
@@ -584,8 +595,47 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
+        return ax
+
+    @staticmethod
+    def add_ax_labels_and_title(
+        ax: Ax,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        plot_length_units: LengthUnit = None,
+    ) -> Ax:
+        """Sets the axis labels, tick labels, and title based on ``axis``
+        and an optional ``plot_length_units`` argument.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes
+            Matplotlib axes to add labels and limits on.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        plot_length_units : LengthUnit = None
+            When set to a supported ``LengthUnit``, plots will be produced with annotated axes
+            and title with the proper units.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied matplotlib axes.
+        """
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        axis_labels = Box._get_plot_labels(axis)
+        ax = set_default_labels_and_title(
+            axis_labels=axis_labels,
+            axis=axis,
+            position=position,
+            ax=ax,
+            plot_length_units=plot_length_units,
+        )
         return ax
 
     @staticmethod

@@ -615,6 +615,11 @@ def test_plot():
     plt.close()
 
 
+def test_plot_with_units():
+    sim_with_units = SIM_FULL.updated_copy(plot_length_units="nm")
+    sim_with_units.plot(x=-0.5)
+
+
 def test_plot_1d_sim():
     mesh1d = td.UniformGrid(dl=2e-4)
     grid_spec = td.GridSpec(grid_x=mesh1d, grid_y=mesh1d, grid_z=mesh1d)

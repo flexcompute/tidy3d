@@ -78,6 +78,11 @@ def test_plot(component):
     plt.close()
 
 
+def test_plot_with_units():
+    _ = BOX.plot(z=0, ax=AX, plot_length_units="nm")
+    plt.close()
+
+
 def test_base_inside():
     assert td.Geometry.inside(GEO, x=0, y=0, z=0)
     assert np.all(td.Geometry.inside(GEO, np.array([0, 0]), np.array([0, 0]), np.array([0, 0])))

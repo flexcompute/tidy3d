@@ -101,6 +101,11 @@ def test_structure_alpha():
     plt.close()
 
 
+def test_plot_with_units():
+    scene_with_units = SCENE_FULL.updated_copy(plot_length_units="nm")
+    scene_with_units.plot(x=-0.5)
+
+
 def test_filter_structures():
     s1 = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=SCENE.medium)
     s2 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)), medium=SCENE.medium)

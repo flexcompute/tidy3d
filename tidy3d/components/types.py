@@ -194,7 +194,7 @@ Shapely = BaseGeometry
 PlanePosition = Literal["bottom", "middle", "top"]
 ClipOperationType = Literal["union", "intersection", "difference", "symmetric_difference"]
 BoxSurface = Literal["x-", "x+", "y-", "y+", "z-", "z+"]
-
+LengthUnit = Literal["nm", "μm", "um", "mm", "cm", "m"]
 
 """ medium """
 

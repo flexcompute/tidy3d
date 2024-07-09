@@ -7,14 +7,16 @@ from html import escape
 from typing import Any
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import pydantic.v1 as pd
 from matplotlib.patches import ArrowStyle, PathPatch
 from matplotlib.path import Path
 from numpy import array, concatenate, inf, ones
 
-from ..exceptions import SetupError
+from ..constants import UnitScaling
+from ..exceptions import SetupError, Tidy3dKeyError
 from .base import Tidy3dBaseModel
-from .types import Ax
+from .types import Ax, Axis, LengthUnit
 
 """ Constants """
 
@@ -343,3 +345,39 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     """
 
     return display(HTML(html_code))
+
+
+def set_default_labels_and_title(
+    axis_labels: tuple[str, str],
+    axis: Axis,
+    position: float,
+    ax: Ax,
+    plot_length_units: LengthUnit = None,
+) -> Ax:
+    """Adds axis labels and title to plots involving spatial dimensions.
+    When the ``plot_length_units`` are specified, the plot axes are scaled, and
+    the title and axis labels include the desired units.
+    """
+    xlabel = axis_labels[0]
+    ylabel = axis_labels[1]
+    if plot_length_units is not None:
+        if plot_length_units not in UnitScaling:
+            raise Tidy3dKeyError(
+                f"Provided units '{plot_length_units}' are not supported. "
+                f"Please choose one of '{LengthUnit}'."
+            )
+        ax.set_xlabel(f"{xlabel} ({plot_length_units})")
+        ax.set_ylabel(f"{ylabel} ({plot_length_units})")
+        # Formatter to help plot in arbitrary units
+        scale_factor = UnitScaling[plot_length_units]
+        formatter = ticker.FuncFormatter(lambda y, _: f"{y * scale_factor:.2f}")
+        ax.xaxis.set_major_formatter(formatter)
+        ax.yaxis.set_major_formatter(formatter)
+        ax.set_title(
+            f"cross section at {'xyz'[axis]}={position * scale_factor:.2f} ({plot_length_units})"
+        )
+    else:
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+    return ax

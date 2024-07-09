@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Optional, Tuple
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
@@ -16,9 +16,14 @@ from ..geometry.base import Box
 from ..medium import Medium, MediumType3D
 from ..scene import Scene
 from ..structure import Structure
-from ..types import TYPE_TAG_STR, Ax, Axis, Bound, Symmetry
+from ..types import TYPE_TAG_STR, Ax, Axis, Bound, LengthUnit, Symmetry
 from ..validators import assert_objects_in_sim_bounds, assert_unique_names
-from ..viz import PlotParams, add_ax_if_none, equal_aspect, plot_params_symmetry
+from ..viz import (
+    PlotParams,
+    add_ax_if_none,
+    equal_aspect,
+    plot_params_symmetry,
+)
 from .monitor import AbstractMonitor
 
 
@@ -102,6 +107,14 @@ class AbstractSimulation(Box, ABC):
         description="String specifying the front end version number.",
     )
 
+    plot_length_units: Optional[LengthUnit] = pd.Field(
+        "μm",
+        title="Plot Units",
+        description="When set to a supported ``LengthUnit``, "
+        "plots will be produced with proper scaling of axes and "
+        "include the desired unit specifier in labels.",
+    )
+
     """ Validating setup """
 
     # make sure all names are unique
@@ -157,7 +170,9 @@ class AbstractSimulation(Box, ABC):
     def scene(self) -> Scene:
         """Scene instance associated with the simulation."""
 
-        return Scene(medium=self.medium, structures=self.structures)
+        return Scene(
+            medium=self.medium, structures=self.structures, plot_length_units=self.plot_length_units
+        )
 
     def get_monitor_by_name(self, name: str) -> AbstractMonitor:
         """Return monitor named 'name'."""
@@ -241,6 +256,12 @@ class AbstractSimulation(Box, ABC):
         )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
+
         return ax
 
     @equal_aspect
@@ -285,6 +306,10 @@ class AbstractSimulation(Box, ABC):
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     @equal_aspect
@@ -328,6 +353,10 @@ class AbstractSimulation(Box, ABC):
             ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
         return ax
 
@@ -375,6 +404,10 @@ class AbstractSimulation(Box, ABC):
             ax = sym_box.plot(x=x, y=y, z=z, ax=ax, **plot_params.to_kwargs())
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
         return ax
 
