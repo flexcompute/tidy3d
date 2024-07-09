@@ -12,9 +12,12 @@ import shapely
 import tidy3d as td
 import trimesh
 from tidy3d.components.geometry.base import Planar
+from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
 from tidy3d.constants import LARGE_NUMBER
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
+
+from ..utils import AssertLogLevel
 
 GEO = td.Box(size=(1, 1, 1))
 GEO_INF = td.Box(size=(1, 1, td.inf))
@@ -779,7 +782,7 @@ def test_to_gds(geometry, tmp_path):
     assert len(cell.polygons) == 0
 
 
-def test_custom_surface_geometry(tmp_path):
+def test_custom_surface_geometry(tmp_path, log_capture):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
@@ -830,24 +833,27 @@ def test_custom_surface_geometry(tmp_path):
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[2, 1, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    # we currently just log a warning
-    # with pytest.raises(ValidationError):
-    geom = td.TriangleMesh.from_trimesh(tetrahedron)
+    with AssertLogLevel(log_capture, "WARNING"):
+        geom = td.TriangleMesh.from_trimesh(tetrahedron)
+    with AssertLogLevel(log_capture, None):
+        geom = geom.fix_winding()
 
     # test non-watertight mesh
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    # we currently just log a warning
-    # with pytest.raises(ValidationError):
-    geom = td.TriangleMesh.from_trimesh(tetrahedron)
+    with AssertLogLevel(log_capture, "WARNING"):
+        geom = td.TriangleMesh.from_trimesh(tetrahedron)
+    with AssertLogLevel(log_capture, None):
+        geom = geom.fill_holes()
 
     # test zero area triangles
     vertices = np.array([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with pytest.raises(pydantic.ValidationError):
+    with AssertLogLevel(log_capture, "WARNING"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
+    assert all(np.array(geom.trimesh.area_faces) > AREA_SIZE_THRESHOLD)
 
     # test trimesh.Scene
     import_geom = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")

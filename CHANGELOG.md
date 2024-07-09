@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Mode solver plugin now supports 'EMESimulation'.
+- `TriangleMesh` class: automatic removal of zero-area faces, and functions `fill_holes` and `fix_winding` to attempt mesh repair.
 
 ### Fixed
 - Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.
 - Error when plotting mode plane PML and the simulation has symmetry.
+- Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
 
 ## [2.7.1]
 
