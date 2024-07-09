@@ -57,34 +57,71 @@ class TriangleMesh(base.Geometry, ABC):
         return val
 
     @pydantic.validator("mesh_dataset", always=True)
+    @verify_packages_import(["trimesh"])
     def _check_mesh(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Check that the mesh is valid."""
         if val is None:
             return None
+
+        import trimesh
+
         mesh = cls._triangles_to_trimesh(val.surface_mesh)
         if not all(np.array(mesh.area_faces) > AREA_SIZE_THRESHOLD):
-            raise ValidationError(
+            old_tol = trimesh.tol.merge
+            trimesh.tol.merge = np.sqrt(2 * AREA_SIZE_THRESHOLD)
+            new_mesh = mesh.process(validate=True)
+            trimesh.tol.merge = old_tol
+            val = TriangleMesh.from_trimesh(new_mesh).mesh_dataset
+            log.warning(
                 f"The provided mesh has triangles with near zero area < {AREA_SIZE_THRESHOLD}. "
-                "Consider using numpy-stl's 'from_file' import with 'remove_empty_areas' set "
-                "to True and a suitable 'AREA_SIZE_THRESHOLD' to remove them."
+                "Triangles which have one edge of their 2D oriented bounding box shorter than "
+                f"'sqrt(2*{AREA_SIZE_THRESHOLD}) are being automatically removed.'"
+            )
+            if not all(np.array(new_mesh.area_faces) > AREA_SIZE_THRESHOLD):
+                raise ValidationError(
+                    f"The provided mesh has triangles with near zero area < {AREA_SIZE_THRESHOLD}. "
+                    "The automatic removal of these triangles has failed. You can try "
+                    "using numpy-stl's 'from_file' import with 'remove_empty_areas' set "
+                    "to True and a suitable 'AREA_SIZE_THRESHOLD' to remove them."
+                )
+        if not mesh.is_watertight:
+            log.warning(
+                "The provided mesh is not watertight. "
+                "This can lead to incorrect permittivity distributions, "
+                "and can also cause problems with plotting and mesh validation. "
+                "You can try 'TriangleMesh.fill_holes', which attempts to repair the mesh. "
+                "Otherwise, the mesh may require manual repair. You can use a "
+                "'PermittivityMonitor' to check if the permittivity distribution is correct. "
+                "You can see which faces are broken using 'trimesh.repair.broken_faces'."
             )
         if not mesh.is_winding_consistent:
             log.warning(
                 "The provided mesh does not have consistent winding (face orientations). "
-                "This can lead to incorrect permittivity distributions. You can use a "
+                "This can lead to incorrect permittivity distributions. "
+                "You can try 'TriangleMesh.fix_winding', which attempts to repair the mesh. "
+                "Otherwise, the mesh may require manual repair. You can use a "
                 "'PermittivityMonitor' to check if the permittivity distribution is correct. "
-                "You could repair the mesh manually, or try 'trimesh.repair.fix_winding'."
-            )
-        if not mesh.is_watertight:
-            log.warning(
-                "The provided mesh is not watertight and may require manual repair. "
-                "Non-watertight meshes can generate incorrect permittivity distributions. "
-                "They also cause problems with plotting. You can use a "
-                "'PermittivityMonitor' to check if the permittivity distribution is correct. "
-                "You can see which faces are broken using 'trimesh.repair.broken_faces'."
             )
 
         return val
+
+    @verify_packages_import(["trimesh"])
+    def fix_winding(self) -> TriangleMesh:
+        """Try to fix winding in the mesh."""
+        import trimesh
+
+        mesh = TriangleMesh._triangles_to_trimesh(self.mesh_dataset.surface_mesh)
+        trimesh.repair.fix_winding(mesh)
+        return TriangleMesh.from_trimesh(mesh)
+
+    @verify_packages_import(["trimesh"])
+    def fill_holes(self) -> TriangleMesh:
+        """Try to fill holes in the mesh. Can be used to repair non-watertight meshes."""
+        import trimesh
+
+        mesh = TriangleMesh._triangles_to_trimesh(self.mesh_dataset.surface_mesh)
+        trimesh.repair.fill_holes(mesh)
+        return TriangleMesh.from_trimesh(mesh)
 
     @classmethod
     @verify_packages_import(["trimesh"])
@@ -347,25 +384,42 @@ class TriangleMesh(base.Geometry, ABC):
 
         mesh = self.trimesh
 
-        section = mesh.section(plane_origin=origin, plane_normal=normal)
+        try:
+            section = mesh.section(plane_origin=origin, plane_normal=normal)
 
-        if section is None:
-            return []
+            if section is None:
+                return []
 
-        # homogeneous transformation matrix to map to xy plane
-        mapping = np.eye(4)
+            # homogeneous transformation matrix to map to xy plane
+            mapping = np.eye(4)
 
-        # translate to origin
-        mapping[3, :3] = -np.array(origin)
+            # translate to origin
+            mapping[3, :3] = -np.array(origin)
 
-        # permute so normal is aligned with z axis
-        # and (y, z), (x, z), resp. (x, y) are aligned with (x, y)
-        identity = np.eye(3)
-        permutation = self.unpop_axis(identity[2], identity[0:2], axis=axis)
-        mapping[:3, :3] = np.array(permutation).T
+            # permute so normal is aligned with z axis
+            # and (y, z), (x, z), resp. (x, y) are aligned with (x, y)
+            identity = np.eye(3)
+            permutation = self.unpop_axis(identity[2], identity[0:2], axis=axis)
+            mapping[:3, :3] = np.array(permutation).T
 
-        section2d, _ = section.to_planar(to_2D=mapping)
-        return list(section2d.polygons_full)
+            section2d, _ = section.to_planar(to_2D=mapping)
+            return list(section2d.polygons_full)
+
+        except ValueError as e:
+            if not mesh.is_watertight:
+                log.warning(
+                    "Unable to compute 'TriangleMesh.intersections_plane' "
+                    "because the mesh was not watertight. Using bounding box instead. "
+                    "This may be overly strict; consider using 'TriangleMesh.fill_holes' "
+                    "to repair the non-watertight mesh."
+                )
+            else:
+                log.warning(
+                    "Unable to compute 'TriangleMesh.intersections_plane'. "
+                    "Using bounding box instead."
+                )
+            log.warning(f"Error encountered: {e}")
+            return self.bounding_box.intersections_plane(x=x, y=y, z=z)
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
