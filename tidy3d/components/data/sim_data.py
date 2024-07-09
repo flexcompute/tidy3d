@@ -1118,7 +1118,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         # fwidth = (fmax - fmin) / 2.0 / num_fwidth
         # src_time_base = GaussianPulse(freq0=freq0, fwidth=fwidth)
 
-        source_index = self.normalize_index or 0
+        source_index = self.simulation.normalize_index or 0
         src_time_base = self.simulation.sources[source_index].source_time.copy()
         src_broadband = adj_srcs[0].updated_copy(source_time=src_time_base)
 
