@@ -972,6 +972,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             sources=sources_adj,
             boundary_spec=bc_adj,
             monitors=adjoint_monitors,
+            normalize_index=None,
         )
 
         # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
@@ -998,27 +999,38 @@ class SimulationData(AbstractYeeGridSimulationData):
         times = self.simulation.tmesh
         dt = self.simulation.dt
 
-        def get_spectrum(source_time: GaussianPulse, frequency: float) -> complex:
+        def get_spectrum(source_time: GaussianPulse, freqs: list[float]) -> complex:
             """Get the spectrum of a source time at a given frequency."""
-            return source_time.spectrum(times, [frequency], dt)[0]
+            return source_time.spectrum(times=times, freqs=freqs, dt=dt)
 
         all_sources_corrected = []
         for key, source_times in spatial_to_spectrums.items():
             freqs = [st.freq0 for st in source_times]
 
-            cross_talk_matrix = np.array(
+            cross_matrix = np.array(
                 [
-                    [
-                        get_spectrum(source_time=source_time, frequency=frequency)
-                        for frequency in freqs
-                    ]
+                    get_spectrum(
+                        source_time=GaussianPulse(
+                            freq0=source_time.freq0, fwidth=source_time.fwidth
+                        ),
+                        freqs=freqs,
+                    )
                     for source_time in source_times
                 ]
             )
 
+            # norm_vector = np.array(
+            #     [
+            #         get_spectrum(source_time=GaussianPulse(freq0=source_time.freq0, fwidth=source_time.fwidth), freqs=[source_time.freq0])
+            #     for source_time in source_times]
+            # )
+
+            cross_talk_matrix = cross_matrix
+
             desired_amplitudes = np.array(
                 [
-                    source_time.amplitude * np.exp(1j * source_time.phase)
+                    get_spectrum(source_time=source_time, freqs=[source_time.freq0])
+                    # source_time.amplitude * np.exp(1j * source_time.phase)
                     for source_time in source_times
                 ]
             )
@@ -1033,7 +1045,10 @@ class SimulationData(AbstractYeeGridSimulationData):
                 source_corrected = orig_sources[key].updated_copy(source_time=source_time)
                 all_sources_corrected.append(source_corrected)
 
-            return all_sources_corrected
+            # import pdb; pdb.set_trace()
+
+        # import pdb; pdb.set_trace()
+        return all_sources_corrected
 
     def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> list[Source]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
