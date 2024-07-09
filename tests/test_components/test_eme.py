@@ -86,6 +86,17 @@ def make_eme_sim():
     return sim
 
 
+def test_sim_version_update(log_capture):
+    sim = make_eme_sim()
+    sim_dict = sim.dict()
+    sim_dict["version"] = "ancient_version"
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        sim_new = td.EMESimulation.parse_obj(sim_dict)
+
+    assert sim_new.version == td.__version__
+
+
 def test_eme_grid():
     sim_geom = td.Box(size=(4, 4, 4), center=(0, 0, 0))
     axis = 2
