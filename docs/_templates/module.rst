@@ -3,6 +3,7 @@
 
 .. autoclass:: {{ fullname }}
    :members:
+   :inherited-members:
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
@@ -34,9 +35,4 @@
        {%- endfor %}
        {% endif %}
        {% endblock %}
-
-
-   .. rubric:: Inherited Methods
-
-   .. include:: ../_custom_autosummary/{{ fullname }}.rst
 
