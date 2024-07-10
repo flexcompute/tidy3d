@@ -3,12 +3,14 @@
 import os
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Callable, Dict, List
 
 import pytz
 from requests import HTTPError
 from rich.progress import Progress
 
+from ...components.data.sim_data import SimulationData
 from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import get_logging_console, log
@@ -59,6 +61,7 @@ def run(
     worker_group: str = None,
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
+    use_local_cache: bool = True,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -89,6 +92,8 @@ def run(
         target solver version.
     worker_group: str = None
         worker group
+    use_local_cache : bool = True
+        If ``True``, checks for and loads a local copy of the simulation results if available.
 
     Returns
     -------
@@ -134,6 +139,18 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
+    if use_local_cache and Path(path).is_file():
+        local_sim = SimulationData.from_file(path)
+        if local_sim.simulation.sha256 == simulation.sha256:
+            log.info(f"Loading local copy of '{task_name}' found at '{path}'.")
+            return load(
+                task_id=None,
+                path=path,
+                verbose=verbose,
+                progress_callback=progress_callback_download,
+                replace_existing=False,
+            )
+
     task_id = upload(
         simulation=simulation,
         task_name=task_name,

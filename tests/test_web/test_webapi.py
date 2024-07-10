@@ -39,6 +39,8 @@ from tidy3d.web.api.webapi import (
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.types import TaskType
 
+from ..utils import AssertLogLevel
+
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
 FOLDER_ID = "1234"
@@ -85,7 +87,6 @@ def make_sim_data(file_size_gb=FILE_SIZE_GB):
     coords = dict(x=x, y=y, z=z, f=f)
     Ex = ScalarFieldDataArray(data, coords=coords)
     monitor = FieldMonitor(size=(2, 2, 2), freqs=f, name="test", fields=["Ex"])
-    field_data = FieldData(monitor=monitor, Ex=Ex)
     sim = Simulation(
         size=(2, 2, 2),
         grid_spec=GridSpec(wavelength=1),
@@ -93,9 +94,11 @@ def make_sim_data(file_size_gb=FILE_SIZE_GB):
         sources=(src,),
         run_time=1e-12,
     )
+    field_data = FieldData(monitor=monitor, Ex=Ex, grid_expanded=sim.discretize_monitor(monitor))
     return SimulationData(
         simulation=sim,
         data=(field_data,),
+        log="field decay: 1e-6",
     )
 
 
@@ -463,7 +466,23 @@ def test_run(mock_webapi, monkeypatch, tmp_path):
         task_name=TASK_NAME,
         folder_name=PROJECT_NAME,
         path=str(tmp_path / "web_test_tmp.json"),
+        use_local_cache=False,
     )
+
+
+@responses.activate
+def test_run_cache_local(mock_webapi, tmp_path, log_capture):
+    simdata = make_sim_data(1e-3)
+    simdata_fp = tmp_path / "simulation_data.hdf5"
+    simdata.to_file(simdata_fp)
+    with AssertLogLevel(log_capture, "INFO", f"{str(simdata_fp)}"):
+        run(
+            simdata.simulation,
+            task_name=TASK_NAME,
+            folder_name=PROJECT_NAME,
+            path=str(simdata_fp),
+            use_local_cache=True,
+        )
 
 
 @responses.activate
