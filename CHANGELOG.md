@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
 - `ModeSolver` methods to plot the mode plane simulation components, including `.plot()`, `.plot_eps()`, `.plot_structures_eps()`, `.plot_grid()`, and `.plot_pml()`.
 - Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
+- Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
 
 ### Changed
 
@@ -21,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug when snapping `CoaxialLumpedPort` to grid cell boundaries.
 - Errors in `PolySlab` when using autograd differentiation with non-zero `sidewall_angle` and `dilation`.
 - Error in `EMESimulationData.smatrix_in_basis` when using older versions of xarray.
-- Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
 - Gradients for `Box` objects when simulation size is < 3D.
 
 ## [2.7.0] - 2024-06-17
