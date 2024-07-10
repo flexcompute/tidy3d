@@ -1,11 +1,36 @@
 """Tests the base model."""
 
+from time import perf_counter
+
 import numpy as np
 import pytest
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
 
+from ..utils import AssertLogLevel
+
 M = td.Medium()
+
+
+def test_cached_property():
+    t0 = perf_counter()
+    a = M.sha256
+    t1 = perf_counter() - t0
+    t0 = perf_counter()
+    b = M.sha256
+    t2 = perf_counter() - t0
+    assert t2 < 10 * t1  # lookup should be several orders of magnitude faster
+
+
+def test_hash_self(log_capture):
+    with AssertLogLevel(log_capture, "WARNING", contains_str="deprecated"):
+        assert M._hash_self() == M.sha256
+
+
+def test_sha256():
+    a = M.sha256
+    b = M.updated_copy(permittivity=2).sha256
+    assert a != b
 
 
 def test_shallow_copy():
