@@ -2,6 +2,7 @@
 
 import traceback
 import typing
+import tempfile
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
@@ -18,12 +19,14 @@ from ..asynchronous import run_async as run_async_webapi
 from ..container import BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
+from ...core.s3utils import download_file
 from .utils import get_derivative_maps
 
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
 AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
 AUX_KEY_FWD_TASK_ID = "task_id_fwd"
+SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
 
 ISSUE_URL = (
     "https://github.com/flexcompute/tidy3d/issues/new?"
@@ -504,16 +507,12 @@ def postprocess_fwd(
 
 
 """ VJP maker for ADJ pass."""
-
-
-def get_fwd_sim_data(task_id_fwd: str) -> td.SimulationData:
-    """Function to grab the forward simulation data from the server from a task ID."""
-    raise NotImplementedError("Must implement grabbing fwd task id for server side autograd.")
-
-
-def get_vjp_traced_fields(task_id_adj: str) -> AutogradFieldMap:
+def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
     """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    raise NotImplementedError("Must implement grabbing fwd task id for server side autograd.")
+    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
+    data_file.close()
+    download_file(task_id_adj, SIM_VJP_FILE, to_file=data_file.name, verbose=verbose)
+    return AutogradFieldMap.from_file(data_file.name)
 
 
 def _run_bwd(
@@ -530,10 +529,7 @@ def _run_bwd(
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
 
-    if not local_gradient:
-        task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
-        sim_data_fwd = get_fwd_sim_data(task_id_fwd)
-    else:
+    if local_gradient:
         sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
 
     td.log.info("constructing custom vjp function for backwards pass.")
@@ -580,8 +576,7 @@ def _run_bwd(
             run_kwargs["parent_tasks"] = [task_id_fwd]
             run_kwargs["simulation_type"] = "autograd_bwd"
 
-            _, task_id_adj = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
-            vjp_traced_fields = get_vjp_traced_fields(task_id_adj)
+            vjp_traced_fields = _run_tidy3d_bwd(sim_adj, task_name=task_name_adj, **run_kwargs)
 
         return vjp_traced_fields
 
@@ -769,6 +764,17 @@ def _run_tidy3d(
     data = job.run()
     return data, job.task_id
 
+def _run_tidy3d_bwd(
+    simulation: td.Simulation, task_name: str, **run_kwargs
+) -> (td.SimulationData, str):
+    """Run a simulation without any tracers using regular web.run()."""
+    td.log.info("running regular simulation with '_run_tidy3d()'")
+
+    run_kwargs = {k: v for k, v in run_kwargs.items() if k in Job._upload_fields}
+    job = Job(simulation=simulation, task_name=task_name, **run_kwargs)
+    job.start()
+    job.monitor()
+    return get_vjp_traced_fields(task_id_adj=job.task_id, verbose=job.verbose)
 
 def _run_async_tidy3d(simulations: dict[str, td.Simulation], **run_async_kwargs) -> BatchData:
     """Run a simulation without any tracers using regular ``web.run_async``."""
