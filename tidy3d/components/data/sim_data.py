@@ -38,7 +38,7 @@ DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataT
 DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in MonitorDataTypes}
 
 # adjoint fwidth stuff is this times the fwidth
-FWIDTH_FACTOR = 1.0
+FWIDTH_FACTOR = 0.05
 
 
 class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
@@ -993,14 +993,13 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         # mapping of source spatial dependence to associated adjoint source times
         fwidth = self.simulation.sources[self.simulation.normalize_index or 0].source_time.fwidth
+        fwidth *= FWIDTH_FACTOR
 
         spatial_to_spectrums = defaultdict(list)
         orig_sources = {}
         for src in sources_adj:
             key = src.json(exclude={"source_time"})
-            spatial_to_spectrums[key].append(
-                src.source_time.updated_copy(fwidth=fwidth * FWIDTH_FACTOR)
-            )
+            spatial_to_spectrums[key].append(src.source_time.updated_copy(fwidth=fwidth))
             orig_sources[key] = src
 
         # correct cross talk
@@ -1039,11 +1038,16 @@ class SimulationData(AbstractYeeGridSimulationData):
             corrected_amplitudes = np.linalg.solve(
                 cross_matrix, desired_amplitudes
             )  # * self_terms)
+
             res = cross_matrix @ corrected_amplitudes - desired_amplitudes
 
-            atol = 1e-3
+            # atol = 1e-3
 
-            if np.linalg.norm(res) / np.linalg.norm(desired_amplitudes) > atol:
+            print(res)
+            print(desired_amplitudes)
+
+            if not np.allclose(res, 0.0):
+                # if np.linalg.norm(res) / np.linalg.norm(desired_amplitudes) > atol:
                 raise NotImplementedError(
                     f"adjoint fwidth would be too large, residual of {np.linalg.norm(res) / np.linalg.norm(desired_amplitudes)} relative to the desired amplitudes."
                 )
