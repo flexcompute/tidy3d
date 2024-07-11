@@ -836,22 +836,9 @@ class Scene(Tidy3dBaseModel):
             vmin=eps_min, vmax=eps_max, label=r"$\epsilon_r$", cmap=STRUCTURE_EPS_CMAP, ax=ax
         )
 
-    def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
-        """Compute range of (real) permittivity present in the scene at frequency "freq".
-
-        Parameters
-        ----------
-        freq : float = None
-            Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
-
-        Returns
-        -------
-        Tuple[float, float]
-            Minimal and maximal values of relative permittivity in scene.
-        """
-
-        medium_list = [self.medium] + list(self.mediums)
+    @staticmethod
+    def _eps_bounds(medium_list: list[Medium], freq: float = None) -> Tuple[float, float]:
+        """Compute range of (real) permittivity present in the mediums at frequency "freq"."""
         medium_list = [medium for medium in medium_list if not medium.is_pec]
         # regular medium
         eps_list = [
@@ -880,6 +867,24 @@ class Scene(Tidy3dBaseModel):
                 ),
             )
         return eps_min, eps_max
+
+    def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
+        """Compute range of (real) permittivity present in the scene at frequency "freq".
+
+        Parameters
+        ----------
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Minimal and maximal values of relative permittivity in scene.
+        """
+
+        medium_list = [self.medium] + list(self.mediums)
+        return self._eps_bounds(medium_list=medium_list, freq=freq)
 
     def _pcolormesh_shape_custom_medium_structure_eps(
         self,
@@ -1030,8 +1035,8 @@ class Scene(Tidy3dBaseModel):
             clip_box=ax.bbox,
         )
 
+    @staticmethod
     def _get_structure_eps_plot_params(
-        self,
         medium: Medium,
         freq: float,
         eps_min: float,
