@@ -1322,12 +1322,14 @@ def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type,
     assert_log_level(log_capture, log_level)
 
 
-def test_num_mediums():
+def test_num_mediums(monkeypatch):
     """Make sure we error if too many mediums supplied."""
 
+    max_num_mediums = 10
+    monkeypatch.setattr(simulation, "MAX_NUM_MEDIUMS", max_num_mediums)
     structures = []
     grid_spec = td.GridSpec.auto(wavelength=1.0)
-    for i in range(MAX_NUM_MEDIUMS):
+    for i in range(max_num_mediums):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 1))
         )
