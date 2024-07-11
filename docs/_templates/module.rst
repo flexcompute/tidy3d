@@ -3,7 +3,6 @@
 
 .. autoclass:: {{ fullname }}
    :members:
-   :inherited-members:
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
