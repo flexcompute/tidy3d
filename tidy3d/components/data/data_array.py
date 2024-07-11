@@ -81,7 +81,10 @@ class DataArray(xr.DataArray):
 
     @property
     def tracers(self) -> Box:
-        if AUTOGRAD_KEY not in self.attrs and not isbox(self.data.flat[0]):  # no tracers
+        if self.data.size == 0:
+            return None
+        elif AUTOGRAD_KEY not in self.attrs and not isbox(self.data.flat[0]):
+            # no tracers
             return None
         elif isbox(self.data.flat[0]):  # traced values take precedence over traced attrs
             return anp.array(self.values.tolist())
