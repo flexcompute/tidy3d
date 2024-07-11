@@ -1,8 +1,8 @@
 # autograd wrapper for web functions
 
+import tempfile
 import traceback
 import typing
-import tempfile
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
@@ -14,12 +14,12 @@ from tidy3d.components.autograd import AutogradFieldMap, get_static
 # from tidy3d.components.autograd.utils import split_data_list, split_list
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
+from ...core.s3utils import download_file
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
 from ..container import BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
-from ...core.s3utils import download_file
 from .utils import get_derivative_maps
 
 # keys for data into auxiliary dictionary
@@ -184,24 +184,21 @@ def run(
     """
 
     if is_valid_for_autograd(simulation):
-        try:
-            return _run(
-                simulation=simulation,
-                task_name=task_name,
-                folder_name=folder_name,
-                path=path,
-                callback_url=callback_url,
-                verbose=verbose,
-                progress_callback_upload=progress_callback_upload,
-                progress_callback_download=progress_callback_download,
-                solver_version=solver_version,
-                worker_group=worker_group,
-                simulation_type="tidy3d_autograd",
-                parent_tasks=parent_tasks,
-                local_gradient=local_gradient,
-            )
-        except Exception as exc:
-            warn_autograd("web.run()", exc=exc)
+        return _run(
+            simulation=simulation,
+            task_name=task_name,
+            folder_name=folder_name,
+            path=path,
+            callback_url=callback_url,
+            verbose=verbose,
+            progress_callback_upload=progress_callback_upload,
+            progress_callback_download=progress_callback_download,
+            solver_version=solver_version,
+            worker_group=worker_group,
+            simulation_type="tidy3d_autograd",
+            parent_tasks=parent_tasks,
+            local_gradient=local_gradient,
+        )
 
     return run_webapi(
         simulation=simulation,
@@ -507,6 +504,8 @@ def postprocess_fwd(
 
 
 """ VJP maker for ADJ pass."""
+
+
 def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
     """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
     data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
@@ -764,6 +763,7 @@ def _run_tidy3d(
     data = job.run()
     return data, job.task_id
 
+
 def _run_tidy3d_bwd(
     simulation: td.Simulation, task_name: str, **run_kwargs
 ) -> (td.SimulationData, str):
@@ -775,6 +775,7 @@ def _run_tidy3d_bwd(
     job.start()
     job.monitor()
     return get_vjp_traced_fields(task_id_adj=job.task_id, verbose=job.verbose)
+
 
 def _run_async_tidy3d(simulations: dict[str, td.Simulation], **run_async_kwargs) -> BatchData:
     """Run a simulation without any tracers using regular ``web.run_async``."""

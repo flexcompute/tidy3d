@@ -11,7 +11,7 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
-from tidy3d.web.api.autograd.autograd import run, run_async
+from tidy3d.web import run, run_async
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
@@ -114,7 +114,6 @@ def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
     import tidy3d
-    from tidy3d.web.api.container import Job
 
     if TEST_MODE in ("pipeline", "speed"):
         VJP = "VJP"
@@ -133,7 +132,6 @@ def use_emulated_run(monkeypatch):
             postprocess_fwd,
             setup_run,
         )
-        from tidy3d.web.api.autograd import autograd
 
         def emulated_run_fwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
@@ -186,10 +184,8 @@ def use_emulated_run(monkeypatch):
             return traced_fields_vjp
 
         monkeypatch.setattr(webapi, "run", run_emulated)
-        monkeypatch.setattr(autograd, "_run_tidy3d", emulated_run_fwd)
-        monkeypatch.setattr(autograd, "_run_tidy3d_bwd", emulated_run_bwd)
-
-        reload(autograd)
+        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
+        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d_bwd", emulated_run_bwd)
 
         _run_was_emulated[0] = True
 
