@@ -18,6 +18,7 @@
 # absolute, like shown here.
 #
 import datetime
+import logging
 import os
 import re
 import subprocess
@@ -64,9 +65,12 @@ autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 autodoc_class_signature = "separated"
 autodoc_default_options = {
     "members": True,
+    "inherited-members": True,
     "member-order": "bysource",
     "undoc-members": True,
-    "exclude-members": "SchemaConfig,__init__,Config,attrs,chunk,copy,json,log",
+    "exclude-members": "SchemaConfig,__init__,Config,attrs,chunk,copy,json,log,__add__,__and__,__eq__,__ge__,__gt__,"
+    "__hash__,__init_subclass__,__invert__,__iter__,__le__,__lt__,__mul__,__neg__,__or__,__pos__,"
+    "__pretty__,__radd__,__repr_name__,__rich_repr__,__sub__,__try_update_forward_refs__,__xor__",
 }
 autodoc_typehints = "none"
 ## TODO DEBATE KEEP
@@ -247,7 +251,6 @@ latex_elements = {
     """
 }
 
-
 # latex_elements: dict = {
 #     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
 #     # The paper size ('letterpaper' or 'a4paper').
@@ -264,13 +267,6 @@ latex_elements = {
 #     # 'figure_align': 'htbp',
 # }
 
-"""
-This is basically a hack until I finally get round to writing our own custom sphinx extension which will customise 
-the way we represent our documentation properly. The goal of adding these filters is that at least we'll get useful 
-information on errors, rather than those related to the docs memory - stub page generation tradeoff.
-"""
-import logging
-
 
 class ImportWarningFilter(logging.Filter):
     def filter(self, record):
@@ -285,6 +281,12 @@ class ImportWarningFilter(logging.Filter):
 
 
 class AutosummaryFilter(logging.Filter):
+    """
+    This is basically a hack until I finally get round to writing our own custom sphinx extension which will customise
+    the way we represent our documentation properly. The goal of adding these filters is that at least we'll get useful
+    information on errors, rather than those related to the docs memory - stub page generation tradeoff.
+    """
+
     def filter(self, record):
         # Suppress "autosummary: stub file not found" warnings
         if "autosummary" in record.getMessage() and "stub file not found" in record.getMessage():
