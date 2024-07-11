@@ -37,6 +37,9 @@ DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataT
 # maps monitor type (string) to the class of the corresponding data
 DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in MonitorDataTypes}
 
+# adjoint fwidth stuff is this times the fwidth
+FWIDTH_FACTOR = 1.0
+
 
 class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
     """Data from an :class:`.AbstractYeeGridSimulation` involving
@@ -973,6 +976,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             boundary_spec=bc_adj,
             monitors=adjoint_monitors,
             normalize_index=None,
+            run_time=sim_original.run_time / FWIDTH_FACTOR,
         )
 
         # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
@@ -992,7 +996,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         orig_sources = {}
         for src in sources_adj:
             key = src.json(exclude={"source_time"})
-            spatial_to_spectrums[key].append(src.source_time)
+            spatial_to_spectrums[key].append(
+                src.source_time.updated_copy(fwidth=src.source_time.fwidth * FWIDTH_FACTOR)
+            )
             orig_sources[key] = src
 
         # correct cross talk
