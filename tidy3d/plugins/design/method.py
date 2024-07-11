@@ -12,13 +12,10 @@ from bayes_opt.event import Events
 from bayes_opt.logger import JSONLogger
 from pyswarms.single.global_best import GlobalBestPSO
 
-import tidy3d.plugins.design as tdd
-from tidy3d.constants import inf
-
-# from ... import web # What's this for?
 from ...components.base import Tidy3dBaseModel
+from ...constants import inf
 from ...log import log
-from .parameter import ParameterType
+from .parameter import ParameterAny, ParameterFloat, ParameterInt, ParameterType
 
 DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube
 
@@ -36,7 +33,7 @@ class Method(Tidy3dBaseModel, ABC):
         """Convert a float asigned to an int parameter to be an int. Update dict in place."""
 
         for param in parameters:
-            if type(param) == tdd.ParameterInt:
+            if isinstance(param, ParameterInt):
                 # Using int(round()) instead of just int as int always rounds down making upper bound value impossible
                 next_point[param.name] = int(round(next_point[param.name], 0))
 
@@ -94,8 +91,6 @@ class MethodSample(Method, ABC):
         fn_args = self.sample(parameters)
         for arg_dict in fn_args:
             self._force_int(arg_dict, parameters)
-        # self.assert_hashable(fn_args)
-        # self.assert_num_points(fn_args)
         return fn_args
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
@@ -184,21 +179,21 @@ class MethodBayOpt(MethodOptimise, ABC):
     )
 
     acq_func: Optional[Literal["ucb", "ei", "poi"]] = pd.Field(
+        default="ucb",
         title="Type of acquisition function.",
         description="TBD",
-        default="ucb",
     )
 
     kappa: Optional[pd.PositiveFloat] = pd.Field(
+        default=2.5,
         title="Kappa parameter for the Gaussian processor.",
         description="TBD",
-        default=2.5,
     )
 
     xi: Optional[pd.NonNegativeFloat] = pd.Field(
+        default=0.0,
         title="Xi parameter for the Gaussian processor.",
         description="TBD",
-        default=0.0,
     )
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
@@ -207,7 +202,7 @@ class MethodBayOpt(MethodOptimise, ABC):
         param_converter = {}
         boundary_dict = {}
         for param in parameters:
-            if type(param) == tdd.ParameterAny:
+            if type(param) == ParameterAny:
                 param_converter[param.name] = self.any_to_int_param(param)
                 boundary_dict[param.name] = (
                     0,
@@ -292,45 +287,45 @@ class MethodGenAlg(MethodOptimise, ABC):
     )
 
     stop_criteria: Optional[pd.constr(regex=r"\b(?:reach|saturate)_\d+\b")] = pd.Field(
+        default=None,
         title="Early stopping criteria.",
         description="Define the early stopping criteria. Supported words are 'reach_X' or 'saturate_X' where X is a number. See PyGAD docs for more details",
-        default=None,
     )
 
     parent_selection_type: Optional[
         Literal["sss", "rws", "sus", "rank", "random", "tournament"]
     ] = pd.Field(
+        default="sss",
         title="Parent selection type.",
         description="TBD",
-        default="sss",
     )
 
     crossover_type: Optional[Literal["single_point", "two_points", "uniform", "scattered"]] = (
         pd.Field(
+            default="single_point",
             title="Crossover type.",
             description="TBD",
-            default="single_point",
         )
     )
 
     crossover_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+        default=0.8,
         title="Crossover probability.",
         description="TBD",
-        default=0.8,
     )
 
     mutation_type: Optional[Literal["random", "swap", "inversion", "scramble", "adaptive"]] = (
         pd.Field(
+            default="random",
             title="Crossover type.",
             description="TBD",
-            default="random",
         )
     )
 
     mutation_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+        default=0.2,
         title="Crossover probability.",
         description="TBD",
-        default=0.2,
     )
 
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
@@ -338,58 +333,53 @@ class MethodGenAlg(MethodOptimise, ABC):
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm for the GA"""
 
-        # Create fitness function combining pre and post fn with the tidy3d call
-        def fitness_function(ga_instance, solution, solution_idx):
-            # Break solution down to dict
-            sol_dict = self.sol_array_to_dict(solution, _param_keys, _param_converter)
-
-            # Iterate through solutions for batched and non-batched data
-            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
-
-            self._flatten_and_append(aux_out, _store_aux)
-
-            return sol_out
-
-        def on_generation(ga_instance):
-            _store_parameters.append(ga_instance.population.copy())
-            _store_fitness.append(ga_instance.last_generation_fitness)
-            best_fitness = ga_instance.best_solution()[1]
-            print(
-                f"Generation {ga_instance.generations_completed}: Best Fitness = {best_fitness:.3f}"
-            )
-
         # Make param names available to the fitness function
-        global _param_keys
-        _param_keys = [param.name for param in parameters]
+        param_keys = [param.name for param in parameters]
 
         # Store parameters and fitness
-        global _store_parameters
-        global _store_fitness
-        global _store_aux
-        _store_parameters = []
-        _store_fitness = []
-        _store_aux = []
+        store_parameters = []
+        store_fitness = []
+        store_aux = []
 
         # Set gene_spaces to keep GA within ranges
-        global _param_converter
-        _param_converter = {}
+        param_converter = {}
         gene_spaces = []
         gene_types = []
         for param in parameters:
-            if type(param) == tdd.ParameterFloat:
+            if type(param) == ParameterFloat:
                 gene_spaces.append({"low": param.span[0], "high": param.span[1]})
                 gene_types.append(float)
-            elif type(param) == tdd.ParameterInt:
+            elif type(param) == ParameterInt:
                 gene_spaces.append(
                     range(param.span[0], param.span[1] + 1)
                 )  # +1 included so as to be inclusive of upper range value
                 gene_types.append(int)
             else:
                 # Designed for str in ParameterAny but may work for anything
-                _param_converter[param.name] = self.any_to_int_param(param)
+                param_converter[param.name] = self.any_to_int_param(param)
 
                 gene_spaces.append(range(0, len(param.allowed_values)))
                 gene_types.append(int)
+
+        # Create fitness function combining pre and post fn with the tidy3d call
+        def fitness_function(ga_instance, solution, solution_idx):
+            # Break solution down to dict
+            sol_dict = self.sol_array_to_dict(solution, param_keys, param_converter)
+
+            # Iterate through solutions for batched and non-batched data
+            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
+
+            self._flatten_and_append(aux_out, store_aux)
+
+            return sol_out
+
+        def on_generation(ga_instance):
+            store_parameters.append(ga_instance.population.copy())
+            store_fitness.append(ga_instance.last_generation_fitness)
+            best_fitness = ga_instance.best_solution()[1]
+            print(
+                f"Generation {ga_instance.generations_completed}: Best Fitness = {best_fitness:.3f}"
+            )
 
         # Determine initial array
         num_genes = len(parameters)
@@ -417,10 +407,10 @@ class MethodGenAlg(MethodOptimise, ABC):
         ga_instance.run()
 
         # Format output
-        fn_args = [dict(zip(_param_keys, val)) for arr in _store_parameters for val in arr]
-        results = [val for arr in _store_fitness for val in arr]
+        fn_args = [dict(zip(param_keys, val)) for arr in store_parameters for val in arr]
+        results = [val for arr in store_fitness for val in arr]
 
-        return fn_args, results, _store_aux
+        return fn_args, results, store_aux
 
 
 class MethodParticleSwarm(MethodOptimise, ABC):
@@ -439,76 +429,53 @@ class MethodParticleSwarm(MethodOptimise, ABC):
     )
 
     cognitive_coeff: Optional[pd.PositiveFloat] = pd.Field(
+        default=1.5,
         title="Number of parents mating.",
         description="TBD",
-        default=1.5,
     )
 
     social_coeff: Optional[pd.PositiveFloat] = pd.Field(
+        default=1.5,
         title="Number of parents mating.",
         description="TBD",
-        default=1.5,
     )
 
     weight: Optional[pd.PositiveFloat] = pd.Field(
+        default=0.9,
         title="Number of parents mating.",
         description="TBD",
-        default=0.9,
     )
 
     ftol: Optional[Union[pd.confloat(ge=0, le=1), Literal[-inf]]] = pd.Field(
+        default=-inf,
         title="Relative error for convergence.",
         description="Relative error in objective_func(best_pos) acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
-        default=-inf,
     )
 
     ftol_iter: Optional[pd.PositiveInt] = pd.Field(
+        default=1,
         title="Number of iterations before acceptable convergence.",
         description="Number of iterations over which the relative error in objective_func is acceptable for convergence.",
-        default=1,
     )
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         # Pyswarms doesn't have a seed set outside of numpy std method
         np.random.seed(self.rng_seed)
 
-        def fitness_function(solution):
-            # Correct solutions that should be ints
-            sol_dict = self.sol_array_to_dict(solution, _param_keys, _param_converter)
-            for arg_dict in sol_dict:
-                self._force_int(arg_dict, parameters)
+        # Variable assignment here so it is available to the fitness function
+        param_keys = [param.name for param in parameters]
 
-            _store_parameters.append(sol_dict)
-
-            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
-
-            self._flatten_and_append(aux_out, _store_aux)
-
-            # Stored before minus to give true answers
-            _store_fitness.append(sol_out)
-
-            # Set as negative as PSO uses a minimising cost function
-            return -np.array(sol_out)
-
-        # Make param names available to the fitness function
-        global _param_keys
-        _param_keys = [param.name for param in parameters]
-
-        global _store_parameters
-        global _store_fitness
-        global _store_aux
-        _store_parameters = []
-        _store_fitness = []
-        _store_aux = []
+        store_parameters = []
+        store_fitness = []
+        store_aux = []
 
         # Build bounds and conversion dict for ParameterAny inputs
-        global _param_converter
-        _param_converter = {}
+        param_converter = {}
         min_bound = []
         max_bound = []
         for param in parameters:
-            if type(param) == tdd.ParameterAny:
-                _param_converter[param.name] = self.any_to_int_param(param)
+            if isinstance(param, ParameterAny):
+                param_converter[param.name] = self.any_to_int_param(param)
                 min_bound.append(0)
                 max_bound.append(len(param.allowed_values) - 1)  # -1 as ints are starting from 0
             else:
@@ -516,6 +483,24 @@ class MethodParticleSwarm(MethodOptimise, ABC):
                 max_bound.append(param.span[1])
 
         bounds = (min_bound, max_bound)
+
+        def fitness_function(solution):
+            # Correct solutions that should be ints
+            sol_dict = self.sol_array_to_dict(solution, param_keys, param_converter)
+            for arg_dict in sol_dict:
+                self._force_int(arg_dict, parameters)
+
+            store_parameters.append(sol_dict)
+
+            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
+
+            self._flatten_and_append(aux_out, store_aux)
+
+            # Stored before minus to give true answers
+            store_fitness.append(sol_out)
+
+            # Set as negative as PSO uses a minimising cost function
+            return -np.array(sol_out)
 
         options = {"c1": self.cognitive_coeff, "c2": self.social_coeff, "w": self.weight}
         optimizer = GlobalBestPSO(
@@ -531,10 +516,10 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         _ = optimizer.optimize(fitness_function, self.n_iter)
 
         # Collapse stores into fn_args and results lists
-        fn_args = [val for sublist in _store_parameters for val in sublist]
-        results = [val for sublist in _store_fitness for val in sublist]
+        fn_args = [val for sublist in store_parameters for val in sublist]
+        results = [val for sublist in store_fitness for val in sublist]
 
-        return fn_args, results, _store_aux
+        return fn_args, results, store_aux
 
 
 class AbstractMethodRandom(MethodSample, ABC):

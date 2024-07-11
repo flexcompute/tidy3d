@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, Dict, Generator, List, Tuple
+from collections import defaultdict
+from typing import Any, Callable, Dict, Generator, List, Tuple, Union
 
 import pydantic.v1 as pd
 
 import tidy3d.web as web
+from tidy3d.log import log
 
 from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.data.sim_data import SimulationData
 from ...components.simulation import Simulation
+from ...web.api.container import BatchData
 from .method import MethodType
 from .parameter import ParameterType
 from .result import Result
@@ -76,7 +80,7 @@ class DesignSpace(Tidy3dBaseModel):
 
     def _package_run_results(
         self,
-        fn_args: Dict[str, tuple],
+        fn_args: list[dict[str, Any]],
         fn_values: List[Any],
         fn_source: str,
         task_ids: Tuple[str] = None,
@@ -165,12 +169,14 @@ class DesignSpace(Tidy3dBaseModel):
             task_ids=self._task_names,
         )
 
-    def run_single(self, fn: Callable):
+    def run_single(self, fn: Callable) -> Tuple(list[dict], list, list[Any]):
         """Run a single function of parameter inputs."""
         evaluate_fn = self._get_evaluate_fn_single(fn=fn)
         return self.method.run(run_fn=evaluate_fn, parameters=self.parameters)
 
-    def run_pre_post(self, fn_pre: Callable, fn_post: Callable):
+    def run_pre_post(self, fn_pre: Callable, fn_post: Callable) -> Tuple(
+        list[dict], list[dict], list[Any]
+    ):
         """Run a function with tidy3d implicitly called in between."""
         evaluate_fn = self._get_evaluate_fn_pre_post(fn_pre=fn_pre, fn_post=fn_post)
         return self.method.run(run_fn=evaluate_fn, parameters=self.parameters)
@@ -202,18 +208,23 @@ class DesignSpace(Tidy3dBaseModel):
 
         def fn_combined(args_list):
             sim_dict = {idx: fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
-            data = self.fn_mid(sim_dict)
+            data = self._fn_mid(sim_dict)
             post_out = [fn_post(val[1]) for val in data.items()]
             return post_out
 
         return fn_combined
 
-    def fn_mid(self, pre_out: Any) -> Any:
+    def _fn_mid(self, pre_out: dict[int, Any]) -> Union[dict[int, Any], BatchData]:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
+
+        # New plan - element wise
+        # Keep list coversion but no need to check for simulation
+        # If no sims or batches found then dump all the work up and just return pre_out - for non-td problems
+        # Don't unpack batches but allow for sequential running
 
         # Convert list of sim inputs to dict of dict before passing through checks
         was_list = False
-        if all(isinstance(sim, List) for sim in pre_out.values()) and any(
+        if all(isinstance(sim, list) for sim in pre_out.values()) and any(
             isinstance(sim, Simulation) for sim in pre_out[0]
         ):
             pre_out = {
@@ -225,9 +236,11 @@ class DesignSpace(Tidy3dBaseModel):
         if all(isinstance(sim, Simulation) for sim in pre_out.values()):
             named_sims = {next(self._name_generator): sim for sim in pre_out.values()}
             self._task_names.extend(list(named_sims.keys()))
-            data = web.Batch(simulations=named_sims, folder_name=self.folder_name).run(
-                path_dir=self.path_dir
-            )
+            data = web.Batch(
+                simulations=named_sims,
+                folder_name=self.folder_name,
+                simulation_type="tidy3d_design",
+            ).run(path_dir=self.path_dir)
 
         # Can "index" dict here because fn_combined uses idx as the key
         elif all(isinstance(sim, Dict) for sim in pre_out.values()) and any(
@@ -235,16 +248,15 @@ class DesignSpace(Tidy3dBaseModel):
         ):
             # Flatten dict of dicts whilst storing combined keys for later
             flattened_sims = {}
-            original_structure = {}
+            original_structure = defaultdict(dict)
             dict_keys = []
             for dict_idx, sub_dict in pre_out.items():
-                sub_structure = {}
                 for sub_dict_idx, sim_like in sub_dict.items():
                     sub_dict_idx = str(sub_dict_idx)  # Needs to be string for restoration later
                     if isinstance(sim_like, Simulation):
                         task_name = f"{dict_idx}_{sub_dict_idx}"
                         flattened_sims[task_name] = sim_like
-                        sub_structure[sub_dict_idx] = None
+                        original_structure[dict_idx][sub_dict_idx] = None
 
                         # Add user specified keys to the naming if a dict was supplied
                         if not was_list:
@@ -252,9 +264,7 @@ class DesignSpace(Tidy3dBaseModel):
                         else:
                             dict_keys.append(None)
                     else:
-                        sub_structure[sub_dict_idx] = sim_like
-
-                original_structure[dict_idx] = sub_structure
+                        original_structure[dict_idx][sub_dict_idx] = sim_like
 
             # Run sims with flattened dict
             named_sims = {}
@@ -263,9 +273,11 @@ class DesignSpace(Tidy3dBaseModel):
                 named_sims[next(self._name_generator)] = sim
             translation_dict = dict(zip(named_sims, flattened_sims))
             self._task_names.extend(list(named_sims.keys()))
-            batch_out = web.Batch(simulations=named_sims, folder_name=self.folder_name).run(
-                path_dir=self.path_dir
-            )
+            batch_out = web.Batch(
+                simulations=named_sims,
+                folder_name=self.folder_name,
+                simulation_type="tidy3d_design",
+            ).run(path_dir=self.path_dir)
 
             # Unflatten structure whilst running fn_post
             for task_id in batch_out.task_ids:
@@ -287,3 +299,30 @@ class DesignSpace(Tidy3dBaseModel):
             data = pre_out
 
         return data
+
+    def run_batch(
+        self,
+        fn_pre: Callable[Any, Union[Simulation, List[Simulation], Dict[str, Simulation]]],
+        fn_post: Callable[
+            Union[SimulationData, List[SimulationData], Dict[str, SimulationData]], Any
+        ],
+        path_dir: str = None,
+        **batch_kwargs,
+    ) -> Result:
+        """
+        This function has been superceded by `run`, please use `run` for batched simulations.
+        """
+        log.warning(
+            "In version 2.8.0, the 'run_batch' method is replaced by 'run'."
+            "While the original syntax will still be supported, future functionality will be added to the new method moving forward."
+        )
+
+        if len(batch_kwargs) > 0:
+            log.warning(
+                "Batch_kwargs supplied here will no longer be used for within the simulation."
+            )
+
+        new_self = self.updated_copy(path_dir=path_dir)
+        result = new_self.run(fn=fn_pre, fn_post=fn_post)
+
+        return result

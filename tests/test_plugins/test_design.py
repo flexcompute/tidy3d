@@ -559,8 +559,8 @@ def test_method_custom_validators():
     class SamplerNoRandom:
         pass
 
+    no_random = tdd.MethodRandomCustom(num_points=5, sampler=SamplerNoRandom)
     with pytest.raises(ValueError):
-        no_random = tdd.MethodRandomCustom(num_points=5, sampler=SamplerNoRandom)
         no_random.get_sampler(parameters)
 
     # random method gives a list
@@ -568,8 +568,8 @@ def test_method_custom_validators():
         def random(self, n):
             return np.random.random((n, d)).tolist()
 
+    gives_list = tdd.MethodRandomCustom(num_points=5, sampler=SamplerList)
     with pytest.raises(ValueError):
-        gives_list = tdd.MethodRandomCustom(num_points=5, sampler=SamplerList)
         gives_list.get_sampler(parameters)
 
     # random method gives wrong number of dimensions
@@ -577,8 +577,8 @@ def test_method_custom_validators():
         def random(self, n):
             return np.random.random((n, d, d))
 
+    wrong_dim = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongDims)
     with pytest.raises(ValueError):
-        wrong_dim = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongDims)
         wrong_dim.get_sampler(parameters)
 
     # random method gives wrong first dimension length
@@ -586,8 +586,8 @@ def test_method_custom_validators():
         def random(self, n):
             return np.random.random((n + 1, d))
 
+    wrong_shape = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongShape)
     with pytest.raises(ValueError):
-        wrong_shape = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongShape)
         wrong_shape.get_sampler(parameters)
 
     # random method gives floats outside of range of 0, 1
@@ -595,15 +595,15 @@ def test_method_custom_validators():
         def random(self, n):
             return 3 * np.random.random((n, d)) - 1
 
+    out_range = tdd.MethodRandomCustom(num_points=5, sampler=SamplerOutOfRange)
     with pytest.raises(ValueError):
-        out_range = tdd.MethodRandomCustom(num_points=5, sampler=SamplerOutOfRange)
         out_range.get_sampler(parameters)
 
     # wrong number of dims given to sampler
     d = 2
 
+    failing_sampler = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWorks)
     with pytest.raises(ValueError):
-        failing_sampler = tdd.MethodRandomCustom(num_points=5, sampler=SamplerWorks)
         failing_sampler.get_sampler(parameters)
 
 
