@@ -845,6 +845,73 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
     assert np.any(grads > 0)
 
 
+@pytest.mark.parametrize(
+    "far_field_approx",
+    [True, pytest.param(False, marks=pytest.mark.skip(reason="Very slow, but passes"))],
+)
+@pytest.mark.parametrize("projection_type", ["angular", "cartesian"])
+def test_field_projection(use_emulated_run, far_field_approx, projection_type):
+    r_proj = 50 * WVL
+    monitor = td.FieldMonitor(
+        center=(0, SIM_BASE.size[1] / 2 - 0.1, 0),
+        size=(td.inf, 0, td.inf),
+        freqs=[FREQ0],
+        name="near_field",
+        colocate=False,
+    )
+
+    if projection_type == "angular":
+        theta_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 2)
+        phi_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 3)
+        monitor_far = td.FieldProjectionAngleMonitor(
+            center=monitor.center,
+            size=monitor.size,
+            freqs=monitor.freqs,
+            phi=tuple(phi_proj),
+            theta=tuple(theta_proj),
+            proj_distance=r_proj,
+            far_field_approx=far_field_approx,
+            name="far_field",
+        )
+    elif projection_type == "cartesian":
+        x_proj = np.linspace(-10, 10, 2)
+        y_proj = np.linspace(-10, 10, 3)
+        monitor_far = td.FieldProjectionCartesianMonitor(
+            center=monitor.center,
+            size=monitor.size,
+            freqs=monitor.freqs,
+            x=x_proj,
+            y=y_proj,
+            proj_axis=2,
+            proj_distance=r_proj,
+            far_field_approx=far_field_approx,
+            name="far_field",
+        )
+
+    def objective(args):
+        structures_traced_dict = make_structures(args)
+        structures = list(SIM_BASE.structures)
+        for structure_key in structure_keys_:
+            structures.append(structures_traced_dict[structure_key])
+
+        sim = SIM_BASE.updated_copy(monitors=[monitor], structures=structures)
+        data = run(sim, task_name="autograd_test", verbose=False)
+
+        projector = td.FieldProjector.from_near_field_monitors(
+            sim_data=data,
+            near_monitors=[sim.monitors[0]],
+            normal_dirs=["+"],
+            pts_per_wavelength=10,
+        )
+
+        projected_fields = projector.project_fields(monitor_far)
+
+        return anp.sum(anp.abs(projected_fields.Etheta.values))
+
+    grads = ag.grad(objective)(params0)
+    assert np.any(grads > 0)
+
+
 def test_autograd_deepcopy():
     """make sure deepcopy works as expected in autograd."""
 

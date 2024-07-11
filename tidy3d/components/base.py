@@ -19,13 +19,12 @@ import rich
 import xarray as xr
 import yaml
 from autograd.builtins import dict as dict_ag
-from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
 
 from ..exceptions import FileError
 from ..log import log
 from .autograd.types import AutogradFieldMap, Box
-from .autograd.utils import get_static
+from .autograd.utils import get_box, get_static, is_traced
 from .data.data_array import AUTOGRAD_KEY, DATA_ARRAY_MAP, DataArray
 from .file_util import compress_file_to_gzip, extract_gzip_file
 from .types import TYPE_TAG_STR, ComplexNumber, Literal
@@ -956,8 +955,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             """recursively update ``field_mapping`` with path to the autograd data."""
 
             # this is a leaf node that we want to trace, add this path and data to the mapping
-            if isbox(x):
-                field_mapping[path] = x
+            if is_traced(x):
+                field_mapping[path] = get_box(x)
 
             # for data arrays, need to be more careful as their tracers are stored in attrs
             elif isinstance(x, DataArray):
@@ -1014,12 +1013,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             sub_element = current_dict[final_key]
             if isinstance(sub_element, DataArray):
                 current_dict[final_key] = sub_element.copy(deep=False, data=x)
-                if isbox(x):
-                    current_dict[final_key].attrs[AUTOGRAD_KEY] = x
-
+                if is_traced(x):
+                    current_dict[final_key].attrs[AUTOGRAD_KEY] = get_box(x)
                 elif AUTOGRAD_KEY in current_dict[final_key].attrs:
                     current_dict[final_key].attrs.pop(AUTOGRAD_KEY)
-
             else:
                 current_dict[final_key] = x
 

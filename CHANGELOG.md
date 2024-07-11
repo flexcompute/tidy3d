@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - More convenient mesh importing from another simulation through `grid_spec = GridSpec.from_grid(sim.grid)`.
 - `autograd` gradient calculations can be performed on the server by passing `local_gradient = False` into `web.run()` or `web.run_async()`.
 - Automatic differentiation with `autograd` supports multiple frequencies through single, broadband adjoint simulation when the objective function can be formulated as depending on a single dataset in the output `SimulationData` with frequency dependence only.
+- Automatic differentiation support for local field projection.
 
 ### Changed
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
@@ -45,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - EME solver through `EMESimulation` class.
-- 2D heat simulations are now fully supported. 
+- 2D heat simulations are now fully supported.
 - `tidy3d.plugins.adjoint.web.run_local` used in place of `run` will skip validators that restrict the size or number of `input_structures`.
 - Introduces the `microwave` plugin which includes `ImpedanceCalculator` for computing the characteristic impedance of transmission lines.
 - `Simulation` now accepts `LumpedElementType`, which currently only supports the `LumpedResistor` type. `LumpedPort` together with `LumpedResistor` make up the new `TerminalComponentModeler` in the `smatrix` plugin.
@@ -68,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a `CoaxialLumpedPort` and `CoaxialLumpedResistor` for coaxial type transmission lines and excitations.
 - Automatic differentiation supported natively in Tidy3D components, and through the `web.run()` and `web.run_async()` functions through `autograd`.
 - A batch of `ModeSolver` objects can be run concurrently using `tidy3d.plugins.mode.web.run_batch()`
-- `RectangularWaveguide.plot_field` optionally draws geometry edges over fields. 
+- `RectangularWaveguide.plot_field` optionally draws geometry edges over fields.
 - `RectangularWaveguide` supports layered cladding above and below core.
 - `SubpixelSpec` accepted by `Simulation.subpixel` to select subpixel averaging methods separately for dielectric, metal, and PEC materials. Specifically, added support for conformal mesh methods near PEC structures that can be specified through the field `pec` in the `SubpixelSpec` class. Note: previously, `subpixel=False` was implementing staircasing for every material except PEC. Now, `subpixel=False` implements direct staircasing for all materials. For PEC, the behavior of `subpixel=False` in Tidy3D < 2.7 is now achieved through `subpixel=SubpixelSpec(pec=HeuristicPECStaircasing())`, while `subpixel=True` in Tidy3D < 2.7 is now achieved through `subpixel=SubpixelSpec(pec=Staircasing())`. The default is `subpixel=SubpixelSpec(pec=PECConformal())` for more accurate PEC modelling.
 - Lossless `Green2008` variant for crystalline silicon added to material library.
@@ -182,7 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration of the `tidy3d-notebooks` repository.
 - `tidy3d develop` CLI and development guide on the main documentation.
 - Added a convenience method `Simulation.subsection()` to a create a new simulation based on a subregion of another one.
-- Users can toggle task caching through `from tidy3d.web.core.environment import Env` and `Env.enable_caching(True)` to enable, `Env.enable_caching(False)` to disable, or `Env.enable_caching(None)` to use global setting from web client account page. 
+- Users can toggle task caching through `from tidy3d.web.core.environment import Env` and `Env.enable_caching(True)` to enable, `Env.enable_caching(False)` to disable, or `Env.enable_caching(None)` to use global setting from web client account page.
 
 ### Changed
 - `DataArray.to_hdf5()` accepts both file handles and file paths.
@@ -352,8 +353,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FastDispersionFitter` for fast fitting of material dispersion data.
 - `Simulation.monitors_data_size` property mapping monitor name to its data size in bytes.
 - Source with arbitrary user-specified time dependence through `CustomSourceTime`.
-- Interface for specifying material heat and charge perturbation models. 
-Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`, 
+- Interface for specifying material heat and charge perturbation models.
+Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`,
 where perturbations to each parameter is specified using class `ParameterPerturbation`.
 A convenience function `Simulation.perturbed_mediums_copy` is added to class `Simulation` which applies heat and/or charge fields to mediums containing perturbation models.
 - Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and vertical plot limits.
@@ -439,7 +440,7 @@ the difference that can be observed when slightly modifying the grid resolution.
 - Source validation happens before simulation upload and raises an error if no source is present.
 - Warning instead of error if structure out of simulation bounds.
 - Internal refactor of `ComponentModeler` to simplify logic.
-- (Changed effective 2.3.0) Backward-direction mode amplitudes from `ModeMonitors` have a flipped sign compared to previous versions. 
+- (Changed effective 2.3.0) Backward-direction mode amplitudes from `ModeMonitors` have a flipped sign compared to previous versions.
 Previously, the amplitudes were computed directly through the dot product ``amp = (mode, field)``, while, since 2.3.0, we use ``amp = (mode, field) / (mode, mode)`` instead.
 The modes are already normalized to unit directed flux, such that ``(mode, mode) = 1`` for forward modes, and ``(mode, mode) = -1`` for backward modes
 (the dot product of a mode with itself is equal to the flux through the mode plane). Therefore, the change in the ``amp`` formula is equivalent to a sign change for
@@ -630,7 +631,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - Log level only accepts upper case strings.
 - `PolySlab` `reference_plane` is `"middle"` by default.
 - Boundary conditions are now `PML()` by default.
-- `PointDipole` sources now have a continuous dependence on the source position, as opposed to snapping to Yee grid locations. Behavior is controlled by the `interpolate` argument, set to `True` by default. 
+- `PointDipole` sources now have a continuous dependence on the source position, as opposed to snapping to Yee grid locations. Behavior is controlled by the `interpolate` argument, set to `True` by default.
 - `smatrix` plugin accepts list of frequencies and returns data as an `xarray.DataArray` instead of a nested `dict`.
 - `importlib-metadata` version set to `>= 6.0.0`.
 
@@ -663,7 +664,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - `SourceTime` plotting methods `.plot()` and `.plot_spectrum()` accept a `val` kwarg, which selects which part of the data (`'real'`, `'imag'`, or `'abs'`) to plot, rather than plotting all at once.
 
 ### Fixed
-- Bug in remote file transfer when client environment has no correct certificate authority pem file install locally. 
+- Bug in remote file transfer when client environment has no correct certificate authority pem file install locally.
 - Tidy3D exceptions inherit from `ValueError` so they are handled properly by pydantic.
 - Two unstable materials in `material_library`: `Cu_JohnsonChristy1972` and `Ni_JohnsonChristy1972`. `TiOx_HoribStable` added for improved stability.
 - Bug in infinite long cylinder when the `reference_plane` is not at the bottom or the cylinder is slanted.
@@ -760,7 +761,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 ### Changed
 - The `Simulation` version updater is called every time a `Simulation` object is loaded, not just `from_file`.
 - Boundary specifications that rely on the default `Periodic` boundary now print a deprecation warning, as the default boundaries will change to
- `PML` in Tidy3D 2.0. 
+ `PML` in Tidy3D 2.0.
 
 ## [1.8.0] - 2022-12-14
 
@@ -774,7 +775,7 @@ method for computing the overlap integral over two sets of frequency-domain fiel
  applied when using the `flux` and `dot` methods.
 - Resonance finding plugin for estimating resonance frequency and Q-factor of multiple resonances from time-domain data.
  Accessed through `tidy3d.plugins.ResonanceFinder`.
-- New `.updated_copy(**kwargs)` method to all tidy3d objects to add a more convenient shortcut to copying an instance with updated fields, 
+- New `.updated_copy(**kwargs)` method to all tidy3d objects to add a more convenient shortcut to copying an instance with updated fields,
  i.e. `med.copy(update=dict(permittivity=3.0))` becomes `med.updated_copy(permittivity=3.0)`.
 - Test support for python 3.11.
 - `sidewall_angle` option for `Cylinder` that allows a `Cylinder` to be tuned into a conical frustum or a cone.
@@ -795,9 +796,9 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 ### Changed
 - Minimum flex unit charge reduced from `0.1` to `0.025`.
 - Default Courant factor was changed from `0.9` to `0.99`.
-- A point dipole source placed on a symmetry plane now always has twice the amplitude of the same source in a simulation without the 
- symmetry plane, as expected by continuity with the case when the dipole is slightly off the symmetry plane, in which case 
- there are effectively two dipoles, the original one and its mirror image. Previously, the amplitude was only doubled for dipoles polarized normal 
+- A point dipole source placed on a symmetry plane now always has twice the amplitude of the same source in a simulation without the
+ symmetry plane, as expected by continuity with the case when the dipole is slightly off the symmetry plane, in which case
+ there are effectively two dipoles, the original one and its mirror image. Previously, the amplitude was only doubled for dipoles polarized normal
  to the plane, because of Yee grid specifics.
 - `FluxMonitor` and `FluxTimeMonitor` no longer snap fields to centers, but instead provide continuous interpolation of the flux over the
  exact geometry of the monitor.
@@ -807,7 +808,7 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 - Writing `Tidy3D` models containing custom data to `.json` file will log a warning and exclude the raw data from the file for performance reasons.
 - Material database reorganization and fixing a few references to the dispersion data.
 - The name `Near2Far` has been replaced with `FieldProjection`. For example, `Near2FarAngleMonitor` is now `FieldProjectionAngleMonitor`.
-- The API for far field projections has been simplified and several methods have now become properties. 
+- The API for far field projections has been simplified and several methods have now become properties.
  For example, the radar cross section is now accessed as `.radar_cross_section`, not `.radar_cross_section()`.
 - Added a method `renormalize_fields` to `AbstractFieldProjectionData` to re-project far fields to different projection distances.
 - The API for `DiffractionData` was refactored to unify it with the API for `AbstractFieldProjectionData`.
@@ -828,7 +829,7 @@ which fields are to be projected is now determined automatically based on the me
 - Ignore x axis when plotting 1D `Simulation` cross sections to avoid plot irregularities.
 - Local web api tests.
 - Use Tidy3D logger for some warnings that used to use default python logging.
- 
+
 ### Changed
 
 - Replaced `gdspy` dependency with `gdstk`.
@@ -896,13 +897,13 @@ which fields are to be projected is now determined automatically based on the me
 
 ### Changed
 - Major refactor of the way data structures are used internally.
-- `ModeFieldMonitor` -> `ModeSolerMonitor` with associated `ModeSolverData`. `ModeSolverData` is now also stored internally in `ModeSolver`, 
+- `ModeFieldMonitor` -> `ModeSolerMonitor` with associated `ModeSolverData`. `ModeSolverData` is now also stored internally in `ModeSolver`,
  and the `plot_field` method can be called directly from `ModeSolver` instead of `ModeSolverData`.
 - Field data for monitors that have a zero size along a given dimension is now interpolated to the exact `monitor.center` along that dimension.
 - Removed `nlopt` from requirements, user-side material fitting now uses `scipy`.
-- New Field `normalize_index` in `Simulation` - used to be input parameter when loading simulation data. A given `SimulationData` 
+- New Field `normalize_index` in `Simulation` - used to be input parameter when loading simulation data. A given `SimulationData`
  can still be renormalized to a different source later on using the new `SimulationData.renormalize`.
-- `FluxMonitor` and `FluxTimeMonitor`-s can now have a 3D box geometry, in which case the flux going out of all box surfaces is computed (optionally, 
+- `FluxMonitor` and `FluxTimeMonitor`-s can now have a 3D box geometry, in which case the flux going out of all box surfaces is computed (optionally,
  some surfaces can be excluded).
 - Frequency-domain monitors require a non-empty list of frequencies.
 - Reduced the minimum flex unit cost to run a simulation to `0.1`.
@@ -923,9 +924,9 @@ which fields are to be projected is now determined automatically based on the me
 - Stopped support for python 3.6, improved support for python 3.10.
 - Web material fitter for lossless input data (no `k` data provided) will now return a lossless medium.
 - `sort_by` changed to `filter_pol` in `ModeSpec`.
-- `center` no longer a field of all `Geometry` components, instead only present when needed, 
- removed in `PolySlab` and `GeometryGroup`. `Planar` geometries no longer have a mandatory `length` field, but 
- have `center_axis` and `lengt_axis` properties for the center and length along the extrusion axis. `PolySlab` now defined exclusively through `slab_bounds`, 
+- `center` no longer a field of all `Geometry` components, instead only present when needed,
+ removed in `PolySlab` and `GeometryGroup`. `Planar` geometries no longer have a mandatory `length` field, but
+ have `center_axis` and `lengt_axis` properties for the center and length along the extrusion axis. `PolySlab` now defined exclusively through `slab_bounds`,
  while `Cylinder` through `center` and `length`.
 - In mode solver, allow precision to switch between double and single precision.
 - Near-to-far transformation tool is no longer a plugin, but is now part of Tidy3D's new core data structures
@@ -943,7 +944,7 @@ which fields are to be projected is now determined automatically based on the me
 ### Fixed
 - Bug in plotting when alpha is turned off in permittivity overlay.
 - Bug in plotting polarization of an angled incidence source (S,P -> P,S).
-- Throw warning if user tries to download data instances in `yaml` or `json` format. 
+- Throw warning if user tries to download data instances in `yaml` or `json` format.
 - Arrow length plotting issues for infinite sources.
 - Issues with nonuniform mesh not extending exactly to simulation boundaries.
 
@@ -1010,15 +1011,15 @@ which fields are to be projected is now determined automatically based on the me
 ### Added
 
 - New `grid_spec` Field in `Simulation` that allows more flexibility in defining the mesh.
-- `GridSpec1d` class defining how the meshing along each dimension should be done, with subclasses `UniformGrid` and `CustomGrid` that cover the functionality 
-  previously offered by supplying a float or a list of floats to `Simulation.grid_size`. New functionality offered by `AutoGrid` subclass, with the 
+- `GridSpec1d` class defining how the meshing along each dimension should be done, with subclasses `UniformGrid` and `CustomGrid` that cover the functionality
+  previously offered by supplying a float or a list of floats to `Simulation.grid_size`. New functionality offered by `AutoGrid` subclass, with the
   mesh automatically generated based on the minimum required steps per wavelength.
 - New `PointDipole` source.
 - Opacity kwargs for monitor and source in `sim.plot`.
 - Separated `plotly`-based requirements from core requirements file, can be added with `"pip install tidy3d-beta[plotly]"`.
 
 ### Changed
-- `Simulation.grid_spec` uses the default `GridSpec`, which has `AutoGrid(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no 
+- `Simulation.grid_spec` uses the default `GridSpec`, which has `AutoGrid(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no
   longer needed to provide grid information, if sources are added to the simulation. Otherwise an error will be raised asking to provide a wavelength for the auto mesh.
 - `VolumeSource` is now called `UniformCurrentSource`.
 - S-matrix module now places the monitors exactly at the port locations and offsets the source slightly for numerical reasons (more accurate).
@@ -1216,13 +1217,13 @@ which fields are to be projected is now determined automatically based on the me
 
 
 ### 21.3.1.5
- - Frequency monitors can now optionally store the complex permittivity at the same locations where 
+ - Frequency monitors can now optionally store the complex permittivity at the same locations where
    the E-fields are recorded, at the monitor frequencies.
- - Frequency monitors now also have an `'interpolate'` keyword, which defaults to `True` and 
-   reproduces the behavior of previous versions. If set to `False`, however, the raw fields 
-   evaluated at their corresponding Yee grid locations are returned, instead of the fields interpolated 
+ - Frequency monitors now also have an `'interpolate'` keyword, which defaults to `True` and
+   reproduces the behavior of previous versions. If set to `False`, however, the raw fields
+   evaluated at their corresponding Yee grid locations are returned, instead of the fields interpolated
    to the Yee cell centers. This also affects the returned permittivity, if requested.
- - Reorganized internal source time dependence handling, enabling more complicated functionality 
+ - Reorganized internal source time dependence handling, enabling more complicated functionality
    in the future, like custom source time.
  - Total field in the simulation now sampled at the time step of the peak of the source time dependence,
    for better estimation of the shutoff factor.
@@ -1231,8 +1232,8 @@ which fields are to be projected is now determined automatically based on the me
 ### 21.3.1.4
 - Reorganized plotting:
 - Speeding up structure visualizations.
-- Structures now shown based on primitive definitions rather than grid discretization. This 
-    then shows the physical structures but not what the simulation "sees". Will add an option to 
+- Structures now shown based on primitive definitions rather than grid discretization. This
+    then shows the physical structures but not what the simulation "sees". Will add an option to
     display the grid lines in next version.
 - Bumped down matplotlib version requirement to 3.2 and python version requirement to 3.6.
 - Improved handling of PEC interfaces.- Reorganized and extended internal logging.

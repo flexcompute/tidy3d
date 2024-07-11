@@ -1,4 +1,5 @@
-from .functions import interpn
+from .constants import AUTOGRAD_KEY
+from .functions import add_at, interpn, trapz
 from .types import (
     AutogradFieldMap,
     AutogradTraced,
@@ -8,9 +9,10 @@ from .types import (
     TracedSize1D,
     TracedVertices,
 )
-from .utils import get_static
+from .utils import get_box, get_data, get_static, is_traced
 
 __all__ = [
+    "AUTOGRAD_KEY",
     "TracedFloat",
     "TracedSize1D",
     "TracedSize",
@@ -19,5 +21,10 @@ __all__ = [
     "AutogradTraced",
     "AutogradFieldMap",
     "get_static",
+    "is_traced",
+    "get_data",
+    "get_box",
     "interpn",
+    "trapz",
+    "add_at",
 ]
