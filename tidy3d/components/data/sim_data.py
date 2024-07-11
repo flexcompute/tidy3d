@@ -992,12 +992,14 @@ class SimulationData(AbstractYeeGridSimulationData):
         """Process mapping of monitor name to adjoint sources to adj srcs."""
 
         # mapping of source spatial dependence to associated adjoint source times
+        fwidth = self.simulation.sources[self.simulation.normalize_index or 0].source_time.fwidth
+
         spatial_to_spectrums = defaultdict(list)
         orig_sources = {}
         for src in sources_adj:
             key = src.json(exclude={"source_time"})
             spatial_to_spectrums[key].append(
-                src.source_time.updated_copy(fwidth=src.source_time.fwidth * FWIDTH_FACTOR)
+                src.source_time.updated_copy(fwidth=fwidth * FWIDTH_FACTOR)
             )
             orig_sources[key] = src
 
@@ -1016,34 +1018,42 @@ class SimulationData(AbstractYeeGridSimulationData):
             cross_matrix = np.array(
                 [
                     get_spectrum(
-                        source_time=GaussianPulse(
-                            freq0=source_time.freq0, fwidth=source_time.fwidth
-                        ),
+                        source_time=GaussianPulse(freq0=source_time.freq0, fwidth=fwidth),
                         freqs=freqs,
                     )
                     for source_time in source_times
                 ]
-            )
+            ).T
 
-            # norm_vector = np.array(
-            #     [
-            #         get_spectrum(source_time=GaussianPulse(freq0=source_time.freq0, fwidth=source_time.fwidth), freqs=[source_time.freq0])
-            #     for source_time in source_times]
-            # )
-
-            cross_talk_matrix = cross_matrix
+            # this is like a normalization?
+            # self_terms = np.diag(cross_matrix)
+            # self_terms = np.ones_like(self_terms)
 
             desired_amplitudes = np.array(
                 [
-                    get_spectrum(source_time=source_time, freqs=[source_time.freq0])
-                    # source_time.amplitude * np.exp(1j * source_time.phase)
+                    source_time.amplitude * np.exp(1j * source_time.phase)
                     for source_time in source_times
                 ]
             )
 
-            corrected_amplitudes = np.linalg.solve(cross_talk_matrix, desired_amplitudes)
+            corrected_amplitudes = np.linalg.solve(
+                cross_matrix, desired_amplitudes
+            )  # * self_terms)
+            res = cross_matrix @ corrected_amplitudes - desired_amplitudes
+
+            atol = 1e-3
+
+            if np.linalg.norm(res) / np.linalg.norm(desired_amplitudes) > atol:
+                raise NotImplementedError(
+                    f"adjoint fwidth would be too large, residual of {np.linalg.norm(res) / np.linalg.norm(desired_amplitudes)} relative to the desired amplitudes."
+                )
+                # must decrease the fwidth / increase run_time of adjoint sources until atol reached
+
+            # corrected_amplitudes = np.linalg.solve(cross_talk_matrix, desired_amplitudes)
             source_times_corrected = [
-                source_time.updated_copy(amplitude=abs(amp_complex), phase=np.angle(amp_complex))
+                source_time.updated_copy(
+                    amplitude=abs(amp_complex), phase=np.angle(amp_complex), fwidth=fwidth
+                )
                 for amp_complex, source_time in zip(corrected_amplitudes, source_times)
             ]
 
@@ -1051,9 +1061,6 @@ class SimulationData(AbstractYeeGridSimulationData):
                 source_corrected = orig_sources[key].updated_copy(source_time=source_time)
                 all_sources_corrected.append(source_corrected)
 
-            # import pdb; pdb.set_trace()
-
-        # import pdb; pdb.set_trace()
         return all_sources_corrected
 
     def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> list[Source]:
