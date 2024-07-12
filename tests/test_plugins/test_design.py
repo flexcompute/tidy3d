@@ -193,7 +193,7 @@ def test_sweep(sweep_method, monkeypatch):
 
     def scs_pre_dict(radius: float, num_spheres: int, tag: str):
         sim = scs_pre(radius, num_spheres, tag)
-        return {"test1": sim, "test2": sim, 3: sim}
+        return {"test1": sim, "test2": sim, "3": sim}
 
     def scs_post_dict(sim_dict):
         sim_data = [scs_post(sim) for sim in sim_dict.values()]
@@ -266,10 +266,12 @@ def test_sweep(sweep_method, monkeypatch):
     assert td_sweep1.values == td_sweep2.values
 
     # Try with batch output from pre
-    # td_batch = design_space.run(scs_pre_batch, scs_post_batch)
+    td_batch = design_space.run(scs_pre_batch, scs_post_batch)
 
     # Test user specified batching works with combined function
     td_batch_combined = design_space.run(scs_combined_batch)
+
+    assert td_batch.values == td_batch_combined.values
 
     # Test with list of sims
     td_sim_list = design_space.run(scs_pre_list, scs_post_list)

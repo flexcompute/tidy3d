@@ -3,18 +3,16 @@
 from __future__ import annotations
 
 import inspect
-from collections import defaultdict
-from typing import Any, Callable, Dict, Generator, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 import pydantic.v1 as pd
 
-import tidy3d.web as web
 from tidy3d.log import log
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.data.sim_data import SimulationData
 from ...components.simulation import Simulation
-from ...web.api.container import BatchData
+from ...web.api.container import Batch, BatchData
 from .method import MethodType
 from .parameter import ParameterType
 from .result import Result
@@ -66,12 +64,6 @@ class DesignSpace(Tidy3dBaseModel):
         title="Folder Name",
         description="Folder path where the simulation will be uploaded in the Tidy3D Workspace. Will use 'default' if no path is set.",
     )
-
-    _dict_name: str = pd.PrivateAttr(default=None)
-
-    _task_names: list = pd.PrivateAttr(default=[])
-
-    _name_generator: Generator = pd.PrivateAttr(default=None)
 
     @cached_property
     def dims(self) -> Tuple[str]:
@@ -148,9 +140,6 @@ class DesignSpace(Tidy3dBaseModel):
             Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
         """
 
-        self._name_generator = self._create_name_generator()
-        next(self._name_generator)
-
         # Run based on how many functions the user provides
         if fn_post is None:
             fn_args, fn_values, aux_values = self.run_single(fn)
@@ -166,7 +155,7 @@ class DesignSpace(Tidy3dBaseModel):
             fn_values=fn_values,
             fn_source=fn_source,
             aux_values=aux_values,
-            task_ids=self._task_names,
+            task_ids=None,
         )
 
     def run_single(self, fn: Callable) -> Tuple(list[dict], list, list[Any]):
@@ -195,10 +184,10 @@ class DesignSpace(Tidy3dBaseModel):
     def _get_evaluate_fn_pre_post(self, fn_pre: Callable, fn_post: Callable) -> list[Any]:
         """Get function that tries to use batch processing on a set of arguments."""
 
-        def evaluate(args_list: list[tuple[Any, ...]]) -> list[Any]:
+        def evaluate(args_list: list[tuple[Any, ...]], sim_counter: int = 0) -> list[Any]:
             """Put together into one pipeline."""
             combined_fn = self._stitch_pre_post(fn_pre=fn_pre, fn_post=fn_post)
-            out = combined_fn(args_list)
+            out = combined_fn(args_list, sim_counter)
             return out
 
         return evaluate
@@ -206,99 +195,95 @@ class DesignSpace(Tidy3dBaseModel):
     def _stitch_pre_post(self, fn_pre: Callable, fn_post: Callable) -> Callable:
         """Combine pre and post into one big function, stitching tidy3d calls between if needed."""
 
-        def fn_combined(args_list):
-            sim_dict = {idx: fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
-            data = self._fn_mid(sim_dict)
+        def fn_combined(args_list, sim_counter):
+            sim_dict = {str(idx): fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
+            data = self._fn_mid(sim_dict, sim_counter)
             post_out = [fn_post(val[1]) for val in data.items()]
             return post_out
 
         return fn_combined
 
-    def _fn_mid(self, pre_out: dict[int, Any]) -> Union[dict[int, Any], BatchData]:
+    def _fn_mid(
+        self, pre_out: dict[int, Any], sim_counter: int
+    ) -> Union[dict[int, Any], BatchData]:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
 
-        # New plan - element wise
-        # Keep list coversion but no need to check for simulation
-        # If no sims or batches found then dump all the work up and just return pre_out - for non-td problems
-        # Don't unpack batches but allow for sequential running
+        # NOTE: Need to check that pre_out has string keys!
 
-        # Convert list of sim inputs to dict of dict before passing through checks
+        # Keep copy of original to use if no tidy3d simulation required
+        original_pre_out = pre_out.copy()
+
+        # Convert list input to dict of dict before passing through checks
         was_list = False
-        if all(isinstance(sim, list) for sim in pre_out.values()) and any(
-            isinstance(sim, Simulation) for sim in pre_out[0]
-        ):
+        if all(isinstance(sim, list) for sim in pre_out.values()):
             pre_out = {
-                idx: dict(enumerate(sim_list)) for idx, sim_list in enumerate(pre_out.values())
+                str(idx): {str(sub_idx): sub_list for sub_idx, sub_list in enumerate(sim_list)}
+                for idx, sim_list in enumerate(pre_out.values())
             }
             was_list = True
 
-        # Handle most common case where fn_combined builds a dict of sims
-        if all(isinstance(sim, Simulation) for sim in pre_out.values()):
-            named_sims = {next(self._name_generator): sim for sim in pre_out.values()}
-            self._task_names.extend(list(named_sims.keys()))
-            data = web.Batch(
-                simulations=named_sims,
-                folder_name=self.folder_name,
-                simulation_type="tidy3d_design",
-            ).run(path_dir=self.path_dir)
+        simulations = {}
+        batches = {}
 
-        # Can "index" dict here because fn_combined uses idx as the key
-        elif all(isinstance(sim, Dict) for sim in pre_out.values()) and any(
-            isinstance(sim, Simulation) for sim in pre_out[0].values()
-        ):
-            # Flatten dict of dicts whilst storing combined keys for later
-            flattened_sims = {}
-            original_structure = defaultdict(dict)
-            dict_keys = []
-            for dict_idx, sub_dict in pre_out.items():
-                for sub_dict_idx, sim_like in sub_dict.items():
-                    sub_dict_idx = str(sub_dict_idx)  # Needs to be string for restoration later
-                    if isinstance(sim_like, Simulation):
-                        task_name = f"{dict_idx}_{sub_dict_idx}"
-                        flattened_sims[task_name] = sim_like
-                        original_structure[dict_idx][sub_dict_idx] = None
+        def _find_and_map(search_dict: dict, search_type: Any, output_dict: dict, previous_key=""):
+            """"""
+            current_key = previous_key
+            for key, value in search_dict.items():
+                if len(previous_key) == 0:
+                    latest_key = str(key)
+                else:
+                    latest_key = f"{current_key}_{key}"
 
-                        # Add user specified keys to the naming if a dict was supplied
-                        if not was_list:
-                            dict_keys.append(sub_dict_idx)
-                        else:
-                            dict_keys.append(None)
-                    else:
-                        original_structure[dict_idx][sub_dict_idx] = sim_like
+                if isinstance(value, dict):
+                    _find_and_map(value, search_type, output_dict, latest_key)
+                if isinstance(value, search_type):
+                    output_dict[latest_key] = value
 
-            # Run sims with flattened dict
-            named_sims = {}
-            for sim, key_name in zip(flattened_sims.values(), dict_keys):
-                self._dict_name = key_name
-                named_sims[next(self._name_generator)] = sim
-            translation_dict = dict(zip(named_sims, flattened_sims))
-            self._task_names.extend(list(named_sims.keys()))
-            batch_out = web.Batch(
-                simulations=named_sims,
-                folder_name=self.folder_name,
-                simulation_type="tidy3d_design",
-            ).run(path_dir=self.path_dir)
+        _find_and_map(pre_out, Simulation, simulations)
+        _find_and_map(pre_out, Batch, batches)
 
-            # Unflatten structure whilst running fn_post
-            for task_id in batch_out.task_ids:
-                search_key = translation_dict[task_id]
-                dict_idx, sub_dict_idx = search_key.split("_", 1)
-                original_structure[int(dict_idx)][sub_dict_idx] = batch_out[task_id]
+        if len(simulations) == 0 and len(batches) == 0:
+            return original_pre_out
 
-            # Restore to lists if user supplied lists
-            if was_list:
-                data = {
-                    dict_idx: list(sub_dict.values())
-                    for dict_idx, sub_dict in original_structure.items()
-                }
+        # Compute sims and batches and return to pre_out
+        named_sims = {}
+        translate_sims = {}
+        for sim_key, sim in simulations.items():
+            sim_name = f"{self.task_name}_{sim_counter}"
+            named_sims[sim_name] = sim
+            translate_sims[sim_name] = sim_key
+            sim_counter += 1
+
+        sims_out = Batch(
+            simulations=named_sims,
+            folder_name=self.folder_name,
+            simulation_type="tidy3d_design",
+        ).run(path_dir=self.path_dir)
+
+        batch_results = {}
+        for batch_key, batch in batches.items():
+            batch_out = batch.run(path_dir=self.path_dir)
+            batch_results[batch_key] = batch_out
+
+        def _return_to_dict(return_dict, key, return_obj):
+            """"""
+            split_key = key.split("_", 1)
+            if len(split_key) > 1:
+                _return_to_dict(return_dict[split_key[0]], split_key[1], return_obj)
             else:
-                data = original_structure
+                return_dict[split_key[0]] = return_obj
 
-        else:
-            # user just wants to split into pre and post, without tidy3d I guess
-            data = pre_out
+        for sim_name, sim in sims_out.items():
+            translated_name = translate_sims[sim_name]
+            _return_to_dict(pre_out, translated_name, sim)
 
-        return data
+        for batch_name, batch in batch_results.items():
+            _return_to_dict(pre_out, batch_name, batch)
+
+        if was_list:
+            return {dict_idx: list(sub_dict.values()) for dict_idx, sub_dict in pre_out.items()}
+
+        return pre_out
 
     def run_batch(
         self,
