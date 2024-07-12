@@ -143,9 +143,12 @@ class DesignSpace(Tidy3dBaseModel):
         # Run based on how many functions the user provides
         if fn_post is None:
             fn_args, fn_values, aux_values = self.run_single(fn)
+            sim_names = None
 
         else:
-            fn_args, fn_values, aux_values = self.run_pre_post(fn_pre=fn, fn_post=fn_post)
+            fn_args, fn_values, aux_values, sim_names = self.run_pre_post(
+                fn_pre=fn, fn_post=fn_post
+            )
 
         fn_source = self.get_fn_source(fn)
 
@@ -155,7 +158,7 @@ class DesignSpace(Tidy3dBaseModel):
             fn_values=fn_values,
             fn_source=fn_source,
             aux_values=aux_values,
-            task_ids=None,
+            task_ids=sim_names,
         )
 
     def run_single(self, fn: Callable) -> Tuple(list[dict], list, list[Any]):
@@ -167,8 +170,13 @@ class DesignSpace(Tidy3dBaseModel):
         list[dict], list[dict], list[Any]
     ):
         """Run a function with tidy3d implicitly called in between."""
-        evaluate_fn = self._get_evaluate_fn_pre_post(fn_pre=fn_pre, fn_post=fn_post)
-        return self.method.run(run_fn=evaluate_fn, parameters=self.parameters)
+        handler = self._get_evaluate_fn_pre_post(
+            fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid
+        )
+        fn_args, fn_values, aux_values = self.method.run(
+            run_fn=handler.evaluate, parameters=self.parameters
+        )
+        return fn_args, fn_values, aux_values, handler.sim_names
 
     """ Helpers """
 
@@ -181,27 +189,30 @@ class DesignSpace(Tidy3dBaseModel):
 
         return evaluate
 
-    def _get_evaluate_fn_pre_post(self, fn_pre: Callable, fn_post: Callable) -> list[Any]:
+    def _get_evaluate_fn_pre_post(self, fn_pre: Callable, fn_post: Callable, fn_mid) -> list[Any]:
         """Get function that tries to use batch processing on a set of arguments."""
 
-        def evaluate(args_list: list[tuple[Any, ...]], sim_counter: int = 0) -> list[Any]:
-            """Put together into one pipeline."""
-            combined_fn = self._stitch_pre_post(fn_pre=fn_pre, fn_post=fn_post)
-            out = combined_fn(args_list, sim_counter)
-            return out
+        class Pre_Post_Handler:
+            def __init__(self):
+                self.sim_counter = 0
+                self.sim_names = []
 
-        return evaluate
+            def _fn_combined(self, args_list):
+                sim_dict = {str(idx): fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
+                data, sim_names = fn_mid(sim_dict, self.sim_counter)
+                self.sim_names.extend(sim_names)
+                self.sim_counter += len(sim_names)
+                post_out = [fn_post(val[1]) for val in data.items()]
+                return post_out
 
-    def _stitch_pre_post(self, fn_pre: Callable, fn_post: Callable) -> Callable:
-        """Combine pre and post into one big function, stitching tidy3d calls between if needed."""
+            def evaluate(self, args_list: list[tuple[Any, ...]]) -> list[Any]:
+                """Put together into one pipeline."""
+                out = self._fn_combined(args_list)
+                return out
 
-        def fn_combined(args_list, sim_counter):
-            sim_dict = {str(idx): fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
-            data = self._fn_mid(sim_dict, sim_counter)
-            post_out = [fn_post(val[1]) for val in data.items()]
-            return post_out
+        handler = Pre_Post_Handler()
 
-        return fn_combined
+        return handler
 
     def _fn_mid(
         self, pre_out: dict[int, Any], sim_counter: int
@@ -243,7 +254,7 @@ class DesignSpace(Tidy3dBaseModel):
         _find_and_map(pre_out, Batch, batches)
 
         if len(simulations) == 0 and len(batches) == 0:
-            return original_pre_out
+            return original_pre_out, list()
 
         # Compute sims and batches and return to pre_out
         named_sims = {}
@@ -281,9 +292,11 @@ class DesignSpace(Tidy3dBaseModel):
             _return_to_dict(pre_out, batch_name, batch)
 
         if was_list:
-            return {dict_idx: list(sub_dict.values()) for dict_idx, sub_dict in pre_out.items()}
+            return {
+                dict_idx: list(sub_dict.values()) for dict_idx, sub_dict in pre_out.items()
+            }, list(named_sims.keys())
 
-        return pre_out
+        return pre_out, list(named_sims.keys())
 
     def run_batch(
         self,
