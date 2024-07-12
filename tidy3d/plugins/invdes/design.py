@@ -11,6 +11,7 @@ import tidy3d.web as web
 from tidy3d.components.autograd import get_static
 
 from .base import InvdesBaseModel
+from .postprocess import WeightedSum
 from .region import DesignRegionType
 from .validators import check_pixel_size
 
@@ -32,16 +33,48 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         description="Task name to use in the objective function when running the ``JaxSimulation``.",
     )
 
+    postprocess: WeightedSum = pd.Field(
+        None,
+        title="Postprocess Object",
+        description="Optional object specifying how to perform weighted sum of ``ModeData`` "
+        "outputs. Can be used instead of passing a generic postprocess function "
+        "to ``Optimizer.run()``.",
+    )
+
     verbose: bool = pd.Field(
         False,
         title="Task Verbosity",
         description="If ``True``, will print the regular output from ``web`` functions.",
     )
 
+    def _get_postprocess_fn(
+        self, post_process_fn: typing.Callable = None
+    ) -> typing.Callable[[td.SimulationData], float]:
+        """Returns postprocessing function used internally given some passed function."""
+
+        if post_process_fn is None and self.postprocess is None:
+            raise ValueError(
+                "If ``InverseDesign.postprocess`` is not specified, must pass a "
+                "``post_process_fn`` to ``Optimizer.run``."
+            )
+        if post_process_fn is not None and self.postprocess is not None:
+            raise ValueError(
+                "Can't specify both an ``InverseDesign.postprocess`` and pass a ``post_process_fn``."
+                "to ``Optimizer.run``."
+            )
+
+        if self.postprocess is not None:
+            return self.postprocess.evaluate
+
+        return post_process_fn
+
     def make_objective_fn(
-        self, post_process_fn: typing.Callable
+        self,
+        post_process_fn: typing.Callable = None,
     ) -> typing.Callable[[anp.ndarray], tuple[float, dict]]:
         """construct the objective function for this ``InverseDesignMulti`` object."""
+
+        _postprocess_fn = self._get_postprocess_fn(post_process_fn)
 
         def objective_fn(params: anp.ndarray, aux_data: dict = None) -> float:
             """Full objective function."""
@@ -49,7 +82,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
             data = self.to_simulation_data(params=params)
 
             # construct objective function values
-            post_process_val = post_process_fn(data)
+            post_process_val = _postprocess_fn(data)
 
             penalty_value = self.design_region.penalty_value(params)
             objective_fn_val = post_process_val - penalty_value

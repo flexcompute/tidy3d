@@ -140,6 +140,13 @@ def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
     return anp.sum(intensity.values)
 
 
+postprocess_obj = tdi.WeightedSum(
+    powers=[
+        tdi.GetPowerMode(monitor_name=MNT_NAME2, direction="+", mode_index=0, weight=0.5),
+    ]
+)
+
+
 def post_process_fn_kwargless(sim_data: td.SimulationData) -> float:
     """Define a post-processing function with no kwargs specified."""
     intensity = sim_data.get_intensity(MNT_NAME1)
@@ -271,14 +278,18 @@ def make_optimizer():
     )
 
 
-def make_result(use_emulated_run_autograd):
+def make_result(use_emulated_run_autograd, fn_postprocess: bool = True):
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
 
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
-    return optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn)
+    if fn_postprocess:
+        return optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn)
+    else:
+        optimizer = optimizer.updated_copy(postprocess=postprocess_obj, path="design")
+        return optimizer.run(params0=PARAMS_0)
 
 
 def test_default_params(use_emulated_run_autograd):  # noqa: F811
@@ -366,15 +377,17 @@ def test_continue_run_from_file(use_emulated_run_autograd):
     result_full = optimizer.continue_run_from_history(post_process_fn=post_process_fn)
 
 
+@pytest.mark.parametrize("fn_postprocess", (True, False))
 def test_result(
     use_emulated_run,  # noqa: F811
     use_emulated_run_autograd,
     use_emulated_run_autograd_async,
     tmp_path,
+    fn_postprocess,
 ):
     """Test methods of the ``InverseDesignResult`` object."""
 
-    result = make_result(use_emulated_run_autograd)
+    result = make_result(use_emulated_run_autograd, fn_postprocess=fn_postprocess)
 
     with pytest.raises(KeyError):
         _ = result.get_last("blah")

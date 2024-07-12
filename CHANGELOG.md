@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Postprocessing functions in `invdes` plugin can be optionally specified by supplying a `postprocess` instance to the `InverseDesign` object.
+
 ### Fixed
 - Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.
 
