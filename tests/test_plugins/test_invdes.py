@@ -140,9 +140,9 @@ def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
     return anp.sum(intensity.values)
 
 
-postprocess_obj = tdi.WeightedSum(
-    powers=[
-        tdi.GetPowerMode(monitor_name=MNT_NAME2, direction="+", mode_index=0, weight=0.5),
+postprocess_obj = tdi.Sum(
+    operations=[
+        tdi.ModePower(monitor_name=MNT_NAME2, direction="+", mode_index=0, weight=0.5),
     ]
 )
 
@@ -380,8 +380,8 @@ def test_continue_run_from_file(use_emulated_run_autograd):
 def test_postprocess_init(use_emulated_run):  # noqa: F811
     """Test the intiialization of an ``InverseDesign`` with different ``postprocess`` options."""
 
-    power_obj = tdi.GetPowerMode(monitor_name=MNT_NAME2, direction="+", mode_index=0, weight=0.5)
-    postprocess_obj = tdi.WeightedSum(powers=[power_obj])
+    power_obj = tdi.ModePower(monitor_name=MNT_NAME2, direction="+", mode_index=0, weight=0.5)
+    postprocess_obj = tdi.Sum(operations=[power_obj])
 
     def fn(sim_data):
         return power_obj.evaluate(sim_data)

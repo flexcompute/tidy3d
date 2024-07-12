@@ -41,7 +41,7 @@ class ElementaryPostprocessOperation(AbstractPostprocessOperation, abc.ABC):
     """A postprocess operation that can work on its own."""
 
 
-class GetPowerMode(ElementaryPostprocessOperation):
+class ModePower(ElementaryPostprocessOperation):
     """Grab the power from a ``ModeMonitor`` and apply an optional weight."""
 
     monitor_name: str = pd.Field(
@@ -91,7 +91,7 @@ class GetPowerMode(ElementaryPostprocessOperation):
 
         if not isinstance(mnt_data, td.ModeData):
             raise ValueError(
-                "'GetPowerMode' only works with 'ModeData' corresponding to 'ModeMonitor'. "
+                "'ModePower' only works with 'ModeData' corresponding to 'ModeMonitor'. "
                 f"Monitor name of '{self.monitor_name}' returned data of type {type(mnt_data)}."
             )
 
@@ -102,28 +102,30 @@ class GetPowerMode(ElementaryPostprocessOperation):
         return self.weight * power
 
 
-ElementaryPostprocessOperationType = typing.Union[GetPowerMode]
+ElementaryPostprocessOperationType = typing.Union[ModePower]
 
 
-class ComposedPostprocessOperation(AbstractPostprocessOperation, abc.ABC):
+class CombinedPostprocessOperation(AbstractPostprocessOperation, abc.ABC):
     """A postprocess operation that combines elementary operations."""
 
     operations: tuple[ElementaryPostprocessOperationType, ...] = pd.Field(
         (),
         title="Postprocessing Operations",
-        description="Set of objects specifying the operations combined in this operation." "",
+        description="Set of objects specifying the operations combined in this operation.",
     )
 
 
-class WeightedSum(ComposedPostprocessOperation):
-    """Weighted sum of ``GetPower`` objects."""
+class Sum(CombinedPostprocessOperation):
+    """Sum of the evaluate outputs of elementary operation objects."""
 
     def evaluate(self, sim_data: td.SimulationData) -> float:
+        """sum the evaluation of each operation."""
+
         value = 0.0
-        for get_power in self.powers:
-            value = value + get_power.evaluate(sim_data)
+        for operation in self.operations:
+            value = value + operation.evaluate(sim_data)
 
         return value
 
 
-PostprocessOperationType = typing.Union[CustomPostprocessOperation, GetPowerMode, WeightedSum]
+PostprocessOperationType = typing.Union[CustomPostprocessOperation, ModePower, Sum]
