@@ -1035,15 +1035,19 @@ class SimulationData(AbstractYeeGridSimulationData):
                 ]
             )
 
-            x, residuals, rank, s = np.linalg.lstsq(cross_matrix, desired_amplitudes, rcond=None)
+            corrected_amplitudes, *rest = np.linalg.lstsq(
+                cross_matrix, desired_amplitudes
+            )  # * self_terms)
 
-            print("residuals = ", residuals)
-            print("x = ", x)
+            # x, residuals, rank, s = np.linalg.lstsq(cross_matrix, desired_amplitudes, rcond=None)
 
-            corrected_amplitudes = x
+            # print("residuals = ", residuals)
+            # print("x = ", x)
 
-            corrected_amplitudes = np.linalg.solve(cross_matrix, desired_amplitudes)
-            print("x = ", corrected_amplitudes)
+            # corrected_amplitudes = x
+
+            # corrected_amplitudes = np.linalg.solve(cross_matrix, desired_amplitudes)
+            # print("x = ", corrected_amplitudes)
 
             # res = cross_matrix @ corrected_amplitudes - desired_amplitudes
 
