@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the account function `account` to check credit balance and daily free simulation balance.
 
 ### Changed
+- Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
 
 ### Fixed
 - Significant speedup for field projection computations.

@@ -420,7 +420,7 @@ class AutoGrid(GridSpec1d):
         )
         # insert snapping_points
         interval_coords, max_dl_list = self.mesher.insert_snapping_points(
-            axis, interval_coords, max_dl_list, snapping_points
+            self.dl_min, axis, interval_coords, max_dl_list, snapping_points
         )
 
         # Put just a single pixel if 2D-like simulation
