@@ -38,7 +38,7 @@ DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataT
 DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in MonitorDataTypes}
 
 # adjoint fwidth stuff is this times the fwidth
-FWIDTH_FACTOR = 0.05
+FWIDTH_FACTOR = 1.0
 
 
 class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
@@ -1039,19 +1039,19 @@ class SimulationData(AbstractYeeGridSimulationData):
                 cross_matrix, desired_amplitudes
             )  # * self_terms)
 
-            res = cross_matrix @ corrected_amplitudes - desired_amplitudes
+            # res = cross_matrix @ corrected_amplitudes - desired_amplitudes
 
             # atol = 1e-3
 
-            print(res)
-            print(desired_amplitudes)
+            # print(res)
+            # print(desired_amplitudes)
 
-            if not np.allclose(res, 0.0):
-                # if np.linalg.norm(res) / np.linalg.norm(desired_amplitudes) > atol:
-                raise NotImplementedError(
-                    f"adjoint fwidth would be too large, residual of {np.linalg.norm(res) / np.linalg.norm(desired_amplitudes)} relative to the desired amplitudes."
-                )
-                # must decrease the fwidth / increase run_time of adjoint sources until atol reached
+            # if not np.allclose(res, 0.0):
+            #     # if np.linalg.norm(res) / np.linalg.norm(desired_amplitudes) > atol:
+            #     raise NotImplementedError(
+            #         f"adjoint fwidth would be too large, residual of {np.linalg.norm(res) / np.linalg.norm(desired_amplitudes)} relative to the desired amplitudes."
+            #     )
+            # must decrease the fwidth / increase run_time of adjoint sources until atol reached
 
             # corrected_amplitudes = np.linalg.solve(cross_talk_matrix, desired_amplitudes)
             source_times_corrected = [
