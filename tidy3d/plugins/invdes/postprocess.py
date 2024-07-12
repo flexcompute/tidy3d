@@ -37,7 +37,11 @@ class CustomPostprocessOperation(AbstractPostprocessOperation):
         return obj
 
 
-class GetPowerMode(AbstractPostprocessOperation):
+class ElementaryPostprocessOperation(AbstractPostprocessOperation, abc.ABC):
+    """A postprocess operation that can work on its own."""
+
+
+class GetPowerMode(ElementaryPostprocessOperation):
     """Grab the power from a ``ModeMonitor`` and apply an optional weight."""
 
     monitor_name: str = pd.Field(
@@ -98,14 +102,21 @@ class GetPowerMode(AbstractPostprocessOperation):
         return self.weight * power
 
 
-class WeightedSum(AbstractPostprocessOperation):
-    """Weighted sum of ``GetPower`` objects."""
+ElementaryPostprocessOperationType = typing.Union[GetPowerMode]
 
-    powers: tuple[GetPowerMode, ...] = pd.Field(
+
+class ComposedPostprocessOperation(AbstractPostprocessOperation, abc.ABC):
+    """A postprocess operation that combines elementary operations."""
+
+    operations: tuple[ElementaryPostprocessOperationType, ...] = pd.Field(
         (),
-        title="Powers",
-        description="Set of objects specifying how to compute and weigh the power from ``ModeData`` outputs.",
+        title="Postprocessing Operations",
+        description="Set of objects specifying the operations combined in this operation." "",
     )
+
+
+class WeightedSum(ComposedPostprocessOperation):
+    """Weighted sum of ``GetPower`` objects."""
 
     def evaluate(self, sim_data: td.SimulationData) -> float:
         value = 0.0
@@ -115,6 +126,4 @@ class WeightedSum(AbstractPostprocessOperation):
         return value
 
 
-PostprocessOperationType = typing.Union[
-    CustomPostprocessOperation, GetPowerMode, WeightedSum, GetPowerMode
-]
+PostprocessOperationType = typing.Union[CustomPostprocessOperation, GetPowerMode, WeightedSum]

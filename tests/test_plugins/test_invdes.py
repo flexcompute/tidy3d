@@ -386,11 +386,16 @@ def test_postprocess_init(use_emulated_run):  # noqa: F811
     def fn(sim_data):
         return power_obj.evaluate(sim_data)
 
+    # basline
     invdes = make_invdes()
     params = invdes.design_region.params_random
     sim_data = invdes.to_simulation_data(params=params, task_name="test")
+    obj_fn_val = fn(sim_data)
 
+    # supply postprocess object directly
     invdes_obj = invdes.updated_copy(postprocess=postprocess_obj)
+
+    # supply invdes with a function from classmethod constructor
     invdes_from_fn = invdes.from_function(
         fn,
         **invdes.dict(
@@ -399,12 +404,13 @@ def test_postprocess_init(use_emulated_run):  # noqa: F811
             }
         ),
     )
+
+    # use the custom postprocess operation.
     invdes_from_custom = invdes.updated_copy(
         postprocess=tdi.CustomPostprocessOperation.from_function(fn)
     )
 
-    obj_fn_val = fn(sim_data)
-
+    # check that they all give the same objective function values, and calling evaluate works
     for invdes_ in (invdes_obj, invdes_from_fn, invdes_from_custom):
         obj_fn_val_ = invdes_.postprocess.evaluate(sim_data)
         assert np.isclose(obj_fn_val, obj_fn_val_)
