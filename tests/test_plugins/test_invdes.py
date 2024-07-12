@@ -377,6 +377,39 @@ def test_continue_run_from_file(use_emulated_run_autograd):
     result_full = optimizer.continue_run_from_history(post_process_fn=post_process_fn)
 
 
+def test_postprocess_init(use_emulated_run):  # noqa: F811
+    """Test the intiialization of an ``InverseDesign`` with different ``postprocess`` options."""
+
+    power_obj = tdi.GetPowerMode(monitor_name=MNT_NAME2, direction="+", mode_index=0, weight=0.5)
+    postprocess_obj = tdi.WeightedSum(powers=[power_obj])
+
+    def fn(sim_data):
+        return power_obj.evaluate(sim_data)
+
+    invdes = make_invdes()
+    params = invdes.design_region.params_random
+    sim_data = invdes.to_simulation_data(params=params, task_name="test")
+
+    invdes_obj = invdes.updated_copy(postprocess=postprocess_obj)
+    invdes_from_fn = invdes.from_function(
+        fn,
+        **invdes.dict(
+            exclude={
+                "postprocess",
+            }
+        ),
+    )
+    invdes_from_custom = invdes.updated_copy(
+        postprocess=tdi.CustomPostprocessOperation.from_function(fn)
+    )
+
+    obj_fn_val = fn(sim_data)
+
+    for invdes_ in (invdes_obj, invdes_from_fn, invdes_from_custom):
+        obj_fn_val_ = invdes_.postprocess.evaluate(sim_data)
+        assert np.isclose(obj_fn_val, obj_fn_val_)
+
+
 @pytest.mark.parametrize("fn_postprocess", (True, False))
 def test_result(
     use_emulated_run,  # noqa: F811

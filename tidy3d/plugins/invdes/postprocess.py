@@ -1,4 +1,5 @@
 # defines postprocessing classes for `InverseDesign` objects.
+from __future__ import annotations
 
 import abc
 import typing
@@ -10,8 +11,10 @@ import tidy3d as td
 
 from .base import InvdesBaseModel
 
+PostProcessFnType = typing.Callable[[td.SimulationData], float]
 
-class PostprocessOperation(InvdesBaseModel, abc.ABC):
+
+class AbstractPostprocessOperation(InvdesBaseModel, abc.ABC):
     """Abstract base class defining components that make up postprocessing classes."""
 
     @abc.abstractmethod
@@ -19,7 +22,22 @@ class PostprocessOperation(InvdesBaseModel, abc.ABC):
         """How to evaluate this operation on a ``SimulationData`` object."""
 
 
-class GetPowerMode(PostprocessOperation):
+class CustomPostprocessOperation(AbstractPostprocessOperation):
+    """A postprocessing operation to subclass and implement ones own ``evalute`` method for."""
+
+    def evaluate(self, sim_data: td.SimulationData) -> float:
+        """How to evaluate this operation on a ``SimulationData`` object."""
+        raise NotImplementedError("Must define the 'self.evaluate(sim_data) -> float' method.")
+
+    @classmethod
+    def from_function(cls, fn: PostProcessFnType, **kwargs) -> CustomPostprocessOperation:
+        """Create a ``CustomPostprocessOperation`` from a function of ``SimulationData``."""
+        cls.evaluate = lambda self, sim_data: fn(sim_data)
+        obj = cls(**kwargs)
+        return obj
+
+
+class GetPowerMode(AbstractPostprocessOperation):
     """Grab the power from a ``ModeMonitor`` and apply an optional weight."""
 
     monitor_name: str = pd.Field(
@@ -80,7 +98,7 @@ class GetPowerMode(PostprocessOperation):
         return self.weight * power
 
 
-class WeightedSum(PostprocessOperation):
+class WeightedSum(AbstractPostprocessOperation):
     """Weighted sum of ``GetPower`` objects."""
 
     powers: tuple[GetPowerMode, ...] = pd.Field(
@@ -95,3 +113,8 @@ class WeightedSum(PostprocessOperation):
             value = value + get_power.evaluate(sim_data)
 
         return value
+
+
+PostprocessOperationType = typing.Union[
+    CustomPostprocessOperation, GetPowerMode, WeightedSum, GetPowerMode
+]

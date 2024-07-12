@@ -1,4 +1,5 @@
 # container for everything defining the inverse design
+from __future__ import annotations
 
 import abc
 import typing
@@ -11,11 +12,9 @@ import tidy3d.web as web
 from tidy3d.components.autograd import get_static
 
 from .base import InvdesBaseModel
-from .postprocess import WeightedSum
+from .postprocess import CustomPostprocessOperation, PostProcessFnType, PostprocessOperationType
 from .region import DesignRegionType
 from .validators import check_pixel_size
-
-PostProcessFnType = typing.Callable[[td.SimulationData], float]
 
 
 class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
@@ -33,7 +32,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         description="Task name to use in the objective function when running the ``JaxSimulation``.",
     )
 
-    postprocess: WeightedSum = pd.Field(
+    postprocess: PostprocessOperationType = pd.Field(
         None,
         title="Postprocess Object",
         description="Optional object specifying how to perform weighted sum of ``ModeData`` "
@@ -46,6 +45,13 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         title="Task Verbosity",
         description="If ``True``, will print the regular output from ``web`` functions.",
     )
+
+    @classmethod
+    def from_function(cls, fn: PostProcessFnType, **kwargs) -> AbstractInverseDesign:
+        """Create an ``InverseDesign`` object from a user-supplied postprocessing function."""
+
+        postprocess = CustomPostprocessOperation.from_function(fn)
+        return cls(postprocess=postprocess, **kwargs)
 
     def _get_postprocess_fn(
         self, post_process_fn: typing.Callable = None
