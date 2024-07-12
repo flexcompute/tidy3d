@@ -10,6 +10,10 @@ def make_grid_spec():
     return td.GridSpec(wavelength=1.0)
 
 
+def make_auto_grid_spec(dl_min=0.02):
+    return td.GridSpec.auto(wavelength=1.0, dl_min=dl_min)
+
+
 def test_add_pml_to_bounds():
     gs = make_grid_spec()
     bounds = np.array([1.0])
@@ -76,13 +80,14 @@ def test_make_coords_with_snapping_points():
     assert np.any(np.isclose(coord, 0.85))
 
     # 3) snapping takes no effect if it's too close to interval boundaries
+    # forming the simulation boundary
     coord = gs.grid_x.make_coords(
         snapping_points=((0.98, 0, 0),),
         **make_coords_args,
     )
     assert np.allclose(coord_original, coord)
 
-    # and no snapping if it's compeletely outside the simulation domain
+    # and no snapping if it's completely outside the simulation domain
     coord = gs.grid_x.make_coords(
         snapping_points=((10, 0, 0),),
         **make_coords_args,
@@ -94,6 +99,40 @@ def test_make_coords_with_snapping_points():
         **make_coords_args,
     )
     assert np.allclose(coord_original, coord)
+
+    # Switch to GridSpec emulating a user setting dl_min
+    gs = make_auto_grid_spec()
+    # 4) Test override behavior
+    # Snapping point should override original interval boundary
+    coord = gs.grid_x.make_coords(
+        snapping_points=((0.56789, 0, 0),),
+        **make_coords_args,
+    )
+    assert np.any(np.isclose(coord, 0.56789))
+    # Same if on the lower side of the initial interval boundary
+    coord = gs.grid_x.make_coords(
+        snapping_points=((-0.56789, 0, 0),),
+        **make_coords_args,
+    )
+    assert np.any(np.isclose(coord, -0.56789))
+
+    gs = make_auto_grid_spec(dl_min=0.5)
+
+    # 5) Test override behavior special cases
+    # Snapping point at 0 should be added when there is space between interval boundaries
+    coord = gs.grid_x.make_coords(
+        snapping_points=((-0.26, 0, 0), (0.26, 0, 0), (0, 0, 0)),
+        **make_coords_args,
+    )
+    assert np.any(np.isclose(coord, 0.0))
+
+    # Snapping point at 0 should NOT be added when there is not enough space
+    # between interval boundaries
+    coord = gs.grid_x.make_coords(
+        snapping_points=((-0.25, 0, 0), (0.25, 0, 0), (0, 0, 0)),
+        **make_coords_args,
+    )
+    assert not np.any(np.isclose(coord, 0.0))
 
 
 def test_make_coords_2d():

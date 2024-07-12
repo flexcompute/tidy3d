@@ -46,6 +46,7 @@ class Mesher(Tidy3dBaseModel, ABC):
     @abstractmethod
     def insert_snapping_points(
         self,
+        dl_min: pd.NonNegativeFloat,
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
@@ -75,6 +76,7 @@ class GradedMesher(Mesher):
 
     def insert_snapping_points(
         self,
+        dl_min: pd.NonNegativeFloat,
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
@@ -84,6 +86,8 @@ class GradedMesher(Mesher):
 
         Parameters
         ----------
+        dl_min: pd.NonNegativeFloat
+            Lower bound of grid size.
         axis : Axis
             Axis index along which to operate.
         interval_coords : ArrayFloat1D
@@ -98,20 +102,25 @@ class GradedMesher(Mesher):
         interval_coords : Array
             An array of coordinates, where the first element is the simulation min boundary, the
             last element is the simulation max boundary, and the intermediate coordinates are all
-            locations with a fixpoint or a structure has a bounding box edge along the specified axis.
-            The boundaries are filtered such that no interval is smaller than the smallest
-            of the ``max_steps``.
+            locations with a snapping_point or a structure has a bounding box edge along the
+            specified axis. The boundaries are filtered such that no interval is smaller than the
+            smallest of the ``max_steps``.
         max_steps : array_like
             An array of size ``interval_coords.size - 1`` giving the maximum grid step required in
             each ``interval_coords[i]:interval_coords[i+1]`` interval, depending on the materials
             in that interval, the supplied wavelength, and the minimum required step per wavelength.
 
         """
-        # Don't do anything for a 2D-like simulation, or no fix points
+        # Don't do anything for a 2D-like simulation, or no snapping points
         if interval_coords.size == 1 or len(snapping_points) < 1:
             return interval_coords, max_dl_list
 
-        min_step = np.amin(max_dl_list) * 0.5
+        # If the user has set dl_min, use that as the min_step
+        if dl_min != 0.0:
+            min_step = dl_min
+        else:
+            min_step = np.amin(max_dl_list) / 2
+
         for point in snapping_points:
             new_coord = point[axis]
             # Skip if the point is outside the domain
@@ -119,13 +128,29 @@ class GradedMesher(Mesher):
                 continue
             # search insertion location
             ind = np.searchsorted(interval_coords, new_coord, side="left")
-            # Skip snapping_points if the distance to the existing interval boundarires are
+            d_1 = abs(new_coord - interval_coords[ind - 1])
+            d_2 = abs(new_coord - interval_coords[ind])
+            # Skip snapping_points if the distances to existing interval boundaries are
             # smaller than `min_step` defined above.
-            if abs(new_coord - interval_coords[ind]) < min_step:
+            if d_1 < min_step and d_2 < min_step:
                 continue
-            if abs(new_coord - interval_coords[ind - 1]) < min_step:
+            # or, if the snapping point is near the first interval boundary,
+            # give priority to the snapping_point and replace
+            elif d_1 < min_step:
+                # Don't replace if the boundary is the simulation boundary
+                if ind == 0:
+                    continue
+                interval_coords[ind - 1] = new_coord
                 continue
-            # insertion
+            # or, if the snapping point is near the second interval boundary,
+            # give priority to the snapping_point and replace
+            elif d_2 < min_step:
+                # Don't replace if the boundary is the simulation boundary
+                if ind == len(interval_coords) - 1:
+                    continue
+                interval_coords[ind] = new_coord
+                continue
+            # otherwise add the snapping point directly since there is sufficient space
             interval_coords = np.insert(interval_coords, ind, new_coord)
             max_dl_list = np.insert(max_dl_list, ind - 1, max_dl_list[ind - 1])
         return interval_coords, max_dl_list
