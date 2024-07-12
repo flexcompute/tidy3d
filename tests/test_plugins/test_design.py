@@ -276,8 +276,13 @@ def test_sweep(sweep_method, monkeypatch):
     # Test with list of sims
     td_sim_list = design_space.run(scs_pre_list, scs_post_list)
 
+    assert "0_0" not in td_sim_list.task_ids[0] and "0_3" not in td_sim_list.task_ids[4]
+
     # Test with dict of sims
     td_sim_dict = design_space.run(scs_pre_dict, scs_post_dict)
+
+    # Check naming is including dict keys
+    assert "test1" in td_sim_dict.task_ids[0]
 
     # Test with list of sims and non-sim constant values
     ts_sim_list_const = design_space.run(scs_pre_list_const, scs_post_list_const)

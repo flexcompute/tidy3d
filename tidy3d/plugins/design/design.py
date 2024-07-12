@@ -86,8 +86,6 @@ class DesignSpace(Tidy3dBaseModel):
 
         fn_args_coords_T = list(map(list, zip(*fn_args_coords)))
 
-        # Format fn_values as appropriate
-
         return Result(
             dims=self.dims,
             values=fn_values,
@@ -96,25 +94,6 @@ class DesignSpace(Tidy3dBaseModel):
             task_ids=task_ids,
             aux_values=aux_values,
         )
-
-    def _create_name_generator(self):
-        """Initialise the name generator used for simulation task names"""
-        counter = 0
-
-        while True:
-            # Check if user has supplied a dict key
-            if self._dict_name is not None:
-                suffix = f"{self._dict_name}_{counter}"
-            else:
-                suffix = f"{counter}"
-
-            if self.task_name is not None:
-                task_name = f"{self.task_name}_{suffix}"
-            else:
-                task_name = f"{suffix}"
-
-            yield (task_name)
-            counter += 1
 
     @staticmethod
     def get_fn_source(function: Callable) -> str:
@@ -198,6 +177,7 @@ class DesignSpace(Tidy3dBaseModel):
                 self.sim_names = []
 
             def _fn_combined(self, args_list):
+                """Compute fn_pre and fn_post functions and capture other outputs."""
                 sim_dict = {str(idx): fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
                 data, sim_names = fn_mid(sim_dict, self.sim_counter)
                 self.sim_names.extend(sim_names)
@@ -233,11 +213,14 @@ class DesignSpace(Tidy3dBaseModel):
             }
             was_list = True
 
-        simulations = {}
-        batches = {}
-
-        def _find_and_map(search_dict: dict, search_type: Any, output_dict: dict, previous_key=""):
-            """"""
+        def _find_and_map(
+            search_dict: dict,
+            search_type: Any,
+            output_dict: dict,
+            naming_dict: dict,
+            previous_key: str = "",
+        ):
+            """Recursively search for search_type objects within a dictionary."""
             current_key = previous_key
             for key, value in search_dict.items():
                 if len(previous_key) == 0:
@@ -246,13 +229,19 @@ class DesignSpace(Tidy3dBaseModel):
                     latest_key = f"{current_key}_{key}"
 
                 if isinstance(value, dict):
-                    _find_and_map(value, search_type, output_dict, latest_key)
-                if isinstance(value, search_type):
+                    _find_and_map(value, search_type, output_dict, naming_dict, latest_key)
+                elif isinstance(value, search_type):
                     output_dict[latest_key] = value
+                    naming_dict[latest_key] = key
 
-        _find_and_map(pre_out, Simulation, simulations)
-        _find_and_map(pre_out, Batch, batches)
+        simulations = {}
+        batches = {}
+        naming_keys = {}
 
+        _find_and_map(pre_out, Simulation, simulations, naming_keys)
+        _find_and_map(pre_out, Batch, batches, naming_keys)
+
+        # Exit fn_mid here if td computation is required
         if len(simulations) == 0 and len(batches) == 0:
             return original_pre_out, list()
 
@@ -260,7 +249,13 @@ class DesignSpace(Tidy3dBaseModel):
         named_sims = {}
         translate_sims = {}
         for sim_key, sim in simulations.items():
-            sim_name = f"{self.task_name}_{sim_counter}"
+            # Checks stop standard indexing keys being included in the name
+            suffix = (
+                f"{naming_keys[sim_key]}_{sim_counter}"
+                if naming_keys[sim_key] != str(sim_counter) and not was_list
+                else sim_counter
+            )
+            sim_name = f"{self.task_name}_{suffix}"
             named_sims[sim_name] = sim
             translate_sims[sim_name] = sim_key
             sim_counter += 1
@@ -277,7 +272,7 @@ class DesignSpace(Tidy3dBaseModel):
             batch_results[batch_key] = batch_out
 
         def _return_to_dict(return_dict, key, return_obj):
-            """"""
+            """Recursively insert items into a dict by keys split with underscore. Only works for dict or dict of dict inputs."""
             split_key = key.split("_", 1)
             if len(split_key) > 1:
                 _return_to_dict(return_dict[split_key[0]], split_key[1], return_obj)
@@ -291,6 +286,7 @@ class DesignSpace(Tidy3dBaseModel):
         for batch_name, batch in batch_results.items():
             _return_to_dict(pre_out, batch_name, batch)
 
+        # Restore output to a list if a list was supplied
         if was_list:
             return {
                 dict_idx: list(sub_dict.values()) for dict_idx, sub_dict in pre_out.items()
