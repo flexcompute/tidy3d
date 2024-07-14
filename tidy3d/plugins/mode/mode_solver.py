@@ -1371,31 +1371,35 @@ class ModeSolver(Tidy3dBaseModel):
         if num_pml_0 > 0:
             pml_thick_0_plus = coord_0[-1] - coord_0[-num_pml_0 - 1]
             pml_thick_0_minus = coord_0[num_pml_0] - coord_0[0]
+            if self.solver_symmetry[0] != 0:
+                pml_thick_0_minus = pml_thick_0_plus
 
         pml_thick_1_plus = 0
         pml_thick_1_minus = 0
         if num_pml_1 > 0:
             pml_thick_1_plus = coord_1[-1] - coord_1[-num_pml_1 - 1]
             pml_thick_1_minus = coord_1[num_pml_1] - coord_1[0]
+            if self.solver_symmetry[1] != 0:
+                pml_thick_1_minus = pml_thick_1_plus
 
         # Mode Plane width and height
-        mp_w = coord_0[-1] - coord_0[0]
-        mp_h = coord_1[-1] - coord_1[0]
+        mp_w = h_lim[1] - h_lim[0]
+        mp_h = v_lim[1] - v_lim[0]
 
         # Plot the absorbing layers.
         if num_pml_0 > 0 or num_pml_1 > 0:
             pml_rect = []
             if pml_thick_0_minus > 0:
-                pml_rect.append(Rectangle((coord_0[0], coord_1[0]), pml_thick_0_minus, mp_h))
+                pml_rect.append(Rectangle((h_lim[0], v_lim[0]), pml_thick_0_minus, mp_h))
             if pml_thick_0_plus > 0:
                 pml_rect.append(
-                    Rectangle((coord_0[-num_pml_0 - 1], coord_1[0]), pml_thick_0_plus, mp_h)
+                    Rectangle((h_lim[1] - pml_thick_0_plus, v_lim[0]), pml_thick_0_plus, mp_h)
                 )
             if pml_thick_1_minus > 0:
-                pml_rect.append(Rectangle((coord_0[0], coord_1[0]), mp_w, pml_thick_1_minus))
+                pml_rect.append(Rectangle((h_lim[0], v_lim[0]), mp_w, pml_thick_1_minus))
             if pml_thick_1_plus > 0:
                 pml_rect.append(
-                    Rectangle((coord_0[0], coord_1[-num_pml_1 - 1]), mp_w, pml_thick_1_plus)
+                    Rectangle((h_lim[0], v_lim[1] - pml_thick_1_plus), mp_w, pml_thick_1_plus)
                 )
 
             pc = PatchCollection(
@@ -1416,14 +1420,24 @@ class ModeSolver(Tidy3dBaseModel):
         n_axis, t_axes = self.plane.pop_axis([0, 1, 2], self.normal_axis)
         a_center = [None, None, None]
         a_center[n_axis] = self.plane.center[n_axis]
+
+        _, (h_min_s, v_min_s) = Box.pop_axis(self.simulation.bounds[0], axis=n_axis)
+        _, (h_max_s, v_max_s) = Box.pop_axis(self.simulation.bounds[1], axis=n_axis)
+
+        h_min = a_center[n_axis] - self.plane.size[t_axes[0]] / 2
+        h_max = a_center[n_axis] + self.plane.size[t_axes[0]] / 2
+        v_min = a_center[n_axis] - self.plane.size[t_axes[1]] / 2
+        v_max = a_center[n_axis] + self.plane.size[t_axes[1]] / 2
+
         h_lim = [
-            a_center[n_axis] - self.plane.size[t_axes[0]] / 2,
-            a_center[n_axis] + self.plane.size[t_axes[0]] / 2,
+            h_min if abs(h_min) < abs(h_min_s) else h_min_s,
+            h_max if abs(h_max) < abs(h_max_s) else h_max_s,
         ]
         v_lim = [
-            a_center[n_axis] - self.plane.size[t_axes[1]] / 2,
-            a_center[n_axis] + self.plane.size[t_axes[1]] / 2,
+            v_min if abs(v_min) < abs(v_min_s) else v_min_s,
+            v_max if abs(v_max) < abs(v_max_s) else v_max_s,
         ]
+
         return a_center, h_lim, v_lim, t_axes
 
     def _validate_modes_size(self):
