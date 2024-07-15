@@ -85,6 +85,7 @@ def test_sweep(sweep_method, monkeypatch):
 
         # set up simulation
         spheres = []
+        freq0 = td.C_0 / 0.5
 
         for _ in range(int(num_spheres)):
             spheres.append(
@@ -104,6 +105,13 @@ def test_sweep(sweep_method, monkeypatch):
         return td.Simulation(
             size=(1, 1, 1),
             structures=spheres,
+            sources=[
+                td.PointDipole(
+                    center=(0, 0, 0),
+                    source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+                    polarization="Ex",
+                )
+            ],
             grid_spec=td.GridSpec.auto(wavelength=1.0),
             run_time=1e-12,
             monitors=[mnt],
@@ -252,6 +260,10 @@ def test_sweep(sweep_method, monkeypatch):
 
     assert non_td_sweep1.values == non_td_sweep2.values
 
+    # Check that estimate fails for non-td functions
+    with pytest.raises(ValueError):
+        estimate = design_space.estimate_cost(float_non_td_pre)
+
     # Ensure output of list and dict pre funcs is the same
     list_non_td_sweep = design_space.run(list_non_td_pre, list_non_td_post)
     dict_non_td_sweep = design_space.run(dict_non_td_pre, dict_non_td_post)
@@ -259,6 +271,14 @@ def test_sweep(sweep_method, monkeypatch):
     assert list_non_td_sweep.values == dict_non_td_sweep.values
 
     # Try functions that include td objects
+    # Test that estimate_cost outputs and fails for combined function output
+    estimate = design_space.estimate_cost(scs_pre)
+
+    assert estimate > 0
+
+    with pytest.raises(ValueError):
+        estimate = design_space.estimate_cost(scs_combined)
+
     # Ensure output of combined and pre-post functions is the same
     td_sweep1 = design_space.run(scs_combined)
     td_sweep2 = design_space.run(scs_pre, scs_post)
@@ -266,7 +286,10 @@ def test_sweep(sweep_method, monkeypatch):
     assert td_sweep1.values == td_sweep2.values
 
     # Try with batch output from pre
+    estimate = design_space.estimate_cost(scs_pre_batch)
     td_batch = design_space.run(scs_pre_batch, scs_post_batch)
+
+    assert estimate > 0
 
     # Test user specified batching works with combined function
     td_batch_combined = design_space.run(scs_combined_batch)

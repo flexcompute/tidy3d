@@ -115,7 +115,8 @@ class MethodGrid(MethodSample):
     >>> method = tdd.MethodGrid()
     """
 
-    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
+    @staticmethod
+    def sample(parameters: Tuple[ParameterType, ...]) -> Dict[str, Any]:
         """Defines how the design parameters are sampled on grid."""
 
         # sample each dimension individually

@@ -12,8 +12,8 @@ from tidy3d.log import log
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.data.sim_data import SimulationData
 from ...components.simulation import Simulation
-from ...web.api.container import Batch, BatchData
-from .method import MethodType
+from ...web.api.container import Batch, BatchData, Job
+from .method import MethodBayOpt, MethodGenAlg, MethodGrid, MethodParticleSwarm, MethodType
 from .parameter import ParameterType
 from .result import Result
 
@@ -328,3 +328,82 @@ class DesignSpace(Tidy3dBaseModel):
         result = new_self.run(fn=fn_pre, fn_post=fn_post)
 
         return result
+
+    def estimate_cost(self, fn_pre):
+        """
+        Compute the maximum FlexCredit charge for the entire design space computation.
+        Require a pre function that should return a Simulation object, Batch object, or collection of either.
+        """
+        # Get output fn_pre for paramters at the lowest span / default
+        arg_dict = {}
+        for param in self.parameters:
+            if hasattr(param, "span"):
+                arg_dict[param.name] = param.span[0]
+            else:  # For ParameterAny objects
+                arg_dict[param.name] = param.allowed_values[0]
+
+        # Compute fn_pre
+        pre_out = fn_pre(**arg_dict)
+
+        def _estimate_sim_cost(sim):
+            job = Job(simulation=sim, task_name="estimate_cost")
+
+            estimate = job.estimate_cost()
+
+            job.delete()
+
+            return estimate
+
+        if isinstance(pre_out, Simulation):
+            per_run_estimate = _estimate_sim_cost(pre_out)
+
+        elif isinstance(pre_out, Batch):
+            per_run_estimate = pre_out.estimate_cost()
+
+        elif isinstance(pre_out, (list, dict)):
+            # Iterate through container to get simulations and batches and sum cost
+            # Accept list or dict inputs
+
+            if isinstance(pre_out, dict):
+                pre_out = list(pre_out.values())
+
+            sims = []
+            batches = []
+            for value in pre_out:
+                if isinstance(value, Simulation):
+                    sims.append(value)
+                elif isinstance(value, Batch):
+                    batches.append(value)
+
+            per_run_estimate = 0
+            for sim in sims:
+                per_run_estimate += _estimate_sim_cost(sim)
+
+            for batch in batches:
+                per_run_estimate += batch.estimate_cost()
+
+        else:
+            raise ValueError("Unrecognised output from pre-function, unable to estimate cost.")
+
+        # Calculate maximum number of runs for different methods
+        # For MonteCarlo, Random, RandomCustom
+        if hasattr(self.method, "num_points"):
+            num_points = self.method.num_points
+
+        # For Grid
+        elif isinstance(self.method, MethodGrid):
+            num_points = len(MethodGrid.sample(self.parameters))
+
+        # For BayOpt
+        elif isinstance(self.method, MethodBayOpt):
+            num_points = self.method.initial_iter + self.method.n_iter
+
+        # For GenAlg
+        elif isinstance(self.method, MethodGenAlg):
+            num_points = self.method.solutions_per_pop * self.method.n_generations
+
+        # For ParticleSwarm
+        elif isinstance(self.method, MethodParticleSwarm):
+            num_points = self.method.n_particles * self.method.n_iter
+
+        return round(per_run_estimate * num_points, 3)
