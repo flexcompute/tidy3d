@@ -1373,9 +1373,8 @@ class PolySlab(base.Planar):
     def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
-        assert derivative_info.paths == [
-            ("vertices",)
-        ], "only support derivative wrt 'PolySlab.vertices'."
+        if derivative_info.paths != [("vertices",)]:
+            raise ValueError("only support derivative wrt 'PolySlab.vertices'.")
 
         vjp_vertices = self.compute_derivative_vertices(derivative_info=derivative_info)
 
@@ -1397,7 +1396,8 @@ class PolySlab(base.Planar):
         edge_centers_axis = self.center_axis * np.ones(num_vertices)
         edge_centers_xyz = self.unpop_axis_vect(edge_centers_axis, edge_centers_plane)
 
-        assert edge_centers_xyz.shape == (num_vertices, 3), "something bad happened"
+        if edge_centers_xyz.shape != (num_vertices, 3):
+            raise AssertionError("something bad happened")
 
         # compute the E and D fields at the edge centers
         E_der_at_edges = self.der_at_centers(

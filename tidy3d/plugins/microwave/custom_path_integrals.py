@@ -124,7 +124,11 @@ class CustomPathIntegral2D(AbstractAxesRH):
         elif isinstance(em_field, FieldTimeData):
             return TimeDataArray(data=result.data, coords=result.coords)
         else:
-            assert isinstance(em_field, ModeSolverData)
+            if not isinstance(em_field, ModeSolverData):
+                raise TypeError(
+                    f"Unsupported 'em_field' type: {type(em_field)}. "
+                    "Expected one of 'FieldData', 'FieldTimeData', 'ModeSolverData'."
+                )
             return FreqModeDataArray(data=result.data, coords=result.coords)
 
     @staticmethod

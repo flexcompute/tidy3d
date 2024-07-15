@@ -1259,7 +1259,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
             """Snap a 2D material to the Yee grid."""
             center = get_bounds(geom, axis)[0]
-            assert get_bounds(geom, axis)[0] == get_bounds(geom, axis)[1]
+            if get_bounds(geom, axis)[0] != get_bounds(geom, axis)[1]:
+                raise AssertionError(
+                    "Unexpected error encountered while processing 2D material. "
+                    "The upper and lower bounds of the geometry in the normal direction are not equal. "
+                    "If you encounter this error, please create an issue in the Tidy3D github repository."
+                )
             snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
             return geom._update_from_bounds(bounds=(snapped_center, snapped_center), axis=axis)
 

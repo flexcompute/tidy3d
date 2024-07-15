@@ -655,7 +655,8 @@ def postprocess_adj(
         # todo: handle multi-frequency, move to a property?
         frequencies = {src.source_time.freq0 for src in sim_data_adj.simulation.sources}
         frequencies = list(frequencies)
-        assert len(frequencies) == 1, "Multiple adjoint freqs found"
+        if len(frequencies) != 1:
+            raise RuntimeError("Multiple adjoint frequencies found.")
         freq_adj = frequencies[0]
 
         eps_in = np.mean(structure.medium.eps_model(freq_adj))
