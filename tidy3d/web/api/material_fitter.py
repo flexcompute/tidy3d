@@ -73,8 +73,10 @@ class MaterialFitterTask(Submittable):
         options: FitterOptions
             fitter options
         """
-        assert fitter
-        assert options
+        if not isinstance(fitter, DispersionFitter):
+            raise TypeError(f"fitter must be an instance of 'DispersionFitter', got {type(fitter)}")
+        if not isinstance(options, FitterOptions):
+            raise TypeError(f"options must be an instance of 'FitterOptions', got {type(options)}")
         data = np.asarray(list(zip(fitter.wvl_um, fitter.n_data, fitter.k_data)))
         with tempfile.NamedTemporaryFile(suffix=".csv") as temp:
             np.savetxt(temp, data, delimiter=",", header="Wavelength,n,k")

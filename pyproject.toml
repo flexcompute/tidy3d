@@ -225,6 +225,7 @@ select = [
   "C",      # flake8-comprehensions
   "B",      # flake8-bugbear
   "UP",
+  "S101",   # do not use asserts
   "NPY201", # numpy 2.* compatibility check
 ]
 ignore = [

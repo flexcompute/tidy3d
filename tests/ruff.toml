@@ -9,4 +9,5 @@ extend-ignore = [
     "E402", # module-level import not at top of file
     "E731", # lambda assignment
     "F841", # unused local variable
+    "S101", # asserts allowed in tests
 ]

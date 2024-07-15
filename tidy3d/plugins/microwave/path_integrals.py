@@ -123,7 +123,12 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
         elif isinstance(scalar_field, ScalarFieldTimeDataArray):
             return TimeDataArray(data=result.data, coords=result.coords)
         else:
-            assert isinstance(scalar_field, ScalarModeFieldDataArray)
+            if not isinstance(scalar_field, ScalarModeFieldDataArray):
+                raise TypeError(
+                    f"Unsupported 'scalar_field' type: {type(scalar_field)}. "
+                    "Expected one of 'ScalarFieldDataArray', 'ScalarFieldTimeDataArray', "
+                    "'ScalarModeFieldDataArray'."
+                )
             return FreqModeDataArray(data=result.data, coords=result.coords)
 
     def _get_field_along_path(self, scalar_field: EMScalarFieldType) -> EMScalarFieldType:

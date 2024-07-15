@@ -245,7 +245,11 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         """Get the scattering matrix given the power wave matrices."""
 
         # move the input and output port dimensions to the end, for ease of matrix operations
-        assert a_matrix.dims == b_matrix.dims
+        if a_matrix.dims != b_matrix.dims:
+            raise ValueError(
+                "'a_matrix' and 'b_matrix' must have the same number of dimensions, "
+                f"got {a_matrix.dims=} and {b_matrix.dims=}"
+            )
         dims = list(a_matrix.dims)
         dims.append(dims.pop(dims.index("port_out")))
         dims.append(dims.pop(dims.index("port_in")))
