@@ -1536,6 +1536,7 @@ class ModeSolver(Tidy3dBaseModel):
             boundary_spec=new_bspec,
             remove_outside_custom_mediums=True,
             remove_outside_structures=True,
+            include_pml_cells=True,
         )
 
         return self.updated_copy(simulation=new_sim)
