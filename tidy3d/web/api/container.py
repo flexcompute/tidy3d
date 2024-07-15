@@ -210,7 +210,7 @@ class Job(WebContainer):
         if (
             self.use_local_cache
             and Path(path).is_file()
-            and (local_data := web._get_local_cache(self.simulation, path))
+            and (local_data := web._get_local_cache(self.simulation, path)) is not None
         ):
             return local_data
         self.upload()
