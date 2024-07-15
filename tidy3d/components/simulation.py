@@ -37,7 +37,7 @@ from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Coords1D, Grid
-from .grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
+from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
 from .lumped_element import LumpedElementType
 from .medium import (
     AbstractCustomMedium,
@@ -4297,6 +4297,7 @@ class Simulation(AbstractYeeGridSimulation):
         monitors: Tuple[MonitorType, ...] = None,
         remove_outside_structures: bool = True,
         remove_outside_custom_mediums: bool = False,
+        include_pml_cells: bool = False,
         **kwargs,
     ) -> Simulation:
         """Generate a simulation instance containing only the ``region``.
@@ -4327,6 +4328,9 @@ class Simulation(AbstractYeeGridSimulation):
             Remove structures outside of the new simulation domain.
         remove_outside_custom_mediums : bool = True
             Remove custom medium data outside of the new simulation domain.
+        include_pml_cells : bool = False
+            Keep PML cells in simulation boundaries. Note that retained PML cells will be converted
+            to regular cells, and the simulation domain boundary will be moved accordingly.
         **kwargs
             Other arguments passed to new simulation instance.
         """
@@ -4336,7 +4340,10 @@ class Simulation(AbstractYeeGridSimulation):
             raise SetupError("Requested region does not intersect simulation domain")
 
         # restrict to the original simulation domain
-        new_bounds = Box.bounds_intersection(self.bounds, region.bounds)
+        if include_pml_cells:
+            new_bounds = Box.bounds_intersection(self.simulation_bounds, region.bounds)
+        else:
+            new_bounds = Box.bounds_intersection(self.bounds, region.bounds)
         new_bounds = [list(new_bounds[0]), list(new_bounds[1])]
 
         # grid spec inheritace
@@ -4345,11 +4352,7 @@ class Simulation(AbstractYeeGridSimulation):
         elif isinstance(grid_spec, str) and grid_spec == "identical":
             # create a custom grid from existing one
             grids_1d = self.grid.boundaries.to_list
-            new_grids = [
-                CustomGrid(dl=tuple(np.diff(grids_1d[dim])), custom_offset=grids_1d[dim][0])
-                for dim in range(3)
-            ]
-            grid_spec = GridSpec(grid_x=new_grids[0], grid_y=new_grids[1], grid_z=new_grids[2])
+            grid_spec = GridSpec.from_grid(self.grid)
 
             # adjust region bounds to perfectly coincide with the grid
             # note, sometimes (when a box already seems to perfrecty align with the grid)

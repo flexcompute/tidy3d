@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mode solver plugin now supports 'EMESimulation'.
 - `TriangleMesh` class: automatic removal of zero-area faces, and functions `fill_holes` and `fix_winding` to attempt mesh repair.
 - Added progress bar for EME simulations.
+- Support for grid specifications from grid cell boundary coordinates via `CustomGridBoundaries` that subclasses from `GridSpec1d`.
+- More convenient mesh importing from another simulation through `grid_spec = GridSpec.from_grid(sim.grid)`.
 
 ### Changed
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
