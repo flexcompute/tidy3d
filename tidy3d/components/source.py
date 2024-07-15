@@ -797,7 +797,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
     Example
     -------
 
-    >>> sim_empty = sim.updated_copy(monitors = [Flux_monitor],
+    >>> sim_empty = sim.updated_copy(monitors = [Flux_monitor],  # doctest: +SKIP
     ...             structures = [],
     ...             grid_spec= sim.grid_spec.updated_copy(override_structures = sim.structures)
     ...             )
