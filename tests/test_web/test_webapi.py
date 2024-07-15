@@ -557,6 +557,27 @@ def test_job(mock_webapi, monkeypatch, tmp_path):
     assert j.real_cost() == FLEX_UNIT
 
 
+@responses.activate
+def test_job_cache(mock_webapi, tmp_path, log_capture):
+    simdata = make_sim_data(1e-3)
+    simdata_fp = tmp_path / "simulation_data.hdf5"
+    simdata.to_file(simdata_fp)
+    j = Job(simulation=simdata.simulation, task_name=TASK_NAME, folder_name=PROJECT_NAME)
+    with AssertLogLevel(log_capture, "INFO", f"{str(simdata_fp)}"):
+        j.run(path=simdata_fp)
+
+
+@responses.activate
+def test_job_cache_corrupted(mock_webapi, monkeypatch, tmp_path, log_capture):
+    monkeypatch.setattr("tidy3d.web.api.container.Job.load", lambda *args, **kwargs: True)
+    simdata = make_sim_data(1e-3)
+    simdata_fp = tmp_path / "simulation_data.hdf5"
+    simdata_fp.touch()
+    j = Job(simulation=simdata.simulation, task_name=TASK_NAME, folder_name=PROJECT_NAME)
+    with AssertLogLevel(log_capture, "WARNING", "running without cache"):
+        j.run(path=simdata_fp)
+
+
 @pytest.fixture
 def mock_job_status(monkeypatch):
     monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
