@@ -102,7 +102,8 @@ class MethodSample(Method, ABC):
         # Run user function on sampled args
         results = self._extract_output(run_fn(fn_args), sampler=True)
 
-        return fn_args, results, None
+        # None is aux_output and opt_output
+        return fn_args, results, None, None
 
 
 class MethodGrid(MethodSample):
@@ -261,7 +262,7 @@ class MethodBayOpt(MethodOptimise, ABC):
         for output in opt.res:
             fn_args.append(output["params"])
 
-        return fn_args, result, total_aux_out
+        return fn_args, result, total_aux_out, opt
 
 
 class MethodGenAlg(MethodOptimise, ABC):
@@ -402,6 +403,7 @@ class MethodGenAlg(MethodOptimise, ABC):
             gene_space=gene_spaces,
             gene_type=gene_types,
             stop_criteria=self.stop_criteria,
+            save_solutions=True,
         )
 
         ga_instance.run()
@@ -410,7 +412,7 @@ class MethodGenAlg(MethodOptimise, ABC):
         fn_args = [dict(zip(param_keys, val)) for arr in store_parameters for val in arr]
         results = [val for arr in store_fitness for val in arr]
 
-        return fn_args, results, store_aux
+        return fn_args, results, store_aux, ga_instance
 
 
 class MethodParticleSwarm(MethodOptimise, ABC):
@@ -519,7 +521,7 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         fn_args = [val for sublist in store_parameters for val in sublist]
         results = [val for sublist in store_fitness for val in sublist]
 
-        return fn_args, results, store_aux
+        return fn_args, results, store_aux, optimizer
 
 
 class AbstractMethodRandom(MethodSample, ABC):

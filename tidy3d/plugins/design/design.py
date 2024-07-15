@@ -77,6 +77,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_source: str,
         task_ids: Tuple[str] = None,
         aux_values: List[Any] = None,
+        opt_output: Any = None,
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
 
@@ -93,6 +94,7 @@ class DesignSpace(Tidy3dBaseModel):
             fn_source=fn_source,
             task_ids=task_ids,
             aux_values=aux_values,
+            opt_output=opt_output,
         )
 
     @staticmethod
@@ -121,13 +123,18 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Run based on how many functions the user provides
         if fn_post is None:
-            fn_args, fn_values, aux_values = self.run_single(fn)
+            fn_args, fn_values, aux_values, opt_output = self.run_single(fn)
             sim_names = None
 
         else:
-            fn_args, fn_values, aux_values, sim_names = self.run_pre_post(
+            fn_args, fn_values, aux_values, opt_output, sim_names = self.run_pre_post(
                 fn_pre=fn, fn_post=fn_post
             )
+
+            sim_names = tuple(sim_names)
+
+            if len(sim_names) == 0:
+                sim_names = None
 
         fn_source = self.get_fn_source(fn)
 
@@ -138,6 +145,7 @@ class DesignSpace(Tidy3dBaseModel):
             fn_source=fn_source,
             aux_values=aux_values,
             task_ids=sim_names,
+            opt_output=opt_output,
         )
 
     def run_single(self, fn: Callable) -> Tuple(list[dict], list, list[Any]):
@@ -152,10 +160,10 @@ class DesignSpace(Tidy3dBaseModel):
         handler = self._get_evaluate_fn_pre_post(
             fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid
         )
-        fn_args, fn_values, aux_values = self.method.run(
+        fn_args, fn_values, aux_values, opt_output = self.method.run(
             run_fn=handler.evaluate, parameters=self.parameters
         )
-        return fn_args, fn_values, aux_values, handler.sim_names
+        return fn_args, fn_values, aux_values, opt_output, handler.sim_names
 
     """ Helpers """
 

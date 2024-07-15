@@ -533,6 +533,9 @@ def test_optimise_specific(sweep_method, monkeypatch):
     with pytest.raises(ValueError):
         bad_format_td_aux_sweep = design_space.run(float_non_td_pre, bad_format_non_td_aux_post)
 
+    # Test that plots have been produced and stored
+    assert ts_sim_aux.opt_output is not None
+
 
 def test_method_custom_validators():
     """Test the MethodRandomCustom validation performs as expected."""

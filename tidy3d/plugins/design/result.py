@@ -62,7 +62,7 @@ class Result(Tidy3dBaseModel):
         description="Source code for the function evaluated in the parameter sweep.",
     )
 
-    task_ids: list[str] = pd.Field(
+    task_ids: Tuple[str, ...] = pd.Field(
         None,
         title="Task IDs",
         description="Task IDs for the simulation run in each data point. Only available if "
@@ -74,6 +74,12 @@ class Result(Tidy3dBaseModel):
         None,
         title="Auxiliary values output from the user function",
         description="The auxiliary return values from the design problem function. These weren't used to inform the optimiser, if one was used.",
+    )
+
+    opt_output: Any = pd.Field(
+        None,
+        title="Plots produced through design method",
+        description="Plot objects captured over the course of the design method run.",
     )
 
     @pd.validator("coords", always=True)
