@@ -351,6 +351,21 @@ class Result(Tidy3dBaseModel):
         new_coords.pop(index)
         new_values.pop(index)
 
+        # ParticleSwarm optimiser doesn't work with updated_copy
+        # Creating new result with updated values and coords instead
+        if self.opt_output is not None:
+            new_result = Result(
+                dims=self.dims,
+                values=new_values,
+                coords=new_coords,
+                output_names=self.output_names,
+                fn_source=self.fn_source,
+                task_ids=self.task_ids,
+                aux_values=self.aux_values,
+                opt_output=self.opt_output,
+            )
+            return new_result
+
         return self.updated_copy(values=new_values, coords=new_coords)
 
     def add(self, fn_args: Dict[str, float], value: Any) -> Result:
@@ -371,5 +386,20 @@ class Result(Tidy3dBaseModel):
 
         new_values = list(self.values) + [value]
         new_coords = list(self.coords) + [tuple(fn_args[dim] for dim in self.dims)]
+
+        # ParticleSwarm optimiser doesn't work with updated_copy
+        # Creating new result with updated values and coords instead
+        if self.opt_output is not None:
+            new_result = Result(
+                dims=self.dims,
+                values=new_values,
+                coords=new_coords,
+                output_names=self.output_names,
+                fn_source=self.fn_source,
+                task_ids=self.task_ids,
+                aux_values=self.aux_values,
+                opt_output=self.opt_output,
+            )
+            return new_result
 
         return self.updated_copy(values=new_values, coords=new_coords)
