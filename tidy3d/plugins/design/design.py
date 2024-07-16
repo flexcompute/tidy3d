@@ -16,7 +16,7 @@ from .method import (
     MethodBayOpt,
     MethodGenAlg,
     MethodGrid,
-    MethodOptimise,
+    MethodOptimize,
     MethodParticleSwarm,
     MethodType,
 )
@@ -426,10 +426,11 @@ class DesignSpace(Tidy3dBaseModel):
         console = get_logging_console()
 
         # Assemble message
+        # If check stops it printing standard attributes
         arg_values = [
             f"{field}: {getattr(self.method, field)}\n"
             for field in self.method.__fields__
-            if field not in MethodOptimise.__fields__
+            if field not in MethodOptimize.__fields__
         ]
 
         param_values = []

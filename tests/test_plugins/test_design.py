@@ -461,8 +461,8 @@ def test_sample_specific(sweep_method, monkeypatch):
     "sweep_method",
     [SWEEP_METHODS["bay_opt"], SWEEP_METHODS["gen_alg"], SWEEP_METHODS["part_swarm"]],
 )
-def test_optimise_specific(sweep_method, monkeypatch):
-    """Run tests that are only relevant to MethodOptimise"""
+def test_optimize_specific(sweep_method, monkeypatch):
+    """Run tests that are only relevant to MethodOptimize"""
 
     monkeypatch.setattr(web, "run", run_emulated)
 

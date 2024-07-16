@@ -73,7 +73,7 @@ class Result(Tidy3dBaseModel):
     aux_values: Tuple[Any, ...] = pd.Field(
         None,
         title="Auxiliary values output from the user function",
-        description="The auxiliary return values from the design problem function. These weren't used to inform the optimiser, if one was used.",
+        description="The auxiliary return values from the design problem function. These weren't used to inform the optimizer, if one was used.",
     )
 
     opt_output: Any = pd.Field(
@@ -351,7 +351,7 @@ class Result(Tidy3dBaseModel):
         new_coords.pop(index)
         new_values.pop(index)
 
-        # ParticleSwarm optimiser doesn't work with updated_copy
+        # ParticleSwarm optimizer doesn't work with updated_copy
         # Creating new result with updated values and coords instead
         if self.opt_output is not None:
             new_result = Result(
@@ -387,7 +387,7 @@ class Result(Tidy3dBaseModel):
         new_values = list(self.values) + [value]
         new_coords = list(self.coords) + [tuple(fn_args[dim] for dim in self.dims)]
 
-        # ParticleSwarm optimiser doesn't work with updated_copy
+        # ParticleSwarm optimizer doesn't work with updated_copy
         # Creating new result with updated values and coords instead
         if self.opt_output is not None:
             new_result = Result(

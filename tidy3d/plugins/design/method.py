@@ -39,7 +39,7 @@ class Method(Tidy3dBaseModel, ABC):
 
     @staticmethod
     def _extract_output(output: list, sampler: bool = False) -> Tuple:
-        """Format the user function output for further optimisation and result storage."""
+        """Format the user function output for further optimization and result storage."""
         if sampler:
             return output
 
@@ -134,12 +134,14 @@ class MethodGrid(MethodSample):
         return t_vals_dict
 
 
-class MethodOptimise(Method, ABC):
-    """A method for handling design searches that optimise the design"""
+class MethodOptimize(Method, ABC):
+    """A method for handling design searches that optimize the design"""
 
     # NOTE: We could move this to the Method base class but it's not relevant to MethodGrid
     rng_seed: pd.PositiveInt = pd.Field(
-        title="Seed for random number generation", description="TBD", default=None
+        default=None,
+        title="Seed for random number generation",
+        description="Set the seed used by the optimizers to set constant random number generation.",
     )
 
     def any_to_int_param(self, parameter):
@@ -165,37 +167,37 @@ class MethodOptimise(Method, ABC):
                 sol[param] = convert[sol[param]]
 
 
-class MethodBayOpt(MethodOptimise, ABC):
+class MethodBayOpt(MethodOptimize, ABC):
     """A standard method for performing bayesian optimization search"""
 
     initial_iter: pd.PositiveInt = pd.Field(
         ...,
         title="Number of initial random search iterations.",
-        description="TBD",
+        description="The number of search runs to be done initialially with parameter values picked randomly. This provides a starting point for the Gaussian processor to optimize from.",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
         title="Number of bayesian optimization iterations.",
-        description="TBD",
+        description="The number of iterations the Gaussian processor should be sequentially called to suggest parameter values and evaluate the results.",
     )
 
     acq_func: Optional[Literal["ucb", "ei", "poi"]] = pd.Field(
         default="ucb",
         title="Type of acquisition function.",
-        description="TBD",
+        description="The style of acquisition function that should be used to suggest parameter values. More detail available at https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html",
     )
 
     kappa: Optional[pd.PositiveFloat] = pd.Field(
         default=2.5,
-        title="Kappa parameter for the Gaussian processor.",
-        description="TBD",
+        title="Kappa.",
+        description="The kappa coefficient used by the 'ucb' acquisition function.",
     )
 
     xi: Optional[pd.NonNegativeFloat] = pd.Field(
         default=0.0,
-        title="Xi parameter for the Gaussian processor.",
-        description="TBD",
+        title="Xi.",
+        description="The Xi coefficient used by the 'ei' and 'poi' acquisition functions",
     )
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
@@ -266,32 +268,32 @@ class MethodBayOpt(MethodOptimise, ABC):
         return fn_args, result, total_aux_out, opt
 
 
-class MethodGenAlg(MethodOptimise, ABC):
+class MethodGenAlg(MethodOptimize, ABC):
     """A standard method for performing genetic algorithm search"""
 
     # Args for the user
     solutions_per_pop: pd.PositiveInt = pd.Field(
         ...,
         title="Number of solutions per population.",
-        description="TBD",
+        description="The number of solutions to be generated for each population.",
     )
 
     n_generations: pd.PositiveInt = pd.Field(
         ...,
         title="Number of generations.",
-        description="TBD",
+        description="The maximum number of generations to run the genetic algorithm.",
     )
 
     n_parents_mating: pd.PositiveInt = pd.Field(
         ...,
         title="Number of parents mating.",
-        description="TBD",
+        description="The number of solutions to be selected as parents for the next generation.",
     )
 
     stop_criteria: Optional[pd.constr(regex=r"\b(?:reach|saturate)_\d+\b")] = pd.Field(
         default=None,
         title="Early stopping criteria.",
-        description="Define the early stopping criteria. Supported words are 'reach_X' or 'saturate_X' where X is a number. See PyGAD docs for more details",
+        description="Define the early stopping criteria. Supported words are 'reach_X' or 'saturate_X' where X is a number. See PyGAD docs for more details.",
     )
 
     parent_selection_type: Optional[
@@ -299,35 +301,35 @@ class MethodGenAlg(MethodOptimise, ABC):
     ] = pd.Field(
         default="sss",
         title="Parent selection type.",
-        description="TBD",
+        description="The style of parent selector. See the PyGAD docs for more details.",
     )
 
     crossover_type: Optional[Literal["single_point", "two_points", "uniform", "scattered"]] = (
         pd.Field(
             default="single_point",
             title="Crossover type.",
-            description="TBD",
+            description="The style of crossover operation. See the PyGAD docs for more details.",
         )
     )
 
     crossover_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
         default=0.8,
         title="Crossover probability.",
-        description="TBD",
+        description="The probability of performing a crossover between two parents.",
     )
 
     mutation_type: Optional[Literal["random", "swap", "inversion", "scramble", "adaptive"]] = (
         pd.Field(
             default="random",
             title="Crossover type.",
-            description="TBD",
+            description="The style of gene mutation.",
         )
     )
 
     mutation_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
         default=0.2,
         title="Crossover probability.",
-        description="TBD",
+        description="The probability of mutating a gene.",
     )
 
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
@@ -416,43 +418,43 @@ class MethodGenAlg(MethodOptimise, ABC):
         return fn_args, results, store_aux, ga_instance
 
 
-class MethodParticleSwarm(MethodOptimise, ABC):
+class MethodParticleSwarm(MethodOptimize, ABC):
     """A standard method for performing particle swarm search"""
 
     n_particles: pd.PositiveInt = pd.Field(
         ...,
         title="Number of particles in the swarm.",
-        description="TBD",
+        description="The number of particles to be used in the optimization.",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of generations.",
-        description="TBD",
+        title="Number of iterations.",
+        description="The maxmium number of iterations to run the optimization.",
     )
 
     cognitive_coeff: Optional[pd.PositiveFloat] = pd.Field(
         default=1.5,
-        title="Number of parents mating.",
-        description="TBD",
+        title="Cognitive coefficient.",
+        description="The cognitive parameter decides how attracted the particle is to its previous best position.",
     )
 
     social_coeff: Optional[pd.PositiveFloat] = pd.Field(
         default=1.5,
-        title="Number of parents mating.",
-        description="TBD",
+        title="Social coefficient.",
+        description="The social parameter decides how attracted the particle is to the global best position found by the swarm.",
     )
 
     weight: Optional[pd.PositiveFloat] = pd.Field(
         default=0.9,
-        title="Number of parents mating.",
-        description="TBD",
+        title="Weight.",
+        description="The weight or inertia of particles in the optimization.",
     )
 
     ftol: Optional[Union[pd.confloat(ge=0, le=1), Literal[-inf]]] = pd.Field(
         default=-inf,
         title="Relative error for convergence.",
-        description="Relative error in objective_func(best_pos) acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
+        description="Relative error in `objective_func(best_solution)` acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
     )
 
     ftol_iter: Optional[pd.PositiveInt] = pd.Field(
@@ -531,11 +533,13 @@ class AbstractMethodRandom(MethodSample, ABC):
     num_points: pd.PositiveInt = pd.Field(
         ...,
         title="Number of points for sampling",
-        description="TBD",
+        description="The number of points to be generated for sampling.",
     )
 
     rng_seed: pd.PositiveInt = pd.Field(
-        title="Seed for random number generation", description="TBD", default=None
+        default=None,
+        title="Seed for random number generation",
+        description="Set the seed used by the optimizers to set constant random number generation.",
     )
 
     @abstractmethod
@@ -650,7 +654,7 @@ class MethodRandomCustom(AbstractMethodRandom):
     sampler_kwargs: Any = pd.Field(
         {},
         title="Keyword arguments for sampler",
-        description="tbd",
+        description="Kwarg input that is passed to the sampler and unpacked when the sampler is initialized.",
     )
 
     # @pd.validator("sampler")
