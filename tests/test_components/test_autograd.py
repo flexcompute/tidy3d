@@ -5,6 +5,7 @@ import cProfile
 import typing
 import warnings
 from importlib import reload
+from os.path import join
 
 import autograd as ag
 import autograd.numpy as anp
@@ -13,7 +14,8 @@ import numpy as np
 import pytest
 import tidy3d as td
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.web.api.autograd.autograd import run, run_async
+from tidy3d.web import run, run_async
+from tidy3d.web.api.autograd.utils import FieldMap
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
@@ -116,12 +118,10 @@ def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
     import tidy3d
-    from tidy3d.web.api.container import Job
 
     if TEST_MODE in ("pipeline", "speed"):
-        VJP = "VJP"
+        AUX_KEY_SIM_FIELDS_ORIGINAL = "sim_fields_original"
         task_id_fwd = "task_fwd"
-        task_id_bwd = "task_bwd"
 
         cache = {}
 
@@ -133,23 +133,19 @@ def use_emulated_run(monkeypatch):
             AUX_KEY_SIM_DATA_ORIGINAL,
             postprocess_adj,
             postprocess_fwd,
-            setup_run,
         )
 
-        def emulated_job_run(self: Job) -> td.SimulationData:
-            """What gets called instead of ``web.run()``."""
+        def emulated_run_fwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
+            """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
 
-            sim_data = run_emulated(self.simulation, task_name="test")
-
-            if self.simulation_type == "autograd_fwd":
-                sim_original = self.simulation
-
+            if run_kwargs.get("simulation_type") == "autograd_fwd":
+                sim_fields = run_kwargs["sim_fields"]
+                sim_original = simulation
                 # add gradient monitors and make combined simulation
-                sim_fields = setup_run(sim_original)
                 sim_combined = sim_original.with_adjoint_monitors(sim_fields)
-                sim_data_combined = run_emulated(sim_combined, task_name="test")
+                sim_data_combined = run_emulated(sim_combined, task_name=task_name)
 
-                # store the data in aux_data (see commented out lines below)
+                # store both original and fwd data aux_data
                 aux_data = {}
 
                 _ = postprocess_fwd(
@@ -158,54 +154,41 @@ def use_emulated_run(monkeypatch):
                     aux_data=aux_data,
                 )
 
-                # todo: split into return (original data) and store (fwd data)
-                # sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
-                # sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
-
-                # cache it locally for test
+                # cache original and fwd data locally for test
                 cache[task_id_fwd] = copy.copy(aux_data)
+                cache[task_id_fwd][AUX_KEY_SIM_FIELDS_ORIGINAL] = sim_fields
+                # return original data only
+                return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_id_fwd
+            else:
+                return run_emulated(simulation, task_name=task_name), task_id_fwd
 
-            elif self.simulation_type == "autograd_bwd":
-                # run the adjoint sim
-                sim_data_adj = run_emulated(self.simulation, task_name="test")
+        def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
+            """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
 
-                # grab the fwd and original data from the cache
-                aux_data_fwd = cache[task_id_fwd]
-                sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
-                sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
+            # run the adjoint sim
+            sim_data_adj = run_emulated(simulation, task_name="task_name")
 
-                # get the original traced fields
-                sim_fields_original = setup_run(simulation=sim_data_orig.simulation)
+            # grab the fwd and original data from the cache
+            aux_data_fwd = cache[task_id_fwd]
+            sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
+            sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
-                # postprocess (compute adjoint gradients)
-                traced_fields_vjp = postprocess_adj(
-                    sim_data_adj=sim_data_adj,
-                    sim_data_orig=sim_data_orig,
-                    sim_data_fwd=sim_data_fwd,
-                    sim_fields_original=sim_fields_original,
-                )
+            # get the original traced fields
+            sim_fields_original = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_ORIGINAL]
 
-                # cache the results in the VJP key of the cache
-                cache[task_id_bwd] = {VJP: traced_fields_vjp}
+            # postprocess (compute adjoint gradients)
+            traced_fields_vjp = postprocess_adj(
+                sim_data_adj=sim_data_adj,
+                sim_data_orig=sim_data_orig,
+                sim_data_fwd=sim_data_fwd,
+                sim_fields_original=sim_fields_original,
+            )
 
-            return sim_data
+            return traced_fields_vjp
 
         monkeypatch.setattr(webapi, "run", run_emulated)
-        monkeypatch.setattr(Job, "run", emulated_job_run)
-        monkeypatch.setattr(Job, "task_id", task_id_fwd)
-
-        reload(tidy3d.web.api.autograd.autograd)
-
-        monkeypatch.setattr(
-            tidy3d.web.api.autograd.autograd,
-            "get_fwd_sim_data",
-            lambda task_id: cache[task_id_fwd][AUX_KEY_SIM_DATA_FWD],
-        )
-        monkeypatch.setattr(
-            tidy3d.web.api.autograd.autograd,
-            "get_vjp_traced_fields",
-            lambda task_id: cache[task_id_bwd][VJP],
-        )
+        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
+        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d_bwd", emulated_run_bwd)
 
         _run_was_emulated[0] = True
 
@@ -715,6 +698,23 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
+@pytest.mark.parametrize("structure_key", ("custom_med",))
+def test_sim_fields_io(structure_key, tmp_path):
+    """Test that converging and AutogradFieldMap dictionary to a FieldMap object, saving and loading
+    from file, and then converting back, returns the same object."""
+    s = make_structures(params0)[structure_key]
+    s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
+    sim_full_traced = SIM_FULL.updated_copy(structures=list(SIM_FULL.structures) + [s])
+    sim_fields = sim_full_traced.strip_traced_fields()
+
+    field_map = FieldMap.from_autograd_field_map(sim_fields)
+    field_map_file = join(tmp_path, "test_sim_fields.hdf5.gz")
+    field_map.to_file(field_map_file)
+    autograd_field_map = FieldMap.from_file(field_map_file).to_autograd_field_map
+    for path, data in sim_fields.items():
+        assert np.all(data == autograd_field_map[path])
+
+
 def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
     """Make sure we get the right warning with no adjoint sources, and no error."""
 
@@ -737,57 +737,6 @@ def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
 
     with AssertLogLevel(log_capture, "WARNING", contains_str="No adjoint sources"):
         ag.grad(objective)(params0)
-
-
-def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_emulated_run_async):
-    """Test what happens when autograd run pipeline fails."""
-
-    monitor_key = "mode"
-    structure_key = "size_element"
-    monitor, postprocess = make_monitors()[monitor_key]
-
-    def make_sim(*args):
-        structure = make_structures(*args)[structure_key]
-        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
-
-    def objective(*args):
-        """Objective function."""
-        sim = make_sim(*args)
-        data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data, data[monitor_key])
-        return value
-
-    def fail(*args, **kwargs):
-        """Just raise an exception."""
-        raise ValueError("test")
-
-    """ if autograd run raises exception, raise a warning and continue with regular ."""
-
-    monkeypatch.setattr(td.web.api.autograd.autograd, "_run", fail)
-
-    with AssertLogLevel(
-        log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
-    ):
-        ag.grad(objective)(params0)
-
-    def objective_async(*args):
-        sims = {"key": make_sim(*args)}
-        data = run_async(sims, verbose=False)
-        value = 0.0
-        for _, val in data.items():
-            value += postprocess(val, val[monitor_key])
-        return value
-
-    """ if autograd run_async raises exception, raise a warning and continue with regular ."""
-
-    monkeypatch.setattr(td.web.api.autograd.autograd, "_run_async", fail)
-
-    with AssertLogLevel(
-        log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
-    ):
-        ag.grad(objective_async)(params0)
-
-    """ if the regular web functions are called, raise custom exception and catch it in tests ."""
 
 
 def test_web_incompatible_inputs(log_capture, monkeypatch):
