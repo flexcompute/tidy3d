@@ -4,7 +4,7 @@ from . import utils
 from .design import InverseDesign, InverseDesignMulti
 from .optimizer import AdamOptimizer
 from .penalty import ErosionDilationPenalty
-from .postprocess import CustomPostprocessOperation, ModePower, Sum
+from .postprocess import CustomPostProcessOperation, ModePower, Sum
 from .region import TopologyDesignRegion
 from .result import InverseDesignResult
 from .transformation import FilterProject
@@ -17,7 +17,7 @@ __all__ = (
     "TopologyDesignRegion",
     "AdamOptimizer",
     "InverseDesignResult",
-    "CustomPostprocessOperation",
+    "CustomPostProcessOperation",
     "Sum",
     "ModePower",
     "utils",

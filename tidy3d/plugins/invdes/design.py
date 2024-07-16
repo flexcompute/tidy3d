@@ -12,7 +12,7 @@ import tidy3d.web as web
 from tidy3d.components.autograd import get_static
 
 from .base import InvdesBaseModel
-from .postprocess import CustomPostprocessOperation, PostProcessFnType, PostprocessOperationType
+from .postprocess import CustomPostProcessOperation, PostProcessFnType, PostProcessOperationType
 from .region import DesignRegionType
 from .validators import check_pixel_size
 
@@ -32,9 +32,9 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         description="Task name to use in the objective function when running the ``JaxSimulation``.",
     )
 
-    postprocess: PostprocessOperationType = pd.Field(
+    postprocess: PostProcessOperationType = pd.Field(
         None,
-        title="Postprocess Object",
+        title="PostProcess Object",
         description="Optional object specifying how to perform weighted sum of ``ModeData`` "
         "outputs. Can be used instead of passing a generic postprocess function "
         "to ``Optimizer.run()``.",
@@ -50,7 +50,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     def from_function(cls, fn: PostProcessFnType, **kwargs) -> AbstractInverseDesign:
         """Create an ``InverseDesign`` object from a user-supplied postprocessing function."""
 
-        postprocess = CustomPostprocessOperation.from_function(fn)
+        postprocess = CustomPostProcessOperation.from_function(fn)
         return cls(postprocess=postprocess, **kwargs)
 
     def _get_postprocess_fn(

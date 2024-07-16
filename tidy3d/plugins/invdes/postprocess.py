@@ -14,7 +14,7 @@ from .base import InvdesBaseModel
 PostProcessFnType = typing.Callable[[td.SimulationData], float]
 
 
-class AbstractPostprocessOperation(InvdesBaseModel, abc.ABC):
+class AbstractPostProcessOperation(InvdesBaseModel, abc.ABC):
     """Abstract base class defining components that make up postprocessing classes."""
 
     @abc.abstractmethod
@@ -22,7 +22,7 @@ class AbstractPostprocessOperation(InvdesBaseModel, abc.ABC):
         """How to evaluate this operation on a ``SimulationData`` object."""
 
 
-class CustomPostprocessOperation(AbstractPostprocessOperation):
+class CustomPostProcessOperation(AbstractPostProcessOperation):
     """A postprocessing operation to subclass and implement ones own ``evalute`` method for."""
 
     def evaluate(self, sim_data: td.SimulationData) -> float:
@@ -30,18 +30,18 @@ class CustomPostprocessOperation(AbstractPostprocessOperation):
         raise NotImplementedError("Must define the 'self.evaluate(sim_data) -> float' method.")
 
     @classmethod
-    def from_function(cls, fn: PostProcessFnType, **kwargs) -> CustomPostprocessOperation:
-        """Create a ``CustomPostprocessOperation`` from a function of ``SimulationData``."""
+    def from_function(cls, fn: PostProcessFnType, **kwargs) -> CustomPostProcessOperation:
+        """Create a ``CustomPostProcessOperation`` from a function of ``SimulationData``."""
         cls.evaluate = lambda self, sim_data: fn(sim_data)
         obj = cls(**kwargs)
         return obj
 
 
-class ElementaryPostprocessOperation(AbstractPostprocessOperation, abc.ABC):
+class ElementaryPostProcessOperation(AbstractPostProcessOperation, abc.ABC):
     """A postprocess operation that can work on its own."""
 
 
-class ModePower(ElementaryPostprocessOperation):
+class ModePower(ElementaryPostProcessOperation):
     """Grab the power from a ``ModeMonitor`` and apply an optional weight."""
 
     monitor_name: str = pd.Field(
@@ -87,6 +87,9 @@ class ModePower(ElementaryPostprocessOperation):
     def evaluate(self, sim_data: td.SimulationData) -> float:
         """Evaluate this instance when passed a simulation dataset."""
 
+        if self.monitor_name not in sim_data:
+            raise KeyError(f"No data found for monitor with name '{self.monitor_name}'.")
+
         mnt_data = sim_data[self.monitor_name]
 
         if not isinstance(mnt_data, td.ModeData):
@@ -102,30 +105,26 @@ class ModePower(ElementaryPostprocessOperation):
         return self.weight * power
 
 
-ElementaryPostprocessOperationType = typing.Union[ModePower]
+ElementaryPostProcessOperationType = typing.Union[ModePower]
 
 
-class CombinedPostprocessOperation(AbstractPostprocessOperation, abc.ABC):
+class CombinedPostProcessOperation(AbstractPostProcessOperation, abc.ABC):
     """A postprocess operation that combines elementary operations."""
 
-    operations: tuple[ElementaryPostprocessOperationType, ...] = pd.Field(
+    operations: tuple[ElementaryPostProcessOperationType, ...] = pd.Field(
         (),
-        title="Postprocessing Operations",
+        title="PostProcessing Operations",
         description="Set of objects specifying the operations combined in this operation.",
     )
 
 
-class Sum(CombinedPostprocessOperation):
+class Sum(CombinedPostProcessOperation):
     """Sum of the evaluate outputs of elementary operation objects."""
 
     def evaluate(self, sim_data: td.SimulationData) -> float:
         """sum the evaluation of each operation."""
 
-        value = 0.0
-        for operation in self.operations:
-            value = value + operation.evaluate(sim_data)
-
-        return value
+        return sum(op.evaluate(sim_data) for op in self.operations)
 
 
-PostprocessOperationType = typing.Union[CustomPostprocessOperation, ModePower, Sum]
+PostProcessOperationType = typing.Union[CustomPostProcessOperation, ModePower, Sum]
