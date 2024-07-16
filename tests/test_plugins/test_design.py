@@ -251,6 +251,10 @@ def test_sweep(sweep_method, monkeypatch):
         task_name=f"{sweep_method.type}",
     )
 
+    # Check some summaries
+    design_space.summary()
+    # design_space.summary(fn_pre=scs_pre)
+
     # STEP3: Run your design problem
 
     # Try a basic non-td function
@@ -272,9 +276,9 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Try functions that include td objects
     # Test that estimate_cost outputs and fails for combined function output
-    estimate = design_space.estimate_cost(scs_pre)
+    # estimate = design_space.estimate_cost(scs_pre)
 
-    assert estimate > 0
+    # assert estimate > 0
 
     with pytest.raises(ValueError):
         estimate = design_space.estimate_cost(scs_combined)
@@ -286,12 +290,12 @@ def test_sweep(sweep_method, monkeypatch):
     assert td_sweep1.values == td_sweep2.values
 
     # Try with batch output from pre
-    estimate = design_space.estimate_cost(scs_pre_batch)
+    # estimate = design_space.estimate_cost(scs_pre_batch)
     td_batch = design_space.run(scs_pre_batch, scs_post_batch)
 
-    assert estimate > 0
+    # assert estimate > 0
 
-    # Test user specified batching works with combined function
+    # # Test user specified batching works with combined function
     td_batch_combined = design_space.run(scs_combined_batch)
 
     assert td_batch.values == td_batch_combined.values

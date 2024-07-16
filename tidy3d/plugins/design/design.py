@@ -7,14 +7,20 @@ from typing import Any, Callable, Dict, List, Tuple, Union
 
 import pydantic.v1 as pd
 
-from tidy3d.log import log
-
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.data.sim_data import SimulationData
 from ...components.simulation import Simulation
+from ...log import get_logging_console, log
 from ...web.api.container import Batch, BatchData, Job
-from .method import MethodBayOpt, MethodGenAlg, MethodGrid, MethodParticleSwarm, MethodType
-from .parameter import ParameterType
+from .method import (
+    MethodBayOpt,
+    MethodGenAlg,
+    MethodGrid,
+    MethodOptimise,
+    MethodParticleSwarm,
+    MethodType,
+)
+from .parameter import ParameterAny, ParameterInt, ParameterType
 from .result import Result
 
 
@@ -105,7 +111,7 @@ class DesignSpace(Tidy3dBaseModel):
         except (TypeError, OSError):
             return None
 
-    def run(self, fn: Callable, fn_post: Callable = None, **kwargs) -> Result:
+    def run(self, fn: Callable, fn_post: Callable = None) -> Result:
         """Run the design problem on a user defined function of the design parameters.
 
         Parameters
@@ -329,7 +335,30 @@ class DesignSpace(Tidy3dBaseModel):
 
         return result
 
-    def estimate_cost(self, fn_pre):
+    def _get_run_count(self) -> int:
+        # For MonteCarlo, Random, RandomCustom
+        if hasattr(self.method, "num_points"):
+            num_points = self.method.num_points
+
+        # For Grid
+        elif isinstance(self.method, MethodGrid):
+            num_points = len(MethodGrid.sample(self.parameters))
+
+        # For BayOpt
+        elif isinstance(self.method, MethodBayOpt):
+            num_points = self.method.initial_iter + self.method.n_iter
+
+        # For GenAlg
+        elif isinstance(self.method, MethodGenAlg):
+            num_points = self.method.solutions_per_pop * self.method.n_generations
+
+        # For ParticleSwarm
+        elif isinstance(self.method, MethodParticleSwarm):
+            num_points = self.method.n_particles * self.method.n_iter
+
+        return num_points
+
+    def estimate_cost(self, fn_pre: Callable) -> float:
         """
         Compute the maximum FlexCredit charge for the entire design space computation.
         Require a pre function that should return a Simulation object, Batch object, or collection of either.
@@ -386,24 +415,65 @@ class DesignSpace(Tidy3dBaseModel):
             raise ValueError("Unrecognised output from pre-function, unable to estimate cost.")
 
         # Calculate maximum number of runs for different methods
-        # For MonteCarlo, Random, RandomCustom
-        if hasattr(self.method, "num_points"):
-            num_points = self.method.num_points
+        run_count = self._get_run_count()
 
-        # For Grid
-        elif isinstance(self.method, MethodGrid):
-            num_points = len(MethodGrid.sample(self.parameters))
+        return round(per_run_estimate * run_count, 3)
 
-        # For BayOpt
-        elif isinstance(self.method, MethodBayOpt):
-            num_points = self.method.initial_iter + self.method.n_iter
+    def summary(self, fn_pre: Callable = None):
+        """Summarise the setup of the DesignSpace"""
 
-        # For GenAlg
-        elif isinstance(self.method, MethodGenAlg):
-            num_points = self.method.solutions_per_pop * self.method.n_generations
+        # Get output console
+        console = get_logging_console()
 
-        # For ParticleSwarm
-        elif isinstance(self.method, MethodParticleSwarm):
-            num_points = self.method.n_particles * self.method.n_iter
+        # Assemble message
+        arg_values = [
+            f"{field}: {getattr(self.method, field)}\n"
+            for field in self.method.__fields__
+            if field not in MethodOptimise.__fields__
+        ]
 
-        return round(per_run_estimate * num_points, 3)
+        param_values = []
+        for param in self.parameters:
+            if isinstance(param, ParameterAny):
+                param_values.append(f"{param.name}: {param.type} {param.allowed_values}\n")
+            else:
+                param_values.append(f"{param.name}: {param.type} {param.span}\n")
+
+        run_count = self._get_run_count()
+
+        console.log(
+            "\nSummary of DesignSpace\n\n"
+            f"Method: {self.method.type}\n"
+            f"Method Args\n{''.join(arg_values)}\n"
+            f"No. of Parameters: {len(self.parameters)}\n"
+            f"Parameters: {', '.join([param.name for param in self.parameters])}\n"
+            f"{''.join(param_values)}\n"
+            f"Maximum Run Count: {run_count}\n"
+        )
+
+        if fn_pre is not None:
+            cost_estimate = self.estimate_cost(fn_pre)
+            console.log(f"Estimated Maximum Cost: {cost_estimate} FlexCredits")
+
+            # NOTE: Could then add more details regarding the output of fn_pre - confirm batching?
+
+        # Include additional notes/warnings
+        notes = []
+
+        if isinstance(self.method, (MethodBayOpt, MethodGenAlg, MethodParticleSwarm)):
+            if any(isinstance(param, ParameterInt) for param in self.parameters):
+                if any(isinstance(param, ParameterAny) for param in self.parameters):
+                    notes.append(
+                        "Discrete ParameterAny values are automatically converted to Int values to be optimized.\n"
+                    )
+
+                notes.append(
+                    "Discrete Int values are automatically rounded as optimizers generate float predictions.\n"
+                )
+
+        if len(notes) > 0:
+            console.log(
+                "Notes:",
+            )
+            for note in notes:
+                console.log(note)
