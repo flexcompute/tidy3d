@@ -1,6 +1,6 @@
 # autograd wrapper for web functions
 
-import traceback
+import tempfile
 import typing
 
 import numpy as np
@@ -13,6 +13,7 @@ from tidy3d.components.autograd import AutogradFieldMap, get_static
 # from tidy3d.components.autograd.utils import split_data_list, split_list
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
+from ...core.s3utils import download_file
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
 from ..container import BatchData, Job
@@ -24,6 +25,7 @@ from .utils import get_derivative_maps
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
 AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
 AUX_KEY_FWD_TASK_ID = "task_id_fwd"
+SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
 
 ISSUE_URL = (
     "https://github.com/flexcompute/tidy3d/issues/new?"
@@ -35,21 +37,6 @@ MAX_NUM_TRACED_STRUCTURES = 500
 
 # default value for whether to do local gradient calculation (True) or server side (False)
 LOCAL_GRADIENT = True
-
-
-def warn_autograd(fn_name: str, exc: Exception) -> str:
-    """Get warning message."""
-
-    exc_str = exc.__repr__()
-    traceback_str = "".join(traceback.format_tb(exc.__traceback__))
-
-    td.log.warning(
-        f"Autograd compatible '{fn_name}' failed, running original '{fn_name}'. "
-        "If you received this warning, please file an issue at the tidy3d front end with this "
-        f"message pasted in and we will investigate. \n\n "
-        f"{URL_LINK}.\n\n"
-        f"{exc_str} {traceback_str}.\n\n"
-    )
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
@@ -181,24 +168,21 @@ def run(
     """
 
     if is_valid_for_autograd(simulation):
-        try:
-            return _run(
-                simulation=simulation,
-                task_name=task_name,
-                folder_name=folder_name,
-                path=path,
-                callback_url=callback_url,
-                verbose=verbose,
-                progress_callback_upload=progress_callback_upload,
-                progress_callback_download=progress_callback_download,
-                solver_version=solver_version,
-                worker_group=worker_group,
-                simulation_type="tidy3d_autograd",
-                parent_tasks=parent_tasks,
-                local_gradient=local_gradient,
-            )
-        except Exception as exc:
-            warn_autograd("web.run()", exc=exc)
+        return _run(
+            simulation=simulation,
+            task_name=task_name,
+            folder_name=folder_name,
+            path=path,
+            callback_url=callback_url,
+            verbose=verbose,
+            progress_callback_upload=progress_callback_upload,
+            progress_callback_download=progress_callback_download,
+            solver_version=solver_version,
+            worker_group=worker_group,
+            simulation_type="tidy3d_autograd",
+            parent_tasks=parent_tasks,
+            local_gradient=local_gradient,
+        )
 
     return run_webapi(
         simulation=simulation,
@@ -264,19 +248,16 @@ def run_async(
     """
 
     if is_valid_for_autograd_async(simulations):
-        try:
-            return _run_async(
-                simulations=simulations,
-                folder_name=folder_name,
-                path_dir=path_dir,
-                callback_url=callback_url,
-                num_workers=num_workers,
-                verbose=verbose,
-                simulation_type="tidy3d_autograd_async",
-                parent_tasks=parent_tasks,
-            )
-        except Exception as exc:
-            warn_autograd("web.run_async()", exc=exc)
+        return _run_async(
+            simulations=simulations,
+            folder_name=folder_name,
+            path_dir=path_dir,
+            callback_url=callback_url,
+            num_workers=num_workers,
+            verbose=verbose,
+            simulation_type="tidy3d_autograd_async",
+            parent_tasks=parent_tasks,
+        )
 
     return run_async_webapi(
         simulations=simulations,
@@ -506,14 +487,12 @@ def postprocess_fwd(
 """ VJP maker for ADJ pass."""
 
 
-def get_fwd_sim_data(task_id_fwd: str) -> td.SimulationData:
-    """Function to grab the forward simulation data from the server from a task ID."""
-    raise NotImplementedError("Must implement grabbing fwd task id for server side autograd.")
-
-
-def get_vjp_traced_fields(task_id_adj: str) -> AutogradFieldMap:
+def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
     """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    raise NotImplementedError("Must implement grabbing fwd task id for server side autograd.")
+    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
+    data_file.close()
+    download_file(task_id_adj, SIM_VJP_FILE, to_file=data_file.name, verbose=verbose)
+    return AutogradFieldMap.from_file(data_file.name)
 
 
 def _run_bwd(
@@ -530,10 +509,7 @@ def _run_bwd(
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
 
-    if not local_gradient:
-        task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
-        sim_data_fwd = get_fwd_sim_data(task_id_fwd)
-    else:
+    if local_gradient:
         sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
 
     td.log.info("constructing custom vjp function for backwards pass.")
@@ -580,8 +556,7 @@ def _run_bwd(
             run_kwargs["parent_tasks"] = [task_id_fwd]
             run_kwargs["simulation_type"] = "autograd_bwd"
 
-            _, task_id_adj = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
-            vjp_traced_fields = get_vjp_traced_fields(task_id_adj)
+            vjp_traced_fields = _run_tidy3d_bwd(sim_adj, task_name=task_name_adj, **run_kwargs)
 
         return vjp_traced_fields
 
@@ -774,6 +749,17 @@ def _run_tidy3d(
     job = Job(simulation=simulation, task_name=task_name, **run_kwargs)
     data = job.run()
     return data, job.task_id
+
+
+def _run_tidy3d_bwd(simulation: td.Simulation, task_name: str, **run_kwargs) -> AutogradFieldMap:
+    """Run a simulation without any tracers using regular web.run()."""
+    td.log.info("running regular simulation with '_run_tidy3d()'")
+
+    run_kwargs = {k: v for k, v in run_kwargs.items() if k in Job._upload_fields}
+    job = Job(simulation=simulation, task_name=task_name, **run_kwargs)
+    job.start()
+    job.monitor()
+    return get_vjp_traced_fields(task_id_adj=job.task_id, verbose=job.verbose)
 
 
 def _run_async_tidy3d(simulations: dict[str, td.Simulation], **run_async_kwargs) -> BatchData:
