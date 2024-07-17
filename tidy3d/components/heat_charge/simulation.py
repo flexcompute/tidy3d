@@ -38,7 +38,13 @@ from .boundary import (
 )
 from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, UnstructuredGridType
 from .monitor import HeatChargeMonitorType, TemperatureMonitor, VoltageMonitor
-from .source import HeatChargeSourceType, HeatFromElectricSource, HeatSource, UniformHeatSource
+from .source import (
+    GlobalHeatChargeSource,
+    HeatChargeSourceType,
+    HeatFromElectricSource,
+    HeatSource,
+    UniformHeatSource,
+)
 from .viz import (
     CHARGE_BC_INSULATOR,
     HEAT_BC_COLOR_CONVECTION,
@@ -1038,8 +1044,9 @@ class HeatChargeSimulation(AbstractSimulation):
         # distribute source where there are assigned
         structure_source_map = {}
         for source in source_list:
-            for name in source.structures:
-                structure_source_map[name] = source
+            if not isinstance(source, GlobalHeatChargeSource):
+                for name in source.structures:
+                    structure_source_map[name] = source
 
         source_list = [structure_source_map.get(structure.name, None) for structure in structures]
 
