@@ -49,6 +49,7 @@ class DesignSpace(Tidy3dBaseModel):
         ...,
         title="Search Type",
         description="Specifications for the procedure used to explore the parameter space.",
+        discriminator="type",  # Stops pydantic trying to validate every method whilst checking MethodType
     )
 
     name: str = pd.Field(None, title="Name", description="Optional name for the design space.")
@@ -111,7 +112,7 @@ class DesignSpace(Tidy3dBaseModel):
         except (TypeError, OSError):
             return None
 
-    def run(self, fn: Callable, fn_post: Callable = None) -> Result:
+    def run(self, fn: Callable, fn_post: Callable = None, verbose: bool = True) -> Result:
         """Run the design problem on a user defined function of the design parameters.
 
         Parameters
@@ -127,14 +128,18 @@ class DesignSpace(Tidy3dBaseModel):
             Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
         """
 
+        # Get the console
+        # Method.run checks for console is None instead of being passed console and verbose
+        console = get_logging_console() if verbose else None
+
         # Run based on how many functions the user provides
         if fn_post is None:
-            fn_args, fn_values, aux_values, opt_output = self.run_single(fn)
+            fn_args, fn_values, aux_values, opt_output = self.run_single(fn, console)
             sim_names = None
 
         else:
             fn_args, fn_values, aux_values, opt_output, sim_names = self.run_pre_post(
-                fn_pre=fn, fn_post=fn_post
+                fn_pre=fn, fn_post=fn_post, console=console
             )
 
             sim_names = tuple(sim_names)
@@ -154,12 +159,12 @@ class DesignSpace(Tidy3dBaseModel):
             opt_output=opt_output,
         )
 
-    def run_single(self, fn: Callable) -> Tuple(list[dict], list, list[Any]):
+    def run_single(self, fn: Callable, console) -> Tuple(list[dict], list, list[Any]):
         """Run a single function of parameter inputs."""
         evaluate_fn = self._get_evaluate_fn_single(fn=fn)
-        return self.method.run(run_fn=evaluate_fn, parameters=self.parameters)
+        return self.method.run(run_fn=evaluate_fn, parameters=self.parameters, console=console)
 
-    def run_pre_post(self, fn_pre: Callable, fn_post: Callable) -> Tuple(
+    def run_pre_post(self, fn_pre: Callable, fn_post: Callable, console) -> Tuple(
         list[dict], list[dict], list[Any]
     ):
         """Run a function with tidy3d implicitly called in between."""
@@ -167,7 +172,7 @@ class DesignSpace(Tidy3dBaseModel):
             fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid
         )
         fn_args, fn_values, aux_values, opt_output = self.method.run(
-            run_fn=handler.evaluate, parameters=self.parameters
+            run_fn=handler.evaluate, parameters=self.parameters, console=console
         )
         return fn_args, fn_values, aux_values, opt_output, handler.sim_names
 
@@ -362,6 +367,7 @@ class DesignSpace(Tidy3dBaseModel):
         """
         Compute the maximum FlexCredit charge for the entire design space computation.
         Require a pre function that should return a Simulation object, Batch object, or collection of either.
+        The pre function is called to estimate the cost - complicated pre functions may cause long runtimes.
         """
         # Get output fn_pre for paramters at the lowest span / default
         arg_dict = {}
@@ -378,8 +384,7 @@ class DesignSpace(Tidy3dBaseModel):
             job = Job(simulation=sim, task_name="estimate_cost")
 
             estimate = job.estimate_cost()
-
-            job.delete()
+            job.delete()  # Deleted as only a test with initial parameters
 
             return estimate
 
@@ -388,6 +393,7 @@ class DesignSpace(Tidy3dBaseModel):
 
         elif isinstance(pre_out, Batch):
             per_run_estimate = pre_out.estimate_cost()
+            pre_out.delete()  # Deleted as only a test with initial parameters
 
         elif isinstance(pre_out, (list, dict)):
             # Iterate through container to get simulations and batches and sum cost
@@ -404,12 +410,18 @@ class DesignSpace(Tidy3dBaseModel):
                 elif isinstance(value, Batch):
                     batches.append(value)
 
-            per_run_estimate = 0
+            calculated_estimates = []
             for sim in sims:
-                per_run_estimate += _estimate_sim_cost(sim)
+                calculated_estimates.append(_estimate_sim_cost(sim))
 
             for batch in batches:
-                per_run_estimate += batch.estimate_cost()
+                calculated_estimates.append(batch.estimate_cost())
+                batch.delete()  # Deleted as only a test with initial parameters
+
+            if None in calculated_estimates:
+                per_run_estimate = None
+            else:
+                per_run_estimate = sum(calculated_estimates)
 
         else:
             raise ValueError("Unrecognised output from pre-function, unable to estimate cost.")
@@ -417,7 +429,11 @@ class DesignSpace(Tidy3dBaseModel):
         # Calculate maximum number of runs for different methods
         run_count = self._get_run_count()
 
-        return round(per_run_estimate * run_count, 3)
+        # For if tidy3d server cannot determine the estimate
+        if per_run_estimate is None:
+            return None
+        else:
+            return round(per_run_estimate * run_count, 3)
 
     def summary(self, fn_pre: Callable = None):
         """Summarise the setup of the DesignSpace"""
@@ -465,11 +481,11 @@ class DesignSpace(Tidy3dBaseModel):
             if any(isinstance(param, ParameterInt) for param in self.parameters):
                 if any(isinstance(param, ParameterAny) for param in self.parameters):
                     notes.append(
-                        "Discrete ParameterAny values are automatically converted to Int values to be optimized.\n"
+                        "Discrete ParameterAny values are automatically converted to int values to be optimized.\n"
                     )
 
                 notes.append(
-                    "Discrete Int values are automatically rounded as optimizers generate float predictions.\n"
+                    "Discrete int values are automatically rounded as optimizers generate float predictions.\n"
                 )
 
         if len(notes) > 0:

@@ -1,5 +1,7 @@
 """Test the parameter sweep plugin."""
 
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -14,12 +16,12 @@ SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
     monte_carlo=tdd.MethodMonteCarlo(num_points=3, rng_seed=1),
     custom=tdd.MethodRandomCustom(
-        num_points=10, sampler=qmc.Halton, sampler_kwargs={"d": 3, "seed": 1}
+        num_points=5, sampler=qmc.Halton, sampler_kwargs={"d": 3, "seed": 1}
     ),
-    random=tdd.MethodRandom(num_points=5, rng_seed=1),  # TODO: remove this if not used
+    random=tdd.MethodRandom(num_points=3, rng_seed=1),  # TODO: remove this if not used
     bay_opt=tdd.MethodBayOpt(initial_iter=2, n_iter=2, rng_seed=1),
     gen_alg=tdd.MethodGenAlg(solutions_per_pop=4, n_generations=2, n_parents_mating=2, rng_seed=1),
-    part_swarm=tdd.MethodParticleSwarm(n_particles=5, n_iter=2, rng_seed=1),
+    part_swarm=tdd.MethodParticleSwarm(n_particles=3, n_iter=2, rng_seed=1),
 )
 
 
@@ -44,6 +46,16 @@ def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
     return BatchDataEmulated(data_dict=data_dict, task_ids=task_ids, task_paths=task_paths)
 
 
+def emulated_estimate_cost(self, verbose=True):
+    # Test both value and failed None returns
+    value = np.random.random()
+
+    if value < 0.5:
+        return value
+    else:
+        return None
+
+
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values())
 def test_sweep(sweep_method, monkeypatch):
     # Problem, simulate scattering cross section of sphere ensemble
@@ -54,6 +66,8 @@ def test_sweep(sweep_method, monkeypatch):
     monkeypatch.setattr(web, "run", run_emulated)
 
     monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
+
+    monkeypatch.setattr(web.Job, "estimate_cost", emulated_estimate_cost)
 
     # STEP1: define your design function (inputs and outputs)
 
@@ -253,7 +267,7 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Check some summaries
     design_space.summary()
-    # design_space.summary(fn_pre=scs_pre)
+    design_space.summary(fn_pre=scs_pre)
 
     # STEP3: Run your design problem
 
@@ -276,9 +290,7 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Try functions that include td objects
     # Test that estimate_cost outputs and fails for combined function output
-    # estimate = design_space.estimate_cost(scs_pre)
-
-    # assert estimate > 0
+    estimate = design_space.estimate_cost(scs_pre)
 
     with pytest.raises(ValueError):
         estimate = design_space.estimate_cost(scs_combined)
@@ -290,10 +302,9 @@ def test_sweep(sweep_method, monkeypatch):
     assert td_sweep1.values == td_sweep2.values
 
     # Try with batch output from pre
-    # estimate = design_space.estimate_cost(scs_pre_batch)
+    estimate = design_space.estimate_cost(scs_pre_batch)
     td_batch = design_space.run(scs_pre_batch, scs_post_batch)
-
-    # assert estimate > 0
+    td_batch_run_batch = design_space.run_batch(scs_pre_batch, scs_post_batch, path_dir="")
 
     # # Test user specified batching works with combined function
     td_batch_combined = design_space.run(scs_combined_batch)
@@ -306,6 +317,7 @@ def test_sweep(sweep_method, monkeypatch):
     assert "0_0" not in td_sim_list.task_ids[0] and "0_3" not in td_sim_list.task_ids[4]
 
     # Test with dict of sims
+    estimate = design_space.estimate_cost(scs_pre_dict)
     td_sim_dict = design_space.run(scs_pre_dict, scs_post_dict)
 
     # Check naming is including dict keys
@@ -457,6 +469,13 @@ def test_sample_specific(sweep_method, monkeypatch):
     assert ts_sim_complex_df["test4"][0] == 3.14
 
 
+method_module_convert = {
+    "MethodBayOpt": "bayes_opt",
+    "MethodGenAlg": "pygad",
+    "MethodParticleSwarm": "pyswarms.single.global_best",
+}
+
+
 @pytest.mark.parametrize(
     "sweep_method",
     [SWEEP_METHODS["bay_opt"], SWEEP_METHODS["gen_alg"], SWEEP_METHODS["part_swarm"]],
@@ -562,6 +581,13 @@ def test_optimize_specific(sweep_method, monkeypatch):
 
     # Test that plots have been produced and stored
     assert ts_sim_aux.opt_output is not None
+
+    # Create an import error to test optimizer can error if relevant package is not installed
+    # Placed at the end of the test so that module is loaded for other checks
+
+    with pytest.raises(ImportError):
+        sys.modules[method_module_convert[sweep_method.type]] = None
+        import_fail = design_space.run(float_non_td_pre, float_non_td_aux_post)
 
 
 def test_method_custom_validators():

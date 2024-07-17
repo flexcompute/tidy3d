@@ -5,12 +5,7 @@ from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
-import pygad
 import scipy.stats.qmc as qmc
-from bayes_opt import BayesianOptimization, UtilityFunction
-from bayes_opt.event import Events
-from bayes_opt.logger import JSONLogger
-from pyswarms.single.global_best import GlobalBestPSO
 
 from ...components.base import Tidy3dBaseModel
 from ...constants import inf
@@ -93,7 +88,7 @@ class MethodSample(Method, ABC):
             self._force_int(arg_dict, parameters)
         return fn_args
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
         # get all function inputs
@@ -185,7 +180,7 @@ class MethodBayOpt(MethodOptimize, ABC):
     acq_func: Optional[Literal["ucb", "ei", "poi"]] = pd.Field(
         default="ucb",
         title="Type of acquisition function.",
-        description="The style of acquisition function that should be used to suggest parameter values. More detail available at https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html",
+        description="The style of acquisition function that should be used to suggest parameter values. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
     )
 
     kappa: Optional[pd.PositiveFloat] = pd.Field(
@@ -200,8 +195,14 @@ class MethodBayOpt(MethodOptimize, ABC):
         description="The Xi coefficient used by the 'ei' and 'poi' acquisition functions",
     )
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
         """Defines the search algorithm for BayOpt"""
+        try:
+            from bayes_opt import BayesianOptimization, UtilityFunction
+        except ImportError:
+            raise ImportError(
+                "Cannot run bayesian optimization as bayes_opt module not found. Please check installation."
+            )
 
         param_converter = {}
         boundary_dict = {}
@@ -226,10 +227,6 @@ class MethodBayOpt(MethodOptimize, ABC):
         opt = BayesianOptimization(
             f=run_fn, pbounds=boundary_dict, random_state=self.rng_seed, allow_duplicate_points=True
         )
-
-        # Create log and update
-        logger = JSONLogger(path="./logs")
-        opt.subscribe(Events.OPTIMIZATION_STEP, logger)
 
         # Run variables
         arg_list = []
@@ -259,6 +256,12 @@ class MethodBayOpt(MethodOptimize, ABC):
             self._flatten_and_append(aux_out, total_aux_out)
             self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out[0])
+
+        if console is not None:
+            console.log(
+                f"Best Result: {opt.max['target']}\n"
+                f"Best Parameters: {' '.join([f'{param}: {val}' for param, val in opt.max['params'].items()])}\n"
+            )
 
         # Output fn_args from the BO.opt object - getting results in situ as opt changes type to float
         fn_args = []
@@ -334,8 +337,14 @@ class MethodGenAlg(MethodOptimize, ABC):
 
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
         """Defines the search algorithm for the GA"""
+        try:
+            import pygad
+        except ImportError:
+            raise ImportError(
+                "Cannot run genetic algorithm optimization as pygad module not found. Please check installation."
+            )
 
         # Make param names available to the fitness function
         param_keys = [param.name for param in parameters]
@@ -380,10 +389,11 @@ class MethodGenAlg(MethodOptimize, ABC):
         def on_generation(ga_instance):
             store_parameters.append(ga_instance.population.copy())
             store_fitness.append(ga_instance.last_generation_fitness)
-            best_fitness = ga_instance.best_solution()[1]
-            print(
-                f"Generation {ga_instance.generations_completed}: Best Fitness = {best_fitness:.3f}"
-            )
+            if console is not None:
+                best_fitness = ga_instance.best_solution()[1]
+                console.log(
+                    f"Generation {ga_instance.generations_completed} Best Fitness: {best_fitness:.3f}"
+                )
 
         # Determine initial array
         num_genes = len(parameters)
@@ -410,6 +420,13 @@ class MethodGenAlg(MethodOptimize, ABC):
         )
 
         ga_instance.run()
+
+        if console is not None:
+            solution, solution_fitness, _ = ga_instance.best_solution()
+            console.log(
+                f"Best Result: {solution_fitness}\n"
+                f"Best Parameters: {' '.join([f'{param.name}: {value}' for param, value in zip(parameters, solution)])}\n"
+            )
 
         # Format output
         fn_args = [dict(zip(param_keys, val)) for arr in store_parameters for val in arr]
@@ -463,7 +480,14 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="Number of iterations over which the relative error in objective_func is acceptable for convergence.",
     )
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+        try:
+            from pyswarms.single.global_best import GlobalBestPSO
+        except ImportError:
+            raise ImportError(
+                "Cannot run particle swarm optimization as pyswarms module not found. Please check installation."
+            )
+
         # Pyswarms doesn't have a seed set outside of numpy std method
         np.random.seed(self.rng_seed)
 
@@ -518,7 +542,13 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             # TODO: including oh_strategy would be nice but complicated to specify with pydantic oh_strategy={"w": "exp_decay"},
         )
 
-        _ = optimizer.optimize(fitness_function, self.n_iter)
+        opt_out = optimizer.optimize(fitness_function, self.n_iter, verbose=False)
+
+        if console is not None:
+            console.log(
+                f"Best Result = {opt_out[0]}\n"
+                f"Best Parameters: {' '.join([f'{param.name}: {value}' for param, value in zip(parameters, opt_out[1])])}\n"
+            )
 
         # Collapse stores into fn_args and results lists
         fn_args = [val for sublist in store_parameters for val in sublist]
