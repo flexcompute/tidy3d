@@ -13,19 +13,22 @@ from tidy3d.components.autograd import AutogradFieldMap, get_static
 # from tidy3d.components.autograd.utils import split_data_list, split_list
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
-from ...core.s3utils import download_file
+from ...core.s3utils import download_file, upload_file
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
 from ..container import BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
-from .utils import get_derivative_maps
+from .utils import FieldMap, get_derivative_maps
 
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
 AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
 AUX_KEY_FWD_TASK_ID = "task_id_fwd"
+AUX_KEY_SIM_ORIGINAL = "sim_original"
+# server-side auxiliary files to upload/download
 SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
+SIM_FIELDS_FILE = "autograd_sim_fields.hdf5"
 
 ISSUE_URL = (
     "https://github.com/flexcompute/tidy3d/issues/new?"
@@ -397,6 +400,7 @@ def _run_primitive(
 
     else:
         run_kwargs["simulation_type"] = "autograd_fwd"
+        run_kwargs["sim_fields"] = sim_fields
 
         sim_data_orig, task_id_fwd = _run_tidy3d(
             sim_original,
@@ -460,6 +464,19 @@ def setup_fwd(
     return sim_original
 
 
+def upload_sim_fields(sim_fields: AutogradFieldMap, task_id: str, verbose: bool = False):
+    """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
+    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
+    data_file.close()
+    FieldMap.from_autograd_field_map(sim_fields).to_file(data_file.name)
+    upload_file(
+        task_id,
+        data_file.name,
+        SIM_FIELDS_FILE,
+        verbose=verbose,
+    )
+
+
 def postprocess_fwd(
     sim_data_combined: td.SimulationData,
     sim_original: td.Simulation,
@@ -492,7 +509,8 @@ def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
     data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
     data_file.close()
     download_file(task_id_adj, SIM_VJP_FILE, to_file=data_file.name, verbose=verbose)
-    return AutogradFieldMap.from_file(data_file.name)
+    field_map = FieldMap.from_file(data_file.name)
+    return field_map.to_autograd_field_map
 
 
 def _run_bwd(
@@ -742,11 +760,14 @@ def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs
 ) -> (td.SimulationData, str):
     """Run a simulation without any tracers using regular web.run()."""
-    td.log.info("running regular simulation with '_run_tidy3d()'")
-    # TODO: set task_type to "tidy3d adjoint autograd?"
-
-    run_kwargs = {k: v for k, v in run_kwargs.items() if k in Job._upload_fields}
-    job = Job(simulation=simulation, task_name=task_name, **run_kwargs)
+    simulation_type = run_kwargs.get("simulation_type", "tidy3d")
+    td.log.info(f"running {simulation_type} simulation with '_run_tidy3d()'")
+    job_fields = list(Job._upload_fields) + ["solver_version"]
+    job_run_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
+    job = Job(simulation=simulation, task_name=task_name, **job_run_kwargs)
+    if simulation_type == "autograd_fwd":
+        verbose = run_kwargs.get("verbose", False)
+        upload_sim_fields(run_kwargs["sim_fields"], task_id=job.task_id, verbose=verbose)
     data = job.run()
     return data, job.task_id
 
@@ -755,8 +776,9 @@ def _run_tidy3d_bwd(simulation: td.Simulation, task_name: str, **run_kwargs) -> 
     """Run a simulation without any tracers using regular web.run()."""
     td.log.info("running regular simulation with '_run_tidy3d()'")
 
-    run_kwargs = {k: v for k, v in run_kwargs.items() if k in Job._upload_fields}
-    job = Job(simulation=simulation, task_name=task_name, **run_kwargs)
+    job_fields = list(Job._upload_fields) + ["solver_version"]
+    job_run_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
+    job = Job(simulation=simulation, task_name=task_name, **job_run_kwargs)
     job.start()
     job.monitor()
     return get_vjp_traced_fields(task_id_adj=job.task_id, verbose=job.verbose)

@@ -5,6 +5,7 @@ import cProfile
 import typing
 import warnings
 from importlib import reload
+from os.path import join
 
 import autograd as ag
 import autograd.numpy as anp
@@ -14,6 +15,7 @@ import pytest
 import tidy3d as td
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.web import run, run_async
+from tidy3d.web.api.autograd.utils import FieldMap
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
@@ -118,9 +120,8 @@ def use_emulated_run(monkeypatch):
     import tidy3d
 
     if TEST_MODE in ("pipeline", "speed"):
-        VJP = "VJP"
+        AUX_KEY_SIM_FIELDS_ORIGINAL = "sim_fields_original"
         task_id_fwd = "task_fwd"
-        task_id_bwd = "task_bwd"
 
         cache = {}
 
@@ -132,16 +133,15 @@ def use_emulated_run(monkeypatch):
             AUX_KEY_SIM_DATA_ORIGINAL,
             postprocess_adj,
             postprocess_fwd,
-            setup_run,
         )
 
         def emulated_run_fwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
 
             if run_kwargs.get("simulation_type") == "autograd_fwd":
+                sim_fields = run_kwargs["sim_fields"]
                 sim_original = simulation
                 # add gradient monitors and make combined simulation
-                sim_fields = setup_run(sim_original)
                 sim_combined = sim_original.with_adjoint_monitors(sim_fields)
                 sim_data_combined = run_emulated(sim_combined, task_name=task_name)
 
@@ -156,6 +156,7 @@ def use_emulated_run(monkeypatch):
 
                 # cache original and fwd data locally for test
                 cache[task_id_fwd] = copy.copy(aux_data)
+                cache[task_id_fwd][AUX_KEY_SIM_FIELDS_ORIGINAL] = sim_fields
                 # return original data only
                 return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_id_fwd
             else:
@@ -173,7 +174,7 @@ def use_emulated_run(monkeypatch):
             sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
             # get the original traced fields
-            sim_fields_original = setup_run(simulation=sim_data_orig.simulation)
+            sim_fields_original = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_ORIGINAL]
 
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
@@ -696,6 +697,23 @@ def test_sim_full_ops(structure_key):
         return anp.sum(sim_full_traced.structures[-1].medium.permittivity.values)
 
     ag.grad(objective)(params0)
+
+
+@pytest.mark.parametrize("structure_key", ("custom_med",))
+def test_sim_fields_io(structure_key, tmp_path):
+    """Test that converging and AutogradFieldMap dictionary to a FieldMap object, saving and loading
+    from file, and then converting back, returns the same object."""
+    s = make_structures(params0)[structure_key]
+    s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
+    sim_full_traced = SIM_FULL.updated_copy(structures=list(SIM_FULL.structures) + [s])
+    sim_fields = sim_full_traced.strip_traced_fields()
+
+    field_map = FieldMap.from_autograd_field_map(sim_fields)
+    field_map_file = join(tmp_path, "test_sim_fields.hdf5.gz")
+    field_map.to_file(field_map_file)
+    autograd_field_map = FieldMap.from_file(field_map_file).to_autograd_field_map
+    for path, data in sim_fields.items():
+        assert np.all(data == autograd_field_map[path])
 
 
 def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
