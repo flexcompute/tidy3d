@@ -140,6 +140,6 @@ class HeatChargeBoundarySpec(Tidy3dBaseModel):
     )
 
 
-HeatBoundarySpec = HeatChargeBoundarySpec
-"""Heat BC specification
-NOTE: here for backward-compatibility only."""
+class HeatBoundarySpec(HeatChargeBoundarySpec):
+    """Heat BC specification
+    NOTE: here for backward-compatibility only."""
