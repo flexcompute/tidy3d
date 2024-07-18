@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -30,6 +30,7 @@ from ..viz import PlotParams, add_ax_if_none, equal_aspect
 from .boundary import (
     ConvectionBC,
     CurrentBC,
+    HeatBoundarySpec,
     HeatChargeBoundarySpec,
     HeatFluxBC,
     InsulatingBC,
@@ -138,7 +139,8 @@ class HeatChargeSimulation(AbstractSimulation):
         description="Monitors in the simulation.",
     )
 
-    boundary_spec: Tuple[HeatChargeBoundarySpec, ...] = pd.Field(
+    # NOTE: creating a union with HeatBoundarySpec for backwards compatibility
+    boundary_spec: Tuple[Union[HeatChargeBoundarySpec, HeatBoundarySpec], ...] = pd.Field(
         (),
         title="Boundary Condition Specifications",
         description="List of boundary condition specifications.",
