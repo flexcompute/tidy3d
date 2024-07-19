@@ -756,16 +756,21 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 """ The fundamental Tidy3D run and run_async functions used above. """
 
 
+def parse_run_kwargs(**run_kwargs):
+    """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
+    job_fields = list(Job._upload_fields) + ["solver_version"]
+    job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
+    return job_init_kwargs
+
+
 def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs
 ) -> (td.SimulationData, str):
     """Run a simulation without any tracers using regular web.run()."""
-    simulation_type = run_kwargs.get("simulation_type", "tidy3d")
-    td.log.info(f"running {simulation_type} simulation with '_run_tidy3d()'")
-    job_fields = list(Job._upload_fields) + ["solver_version"]
-    job_run_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
-    job = Job(simulation=simulation, task_name=task_name, **job_run_kwargs)
-    if simulation_type == "autograd_fwd":
+    job_init_kwargs = parse_run_kwargs(**run_kwargs)
+    job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
+    td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
+    if job.simulation_type == "autograd_fwd":
         verbose = run_kwargs.get("verbose", False)
         upload_sim_fields(run_kwargs["sim_fields"], task_id=job.task_id, verbose=verbose)
     data = job.run()
@@ -774,11 +779,9 @@ def _run_tidy3d(
 
 def _run_tidy3d_bwd(simulation: td.Simulation, task_name: str, **run_kwargs) -> AutogradFieldMap:
     """Run a simulation without any tracers using regular web.run()."""
-    td.log.info("running regular simulation with '_run_tidy3d()'")
-
-    job_fields = list(Job._upload_fields) + ["solver_version"]
-    job_run_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
-    job = Job(simulation=simulation, task_name=task_name, **job_run_kwargs)
+    job_init_kwargs = parse_run_kwargs(**run_kwargs)
+    job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
+    td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d_bwd()'")
     job.start()
     job.monitor()
     return get_vjp_traced_fields(task_id_adj=job.task_id, verbose=job.verbose)
