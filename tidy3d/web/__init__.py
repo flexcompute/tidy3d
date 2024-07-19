@@ -27,6 +27,7 @@ from .api.webapi import (
     monitor,
     real_cost,
     start,
+    account,
     test,
     # run, # NOTE: use autograd one now (see below)
     upload,
@@ -61,4 +62,5 @@ __all__ = [
     "configure",
     "run_async",
     "test",
+    "account",
 ]

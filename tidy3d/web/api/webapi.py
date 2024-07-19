@@ -15,6 +15,7 @@ from ...log import get_logging_console, log
 from ..core.constants import SIM_FILE_HDF5, TaskId
 from ..core.environment import Env
 from ..core.task_core import Folder, SimulationTask
+from ..core.account_core import UserAccount
 from ..core.task_info import ChargeType, TaskInfo
 from .connect_util import (
     REFRESH_TIME,
@@ -924,6 +925,20 @@ def real_cost(task_id: str, verbose=True) -> float:
                     "decrease the estimated, and correspondingly the billed cost of such tasks."
                 )
     return flex_unit
+
+
+@wait_for_connection
+def account(verbose=True) -> UserAccount:
+    account_info = UserAccount.get()
+    if verbose:
+        console = get_logging_console()
+        console.log(
+            f"Current FlexCredit balance: {account_info.credit} and Expiration date: {account_info.credit_expiration}. "
+            f"{account_info.allowance_cycle_type} FlexCredit balance: {account_info.allowance_current_cycle_amount} "
+            f"and Expiration date:{account_info.allowance_current_cycle_end_date}. "
+            f"Daily free Simulation counts: {account_info.daily_free_simulation_counts}."
+        )
+    return account_info
 
 
 @wait_for_connection

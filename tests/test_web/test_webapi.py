@@ -3,9 +3,10 @@
 import numpy as np
 import pytest
 import responses
-import tidy3d as td
 from _pytest import monkeypatch
 from responses import matchers
+
+import tidy3d as td
 from tidy3d import Simulation
 from tidy3d.__main__ import main
 from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -34,6 +35,7 @@ from tidy3d.web.api.webapi import (
     real_cost,
     run,
     start,
+    account,
     upload,
 )
 from tidy3d.web.core.environment import Env
@@ -287,6 +289,26 @@ def mock_get_run_info(monkeypatch, set_api_key):
         status=200,
     )
 
+
+@pytest.fixture
+def mock_get_account(monkeypatch, set_api_key):
+    """Mocks webapi.get_info."""
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/py/account",
+        json={
+            "data": {
+                "credit": 10.0,
+                "creditExpiration": '2024-10-01T00:00:00.000Z',
+                "allowanceCycleType": 'Daily',
+                "allowanceCurrentCycleAmount": 10.0,
+                "allowanceCurrentCycleEndDate": '2024-09-01T00:00:00.000Z',
+                "dailyFreeSimulationCounts": 2,
+            }
+        },
+        status=200,
+    )
 
 @pytest.fixture
 def mock_webapi(
@@ -627,3 +649,10 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
                 "--inspect_sim",
             ]
         )
+
+
+@responses.activate
+def test_account(mock_get_account):
+    info = account()
+    assert info is not None
+    assert info.credit == 10.0

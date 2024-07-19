@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DirectivityMonitor` to compute antenna directivity.
 - Added `plot_length_units` to `Simulation` and `Scene` to allow for specifying units, which improves axis labels and scaling when plotting.
 - Added the helper function `compute_power_delivered_by_port`  to `TerminalComponentModeler` which computes power delivered to a microwave network from a port.
+- Added the account function `account` to check credit balance and daily free simulation balance.
 
 ### Changed
 
