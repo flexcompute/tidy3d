@@ -12,6 +12,7 @@ from rich.progress import Progress
 from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import get_logging_console, log
+from ..core.account import Account
 from ..core.constants import SIM_FILE_HDF5, TaskId
 from ..core.environment import Env
 from ..core.task_core import Folder, SimulationTask
@@ -924,6 +925,38 @@ def real_cost(task_id: str, verbose=True) -> float:
                     "decrease the estimated, and correspondingly the billed cost of such tasks."
                 )
     return flex_unit
+
+
+@wait_for_connection
+def account(verbose=True) -> Account:
+    account_info = Account.get()
+    if verbose and account_info:
+        console = get_logging_console()
+        credit = account_info.credit
+        credit_expiration = account_info.credit_expiration
+        cycle_type = account_info.allowance_cycle_type
+        cycle_amount = account_info.allowance_current_cycle_amount
+        cycle_end_date = account_info.allowance_current_cycle_end_date
+        free_simulation_counts = account_info.daily_free_simulation_counts
+
+        message = ""
+        if credit is not None:
+            message += f"Current FlexCredit balance: {credit:.2f}"
+            if credit_expiration is not None:
+                message += (
+                    f" and expiration date: {credit_expiration.strftime('%Y-%m-%d %H:%M:%S')}. "
+                )
+            else:
+                message += ". "
+        if cycle_type is not None and cycle_amount is not None and cycle_end_date is not None:
+            cycle_end = cycle_end_date.strftime("%Y-%m-%d %H:%M:%S")
+            message += f"{cycle_type} FlexCredit balance: {cycle_amount:.2f} and expiration date: {cycle_end}. "
+        if free_simulation_counts is not None:
+            message += f"Daily free simulation counts: {free_simulation_counts}."
+
+        console.log(message)
+
+    return account_info
 
 
 @wait_for_connection
