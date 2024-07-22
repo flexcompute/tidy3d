@@ -413,10 +413,15 @@ class FieldProjector(Tidy3dBaseModel):
         _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
         # integration dimension for 2d far field projection
-        zero_dim = (dim for dim, size in enumerate(self.sim_data.simulation.size) if size == 0)
+        zero_dim = [dim for dim, size in enumerate(self.sim_data.simulation.size) if size == 0]
         if self.is_2d_simulation:
+            # Ensure zero_dim has a single element since {zero_dim} expects a value
+            if len(zero_dim) != 1:
+                raise ValueError("Expected exactly one dimension with size 0 for 2D simulation")
+
+            zero_dim = zero_dim[0]
             integration_axis = {0, 1, 2} - {zero_dim, surface.axis}
-            idx_int_1d = integration_axis.pop()  # Get the remaining axis as an integer
+            idx_int_1d = integration_axis.pop()
 
         idx_u, idx_v = idx_uv
         cmp_1, cmp_2 = source_names
@@ -451,7 +456,6 @@ class FieldProjector(Tidy3dBaseModel):
                     J[idx_u, i_th, j_ph] = self.integrate_1d(
                         currents_f[f"E{cmp_1}"].values, phase_ij, pts[idx_int_1d]
                     )
-
                     J[idx_v, i_th, j_ph] = self.integrate_1d(
                         currents_f[f"E{cmp_2}"].values, phase_ij, pts[idx_int_1d]
                     )

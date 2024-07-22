@@ -2882,11 +2882,11 @@ class Simulation(AbstractYeeGridSimulation):
     def _projection_monitors_2d(cls, val, values):
         """
         Validate if the field projection monitor is set up for a 2D simulation and
-        ensure the observation angle is configured correctly.
+        ensure the observation parameters are configured correctly.
 
         - For a 2D simulation in the x-y plane, 'theta' should be set to 'pi/2'.
-        - For a 2D simulation in the y-z plane, 'phi' should be set to 'pi/2'.
-        - For a 2D simulation in the x-z plane, 'phi' should be set to '0'.
+        - For a 2D simulation in the y-z plane, 'phi' should be set to 'pi/2' or '2*pi/3'.
+        - For a 2D simulation in the x-z plane, 'phi' should be set to '0' or 'pi'.
 
         Note: Exact far field projection is not available yet. Currently, only
         'far_field_approx = True' is supported.
@@ -2903,18 +2903,13 @@ class Simulation(AbstractYeeGridSimulation):
             return val
 
         plane = None
-        phi_value = None
-        theta_value = None
 
         if sim_size[0] == 0:
             plane = "y-z"
-            phi_value = np.pi / 2
         elif sim_size[1] == 0:
             plane = "x-z"
-            phi_value = 0
         elif sim_size[2] == 0:
             plane = "x-y"
-            theta_value = np.pi / 2
 
         for monitor in val:
             if isinstance(monitor, AbstractFieldProjectionMonitor):
@@ -2923,37 +2918,63 @@ class Simulation(AbstractYeeGridSimulation):
                         f"Monitor '{monitor.name}' is not supported in 1D simulations."
                     )
 
-                if isinstance(
-                    monitor, (FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor)
-                ):
+                if isinstance(monitor, (FieldProjectionKSpaceMonitor)):
                     raise SetupError(
                         f"Monitor '{monitor.name}' in 2D simulations is coming soon. "
                         "Please use 'FieldProjectionAngleMonitor' instead."
+                        "Please use 'FieldProjectionAngleMonitor' or 'FieldProjectionCartesianMonitor' instead."
                     )
 
+                if isinstance(monitor, (FieldProjectionCartesianMonitor)):
+                    config = {
+                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
+                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
+                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
+                    }[plane]
+
+                    valid_proj_axes = config["valid_proj_axes"]
+                    invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
+
+                    if monitor.proj_axis in invalid_proj_axis:
+                        raise SetupError(
+                            f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
+                            f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
+                        )
+
+                    for idx, axis in enumerate(valid_proj_axes):
+                        coord = getattr(monitor, config["coord"][idx])
+                        if monitor.proj_axis == axis and not all(value in [0] for value in coord):
+                            raise SetupError(
+                                f"For a 2D simulation in the {plane} plane with "
+                                f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
+                                f"'{monitor.name}' should be set to '[0]'."
+                            )
+
                 if isinstance(monitor, FieldProjectionAngleMonitor):
-                    if not monitor.far_field_approx:
-                        raise SetupError(
-                            "Exact far field projection in 2D simulations is coming soon."
-                            "Please set 'far_field_approx = True'."
+                    config = {
+                        "y-z": {"valid_value": [np.pi / 2, 3 * np.pi / 2], "coord": "phi"},
+                        "x-z": {"valid_value": [0, np.pi], "coord": "phi"},
+                        "x-y": {"valid_value": [np.pi / 2], "coord": "theta"},
+                    }[plane]
+
+                    coord = getattr(monitor, config["coord"])
+                    if not all(value in config["valid_value"] for value in coord):
+                        replacements = {
+                            np.pi: "np.pi",
+                            np.pi / 2: "np.pi/2",
+                            3 * np.pi / 2: "3*np.pi/2",
+                            0: "0",
+                        }
+                        valid_values_str = ", ".join(
+                            replacements.get(val) for val in config["valid_value"]
                         )
-                    if plane == "y-z" and (len(monitor.phi) != 1 or monitor.phi[0] != phi_value):
                         raise SetupError(
-                            "For a 2D simulation in the y-z plane, the observation angle 'phi' "
-                            f"of monitor '{monitor.name}' should be set to 'np.pi/2'."
+                            f"For a 2D simulation in the {plane} plane, the observation "
+                            f"angle '{config['coord']}' of monitor "
+                            f"'{monitor.name}' should be set to "
+                            f"'{valid_values_str}'"
                         )
-                    elif plane == "x-z" and (len(monitor.phi) != 1 or monitor.phi[0] != phi_value):
-                        raise SetupError(
-                            "For a 2D simulation in the x-z plane, the observation angle 'phi' "
-                            f"of monitor '{monitor.name}' should be set to '0'."
-                        )
-                    elif plane == "x-y" and (
-                        len(monitor.theta) != 1 or monitor.theta[0] != theta_value
-                    ):
-                        raise SetupError(
-                            "For a 2D simulation in the x-y plane, the observation angle 'theta' "
-                            f"of monitor '{monitor.name}' should be set to 'np.pi/2'."
-                        )
+
         return val
 
     @pydantic.validator("monitors", always=True)
