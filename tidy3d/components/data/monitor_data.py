@@ -2161,7 +2161,7 @@ class AbstractFieldProjectionData(MonitorData):
             return 1.0
 
         if is_2d_simulation:
-            return -np.exp(1j * k * dist) * np.sqrt(1j * k / (8 * np.pi * dist))
+            return np.exp(1j * k * dist) * np.sqrt(-1j * k / (8 * np.pi * dist))
 
         return -1j * k * np.exp(1j * k * dist) / (4 * np.pi * dist)
 
