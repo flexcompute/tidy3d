@@ -552,6 +552,17 @@ def test_relative_min_dl_warning(log_capture):
         )
 
 
+def test_sim_version_update(log_capture):
+    heat_sim = make_heat_sim()
+    heat_sim_dict = heat_sim.dict()
+    heat_sim_dict["version"] = "ancient_version"
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        heat_sim_new = td.HeatSimulation.parse_obj(heat_sim_dict)
+
+    assert heat_sim_new.version == td.__version__
+
+
 @pytest.mark.parametrize("zero_dim_axis", [None, 0, 2])
 def test_symmetry_expanded(zero_dim_axis):
     symmetry_center = [2, 0.5, 0]

@@ -294,7 +294,7 @@ def test_mode_solver_validation():
         ms.validate_pre_upload()
 
 
-@pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))
+@pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, None)))
 def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
     """Test mode solver setups issuing warnings."""
 
@@ -939,3 +939,63 @@ def test_mode_solver_relative():
     new_freqs = np.array(freqs) * 1.01
     ms = ms.updated_copy(freqs=new_freqs)
     _ = ms._data_on_yee_grid_relative(basis=basis)
+
+
+def test_mode_solver_plot():
+    """Test mode plane plotting functions"""
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=3,
+        target_neff=2.0,
+        num_pml=[8, 4],
+    )
+    freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+        colocate=False,
+    )
+    _, ax = plt.subplots(2, 2, figsize=(12, 8), tight_layout=True)
+    ms.plot(ax=ax[0, 0])
+    ms.plot_eps(freq=200e14, alpha=0.7, ax=ax[0, 1])
+    ms.plot_structures_eps(freq=200e14, alpha=0.8, cbar=True, reverse=False, ax=ax[1, 0])
+    ms.plot_grid(linewidth=0.3, ax=ax[1, 0])
+    ms.plot(ax=ax[1, 1])
+    ms.plot_pml(ax=ax[1, 1])
+    ms.plot_grid(linewidth=0.3, ax=ax[1, 1])
+    plt.close()
+
+
+@pytest.mark.parametrize("local", [True, False])
+@responses.activate
+def test_modes_eme_sim(mock_remote_api, local):
+    lambda0 = 1
+    freq0 = td.C_0 / lambda0
+    sim_size = (1, 1, 1)
+    mode_spec = td.EMEModeSpec(num_modes=10)
+    eme_grid_spec = td.EMEUniformGrid(num_cells=2, mode_spec=mode_spec)
+    sim = td.EMESimulation(size=sim_size, freqs=[freq0], axis=2, eme_grid_spec=eme_grid_spec)
+    solver = ModeSolver(
+        simulation=sim,
+        freqs=[freq0],
+        mode_spec=td.ModeSpec(num_modes=2),
+        plane=sim.eme_grid.mode_planes[0],
+    )
+    if local:
+        _ = solver.data
+    else:
+        with pytest.raises(SetupError):
+            _ = msweb.run(solver)
+        _ = msweb.run(solver.to_fdtd_mode_solver())

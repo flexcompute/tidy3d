@@ -1014,8 +1014,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             sub_element = current_dict[final_key]
             if isinstance(sub_element, DataArray):
                 current_dict[final_key] = sub_element.copy(deep=False, data=x)
-                if "AUTOGRAD" in sub_element.attrs:
-                    current_dict[final_key].attrs["AUTOGRAD"] = x
+                if AUTOGRAD_KEY in sub_element.attrs:
+                    current_dict[final_key].attrs[AUTOGRAD_KEY] = x
             else:
                 current_dict[final_key] = x
 

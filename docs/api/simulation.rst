@@ -8,3 +8,4 @@ Simulation
    :template: module.rst
 
    tidy3d.Simulation
+   tidy3d.RunTimeSpec

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Union
@@ -120,19 +119,29 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     def sim_dict(self) -> Dict[str, Simulation]:
         """Generate all the :class:`Simulation` objects for the S matrix calculation."""
 
-    def json(self, **kwargs):
-        """Save component to dictionary. Add the ``batch`` if it has been cached."""
+    def to_file(self, fname: str) -> None:
+        """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
-        self_json = super().json(**kwargs)
+        Parameters
+        ----------
+        fname : str
+            Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
 
-        batch = self._cached_properties.get("batch")
+        Example
+        -------
+        >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
+        """
 
-        if not batch:
-            return self_json
-
-        self_dict = json.loads(self_json)
-        self_dict["batch_cached"] = json.loads(batch.json())
-        return json.dumps(self_dict)
+        batch_cached = self._cached_properties.get("batch")
+        jobs_cached = batch_cached._cached_properties.get("jobs")
+        if jobs_cached is not None:
+            jobs = {}
+            for key, job in jobs_cached.items():
+                task_id = job._cached_properties.get("task_id")
+                jobs[key] = job.updated_copy(task_id_cached=task_id)
+            batch_cached = batch_cached.updated_copy(jobs_cached=jobs)
+        self = self.updated_copy(batch_cached=batch_cached)
+        super(AbstractComponentModeler, self).to_file(fname=fname)  # noqa: UP008
 
     @cached_property
     def batch(self) -> Batch:
@@ -180,7 +189,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     @cached_property
     def _batch_path(self) -> str:
         """Where we store the batch for this ComponentModeler instance after the run."""
-        return os.path.join(self.path_dir, "batch" + str(hash(self)) + ".json")
+        return os.path.join(self.path_dir, "batch" + str(hash(self)) + ".hdf5")
 
     def _run_sims(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Run :class:`Simulations` for each port and return the batch after saving."""

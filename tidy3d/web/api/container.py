@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import concurrent
-import json
 import os
 import time
 from abc import ABC
@@ -171,19 +170,22 @@ class Job(WebContainer):
         "parent_tasks",
     )
 
-    def json(self, **kwargs):
-        """Save ``Job`` to dictionary. Add the `task_id` if it has been cached."""
+    def to_file(self, fname: str) -> None:
+        """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
-        self_json = super().json(**kwargs)
+        Parameters
+        ----------
+        fname : str
+            Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
 
-        task_id = self._cached_properties.get("task_id")
+        Example
+        -------
+        >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
+        """
 
-        if not task_id:
-            return self_json
-
-        self_dict = json.loads(self_json)
-        self_dict["task_id_cached"] = task_id
-        return json.dumps(self_dict)
+        task_id_cached = self._cached_properties.get("task_id")
+        self = self.updated_copy(task_id_cached=task_id_cached)
+        super(Job, self).to_file(fname=fname)  # noqa: UP008
 
     def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
         """Run :class:`Job` all the way through and return data.
@@ -587,19 +589,26 @@ class Batch(WebContainer):
             jobs[task_name] = job
         return jobs
 
-    def json(self, **kwargs):
-        """Save ``Batch`` to dictionary. Add the ``jobs`` if they have been cached."""
+    def to_file(self, fname: str) -> None:
+        """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
 
-        self_json = super().json(**kwargs)
+        Parameters
+        ----------
+        fname : str
+            Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
 
-        jobs = self._cached_properties.get("jobs")
-
-        if not jobs:
-            return self_json
-
-        self_dict = json.loads(self_json)
-        self_dict["jobs_cached"] = {k: json.loads(j.json()) for k, j in jobs.items()}
-        return json.dumps(self_dict)
+        Example
+        -------
+        >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
+        """
+        jobs_cached = self._cached_properties.get("jobs")
+        if jobs_cached is not None:
+            jobs = {}
+            for key, job in jobs_cached.items():
+                task_id = job._cached_properties.get("task_id")
+                jobs[key] = job.updated_copy(task_id_cached=task_id)
+            self = self.updated_copy(jobs_cached=jobs)
+        super(Batch, self).to_file(fname=fname)  # noqa: UP008
 
     @property
     def num_jobs(self) -> int:
