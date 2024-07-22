@@ -32,12 +32,12 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         "associated with the monitors of the original :class:`.EMESimulation`.",
     )
 
-    smatrix: EMESMatrixDataset = pd.Field(
-        ..., title="S Matrix", description="Scattering matrix of the EME simulation."
+    smatrix: Optional[EMESMatrixDataset] = pd.Field(
+        None, title="S Matrix", description="Scattering matrix of the EME simulation."
     )
 
     port_modes: Optional[EMEModeSolverData] = pd.Field(
-        ...,
+        None,
         title="Port Modes",
         description="Modes associated with the two ports of the EME device. "
         "The scattering matrix is expressed in this basis.",
@@ -239,9 +239,21 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 S12 = S12.rename(mode_index_out="mode_index_out_old")
                 S21 = S21.rename(mode_index_in="mode_index_in_old")
 
-                S11 = O1out.dot(S11, dim="mode_index_out_old").dot(O1in, dim="mode_index_in_old")
-                S12 = O1out.dot(S12, dim="mode_index_out_old")
-                S21 = S21.dot(O1in, dim="mode_index_in_old")
+                # this exception handling is needed because xarray renamed dims kwarg to dim
+                # but we want to keep supporting old xarray
+                try:
+                    S11 = O1out.dot(S11, dim="mode_index_out_old").dot(
+                        O1in, dim="mode_index_in_old"
+                    )
+                    S12 = O1out.dot(S12, dim="mode_index_out_old")
+                    S21 = S21.dot(O1in, dim="mode_index_in_old")
+                except TypeError:
+                    S11 = O1out.dot(S11, dims="mode_index_out_old").dot(
+                        O1in, dims="mode_index_in_old"
+                    )
+                    S12 = O1out.dot(S12, dims="mode_index_out_old")
+                    S21 = S21.dot(O1in, dims="mode_index_in_old")
+
             if modes2_provided:
                 overlaps2 = modes2.outer_dot(port_modes2, conjugate=False)
                 if not modes_in_2:
@@ -256,9 +268,19 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                     mode_index_in="mode_index_in_old", mode_index_out="mode_index_out_old"
                 )
 
-                S12 = S12.dot(O2in, dim="mode_index_in_old")
-                S21 = O2out.dot(S21, dim="mode_index_out_old")
-                S22 = O2out.dot(S22, dim="mode_index_out_old").dot(O2in, dim="mode_index_in_old")
+                # same for this exception handling
+                try:
+                    S12 = S12.dot(O2in, dim="mode_index_in_old")
+                    S21 = O2out.dot(S21, dim="mode_index_out_old")
+                    S22 = O2out.dot(S22, dim="mode_index_out_old").dot(
+                        O2in, dim="mode_index_in_old"
+                    )
+                except TypeError:
+                    S12 = S12.dot(O2in, dims="mode_index_in_old")
+                    S21 = O2out.dot(S21, dims="mode_index_out_old")
+                    S22 = O2out.dot(S22, dims="mode_index_out_old").dot(
+                        O2in, dims="mode_index_in_old"
+                    )
 
             data11[:, sweep_index, :, :] = S11.to_numpy()
             data12[:, sweep_index, :, :] = S12.to_numpy()

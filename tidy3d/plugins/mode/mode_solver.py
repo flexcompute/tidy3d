@@ -4,12 +4,15 @@ invariance along a given propagation axis.
 
 from __future__ import annotations
 
+from functools import wraps
 from math import isclose
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Rectangle
 
 from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
@@ -20,6 +23,8 @@ from ...components.data.data_array import (
 )
 from ...components.data.monitor_data import ModeSolverData
 from ...components.data.sim_data import SimulationData
+from ...components.eme.data.sim_data import EMESimulationData
+from ...components.eme.simulation import EMESimulation
 from ...components.geometry.base import Box
 from ...components.grid.grid import Grid
 from ...components.medium import FullyAnisotropicMedium
@@ -41,6 +46,7 @@ from ...components.types import (
     Symmetry,
 )
 from ...components.validators import validate_freqs_min, validate_freqs_not_empty
+from ...components.viz import plot_params_pml
 from ...constants import C_0
 from ...exceptions import SetupError, ValidationError
 from ...log import log
@@ -66,6 +72,25 @@ FIELD_DECAY_CUTOFF = 1e-2
 # Maximum allowed size of the field data produced by the mode solver
 MAX_MODES_DATA_SIZE_GB = 20
 
+MODE_SIMULATION_TYPE = Union[Simulation, EMESimulation]
+MODE_SIMULATION_DATA_TYPE = Union[SimulationData, EMESimulationData]
+
+
+def require_fdtd_simulation(fn):
+    """Decorate a function to check that ``simulation`` is an FDTD ``Simulation``."""
+
+    @wraps(fn)
+    def _fn(self, **kwargs):
+        """New decorated function."""
+        if not isinstance(self.simulation, Simulation):
+            raise SetupError(
+                f"The function '{fn.__name__}' is only supported "
+                "for 'simulation' of type FDTD 'Simulation'."
+            )
+        return fn(self, **kwargs)
+
+    return _fn
+
 
 class ModeSolver(Tidy3dBaseModel):
     """
@@ -86,8 +111,11 @@ class ModeSolver(Tidy3dBaseModel):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    simulation: Simulation = pydantic.Field(
-        ..., title="Simulation", description="Simulation defining all structures and mediums."
+    simulation: MODE_SIMULATION_TYPE = pydantic.Field(
+        ...,
+        title="Simulation",
+        description="Simulation or EMESimulation defining all structures and mediums.",
+        discriminator="type",
     )
 
     plane: Box = pydantic.Field(
@@ -513,7 +541,7 @@ class ModeSolver(Tidy3dBaseModel):
         return mode_solver_data.symmetry_expanded_copy
 
     @cached_property
-    def sim_data(self) -> SimulationData:
+    def sim_data(self) -> MODE_SIMULATION_DATA_TYPE:
         """:class:`.SimulationData` object containing the :class:`.ModeSolverData` for this object.
 
         Returns
@@ -524,7 +552,17 @@ class ModeSolver(Tidy3dBaseModel):
         monitor_data = self.data
         new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
         new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
-        return SimulationData(simulation=new_simulation, data=(monitor_data,))
+        if isinstance(new_simulation, Simulation):
+            return SimulationData(simulation=new_simulation, data=(monitor_data,))
+        elif isinstance(new_simulation, EMESimulation):
+            return EMESimulationData(
+                simulation=new_simulation, data=(monitor_data,), smatrix=None, port_modes=None
+            )
+        else:
+            raise SetupError(
+                "The 'simulation' provided does not correspond to any known "
+                "'AbstractSimulationData' type."
+            )
 
     def _get_epsilon(self, freq: float) -> ArrayComplex4D:
         """Compute the epsilon tensor in the plane. Order of components is xx, xy, xz, yx, etc."""
@@ -787,7 +825,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     @staticmethod
     def _grid_correction(
-        simulation: Simulation,
+        simulation: MODE_SIMULATION_TYPE,
         plane: Box,
         mode_spec: ModeSpec,
         n_complex: ModeIndexDataArray,
@@ -990,6 +1028,7 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
+    @require_fdtd_simulation
     def sim_with_source(
         self,
         source_time: SourceTime,
@@ -1024,6 +1063,7 @@ class ModeSolver(Tidy3dBaseModel):
         new_sim = self.simulation.updated_copy(sources=new_sources)
         return new_sim
 
+    @require_fdtd_simulation
     def sim_with_monitor(
         self,
         freqs: List[float] = None,
@@ -1141,6 +1181,302 @@ class ModeSolver(Tidy3dBaseModel):
             **sel_kwargs,
         )
 
+    def plot(
+        self,
+        ax: Ax = None,
+        **patch_kwargs,
+    ) -> Ax:
+        """Plot the mode plane simulation's components.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
+
+        """
+        # Get the mode plane normal axis, center, and limits.
+        a_center, h_lim, v_lim, _ = self._center_and_lims()
+
+        return self.simulation.plot(
+            x=a_center[0],
+            y=a_center[1],
+            z=a_center[2],
+            hlim=h_lim,
+            vlim=v_lim,
+            source_alpha=0,
+            monitor_alpha=0,
+            lumped_element_alpha=0,
+            ax=ax,
+            **patch_kwargs,
+        )
+
+    def plot_eps(
+        self,
+        freq: float = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot the mode plane simulation's components.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
+        """
+
+        # Get the mode plane normal axis, center, and limits.
+        a_center, h_lim, v_lim, _ = self._center_and_lims()
+
+        # Plot at central mode frequency if freq is not provided.
+        f = freq if freq is not None else self.freqs[len(self.freqs) // 2]
+
+        return self.simulation.plot_eps(
+            x=a_center[0],
+            y=a_center[1],
+            z=a_center[2],
+            freq=f,
+            alpha=alpha,
+            hlim=h_lim,
+            vlim=v_lim,
+            source_alpha=0,
+            monitor_alpha=0,
+            lumped_element_alpha=0,
+            ax=ax,
+        )
+
+    def plot_structures_eps(
+        self,
+        freq: float = None,
+        alpha: float = None,
+        cbar: bool = True,
+        reverse: bool = False,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot the mode plane simulation's components.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        cbar : bool = True
+            Whether to plot a colorbar for the relative permittivity.
+        reverse : bool = False
+            If ``False``, the highest permittivity is plotted in black.
+            If ``True``, it is plotteed in white (suitable for black backgrounds).
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
+        """
+
+        # Get the mode plane normal axis, center, and limits.
+        a_center, h_lim, v_lim, _ = self._center_and_lims()
+
+        # Plot at central mode frequency if freq is not provided.
+        f = freq if freq is not None else self.freqs[len(self.freqs) // 2]
+
+        return self.simulation.plot_structures_eps(
+            x=a_center[0],
+            y=a_center[1],
+            z=a_center[2],
+            freq=f,
+            alpha=alpha,
+            cbar=cbar,
+            reverse=reverse,
+            hlim=h_lim,
+            vlim=v_lim,
+            ax=ax,
+        )
+
+    def plot_grid(
+        self,
+        ax: Ax = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the mode plane cell boundaries as lines.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **kwargs
+            Optional keyword arguments passed to the matplotlib ``LineCollection``.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        # Get the mode plane normal axis, center, and limits.
+        a_center, h_lim, v_lim, _ = self._center_and_lims()
+
+        return self.simulation.plot_grid(
+            x=a_center[0], y=a_center[1], z=a_center[2], hlim=h_lim, vlim=v_lim, ax=ax, **kwargs
+        )
+
+    def plot_pml(
+        self,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot the mode plane absorbing boundaries.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        # Get the mode plane normal axis, center, and limits.
+        a_center, h_lim, v_lim, t_axes = self._center_and_lims()
+
+        # Plot the mode plane is ax=None.
+        if not ax:
+            ax = self.simulation.plot(
+                x=a_center[0],
+                y=a_center[1],
+                z=a_center[2],
+                hlim=h_lim,
+                vlim=v_lim,
+                source_alpha=0,
+                monitor_alpha=0,
+                ax=ax,
+            )
+
+        # Mode plane grid.
+        plane_grid = self.grid_snapped.centers.to_list
+        coord_0 = plane_grid[t_axes[0]][1:-1]
+        coord_1 = plane_grid[t_axes[1]][1:-1]
+
+        # Number of PML layers in ModeSpec.
+        num_pml_0 = self.mode_spec.num_pml[0]
+        num_pml_1 = self.mode_spec.num_pml[1]
+
+        # Calculate PML thickness.
+        pml_thick_0_plus = 0
+        pml_thick_0_minus = 0
+        if num_pml_0 > 0:
+            pml_thick_0_plus = coord_0[-1] - coord_0[-num_pml_0 - 1]
+            pml_thick_0_minus = coord_0[num_pml_0] - coord_0[0]
+            if self.solver_symmetry[0] != 0:
+                pml_thick_0_minus = pml_thick_0_plus
+
+        pml_thick_1_plus = 0
+        pml_thick_1_minus = 0
+        if num_pml_1 > 0:
+            pml_thick_1_plus = coord_1[-1] - coord_1[-num_pml_1 - 1]
+            pml_thick_1_minus = coord_1[num_pml_1] - coord_1[0]
+            if self.solver_symmetry[1] != 0:
+                pml_thick_1_minus = pml_thick_1_plus
+
+        # Mode Plane width and height
+        mp_w = h_lim[1] - h_lim[0]
+        mp_h = v_lim[1] - v_lim[0]
+
+        # Plot the absorbing layers.
+        if num_pml_0 > 0 or num_pml_1 > 0:
+            pml_rect = []
+            if pml_thick_0_minus > 0:
+                pml_rect.append(Rectangle((h_lim[0], v_lim[0]), pml_thick_0_minus, mp_h))
+            if pml_thick_0_plus > 0:
+                pml_rect.append(
+                    Rectangle((h_lim[1] - pml_thick_0_plus, v_lim[0]), pml_thick_0_plus, mp_h)
+                )
+            if pml_thick_1_minus > 0:
+                pml_rect.append(Rectangle((h_lim[0], v_lim[0]), mp_w, pml_thick_1_minus))
+            if pml_thick_1_plus > 0:
+                pml_rect.append(
+                    Rectangle((h_lim[0], v_lim[1] - pml_thick_1_plus), mp_w, pml_thick_1_plus)
+                )
+
+            pc = PatchCollection(
+                pml_rect,
+                alpha=plot_params_pml.alpha,
+                facecolor=plot_params_pml.facecolor,
+                edgecolor=plot_params_pml.edgecolor,
+                hatch=plot_params_pml.hatch,
+                zorder=plot_params_pml.zorder,
+            )
+            ax.add_collection(pc)
+
+        return ax
+
+    def _center_and_lims(self) -> Tuple[List, List, List, List]:
+        """Get the mode plane center and limits."""
+
+        n_axis, t_axes = self.plane.pop_axis([0, 1, 2], self.normal_axis)
+        a_center = [None, None, None]
+        a_center[n_axis] = self.plane.center[n_axis]
+
+        _, (h_min_s, v_min_s) = Box.pop_axis(self.simulation.bounds[0], axis=n_axis)
+        _, (h_max_s, v_max_s) = Box.pop_axis(self.simulation.bounds[1], axis=n_axis)
+
+        h_min = a_center[n_axis] - self.plane.size[t_axes[0]] / 2
+        h_max = a_center[n_axis] + self.plane.size[t_axes[0]] / 2
+        v_min = a_center[n_axis] - self.plane.size[t_axes[1]] / 2
+        v_max = a_center[n_axis] + self.plane.size[t_axes[1]] / 2
+
+        h_lim = [
+            h_min if abs(h_min) < abs(h_min_s) else h_min_s,
+            h_max if abs(h_max) < abs(h_max_s) else h_max_s,
+        ]
+        v_lim = [
+            v_min if abs(v_min) < abs(v_min_s) else v_min_s,
+            v_max if abs(v_max) < abs(v_max_s) else v_max_s,
+        ]
+
+        return a_center, h_lim, v_lim, t_axes
+
     def _validate_modes_size(self):
         """Make sure that the total size of the modes fields is not too large."""
         monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
@@ -1203,3 +1539,16 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         return self.updated_copy(simulation=new_sim)
+
+    def to_fdtd_mode_solver(self) -> ModeSolver:
+        """Construct a new :class:`.ModeSolver` by converting ``simulation``
+        from a :class:`.EMESimulation` to an FDTD :class:`.Simulation`.
+        Only used as a workaround until :class:`.EMESimulation` is natively supported in the
+        :class:`.ModeSolver` webapi."""
+        if not isinstance(self.simulation, EMESimulation):
+            raise ValidationError(
+                "The method 'to_fdtd_mode_solver' is only needed "
+                "when the 'simulation' is an 'EMESimulation'."
+            )
+        fdtd_sim = self.simulation._to_fdtd_sim()
+        return self.updated_copy(simulation=fdtd_sim)

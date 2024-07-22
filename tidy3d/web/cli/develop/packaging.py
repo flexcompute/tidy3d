@@ -25,7 +25,7 @@ output_timing_log = ["python", "-X", "importtime", "-c", "import tidy3d"]
 # Runs the import 100 times.
 average_test_import = [
     "python",
-    str(Path("tests", "test_timing", "import_tidy3d.py")),
+    str(Path("scripts", "benchmark_import.py")),
 ]
 
 timing_commands = {

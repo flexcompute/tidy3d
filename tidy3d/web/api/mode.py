@@ -15,10 +15,11 @@ from joblib import Parallel, delayed
 from rich.progress import Progress
 
 from ...components.data.monitor_data import ModeSolverData
+from ...components.eme.simulation import EMESimulation
 from ...components.medium import AbstractCustomMedium
 from ...components.simulation import Simulation
 from ...components.types import Literal
-from ...exceptions import WebError
+from ...exceptions import SetupError, WebError
 from ...log import get_logging_console, log
 from ...plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
 from ...version import __version__
@@ -319,7 +320,21 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         folder = Folder.get(folder_name, create=True)
 
         mode_solver.validate_pre_upload()
-        mode_solver.simulation.validate_pre_upload(source_required=False)
+        if isinstance(mode_solver.simulation, Simulation):
+            mode_solver.simulation.validate_pre_upload(source_required=False)
+        elif isinstance(mode_solver.simulation, EMESimulation):
+            # TODO: replace this with native web api support
+            raise SetupError(
+                "'EMESimulation' is not yet supported in the "
+                "remote mode solver web api. Please instead call 'ModeSolver.to_fdtd_mode_solver' "
+                "before using the web api; this replaces the 'EMESimulation' with a 'Simulation' "
+                "that can be used in the remote mode solver. "
+                "Alternatively, you can add a 'ModeSolverMonitor' to the 'EMESimulation' "
+                "and use the EME solver web api."
+            )
+            # mode_solver.simulation.validate_pre_upload()
+        else:
+            raise SetupError("Simulation type not supported in the remote mode solver web api.")
 
         response_body = {
             "projectId": folder.folder_id,

@@ -12,7 +12,6 @@ import h5py
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
-from scipy.io import savemat
 
 from ...exceptions import DataError, FileError, Tidy3dKeyError
 from ...log import log
@@ -1045,6 +1044,8 @@ class SimulationData(AbstractYeeGridSimulationData):
         modified_sim_dict = replace_values(sim_dict, None, [])
 
         try:
+            from scipy.io import savemat
+
             savemat(fname, modified_sim_dict, **kwargs)
         except Exception as e:
             raise ValueError(

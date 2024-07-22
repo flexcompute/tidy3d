@@ -1,7 +1,8 @@
 from functools import partial
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 import numpy as np
+from numpy.typing import NDArray
 
 from ..functions import convolve
 from ..types import KernelType, PaddingType
@@ -14,7 +15,7 @@ def make_filter(
     *,
     normalize: bool = True,
     padding: PaddingType = "reflect",
-):
+) -> Callable:
     """Create a filter function based on the specified kernel type and size.
 
     Parameters
@@ -35,7 +36,7 @@ def make_filter(
     """
     _kernel = {}
 
-    def _filter(array):
+    def _filter(array: NDArray) -> NDArray:
         original_shape = array.shape
         squeezed_array = np.squeeze(array)
 

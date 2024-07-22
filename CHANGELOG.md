@@ -8,9 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.8.0rc1]
 
 ### Added
-- Support for differentiation with respect to `GeometryGroup.geometries` elements.
 - Support for differentiation with respect to `ComplexPolySlab.vertices`.
-- Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
 - Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
 - Users can specify the background medium for a structure in automatic differentiation by supplying `Structure.autograd_background_permittivity`.
 - `DirectivityMonitor` to compute antenna directivity.
@@ -20,10 +18,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
-- Bug where boundary layers would be plotted too small in 2D simulations.
 - Significant speedup for field projection computations.
 - Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
+
+## [2.7.2]
+
+### Added
+- Mode solver plugin now supports 'EMESimulation'.
+- TriangleMesh class: automatic removal of zero-area faces, and functions fill_holes and fix_winding to attempt mesh repair.
+
+### Changed
+- Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
+
+### Fixed
+- Error when loading a previously run Batch or ComponentModeler containing custom data.
+- Error when plotting mode plane PML and the simulation has symmetry.
+- Validators using TriangleMesh.intersections_plane will fall back on bounding box in case the method fails for a non-watertight mesh.
+
+
+## [2.7.1]
+
+### Added
+- Support for differentiation with respect to `GeometryGroup.geometries` elements.
+- Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
+- `ModeSolver` methods to plot the mode plane simulation components, including `.plot()`, `.plot_eps()`, `.plot_structures_eps()`, `.plot_grid()`, and `.plot_pml()`.
+- Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
+- Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
+- Support for `FieldProjectionAngleMonitor` for 2D simulations with `far_field_approx = True`.
+
+### Fixed
+- Bug where boundary layers would be plotted too small in 2D simulations.
+- Bug when plotting transformed geometries.
 - Bug when snapping `CoaxialLumpedPort` to grid cell boundaries.
+- Errors in `PolySlab` when using autograd differentiation with non-zero `sidewall_angle` and `dilation`.
+- Error in `EMESimulationData.smatrix_in_basis` when using older versions of xarray.
+- Gradients for `Box` objects when simulation size is < 3D.
 
 ## [2.7.0] - 2024-06-17
 
@@ -1245,7 +1274,9 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.0rc1...pre/2.8
+[2.8.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.7.1...v2.8.0rc1
+[2.7.1]: https://github.com/flexcompute/tidy3d/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...v2.7.0
 [2.6.4]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.6.4
 [2.6.3]: https://github.com/flexcompute/tidy3d/compare/v2.6.2...v2.6.3

@@ -117,6 +117,18 @@ class AbstractSimulation(Box, ABC):
 
     """ Validating setup """
 
+    @pd.root_validator(pre=True)
+    def _update_simulation(cls, values):
+        """Update the simulation if it is an earlier version."""
+
+        # dummy upgrade of version number
+        # this should be overriden by each simulation class if needed
+        current_version = values.get("version")
+        if current_version != __version__ and current_version is not None:
+            log.warning(f"updating {cls.__name__} from {current_version} to {__version__}")
+            values["version"] = __version__
+        return values
+
     # make sure all names are unique
     _unique_monitor_names = assert_unique_names("monitors")
     _unique_structure_names = assert_unique_names("structures")

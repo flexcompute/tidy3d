@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Mapping, Union
 
+import autograd.numpy as anp
 import dask
 import h5py
 import numpy as np
 import pandas
 import xarray as xr
-from autograd.tracer import getval, isbox
+from autograd.tracer import Box, getval, isbox
+from xarray.core.types import InterpOptions
+from xarray.core.utils import either_dict_or_kwargs
 
 from ...constants import (
     HERTZ,
@@ -21,6 +24,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
+from ..autograd.functions import interpn
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -70,21 +74,22 @@ class DataArray(xr.DataArray):
         """Initialize ``DataArray``."""
 
         # initialize with untraced data
-        data_untraced = getval(data)
-        super().__init__(data_untraced, *args, **kwargs)
-
-        # if the passed data has tracers, store them in attrs dict
+        super().__init__(getval(data), *args, **kwargs)
+        # and put tracers in .attrs
         if isbox(data):
             self.attrs[AUTOGRAD_KEY] = data
-            # NOTE: this is done because if we pass the traced array directly, it will create a
-            # numpy array of `ArrayBox`, which is extremely slow
 
     @property
-    def has_tracers(self) -> bool:
-        """Whether the ``DataArray`` has ``autograd`` derivative information."""
-        traced_data = self.data.dtype == object and isbox(self.data.flat[0])
-        traced_attrs = AUTOGRAD_KEY in self.attrs
-        return traced_data or traced_attrs
+    def tracers(self) -> Box:
+        if self.data.size == 0:
+            return None
+        elif AUTOGRAD_KEY not in self.attrs and not isbox(self.data.flat[0]):
+            # no tracers
+            return None
+        elif isbox(self.data.flat[0]):  # traced values take precedence over traced attrs
+            return anp.array(self.values.tolist())
+        else:
+            return self.attrs[AUTOGRAD_KEY]
 
     @classmethod
     def __get_validators__(cls):
@@ -130,7 +135,7 @@ class DataArray(xr.DataArray):
         """
         # skip this validator if currently tracing for autograd because
         # self.values will be dtype('object') and not interpolatable
-        if isbox(self.values.flat[0]):
+        if self.tracers is not None:
             return
 
         if field_name is None:
@@ -282,6 +287,79 @@ class DataArray(xr.DataArray):
         self_mult = self.copy()
         self_mult[{coord_name: indices}] *= value
         return self_mult
+
+    def interp(
+        self,
+        coords: Union[Mapping[Any, Any], None] = None,
+        method: InterpOptions = "linear",
+        assume_sorted: bool = False,
+        kwargs: Union[Mapping[str, Any], None] = None,
+        **coords_kwargs: Any,
+    ):
+        """Interpolate this DataArray to new coordinate values.
+
+        Parameters
+        ----------
+        coords : Union[Mapping[Any, Any], None] = None
+            A mapping from dimension names to new coordinate labels.
+        method : InterpOptions = "linear"
+            The interpolation method to use.
+        assume_sorted : bool = False
+            If True, skip sorting of coordinates.
+        kwargs : Union[Mapping[str, Any], None] = None
+            Additional keyword arguments to pass to the interpolation function.
+        **coords_kwargs : Any
+            The keyword arguments form of coords.
+
+        Returns
+        -------
+        DataArray
+            A new DataArray with interpolated values.
+
+        Raises
+        ------
+        KeyError
+            If any of the specified coordinates are not in the DataArray.
+        """
+        if self.tracers is not None:  # use custom interp if using traced data
+            coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
+
+            missing_keys = set(coords) - set(self.coords)
+            if missing_keys:
+                raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
+
+            obj = self if assume_sorted else self.sortby(list(coords.keys()))
+
+            points = tuple(obj.coords[k] for k in obj.dims)
+            xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
+            vals = interpn(points, obj.tracers, xi, method=method)
+
+            da = DataArray(vals, dict(obj.coords) | coords)  # tracers go into .attrs
+            if isbox(self.values.flat[0]):  # if tracing .values instead of .attrs
+                da = da.copy(deep=False, data=vals)  # copy over tracers
+
+            return da
+
+        return super().interp(
+            coords=coords,
+            method=method,
+            assume_sorted=assume_sorted,
+            kwargs=kwargs,
+            **coords_kwargs,
+        )
+
+    def conj(self, *args: Any, **kwargs: Any):
+        """Return the complex conjugate of this DataArray."""
+        if self.tracers is not None:
+            return self.__array_wrap__(anp.conj(self.tracers))
+        return super().conj(*args, **kwargs)
+
+    @property
+    def real(self):
+        """Return the real part of this DataArray."""
+        if self.tracers is not None:
+            return self.__array_wrap__(anp.real(self.tracers))
+        return super().real
 
 
 class FreqDataArray(DataArray):
