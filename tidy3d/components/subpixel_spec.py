@@ -150,7 +150,7 @@ class SubpixelSpec(Tidy3dBaseModel):
     )
 
     lossy_metal: GoodConductorSubpixelType = pd.Field(
-        VolumetricAveraging(),
+        SurfaceImpedance(),
         title="Subpixel averaging method on good conductor interfaces",
         description="Subpixel averaging method applied to `td.LossyMetal` structure interfaces.",
         discriminator=TYPE_TAG_STR,
@@ -159,7 +159,12 @@ class SubpixelSpec(Tidy3dBaseModel):
     @classmethod
     def staircasing(cls) -> SubpixelSpec:
         """Apply staircasing on all material boundaries."""
-        return cls(dielectric=Staircasing(), metal=Staircasing(), pec=Staircasing())
+        return cls(
+            dielectric=Staircasing(),
+            metal=Staircasing(),
+            pec=Staircasing(),
+            lossy_metal=Staircasing(),
+        )
 
     def courant_ratio(self, contain_pec_structures: bool, contain_sibc_structures: bool) -> float:
         """The scaling ratio applied to Courant number so that the courant number
