@@ -1088,8 +1088,23 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
 
 class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
-    """:class:`Monitor` that records the directivity of antennas in the frequency domain
+    """
+    :class:`Monitor` that records the radiation characteristics of antennas in the frequency domain
     at specified observation angles.
+
+    Note
+    ----
+    For directivity, the computation is based on the ratio of the radiation
+    intensity in a given direction to the average radiation intensity
+    over all directions:
+
+        Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        John Wiley & Sons, Chapter 2.6 (2016).
+
+    For axial ratio, the computation is based on:
+
+        Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        John Wiley & Sons, Chapter 2.12 (2016).
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:

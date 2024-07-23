@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Support for differentiation with respect to `ComplexPolySlab.vertices`.
-- Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
+- Introduce RF material library. Users can now import `rf_material_library` from `tidy3d.plugins.microwave`.
 - Users can specify the background medium for a structure in automatic differentiation by supplying `Structure.autograd_background_permittivity`.
 - `DirectivityMonitor` to compute antenna directivity.
 - Added `plot_length_units` to `Simulation` and `Scene` to allow for specifying units, which improves axis labels and scaling when plotting.
@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `WavePort` to the `TerminalComponentModeler` which is the suggested port type for exciting transmission lines.
 - Added plotting functionality to voltage and current path integrals in the `microwave` plugin.
 - Added convenience functions `from_terminal_positions` and `from_circular_path` to simplify setup of `VoltageIntegralAxisAligned` and `CustomCurrentIntegral2D`, respectively.
+- Added `axial_ratio` to `DirectivityData.axial_ratio` for the `DirectivityMonitor`, defined as the ratio of the major axis to the minor axis of the polarization ellipse. 
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
