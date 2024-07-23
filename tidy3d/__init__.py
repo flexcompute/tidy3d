@@ -37,6 +37,7 @@ from .components.boundary import (
 
 # data
 from .components.data.data_array import (
+    AxialRatioDataArray,
     CellDataArray,
     ChargeDataArray,
     DiffractionDataArray,
@@ -387,6 +388,7 @@ __all__ = [
     "FieldProjectionKSpaceDataArray",
     "DiffractionDataArray",
     "DirectivityDataArray",
+    "AxialRatioDataArray",
     "HeatDataArray",
     "ChargeDataArray",
     "FieldDataset",

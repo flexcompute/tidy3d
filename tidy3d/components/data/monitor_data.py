@@ -58,6 +58,7 @@ from ..types import (
 )
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from .data_array import (
+    AxialRatioDataArray,
     DataArray,
     DiffractionDataArray,
     DirectivityDataArray,
@@ -1989,16 +1990,17 @@ class DirectivityData(MonitorData):
 
     Example
     -------
-    >>> from tidy3d import DirectivityDataArray
+    >>> from tidy3d import DirectivityDataArray, AxialRatioDataArray
     >>> f = np.linspace(1e14, 2e14, 10)
-    >>> r = np.atleast_1d(5)
+    >>> r = np.atleast_1d(1e6)
     >>> theta = np.linspace(0, np.pi, 10)
     >>> phi = np.linspace(0, 2*np.pi, 20)
     >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
     >>> values = np.random.random((len(r), len(theta), len(phi), len(f)))
-    >>> scalar_field = DirectivityDataArray(values, coords=coords)
+    >>> scalar_directivity_field = DirectivityDataArray(values, coords=coords)
+    >>> scalar_axial_ratio_field = AxialRatioDataArray(values, coords=coords)
     >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
-    >>> data = DirectivityData(monitor=monitor,directivity=scalar_field)
+    >>> data = DirectivityData(monitor=monitor, directivity=scalar_directivity_field, axial_ratio=scalar_axial_ratio_field)
     """
 
     monitor: DirectivityMonitor = pd.Field(
@@ -2009,6 +2011,10 @@ class DirectivityData(MonitorData):
 
     directivity: DirectivityDataArray = pd.Field(
         ..., title="Directivity", description="Directivity with an angle-based projection grid."
+    )
+
+    axial_ratio: AxialRatioDataArray = pd.Field(
+        ..., title="Axial Ratio", description="Axial ratio with an angle-based projection grid."
     )
 
 

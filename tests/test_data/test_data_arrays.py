@@ -193,6 +193,11 @@ def make_directivity_data_array():
     return td.DirectivityDataArray(values, coords=dict(r=PD, theta=THETAS, phi=PHIS, f=FS))
 
 
+def make_axial_ratio_data_array():
+    values = np.random.random((len(PD), len(THETAS), len(PHIS), len(FS)))
+    return td.AxialRatioDataArray(values, coords=dict(r=PD, theta=THETAS, phi=PHIS, f=FS))
+
+
 def make_flux_time_data_array():
     values = np.random.random(len(TS))
     return td.FluxTimeDataArray(values, coords=dict(t=TS))
@@ -257,6 +262,11 @@ def test_flux_time_data_array():
 
 def test_directivity_data_array():
     data = make_directivity_data_array()
+    data = data.sel(f=1e14, phi=0)
+
+
+def test_axial_ratio_data_array():
+    data = make_axial_ratio_data_array()
     data = data.sel(f=1e14, phi=0)
 
 

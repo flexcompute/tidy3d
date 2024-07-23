@@ -779,9 +779,9 @@ class FieldProjectionAngleDataArray(DataArray):
 
 
 class DirectivityDataArray(DataArray):
-    """Directivity in the frequency domain as a function of angles theta and phi. Directivity is a
-    dimensionless quantity defined as the ratio of the radiation intensity in a given direction
-    to the average radiation intensity over all directions.
+    """Directivity in the frequency domain as a function of angles theta and phi.
+    Directivity is a dimensionless quantity defined as the ratio of the radiation
+    intensity in a given direction to the average radiation intensity over all directions.
 
     Example
     -------
@@ -797,6 +797,34 @@ class DirectivityDataArray(DataArray):
     __slots__ = ()
     _dims = ("r", "theta", "phi", "f")
     _data_attrs = {"long_name": "radiation intensity"}
+
+
+class AxialRatioDataArray(DataArray):
+    """Axial Ratio (AR) in the frequency domain as a function of angles theta and phi.
+    AR is a dimensionless quantity defined as the ratio of the major axis to the minor
+    axis of the polarization ellipse.
+
+    Note
+    ----
+    The axial ratio computation is based on:
+
+    Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+    John Wiley & Sons, Chapter 2.12 (2016).
+
+    Example
+    -------
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> r = np.atleast_1d(5)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
+    >>> values = np.random.random((len(r), len(theta), len(phi), len(f)))
+    >>> data = AxialRatioDataArray(values, coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("r", "theta", "phi", "f")
+    _data_attrs = {"long_name": "axial ratio"}
 
 
 class FieldProjectionCartesianDataArray(DataArray):
@@ -1097,6 +1125,7 @@ DATA_ARRAY_TYPES = [
     FieldProjectionKSpaceDataArray,
     DiffractionDataArray,
     DirectivityDataArray,
+    AxialRatioDataArray,
     FreqModeDataArray,
     FreqDataArray,
     TimeDataArray,

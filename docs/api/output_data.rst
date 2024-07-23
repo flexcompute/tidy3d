@@ -53,3 +53,4 @@ Individual Datasets
    tidy3d.FieldProjectionKSpaceDataArray
    tidy3d.DiffractionDataArray
    tidy3d.DirectivityDataArray
+   tidy3d.AxialRatioDataArray
