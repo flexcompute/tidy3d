@@ -566,6 +566,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _get_epsilon(self, freq: float) -> ArrayComplex4D:
         """Compute the epsilon tensor in the plane. Order of components is xx, xy, xz, yx, etc."""
+        print("******* '_get_epsilon_' from local********")
         eps_keys = ["Ex", "Exy", "Exz", "Eyx", "Ey", "Eyz", "Ezx", "Ezy", "Ez"]
         eps_tensor = [
             self.simulation.epsilon_on_grid(self._solver_grid, key, freq) for key in eps_keys
@@ -638,7 +639,7 @@ class ModeSolver(Tidy3dBaseModel):
         symmetry: Tuple[Symmetry, Symmetry],
     ) -> Tuple[List[float], List[Dict[str, ArrayComplex4D]], List[EpsSpecType]]:
         """Call the mode solver at all requested frequencies."""
-
+        print("******* '_solver_all_freqs' from local********")
         fields = []
         n_complex = []
         eps_spec = []
@@ -698,7 +699,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         The fields are rotated from propagation coordinates back to global coordinates.
         """
-
+        print("******* '_solver_single_freqs' from local********")
         if not LOCAL_SOLVER_IMPORTED:
             raise ImportError(IMPORT_ERROR_MSG)
 
