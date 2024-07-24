@@ -10,6 +10,8 @@ from .types import TYPE_TAG_STR
 
 # Default Courant number reduction rate in PEC conformal's scheme
 DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL = 0.3
+# Default Courant number reduction rate in Surface impedance conformal's scheme
+DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL = 0.0
 
 
 class AbstractSubpixelAveragingMethod(Tidy3dBaseModel):
@@ -118,6 +120,16 @@ class SurfaceImpedance(PECConformal):
     """Apply 1st order (Leontovich) surface impedance boundary condition to
     structure made of ``td.LossyMetal``.
     """
+
+    timestep_reduction: float = pd.Field(
+        DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL,
+        title="Time Step Size Reduction Rate",
+        description="Reduction factor between 0 and 1 such that the simulation's time step size "
+        "will be ``1 - timestep_reduction`` times its default value. "
+        "Accuracy can be improved with a smaller time step size, but simulation time increased as well.",
+        lt=1,
+        ge=0,
+    )
 
 
 GoodConductorSubpixelType = Union[Staircasing, VolumetricAveraging, SurfaceImpedance]
