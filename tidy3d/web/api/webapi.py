@@ -952,7 +952,7 @@ def account(verbose=True) -> Account:
             cycle_end = cycle_end_date.strftime("%Y-%m-%d %H:%M:%S")
             message += f"{cycle_type} FlexCredit balance: {cycle_amount:.2f} and expiration date: {cycle_end}. "
         if free_simulation_counts is not None:
-            message += f"Daily free simulation counts: {free_simulation_counts}."
+            message += f"Remaining daily free simulations: {free_simulation_counts}."
 
         console.log(message)
 
