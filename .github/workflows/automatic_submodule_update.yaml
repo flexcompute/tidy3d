@@ -1,9 +1,11 @@
-name: Automatic Submodule Update on Request
+name: request-driven-submodule-update
 
 on:
   workflow_dispatch:
   repository_dispatch:
-    types: [submodule_update]
+    types: [
+      submodule_update
+    ]
 
 jobs:
   update-submodule:
