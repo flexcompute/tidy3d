@@ -1,0 +1,32 @@
+name: Automatic Submodule Update on Request
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [submodule_update]
+
+jobs:
+  update-submodule:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Update specific submodule
+        run: |
+          SUBMODULE=${{ github.event.client_payload.submodule }}
+          BRANCH=${{ github.event.client_payload.branch }}
+          
+          git config --file=.gitmodules submodule.$SUBMODULE.branch $BRANCH
+          git submodule update --remote $SUBMODULE
+          git add $SUBMODULE
+          git commit -m "Update submodule $SUBMODULE to latest commit on branch $BRANCH"
+          git push origin HEAD
+
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
