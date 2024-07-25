@@ -15,18 +15,41 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify Payload
+        run: |
+          echo ${{ github.event.client_payload }}
+
       - name: Update specific submodule
         run: |
           SUBMODULE=${{ github.event.client_payload.submodule }}
           BRANCH=${{ github.event.client_payload.branch }}
           
-          git config --file=.gitmodules submodule.$SUBMODULE.branch $BRANCH
-          git submodule update --remote $SUBMODULE
-          git add $SUBMODULE
-          git commit -m "Update submodule $SUBMODULE to latest commit on branch $BRANCH"
+          # Checkout the frontend branch that mirrors the submodule branch
+          git checkout ${{ github.event.client_payload.branch }}
+          
+          # Update the latest submodules from the remote
+          if [ "$SUBMODULE" == "flexcompute/tidy3d-notebooks" ]; then
+            cd docs/notebooks
+            git checkout $BRANCH
+            git pull origin $BRANCH
+            
+            cd ../../
+            git add docs/notebooks
+          
+          elif [ "$SUBMODULE" == "flexcompute/tidy3d-faq" ]; then
+            cd docs/faq
+            git checkout $BRANCH
+            git pull origin $BRANCH
+            cd ../../
+            git add docs/faq
+          
+          else
+            echo "Submodule $SUBMODULE not recognized. Debug the request."
+            exit 1
+          
+          fi
+          
+          git commit -m ":robot: Automatic submodule $SUBMODULE update triggered from branch $BRANCH"
+          
+          # Update corresponding branch
           git push origin HEAD
-
-      - name: Push changes
-        uses: ad-m/github-push-action@v0.6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
