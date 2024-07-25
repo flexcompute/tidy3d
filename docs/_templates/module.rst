@@ -27,7 +27,7 @@
    .. autosummary::
        :toctree:
        {% for item in methods %}
-            {{ item }}
+         {{ item }}
        {%- endfor %}
        {% endif %}
        {% endblock %}
