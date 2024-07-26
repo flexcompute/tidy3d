@@ -1,7 +1,7 @@
 """Defines the methods used for parameter sweep."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Literal, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -9,7 +9,6 @@ import scipy.stats.qmc as qmc
 
 from ...components.base import Tidy3dBaseModel
 from ...constants import inf
-from ...log import log
 from .parameter import ParameterAny, ParameterFloat, ParameterInt, ParameterType
 
 DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube
@@ -24,7 +23,11 @@ class Method(Tidy3dBaseModel, ABC):
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
-    def _force_int(self, next_point: dict, parameters: list):
+    @abstractmethod
+    def get_run_count(self, parameters: list = None) -> int:
+        """Return the maximum number of runs for the method based on current method arguments."""
+
+    def _force_int(self, next_point: dict, parameters: list) -> None:
         """Convert a float asigned to an int parameter to be an int. Update dict in place."""
 
         for param in parameters:
@@ -35,18 +38,34 @@ class Method(Tidy3dBaseModel, ABC):
     @staticmethod
     def _extract_output(output: list, sampler: bool = False) -> Tuple:
         """Format the user function output for further optimization and result storage."""
+        # Light check if all the outputs are the same type
+        # If the user has supplied multiple returns this may catch it
+        # If the user has multiple returns and it passes this then it's less likely to cause further problems
+        if not all(isinstance(val, type(output[0])) for val in output):
+            raise ValueError(
+                "Unrecognized output from supplied post function. The type of output varies across the output."
+                "Use of multiple return functions in fn_post is discouraged."
+                "If this is a problem please raise an issue on the Tidy3D Github page."
+            )
+
         if sampler:
             return output
 
         if all(isinstance(val, (float, int)) for val in output):
             # No aux_out
-            return (output, None)
+            none_aux = [None for _ in range(len(output))]
+            return (output, none_aux)
 
         if all(isinstance(val, (list, Tuple)) for val in output):
             if all(isinstance(val[0], (float, int)) for val in output):
                 float_out = []
                 aux_out = []
                 for val in output:
+                    if len(val) > 2:
+                        raise ValueError(
+                            "Unrecognized output from supplied post function. Too many elements in the return object, it should be a float and a list/tuple/dict."
+                        )
+
                     float_out.append(val[0])
                     aux_out.append(val[1])
 
@@ -55,16 +74,17 @@ class Method(Tidy3dBaseModel, ABC):
 
             else:
                 raise ValueError(
-                    "Unrecognised output from supplied run function. The first element in the iterable object should be a float."
+                    "Unrecognized output from supplied post function. The first element in the iterable object should be a float."
                 )
 
         else:
             raise ValueError(
-                "Unrecognised output from supplied run function. Output should be a float or an iterable object."
+                "Unrecognized output from supplied post function. Output should be a float or an iterable object."
             )
 
     @staticmethod
-    def _flatten_and_append(list_of_lists: list[list], append_target: list):
+    def _flatten_and_append(list_of_lists: list[list], append_target: list) -> None:
+        """Flatten a list of lists and append the sublist to a new list."""
         if list_of_lists is not None:
             for sub_list in list_of_lists:
                 append_target.append(sub_list)
@@ -110,6 +130,9 @@ class MethodGrid(MethodSample):
     >>> method = tdd.MethodGrid()
     """
 
+    def get_run_count(self, parameters: list) -> int:
+        return len(self.sample(parameters))
+
     @staticmethod
     def sample(parameters: Tuple[ParameterType, ...]) -> Dict[str, Any]:
         """Defines how the design parameters are sampled on grid."""
@@ -154,7 +177,7 @@ class MethodOptimize(Method, ABC):
 
         return sol_dict_list
 
-    def _handle_param_convert(self, param_converter, sol_dict_list):
+    def _handle_param_convert(self, param_converter: dict, sol_dict_list: list[dict]) -> None:
         for param, convert in param_converter.items():
             for sol in sol_dict_list:
                 if isinstance(sol[param], float):
@@ -167,33 +190,36 @@ class MethodBayOpt(MethodOptimize, ABC):
 
     initial_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of initial random search iterations.",
+        title="Number of initial random search iterations",
         description="The number of search runs to be done initialially with parameter values picked randomly. This provides a starting point for the Gaussian processor to optimize from.",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of bayesian optimization iterations.",
+        title="Number of bayesian optimization iterations",
         description="The number of iterations the Gaussian processor should be sequentially called to suggest parameter values and evaluate the results.",
     )
 
-    acq_func: Optional[Literal["ucb", "ei", "poi"]] = pd.Field(
+    acq_func: Literal["ucb", "ei", "poi"] = pd.Field(
         default="ucb",
-        title="Type of acquisition function.",
+        title="Type of acquisition function",
         description="The style of acquisition function that should be used to suggest parameter values. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
     )
 
-    kappa: Optional[pd.PositiveFloat] = pd.Field(
+    kappa: pd.PositiveFloat = pd.Field(
         default=2.5,
-        title="Kappa.",
-        description="The kappa coefficient used by the 'ucb' acquisition function.",
+        title="Kappa",
+        description="The kappa coefficient used by the ``ucb`` acquisition function.",
     )
 
-    xi: Optional[pd.NonNegativeFloat] = pd.Field(
+    xi: pd.NonNegativeFloat = pd.Field(
         default=0.0,
-        title="Xi.",
-        description="The Xi coefficient used by the 'ei' and 'poi' acquisition functions",
+        title="Xi",
+        description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions",
     )
+
+    def get_run_count(self, parameters: list = None) -> int:
+        return self.initial_iter + self.n_iter
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
         """Defines the search algorithm for BayOpt"""
@@ -201,7 +227,7 @@ class MethodBayOpt(MethodOptimize, ABC):
             from bayes_opt import BayesianOptimization, UtilityFunction
         except ImportError:
             raise ImportError(
-                "Cannot run bayesian optimization as bayes_opt module not found. Please check installation."
+                "Cannot run bayesian optimization as 'bayes_opt' module not found. Please check installation or run 'pip install bayesian-optimization'."
             )
 
         param_converter = {}
@@ -254,6 +280,8 @@ class MethodBayOpt(MethodOptimize, ABC):
             next_out, aux_out = self._extract_output(run_fn([next_point]))
             result.append(next_out[0])
             self._flatten_and_append(aux_out, total_aux_out)
+
+            # ParameterAny values in next_point need to be converted back for the optimizer
             self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out[0])
 
@@ -266,6 +294,7 @@ class MethodBayOpt(MethodOptimize, ABC):
         # Output fn_args from the BO.opt object - getting results in situ as opt changes type to float
         fn_args = []
         for output in opt.res:
+            self._handle_param_convert(param_converter, [output["params"]])
             fn_args.append(output["params"])
 
         return fn_args, result, total_aux_out, opt
@@ -277,65 +306,86 @@ class MethodGenAlg(MethodOptimize, ABC):
     # Args for the user
     solutions_per_pop: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of solutions per population.",
+        title="Number of solutions per population",
         description="The number of solutions to be generated for each population.",
     )
 
     n_generations: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of generations.",
+        title="Number of generations",
         description="The maximum number of generations to run the genetic algorithm.",
     )
 
     n_parents_mating: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of parents mating.",
+        title="Number of parents mating",
         description="The number of solutions to be selected as parents for the next generation.",
     )
 
-    stop_criteria: Optional[pd.constr(regex=r"\b(?:reach|saturate)_\d+\b")] = pd.Field(
+    stop_criteria_type: Literal["reach", "saturate"] = pd.Field(
         default=None,
-        title="Early stopping criteria.",
-        description="Define the early stopping criteria. Supported words are 'reach_X' or 'saturate_X' where X is a number. See PyGAD docs for more details.",
+        title="Early stopping criteria type",
+        description="Define the early stopping criteria. Supported words are 'reach' or 'saturate'. 'reach' stops at a desired fitness, 'saturate' stops when the fitness stops improving. Must set ``stop_criteria_number``. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
-    parent_selection_type: Optional[
-        Literal["sss", "rws", "sus", "rank", "random", "tournament"]
-    ] = pd.Field(
+    stop_criteria_number: pd.PositiveInt = pd.Field(
+        default=None,
+        title="Early stopping criteria number",
+        description="Must set ``stop_criteria_type``. If type is 'reach' the number is acceptable fitness value to stop the optimization. If type is 'saturate' the number is the number generations where the fitness doesn't improve before optimization is stopped. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+    )
+
+    parent_selection_type: Literal["sss", "rws", "sus", "rank", "random", "tournament"] = pd.Field(
         default="sss",
-        title="Parent selection type.",
-        description="The style of parent selector. See the PyGAD docs for more details.",
+        title="Parent selection type",
+        description="The style of parent selector. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
-    crossover_type: Optional[Literal["single_point", "two_points", "uniform", "scattered"]] = (
+    keep_parents: Union[pd.PositiveInt, Literal[-1, 0]] = pd.Field(
+        default=-1,
+        title="Keep parents",
+        description="The style of parent selector. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+    )
+
+    crossover_type: Union[None, Literal["single_point", "two_points", "uniform", "scattered"]] = (
         pd.Field(
             default="single_point",
-            title="Crossover type.",
-            description="The style of crossover operation. See the PyGAD docs for more details.",
+            title="Crossover type",
+            description="The style of crossover operation. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
         )
     )
 
-    crossover_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+    crossover_prob: pd.confloat(ge=0, le=1) = pd.Field(
         default=0.8,
-        title="Crossover probability.",
+        title="Crossover probability",
         description="The probability of performing a crossover between two parents.",
     )
 
-    mutation_type: Optional[Literal["random", "swap", "inversion", "scramble", "adaptive"]] = (
+    mutation_type: Union[None, Literal["random", "swap", "inversion", "scramble", "adaptive"]] = (
         pd.Field(
             default="random",
-            title="Crossover type.",
+            title="Crossover type",
             description="The style of gene mutation.",
         )
     )
 
-    mutation_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+    mutation_prob: pd.confloat(ge=0, le=1) = pd.Field(
         default=0.2,
-        title="Crossover probability.",
+        title="Crossover probability",
         description="The probability of mutating a gene.",
     )
 
+    save_solution: pd.StrictBool = pd.Field(
+        default=False,
+        title="Save solutions",
+        description="Save all solutions from all generations within a numpy array. Can be accessed from the optimizer object stored in the Result. May cause memory issues with large populations or many generations. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+    )
+
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
+
+    def get_run_count(self, parameters: list = None) -> int:
+        # +1 to generations as pygad creates an initial population which is effectively "Generation 0"
+        run_count = self.solutions_per_pop * (self.n_generations + 1)
+        return run_count
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
         """Defines the search algorithm for the GA"""
@@ -343,7 +393,7 @@ class MethodGenAlg(MethodOptimize, ABC):
             import pygad
         except ImportError:
             raise ImportError(
-                "Cannot run genetic algorithm optimization as pygad module not found. Please check installation."
+                "Cannot run genetic algorithm optimization as 'pygad' module not found. Please check installation or run 'pip install pygad'."
             )
 
         # Make param names available to the fitness function
@@ -353,6 +403,7 @@ class MethodGenAlg(MethodOptimize, ABC):
         store_parameters = []
         store_fitness = []
         store_aux = []
+        previous_solutions = {}
 
         # Set gene_spaces to keep GA within ranges
         param_converter = {}
@@ -374,36 +425,112 @@ class MethodGenAlg(MethodOptimize, ABC):
                 gene_spaces.append(range(0, len(param.allowed_values)))
                 gene_types.append(int)
 
-        # Create fitness function combining pre and post fn with the tidy3d call
-        def fitness_function(ga_instance, solution, solution_idx):
-            # Break solution down to dict
-            sol_dict = self.sol_array_to_dict(solution, param_keys, param_converter)
-
-            # Iterate through solutions for batched and non-batched data
-            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
+        def capture_aux(sol_dict_list):
+            """Store the aux data by pulling from previous_solutions."""
+            aux_out = []
+            for sol in sol_dict_list:
+                composite_key = str(sol.keys()) + str(sol.values())
+                _, aux_data = previous_solutions[composite_key]
+                aux_out.append(aux_data)
 
             self._flatten_and_append(aux_out, store_aux)
+
+        # Create fitness function combining pre and post fn with the tidy3d call
+        def fitness_function(ga_instance, solution, solution_idx):
+            # Break solution down to list of dict
+            sol_dict_list = self.sol_array_to_dict(solution, param_keys, param_converter)
+
+            # Check if solution already exists
+            # Have to update the solutions as need to pass to run_fn together to be batched
+            known_sol = {}
+            unknown_sol = []
+            unknown_keys = []
+            for sol_idx, sol in enumerate(sol_dict_list):
+                composite_key = str(sol.keys()) + str(sol.values())
+
+                if composite_key in previous_solutions:
+                    known_sol[sol_idx] = composite_key
+                else:
+                    # Catches when PyGAD proposes the same solution multiple times in the same generation
+                    if composite_key in unknown_keys:
+                        # This keeps known_sol ordered correctly so that it inserts at the correct idx
+                        known_sol[sol_idx] = (
+                            composite_key  # We'll fill the result once it's been run the first time
+                        )
+
+                    # For totally unknown solutions
+                    else:
+                        unknown_sol.append(sol)
+                        unknown_keys.append(composite_key)
+
+            # Run unknown solutions
+            sol_out, aux_out = self._extract_output(run_fn(unknown_sol))
+
+            # Add unknown solution results to previous_solutions
+            for composite_key, sol_result, aux_result in zip(unknown_keys, sol_out, aux_out):
+                previous_solutions[composite_key] = (sol_result, aux_result)
+
+            # Add known_sol to sol_out - order must be preserved
+            # Aux data is added later as PyGAD will add repeat solutions to the population
+            for sol_idx, composite_key in known_sol.items():
+                sol, _ = previous_solutions[composite_key]
+                sol_out.insert(sol_idx, sol)
 
             return sol_out
 
         def on_generation(ga_instance):
-            store_parameters.append(ga_instance.population.copy())
+            sol_dict_list = self.sol_array_to_dict(
+                ga_instance.population.copy(), param_keys, param_converter
+            )
+            capture_aux(sol_dict_list)
+
+            store_parameters.extend(sol_dict_list)
             store_fitness.append(ga_instance.last_generation_fitness)
+
+            # Report generation progress
             if console is not None:
                 best_fitness = ga_instance.best_solution()[1]
                 console.log(
                     f"Generation {ga_instance.generations_completed} Best Fitness: {best_fitness:.3f}"
                 )
 
+        # Build stop criteria string
+        if any(val is not None for val in (self.stop_criteria_type, self.stop_criteria_number)):
+            if all(val is not None for val in (self.stop_criteria_type, self.stop_criteria_number)):
+                stop_criteria = f"{self.stop_criteria_type}_{self.stop_criteria_number}"
+            else:
+                raise ValueError(
+                    "Both ``stop_criteria_type`` and ``stop_criteria_number`` fields need to be set to define the GA stop criteria."
+                )
+        else:
+            stop_criteria = None
+
         # Determine initial array
         num_genes = len(parameters)
 
-        # define the optimizer
+        # PyGAD doesn't store the initial population fitness - this captures parameters, fitness and aux data
+        init_state = []
+
+        def capture_init_pop_fitness(ga_instance, population_fitness):
+            # Have to check len of list instead of bool as can't pass any args into this func, or capture a return
+            if not len(init_state):
+                sol_dict_list = self.sol_array_to_dict(
+                    ga_instance.initial_population.copy(), param_keys, param_converter
+                )
+                store_parameters.extend(sol_dict_list)
+                store_fitness.append(population_fitness)
+                init_state.append("Stored Init")
+
+                capture_aux(sol_dict_list)
+
+        # Define the optimizer
         ga_instance = pygad.GA(
+            on_fitness=capture_init_pop_fitness,
             num_generations=self.n_generations,
             num_parents_mating=self.n_parents_mating,
             fitness_func=fitness_function,
             parent_selection_type=self.parent_selection_type,
+            keep_parents=self.keep_parents,
             mutation_type=self.mutation_type,
             mutation_probability=self.mutation_prob,
             crossover_type=self.crossover_type,
@@ -415,8 +542,8 @@ class MethodGenAlg(MethodOptimize, ABC):
             random_seed=self.rng_seed,
             gene_space=gene_spaces,
             gene_type=gene_types,
-            stop_criteria=self.stop_criteria,
-            save_solutions=True,
+            stop_criteria=stop_criteria,
+            save_solutions=False,
         )
 
         ga_instance.run()
@@ -429,7 +556,7 @@ class MethodGenAlg(MethodOptimize, ABC):
             )
 
         # Format output
-        fn_args = [dict(zip(param_keys, val)) for arr in store_parameters for val in arr]
+        fn_args = store_parameters
         results = [val for arr in store_fitness for val in arr]
 
         return fn_args, results, store_aux, ga_instance
@@ -440,52 +567,55 @@ class MethodParticleSwarm(MethodOptimize, ABC):
 
     n_particles: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of particles in the swarm.",
+        title="Number of particles in the swarm",
         description="The number of particles to be used in the optimization.",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of iterations.",
+        title="Number of iterations",
         description="The maxmium number of iterations to run the optimization.",
     )
 
-    cognitive_coeff: Optional[pd.PositiveFloat] = pd.Field(
+    cognitive_coeff: pd.PositiveFloat = pd.Field(
         default=1.5,
-        title="Cognitive coefficient.",
+        title="Cognitive coefficient",
         description="The cognitive parameter decides how attracted the particle is to its previous best position.",
     )
 
-    social_coeff: Optional[pd.PositiveFloat] = pd.Field(
+    social_coeff: pd.PositiveFloat = pd.Field(
         default=1.5,
-        title="Social coefficient.",
+        title="Social coefficient",
         description="The social parameter decides how attracted the particle is to the global best position found by the swarm.",
     )
 
-    weight: Optional[pd.PositiveFloat] = pd.Field(
+    weight: pd.PositiveFloat = pd.Field(
         default=0.9,
-        title="Weight.",
+        title="Weight",
         description="The weight or inertia of particles in the optimization.",
     )
 
-    ftol: Optional[Union[pd.confloat(ge=0, le=1), Literal[-inf]]] = pd.Field(
+    ftol: Union[pd.confloat(ge=0, le=1), Literal[-inf]] = pd.Field(
         default=-inf,
-        title="Relative error for convergence.",
+        title="Relative error for convergence",
         description="Relative error in `objective_func(best_solution)` acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
     )
 
-    ftol_iter: Optional[pd.PositiveInt] = pd.Field(
+    ftol_iter: pd.PositiveInt = pd.Field(
         default=1,
-        title="Number of iterations before acceptable convergence.",
+        title="Number of iterations before acceptable convergence",
         description="Number of iterations over which the relative error in objective_func is acceptable for convergence.",
     )
+
+    def get_run_count(self, parameters: list = None) -> int:
+        return self.n_particles * self.n_iter
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
         try:
             from pyswarms.single.global_best import GlobalBestPSO
         except ImportError:
             raise ImportError(
-                "Cannot run particle swarm optimization as pyswarms module not found. Please check installation."
+                "Cannot run particle swarm optimization as 'pyswarms' module not found. Please check installation or run 'pip install pyswarms'."
             )
 
         # Pyswarms doesn't have a seed set outside of numpy std method
@@ -515,13 +645,13 @@ class MethodParticleSwarm(MethodOptimize, ABC):
 
         def fitness_function(solution):
             # Correct solutions that should be ints
-            sol_dict = self.sol_array_to_dict(solution, param_keys, param_converter)
-            for arg_dict in sol_dict:
+            sol_dict_list = self.sol_array_to_dict(solution, param_keys, param_converter)
+            for arg_dict in sol_dict_list:
                 self._force_int(arg_dict, parameters)
 
-            store_parameters.append(sol_dict)
+            store_parameters.append(sol_dict_list)
 
-            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
+            sol_out, aux_out = self._extract_output(run_fn(sol_dict_list))
 
             self._flatten_and_append(aux_out, store_aux)
 
@@ -576,6 +706,9 @@ class AbstractMethodRandom(MethodSample, ABC):
     def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
+    def get_run_count(self, parameters: list = None) -> int:
+        return self.num_points
+
     def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
         """Defines how the design parameters are sampled on grid."""
 
@@ -612,140 +745,9 @@ class MethodMonteCarlo(AbstractMethodRandom):
         return DEFAULT_MONTE_CARLO_SAMPLER_TYPE(d=d, seed=self.rng_seed)
 
 
-class MethodRandom(AbstractMethodRandom):
-    """Select sampling points uniformly at random.
-
-    Example
-    -------
-    >>> import tidy3d.plugins.design as tdd
-    >>> method = tdd.MethodRandom(num_points=20, monte_carlo_warning=False)
-    """
-
-    monte_carlo_warning: bool = pd.Field(
-        True,
-        title="Monte Carlo Suggestion",
-        description="We recommend you use ``MethodMonteCarlo`` as it is more efficient at sampling."
-        " Setting this field to ``False`` will disable the "
-        "warning that occurs when this class is made.",
-    )
-
-    @pd.validator("monte_carlo_warning", always=True)
-    def _suggest_monte_carlo(cls, val):
-        """Suggest that the user use ``MethodMonteCarlo`` instead of this method."""
-        if val:
-            log.warning(
-                "We recommend using the Monte Carlo method to sample your design space instead of "
-                "this method, which samples uniformly at random. Monte Carlo is more efficient at "
-                "sampling and generally needs fewer points than uniform random sampling. "
-                "Please consider using 'sweep.MethodMonteCarlo'. "
-                "If you are intentionally using uniform random sampling, "
-                "you can disable this warning by setting 'monte_carlo_warning=False' "
-                "in 'MethodRandom'."
-            )
-        return val
-
-    def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
-        """Sampler for this ``Method`` class."""
-
-        d = len(parameters)
-        np.random.seed(self.rng_seed)
-
-        class UniformRandomSampler:
-            """Has ``.random(n)`` returning ``(n, d)`` array sampled random uniformly in [0, 1]."""
-
-            def random(self, n) -> np.ndarray:
-                """Return ``(n, d)``-shaped array sampled uniformly at random in range [0, 1]."""
-                return np.random.random((n, d))
-
-        return UniformRandomSampler()
-
-
-class MethodRandomCustom(AbstractMethodRandom):
-    """Select parameters with an object with a user supplied sampler with a ``.random`` method.
-
-    Example
-    -------
-    >>> import tidy3d.plugins.design as tdd
-    >>> import scipy.stats.qmc as qmc
-    >>> sampler = qmc.Halton(d=3)
-    >>> method = tdd.MethodRandomCustom(num_points=20, sampler=sampler)
-    """
-
-    sampler: Any = pd.Field(
-        None,
-        title="Custom Sampler",
-        description="An object with a ``.random(n)`` method, which returns a ``np.ndarray`` "
-        "of shape ``(n, d)`` where d is the number of dimensions of the design space. "
-        "Values must lie between [0, 1] and will be re-scaled depending on the design parameters. "
-        " Compatible objects include instances of ``scipy.stats.qmc.QMCEngine``, but other objects "
-        " can also be supplied.",
-    )
-
-    sampler_kwargs: Any = pd.Field(
-        {},
-        title="Keyword arguments for sampler",
-        description="Kwarg input that is passed to the sampler and unpacked when the sampler is initialized.",
-    )
-
-    # @pd.validator("sampler")
-    def _check_sampler(cls, val):
-        """make sure sampler has required methods."""
-        if not hasattr(val, "random"):
-            raise ValueError(
-                "Sampler must have a 'random(n)' method, "
-                "returning a numpy array of shape '(n, d)' where 'd' is the number of dimensions "
-                "in the design space."
-            )
-        n = 30
-        sample_values = val.random(n)
-        if not isinstance(sample_values, np.ndarray):
-            raise ValueError(
-                f"'sampler.random(n)' must return a 'np.ndarray' object, got {type(sample_values)}."
-            )
-        sample_shape = sample_values.shape
-        if len(sample_shape) != 2:
-            raise ValueError(
-                f"The 'sampler.random(n)' method must give a 'np.ndarray of shape (n, d)', "
-                "where 'd' is the number of dimensions in the design parameters. "
-                f"Supplied sampler gave an array with {len(sample_shape)} dimensions."
-            )
-        if sample_shape[0] != n:
-            raise ValueError(
-                f"The 'sampler.random(n)' method must give a 'np.ndarray of shape (n, d)', "
-                "where 'd' is the number of dimensions in the design parameters. "
-                f"Supplied sampler gave an array of shape ({sample_shape[0]}, d)."
-            )
-        if np.any(sample_values > 1) or np.any(sample_values < 0):
-            raise ValueError(
-                "The 'sampler.random(n)' method must give a 'np.ndarray of shape (n, d)' where all "
-                "values lie between 0 and 1. After the points are generated, "
-                "their values will be resampled appropriately depending "
-                "on the 'parameters' used in the parameter sweep 'DesignSpace'."
-            )
-        return val
-
-    def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
-        """Sampler for this ``Method`` class. If ``None``, sets a default."""
-
-        loaded_sampler = self.sampler(**self.sampler_kwargs)
-        self._check_sampler(loaded_sampler)
-        num_dims_vars = len(parameters)
-        num_dims_sampler = loaded_sampler.random(1).size
-
-        if num_dims_sampler != num_dims_vars:
-            raise ValueError(
-                f"The sampler {self.sampler} has {num_dims_sampler} dimensions, "
-                f"but the design space has {num_dims_vars} dimensions. These must be equivalent. "
-            )
-
-        return loaded_sampler
-
-
 MethodType = Union[
     MethodMonteCarlo,
     MethodGrid,
-    MethodRandom,
-    MethodRandomCustom,
     MethodBayOpt,
     MethodGenAlg,
     MethodParticleSwarm,

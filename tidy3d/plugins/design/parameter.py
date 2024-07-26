@@ -51,6 +51,10 @@ class Parameter(Tidy3dBaseModel, ABC):
     def select_from_01(self, pts_01: np.ndarray) -> List[Any]:
         """Select values given a set of points between 0, 1."""
 
+    @abstractmethod
+    def sample_first(self) -> Any:
+        """Output the first allowed sample."""
+
 
 class ParameterNumeric(Parameter, ABC):
     """A variable with numeric values."""
@@ -77,6 +81,9 @@ class ParameterNumeric(Parameter, ABC):
         span_min = min(self.span)
         span_max = max(self.span)
         return span_max - span_min
+
+    def sample_first(self) -> tuple:
+        return self.span[0]
 
 
 class ParameterFloat(ParameterNumeric):
@@ -202,6 +209,9 @@ class ParameterAny(Parameter):
         pts_continuous = pts_01 * len(self.allowed_values)
         indices = np.floor(pts_continuous).astype(int)
         return np.array(self.allowed_values)[indices].tolist()
+
+    def sample_first(self) -> Any:
+        return self.allowed_values[0]
 
 
 ParameterType = Union[ParameterInt, ParameterFloat, ParameterAny]

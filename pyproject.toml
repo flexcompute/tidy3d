@@ -75,7 +75,7 @@ jax = { version = "0.4.25", extras = [
 
 # design
 bayesian-optimization = { version = "*", optional = true }
-pygad = { version = "*", optional = true }
+pygad = { version = "3.3.1", optional = true }
 pyswarms = { version = "*", optional = true }
 
 # scikit-rf

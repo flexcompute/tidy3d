@@ -76,10 +76,10 @@ class Result(Tidy3dBaseModel):
         description="The auxiliary return values from the design problem function. These weren't used to inform the optimizer, if one was used.",
     )
 
-    opt_output: Any = pd.Field(
+    optimizer: Any = pd.Field(
         None,
-        title="Plots produced through design method",
-        description="Plot objects captured over the course of the design method run.",
+        title="Optimizer object",
+        description="The optimizer returned at the end of an optimizer run. Can be used to analyze and plot how the optimization progressed. Will be None for sampling based methods.",
     )
 
     @pd.validator("coords", always=True)
@@ -208,6 +208,11 @@ class Result(Tidy3dBaseModel):
 
                 columns = columns + aux_keys
                 data = expanded_data
+
+            else:
+                raise ValueError(
+                    "``include_aux`` is True but no ``aux_values`` were found in the ``Results``."
+                )
 
         df = pandas.DataFrame(data=data, columns=columns)
 
@@ -353,7 +358,7 @@ class Result(Tidy3dBaseModel):
 
         # ParticleSwarm optimizer doesn't work with updated_copy
         # Creating new result with updated values and coords instead
-        if self.opt_output is not None:
+        if self.optimizer is not None:
             new_result = Result(
                 dims=self.dims,
                 values=new_values,
@@ -362,7 +367,7 @@ class Result(Tidy3dBaseModel):
                 fn_source=self.fn_source,
                 task_ids=self.task_ids,
                 aux_values=self.aux_values,
-                opt_output=self.opt_output,
+                optimizer=self.optimizer,
             )
             return new_result
 
@@ -389,7 +394,7 @@ class Result(Tidy3dBaseModel):
 
         # ParticleSwarm optimizer doesn't work with updated_copy
         # Creating new result with updated values and coords instead
-        if self.opt_output is not None:
+        if self.optimizer is not None:
             new_result = Result(
                 dims=self.dims,
                 values=new_values,
@@ -398,7 +403,7 @@ class Result(Tidy3dBaseModel):
                 fn_source=self.fn_source,
                 task_ids=self.task_ids,
                 aux_values=self.aux_values,
-                opt_output=self.opt_output,
+                optimizer=self.optimizer,
             )
             return new_result
 

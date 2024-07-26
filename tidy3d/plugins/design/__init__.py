@@ -7,8 +7,6 @@ from .method import (
     MethodGrid,
     MethodMonteCarlo,
     MethodParticleSwarm,
-    MethodRandom,
-    MethodRandomCustom,
 )
 from .parameter import ParameterAny, ParameterFloat, ParameterInt
 from .result import Result
@@ -21,8 +19,6 @@ __all__ = [
     "Result",
     "MethodMonteCarlo",
     "MethodGrid",
-    "MethodRandomCustom",
-    "MethodRandom",
     "MethodBayOpt",
     "MethodGenAlg",
     "MethodParticleSwarm",
