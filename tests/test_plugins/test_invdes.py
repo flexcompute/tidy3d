@@ -44,6 +44,16 @@ simulation = td.Simulation(
 )
 
 
+@pytest.fixture
+def use_emulated_to_sim_data(monkeypatch):
+    """Emulate the InverseDesign.to_simulation_data to call emulated run."""
+    monkeypatch.setattr(
+        tdi.InverseDesign,
+        "to_simulation_data",
+        lambda self, params, **kwargs: run_emulated(self.simulation, task_name="test"),
+    )
+
+
 def make_design_region():
     """Make a ``TopologyDesignRegion``."""
 
@@ -170,8 +180,10 @@ class MockSimData:
         return MockDataArray()
 
 
-def test_invdes_simulation_data(use_emulated_run):  # noqa: F811
+def test_invdes_simulation_data(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
     """Test convenience function to convert ``InverseDesign`` to simulation and run it."""
+
+    # monkeypatch.setattr(tdi.InverseDesign, "to_simulation_data", lambda self, params, **kwargs: run_emulated(self.simulation, task_name='test'))
 
     invdes = make_invdes()
     params = invdes.design_region.params_random
@@ -351,6 +363,7 @@ def test_continue_run_from_file(use_emulated_run):  # noqa: F811
 
 def test_result(
     use_emulated_run,  # noqa: F811
+    use_emulated_to_sim_data,
     tmp_path,
 ):
     """Test methods of the ``InverseDesignResult`` object."""
@@ -368,7 +381,7 @@ def test_result(
     _ = result.sim_data_last(task_name="last")
 
 
-def test_result_data(use_emulated_run):  # noqa: F811
+def test_result_data(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
     """Test methods of the ``InverseDesignResult`` object."""
 
     result = make_result(use_emulated_run)
