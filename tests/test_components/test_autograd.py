@@ -673,6 +673,31 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
     val, grad = ag.value_and_grad(objective)(params0)
 
 
+@pytest.mark.parametrize("structure_key, monitor_key", (("custom_med", "mode"),))
+def test_autograd_async_server(use_emulated_run_async, structure_key, monitor_key):
+    """Test an async objective function through tidy3d autograd."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        sims = {"autograd_test1": sim, "autograd_test2": sim}
+        batch_data = run_async(sims, verbose=False, local_gradient=False)
+        value = 0.0
+        for _, sim_data in batch_data.items():
+            value = value + postprocess(sim_data)
+        return value
+
+        val, grad = ag.value_and_grad(objective)(params0)
+        print(val, grad)
+        assert anp.all(grad != 0.0), "some gradients are 0"
+
+    val, grad = ag.value_and_grad(objective)(params0)
+
+
 @pytest.mark.parametrize("structure_key", ("custom_med",))
 def test_sim_full_ops(structure_key):
     """make sure the autograd operations don't error on a simulation containing everything."""
