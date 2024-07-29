@@ -137,7 +137,7 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_fwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
-
+            task_id_fwd = task_name
             if run_kwargs.get("simulation_type") == "autograd_fwd":
                 sim_original = simulation
                 sim_fields_keys = sim_original.attrs[SIM_FIELDS_KEYS_TAG]
@@ -164,6 +164,8 @@ def use_emulated_run(monkeypatch):
         def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
 
+            task_id_fwd = task_name[:-8]
+
             # run the adjoint sim
             sim_data_adj = run_emulated(simulation, task_name="task_name")
 
@@ -185,34 +187,34 @@ def use_emulated_run(monkeypatch):
 
             return traced_fields_vjp
 
+        def emulated_run_async_fwd(simulations, **run_kwargs) -> td.SimulationData:
+            batch_data_orig, task_ids_fwd = {}, {}
+            for task_name, simulation in simulations.items():
+                sim_data_orig, task_id_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
+                batch_data_orig[task_name] = sim_data_orig
+                task_ids_fwd[task_name] = task_id_fwd
+
+            return batch_data_orig, task_ids_fwd
+
+        def emulated_run_async_bwd(simulations, **run_kwargs) -> td.SimulationData:
+            vjp_dict = {}
+            for task_name, simulation in simulations.items():
+                task_id_fwd = task_name[:-8]
+                vjp_dict[task_name] = emulated_run_bwd(simulation, task_name, **run_kwargs)
+            return vjp_dict
+
         monkeypatch.setattr(webapi, "run", run_emulated)
         monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
         monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d_bwd", emulated_run_bwd)
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d", emulated_run_async_fwd
+        )
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d_bwd", emulated_run_async_bwd
+        )
 
         _run_was_emulated[0] = True
-
-
-@pytest.fixture
-def use_emulated_run_async(monkeypatch):
-    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
-
-    if TEST_MODE in ("pipeline", "speed"):
-        import tidy3d.web.api.asynchronous as asynchronous
-
-        def run_async_emulated(simulations, **kwargs):
-            """Mock version of ``run_async``."""
-            return {
-                task_name: run_emulated(sim, task_name=task_name)
-                for task_name, sim in simulations.items()
-            }
-
-        monkeypatch.setattr(asynchronous, "run_async", run_async_emulated)
-        _run_was_emulated[0] = True
-
-        # import here so it uses emulated run
-        from tidy3d.web.api.autograd import autograd
-
-        reload(autograd)
+        return emulated_run_fwd, emulated_run_bwd
 
 
 def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
@@ -591,7 +593,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
+def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
     fn_dict = get_functions(structure_key, monitor_key)
@@ -673,7 +675,7 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", (("custom_med", "mode"),))
-def test_autograd_async_server(use_emulated_run_async, structure_key, monitor_key):
+def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
     """Test an async objective function through tidy3d autograd."""
 
     fn_dict = get_functions(structure_key, monitor_key)
