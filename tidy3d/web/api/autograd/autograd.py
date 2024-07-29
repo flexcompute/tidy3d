@@ -673,7 +673,14 @@ def _run_async_bwd(
             run_async_kwargs["parent_tasks"] = parent_tasks
             run_async_kwargs["simulation_type"] = "autograd_bwd"
 
-            sim_fields_vjp_dict = _run_async_tidy3d_bwd(simulations=sims_adj, **run_async_kwargs)
+            sim_fields_vjp_dict_adj_keys = _run_async_tidy3d_bwd(
+                simulations=sims_adj, **run_async_kwargs
+            )
+
+            # swap adjoint task_names for original task_names
+            sim_fields_vjp_dict = {}
+            for task_name_fwd, task_name_adj in zip(task_names, task_names_adj):
+                sim_fields_vjp_dict[task_name_fwd] = sim_fields_vjp_dict_adj_keys[task_name_adj]
 
         return sim_fields_vjp_dict
 

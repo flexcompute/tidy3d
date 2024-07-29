@@ -190,29 +190,49 @@ def use_emulated_run(monkeypatch):
         monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d_bwd", emulated_run_bwd)
 
         _run_was_emulated[0] = True
+        return emulated_run_fwd, emulated_run_bwd
 
 
 @pytest.fixture
-def use_emulated_run_async(monkeypatch):
+def use_emulated_run_async(monkeypatch, use_emulated_run):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
+    import tidy3d
+
+    emulated_run_fwd, emulated_run_bwd = use_emulated_run
+
+    # cache_dict = defaultdict(dict)
+
     if TEST_MODE in ("pipeline", "speed"):
-        import tidy3d.web.api.asynchronous as asynchronous
 
-        def run_async_emulated(simulations, **kwargs):
+        def run_async_fwd_emulated(simulations, **kwargs):
             """Mock version of ``run_async``."""
-            return {
-                task_name: run_emulated(sim, task_name=task_name)
-                for task_name, sim in simulations.items()
-            }
+            data_dict = {}
+            task_id_dict = {}
+            for task_name, sim in simulations.items():
+                sim_data_fwd, task_id_fwd = emulated_run_fwd(sim, task_name=task_name)
+                data_dict[task_name] = sim_data_fwd
+                task_id_dict[task_name] = task_id_fwd
+                # cache_dict[task_id_fwd] = copy.copy(aux_data)
+                # cache_dict[task_id_fwd][AUX_KEY_SIM_FIELDS_ORIGINAL] = sim_fields
+            return data_dict, task_id_dict
 
-        monkeypatch.setattr(asynchronous, "run_async", run_async_emulated)
+        def run_async_bwd_emulated(simulations, **kwargs):
+            """Mock version of ``run_async``."""
+            traced_fields_vjp_dict = {}
+            for task_name_adj, sim_adj in simulations.items():
+                traced_fields_vjp = emulated_run_bwd(sim_adj, task_name=task_name_adj)
+                traced_fields_vjp_dict[task_name_adj] = traced_fields_vjp
+            return traced_fields_vjp_dict
+
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d", run_async_fwd_emulated
+        )
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d_bwd", run_async_bwd_emulated
+        )
+
         _run_was_emulated[0] = True
-
-        # import here so it uses emulated run
-        from tidy3d.web.api.autograd import autograd
-
-        reload(autograd)
 
 
 def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
