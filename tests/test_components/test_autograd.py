@@ -120,7 +120,6 @@ def use_emulated_run(monkeypatch):
     import tidy3d
 
     if TEST_MODE in ("pipeline", "speed"):
-        AUX_KEY_SIM_FIELDS_ORIGINAL = "sim_fields_original"
         task_id_fwd = "task_fwd"
 
         cache = {}
@@ -131,6 +130,7 @@ def use_emulated_run(monkeypatch):
         from tidy3d.web.api.autograd.autograd import (
             AUX_KEY_SIM_DATA_FWD,
             AUX_KEY_SIM_DATA_ORIGINAL,
+            SIM_FIELDS_KEYS_TAG,
             postprocess_adj,
             postprocess_fwd,
         )
@@ -139,10 +139,10 @@ def use_emulated_run(monkeypatch):
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
 
             if run_kwargs.get("simulation_type") == "autograd_fwd":
-                sim_fields = run_kwargs["sim_fields"]
                 sim_original = simulation
+                sim_fields_keys = sim_original.attrs[SIM_FIELDS_KEYS_TAG]
                 # add gradient monitors and make combined simulation
-                sim_combined = sim_original.with_adjoint_monitors(sim_fields)
+                sim_combined = sim_original.with_adjoint_monitors(sim_fields_keys)
                 sim_data_combined = run_emulated(sim_combined, task_name=task_name)
 
                 # store both original and fwd data aux_data
@@ -156,7 +156,6 @@ def use_emulated_run(monkeypatch):
 
                 # cache original and fwd data locally for test
                 cache[task_id_fwd] = copy.copy(aux_data)
-                cache[task_id_fwd][AUX_KEY_SIM_FIELDS_ORIGINAL] = sim_fields
                 # return original data only
                 return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_id_fwd
             else:
@@ -174,14 +173,14 @@ def use_emulated_run(monkeypatch):
             sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
             # get the original traced fields
-            sim_fields_original = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_ORIGINAL]
+            sim_fields_keys = sim_data_orig.simulation.attrs[SIM_FIELDS_KEYS_TAG]
 
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
                 sim_data_adj=sim_data_adj,
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
-                sim_fields_original=sim_fields_original,
+                sim_fields_keys=sim_fields_keys,
             )
 
             return traced_fields_vjp

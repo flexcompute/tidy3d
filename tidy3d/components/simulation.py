@@ -16,7 +16,6 @@ from ..constants import C_0, SECOND, fp_eps, inf
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from ..log import log
 from ..updater import Updater
-from .autograd import AutogradFieldMap
 from .base import cached_property, skip_if_fields_missing
 from .base_sim.simulation import AbstractSimulation
 from .boundary import (
@@ -3296,11 +3295,11 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    def with_adjoint_monitors(self, sim_fields: AutogradFieldMap) -> Simulation:
+    def with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
         # set of indices in the structures needing adjoint monitors
-        structure_indices = {index for (_, index, *_), _ in sim_fields.items()}
+        structure_indices = {index for (_, index, *_) in sim_fields_keys}
 
         mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
