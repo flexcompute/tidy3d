@@ -466,6 +466,13 @@ class DesignSpace(Tidy3dBaseModel):
         # Include additional notes/warnings
         notes = []
 
+        if isinstance(self.method, MethodGenAlg):
+            notes.append(
+                "The maximum run count for MethodGenAlg is difficult to predict."
+                "Repeated solutions are not executed, reducing the total number of simulations."
+                "High crossover and mutation probabilities may result in an increased number of simulations, potentially exceeding the predicted maximum run count."
+            )
+
         if isinstance(self.method, (MethodBayOpt, MethodGenAlg, MethodParticleSwarm)):
             if any(isinstance(param, ParameterInt) for param in self.parameters):
                 if any(isinstance(param, ParameterAny) for param in self.parameters):

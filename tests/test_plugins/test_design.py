@@ -16,7 +16,7 @@ SWEEP_METHODS = dict(
     monte_carlo=tdd.MethodMonteCarlo(num_points=5, rng_seed=1),
     bay_opt=tdd.MethodBayOpt(initial_iter=5, n_iter=2, rng_seed=1),
     gen_alg=tdd.MethodGenAlg(
-        solutions_per_pop=4,
+        solutions_per_pop=6,
         n_generations=2,
         n_parents_mating=4,
         rng_seed=1,
@@ -354,6 +354,7 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Test multiple return statements for pre and post
     # Currently not supporting this and intercepting attempts within _extract_output
+    # Note this requires a "tag1" tag to be in the prediction space
     with pytest.raises(ValueError):
         non_td_multi_return = design_space.run(non_td_pre_multi_return, non_td_post_multi_return)
 
@@ -366,7 +367,9 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Try with batch output from pre
     td_batch = design_space.run(scs_pre_batch, scs_post_batch)
-    td_batch_run_batch = design_space.run_batch(scs_pre_batch, scs_post_batch, path_dir="")
+    td_batch_run_batch = design_space.run_batch(
+        scs_pre_batch, scs_post_batch, path_dir="", batch_kwargs={"fake_kwarg": None}
+    )
 
     # # Test user specified batching works with combined function
     td_batch_combined = design_space.run(scs_combined_batch)
