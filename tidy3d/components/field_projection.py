@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -89,13 +89,6 @@ class FieldProjector(Tidy3dBaseModel):
         description="Local origin used for defining observation points. If ``None``, uses the "
         "average of the centers of all surface monitors.",
         units=MICROMETER,
-    )
-
-    currents: Dict[str, xr.Dataset] = pydantic.Field(
-        None,
-        title="Surface current densities",
-        description="Dictionary mapping monitor name to an ``xarray.Dataset`` storing the "
-        "surface current densities.",
     )
 
     @cached_property
@@ -362,7 +355,7 @@ class FieldProjector(Tidy3dBaseModel):
         pts_u: np.ndarray,
     ):
         """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)
+        return np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)  # noqa: NPY201
 
     def integrate_2d(
         self,
@@ -372,7 +365,7 @@ class FieldProjector(Tidy3dBaseModel):
         pts_v: np.ndarray,
     ):
         """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
+        return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)  # noqa: NPY201
 
     def _far_fields_for_surface(
         self,
