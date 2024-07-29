@@ -46,6 +46,40 @@ def test_array_validators():
         )
 
 
+def test_non_metallic_validator():
+    with pytest.raises(ValidationError, match="conductor"):
+        waveguide.RectangularDielectric(
+            wavelength=1.55,
+            core_width=0.3,
+            core_thickness=0.22,
+            clad_thickness=[1, 1],
+            core_medium=td.material_library["Ag"].medium,
+            clad_medium=[td.Medium(permittivity=1.45**2)] * 2,
+        )
+
+    with pytest.raises(ValidationError, match="conductor"):
+        waveguide.RectangularDielectric(
+            wavelength=1.55,
+            core_width=0.3,
+            core_thickness=0.22,
+            clad_thickness=1,
+            core_medium=td.Medium(permittivity=3.48**2),
+            clad_medium=td.material_library["Ag"].medium,
+        )
+
+    with pytest.raises(ValidationError, match="conductor"):
+        waveguide.RectangularDielectric(
+            wavelength=1.55,
+            core_width=0.3,
+            core_thickness=0.22,
+            clad_thickness=[1, 1],
+            box_thickness=[1, 1],
+            core_medium=td.Medium(permittivity=3.48**2),
+            clad_medium=[td.Medium(permittivity=1.45**2)] * 2,
+            box_medium=[td.Medium(permittivity=1.45**2), td.material_library["Ag"].medium],
+        )
+
+
 def test_layer_validators():
     with pytest.raises(ValidationError, match="Number"):
         waveguide.RectangularDielectric(

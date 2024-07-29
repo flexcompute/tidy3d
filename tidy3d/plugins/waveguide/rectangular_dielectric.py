@@ -215,6 +215,19 @@ class RectangularDielectric(Tidy3dBaseModel):
             raise ValidationError("Values may not be negative.")
         return val
 
+    @pydantic.validator("core_medium", "clad_medium", "box_medium")
+    def _check_non_metallic(cls, val, values):
+        if val is None:
+            return val
+        media = val if isinstance(val, tuple) else (val,)
+        freqs = C_0 / values["wavelength"]
+        if any(medium.eps_model(f).real < 1 for medium in media for f in freqs):
+            raise ValidationError(
+                "'RectangularDielectric' can only be used with dielectric media. "
+                "Found a conductor with real permittivity < 1."
+            )
+        return val
+
     @pydantic.validator("gap", always=True)
     @skip_if_fields_missing(["core_width"])
     def _validate_gaps(cls, val, values):
