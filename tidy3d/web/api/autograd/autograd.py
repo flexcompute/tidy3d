@@ -13,7 +13,7 @@ from tidy3d.components.autograd import AutogradFieldMap, get_static
 # from tidy3d.components.autograd.utils import split_data_list, split_list
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
-from ...core.s3utils import download_file, upload_file
+from ...core.s3utils import download_file
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
 from ..container import Batch, BatchData, Job
@@ -28,7 +28,7 @@ AUX_KEY_FWD_TASK_ID = "task_id_fwd"
 AUX_KEY_SIM_ORIGINAL = "sim_original"
 # server-side auxiliary files to upload/download
 SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
-SIM_FIELDS_FILE = "autograd_sim_fields.hdf5"
+SIM_FIELDS_KEYS_TAG = "<<< AUTOGRAD_SIM_FIELDS_KEYS >>>"
 
 ISSUE_URL = (
     "https://github.com/flexcompute/tidy3d/issues/new?"
@@ -406,7 +406,7 @@ def _run_primitive(
 
     else:
         run_kwargs["simulation_type"] = "autograd_fwd"
-        run_kwargs["sim_fields"] = sim_fields
+        sim_original.attrs[SIM_FIELDS_KEYS_TAG] = list(sim_fields.keys())
 
         sim_data_orig, task_id_fwd = _run_tidy3d(
             sim_original,
@@ -441,7 +441,7 @@ def _run_async_primitive(
             sim_original = sims_original[task_name]
             sims_combined[task_name] = setup_fwd(sim_fields=sim_fields, sim_original=sim_original)
 
-        batch_data_combined = _run_async_tidy3d(sims_combined, **run_async_kwargs)
+        batch_data_combined, _ = _run_async_tidy3d(sims_combined, **run_async_kwargs)
 
         field_map_fwd_dict = {}
         for task_name in task_names:
@@ -456,7 +456,8 @@ def _run_async_primitive(
 
     else:
         run_async_kwargs["simulation_type"] = "autograd_fwd"
-        run_async_kwargs["sim_fields_dict"] = sim_fields_dict
+        for task_name, simulation in sims_original.items():
+            simulation.attrs[SIM_FIELDS_KEYS_TAG] = list(sim_fields_dict[task_name].keys())
 
         sim_data_orig_dict, task_ids_fwd_dict = _run_async_tidy3d(
             sims_original,
@@ -489,19 +490,6 @@ def setup_fwd(
 
     # if remote gradient, add them later
     return sim_original
-
-
-def upload_sim_fields(sim_fields: AutogradFieldMap, task_id: str, verbose: bool = False):
-    """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
-    data_file.close()
-    FieldMap.from_autograd_field_map(sim_fields).to_file(data_file.name)
-    upload_file(
-        task_id,
-        data_file.name,
-        SIM_FIELDS_FILE,
-        verbose=verbose,
-    )
 
 
 def postprocess_fwd(
@@ -553,6 +541,8 @@ def _run_bwd(
 
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
+    # strip the sim fields keys
+    sim_fields_keys = list(sim_fields_original.keys())
 
     if local_gradient:
         sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
@@ -565,7 +555,7 @@ def _run_bwd(
         sim_adj = setup_adj(
             data_fields_vjp=data_fields_vjp,
             sim_data_orig=sim_data_orig,
-            sim_fields_original=sim_fields_original,
+            sim_fields_keys=sim_fields_keys,
         )
 
         # no adjoint sources, no gradient for you :(
@@ -593,7 +583,7 @@ def _run_bwd(
                 sim_data_adj=sim_data_adj,
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
-                sim_fields_original=sim_fields_original,
+                sim_fields_keys=sim_fields_keys,
             )
 
         else:
@@ -623,9 +613,12 @@ def _run_async_bwd(
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig_dict = {}
     sim_data_fwd_dict = {}
+    sim_fields_keys_dict = {}
     for task_name in task_names:
         aux_data = aux_data_dict[task_name]
         sim_data_orig_dict[task_name] = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
+        # strip the sim fields keys
+        sim_fields_keys_dict[task_name] = list(sim_fields_original_dict[task_name].keys())
 
         if local_gradient:
             sim_data_fwd_dict[task_name] = aux_data[AUX_KEY_SIM_DATA_FWD]
@@ -641,12 +634,12 @@ def _run_async_bwd(
         for task_name, task_name_adj in zip(task_names, task_names_adj):
             data_fields_vjp = data_fields_dict_vjp[task_name]
             sim_data_orig = sim_data_orig_dict[task_name]
-            sim_fields_original = sim_fields_original_dict[task_name]
+            sim_fields_keys = sim_fields_keys_dict[task_name]
 
             sim_adj = setup_adj(
                 data_fields_vjp=data_fields_vjp,
                 sim_data_orig=sim_data_orig,
-                sim_fields_original=sim_fields_original,
+                sim_fields_keys=sim_fields_keys,
             )
             sims_adj[task_name_adj] = sim_adj
 
@@ -654,20 +647,20 @@ def _run_async_bwd(
 
         if local_gradient:
             # run adjoint simulation
-            batch_data_adj = _run_async_tidy3d(sims_adj, **run_async_kwargs)
+            batch_data_adj, _ = _run_async_tidy3d(sims_adj, **run_async_kwargs)
 
             sim_fields_vjp_dict = {}
             for task_name, task_name_adj in zip(task_names, task_names_adj):
                 sim_data_adj = batch_data_adj[task_name_adj]
                 sim_data_orig = sim_data_orig_dict[task_name]
                 sim_data_fwd = sim_data_fwd_dict[task_name]
-                sim_fields_original = sim_fields_original_dict[task_name]
+                sim_fields_keys = sim_fields_keys_dict[task_name]
 
                 sim_fields_vjp = postprocess_adj(
                     sim_data_adj=sim_data_adj,
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
-                    sim_fields_original=sim_fields_original,
+                    sim_fields_keys=sim_fields_keys,
                 )
                 sim_fields_vjp_dict[task_name] = sim_fields_vjp
 
@@ -690,7 +683,7 @@ def _run_async_bwd(
 def setup_adj(
     data_fields_vjp: AutogradFieldMap,
     sim_data_orig: td.SimulationData,
-    sim_fields_original: AutogradFieldMap,
+    sim_fields_keys: list,
 ) -> td.Simulation:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
@@ -708,7 +701,7 @@ def setup_adj(
     data_vjp_paths = set(data_fields_vjp.keys())
 
     num_monitors = len(sim_data_orig.simulation.monitors)
-    adjoint_monitors = sim_data_orig.simulation.with_adjoint_monitors(sim_fields_original).monitors[
+    adjoint_monitors = sim_data_orig.simulation.with_adjoint_monitors(sim_fields_keys).monitors[
         num_monitors:
     ]
 
@@ -726,13 +719,13 @@ def postprocess_adj(
     sim_data_adj: td.SimulationData,
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
-    sim_fields_original: AutogradFieldMap,
+    sim_fields_keys: list,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
     # map of index into 'structures' to the list of paths we need vjps for
     sim_vjp_map = {}
-    for _, structure_index, *structure_path in sim_fields_original.keys():
+    for _, structure_index, *structure_path in sim_fields_keys:
         structure_path = tuple(structure_path)
         if structure_index in sim_vjp_map:
             sim_vjp_map[structure_index].append(structure_path)
@@ -812,9 +805,6 @@ def _run_tidy3d(
     job_init_kwargs = parse_run_kwargs(**run_kwargs)
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
-    if job.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        upload_sim_fields(run_kwargs["sim_fields"], task_id=job.task_id, verbose=verbose)
     data = job.run()
     return data, job.task_id
 
@@ -844,12 +834,6 @@ def _run_async_tidy3d(
         batch_data = batch.run()
 
     task_ids = batch_data.task_ids
-
-    if batch.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        for task_name, sim_fields in run_kwargs["sim_fields_dict"].items():
-            task_id = task_ids[task_name]
-            upload_sim_fields(sim_fields, task_id=task_id, verbose=verbose)
 
     return batch_data, task_ids
 
