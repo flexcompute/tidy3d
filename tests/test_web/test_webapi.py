@@ -37,6 +37,7 @@ from tidy3d.web.api.webapi import (
     upload,
 )
 from tidy3d.web.core.environment import Env
+from tidy3d.web.core.system_config import SystemConfig
 from tidy3d.web.core.types import TaskType
 
 TASK_NAME = "task_name_test"
@@ -175,6 +176,42 @@ def mock_get_info(monkeypatch, set_api_key):
 
 
 @pytest.fixture
+def mock_get_system_config(monkeypatch, set_api_key):
+    """Mocks webapi.get_system_config."""
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/system/py/config",
+        json={
+            "data": {
+                "runStatuses": [
+                    "draft",
+                    "queued",
+                    "preprocess",
+                    "queued_solver",
+                    "running",
+                    "postprocess",
+                    "visualize",
+                    "success",
+                ],
+                "endStatuses": [
+                    "success",
+                    "error",
+                    "errored",
+                    "diverged",
+                    "diverge",
+                    "deleted",
+                    "draft",
+                    "abort",
+                    "aborted",
+                ],
+            }
+        },
+        status=200,
+    )
+
+
+@pytest.fixture
 def mock_start(monkeypatch, set_api_key, mock_get_info):
     """Mocks webapi.start."""
 
@@ -225,10 +262,38 @@ def mock_monitor(monkeypatch):
         run_count[0] += 1
         return perc_done, 1
 
+    def mock_get_system_info():
+        return SystemConfig(
+            **{
+                "runStatuses": [
+                    "draft",
+                    "queued",
+                    "preprocess",
+                    "queued_solver",
+                    "running",
+                    "postprocess",
+                    "visualize",
+                    "success",
+                ],
+                "endStatuses": [
+                    "success",
+                    "error",
+                    "errored",
+                    "diverged",
+                    "diverge",
+                    "deleted",
+                    "draft",
+                    "abort",
+                    "aborted",
+                ],
+            }
+        )
+
     monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
     monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)
+    monkeypatch.setattr(f"{api_path}.get_system_config", mock_get_system_info)
 
 
 @pytest.fixture
@@ -290,7 +355,13 @@ def mock_get_run_info(monkeypatch, set_api_key):
 
 @pytest.fixture
 def mock_webapi(
-    mock_upload, mock_metadata, mock_get_info, mock_start, mock_monitor, mock_download, mock_load
+    mock_upload,
+    mock_metadata,
+    mock_get_info,
+    mock_start,
+    mock_monitor,
+    mock_download,
+    mock_load,
 ):
     """Mocks all webapi operation."""
 
@@ -545,7 +616,7 @@ def mock_job_status(monkeypatch):
 
 
 @responses.activate
-def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path):
+def test_batch(mock_webapi, mock_job_status, mock_load, mock_get_system_config, tmp_path):
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
 
@@ -569,7 +640,7 @@ def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path):
 
 
 @responses.activate
-def test_async(mock_webapi, mock_job_status):
+def test_async(mock_webapi, mock_get_system_config, mock_job_status):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_sim()}
     _ = run_async(sims, folder_name=PROJECT_NAME)
