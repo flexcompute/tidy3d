@@ -368,7 +368,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     task_type = task_info.taskType
 
-    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")
+    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort", "aborted")
 
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
