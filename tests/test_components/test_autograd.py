@@ -559,7 +559,6 @@ def test_autograd_speed_num_structures(use_emulated_run):
     import time
 
     fn_dict = get_functions(ALL_KEY, ALL_KEY)
-    make_sim = fn_dict["sim"]
 
     monitor_key = "mode"
     structure_key = "size_element"
