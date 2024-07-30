@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - More convenient mesh importing from another simulation through `grid_spec = GridSpec.from_grid(sim.grid)`.
 - `autograd` gradient calculations can be performed on the server by passing `local_gradient = False` into `web.run()` or `web.run_async()`.
 - Automatic differentiation with `autograd` supports multiple frequencies through single, broadband adjoint simulation when the objective function can be formulated as depending on a single dataset in the output `SimulationData` with frequency dependence only.
+- Convenience method `EMESimulation.subsection` to create a new EME simulation based on a subregion of an existing one.
 
 ### Changed
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
+- Mode solver now always operates on a reduced simulation copy.
 
 ### Fixed
 - Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.

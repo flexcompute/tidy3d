@@ -210,11 +210,12 @@ class EMEExplicitGrid(EMEGridSpec):
             raise ValidationError(
                 "There must be exactly one fewer item in 'boundaries' than " "in 'mode_specs'."
             )
-        rmin = boundaries[0]
-        for rmax in boundaries[1:]:
-            if rmax < rmin:
-                raise ValidationError("The 'boundaries' must be increasing.")
-            rmin = rmax
+        if len(boundaries) > 0:
+            rmin = boundaries[0]
+            for rmax in boundaries[1:]:
+                if rmax < rmin:
+                    raise ValidationError("The 'boundaries' must be increasing.")
+                rmin = rmax
         return val
 
     def make_grid(self, center: Coordinate, size: Size, axis: Axis) -> EMEGrid:
@@ -237,12 +238,15 @@ class EMEExplicitGrid(EMEGridSpec):
         """
         sim_rmin = center[axis] - size[axis] / 2
         sim_rmax = center[axis] + size[axis] / 2
-        if self.boundaries[0] < sim_rmin - fp_eps:
-            raise ValidationError(
-                "The first item in 'boundaries' is outside the simulation domain."
-            )
-        if self.boundaries[-1] > sim_rmax + fp_eps:
-            raise ValidationError("The last item in 'boundaries' is outside the simulation domain.")
+        if len(self.boundaries) > 0:
+            if self.boundaries[0] < sim_rmin - fp_eps:
+                raise ValidationError(
+                    "The first item in 'boundaries' is outside the simulation domain."
+                )
+            if self.boundaries[-1] > sim_rmax + fp_eps:
+                raise ValidationError(
+                    "The last item in 'boundaries' is outside the simulation domain."
+                )
 
         boundaries = [sim_rmin] + list(self.boundaries) + [sim_rmax]
         return EMEGrid(

@@ -296,6 +296,22 @@ def test_eme_simulation(log_capture):
     _ = sim2.plot(y=0, ax=AX)
     _ = sim2.plot(z=0, ax=AX)
 
+    # must be 3D
+    with pytest.raises(pd.ValidationError):
+        _ = td.EMESimulation(
+            size=(0, 2, 2),
+            freqs=[td.C_0],
+            axis=2,
+            eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec()),
+        )
+    with pytest.raises(pd.ValidationError):
+        _ = td.EMESimulation(
+            size=(2, 2, 0),
+            freqs=[td.C_0],
+            axis=2,
+            eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec()),
+        )
+
     # need at least one freq
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(freqs=[])
@@ -324,7 +340,7 @@ def test_eme_simulation(log_capture):
         )
 
     # test port offsets
-    with pytest.raises(SetupError):
+    with pytest.raises(ValidationError):
         _ = sim.updated_copy(port_offsets=[sim.size[sim.axis] * 2 / 3, sim.size[sim.axis] * 2 / 3])
 
     # test duplicate freqs
@@ -1193,3 +1209,30 @@ def test_eme_sim_data():
     assert "mode_index" not in field_in_basis.Ex.coords
     field_in_basis = sim_data.field_in_basis(field=sim_data["field"], modes=modes_in0, port_index=1)
     assert "mode_index" not in field_in_basis.Ex.coords
+
+
+def test_eme_sim_subsection():
+    eme_sim = td.EMESimulation(
+        axis=2,
+        size=(2, 2, 2),
+        freqs=[td.C_0],
+        grid_spec=td.GridSpec.auto(),
+        eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec()),
+    )
+    # check 3d subsection
+    region = td.Box(size=(2, 2, 1))
+    subsection = eme_sim.subsection(region=region)
+    assert subsection.size[2] == 1
+
+    # check 3d subsection with identical eme grid
+    region = td.Box(size=(2, 2, 1))
+    subsection = eme_sim.subsection(region=region, eme_grid_spec="identical")
+    assert subsection.size[2] == 2
+    region = td.Box(size=(2, 2, 0.5), center=(0, 0, 0.5))
+    subsection = eme_sim.subsection(region=region, eme_grid_spec="identical")
+    assert subsection.size[2] == 1
+
+    # 2d subsection errors
+    region = td.Box(size=(2, 2, 0))
+    with pytest.raises(pd.ValidationError):
+        subsection = eme_sim.subsection(region=region)
