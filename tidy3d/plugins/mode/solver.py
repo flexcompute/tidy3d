@@ -90,7 +90,7 @@ class EigSolver(Tidy3dBaseModel):
         angle_phi = mode_spec.angle_phi
         omega = 2 * np.pi * freq
         k0 = omega / C_0
-        enable_incidence_matrices = split_curl_scaling is not None or mu_cross is not None
+        enable_incidence_matrices = False  # Experimental feature, always off for now
 
         eps_formated = cls.format_medium_data(eps_cross)
         eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_formated
@@ -331,6 +331,7 @@ class EigSolver(Tidy3dBaseModel):
             return eps
 
         eps_tensor = conductivity_model_for_pec(eps_tensor)
+        mu_tensor = conductivity_model_for_pec(mu_tensor)
 
         # Determine if ``eps`` and ``mu`` are diagonal or tensorial
         off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
