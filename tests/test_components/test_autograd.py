@@ -121,6 +121,7 @@ def use_emulated_run(monkeypatch):
 
     if TEST_MODE in ("pipeline", "speed"):
         task_id_fwd = "task_fwd"
+        AUX_KEY_SIM_FIELDS_KEYS = "sim_fields_keys"
 
         cache = {}
 
@@ -130,7 +131,6 @@ def use_emulated_run(monkeypatch):
         from tidy3d.web.api.autograd.autograd import (
             AUX_KEY_SIM_DATA_FWD,
             AUX_KEY_SIM_DATA_ORIGINAL,
-            SIM_FIELDS_KEYS_TAG,
             postprocess_adj,
             postprocess_fwd,
         )
@@ -140,7 +140,7 @@ def use_emulated_run(monkeypatch):
             task_id_fwd = task_name
             if run_kwargs.get("simulation_type") == "autograd_fwd":
                 sim_original = simulation
-                sim_fields_keys = sim_original.attrs[SIM_FIELDS_KEYS_TAG]
+                sim_fields_keys = run_kwargs["sim_fields_keys"]
                 # add gradient monitors and make combined simulation
                 sim_combined = sim_original.with_adjoint_monitors(sim_fields_keys)
                 sim_data_combined = run_emulated(sim_combined, task_name=task_name)
@@ -156,6 +156,7 @@ def use_emulated_run(monkeypatch):
 
                 # cache original and fwd data locally for test
                 cache[task_id_fwd] = copy.copy(aux_data)
+                cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS] = sim_fields_keys
                 # return original data only
                 return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_id_fwd
             else:
@@ -175,7 +176,7 @@ def use_emulated_run(monkeypatch):
             sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
             # get the original traced fields
-            sim_fields_keys = sim_data_orig.simulation.attrs[SIM_FIELDS_KEYS_TAG]
+            sim_fields_keys = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS]
 
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
@@ -189,7 +190,10 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_async_fwd(simulations, **run_kwargs) -> td.SimulationData:
             batch_data_orig, task_ids_fwd = {}, {}
+            sim_fields_keys_dict = run_kwargs.pop("sim_fields_keys_dict", None)
             for task_name, simulation in simulations.items():
+                if sim_fields_keys_dict is not None:
+                    run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
                 sim_data_orig, task_id_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
                 batch_data_orig[task_name] = sim_data_orig
                 task_ids_fwd[task_name] = task_id_fwd
@@ -652,7 +656,7 @@ def test_autograd_speed_num_structures(use_emulated_run):
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", (("custom_med", "mode"),))
+@pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_server(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -674,7 +678,7 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
     val, grad = ag.value_and_grad(objective)(params0)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", (("custom_med", "mode"),))
+@pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
     """Test an async objective function through tidy3d autograd."""
 

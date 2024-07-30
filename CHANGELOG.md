@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added progress bar for EME simulations.
 - Support for grid specifications from grid cell boundary coordinates via `CustomGridBoundaries` that subclasses from `GridSpec1d`.
 - More convenient mesh importing from another simulation through `grid_spec = GridSpec.from_grid(sim.grid)`.
+- `autograd` gradient calculations can be performed on the server by passing `local_gradient = False` into `web.run()` or `web.run_async()`.
 
 ### Changed
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
@@ -30,8 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
 - Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
 - Support for `FieldProjectionAngleMonitor` for 2D simulations with `far_field_approx = True`.
-- Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
-- `autograd` gradient calculations are done server side by default. Behavior can be changed by passing `local_gradient = True` into `web.run()`.
 
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
