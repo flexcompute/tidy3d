@@ -2,28 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import matplotlib as mpl
 import numpy as np
 import pydantic.v1 as pd
 
-from ...exceptions import SetupError
+from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import cached_property
 from ..boundary import BoundarySpec, PECBoundary
+from ..geometry.base import Box
 from ..grid.grid import Grid
 from ..grid.grid_spec import GridSpec
 from ..medium import FullyAnisotropicMedium
-from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor
+from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor, MonitorType
 from ..scene import Scene
 from ..simulation import AbstractYeeGridSimulation, Simulation
-from ..source import GaussianPulse, ModeSource
+from ..source import GaussianPulse, PointDipole
 from ..structure import Structure
-from ..types import Ax, Axis, FreqArray, annotate_type
+from ..types import Ax, Axis, FreqArray, Symmetry, annotate_type
 from ..validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
 from ..viz import add_ax_if_none, equal_aspect
-from .grid import EMECompositeGrid, EMEGrid, EMEGridSpec, EMEGridSpecType
+from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGrid, EMEGridSpec, EMEGridSpecType
 from .monitor import EMEFieldMonitor, EMEModeSolverMonitor, EMEMonitor, EMEMonitorType
 from .sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMESweepSpecType
 
@@ -230,6 +231,16 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
+
+    @pd.validator("size", always=True)
+    def _validate_fully_3d(cls, val):
+        """An EME simulation must be fully 3D."""
+        if val.count(0.0) != 0:
+            raise ValidationError(
+                "'EMESimulation' cannot have any component of 'size' equal to "
+                f"zero, given 'size={val}'."
+            )
+        return val
 
     @pd.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
@@ -606,7 +617,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         size = self.size
         axis = self.axis
         if size[axis] < total_offset:
-            raise SetupError(
+            raise ValidationError(
                 "The sum of the two 'port_offset' fields "
                 "cannot exceed the simulation 'size' in the 'axis' direction."
             )
@@ -1005,12 +1016,10 @@ class EMESimulation(AbstractYeeGridSimulation):
                 )
             plane = self.eme_grid.mode_planes[0]
             sources.append(
-                ModeSource(
+                PointDipole(
                     center=plane.center,
-                    size=plane.size,
                     source_time=GaussianPulse(freq0=freqs[0], fwidth=0.1 * freqs[0]),
-                    direction="+",
-                    mode_spec=self.eme_grid.mode_specs[0],
+                    polarization="Ez",
                 )
             )
 
@@ -1050,12 +1059,10 @@ class EMESimulation(AbstractYeeGridSimulation):
         plane = self.eme_grid.mode_planes[0]
         freq0 = self.freqs[0]
         source_time = GaussianPulse(freq0=freq0, fwidth=0.1 * freq0)
-        source = ModeSource(
+        source = PointDipole(
             center=plane.center,
-            size=plane.size,
             source_time=source_time,
-            direction="+",
-            mode_spec=self.eme_grid.mode_specs[0]._to_mode_spec(),
+            polarization="Ez",
         )
         # copy over all FDTD monitors too
         monitors = [monitor for monitor in self.monitors if not isinstance(monitor, EMEMonitor)]
@@ -1073,3 +1080,83 @@ class EMESimulation(AbstractYeeGridSimulation):
             sources=[source],
             monitors=monitors,
         )
+
+    def subsection(
+        self,
+        region: Box,
+        grid_spec: Union[GridSpec, Literal["identical"]] = None,
+        eme_grid_spec: Union[EMEGridSpec, Literal["identical"]] = None,
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry] = None,
+        monitors: Tuple[MonitorType, ...] = None,
+        remove_outside_structures: bool = True,
+        remove_outside_custom_mediums: bool = False,
+        **kwargs,
+    ) -> EMESimulation:
+        """Generate a simulation instance containing only the ``region``.
+        Same as in :class:`.AbstractYeeGridSimulation`, except also restricting EME grid.
+
+        Parameters
+        ----------
+        region : :class:.`Box`
+            New simulation domain.
+        grid_spec : :class:.`GridSpec` = None
+            New grid specification. If ``None``, then it is inherited from the original
+            simulation. If ``identical``, then the original grid is transferred directly as a
+            :class:.`CustomGrid`. Note that in the latter case the region of the new simulation is
+            snapped to the original grid lines.
+        eme_grid_spec: :class:`.EMEGridSpec` = None
+            New EME grid specification. If ``None``, then it is inherited from the original
+            simulation. If ``identical``, then the original grid is transferred directly as a
+            :class:`.EMEExplicitGrid`. Noe that in the latter case the region of the new simulation
+            is expanded to contain full EME cells.
+        symmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = None
+            New simulation symmetry. If ``None``, then it is inherited from the original
+            simulation. Note that in this case the size and placement of new simulation domain
+            must be commensurate with the original symmetry.
+        monitors : Tuple[MonitorType, ...] = None
+            New list of monitors. If ``None``, then the monitors intersecting the new simulation
+            domain are inherited from the original simulation.
+        remove_outside_structures : bool = True
+            Remove structures outside of the new simulation domain.
+        remove_outside_custom_mediums : bool = True
+            Remove custom medium data outside of the new simulation domain.
+        **kwargs
+            Other arguments passed to new simulation instance.
+        """
+
+        new_region = region
+        if eme_grid_spec is None:
+            eme_grid_spec = self.eme_grid_spec
+        elif isinstance(eme_grid_spec, str) and eme_grid_spec == "identical":
+            axis = self.axis
+            mode_specs = self.eme_grid.mode_specs
+            boundaries = self.eme_grid.boundaries
+            indices = self.eme_grid.cell_indices_in_box(box=region)
+
+            new_boundaries = boundaries[indices[0] : indices[-1] + 2]
+            new_mode_specs = mode_specs[indices[0] : indices[-1] + 1]
+
+            rmin = list(region.bounds[0])
+            rmax = list(region.bounds[1])
+            rmin[axis] = min(rmin[axis], new_boundaries[0])
+            rmax[axis] = max(rmax[axis], new_boundaries[-1])
+            new_region = Box.from_bounds(rmin=rmin, rmax=rmax)
+
+            # remove outer boundaries for explicit grid
+            new_boundaries = new_boundaries[1:-1]
+
+            eme_grid_spec = EMEExplicitGrid(mode_specs=new_mode_specs, boundaries=new_boundaries)
+
+        new_sim = super().subsection(
+            region=new_region,
+            grid_spec=grid_spec,
+            symmetry=symmetry,
+            monitors=monitors,
+            remove_outside_structures=remove_outside_structures,
+            remove_outside_custom_mediums=remove_outside_custom_mediums,
+            **kwargs,
+        )
+
+        new_sim = new_sim.updated_copy(eme_grid_spec=eme_grid_spec)
+
+        return new_sim

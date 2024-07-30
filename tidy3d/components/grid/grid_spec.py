@@ -274,7 +274,7 @@ class CustomGridBoundaries(GridSpec1d):
 
     Example
     -------
-    >>> grid_1d = CustomGridCoords(boundaries=[-0.2, 0.0, 0.2, 0.4, 0.5, 0.6, 0.7])
+    >>> grid_1d = CustomGridBoundaries(coords=[-0.2, 0.0, 0.2, 0.4, 0.5, 0.6, 0.7])
     """
 
     coords: Coords1D = pd.Field(

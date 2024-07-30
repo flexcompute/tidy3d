@@ -1032,3 +1032,5 @@ def test_modes_eme_sim(mock_remote_api, local):
         with pytest.raises(SetupError):
             _ = msweb.run(solver)
         _ = msweb.run(solver.to_fdtd_mode_solver())
+
+    _ = solver.reduced_simulation_copy
