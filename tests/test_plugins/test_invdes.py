@@ -7,7 +7,7 @@ import tidy3d as td
 import tidy3d.plugins.invdes as tdi
 
 # use single threading pipeline
-from ..test_components.test_autograd import use_emulated_run, use_emulated_run_async  # noqa: F401
+from ..test_components.test_autograd import use_emulated_run  # noqa: F401
 from ..utils import AssertLogLevel, run_emulated
 
 FREQ0 = 1e14
@@ -51,6 +51,14 @@ def use_emulated_to_sim_data(monkeypatch):
         tdi.InverseDesign,
         "to_simulation_data",
         lambda self, params, **kwargs: run_emulated(self.simulation, task_name="test"),
+    )
+    monkeypatch.setattr(
+        tdi.InverseDesignMulti,
+        "to_simulation_data",
+        lambda self, params, **kwargs: {
+            task_name: run_emulated(sim, task_name=task_name)
+            for task_name, sim in zip(self.task_names, self.simulations)
+        },
     )
 
 
@@ -390,7 +398,7 @@ def test_result_data(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
 
 
 def test_result_data_multi(
-    use_emulated_run_async,  # noqa: F811
+    use_emulated_to_sim_data,  # noqa: F811
     use_emulated_run,  # noqa: F811
     tmp_path,
 ):

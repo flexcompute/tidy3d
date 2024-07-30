@@ -202,6 +202,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         "``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` "
         ", or ``False`` to apply staircasing.",
     )
+
+    simulation_type: Literal["autograd_fwd", "autograd_bwd", None] = pydantic.Field(
+        None,
+        title="Simulation Type",
+        description="Tag used internally to distinguish types of simulations for "
+        "``autograd`` gradient processing.",
+    )
+
     """
     Supply :class:`SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
     PEC material interfaces. Alternatively, supply ``True`` to use default subpixel averaging methods,
