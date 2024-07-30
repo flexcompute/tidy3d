@@ -70,7 +70,7 @@ class Tracer(Tidy3dBaseModel):
 
     path: tuple[typing.Any, ...] = pd.Field(
         ...,
-        title="Path to the traced object in the model dictionary",
+        title="Path to the traced object in the model dictionary.",
     )
 
     data: typing.Any = pd.Field(..., title="Tracing data")
@@ -97,3 +97,12 @@ class FieldMap(Tidy3dBaseModel):
             tracers.append(Tracer(path=path, data=data))
 
         return cls(tracers=tuple(tracers))
+
+
+class TracerKeys(Tidy3dBaseModel):
+    """Class to store a collection of tracer keys."""
+
+    keys: tuple[tuple[typing.Any, ...], ...] = pd.Field(
+        ...,
+        title="Collection of tracer keys.",
+    )

@@ -13,13 +13,13 @@ from tidy3d.components.autograd import AutogradFieldMap, get_static
 # from tidy3d.components.autograd.utils import split_data_list, split_list
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
-from ...core.s3utils import download_file
+from ...core.s3utils import download_file, upload_file
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
 from ..container import Batch, BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
-from .utils import FieldMap, get_derivative_maps
+from .utils import FieldMap, TracerKeys, get_derivative_maps
 
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
@@ -28,7 +28,7 @@ AUX_KEY_FWD_TASK_ID = "task_id_fwd"
 AUX_KEY_SIM_ORIGINAL = "sim_original"
 # server-side auxiliary files to upload/download
 SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
-SIM_FIELDS_KEYS_TAG = "<<< AUTOGRAD_SIM_FIELDS_KEYS >>>"
+SIM_FIELDS_KEYS_FILE = "autograd_sim_fields_keys.hdf5"
 
 ISSUE_URL = (
     "https://github.com/flexcompute/tidy3d/issues/new?"
@@ -406,7 +406,7 @@ def _run_primitive(
 
     else:
         run_kwargs["simulation_type"] = "autograd_fwd"
-        sim_original.attrs[SIM_FIELDS_KEYS_TAG] = list(sim_fields.keys())
+        run_kwargs["sim_fields_keys"] = list(sim_fields.keys())
 
         sim_data_orig, task_id_fwd = _run_tidy3d(
             sim_original,
@@ -456,8 +456,9 @@ def _run_async_primitive(
 
     else:
         run_async_kwargs["simulation_type"] = "autograd_fwd"
-        for task_name, simulation in sims_original.items():
-            simulation.attrs[SIM_FIELDS_KEYS_TAG] = list(sim_fields_dict[task_name].keys())
+        run_async_kwargs["sim_fields_keys_dict"] = {}
+        for task_name, sim_fields in sim_fields_dict.items():
+            run_async_kwargs["sim_fields_keys_dict"][task_name] = list(sim_fields.keys())
 
         sim_data_orig_dict, task_ids_fwd_dict = _run_async_tidy3d(
             sims_original,
@@ -514,6 +515,19 @@ def postprocess_fwd(
 
     # return the AutogradFieldMap that autograd registers as the "output" of the primitive
     return data_traced
+
+
+def upload_sim_fields_keys(sim_fields_keys: list, task_id: str, verbose: bool = False):
+    """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
+    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
+    data_file.close()
+    TracerKeys(keys=sim_fields_keys).to_file(data_file.name)
+    upload_file(
+        task_id,
+        data_file.name,
+        SIM_FIELDS_KEYS_FILE,
+        verbose=verbose,
+    )
 
 
 """ VJP maker for ADJ pass."""
@@ -812,6 +826,9 @@ def _run_tidy3d(
     job_init_kwargs = parse_run_kwargs(**run_kwargs)
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
+    if job.simulation_type == "autograd_fwd":
+        verbose = run_kwargs.get("verbose", False)
+        upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
     data = job.run()
     return data, job.task_id
 
@@ -835,12 +852,19 @@ def _run_async_tidy3d(
     batch = Batch(simulations=simulations, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
 
+    if batch.simulation_type == "autograd_fwd":
+        verbose = run_kwargs.get("verbose", False)
+        # Need to upload to get the task_ids
+        batch.upload()
+        task_ids = {key: job.task_id for key, job in batch.jobs.items()}
+        for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
+            task_id = task_ids[task_name]
+            upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
+
     if path_dir:
         batch_data = batch.run(path_dir)
     else:
         batch_data = batch.run()
-
-    task_ids = batch_data.task_ids
 
     return batch_data, task_ids
 
@@ -853,6 +877,7 @@ def _run_async_tidy3d_bwd(
     _ = run_kwargs.pop("path_dir")
     batch = Batch(simulations=simulations, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} simulation with '_run_tidy3d_bwd()'")
+
     batch.start()
     batch.monitor()
 
