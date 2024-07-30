@@ -1,4 +1,5 @@
 # utility functions for autograd web API
+from __future__ import annotations
 
 import typing
 
@@ -81,7 +82,7 @@ class FieldMap(Tidy3dBaseModel):
 
     tracers: tuple[Tracer, ...] = pd.Field(
         ...,
-        title="Collection of tracers.",
+        title="Collection of Tracers.",
     )
 
     @property
@@ -90,7 +91,7 @@ class FieldMap(Tidy3dBaseModel):
         return dict_ag({tracer.path: tracer.data for tracer in self.tracers})
 
     @classmethod
-    def from_autograd_field_map(cls, autograd_field_map) -> "FieldMap":
+    def from_autograd_field_map(cls, autograd_field_map) -> FieldMap:
         """Initialize from an ``AutogradFieldMap`` autograd dictionary."""
         tracers = []
         for path, data in autograd_field_map.items():

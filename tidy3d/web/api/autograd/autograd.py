@@ -9,8 +9,6 @@ from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
-
-# from tidy3d.components.autograd.utils import split_data_list, split_list
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
 from ...core.s3utils import download_file, upload_file
@@ -394,9 +392,6 @@ def _run_primitive(
             local_gradient=local_gradient,
         )
         sim_data_combined, _ = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
-
-        # TODO: put this in postprocess?
-        # aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
 
         field_map = postprocess_fwd(
             sim_data_combined=sim_data_combined,

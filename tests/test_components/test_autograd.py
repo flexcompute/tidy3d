@@ -190,9 +190,10 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_async_fwd(simulations, **run_kwargs) -> td.SimulationData:
             batch_data_orig, task_ids_fwd = {}, {}
-            sim_fields_keys_dict = run_kwargs.pop("sim_fields_keys_dict")
+            sim_fields_keys_dict = run_kwargs.pop("sim_fields_keys_dict", None)
             for task_name, simulation in simulations.items():
-                run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
+                if sim_fields_keys_dict is not None:
+                    run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
                 sim_data_orig, task_id_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
                 batch_data_orig[task_name] = sim_data_orig
                 task_ids_fwd[task_name] = task_id_fwd
@@ -655,7 +656,7 @@ def test_autograd_speed_num_structures(use_emulated_run):
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", (("custom_med", "mode"),))
+@pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_server(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -677,7 +678,7 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
     val, grad = ag.value_and_grad(objective)(params0)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", (("custom_med", "mode"),))
+@pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
     """Test an async objective function through tidy3d autograd."""
 
