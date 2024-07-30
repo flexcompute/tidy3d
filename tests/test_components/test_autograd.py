@@ -190,7 +190,9 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_async_fwd(simulations, **run_kwargs) -> td.SimulationData:
             batch_data_orig, task_ids_fwd = {}, {}
+            sim_fields_keys_dict = run_kwargs.pop("sim_fields_keys_dict")
             for task_name, simulation in simulations.items():
+                run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
                 sim_data_orig, task_id_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
                 batch_data_orig[task_name] = sim_data_orig
                 task_ids_fwd[task_name] = task_id_fwd
