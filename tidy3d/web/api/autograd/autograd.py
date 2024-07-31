@@ -29,6 +29,7 @@ AUX_KEY_SIM_ORIGINAL = "sim_original"
 # server-side auxiliary files to upload/download
 SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
 SIM_FIELDS_KEYS_FILE = "autograd_sim_fields_keys.hdf5"
+ADJOINT_SOURCE_INFO_FILE = "autograd_adjoint_source_info_file.hdf5"
 
 ISSUE_URL = (
     "https://github.com/flexcompute/tidy3d/issues/new?"
@@ -533,6 +534,21 @@ def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: 
     )
 
 
+def upload_adjoint_source_info(
+    adjoint_source_info: AdjointSourceInfo, task_id: str, verbose: bool = False
+) -> None:
+    """Upload the adjoint source information for the adjoint run."""
+    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
+    data_file.close()
+    adjoint_source_info.to_file(data_file.name)
+    upload_file(
+        task_id,
+        data_file.name,
+        ADJOINT_SOURCE_INFO_FILE,
+        verbose=verbose,
+    )
+
+
 """ VJP maker for ADJ pass."""
 
 
@@ -595,7 +611,12 @@ def _run_bwd(
             run_kwargs["simulation_type"] = "autograd_bwd"
             sim_adj = sim_adj.updated_copy(simulation_type="autograd_bwd", deep=False)
 
-            vjp_traced_fields = _run_tidy3d_bwd(sim_adj, task_name=task_name_adj, **run_kwargs)
+            vjp_traced_fields = _run_tidy3d_bwd(
+                sim_adj,
+                task_name=task_name_adj,
+                adjoint_source_info=adjoint_source_info,
+                **run_kwargs,
+            )
 
         return vjp_traced_fields
 
@@ -684,7 +705,9 @@ def _run_async_bwd(
                 for task_name, sim in sims_adj.items()
             }
             sim_fields_vjp_dict_adj_keys = _run_async_tidy3d_bwd(
-                simulations=sims_adj, **run_async_kwargs
+                simulations=sims_adj,
+                adjoint_source_info_dict=adjoint_source_info_dict,
+                **run_async_kwargs,
             )
 
             # swap adjoint task_names for original task_names
@@ -832,10 +855,14 @@ def _run_tidy3d(
     return data, job.task_id
 
 
-def _run_tidy3d_bwd(simulation: td.Simulation, task_name: str, **run_kwargs) -> AutogradFieldMap:
+def _run_tidy3d_bwd(
+    simulation: td.Simulation, task_name: str, adjoint_source_info: AdjointSourceInfo, **run_kwargs
+) -> AutogradFieldMap:
     """Run a simulation without any tracers using regular web.run()."""
     job_init_kwargs = parse_run_kwargs(**run_kwargs)
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
+    verbose = run_kwargs.get("verbose", False)
+    upload_adjoint_source_info(adjoint_source_info, task_id=job.task_id, verbose=verbose)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d_bwd()'")
     job.start()
     job.monitor()
@@ -875,13 +902,21 @@ def _run_async_tidy3d(
 
 
 def _run_async_tidy3d_bwd(
-    simulations: dict[str, td.Simulation], **run_kwargs
+    simulations: dict[str, td.Simulation],
+    adjoint_source_info_dict: dict[str, AdjointSourceInfo],
+    **run_kwargs,
 ) -> dict[str, AutogradFieldMap]:
     """Run a simulation without any tracers using regular web.run()."""
+
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     _ = run_kwargs.pop("path_dir")
     batch = Batch(simulations=simulations, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} simulation with '_run_tidy3d_bwd()'")
+
+    task_ids = {key: job.task_id for key, job in batch.jobs.items()}
+    for task_name, adjoint_source_info in adjoint_source_info_dict.items():
+        task_id = task_ids[task_name]
+        upload_adjoint_source_info(adjoint_source_info, task_id=task_id, verbose=batch.verbose)
 
     batch.start()
     batch.monitor()
@@ -889,7 +924,6 @@ def _run_async_tidy3d_bwd(
     vjp_traced_fields_dict = {}
     for task_name, job in batch.jobs.items():
         task_id = job.task_id
-
         vjp = get_vjp_traced_fields(task_id_adj=task_id, verbose=batch.verbose)
         vjp_traced_fields_dict[task_name] = vjp
 
