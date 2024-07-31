@@ -22,10 +22,11 @@ from ..base_sim.data.sim_data import AbstractSimulationData
 from ..file_util import replace_values
 from ..monitor import Monitor
 from ..simulation import Simulation
-from ..source import GaussianPulse, Source
+from ..source import GaussianPulse, SourceType
 from ..structure import Structure
 from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
 from ..viz import add_ax_if_none, equal_aspect
+from .data_array import FreqDataArray
 from .monitor_data import (
     AbstractFieldData,
     FieldTimeData,
@@ -45,13 +46,13 @@ RESIDUAL_CUTOFF_ADJOINT = 1e-6
 class AdjointSourceInfo(Tidy3dBaseModel):
     """Stores information about the adjoint sources to pass to autograd pipeline."""
 
-    sources: tuple[Source, ...] = pd.Field(
+    sources: tuple[SourceType, ...] = pd.Field(
         ...,
         title="Adjoint Sources",
         description="Set of processed sources to include in the adjoint simulation.",
     )
 
-    post_norm: Union[float, xr.DataArray] = pd.Field(
+    post_norm: Union[float, FreqDataArray] = pd.Field(
         ...,
         title="Post Normalization Values",
         description="Factor to multiply the adjoint fields by after running "
@@ -1056,7 +1057,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return sim_original.updated_copy(**sim_adj_update_dict), adjoint_source_info
 
-    def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, Source]:
+    def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, SourceType]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
 
         # map of index into 'self.data' to the list of datasets we need adjoint sources for
@@ -1081,8 +1082,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         normalize_index_fwd = self.simulation.normalize_index or 0
         return self.simulation.sources[normalize_index_fwd].source_time.fwidth
 
-    def process_adjoint_sources(self, adj_srcs: list[Source]) -> AdjointSourceInfo:
-        # tuple[list[Source], Union[float, xr.DataArray], bool]:
+    def process_adjoint_sources(self, adj_srcs: list[SourceType]) -> AdjointSourceInfo:
         """Compute list of final sources along with a post run normalization for adj fields."""
 
         # dictionary mapping hash of sources with same freq dependence to list of time-dependencies
@@ -1121,8 +1121,8 @@ class SimulationData(AbstractYeeGridSimulationData):
     """ SIMPLE APPROACH """
 
     def process_adjoint_sources_broadband(
-        self, adj_srcs: list[Source]
-    ) -> tuple[list[Source], xr.DataArray]:
+        self, adj_srcs: list[SourceType]
+    ) -> tuple[list[SourceType], xr.DataArray]:
         """Process adjoint sources for the case of several sources at the same freq."""
 
         src_broadband = self._make_broadband_source(adj_srcs=adj_srcs)
@@ -1137,7 +1137,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return [src_broadband], post_norm_amps
 
-    def _make_broadband_source(self, adj_srcs: list[Source]) -> Source:
+    def _make_broadband_source(self, adj_srcs: list[SourceType]) -> SourceType:
         """Make a broadband source for a set of adjoint sources."""
 
         source_index = self.simulation.normalize_index or 0
@@ -1147,7 +1147,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         return src_broadband
 
     @staticmethod
-    def _make_post_norm_amps(adj_srcs: list[Source]) -> xr.DataArray:
+    def _make_post_norm_amps(adj_srcs: list[SourceType]) -> xr.DataArray:
         """Make a ``DataArray`` containing the complex amplitudes to multiply with adjoint field."""
 
         freqs = []
@@ -1166,10 +1166,10 @@ class SimulationData(AbstractYeeGridSimulationData):
 
     def process_adjoint_sources_fit(
         self,
-        adj_srcs: list[Source],
+        adj_srcs: list[SourceType],
         hashes_to_src_times: dict[str, GaussianPulse],
-        hashes_to_sources: dict[str, list[Source]],
-    ) -> tuple[list[Source], float]:
+        hashes_to_sources: dict[str, list[SourceType]],
+    ) -> tuple[list[SourceType], float]:
         """Process the adjoint sources using a least squared fit to the derivative data."""
 
         raise NotImplementedError(
@@ -1208,8 +1208,8 @@ class SimulationData(AbstractYeeGridSimulationData):
         return adj_srcs_norm, norm_amps
 
     def correct_adjoint_sources(
-        self, src: Source, fwidth: float, source_times: list[GaussianPulse]
-    ) -> [Source]:
+        self, src: SourceType, fwidth: float, source_times: list[GaussianPulse]
+    ) -> [SourceType]:
         """Corret a set of spectrally overlapping adjoint sources to give correct E_adj."""
 
         freqs = [st.freq0 for st in source_times]
