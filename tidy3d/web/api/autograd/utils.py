@@ -8,7 +8,7 @@ import pydantic as pd
 import tidy3d as td
 from tidy3d.components.autograd.types import AutogradFieldMap, dict_ag
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayLike
+from tidy3d.components.types import ArrayLike, tidycomplex
 
 """ E and D field gradient map calculation helpers. """
 
@@ -75,7 +75,7 @@ class Tracer(Tidy3dBaseModel):
         title="Path to the traced object in the model dictionary.",
     )
 
-    data: ArrayLike = pd.Field(..., title="Tracing data")
+    data: typing.Union[float, tidycomplex, ArrayLike] = pd.Field(..., title="Tracing data")
 
 
 class FieldMap(Tidy3dBaseModel):
