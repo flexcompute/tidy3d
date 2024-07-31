@@ -400,7 +400,7 @@ def _run_primitive(
         )
 
     else:
-        sim_original = sim_original.updated_copy(autograd_type="fwd", deep=False)
+        sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
         run_kwargs["simulation_type"] = "autograd_fwd"
         run_kwargs["sim_fields_keys"] = list(sim_fields.keys())
 
@@ -455,6 +455,11 @@ def _run_async_primitive(
         run_async_kwargs["sim_fields_keys_dict"] = {}
         for task_name, sim_fields in sim_fields_dict.items():
             run_async_kwargs["sim_fields_keys_dict"][task_name] = list(sim_fields.keys())
+
+        sims_original = {
+            task_name: sim.updated_copy(simulation_type="autograd_fwd", deep=False)
+            for task_name, sim in sims_original.items()
+        }
 
         sim_data_orig_dict, task_ids_fwd_dict = _run_async_tidy3d(
             sims_original,
@@ -600,7 +605,7 @@ def _run_bwd(
             task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
             run_kwargs["parent_tasks"] = [task_id_fwd]
             run_kwargs["simulation_type"] = "autograd_bwd"
-            sim_adj = sim_adj.updated_copy(autograd_type="bwd", deep=False)
+            sim_adj = sim_adj.updated_copy(simulation_type="autograd_bwd", deep=False)
 
             vjp_traced_fields = _run_tidy3d_bwd(sim_adj, task_name=task_name_adj, **run_kwargs)
 
@@ -684,7 +689,7 @@ def _run_async_bwd(
             run_async_kwargs["parent_tasks"] = parent_tasks
             run_async_kwargs["simulation_type"] = "autograd_bwd"
             sims_adj = {
-                task_name: sim.updated_copy(autograd_type="bwd", deep=False)
+                task_name: sim.updated_copy(simulation_type="autograd_bwd", deep=False)
                 for task_name, sim in sims_adj.items()
             }
             sim_fields_vjp_dict_adj_keys = _run_async_tidy3d_bwd(
@@ -856,7 +861,7 @@ def _run_async_tidy3d(
         verbose = run_kwargs.get("verbose", False)
         # Need to upload to get the task_ids
         sims = {
-            task_name: sim.updated_copy(autograd_type="fwd", deep=False)
+            task_name: sim.updated_copy(simulation_type="autograd_fwd", deep=False)
             for task_name, sim in batch.simulations.items()
         }
         batch = batch.updated_copy(simulations=sims)
