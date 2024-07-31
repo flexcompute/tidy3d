@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.
 - Error when plotting mode plane PML and the simulation has symmetry.
 - Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
+- Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
 
 ## [2.7.1]
 

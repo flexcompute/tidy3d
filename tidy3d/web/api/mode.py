@@ -626,6 +626,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         self.mode_solver._cached_properties["data_raw"] = data
 
         # Perform symmetry expansion
+        self.mode_solver._cached_properties.pop("data", None)
         return self.mode_solver.data
 
     def get_log(
