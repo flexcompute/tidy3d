@@ -400,6 +400,7 @@ def _run_primitive(
         )
 
     else:
+        sim_original = sim_original.updated_copy(autograd_type="fwd", deep=False)
         run_kwargs["simulation_type"] = "autograd_fwd"
         run_kwargs["sim_fields_keys"] = list(sim_fields.keys())
 
@@ -599,6 +600,7 @@ def _run_bwd(
             task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
             run_kwargs["parent_tasks"] = [task_id_fwd]
             run_kwargs["simulation_type"] = "autograd_bwd"
+            sim_adj = sim_adj.updated_copy(autograd_type="bwd", deep=False)
 
             vjp_traced_fields = _run_tidy3d_bwd(sim_adj, task_name=task_name_adj, **run_kwargs)
 
@@ -681,7 +683,10 @@ def _run_async_bwd(
 
             run_async_kwargs["parent_tasks"] = parent_tasks
             run_async_kwargs["simulation_type"] = "autograd_bwd"
-
+            sims_adj = {
+                task_name: sim.updated_copy(autograd_type="bwd", deep=False)
+                for task_name, sim in sims_adj.items()
+            }
             sim_fields_vjp_dict_adj_keys = _run_async_tidy3d_bwd(
                 simulations=sims_adj, **run_async_kwargs
             )
@@ -850,6 +855,12 @@ def _run_async_tidy3d(
     if batch.simulation_type == "autograd_fwd":
         verbose = run_kwargs.get("verbose", False)
         # Need to upload to get the task_ids
+        sims = {
+            task_name: sim.updated_copy(autograd_type="fwd", deep=False)
+            for task_name, sim in batch.simulations.items()
+        }
+        batch = batch.updated_copy(simulations=sims)
+
         batch.upload()
         task_ids = {key: job.task_id for key, job in batch.jobs.items()}
         for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
