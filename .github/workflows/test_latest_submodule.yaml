@@ -1,12 +1,12 @@
-name: "tidy3d-release"
-
-permissions:
-  contents: write
+name: "tidy3d-submodule-tests"
 
 on:
+  workflow_dispatch:
   push:
-    tags:
-      - 'v*.*.*'
+    branches: [ latest ]
+  pull_request:
+    branches:
+      - latest
 
 jobs:
   test-latest-submodules:
@@ -62,8 +62,8 @@ jobs:
           NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/${{ env.BRANCH_NAME }})
           echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
           echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
-
-
+          
+          
           cd ../..
           if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
             echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the ${{ env.BRANCH_NAME }} branch. Please update it."
@@ -88,56 +88,3 @@ jobs:
           else
             echo "Submodule $FAQ_PATH is up to date."
           fi
-
-  github-release:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.ref }}
-    - name: Exit if any RC release
-      if: contains(github.ref, 'rc') == false
-      uses: everlytic/branch-merge@1.1.2
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        source_ref: ${{ github.ref }}
-        target_branch: "latest"
-        commit_message_template: ':tada: RELEASE: Merged {source_ref} into target {target_branch}'
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      with:
-        generate_release_notes: true      
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  pypi-release:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ github.ref }}
-    - uses: actions/setup-python@v2
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install setuptools wheel twine build
-    - name: Build and publish
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        python -m build
-        python -m twine upload --repository pypi dist/*
-  sync_to_develop:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: "latest"
-    - name: Exit if any RC release
-      if: contains(github.ref, 'rc') == false
-      uses: everlytic/branch-merge@1.1.2
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        source_ref: "latest"
-        target_branch: "develop"
-        commit_message_template: ':tada: RELEASE: Synced latest into develop'
