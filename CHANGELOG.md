@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
 - Mode solver now always operates on a reduced simulation copy.
+- Moved `EMESimulation` size limit validators to preupload.
 
 ### Fixed
 - Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.

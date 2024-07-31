@@ -432,20 +432,25 @@ def test_eme_simulation(log_capture):
         _ = sim.updated_copy(boundary_spec=td.BoundarySpec.all_sides(td.Periodic()))
 
     # test max sim size and freqs
+    sim_bad = sim.updated_copy(size=(1000, 1000, 1000))
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(size=(1000, 1000, 1000))
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(size=(1000, 500, 3), monitors=[], store_port_modes=True)
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(size=(1000, 500, 3), monitors=[], store_port_modes=True)
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(size=(1000, 500, 3), monitors=[], store_port_modes=False)
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(size=(1000, 500, 3), monitors=[], store_port_modes=False)
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(size=(500, 500, 3), monitors=[])
     with AssertLogLevel(log_capture, "WARNING", "slow-down"):
-        _ = sim.updated_copy(size=(500, 500, 3), monitors=[])
+        sim_bad.validate_pre_upload()
 
+    sim_bad = sim.updated_copy(
+        freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 1000)),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(
-            freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 1000)),
-            grid_spec=sim.grid_spec.updated_copy(wavelength=1),
-        )
+        sim_bad.validate_pre_upload()
     large_monitor = sim.monitors[2].updated_copy(size=(td.inf, td.inf, td.inf))
     _ = sim.updated_copy(
         size=(10, 10, 10),
@@ -453,27 +458,30 @@ def test_eme_simulation(log_capture):
         freqs=list(1e14 * np.linspace(1, 2, 1)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
+    sim_bad = sim.updated_copy(
+        size=(10, 10, 10),
+        monitors=[large_monitor],
+        freqs=list(1e14 * np.linspace(1, 2, 5)),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
     with AssertLogLevel(log_capture, "WARNING", contains_str="estimated storage"):
-        _ = sim.updated_copy(
-            size=(10, 10, 10),
-            monitors=[large_monitor],
-            freqs=list(1e14 * np.linspace(1, 2, 5)),
-            grid_spec=sim.grid_spec.updated_copy(wavelength=1),
-        )
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(
+        size=(10, 10, 10),
+        monitors=[large_monitor],
+        freqs=list(1e14 * np.linspace(1, 2, 20)),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(
-            size=(10, 10, 10),
-            monitors=[large_monitor],
-            freqs=list(1e14 * np.linspace(1, 2, 20)),
-            grid_spec=sim.grid_spec.updated_copy(wavelength=1),
-        )
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(
+        size=(10, 10, 10),
+        monitors=[large_monitor, large_monitor.updated_copy(name="lmon2")],
+        freqs=list(1e14 * np.linspace(1, 2, 5)),
+        grid_spec=sim.grid_spec.updated_copy(wavelength=1),
+    )
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(
-            size=(10, 10, 10),
-            monitors=[large_monitor, large_monitor.updated_copy(name="lmon2")],
-            freqs=list(1e14 * np.linspace(1, 2, 5)),
-            grid_spec=sim.grid_spec.updated_copy(wavelength=1),
-        )
+        sim_bad.validate_pre_upload()
 
     # test monitor that does not intersect any EME cells
     mode_monitor = td.EMEModeSolverMonitor(
@@ -532,32 +540,36 @@ def test_eme_simulation(log_capture):
     # test sweep size limit
     with pytest.raises(SetupError):
         _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
+    sim_bad = sim.updated_copy(
+        sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 200)))
+    )
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(
-            sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 200)))
-        )
+        sim_bad.validate_pre_upload()
     # can't exceed max num modes
     with pytest.raises(SetupError):
         _ = sim.updated_copy(sweep_spec=td.EMEModeSweep(num_modes=list(np.arange(150, 200))))
 
     # don't warn in these two cases
     with AssertLogLevel(log_capture, None):
-        _ = sim.updated_copy(
+        sim_good = sim.updated_copy(
             constraint="passive",
             eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=40)),
             grid_spec=sim.grid_spec.updated_copy(wavelength=1),
         )
-        _ = sim.updated_copy(
+        sim_good.validate_pre_upload()
+        sim_good = sim.updated_copy(
             constraint=None,
             eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=60)),
             grid_spec=sim.grid_spec.updated_copy(wavelength=1),
         )
+        sim_good.validate_pre_upload()
     # warn about num modes with constraint
+    sim_bad = sim.updated_copy(
+        constraint="passive",
+        eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=60)),
+    )
     with AssertLogLevel(log_capture, "WARNING", contains_str="constraint"):
-        _ = sim.updated_copy(
-            constraint="passive",
-            eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=60)),
-        )
+        sim_bad.validate_pre_upload()
 
     _ = sim.port_modes_monitor
 

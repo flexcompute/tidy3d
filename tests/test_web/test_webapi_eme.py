@@ -6,6 +6,7 @@ import tidy3d as td
 from botocore.exceptions import ClientError
 from responses import matchers
 from tidy3d import EMESimulation
+from tidy3d.exceptions import SetupError
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.webapi import (
@@ -238,6 +239,13 @@ def mock_webapi(
     mock_upload, mock_metadata, mock_get_info, mock_start, mock_monitor, mock_download, mock_load
 ):
     """Mocks all webapi operation."""
+
+
+@responses.activate
+def test_preupload_validation(mock_upload):
+    sim = make_eme_sim().updated_copy(size=(1000, 1000, 1000))
+    with pytest.raises(SetupError):
+        upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate

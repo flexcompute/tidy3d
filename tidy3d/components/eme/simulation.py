@@ -558,15 +558,19 @@ class EMESimulation(AbstractYeeGridSimulation):
         _ = self.grid
         _ = self.eme_grid
         _ = self.mode_solver_monitors
-        log.begin_capture()
         self._validate_too_close_to_edges()
         self._validate_sweep_spec()
+        self._validate_symmetry()
         self._validate_monitor_setup()
         self._validate_sources_and_boundary()
+
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized EME simulation is ok for upload to our servers."""
+        log.begin_capture()
+        self._validate_sweep_spec_size()
         self._validate_size()
         self._validate_monitor_size()
         self._validate_modes_size()
-        self._validate_symmetry()
         self._validate_constraint()
         # self._warn_monitor_interval()
         log.end_capture(self)
@@ -639,19 +643,24 @@ class EMESimulation(AbstractYeeGridSimulation):
     #                    "it always monitors every EME cell."
     #                )
 
-    def _validate_sweep_spec(self):
-        """Validate sweep spec."""
+    def _validate_sweep_spec_size(self):
+        """Make sure sweep spec is not too large."""
         if self.sweep_spec is None:
             return
-        # mode sweep can't exceed max num modes
         num_sweep = self.sweep_spec.num_sweep
-        if num_sweep == 0:
-            raise SetupError("Simulation 'sweep_spec' has 'num_sweep=0'.")
         if num_sweep > MAX_NUM_SWEEP:
             raise SetupError(
                 f"Simulation 'sweep_spec' has 'num_sweep={num_sweep}, "
                 f"which exceeds the maximum allowed '{MAX_NUM_SWEEP}'."
             )
+
+    def _validate_sweep_spec(self):
+        """Validate sweep spec."""
+        if self.sweep_spec is None:
+            return
+        num_sweep = self.sweep_spec.num_sweep
+        if num_sweep == 0:
+            raise SetupError("Simulation 'sweep_spec' has 'num_sweep=0'.")
         if isinstance(self.sweep_spec, EMEModeSweep):
             if any(self.sweep_spec.num_modes > self.max_num_modes):
                 raise SetupError(
@@ -690,6 +699,8 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _validate_monitor_setup(self):
         """Check monitor setup."""
         for monitor in self.monitors:
+            if isinstance(monitor, EMEMonitor):
+                _ = self._monitor_eme_cell_indices(monitor=monitor)
             if (
                 hasattr(monitor, "freqs")
                 and monitor.freqs is not None
