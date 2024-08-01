@@ -2465,6 +2465,35 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         """Z positions."""
         return self.Etheta.z.values
 
+    @property
+    def tangential_dims(self):
+        tangential_dims = ["x", "y", "z"]
+        tangential_dims.pop(self.monitor.proj_axis)
+        return tangential_dims
+
+    @property
+    def poynting(self) -> xr.DataArray:
+        """Time-averaged Poynting vector for field data associated to a Cartesian field projection monitor."""
+        fc = self.fields_cartesian
+        dim1, dim2 = self.tangential_dims
+
+        e1 = fc["E" + dim1]
+        e2 = fc["E" + dim2]
+        h1 = fc["H" + dim1]
+        h2 = fc["H" + dim2]
+
+        e1_h2 = e1 * h2.conj()
+        e2_h1 = e2 * h1.conj()
+
+        e_x_h_star = e1_h2 - e2_h1
+        return 0.5 * np.real(e_x_h_star)
+
+    @cached_property
+    def flux(self) -> FluxDataArray:
+        """Flux for projecteded field data corresponding to a Cartesian field projection monitor."""
+        flux = self.poynting.integrate(self.tangential_dims)
+        return FluxDataArray(flux)
+
     def renormalize_fields(self, proj_distance: float) -> FieldProjectionCartesianData:
         """Return a :class:`.FieldProjectionCartesianData` with fields re-normalized to a new
         projection distance, by applying a phase factor based on ``proj_distance``.

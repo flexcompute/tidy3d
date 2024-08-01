@@ -344,6 +344,8 @@ def test_proj_clientside():
     far_fields_cartesian.fields_cartesian
     far_fields_cartesian.radar_cross_section
     far_fields_cartesian.power
+    far_fields_cartesian.poynting
+    far_fields_cartesian.flux
     for val in far_fields_cartesian.field_components.values():
         val.sel(f=f0)
     far_fields_cartesian.renormalize_fields(proj_distance=5e6)
@@ -366,6 +368,8 @@ def test_proj_clientside():
     exact_fields_cartesian.fields_cartesian
     exact_fields_cartesian.radar_cross_section
     exact_fields_cartesian.power
+    exact_fields_cartesian.poynting
+    exact_fields_cartesian.flux
     for val in exact_fields_cartesian.field_components.values():
         val.sel(f=f0)
     with pytest.raises(DataError):
