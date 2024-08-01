@@ -4,10 +4,7 @@ import typing
 
 import autograd.numpy as anp
 import numpy as np
-import xarray as xr
 from autograd.tracer import getval, isbox
-
-from .constants import AUTOGRAD_KEY
 
 
 def _is_traced_objary(x: typing.Any) -> bool:
@@ -15,8 +12,8 @@ def _is_traced_objary(x: typing.Any) -> bool:
 
 
 def get_data(x: typing.Any) -> typing.Any:
-    if isinstance(x, xr.DataArray) or isinstance(x, xr.Variable):
-        return x.data
+    # if isinstance(x, xr.DataArray) or isinstance(x, xr.Variable):
+    #     return x.data
     return x
 
 
@@ -30,13 +27,13 @@ def get_static(x: typing.Any) -> typing.Any:
     """Get the 'static' (untraced) version of some value."""
     data = getval(get_data(x))
 
-    if isinstance(x, xr.DataArray) or isinstance(x, xr.Variable):
-        return x.copy(deep=False, data=data)
+    # if isinstance(x, xr.DataArray) or isinstance(x, xr.Variable):
+    #     return x.copy(deep=False, data=data)
 
-    if _is_traced_objary(data) or (
-        isinstance(data, np.ndarray) and data.dtype == np.dtype("object")
-    ):
-        return np.array(data.tolist())
+    # if _is_traced_objary(data) or (
+    #     isinstance(data, np.ndarray) and data.dtype == np.dtype("object")
+    # ):
+    #     return np.array(data.tolist())
 
     return data
 
@@ -51,8 +48,8 @@ def get_box(x: typing.Any) -> typing.Any:
     if not _is_traced_objary(data):
         return data
 
-    if hasattr(x, "attrs") and isinstance(x.attrs, dict) and AUTOGRAD_KEY in x.attrs:
-        return x.attrs[AUTOGRAD_KEY]
+    # if hasattr(x, "attrs") and isinstance(x.attrs, dict) and AUTOGRAD_KEY in x.attrs:
+    #     return x.attrs[AUTOGRAD_KEY]
 
     return anp.array(data.tolist())
 

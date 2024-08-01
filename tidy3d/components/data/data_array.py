@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 import pandas
 import xarray as xr
-from autograd.tracer import Box
+from autograd.tracer import Box, getval, isbox
 from xarray.core.types import InterpOptions
 from xarray.core.utils import either_dict_or_kwargs
 
@@ -26,7 +26,8 @@ from ...constants import (
 from ...exceptions import DataError, FileError
 from ..autograd.constants import AUTOGRAD_KEY
 from ..autograd.functions import interpn
-from ..autograd.utils import get_box, get_static, is_traced
+
+# from ..autograd.utils import get_box, get_static, is_traced
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -70,43 +71,32 @@ class DataArray(xr.DataArray):
     _data_attrs: Dict[str, str] = {}
 
     def __init__(self, data, *args, **kwargs):
-        if is_traced(data):
-            super().__init__(get_static(data), *args, **kwargs)
-            self.attrs[AUTOGRAD_KEY] = get_box(data)
-        else:
-            super().__init__(data, *args, **kwargs)
+        super().__init__(data, *args, **kwargs)
+        if isbox(data):
+            self.attrs[AUTOGRAD_KEY] = data
 
     @property
-    def has_tracers(self):
-        return self.tracers is not None
-
-    @property
-    def values(self):
-        if self.has_tracers:
-            return self.tracers
-        return self.variable.values
-
-    @values.setter
-    def values(self, value: Any) -> None:
-        self.variable.values = value
+    def has_tracers(self) -> bool:
+        if isbox(self.values.flat[0]) or AUTOGRAD_KEY in self.attrs:
+            return True
+        return False
 
     @property
     def static(self):
-        return get_static(self.values)
+        static_self = self.copy(deep=False, data=getval(self.values))
+        if AUTOGRAD_KEY in static_self.attrs:
+            static_self.attrs.pop(AUTOGRAD_KEY)
+        return static_self
+
+    # @property
+    # def values(self):
+    #     if self.has_tracers:
+    #         return self.tracers
+    #     return self.variable.values
 
     @property
     def tracers(self) -> Box | None:
-        if self.data.size == 0:
-            return None
-
-        is_tracing_values = is_traced(self)
-        if AUTOGRAD_KEY not in self.attrs and not is_tracing_values:  # no tracers
-            return None
-
-        if is_tracing_values:  # traced values take precedence over traced attrs
-            return get_box(self)
-
-        return self.attrs[AUTOGRAD_KEY]
+        return self.attrs.get(AUTOGRAD_KEY)
 
     @classmethod
     def __get_validators__(cls):
@@ -356,9 +346,9 @@ class DataArray(xr.DataArray):
             vals = interpn(points, interp_vals, xi, method=method)
 
             da = DataArray(vals, dict(obj.coords) | coords)  # tracers go into .attrs
-            if is_traced(self):  # if tracing .values instead of .attrs
+            if isbox(vals):  # if tracing .values instead of .attrs
                 da = da.copy(deep=False, data=vals)  # copy over tracers
-
+                da.attrs[AUTOGRAD_KEY] = vals
             return da
 
         return super().interp(
@@ -369,17 +359,23 @@ class DataArray(xr.DataArray):
             **coords_kwargs,
         )
 
+    def insert_tracers(self, tracers):
+        traced_self = self.copy(deep=False, data=tracers)
+        if isbox(tracers):
+            traced_self.attrs[AUTOGRAD_KEY] = tracers
+        return traced_self
+
     def conj(self, *args: Any, **kwargs: Any):
         """Return the complex conjugate of this DataArray."""
-        if self.has_tracers:
-            return self.__array_wrap__(anp.conj(self.values))
+        if isbox(self.values.flat[0]) or AUTOGRAD_KEY in self.attrs:
+            return self.insert_tracers(anp.conj(anp.array(self.values.tolist())))
         return super().conj(*args, **kwargs)
 
     @property
     def real(self):
         """Return the real part of this DataArray."""
-        if self.has_tracers:
-            return self.__array_wrap__(anp.real(self.values))
+        if isbox(self.values.flat[0]) or AUTOGRAD_KEY in self.attrs:
+            return self.insert_tracers(anp.real(anp.array(self.values.tolist())))
         return super().real
 
 
