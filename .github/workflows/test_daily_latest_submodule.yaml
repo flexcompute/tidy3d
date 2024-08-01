@@ -1,0 +1,107 @@
+name: "tidy3d-submodule-daily-tests"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *' # Runs at 9am UK-time every day
+
+
+jobs:
+  test-latest-submodules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          # This fetches only a single branch by default, so additional fetch is needed
+          fetch-depth: 0 # Optionally, set to 0 to fetch all history for all branches and tags
+
+      - name: Initialize and update submodule
+        run: |
+          git submodule update --init --recursive
+
+      - name: Determine the latest pre/2.* branch
+        id: get_latest_pre_branch
+        run: |
+          # Fetch all branches
+          git fetch --all --quiet
+
+          # List all remote branches for debugging purposes
+          echo "Available branches:"
+          git branch -r
+
+          # List branches matching the pre/2.* pattern
+          BRANCHES=$(git branch -r | grep 'origin/pre/2\.' | sed 's|origin/||' | sort -V)
+
+          # Debugging: Print out the matched branches
+          echo "Matched branches with pre/2.* pattern:"
+          echo "$BRANCHES"
+
+          # Identify the latest branch
+          LATEST_BRANCH=$(echo "$BRANCHES" | tail -n 1)
+
+          # Set the latest branch as an environment variable
+          echo "LATEST_BRANCH=$LATEST_BRANCH" >> $GITHUB_ENV
+          echo "Latest pre/2.* branch is: $LATEST_BRANCH"
+
+      - name: Check submodules for multiple branches
+        shell: bash
+        run: |
+          BRANCHES=("develop" $LATEST_BRANCH) # Add your branches here
+          
+          for BRANCH in "${BRANCHES[@]}"; do
+            echo "Analyzing branch: $BRANCH"
+          
+            # Fetch all branches and tags
+            git fetch --all --verbose
+          
+            # Checkout the branch
+            git checkout $BRANCH
+          
+            NOTEBOOKS_PATH=docs/notebooks
+            FAQ_PATH=docs/faq
+          
+            # Checking Notebooks submodule
+            echo "Checking $NOTEBOOKS_PATH for updates..."
+            cd $NOTEBOOKS_PATH
+            NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
+            echo $(git fetch --all --verbose)
+            echo $(git remote get-url origin)
+            if git show-ref --verify refs/remotes/origin/$BRANCH; then
+              echo "Branch $BRANCH exists."
+            else
+              echo "::error::Branch $BRANCH does not exist on remote."
+              exit 1
+            fi
+            NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/${BRANCH})
+            echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
+            echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
+          
+            cd ../..
+            if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
+              echo "::error::Submodule $NOTEBOOKS_PATH is not up to date with the $BRANCH branch. Please update it."
+              exit 1
+            else
+              echo "Submodule $NOTEBOOKS_PATH is up to date with the $BRANCH branch."
+            fi
+          
+            # Checking FAQs only on the develop branch
+            if [[ "$BRANCH" == "develop" ]]; then
+              echo "Checking $FAQ_PATH for updates..."
+              cd $FAQ_PATH
+              FAQ_CURRENT_COMMIT=$(git rev-parse HEAD)
+              echo $(git fetch --all --verbose)
+              echo $(git remote get-url origin)
+              FAQ_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
+              echo "FAQ_LATEST_COMMIT: $FAQ_LATEST_COMMIT"
+              echo "FAQ_CURRENT_COMMIT: $FAQ_CURRENT_COMMIT"
+              cd ../..
+              if [ "$FAQ_LATEST_COMMIT" != "$FAQ_CURRENT_COMMIT" ]; then
+                echo "::error::Submodule $FAQ_PATH is not up to date. Please update it."
+                exit 1
+              else
+                echo "Submodule $FAQ_PATH is up to date."
+              fi
+            fi
+          done
