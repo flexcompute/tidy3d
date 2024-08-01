@@ -1,4 +1,4 @@
-name: "tidy3d-submodule-tests"
+name: "tidy3d-submodule-PR-tests"
 
 on:
   workflow_dispatch:
