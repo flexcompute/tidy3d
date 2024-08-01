@@ -1014,8 +1014,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             if isinstance(sub_element, DataArray):
                 current_dict[final_key] = sub_element.insert_tracers(x)
 
-                if AUTOGRAD_KEY in current_dict[final_key].attrs:
-                    current_dict[final_key].attrs.pop(AUTOGRAD_KEY)
+                # if not is_traced(x) and AUTOGRAD_KEY in current_dict[final_key].attrs:
+                #     current_dict[final_key].attrs.pop(AUTOGRAD_KEY)
             else:
                 current_dict[final_key] = x
 

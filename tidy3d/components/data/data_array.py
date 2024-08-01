@@ -83,7 +83,7 @@ class DataArray(xr.DataArray):
 
     @property
     def static(self):
-        static_self = self.copy(deep=False, data=getval(self.values))
+        static_self = self.copy(deep=False, data=np.array(getval(self.values.tolist())))
         if AUTOGRAD_KEY in static_self.attrs:
             static_self.attrs.pop(AUTOGRAD_KEY)
         return static_self
