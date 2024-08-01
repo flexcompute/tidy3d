@@ -20,8 +20,8 @@ class Method(Tidy3dBaseModel, ABC):
     name: str = pd.Field(None, title="Name", description="Optional name for the sweep method.")
 
     @abstractmethod
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
-        """Defines the search algorithm (sequential)."""
+    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
+        """Defines the search algorithm."""
 
     @abstractmethod
     def get_run_count(self, parameters: list = None) -> int:
@@ -38,6 +38,7 @@ class Method(Tidy3dBaseModel, ABC):
     @staticmethod
     def _extract_output(output: list, sampler: bool = False) -> Tuple:
         """Format the user function output for further optimization and result storage."""
+
         # Light check if all the outputs are the same type
         # If the user has supplied multiple returns this may catch it
         # If the user has multiple returns and it passes this then it's less likely to cause further problems
@@ -91,7 +92,7 @@ class Method(Tidy3dBaseModel, ABC):
 
 
 class MethodSample(Method, ABC):
-    """A sweep method where all points are independently computed."""
+    """A sweep method where all points are independently computed in one iteration."""
 
     @abstractmethod
     def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
@@ -108,8 +109,8 @@ class MethodSample(Method, ABC):
             self._force_int(arg_dict, parameters)
         return fn_args
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
-        """Defines the search algorithm (sequential)."""
+    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+        """Defines the search algorithm."""
 
         # get all function inputs
         fn_args = self._assemble_args(parameters)
@@ -124,6 +125,10 @@ class MethodSample(Method, ABC):
 class MethodGrid(MethodSample):
     """Select parameters uniformly on a grid.
 
+    Size of the grid is specified by the parameter type,
+    either as the number of unique discrete values (ParameterInt, ParameterAny)
+    or with the num_points argument (ParameterFloat).
+
     Example
     -------
     >>> import tidy3d.plugins.design as tdd
@@ -135,7 +140,7 @@ class MethodGrid(MethodSample):
 
     @staticmethod
     def sample(parameters: Tuple[ParameterType, ...]) -> Dict[str, Any]:
-        """Defines how the design parameters are sampled on grid."""
+        """Defines how the design parameters are sampled on the grid."""
 
         # sample each dimension individually
         vals_each_dim = {}
@@ -159,7 +164,7 @@ class MethodOptimize(Method, ABC):
     rng_seed: pd.PositiveInt = pd.Field(
         default=None,
         title="Seed for random number generation",
-        description="Set the seed used by the optimizers to set constant random number generation.",
+        description="Set the seed used by the optimizers to ensure consistant random number generation.",
     )
 
     def any_to_int_param(self, parameter):
@@ -186,43 +191,48 @@ class MethodOptimize(Method, ABC):
 
 
 class MethodBayOpt(MethodOptimize, ABC):
-    """A standard method for performing bayesian optimization search"""
+    """A standard method for performing a bayesian optimization search."""
 
     initial_iter: pd.PositiveInt = pd.Field(
         ...,
         title="Number of initial random search iterations",
-        description="The number of search runs to be done initialially with parameter values picked randomly. This provides a starting point for the Gaussian processor to optimize from.",
+        description="The number of search runs to be done initialially with parameter values picked randomly. This provides a starting point for the Gaussian processor to optimize from. These solutions can be computed as a single ``Batch`` if the pre function generates ``Simulation`` objects.",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
         title="Number of bayesian optimization iterations",
-        description="The number of iterations the Gaussian processor should be sequentially called to suggest parameter values and evaluate the results.",
+        description="Following the initial search, this is number of iterations the Gaussian processor should be sequentially called to suggest parameter values and register the results.",
     )
 
     acq_func: Literal["ucb", "ei", "poi"] = pd.Field(
         default="ucb",
         title="Type of acquisition function",
-        description="The style of acquisition function that should be used to suggest parameter values. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
+        description="The type of acquisition function that should be used to suggest parameter values. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
     )
 
     kappa: pd.PositiveFloat = pd.Field(
         default=2.5,
         title="Kappa",
-        description="The kappa coefficient used by the ``ucb`` acquisition function.",
+        description="The kappa coefficient used by the ``ucb`` acquisition function. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
     )
 
     xi: pd.NonNegativeFloat = pd.Field(
         default=0.0,
         title="Xi",
-        description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions",
+        description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
     )
 
     def get_run_count(self, parameters: list = None) -> int:
         return self.initial_iter + self.n_iter
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
-        """Defines the search algorithm for BayOpt"""
+    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+        """Defines the bayesian optimization search algorithm for the method.
+
+        Uses the ``bayes_opt`` package to carry out a Bayesian optimization. Utilizes the ``.suggest`` and ``.register`` methods instead of
+        the ``BayesianOptimization`` helper class as this allows more control over batching and preprocessing.
+        More details of the package can be found `here <https://bayesian-optimization.github.io/BayesianOptimization/basic-tour.html>'_
+        """
         try:
             from bayes_opt import BayesianOptimization, UtilityFunction
         except ImportError:
@@ -306,77 +316,77 @@ class MethodGenAlg(MethodOptimize, ABC):
     # Args for the user
     solutions_per_pop: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of solutions per population",
+        title="Solutions per Population",
         description="The number of solutions to be generated for each population.",
     )
 
     n_generations: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of generations",
+        title="Number of Generations",
         description="The maximum number of generations to run the genetic algorithm.",
     )
 
     n_parents_mating: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of parents mating",
-        description="The number of solutions to be selected as parents for the next generation.",
+        title="Number of Parents Mating",
+        description="The number of solutions to be selected as parents for the next generation. Crossovers of these parents will produce the next population.",
     )
 
     stop_criteria_type: Literal["reach", "saturate"] = pd.Field(
         default=None,
-        title="Early stopping criteria type",
+        title="Early Stopping Criteria Type",
         description="Define the early stopping criteria. Supported words are 'reach' or 'saturate'. 'reach' stops at a desired fitness, 'saturate' stops when the fitness stops improving. Must set ``stop_criteria_number``. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
     stop_criteria_number: pd.PositiveInt = pd.Field(
         default=None,
-        title="Early stopping criteria number",
+        title="Early Stopping Criteria Number",
         description="Must set ``stop_criteria_type``. If type is 'reach' the number is acceptable fitness value to stop the optimization. If type is 'saturate' the number is the number generations where the fitness doesn't improve before optimization is stopped. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
     parent_selection_type: Literal["sss", "rws", "sus", "rank", "random", "tournament"] = pd.Field(
         default="sss",
-        title="Parent selection type",
+        title="Parent Selection Type",
         description="The style of parent selector. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
     keep_parents: Union[pd.PositiveInt, Literal[-1, 0]] = pd.Field(
         default=-1,
-        title="Keep parents",
-        description="The style of parent selector. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+        title="Keep Parents",
+        description="The number of parents to keep unaltered in the population of the next generation.",
     )
 
     crossover_type: Union[None, Literal["single_point", "two_points", "uniform", "scattered"]] = (
         pd.Field(
             default="single_point",
-            title="Crossover type",
+            title="Crossover Type",
             description="The style of crossover operation. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
         )
     )
 
     crossover_prob: pd.confloat(ge=0, le=1) = pd.Field(
         default=0.8,
-        title="Crossover probability",
+        title="Crossover Probability",
         description="The probability of performing a crossover between two parents.",
     )
 
     mutation_type: Union[None, Literal["random", "swap", "inversion", "scramble", "adaptive"]] = (
         pd.Field(
             default="random",
-            title="Crossover type",
-            description="The style of gene mutation.",
+            title="Mutation Type",
+            description="The style of gene mutation. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
         )
     )
 
     mutation_prob: pd.confloat(ge=0, le=1) = pd.Field(
         default=0.2,
-        title="Crossover probability",
+        title="Mutation Probability",
         description="The probability of mutating a gene.",
     )
 
     save_solution: pd.StrictBool = pd.Field(
         default=False,
-        title="Save solutions",
+        title="Save Solutions",
         description="Save all solutions from all generations within a numpy array. Can be accessed from the optimizer object stored in the Result. May cause memory issues with large populations or many generations. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
@@ -387,8 +397,13 @@ class MethodGenAlg(MethodOptimize, ABC):
         run_count = self.solutions_per_pop * (self.n_generations + 1)
         return run_count
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
-        """Defines the search algorithm for the GA"""
+    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+        """Defines the genetic algorithm for the method.
+
+        Uses the ``pygad`` package to carry out a particle search optimization. Additional development has ensured that
+        previously suggested solutions are not repeatedly computed, and that all computed solutions are captured.
+        More details of the package can be found `here <https://pygad.readthedocs.io/en/latest/index.html>'_
+        """
         try:
             import pygad
         except ImportError:
@@ -567,25 +582,25 @@ class MethodParticleSwarm(MethodOptimize, ABC):
 
     n_particles: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of particles in the swarm",
-        description="The number of particles to be used in the optimization.",
+        title="Number of Particles",
+        description="The number of particles to be used in the swarm for the optimization.",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of iterations",
+        title="Number of Iterations",
         description="The maxmium number of iterations to run the optimization.",
     )
 
     cognitive_coeff: pd.PositiveFloat = pd.Field(
         default=1.5,
-        title="Cognitive coefficient",
+        title="Cognitive Coefficient",
         description="The cognitive parameter decides how attracted the particle is to its previous best position.",
     )
 
     social_coeff: pd.PositiveFloat = pd.Field(
         default=1.5,
-        title="Social coefficient",
+        title="Social Coefficient",
         description="The social parameter decides how attracted the particle is to the global best position found by the swarm.",
     )
 
@@ -597,20 +612,25 @@ class MethodParticleSwarm(MethodOptimize, ABC):
 
     ftol: Union[pd.confloat(ge=0, le=1), Literal[-inf]] = pd.Field(
         default=-inf,
-        title="Relative error for convergence",
-        description="Relative error in `objective_func(best_solution)` acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
+        title="Relative Error for Convergence",
+        description="Relative error in ``objective_func(best_solution)`` acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
     )
 
     ftol_iter: pd.PositiveInt = pd.Field(
         default=1,
         title="Number of iterations before acceptable convergence",
-        description="Number of iterations over which the relative error in objective_func is acceptable for convergence.",
+        description="Number of iterations over which the relative error in the objective_func is acceptable for convergence.",
     )
 
     def get_run_count(self, parameters: list = None) -> int:
         return self.n_particles * self.n_iter
 
-    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+        """Defines the particle search optimization algorithm for the method.
+
+        Uses the ``pyswarms`` package to carry out a particle search optimization.
+        More details of the package can be found `here <https://pyswarms.readthedocs.io/en/latest/index.html>'_
+        """
         try:
             from pyswarms.single.global_best import GlobalBestPSO
         except ImportError:
@@ -692,14 +712,14 @@ class AbstractMethodRandom(MethodSample, ABC):
 
     num_points: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of points for sampling",
+        title="Number of Sampling Points",
         description="The number of points to be generated for sampling.",
     )
 
     rng_seed: pd.PositiveInt = pd.Field(
         default=None,
-        title="Seed for random number generation",
-        description="Set the seed used by the optimizers to set constant random number generation.",
+        title="Seed",
+        description="Sets the seed used by the optimizers to set constant random number generation.",
     )
 
     @abstractmethod
@@ -730,7 +750,9 @@ class AbstractMethodRandom(MethodSample, ABC):
 
 
 class MethodMonteCarlo(AbstractMethodRandom):
-    """Select sampling points using Monte Carlo sampling (Latin Hypercube method).
+    """Select sampling points using Monte Carlo sampling.
+
+    The sampling is done with the Latin Hypercube method from scipy.
 
     Example
     -------

@@ -62,7 +62,7 @@ class ParameterNumeric(Parameter, ABC):
     span: Tuple[Union[float, int], Union[float, int]] = pd.Field(
         ...,
         title="Span",
-        description="(min, max) inclusive range within which the variable should be swept.",
+        description="(min, max) inclusive range within which are allowed values for the variable.",
     )
 
     @pd.validator("span", always=True)
@@ -140,7 +140,7 @@ class ParameterInt(ParameterNumeric):
     span: Tuple[int, int] = pd.Field(
         ...,
         title="Span",
-        description="``(min, max)`` range within which the variable should be swept. "
+        description="``(min, max)`` range within which are allowed values for the variable. "
         "The ``min`` value is inclusive and the ``max`` value is exclusive. In other words, "
         "a grid search over this variable will iterate over ``np.arange(min, max)``.",
     )

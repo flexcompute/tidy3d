@@ -66,20 +66,21 @@ class Result(Tidy3dBaseModel):
         None,
         title="Task IDs",
         description="Task IDs for the simulation run in each data point. Only available if "
-        "the parameter sweep function is split into pre and post processing and run with "
-        "'Design.run_batch()', otherwise is ``None``. ",
+        "the parameter sweep function is split into pre and post processing, otherwise is ``None``. ",
     )
 
     aux_values: Tuple[Any, ...] = pd.Field(
         None,
         title="Auxiliary values output from the user function",
-        description="The auxiliary return values from the design problem function. These weren't used to inform the optimizer, if one was used.",
+        description="The auxiliary return values from the design problem function. This is the collection of objects returned "
+        "alongside the float value used for the optimization. These weren't used to inform the optimizer, if one was used.",
     )
 
     optimizer: Any = pd.Field(
         None,
         title="Optimizer object",
-        description="The optimizer returned at the end of an optimizer run. Can be used to analyze and plot how the optimization progressed. Will be None for sampling based methods.",
+        description="The optimizer returned at the end of an optimizer run. Can be used to analyze and plot how the optimization progressed. "
+        "Attributes depend on the optimizer used; a full explaination of the optimizer can be found on associated library doc pages. Will be None for sampling based methods.",
     )
 
     @pd.validator("coords", always=True)
@@ -173,7 +174,16 @@ class Result(Tidy3dBaseModel):
         return self.get_value(coords_tuple)
 
     def to_dataframe(self, include_aux: bool = False) -> pandas.DataFrame:
-        """Data as a `pandas.DataFrame`.
+        """Data as a ``pandas.DataFrame``.
+
+        Output a ``pandas.DataFrame`` of the ``Result``. Can include auxiliary data if ``include_aux`` is ``True``
+        and auxiliary data is found in the ``Result``. If auxiliary data is in a dictionary the keys will be used
+        as column names, otherwise they will be labeled ``aux_key_X`` for X auxiliary columns.
+
+        Parameters
+        ----------
+        include_aux: bool = False
+            Toggle to include auxiliary values in the dataframe. Requires auxiliary values in the ``Result``.
 
         Returns
         -------

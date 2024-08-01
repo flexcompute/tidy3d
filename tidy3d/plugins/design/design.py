@@ -24,7 +24,7 @@ from .result import Result
 
 
 class DesignSpace(Tidy3dBaseModel):
-    """Specification of a design problem / combination of several parameters + algorithm.
+    """Manages all exploration of a parameter space within specified parameters using a supplied search method.
 
     Example
     -------
@@ -36,6 +36,7 @@ class DesignSpace(Tidy3dBaseModel):
     >>> result = design_space.run(fn)
     >>> df = result.to_dataframe()
     >>> im = df.plot()
+
     """
 
     parameters: Tuple[ParameterType, ...] = pd.Field(
@@ -51,18 +52,20 @@ class DesignSpace(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,  # Stops pydantic trying to validate every method whilst checking MethodType
     )
 
-    name: str = pd.Field(None, title="Name", description="Optional name for the design space.")
-
     task_name: str = pd.Field(
-        None,
+        "",
         title="Task Name",
-        description="Task name assigned to tasks along with a simulation counter. Only used when pre-post functions are supplied.",
+        description="Task name assigned to tasks along with a simulation counter in the form of {task_name}_{counter}. \
+            If the pre function outputs a dictionary the key will be included in the task name as {task_name}_{dict_key}_{counter}. \
+            Only used when pre-post functions are supplied.",
     )
+
+    name: str = pd.Field(None, title="Name", description="Optional name for the design space.")
 
     path_dir: str = pd.Field(
         ".",
         title="Path Directory",
-        description="Directory where simulation data files will be saved to. Only used when pre-post functions are supplied.",
+        description="Directory where simulation data files will be locally saved to. Only used when pre-post functions are supplied.",
     )
 
     folder_name: str = pd.Field(
@@ -112,17 +115,48 @@ class DesignSpace(Tidy3dBaseModel):
             return None
 
     def run(self, fn: Callable, fn_post: Callable = None, verbose: bool = True) -> Result:
-        """Run the design problem on a user defined function of the design parameters.
+        """Explore a parameter space with a supplied method using the user supplied function.
+
+        Supplied functions are used to evaluate the design space and are called within the method.
+        For optimization methods these functions act as the fitness function. A single function can be
+        supplied which will contain the preprocessing, computation, and analysis of the desired problem.
+        If running a Tidy3D simulation, it is recommended to split this function into a pre function, that creates a Simulation object(s),
+        and a post function which analyses the SimulationData produced by the pre function Simulations. This allows the DesignSpace to
+        manage the batching of Simulations, which varies between Method used, and saving time writing their own batching code.
+        It also efficiently submits simulations to the cloud servers allowing for the fastest exploration of a design space.
+
+        The ``fn`` function must take a dictionary input - this can be stored a dictionary ``def example_fn(**params)``
+        or left as keyword arguments ``def example_fn(arg1, arg2)`` where the keywords correspond to the ``name`` of the parameters in the design space.
+
+        If used as a pre function, the output of ``fn`` must be a float, ``Simulation``, ``Batch``, list, or dict. Supplied ``Batch`` objects are
+        run without modification and are run in series. A list or dict of ``Simulation`` objects is flattened into a single ``Batch`` to enable
+        parallel computation on the cloud. The original structure is then restored for output; all `Simulation`` objects are replaced by ``SimulationData`` objects.
+
+        The output of ``fn_post`` (or ``fn`` if only one function is supplied) must be a float
+        or a container where the first element is a ``float`` and second element is a ``list`` / ``dict`` e,g. [float {"aux_1": str}].
+        The float is used by the optimizers as the return of the fitness function.
+        The second element is for auxiliary data from the analysis that the user may want to keep.
+        Sampling methods (``MethodGrid`` or ``MethodMonteCarlo``) can have any return type.
 
         Parameters
         ----------
-        function : Callable
-            Function accepting arguments that correspond to the ``.name`` fields
+        fn : Callable
+            Function accepting arguments that correspond to the ``name`` fields
             of the ``DesignSpace.parameters``.
+            Must return in the expected format for the ``method`` used in ``DesignSpace``,
+            or return an object that fn_post can accept as an input.
+
+        fn_post : Callable = None
+            Optional function performing postprocessing on the output of ``fn``.
+            It is recommended to supply fn_post when working with Simulation objects.
+            Must return in the expected format for the ``method`` used in ``DesignSpace``.
+
+        verbose : bool = True
+            Toggle the output of statements stored in the logging console.
 
         Returns
         -------
-        :class:`.Result`
+        :class:`Result`
             Object containing the results of the design space exploration.
             Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
         """
@@ -161,16 +195,16 @@ class DesignSpace(Tidy3dBaseModel):
     def run_single(self, fn: Callable, console) -> Tuple(list[dict], list, list[Any]):
         """Run a single function of parameter inputs."""
         evaluate_fn = self._get_evaluate_fn_single(fn=fn)
-        return self.method.run(run_fn=evaluate_fn, parameters=self.parameters, console=console)
+        return self.method._run(run_fn=evaluate_fn, parameters=self.parameters, console=console)
 
     def run_pre_post(self, fn_pre: Callable, fn_post: Callable, console) -> Tuple(
         list[dict], list[dict], list[Any]
     ):
-        """Run a function with tidy3d implicitly called in between."""
+        """Run a function with Tidy3D implicitly called in between."""
         handler = self._get_evaluate_fn_pre_post(
             fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid
         )
-        fn_args, fn_values, aux_values, opt_output = self.method.run(
+        fn_args, fn_values, aux_values, opt_output = self.method._run(
             run_fn=handler.fn_combined, parameters=self.parameters, console=console
         )
         return fn_args, fn_values, aux_values, opt_output, handler.sim_names
@@ -277,7 +311,12 @@ class DesignSpace(Tidy3dBaseModel):
                 if naming_keys[sim_key] != str(sim_counter) and not was_list
                 else sim_counter
             )
-            sim_name = f"{self.task_name}_{suffix}"
+
+            # Handle if the user does not want a task name
+            if len(self.task_name) > 0:
+                sim_name = f"{self.task_name}_{suffix}"
+            else:
+                sim_name = suffix
             named_sims[sim_name] = sim
             translate_sims[sim_name] = sim_key
             sim_counter += 1
@@ -345,10 +384,24 @@ class DesignSpace(Tidy3dBaseModel):
         return result
 
     def estimate_cost(self, fn_pre: Callable) -> float:
-        """
-        Compute the maximum FlexCredit charge for the entire design space computation.
-        Require a pre function that should return a Simulation object, Batch object, or collection of either.
-        The pre function is called to estimate the cost - complicated pre functions may cause long runtimes.
+        """Compute the maximum FlexCredit charge for the ``DesignSpace.run`` computation.
+
+        Require a pre function that should return a ``Simulation`` object, a ``Batch`` object, or collection of either.
+        The pre function is called to estimate the cost - complicated pre functions may cause long runtimes. The cost per
+        iteration is multiplied by the theoretical maximum number of iterations to give the maximum cost.
+
+        Parameters
+        ----------
+        fn_pre : Callable
+            Function accepting arguments that correspond to the ``name`` fields
+            of the ``DesignSpace.parameters``. Should return a ``Simulation`` or ``Batch`` object, or a
+            ``list`` / ``dict`` of these objects.
+
+        Returns
+        -------
+        float
+            Estimated maximum cost for the ``DesignSpace.run``.
+
         """
         # Get output fn_pre for paramters at the lowest span / default
         arg_dict = {}
@@ -414,7 +467,24 @@ class DesignSpace(Tidy3dBaseModel):
             return round(per_run_estimate * run_count, 3)
 
     def summarize(self, fn_pre: Callable = None) -> dict[str, Any]:
-        """Summarize the setup of the DesignSpace"""
+        """Summarize the setup of the DesignSpace
+
+        Prints a summary of the DesignSpace including the method and associated args, the parameters,
+        and the maximum number of runs expected. If ``fn_pre`` is provided an estimated cost will
+        also be included. Additional notes are printed where relevant. All data is returned as a dict.
+
+        Parameters
+        ----------
+        fn_pre : Callable = None
+            Function accepting arguments that correspond to the ``name`` fields
+            of the ``DesignSpace.parameters``. Allows for estimated cost to be included
+            in the summary.
+
+        Returns
+        -------
+        summary_dict: dict
+            Dictionary containing the summary information.
+        """
 
         # Get output console
         console = get_logging_console()
