@@ -309,7 +309,7 @@ class DesignSpace(Tidy3dBaseModel):
             suffix = (
                 f"{naming_keys[sim_key]}_{sim_counter}"
                 if naming_keys[sim_key] != str(sim_counter) and not was_list
-                else sim_counter
+                else str(sim_counter)
             )
 
             # Handle if the user does not want a task name
