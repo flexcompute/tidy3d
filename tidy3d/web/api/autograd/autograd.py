@@ -898,6 +898,7 @@ def _run_async_tidy3d(
     else:
         batch_data = batch.run()
 
+    task_ids = {key: job.task_id for key, job in batch.jobs.items()}
     return batch_data, task_ids
 
 
