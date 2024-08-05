@@ -84,7 +84,8 @@ class DesignSpace(Tidy3dBaseModel):
         fn_args: list[dict[str, Any]],
         fn_values: List[Any],
         fn_source: str,
-        task_ids: Tuple[str] = None,
+        task_names: Tuple[str] = None,
+        task_paths: list = None,
         aux_values: List[Any] = None,
         opt_output: Any = None,
     ) -> Result:
@@ -101,7 +102,8 @@ class DesignSpace(Tidy3dBaseModel):
             values=fn_values,
             coords=fn_args_coords_T,
             fn_source=fn_source,
-            task_ids=task_ids,
+            task_names=task_names,
+            task_paths=task_paths,
             aux_values=aux_values,
             optimizer=opt_output,
         )
@@ -169,13 +171,12 @@ class DesignSpace(Tidy3dBaseModel):
         if fn_post is None:
             fn_args, fn_values, aux_values, opt_output = self.run_single(fn, console)
             sim_names = None
+            sim_paths = None
 
         else:
-            fn_args, fn_values, aux_values, opt_output, sim_names = self.run_pre_post(
+            fn_args, fn_values, aux_values, opt_output, sim_names, sim_paths = self.run_pre_post(
                 fn_pre=fn, fn_post=fn_post, console=console
             )
-
-            sim_names = tuple(sim_names)
 
             if len(sim_names) == 0:
                 sim_names = None
@@ -188,7 +189,8 @@ class DesignSpace(Tidy3dBaseModel):
             fn_values=fn_values,
             fn_source=fn_source,
             aux_values=aux_values,
-            task_ids=sim_names,
+            task_names=sim_names,
+            task_paths=sim_paths,
             opt_output=opt_output,
         )
 
@@ -207,7 +209,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_args, fn_values, aux_values, opt_output = self.method._run(
             run_fn=handler.fn_combined, parameters=self.parameters, console=console
         )
-        return fn_args, fn_values, aux_values, opt_output, handler.sim_names
+        return fn_args, fn_values, aux_values, opt_output, handler.sim_names, handler.sim_paths
 
     """ Helpers """
 
@@ -227,6 +229,7 @@ class DesignSpace(Tidy3dBaseModel):
             def __init__(self):
                 self.sim_counter = 0
                 self.sim_names = []
+                self.sim_paths = []
 
             def fn_combined(self, args_list: list[dict[str, Any]]) -> list[Any]:
                 """Compute fn_pre and fn_post functions and capture other outputs."""
@@ -240,9 +243,10 @@ class DesignSpace(Tidy3dBaseModel):
                         "Unrecognized output of fn_pre. Please change the return of fn_pre."
                     )
 
-                data, sim_names = fn_mid(sim_dict, self.sim_counter)
-                self.sim_names.extend(sim_names)
-                self.sim_counter += len(sim_names)
+                data, task_names, task_paths = fn_mid(sim_dict, self.sim_counter)
+                self.sim_names.extend(task_names)
+                self.sim_paths.extend(task_paths)
+                self.sim_counter += len(task_names)
                 post_out = [fn_post(val) for val in data.values()]
                 return post_out
 
@@ -299,9 +303,9 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Exit fn_mid here if no td computation is required
         if not len(simulations) and not len(batches):
-            return original_pre_out, list()
+            return original_pre_out, list(), list()
 
-        # Compute sims and batches and return to pre_out
+        # Create task names for simulations
         named_sims = {}
         translate_sims = {}
         for sim_key, sim in simulations.items():
@@ -321,6 +325,7 @@ class DesignSpace(Tidy3dBaseModel):
             translate_sims[sim_name] = sim_key
             sim_counter += 1
 
+        # Running simulations and batches
         sims_out = Batch(
             simulations=named_sims,
             folder_name=self.folder_name,
@@ -340,20 +345,52 @@ class DesignSpace(Tidy3dBaseModel):
             else:
                 return_dict[split_key[0]] = return_obj
 
-        for sim_name, sim in sims_out.items():
+        for (sim_name, sim), task_name, task_path in zip(
+            sims_out.items(), sims_out.task_ids.keys(), sims_out.task_paths.values()
+        ):
             translated_name = translate_sims[sim_name]
+            sim.attrs["task_name"] = task_name
+            sim.attrs["task_path"] = task_path
             _return_to_dict(pre_out, translated_name, sim)
 
         for batch_name, batch in batch_results.items():
             _return_to_dict(pre_out, batch_name, batch)
 
+        def _remove_or_replace(search_dict, attr_name):
+            """Recursively search through a dict replacing Sims and Batches or ignoring other items thus removing them"""
+            new_dict = {}
+            for key, value in search_dict.items():
+                if isinstance(value, dict):
+                    new_sub_dict = _remove_or_replace(value, attr_name)
+                    new_dict[key] = new_sub_dict
+
+                else:
+                    if isinstance(value, SimulationData):
+                        new_dict[key] = value.attrs[attr_name]
+
+                    elif isinstance(value, BatchData):
+                        if attr_name == "task_name":
+                            new_dict[key] = list(value.task_ids.keys())
+                        else:
+                            new_dict[key] = list(value.task_paths.values())
+
+            return new_dict
+
+        # Build out a dict of task_name or task_path in the same shape as the original data
+        task_names = _remove_or_replace(pre_out.copy(), "task_name")
+        task_paths = _remove_or_replace(pre_out.copy(), "task_path")
+
+        # Reduce down to a list to be extended later
+        task_names = list(task_names.values())
+        task_paths = list(task_paths.values())
+
         # Restore output to a list if a list was supplied
         if was_list:
-            return {
-                dict_idx: list(sub_dict.values()) for dict_idx, sub_dict in pre_out.items()
-            }, list(named_sims.keys())
+            pre_out = {dict_idx: list(sub_dict.values()) for dict_idx, sub_dict in pre_out.items()}
+            task_names = [list(sub_dict.values()) for sub_dict in task_names]
+            task_paths = [list(sub_dict.values()) for sub_dict in task_paths]
 
-        return pre_out, list(named_sims.keys())
+        return pre_out, task_names, task_paths
 
     def run_batch(
         self,

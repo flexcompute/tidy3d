@@ -30,7 +30,7 @@ SWEEP_METHODS = dict(
 def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
     data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()}
     task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
-    task_paths = dict(zip(simulations.simulations.keys(), simulations.simulations.keys()))
+    task_paths = {key: f"/path/to/{key}" for key in simulations.simulations.keys()}
 
     class BatchDataEmulated(web.BatchData):
         """Emulated BatchData object that just returns stored emulated data."""
@@ -379,13 +379,13 @@ def test_sweep(sweep_method, monkeypatch):
     # Test with list of sims
     td_sim_list = design_space.run(scs_pre_list, scs_post_list)
 
-    assert "0_0" not in td_sim_list.task_ids[0] and "0_3" not in td_sim_list.task_ids[4]
+    assert "0_0" not in td_sim_list.task_names[0] and "0_3" not in td_sim_list.task_names[4]
 
     # Test with dict of sims
     td_sim_dict = design_space.run(scs_pre_dict, scs_post_dict)
 
     # Check naming is including dict keys
-    assert "test1" in td_sim_dict.task_ids[0]
+    assert "test1" in td_sim_dict.task_names[0]
 
     # Test with list of sims and non-sim constant values
     ts_sim_list_const = design_space.run(scs_pre_list_const, scs_post_list_const)
@@ -601,7 +601,7 @@ def test_bad_result():
             values=[1, 2],
             coords=[(1, 2), (3, 4)],
             fn_source="",
-            task_ids=None,
+            task_names=None,
             aux_values=None,
         )
 
@@ -612,7 +612,7 @@ def test_bad_result():
             values=(1,),
             coords=[(1, 2), (3, 4)],
             fn_source="",
-            task_ids=None,
+            task_names=None,
             aux_values=None,
         )
 
@@ -624,7 +624,7 @@ def test_bad_result():
             values=(1, 2),
             coords=[(1, 2), (3, 4)],
             fn_source="Uh",
-            task_ids=None,
+            task_names=None,
             aux_values=None,
         )
 
@@ -633,7 +633,7 @@ def test_bad_result():
             values=(1, 2),
             coords=[(1, 2), (3, 4)],
             fn_source="Oh",
-            task_ids=None,
+            task_names=None,
             aux_values=None,
         )
 
@@ -646,7 +646,7 @@ def test_bad_result():
             values=(1, 2),
             coords=[(1, 2), (3, 4)],
             fn_source="",
-            task_ids=None,
+            task_names=None,
             aux_values=None,
         )
 
@@ -655,7 +655,7 @@ def test_bad_result():
             values=(1, 2),
             coords=[(1, 2), (3, 4)],
             fn_source="",
-            task_ids=None,
+            task_names=None,
             aux_values=None,
         )
 

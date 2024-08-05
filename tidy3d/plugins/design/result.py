@@ -62,11 +62,20 @@ class Result(Tidy3dBaseModel):
         description="Source code for the function evaluated in the parameter sweep.",
     )
 
-    task_ids: Tuple[str, ...] = pd.Field(
+    task_names: list = pd.Field(
         None,
-        title="Task IDs",
-        description="Task IDs for the simulation run in each data point. Only available if "
-        "the parameter sweep function is split into pre and post processing, otherwise is ``None``. ",
+        title="Task Names",
+        description="Task name of every simulation run during ``DesignSpace.run``. Only available if "
+        "the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
+        "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
+    )
+
+    task_paths: list = pd.Field(
+        None,
+        title="Task Paths",
+        description="Task paths of every simulation run during ``DesignSpace.run``. Useful for loading download ``SimulationData`` hdf5 files."
+        "Only available if the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
+        "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
 
     aux_values: Tuple[Any, ...] = pd.Field(
@@ -227,7 +236,7 @@ class Result(Tidy3dBaseModel):
         df = pandas.DataFrame(data=data, columns=columns)
 
         attrs = dict(
-            task_ids=self.task_ids,
+            task_names=self.task_names,
             output_names=self.output_names,
             fn_source=self.fn_source,
             dims=self.dims,
@@ -285,7 +294,7 @@ class Result(Tidy3dBaseModel):
             coords=coords,
             values=values,
             output_names=attrs.get("output_names"),
-            task_ids=attrs.get("task_ids"),
+            task_names=attrs.get("task_names"),
             fn_source=attrs.get("fn_source"),
         )
 
@@ -320,7 +329,7 @@ class Result(Tidy3dBaseModel):
                 raise ValueError("Can't combine data where one only one field is `None`.")
             return list(tuple1) + list(tuple2)
 
-        task_ids = combine_tuples(self.task_ids, other.task_ids)
+        task_names = combine_tuples(self.task_names, other.task_names)
         coords = combine_tuples(self.coords, other.coords)
         values = combine_tuples(self.values, other.values)
 
@@ -330,7 +339,7 @@ class Result(Tidy3dBaseModel):
             values=values,
             output_names=self.output_names,
             fn_source=self.fn_source,
-            task_ids=task_ids,
+            task_names=task_names,
         )
 
     def __add__(self, other):
@@ -375,7 +384,7 @@ class Result(Tidy3dBaseModel):
                 coords=new_coords,
                 output_names=self.output_names,
                 fn_source=self.fn_source,
-                task_ids=self.task_ids,
+                task_names=self.task_names,
                 aux_values=self.aux_values,
                 optimizer=self.optimizer,
             )
@@ -411,7 +420,7 @@ class Result(Tidy3dBaseModel):
                 coords=new_coords,
                 output_names=self.output_names,
                 fn_source=self.fn_source,
-                task_ids=self.task_ids,
+                task_names=self.task_names,
                 aux_values=self.aux_values,
                 optimizer=self.optimizer,
             )
