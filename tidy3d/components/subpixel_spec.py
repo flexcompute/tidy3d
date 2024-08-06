@@ -11,6 +11,9 @@ from .types import TYPE_TAG_STR
 # Default Courant number reduction rate in PEC conformal's scheme
 DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL = 0.3
 
+# Default Courant number reduction rate in Surface impedance conformal's scheme
+DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL = 0.0
+
 
 class AbstractSubpixelAveragingMethod(Tidy3dBaseModel):
     """Base class defining how to handle material assignment on structure interfaces."""
@@ -58,7 +61,7 @@ class VolumetricAveraging(AbstractSubpixelAveragingMethod):
 
     staircase_normal_component: bool = pd.Field(
         True,
-        title="Staircasing for field components substantially normal to interface",
+        title="Staircasing For Field Components Substantially Normal To Interface",
         description="Volumetric averaging works accurately if the electric field component "
         "is substantially tangential to the interface. If ``True``, apply volumetric averaging only "
         "if the field component is largely tangential to the interface; if ``False``, apply volumetric "
@@ -97,8 +100,8 @@ class PECConformal(AbstractSubpixelAveragingMethod):
         DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL,
         title="Time Step Size Reduction Rate",
         description="Reduction factor between 0 and 1 such that the simulation's time step size "
-        "will be ``1 - timestep_reduction`` times its default value. "
-        "Accuracy can be improved with a smaller time step size, but simulation time increased as well.",
+        "is ``1 - timestep_reduction`` times its default value. "
+        "Accuracy can be improved with a smaller time step size, but the simulation time will be increased.",
         lt=1,
         ge=0,
     )
@@ -114,19 +117,38 @@ class PECConformal(AbstractSubpixelAveragingMethod):
 PECSubpixelType = Union[Staircasing, HeuristicPECStaircasing, PECConformal]
 
 
+class SurfaceImpedance(PECConformal):
+    """Apply 1st order (Leontovich) surface impedance boundary condition to
+    structure made of :class:`.LossyMetalMedium`.
+    """
+
+    timestep_reduction: float = pd.Field(
+        DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL,
+        title="Time Step Size Reduction Rate",
+        description="Reduction factor between 0 and 1 such that the simulation's time step size "
+        "is ``1 - timestep_reduction`` times its default value. "
+        "Accuracy can be improved with a smaller time step size, but the simulation time will be increased.",
+        lt=1,
+        ge=0,
+    )
+
+
+LossyMetalSubpixelType = Union[Staircasing, VolumetricAveraging, SurfaceImpedance]
+
+
 class SubpixelSpec(Tidy3dBaseModel):
     """Defines specification for subpixel averaging schemes when added to ``Simulation.subpixel``."""
 
     dielectric: DielectricSubpixelType = pd.Field(
         PolarizedAveraging(),
-        title="Subpixel averaging method on dielectric material interfaces",
+        title="Subpixel Averaging Method For Dielectric Interfaces",
         description="Subpixel averaging method applied to dielectric material interfaces.",
         discriminator=TYPE_TAG_STR,
     )
 
     metal: MetalSubpixelType = pd.Field(
         Staircasing(),
-        title="Subpixel averaging method on metallic material interfaces",
+        title="Subpixel Averaging Method For Metallic Interfaces",
         description="Subpixel averaging method applied to metallic structure interfaces. "
         "A material is considered as metallic if its real part of relative permittivity "
         "is less than 1 at the central frequency.",
@@ -135,21 +157,37 @@ class SubpixelSpec(Tidy3dBaseModel):
 
     pec: PECSubpixelType = pd.Field(
         PECConformal(),
-        title="Subpixel averaging method on PEC interfaces",
+        title="Subpixel Averaging Method For PEC Interfaces",
         description="Subpixel averaging method applied to PEC structure interfaces.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    lossy_metal: LossyMetalSubpixelType = pd.Field(
+        SurfaceImpedance(),
+        title="Subpixel Averaging Method for Lossy Metal Interfaces",
+        description="Subpixel averaging method applied to ``td.LossyMetalMedium`` material interfaces.",
         discriminator=TYPE_TAG_STR,
     )
 
     @classmethod
     def staircasing(cls) -> SubpixelSpec:
         """Apply staircasing on all material boundaries."""
-        return cls(dielectric=Staircasing(), metal=Staircasing(), pec=Staircasing())
+        return cls(
+            dielectric=Staircasing(),
+            metal=Staircasing(),
+            pec=Staircasing(),
+            lossy_metal=Staircasing(),
+        )
 
-    def courant_ratio(self, contain_pec_structures: bool) -> float:
+    def courant_ratio(self, contain_pec_structures: bool, contain_sibc_structures: bool) -> float:
         """The scaling ratio applied to Courant number so that the courant number
         in the simulation is ``sim.courant * courant_ratio``. So far only PEC subpixel averaging
-        scheme requires deduction of Courant number.
+        scheme and SIBC require deduction of Courant number.
         """
+        if contain_pec_structures and contain_sibc_structures:
+            return min(self.pec.courant_ratio, self.lossy_metal.courant_ratio)
         if contain_pec_structures:
             return self.pec.courant_ratio
+        if contain_sibc_structures:
+            return self.lossy_metal.courant_ratio
         return 1.0

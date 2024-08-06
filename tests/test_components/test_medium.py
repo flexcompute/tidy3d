@@ -141,6 +141,27 @@ def test_PEC():
     _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
 
 
+def test_lossy_metal():
+    # frequency_range shouldn't be None
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium()
+    # frequency_range shouldn't contain non-postive values
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(frequency_range=(0, 10))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(frequency_range=(-10, 10))
+
+    # frequency_range should be finite
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(frequency_range=(10, np.inf))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(frequency_range=(-np.inf, 10))
+
+    # default fitting
+    mat = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14))
+    model = mat.skin_depth_model
+
+
 def test_medium_dispersion():
     # construct media
     m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])

@@ -21,3 +21,4 @@ Types of Subpixel Averaging Methods
    tidy3d.HeuristicPECStaircasing
    tidy3d.PolarizedAveraging
    tidy3d.PECConformal
+   tidy3d.SurfaceImpedance

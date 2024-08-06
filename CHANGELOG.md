@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added new support functions for the Design plugin: automated batching of `Simulation` objects, and summary functions with `DesignSpace.estimate_cost` and `DesignSpace.summarize`.
 - Added validation and repair methods for `TriangleMesh` with inward-facing normals.
 - Added `from_admittance_coeffs` to `PoleResidue`, which allows for directly constructing a `PoleResidue` medium from an admittance function in the Laplace domain.
+- Added material type `LossyMetalMedium` that has high DC-conductivity. Its boundaries can be modeled by a surface impedance boundary condition (SIBC). This is treated as a subpixel method, which can be switched by setting `SubpixelSpec(lossy_metal=method)` where `method` can be `Staircasing()`, `VolumetricAveraging()`, or `SurfaceImpedance()`.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
