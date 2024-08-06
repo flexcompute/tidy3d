@@ -1,8 +1,8 @@
 import os
 import pickle
 
+import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 
 # PyTorch
 import torch
@@ -10,15 +10,17 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 
+import tidy3d as td
 from tidy3d.plugins.design.surrogate_model_funcs import (
     print_label_stats,
     train_regression_network,
     validate_regression,
 )
-from tidy3d.plugins.design.surrogate_models import BasicReducingANN as NN
+from tidy3d.plugins.design.surrogate_models import Basic1DCNN as NN
 
 # Local
 from tidy3d.plugins.design.surrogate_preprocess_funcs import (
+    load_sim_data,
     pytorch_load,
     save_scalers,
     scale_feature,
@@ -32,14 +34,16 @@ np.random.seed(SEED)
 torch.cuda.empty_cache()
 torch.manual_seed(SEED)
 
-os.chdir("/home/matt/Documents/Flexcompute/tidy3d/docs/notebooks")
-OUTPUT_DIR = "/home/matt/Documents/Flexcompute/tidy3d/tidy3d/plugins/design"
+os.chdir("/home/matt/Documents/Flexcompute/bragg")
+OUTPUT_DIR = "/home/matt/Documents/Flexcompute/bragg"
+PICKLE_DIR = "/home/matt/Documents/Flexcompute/bragg/pickle_data"
 
 # Testing
-label_stats = True
+label_stats = False
 random_labels = False
 
 # Model Constants
+RESOLUTION = 100
 BATCH_SIZE = 16
 TEST_PERCENT = 0.20
 VALID_PERCENT = 0.20
@@ -53,16 +57,36 @@ PLOT_OUTPUT = True
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"Using device {device}")
 
-with open("ysplit.pkl", "rb") as input:
-    raw_df = pickle.load(input)
 
-with open("ysplit_2.pkl", "rb") as input2:
-    raw_df2 = pickle.load(input2)
+def get_data(sim_data: td.SimulationData) -> dict[str, float]:
+    flux = sim_data["flux"].flux
+    reflectance = 1 - flux
+    reflectance_max = float(np.max(reflectance).values)
+    # TODO: compute the bandwidth Delta lambda
+    return reflectance_max
 
-raw_df = pd.concat([raw_df, raw_df2])
 
-raw_labels = np.array(raw_df.pop("output"))
-raw_features = np.array(raw_df)
+# Create data
+hdf5_files = [fileName for fileName in os.listdir() if ".hdf5" in fileName]
+
+modelName = f"bragg_{len(hdf5_files)}.pkl"
+
+try:
+    os.chdir(PICKLE_DIR)
+    with open(modelName, "rb") as d:
+        raw_features, raw_labels, delta_n = pickle.load(d)
+    print("Loaded data from pickle")
+except FileNotFoundError:
+    print("Calculating data from scratch")
+    os.chdir(OUTPUT_DIR)
+    raw_features, raw_labels, delta_n = load_sim_data(RESOLUTION, get_data, hdf5_files)
+
+    os.chdir(PICKLE_DIR)
+    with open(modelName, "wb") as file:
+        pickle.dump((raw_features, raw_labels, delta_n), file)
+
+# Change shape for convolution
+raw_features = np.expand_dims(raw_features, axis=1)
 
 # Randomise labels for sanity check
 if random_labels:
@@ -73,11 +97,15 @@ if random_labels:
 shuffle_index = np.random.permutation(len(raw_features))
 shuffle_features = raw_features[shuffle_index]
 shuffle_labels = raw_labels[shuffle_index]
+shuffle_delta_n = delta_n[shuffle_index]
 
 train_features, test_features, valid_features = split_data(
     shuffle_features, TEST_PERCENT, VALID_PERCENT
 )
 train_labels, test_labels, valid_labels = split_data(shuffle_labels, TEST_PERCENT, VALID_PERCENT)
+train_delta_n, test_delta_n, valid_delta_n = split_data(
+    shuffle_delta_n, TEST_PERCENT, VALID_PERCENT
+)
 
 # Scale labels
 scaled_train_labels, label_scaler = scale_label(train_labels)
@@ -98,8 +126,8 @@ os.chdir("/home/matt/Documents/Flexcompute/tidy3d/tidy3d/plugins/design")
 save_scalers(label_scaler, feature_scaler)
 
 # Setup NN
-net = NN(train_features.shape[1], INIT_NEURONS, DROPOUT).to(device)
-trained_net = NN(train_features.shape[1], INIT_NEURONS, DROPOUT).to(device)
+net = NN().to(device)
+trained_net = NN().to(device)
 optimiser = optim.Adam(net.parameters(), lr=LEARNING_RATE, weight_decay=0.0001)
 loss_function = nn.MSELoss()
 
@@ -149,3 +177,20 @@ if label_stats:
     print_label_stats(valid_labels)
     print("\nValid Predictions")
     print_label_stats(valid_predictions)
+
+_, ax = plt.subplots()
+
+
+def ref_max_model(delta_n):
+    return np.tanh(10 * delta_n / 2.0) ** 2
+
+
+ax.scatter(test_delta_n, test_predictions, label="predicted values", c="tab:orange")
+
+dns = np.linspace(0, 0.5, 101)
+rmax = ref_max_model(dns)
+ax.plot(dns, rmax, label="analytical model")
+plt.ylabel("reflectance")
+plt.xlabel("delta n")
+plt.legend()
+plt.show()

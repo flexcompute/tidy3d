@@ -1,7 +1,61 @@
+import math
 import pickle
 
+import numpy as np
 import torch
 from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
+
+import tidy3d as td
+
+
+def load_sim_data(RESOLUTION, fn_post, hdf5_files):
+    raw_features = []
+    raw_labels = []
+    delta_n = []
+    for sim_file in hdf5_files:
+        sim_data = td.SimulationData.from_file(sim_file)
+        raw_features.append(create_1d_array(sim_data.simulation, RESOLUTION))
+        raw_labels.append(fn_post(sim_data))
+        delta_n.append(calc_delta_n(sim_data.simulation))
+
+    raw_features = np.array(raw_features)
+    raw_labels = np.array(raw_labels)
+    delta_n = np.array(delta_n)
+
+    return raw_features, raw_labels, delta_n
+
+
+def create_1d_array(sim, resolution):
+    structure_info = [
+        [struct.geometry.center[2], struct.geometry.size[2]] for struct in sim.structures
+    ]
+    start_z = structure_info[0][0] - structure_info[0][1] / 2
+    end_z = structure_info[-1][0] + structure_info[-1][1] / 2
+
+    structre_widths = np.array(
+        [[struct[0] - struct[1] / 2, struct[0] + struct[1] / 2] for struct in structure_info]
+    )
+    search_points = np.linspace(start_z, end_z, resolution)
+
+    permittivity_idx = []
+    for point in search_points:
+        for idx, widths in enumerate(structre_widths):
+            if point >= widths[0] and point < widths[1]:
+                permittivity_idx.append(idx)
+                break
+
+    permittivity_map = np.array(
+        [sim.structures[idx].medium.permittivity for idx in permittivity_idx]
+    )
+
+    return permittivity_map
+
+
+def calc_delta_n(sim):
+    structures = sim.structures
+    s1 = math.sqrt(structures[0].medium.permittivity)
+    s2 = math.sqrt(structures[1].medium.permittivity)
+    return abs(s1 - s2)
 
 
 def split_data(dataArray, testPercent, validPercent):
@@ -45,7 +99,7 @@ def scale_feature(x, pre_fit=None):
         scaled_flat_arr = pre_fit.transform(flattened_x)
 
     # Return to original shape
-    scaledArr = scaled_flat_arr.reshape(-1, original_shape[1])
+    scaledArr = scaled_flat_arr.reshape(original_shape)
 
     if pre_fit is None:
         return scaledArr, scaler
