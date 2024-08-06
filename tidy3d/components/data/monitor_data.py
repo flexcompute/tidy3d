@@ -1042,6 +1042,9 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
                 forward_amp = self.get_amplitude(field_component.sel(f=freq0))
 
+                if forward_amp == 0.0:
+                    continue
+
                 adj_phase = np.pi + np.angle(forward_amp)
                 adj_amp = scaling_factor * forward_amp
 
@@ -1095,7 +1098,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             for name, field_component in self.field_components.items():
                 field_component = field_component.sel(f=freq0)
                 forward_amps = field_component.values
-                values = -1j * forward_amps
+                values = -1j * 1 / 3.0 * forward_amps
                 coords = dict(field_component.coords.copy())
                 for dim, key in enumerate("xyz"):
                     coords[key] = np.array(coords[key]) - source_geo.center[dim]

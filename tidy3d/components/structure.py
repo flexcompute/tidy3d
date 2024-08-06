@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from collections import defaultdict
-from typing import Callable, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -216,6 +216,7 @@ class Structure(AbstractStructure):
             size=size,
             center=center,
             freqs=freqs,
+            fields=("Ex", "Ey", "Ez"),
             name=self.get_monitor_name(index=index, data_type="fld"),
             colocate=False,
         )
@@ -229,24 +230,6 @@ class Structure(AbstractStructure):
         )
 
         return mnt_fld, mnt_eps
-
-    @property
-    def derivative_function_map(self) -> dict[tuple[str, str], Callable]:
-        """Map path to the right derivative function function."""
-        return {
-            ("medium", "permittivity"): self.derivative_medium_permittivity,
-            ("medium", "conductivity"): self.derivative_medium_conductivity,
-            ("geometry", "size"): self.derivative_geometry_size,
-            ("geometry", "center"): self.derivative_geometry_center,
-        }
-
-    def get_derivative_function(self, path: tuple[str, ...]) -> Callable:
-        """Get the derivative function function."""
-
-        derivative_map = self.derivative_function_map
-        if path not in derivative_map:
-            raise NotImplementedError(f"Can't compute derivative for structure field path: {path}.")
-        return derivative_map[path]
 
     def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields"""
