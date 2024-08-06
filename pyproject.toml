@@ -108,6 +108,7 @@ pyswarms = { version = "*", optional = true }
 sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
+hypothesis = "^6.108.10"
 
 [tool.poetry.extras]
 dev = [
