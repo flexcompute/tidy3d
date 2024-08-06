@@ -49,6 +49,12 @@ from .data.dataset import (
     _zeros_like,
 )
 from .data.validators import validate_no_nans
+from .dispersion_fitter import (
+    LOSS_CHECK_MAX,
+    LOSS_CHECK_MIN,
+    LOSS_CHECK_NUM,
+    imag_resp_extrema_locs,
+)
 from .geometry.base import Geometry
 from .grid.grid import Coords, Grid
 from .heat_charge_spec import ElectricSpecType, ThermalSpecType
@@ -84,12 +90,6 @@ FILL_VALUE = "extrapolate"
 # cap on number of nonlinear iterations
 NONLINEAR_MAX_NUM_ITERS = 100
 NONLINEAR_DEFAULT_NUM_ITERS = 5
-
-# Range for checking upper bound of Im[eps], in addition to extrema method.
-# The range is in unit of eV and it's in log scale.
-LOSS_CHECK_MIN = -10
-LOSS_CHECK_MAX = 4
-LOSS_CHECK_NUM = 1000
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -3099,60 +3099,9 @@ class PoleResidue(DispersiveMedium):
             Tuple of complex-valued (``a_i, c_i``) poles for the model.
         """
 
-        def _extrema_loss_freq_finder(areal, aimag, creal, cimag):
-            """For each pole, find frequencies for the extrema of Im[eps]"""
-
-            a_square = areal**2 + aimag**2
-            alpha = creal
-            beta = creal * (areal**2 - aimag**2) + 2 * cimag * areal * aimag
-            mus = 2 * (areal**2 - aimag**2)
-            nus = a_square**2
-
-            numerator = np.array([0])
-            denominator = np.array([1])
-            for i in range(len(creal)):
-                numerator_i = np.array(
-                    [
-                        -alpha[i],
-                        alpha[i] * mus[i] - 3 * beta[i],
-                        3 * alpha[i] * nus[i] - beta[i] * mus[i],
-                        beta[i] * nus[i],
-                    ]
-                )
-                denominator_i = np.array(
-                    [1, 2 * mus[i], 2 * nus[i] + mus[i] ** 2, 2 * mus[i] * nus[i], nus[i] ** 2]
-                )
-                # to avoid divergence, let's renormalize
-                if np.abs(alpha[i]) > 1:
-                    numerator_i /= alpha[i]
-                    denominator_i /= alpha[i]
-
-                # n/d + ni/di = (n*di+d*ni)/(d*di)
-                n_di = np.polymul(numerator, denominator_i)
-                d_ni = np.polymul(denominator, numerator_i)
-                numerator = np.polyadd(n_di, d_ni)
-                denominator = np.polymul(denominator, denominator_i)
-
-            roots = np.sqrt(np.roots(numerator) + 0j)
-            # cutoff to determine if it's a real number
-            r_real = roots.real[np.abs(roots.imag) / (np.abs(roots) + fp_eps) < fp_eps]
-            return r_real[r_real > 0]
-
-        try:
-            poles_a, poles_c = zip(*poles)
-            poles_a = np.array(poles_a)
-            poles_c = np.array(poles_c)
-            extrema_freq = _extrema_loss_freq_finder(
-                poles_a.real, poles_a.imag, poles_c.real, poles_c.imag
-            )
-            return extrema_freq
-        except np.linalg.LinAlgError:
-            log.warning(
-                "'LinAlgError' in computing Im[eps] extrema. "
-                "This can result in inaccurate estimation of lower and upper bound of "
-                "Im[eps]. When used in passivity enforcement, passivity is not guaranteed."
-            )
-            return np.array([])
+        poles_a = [a for (a, _) in poles]
+        poles_c = [c for (_, c) in poles]
+        return imag_resp_extrema_locs(poles=poles_a, residues=poles_c)
 
     def _imag_ep_extrema_with_samples(self) -> ArrayFloat1D:
         """Provide a list of frequencies (in unit of rad/s) to probe the possible lower and
