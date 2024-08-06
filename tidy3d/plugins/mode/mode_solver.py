@@ -29,9 +29,9 @@ from ...components.geometry.base import Box
 from ...components.grid.grid import Grid
 from ...components.medium import FullyAnisotropicMedium
 from ...components.mode import ModeSpec
-from ...components.monitor import ModeMonitor, ModeSolverMonitor, MonitorType
+from ...components.monitor import ModeMonitor, ModeSolverMonitor
 from ...components.simulation import Simulation
-from ...components.source import ModeSource, SourceTime, SourceType
+from ...components.source import ModeSource, SourceTime
 from ...components.types import (
     TYPE_TAG_STR,
     ArrayComplex3D,
@@ -75,6 +75,7 @@ MAX_MODES_DATA_SIZE_GB = 20
 
 MODE_SIMULATION_TYPE = Union[Simulation, EMESimulation]
 MODE_SIMULATION_DATA_TYPE = Union[SimulationData, EMESimulationData]
+MODE_PLANE_TYPE = Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor]
 
 
 def require_fdtd_simulation(fn):
@@ -119,7 +120,7 @@ class ModeSolver(Tidy3dBaseModel):
         discriminator="type",
     )
 
-    plane: Union[Box, MonitorType, SourceType] = pydantic.Field(
+    plane: MODE_PLANE_TYPE = pydantic.Field(
         ...,
         title="Plane",
         description="Cross-sectional plane in which the mode will be computed.",
