@@ -1717,10 +1717,10 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             "n eff": self.n_eff,
             "k eff": self.k_eff,
             "loss (dB/cm)": loss_db_cm,
-            f"TE (E{self._tangential_dims[0]}) fraction": self.pol_fraction["te"],
-            "wg TE fraction": self.pol_fraction_waveguide["te"],
-            "wg TM fraction": self.pol_fraction_waveguide["tm"],
-            "mode area": self.mode_area,
+            f"TE (E{self._tangential_dims[0]}) fraction": None,
+            "wg TE fraction": None,
+            "wg TM fraction": None,
+            "mode area": None,
             "group index": self.n_group_raw,  # Use raw field to avoid issuing a warning
             "dispersion (ps/(nm km))": self.dispersion_raw,  # Use raw field to avoid issuing a warning
         }
