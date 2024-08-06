@@ -19,7 +19,7 @@ from ..asynchronous import run_async as run_async_webapi
 from ..container import Batch, BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
-from .utils import FieldMap, TracerKeys, get_derivative_maps
+from .utils import E_to_D, FieldMap, TracerKeys, get_derivative_maps
 
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
@@ -775,25 +775,28 @@ def postprocess_adj(
     sim_fields_vjp = {}
     for structure_index, structure_paths in sim_vjp_map.items():
         # grab the forward and adjoint data
-        fld_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
+        E_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
         eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
-        fld_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
+        E_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
         eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
 
         fwd_flds_normed = {}
-        for key, val in fld_adj.field_components.items():
+        for key, val in E_adj.field_components.items():
             fwd_flds_normed[key] = val * adjoint_source_info.post_norm
 
-        fld_adj = fld_adj.updated_copy(**fwd_flds_normed)
+        E_adj = E_adj.updated_copy(**fwd_flds_normed)
 
         # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
         der_maps = get_derivative_maps(
-            fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj
+            fld_fwd=E_fwd, eps_fwd=eps_fwd, fld_adj=E_adj, eps_adj=eps_adj
         )
         E_der_map = der_maps["E"]
         D_der_map = der_maps["D"]
+
+        D_fwd = E_to_D(E_fwd, eps_fwd)
+        D_adj = E_to_D(E_adj, eps_fwd)
 
         # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
@@ -810,6 +813,10 @@ def postprocess_adj(
             paths=structure_paths,
             E_der_map=E_der_map.field_components,
             D_der_map=D_der_map.field_components,
+            E_fwd=E_fwd.field_components,
+            E_adj=E_adj.field_components,
+            D_fwd=D_fwd.field_components,
+            D_adj=D_adj.field_components,
             eps_data=eps_fwd.field_components,
             eps_in=eps_in,
             eps_out=eps_out,
