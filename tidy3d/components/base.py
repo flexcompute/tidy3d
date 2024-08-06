@@ -214,7 +214,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
         kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
-        return self.validate(new_copy.dict())
+        return self.validate(new_copy)
 
     def updated_copy(self, path: str = None, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
