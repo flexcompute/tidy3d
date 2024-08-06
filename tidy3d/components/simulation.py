@@ -44,6 +44,7 @@ from .medium import (
     AbstractPerturbationMedium,
     AnisotropicMedium,
     FullyAnisotropicMedium,
+    LossyMetalMedium,
     Medium,
     Medium2D,
     MediumType,
@@ -4117,8 +4118,10 @@ class Simulation(AbstractYeeGridSimulation):
 
         mediums = self.scene.mediums
         contain_pec_structures = any(medium.is_pec for medium in mediums)
+        contain_sibc_structures = any(isinstance(medium, LossyMetalMedium) for medium in mediums)
         return self.courant * self._subpixel.courant_ratio(
-            contain_pec_structures=contain_pec_structures
+            contain_pec_structures=contain_pec_structures,
+            contain_sibc_structures=contain_sibc_structures,
         )
 
     @cached_property

@@ -14,6 +14,7 @@ Spatially uniform
    :template: module.rst
 
    tidy3d.Medium
+   tidy3d.LossyMetalMedium
    tidy3d.PECMedium
    tidy3d.FullyAnisotropicMedium
 
@@ -24,6 +25,15 @@ Spatially varying
    :template: module.rst
 
    tidy3d.CustomMedium
+
+Fitting parameters
+^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.SkinDepthFitterParam
 
 Dispersive Mediums
 ------------------

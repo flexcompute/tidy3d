@@ -17,7 +17,7 @@ from ...constants import C_0, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import Tidy3dBaseModel
-from ..medium import AnisotropicMedium, Medium2D, PECMedium
+from ..medium import AnisotropicMedium, LossyMetalMedium, Medium2D, PECMedium
 from ..structure import MeshOverrideStructure, Structure, StructureType
 from ..types import ArrayFloat1D, Axis, Bound, Coordinate
 
@@ -522,7 +522,7 @@ class GradedMesher(Mesher):
         min_steps = []
         for structure in structures:
             if isinstance(structure, Structure):
-                if isinstance(structure.medium, (PECMedium, Medium2D)) or (
+                if isinstance(structure.medium, (PECMedium, Medium2D, LossyMetalMedium)) or (
                     isinstance(structure.medium, AnisotropicMedium)
                     and structure.medium.is_comp_pec(axis)
                 ):

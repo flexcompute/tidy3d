@@ -54,6 +54,7 @@ from .dispersion_fitter import (
     LOSS_CHECK_MAX,
     LOSS_CHECK_MIN,
     LOSS_CHECK_NUM,
+    fit,
     imag_resp_extrema_locs,
 )
 from .geometry.base import Geometry
@@ -76,6 +77,7 @@ from .types import (
     Complex,
     FreqBound,
     InterpMethod,
+    Literal,
     PoleAndResidue,
     TensorReal,
 )
@@ -91,6 +93,12 @@ FILL_VALUE = "extrapolate"
 # cap on number of nonlinear iterations
 NONLINEAR_MAX_NUM_ITERS = 100
 NONLINEAR_DEFAULT_NUM_ITERS = 5
+
+# Lossy metal
+LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY = 20
+LOSSY_METAL_SCALED_REAL_PART = 10.0
+LOSSY_METAL_DEFAULT_MAX_POLES = 3
+LOSSY_METAL_DEFAULT_TOLERANCE_RMS = 1e-3
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -1070,6 +1078,50 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             Complex-valued relative permittivity.
         """
         return eps_real * (1 + 1j * loss_tangent)
+
+    @staticmethod
+    def eV_to_angular_freq(f_eV: float):
+        """Convert frequency in unit of eV to rad/s.
+
+        Parameters
+        ----------
+        f_eV : float
+            Frequency in unit of eV
+        """
+        return f_eV / HBAR
+
+    @staticmethod
+    def angular_freq_to_eV(f_rad: float):
+        """Convert frequency in unit of rad/s to eV.
+
+        Parameters
+        ----------
+        f_rad : float
+            Frequency in unit of rad/s
+        """
+        return f_rad * HBAR
+
+    @staticmethod
+    def angular_freq_to_Hz(f_rad: float):
+        """Convert frequency in unit of rad/s to Hz.
+
+        Parameters
+        ----------
+        f_rad : float
+            Frequency in unit of rad/s
+        """
+        return f_rad / 2 / np.pi
+
+    @staticmethod
+    def Hz_to_angular_freq(f_hz: float):
+        """Convert frequency in unit of Hz to rad/s.
+
+        Parameters
+        ----------
+        f_hz : float
+            Frequency in unit of Hz
+        """
+        return f_hz * 2 * np.pi
 
     @ensure_freq_in_range
     def sigma_model(self, freq: float) -> complex:
@@ -3052,50 +3104,6 @@ class PoleResidue(DispersiveMedium):
         return PoleResidue(eps_inf=eps_inf, poles=list(zip(a_coeffs, c_coeffs)))
 
     @staticmethod
-    def eV_to_angular_freq(f_eV: float):
-        """Convert frequency in unit of eV to rad/s.
-
-        Parameters
-        ----------
-        f_eV : float
-            Frequency in unit of eV
-        """
-        return f_eV / HBAR
-
-    @staticmethod
-    def angular_freq_to_eV(f_rad: float):
-        """Convert frequency in unit of rad/s to eV.
-
-        Parameters
-        ----------
-        f_rad : float
-            Frequency in unit of rad/s
-        """
-        return f_rad * HBAR
-
-    @staticmethod
-    def angular_freq_to_Hz(f_rad: float):
-        """Convert frequency in unit of rad/s to Hz.
-
-        Parameters
-        ----------
-        f_rad : float
-            Frequency in unit of rad/s
-        """
-        return f_rad / 2 / np.pi
-
-    @staticmethod
-    def Hz_to_angular_freq(f_hz: float):
-        """Convert frequency in unit of Hz to rad/s.
-
-        Parameters
-        ----------
-        f_hz : float
-            Frequency in unit of Hz
-        """
-        return f_hz * 2 * np.pi
-
-    @staticmethod
     def imag_ep_extrema(poles: Tuple[PoleAndResidue, ...]) -> ArrayFloat1D:
         """Extrema of Im[eps] in the same unit as poles.
 
@@ -4955,7 +4963,177 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
 
 
-IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium]
+class SkinDepthFitterParam(Tidy3dBaseModel):
+    """Advanced parameters for fitting complex-valued skin depth ``2j/k`` of a :class:`.LossyMetalMedium`
+    over its frequency bandwidth, where k is the complex-valued wavenumber inside the lossy metal. Real part
+    of this quantity corresponds to the physical skin depth.
+    """
+
+    max_num_poles: pd.PositiveInt = pd.Field(
+        LOSSY_METAL_DEFAULT_MAX_POLES,
+        title="Maximal Number Of Poles",
+        description="Maximal number of poles in complex-conjugate pole residue model for "
+        "fitting complex-valued skin depth.",
+    )
+
+    tolerance_rms: pd.NonNegativeFloat = pd.Field(
+        LOSSY_METAL_DEFAULT_TOLERANCE_RMS,
+        title="Tolerance In Fitting",
+        description="Tolerance in fitting complex-valued skin depth.",
+    )
+
+    frequency_sampling_points: pd.PositiveInt = pd.Field(
+        LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY,
+        title="Number Of Sampling Frequencies",
+        description="Number of sampling frequencies used in fitting.",
+    )
+
+    log_sampling: bool = pd.Field(
+        True,
+        title="Frequencies Sampling In Log Scale",
+        description="Whether to sample frequencies logarithmically (``True``),  "
+        "or linearly (``False``).",
+    )
+
+
+class LossyMetalMedium(Medium):
+    """Lossy metal that can be modeled with a surface impedance boundary condition (SIBC).
+
+    Notes
+    -----
+
+        SIBC is most accurate when the skin depth is much smaller than the structure feature size.
+        If not the case, please use a regular medium instead, or set ``simulation.subpixel.lossy_metal``
+        to ``td.VolumetricAveraging()`` or ``td.Staircasing()``.
+
+    Example
+    -------
+    >>> lossy_metal = LossyMetalMedium(conductivity=10, frequency_range=(9e9, 10e9))
+
+    """
+
+    permittivity: Literal[1] = pd.Field(
+        1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
+    )
+
+    frequency_range: FreqBound = pd.Field(
+        ...,
+        title="Frequency Range",
+        description="Frequency range of validity for the medium.",
+        units=(HERTZ, HERTZ),
+    )
+
+    fit_param: SkinDepthFitterParam = pd.Field(
+        SkinDepthFitterParam(),
+        title="Complex-valued Skin Depth Fitting Parameters",
+        description="Parameters for fitting complex-valued dispersive skin depth over "
+        "the frequency range using pole-residue pair model.",
+    )
+
+    @pd.validator("frequency_range")
+    def _validate_frequency_range(cls, val):
+        """Validate that frequency range is finite and non-zero."""
+        for freq in val:
+            if not np.isfinite(freq):
+                raise ValidationError("Values in 'frequency_range' must be finite.")
+            if freq <= 0:
+                raise ValidationError("Values in 'frequency_range' must be positive.")
+        return val
+
+    @cached_property
+    def skin_depth_model(self) -> PoleResidue:
+        """Fitted complex-valued skin depth using pole-residue pair model within ``frequency_range``."""
+        skin_depth = self.complex_skin_depth(self.sampling_frequencies)
+
+        # let's use scaled `skin_depth` in fitting: minimal real part equals ``SCALED_REAL_PART``
+        min_skin_depth_real = np.min(skin_depth.real)
+        if min_skin_depth_real <= 0:
+            raise SetupError("Physical skin depth cannot be non-positive. Something is wrong.")
+
+        scaling_factor = LOSSY_METAL_SCALED_REAL_PART / min_skin_depth_real
+        skin_depth *= scaling_factor
+
+        omega_data = self.Hz_to_angular_freq(self.sampling_frequencies)
+        (res_inf, poles, residues), error = fit(
+            omega_data=omega_data,
+            resp_data=skin_depth,
+            min_num_poles=0,
+            max_num_poles=self.fit_param.max_num_poles,
+            resp_inf=None,
+            tolerance_rms=self.fit_param.tolerance_rms,
+            scale_factor=1.0 / np.max(omega_data),
+        )
+
+        res_inf /= scaling_factor
+        residues /= scaling_factor
+
+        return PoleResidue(eps_inf=res_inf, poles=list(zip(poles, residues)))
+
+    @cached_property
+    def num_poles(self) -> int:
+        """Number of poles in the fitted model."""
+        return len(self.skin_depth_model.poles)
+
+    def complex_skin_depth(self, frequencies: ArrayFloat1D):
+        """Complex-valued skin_depth defined as ``2j/k`` where ``k`` is the wavenumber inside the metal."""
+        # compute complex-valued skin depth
+        n, k = self.nk_model(frequencies)
+        wavenumber = 2 * np.pi * frequencies * (n + 1j * k) / C_0
+        return 2j / wavenumber
+
+    @cached_property
+    def sampling_frequencies(self) -> ArrayFloat1D:
+        """Sampling frequencies used in fitting."""
+        if self.fit_param.frequency_sampling_points < 2:
+            return np.array([np.mean(self.frequency_range)])
+
+        if self.fit_param.log_sampling:
+            return np.logspace(
+                np.log10(self.frequency_range[0]),
+                np.log10(self.frequency_range[1]),
+                self.fit_param.frequency_sampling_points,
+            )
+        return np.linspace(
+            self.frequency_range[0],
+            self.frequency_range[1],
+            self.fit_param.frequency_sampling_points,
+        )
+
+    @add_ax_if_none
+    def plot(
+        self,
+        ax: Ax = None,
+    ) -> Ax:
+        """Make plot of complex-valued skin depth model vs fitted model, at sampling frequencies.
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes = None
+            Axes to plot the data on, if None, a new one is created.
+        Returns
+        -------
+        matplotlib.axis.Axes
+            Matplotlib axis corresponding to plot.
+        """
+        frequencies = self.sampling_frequencies
+        skin_depth = self.complex_skin_depth(frequencies)
+
+        ax.plot(frequencies, skin_depth.real, "x", label="Real")
+        ax.plot(frequencies, skin_depth.imag, "+", label="Imag")
+
+        skin_depth_from_model = self.skin_depth_model.eps_model(frequencies)
+        ax.plot(frequencies, skin_depth_from_model.real, label="Real (model)")
+        ax.plot(frequencies, skin_depth_from_model.imag, label="Imag (model)")
+
+        ax.set_ylabel("Skin depth")
+        ax.set_xlabel("Frequency (Hz)")
+        ax.legend()
+
+        return ax
+
+
+IsotropicUniformMediumType = Union[
+    Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
+]
 IsotropicCustomMediumType = Union[
     CustomPoleResidue,
     CustomSellmeier,
@@ -6191,6 +6369,7 @@ MediumType3D = Union[
     CustomAnisotropicMedium,
     PerturbationMedium,
     PerturbationPoleResidue,
+    LossyMetalMedium,
 ]
 
 

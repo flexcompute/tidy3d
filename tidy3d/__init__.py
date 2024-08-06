@@ -173,6 +173,7 @@ from .components.medium import (
     FullyAnisotropicMedium,
     KerrNonlinearity,
     Lorentz,
+    LossyMetalMedium,
     Medium,
     Medium2D,
     NonlinearModel,
@@ -183,6 +184,7 @@ from .components.medium import (
     PerturbationPoleResidue,
     PoleResidue,
     Sellmeier,
+    SkinDepthFitterParam,
     TwoPhotonAbsorption,
     medium_from_nk,
 )
@@ -255,6 +257,7 @@ from .components.subpixel_spec import (
     PolarizedAveraging,
     Staircasing,
     SubpixelSpec,
+    SurfaceImpedance,
     VolumetricAveraging,
 )
 
@@ -335,6 +338,8 @@ __all__ = [
     "CustomDrude",
     "CustomDebye",
     "CustomAnisotropicMedium",
+    "LossyMetalMedium",
+    "SkinDepthFitterParam",
     "RotationAroundAxis",
     "PerturbationMedium",
     "PerturbationPoleResidue",
@@ -507,6 +512,7 @@ __all__ = [
     "PolarizedAveraging",
     "HeuristicPECStaircasing",
     "PECConformal",
+    "SurfaceImpedance",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",
