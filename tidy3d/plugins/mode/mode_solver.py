@@ -29,10 +29,11 @@ from ...components.geometry.base import Box
 from ...components.grid.grid import Grid
 from ...components.medium import FullyAnisotropicMedium
 from ...components.mode import ModeSpec
-from ...components.monitor import ModeMonitor, ModeSolverMonitor
+from ...components.monitor import ModeMonitor, ModeSolverMonitor, MonitorType
 from ...components.simulation import Simulation
-from ...components.source import ModeSource, SourceTime
+from ...components.source import ModeSource, SourceTime, SourceType
 from ...components.types import (
+    TYPE_TAG_STR,
     ArrayComplex3D,
     ArrayComplex4D,
     ArrayFloat1D,
@@ -118,8 +119,11 @@ class ModeSolver(Tidy3dBaseModel):
         discriminator="type",
     )
 
-    plane: Box = pydantic.Field(
-        ..., title="Plane", description="Cross-sectional plane in which the mode will be computed."
+    plane: Union[Box, MonitorType, SourceType] = pydantic.Field(
+        ...,
+        title="Plane",
+        description="Cross-sectional plane in which the mode will be computed.",
+        discriminator=TYPE_TAG_STR,
     )
 
     mode_spec: ModeSpec = pydantic.Field(
