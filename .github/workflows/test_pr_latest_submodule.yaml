@@ -19,24 +19,6 @@ jobs:
           # This fetches only a single branch by default, so additional fetch is needed
           fetch-depth: 0 # Optionally, set to 0 to fetch all history for all branches and tags
 
-      - name: Determine current branch or PR ref
-        id: get_branch
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # Extract the base branch of the PR
-            BRANCH_NAME="${{ github.event.pull_request.base.ref }}"
-            echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-          else
-            # Assume it's a push event, extract the branch name from $GITHUB_REF
-            BRANCH_NAME=$(echo $GITHUB_REF | sed 's|refs/heads/||')
-            echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-          fi
-          # Now echoing the BRANCH_NAME to verify
-          echo "BRANCH_NAME: $BRANCH_NAME"
-        shell: bash
-        env:
-          GITHUB_REF: ${{ github.ref }}
-
       - name: Initialize and update submodule
         run: |
           git submodule update --init --recursive
@@ -53,23 +35,23 @@ jobs:
           NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
           echo $(git fetch --all --verbose)
           echo $(git remote get-url origin)
-          if git show-ref --verify refs/remotes/origin/$BRANCH_NAME; then
-           echo "Branch $BRANCH_NAME exists."
+          if git show-ref --verify refs/remotes/origin/develop; then
+           echo "Branch develop exists."
           else
-            echo "::error::Branch $BRANCH_NAME does not exist on remote."
+            echo "::error::Branch develop does not exist on remote."
             exit 1
           fi
-          NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/${{ env.BRANCH_NAME }})
+          NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
           echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
           echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
           
           
           cd ../..
           if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
-            echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the ${{ env.BRANCH_NAME }} branch. Please update it."
+            echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the develop branch. Please update it."
             exit 1
           else
-            echo "Submodule $NOTEBOOKS_PATH is up to date with the ${{ env.BRANCH_NAME }} branch."
+            echo "Submodule $NOTEBOOKS_PATH is up to date with the develop branch."
           fi
 
           # Checking FAQs only on the develop branch.
