@@ -8,7 +8,7 @@ from typing import List, Tuple, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ...constants import C_0, MICROMETER, fp_eps
+from ...constants import C_0, MICROMETER, inf
 from ...exceptions import SetupError
 from ...log import log
 from ..base import Tidy3dBaseModel
@@ -136,6 +136,78 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         add_right = bounds[-1] + last_step * np.arange(1, num_layers[1] + 1)
         return np.concatenate((add_left, bounds, add_right))
 
+    @staticmethod
+    def _postprocess_unaligned_grid(
+        axis: Axis,
+        simulation_box: Box,
+        machine_error_relaxation: bool,
+        bound_coords: Coords1D,
+    ) -> Coords1D:
+        """Postprocess grids whose two ends  might be aligned with simulation boundaries.
+        This is to be used in `_make_coords_initial`.
+
+        Parameters
+        ----------
+        axis : Axis
+            Axis of this direction.
+        structures : List[StructureType]
+            List of structures present in simulation, the first one being the simulation domain.
+        machine_error_relaxation : bool
+            When operations such as translation are applied to the 1d grids, fix the bounds
+            were numerically within the simulation bounds but were still chopped off.
+        bound_coords : Coord1D
+            1D grids potentially unaligned with the simulation boundary
+
+        Returns
+        -------
+        :class:`.Coords1D`:
+            1D coords to be used as grid boundaries.
+
+        """
+        center, size = simulation_box.center[axis], simulation_box.size[axis]
+        # chop off any coords outside of simulation bounds, beyond some buffer region
+        # to take numerical effects into account
+        bound_min = np.nextafter(center - size / 2, -inf, dtype=np.float32)
+        bound_max = np.nextafter(center + size / 2, inf, dtype=np.float32)
+
+        if bound_max < bound_coords[0] or bound_min > bound_coords[-1]:
+            axis_name = "xyz"[axis]
+            raise SetupError(
+                f"Simulation domain does not overlap with the provided grid in '{axis_name}' direction."
+            )
+
+        if size == 0:
+            # in case of zero-size dimension return the boundaries between which simulation falls
+            ind = np.searchsorted(bound_coords, center, side="right")
+
+            # in case when the center coincides with the right most boundary
+            if ind >= len(bound_coords):
+                ind = len(bound_coords) - 1
+
+            return bound_coords[ind - 1 : ind + 1]
+
+        else:
+            bound_coords = bound_coords[bound_coords <= bound_max]
+            bound_coords = bound_coords[bound_coords >= bound_min]
+
+            # if not extending to simulation bounds, repeat beginning and end
+            dl_min = bound_coords[1] - bound_coords[0]
+            dl_max = bound_coords[-1] - bound_coords[-2]
+            while bound_coords[0] - dl_min >= bound_min:
+                bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+            while bound_coords[-1] + dl_max <= bound_max:
+                bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+
+            # in case operations are applied to coords, it's possible the bounds were numerically within
+            # the simulation bounds but were still chopped off, which is fixed here
+            if machine_error_relaxation:
+                if np.isclose(bound_coords[0] - dl_min, bound_min):
+                    bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+                if np.isclose(bound_coords[-1] + dl_max, bound_max):
+                    bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+
+            return bound_coords
+
 
 class UniformGrid(GridSpec1d):
     """Uniform 1D grid. The most standard way to define a simulation is to use a constant grid size in each of the three directions.
@@ -176,8 +248,6 @@ class UniformGrid(GridSpec1d):
             Axis of this direction.
         structures : List[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
-        **kwargs:
-            Other arguments all go here.
 
         Returns
         -------
@@ -197,6 +267,50 @@ class UniformGrid(GridSpec1d):
         dl_snapped = size / num_cells if size > 0 else self.dl
 
         return center - size / 2 + np.arange(num_cells + 1) * dl_snapped
+
+
+class CustomGridBoundaries(GridSpec1d):
+    """Custom 1D grid supplied as a list of grid cell boundary coordinates.
+
+    Example
+    -------
+    >>> grid_1d = CustomGridBoundaries(coords=[-0.2, 0.0, 0.2, 0.4, 0.5, 0.6, 0.7])
+    """
+
+    coords: Coords1D = pd.Field(
+        ...,
+        title="Grid Boundary Coordinates",
+        description="An array of grid boundary coordinates.",
+        units=MICROMETER,
+    )
+
+    def _make_coords_initial(
+        self,
+        axis: Axis,
+        structures: List[StructureType],
+        **kwargs,
+    ) -> Coords1D:
+        """Customized 1D coords to be used as grid boundaries.
+
+        Parameters
+        ----------
+        axis : Axis
+            Axis of this direction.
+        structures : List[StructureType]
+            List of structures present in simulation, the first one being the simulation domain.
+
+        Returns
+        -------
+        :class:`.Coords1D`:
+            1D coords to be used as grid boundaries.
+        """
+
+        return self._postprocess_unaligned_grid(
+            axis=axis,
+            simulation_box=structures[0].geometry,
+            machine_error_relaxation=False,
+            bound_coords=self.coords,
+        )
 
 
 class CustomGrid(GridSpec1d):
@@ -241,8 +355,6 @@ class CustomGrid(GridSpec1d):
             Axis of this direction.
         structures : List[StructureType]
             List of structures present in simulation, the first one being the simulation domain.
-        *kwargs
-            Other arguments all go here.
 
         Returns
         -------
@@ -250,7 +362,7 @@ class CustomGrid(GridSpec1d):
             1D coords to be used as grid boundaries.
         """
 
-        center, size = structures[0].geometry.center[axis], structures[0].geometry.size[axis]
+        center = structures[0].geometry.center[axis]
 
         # get bounding coordinates
         dl = np.array(self.dl)
@@ -263,49 +375,12 @@ class CustomGrid(GridSpec1d):
         else:
             bound_coords += self.custom_offset
 
-        # chop off any coords outside of simulation bounds, beyond some buffer region
-        # to take numerical effects into account
-        buffer = fp_eps * size
-        bound_min = center - size / 2 - buffer
-        bound_max = center + size / 2 + buffer
-
-        if bound_max < bound_coords[0] or bound_min > bound_coords[-1]:
-            axis_name = "xyz"[axis]
-            raise SetupError(
-                f"Simulation domain does not overlap with the provided custom grid in '{axis_name}' direction."
-            )
-
-        if size == 0:
-            # in case of zero-size dimension return the boundaries between which simulation falls
-            ind = np.searchsorted(bound_coords, center, side="right")
-
-            # in case when the center coincides with the right most boundary
-            if ind >= len(bound_coords):
-                ind = len(bound_coords) - 1
-
-            return bound_coords[ind - 1 : ind + 1]
-
-        else:
-            bound_coords = bound_coords[bound_coords <= bound_max]
-            bound_coords = bound_coords[bound_coords >= bound_min]
-
-            # if not extending to simulation bounds, repeat beginning and end
-            dl_min = dl[0]
-            dl_max = dl[-1]
-            while bound_coords[0] - dl_min >= bound_min:
-                bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
-            while bound_coords[-1] + dl_max <= bound_max:
-                bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
-
-            # in case a `custom_offset` is provided, it's possible the bounds were numerically within
-            # the simulation bounds but were still chopped off, which is fixed here
-            if self.custom_offset is not None:
-                if np.isclose(bound_coords[0] - dl_min, bound_min):
-                    bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
-                if np.isclose(bound_coords[-1] + dl_max, bound_max):
-                    bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
-
-            return bound_coords
+        return self._postprocess_unaligned_grid(
+            axis=axis,
+            simulation_box=structures[0].geometry,
+            machine_error_relaxation=self.custom_offset is not None,
+            bound_coords=bound_coords,
+        )
 
 
 class AutoGrid(GridSpec1d):
@@ -454,7 +529,7 @@ class AutoGrid(GridSpec1d):
         return np.array(bound_coords)
 
 
-GridType = Union[UniformGrid, CustomGrid, AutoGrid]
+GridType = Union[UniformGrid, CustomGrid, AutoGrid, CustomGridBoundaries]
 
 
 class GridSpec(Tidy3dBaseModel):
@@ -656,6 +731,14 @@ class GridSpec(Tidy3dBaseModel):
 
         coords = Coords(**coords_dict)
         return Grid(boundaries=coords)
+
+    @classmethod
+    def from_grid(cls, grid: Grid) -> GridSpec:
+        """Import grid directly from another simulation, e.g. ``grid_spec = GridSpec.from_grid(sim.grid)``."""
+        grid_dict = {}
+        for dim in "xyz":
+            grid_dict["grid_" + dim] = CustomGridBoundaries(coords=grid.boundaries.to_dict[dim])
+        return cls(**grid_dict)
 
     @classmethod
     def auto(

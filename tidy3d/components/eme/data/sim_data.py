@@ -32,12 +32,12 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         "associated with the monitors of the original :class:`.EMESimulation`.",
     )
 
-    smatrix: EMESMatrixDataset = pd.Field(
-        ..., title="S Matrix", description="Scattering matrix of the EME simulation."
+    smatrix: Optional[EMESMatrixDataset] = pd.Field(
+        None, title="S Matrix", description="Scattering matrix of the EME simulation."
     )
 
     port_modes: Optional[EMEModeSolverData] = pd.Field(
-        ...,
+        None,
         title="Port Modes",
         description="Modes associated with the two ports of the EME device. "
         "The scattering matrix is expressed in this basis.",

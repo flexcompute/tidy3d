@@ -1,32 +1,14 @@
 # utility functions for autograd web API
+from __future__ import annotations
 
 import typing
 
+import pydantic as pd
+
 import tidy3d as td
-
-""" generic data manipulation """
-
-
-def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> tuple[list, list]:
-    """Split data list into original, adjoint field, and adjoint permittivity."""
-
-    data_all = list(sim_data.data)
-    num_mnts_adjoint = (len(data_all) - num_mnts_original) // 2
-
-    td.log.info(
-        f" -> {num_mnts_original} monitors, {num_mnts_adjoint} adjoint field monitors, {num_mnts_adjoint} adjoint eps monitors."
-    )
-
-    data_original, data_adjoint = split_list(data_all, index=num_mnts_original)
-
-    return data_original, data_adjoint
-
-
-def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):
-    """Split a list at a given index."""
-    x = list(x)
-    return x[:index], x[index:]
-
+from tidy3d.components.autograd.types import AutogradFieldMap, dict_ag
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import ArrayLike, tidycomplex
 
 """ E and D field gradient map calculation helpers. """
 
@@ -83,3 +65,46 @@ def multiply_field_data(
         mult = cmp_1 * cmp_2
         field_components[key_1] = mult
     return fld_1.updated_copy(**field_components)
+
+
+class Tracer(Tidy3dBaseModel):
+    """Class to store a single traced field."""
+
+    path: tuple[typing.Any, ...] = pd.Field(
+        ...,
+        title="Path to the traced object in the model dictionary.",
+    )
+
+    data: typing.Union[float, tidycomplex, ArrayLike] = pd.Field(..., title="Tracing data")
+
+
+class FieldMap(Tidy3dBaseModel):
+    """Class to store a collection of traced fields."""
+
+    tracers: tuple[Tracer, ...] = pd.Field(
+        ...,
+        title="Collection of Tracers.",
+    )
+
+    @property
+    def to_autograd_field_map(self) -> AutogradFieldMap:
+        """Convert to ``AutogradFieldMap`` autograd dictionary."""
+        return dict_ag({tracer.path: tracer.data for tracer in self.tracers})
+
+    @classmethod
+    def from_autograd_field_map(cls, autograd_field_map) -> FieldMap:
+        """Initialize from an ``AutogradFieldMap`` autograd dictionary."""
+        tracers = []
+        for path, data in autograd_field_map.items():
+            tracers.append(Tracer(path=path, data=data))
+
+        return cls(tracers=tuple(tracers))
+
+
+class TracerKeys(Tidy3dBaseModel):
+    """Class to store a collection of tracer keys."""
+
+    keys: tuple[tuple[typing.Any, ...], ...] = pd.Field(
+        ...,
+        title="Collection of tracer keys.",
+    )

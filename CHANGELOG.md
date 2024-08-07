@@ -5,7 +5,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.7.1]
+## [2.7.2] - 2024-08-07
+
+### Added
+- Mode solver plugin now supports 'EMESimulation'.
+- `TriangleMesh` class: automatic removal of zero-area faces, and functions `fill_holes` and `fix_winding` to attempt mesh repair.
+- Added progress bar for EME simulations.
+- Support for grid specifications from grid cell boundary coordinates via `CustomGridBoundaries` that subclasses from `GridSpec1d`.
+- More convenient mesh importing from another simulation through `grid_spec = GridSpec.from_grid(sim.grid)`.
+- `autograd` gradient calculations can be performed on the server by passing `local_gradient = False` into `web.run()` or `web.run_async()`.
+- Automatic differentiation with `autograd` supports multiple frequencies through single, broadband adjoint simulation when the objective function can be formulated as depending on a single dataset in the output `SimulationData` with frequency dependence only.
+- Convenience method `EMESimulation.subsection` to create a new EME simulation based on a subregion of an existing one.
+- Added `flux` and `poynting` properties to `FieldProjectionCartesianData`.
+
+### Changed
+- Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
+- Mode solver now always operates on a reduced simulation copy.
+- Moved `EMESimulation` size limit validators to preupload.
+- Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` or `FieldProjectionCartesianMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
+
+### Fixed
+- Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.
+- Error when plotting mode plane PML and the simulation has symmetry.
+- Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
+- Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
+
+## [2.7.1] - 2024-07-10
 
 ### Added
 - Support for differentiation with respect to `GeometryGroup.geometries` elements.
@@ -13,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ModeSolver` methods to plot the mode plane simulation components, including `.plot()`, `.plot_eps()`, `.plot_structures_eps()`, `.plot_grid()`, and `.plot_pml()`.
 - Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
 - Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
+- Support for `FieldProjectionAngleMonitor` for 2D simulations with `far_field_approx = True`.
 
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
@@ -1241,7 +1267,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.2...develop
+[2.7.2]: https://github.com/flexcompute/tidy3d/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/flexcompute/tidy3d/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...v2.7.0
 [2.6.4]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.6.4

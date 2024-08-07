@@ -194,9 +194,16 @@ class LumpedPort(AbstractLumpedPort, Box):
         inject_center = h_cap_coords_along_injection[orth_index]
         # Some sanity checks, tangent H field coordinates should be directly above
         # and below the coordinates of the resistive sheet
-        assert orth_index > 0
-        assert inject_center < h_coords_along_injection[orth_index]
-        assert h_coords_along_injection[orth_index - 1] < inject_center
+        error_message = (
+            "Unexpected error encountered when setting up the current computation for a 'LumpedPort'. "
+            "If you encounter this error, please create an issue in the Tidy3D github repository."
+        )
+        if orth_index <= 0:
+            raise AssertionError(error_message)
+        if inject_center >= h_coords_along_injection[orth_index]:
+            raise AssertionError(error_message)
+        if h_coords_along_injection[orth_index - 1] >= inject_center:
+            raise AssertionError(error_message)
         # Distance between the h1_field and h2_field, a single cell size
         dcap = h_coords_along_injection[orth_index] - h_coords_along_injection[orth_index - 1]
 

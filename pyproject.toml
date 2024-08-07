@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.7.1"
+version = "2.7.2"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -50,7 +50,7 @@ joblib = "*"
 ### Optional dependencies ###
 # development core
 bump-my-version = { version = "*", optional = true }
-ruff = { version = "0.4.8", optional = true }
+ruff = { version = "0.5.5", optional = true }
 coverage = { version = "*", optional = true }
 dill = { version = "*", optional = true }
 ipython = { version = "*", optional = true }
@@ -225,6 +225,7 @@ select = [
   "C",      # flake8-comprehensions
   "B",      # flake8-bugbear
   "UP",
+  "S101",   # do not use asserts
   "NPY201", # numpy 2.* compatibility check
 ]
 ignore = [
@@ -258,7 +259,7 @@ testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
 
 [tool.bumpversion]
-current_version = "2.7.1"
+current_version = "2.7.2"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.

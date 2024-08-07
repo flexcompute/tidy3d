@@ -286,6 +286,15 @@ class AdjointBatch(Batch):
         description="Containers of information needed to reconstruct JaxSimulation for each item.",
     )
 
+    jobs_cached: Dict[str, AdjointJob] = pd.Field(
+        None,
+        title="Jobs (Cached)",
+        description="Optional field to specify ``jobs``. Only used as a workaround internally "
+        "so that ``jobs`` is written when ``Batch.to_file()`` and then the proper task is loaded "
+        "from ``Batch.from_file()``. We recommend leaving unset as setting this field along with "
+        "fields that were not used to create the task will cause errors.",
+    )
+
     _job_type = AdjointJob
 
     def start(self) -> None:

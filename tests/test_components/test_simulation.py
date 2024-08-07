@@ -1322,12 +1322,14 @@ def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type,
     assert_log_level(log_capture, log_level)
 
 
-def test_num_mediums():
+def test_num_mediums(monkeypatch):
     """Make sure we error if too many mediums supplied."""
 
+    max_num_mediums = 10
+    monkeypatch.setattr(simulation, "MAX_NUM_MEDIUMS", max_num_mediums)
     structures = []
     grid_spec = td.GridSpec.auto(wavelength=1.0)
-    for i in range(MAX_NUM_MEDIUMS):
+    for i in range(max_num_mediums):
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 1))
         )
@@ -2472,10 +2474,21 @@ def test_sim_subsection(unstructured, nz):
         # compare
         assert np.allclose(red_grid, full_grid[ind : ind + len(red_grid)])
 
+    subsection_monitors = [mnt for mnt in SIM_FULL.monitors if region_xy.intersects(mnt)]
     sim_red = SIM_FULL.subsection(
         region=region_xy,
         grid_spec="identical",
         boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        # Set theta to 'pi/2' for 2D simulation in the x-y plane
+        monitors=[
+            mnt.updated_copy(theta=np.pi / 2)
+            if isinstance(mnt, td.FieldProjectionAngleMonitor)
+            else mnt
+            for mnt in subsection_monitors
+            if not isinstance(
+                mnt, (td.FieldProjectionCartesianMonitor, td.FieldProjectionKSpaceMonitor)
+            )
+        ],
     )
     assert sim_red.size[2] == 0
     assert isinstance(sim_red.boundary_spec.z.minus, td.Periodic)

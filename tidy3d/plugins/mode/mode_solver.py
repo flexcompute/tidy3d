@@ -4,8 +4,9 @@ invariance along a given propagation axis.
 
 from __future__ import annotations
 
+from functools import wraps
 from math import isclose
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -22,6 +23,8 @@ from ...components.data.data_array import (
 )
 from ...components.data.monitor_data import ModeSolverData
 from ...components.data.sim_data import SimulationData
+from ...components.eme.data.sim_data import EMESimulationData
+from ...components.eme.simulation import EMESimulation
 from ...components.geometry.base import Box
 from ...components.grid.grid import Grid
 from ...components.medium import FullyAnisotropicMedium
@@ -30,6 +33,7 @@ from ...components.monitor import ModeMonitor, ModeSolverMonitor
 from ...components.simulation import Simulation
 from ...components.source import ModeSource, SourceTime
 from ...components.types import (
+    TYPE_TAG_STR,
     ArrayComplex3D,
     ArrayComplex4D,
     ArrayFloat1D,
@@ -69,6 +73,26 @@ FIELD_DECAY_CUTOFF = 1e-2
 # Maximum allowed size of the field data produced by the mode solver
 MAX_MODES_DATA_SIZE_GB = 20
 
+MODE_SIMULATION_TYPE = Union[Simulation, EMESimulation]
+MODE_SIMULATION_DATA_TYPE = Union[SimulationData, EMESimulationData]
+MODE_PLANE_TYPE = Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor]
+
+
+def require_fdtd_simulation(fn):
+    """Decorate a function to check that ``simulation`` is an FDTD ``Simulation``."""
+
+    @wraps(fn)
+    def _fn(self, **kwargs):
+        """New decorated function."""
+        if not isinstance(self.simulation, Simulation):
+            raise SetupError(
+                f"The function '{fn.__name__}' is only supported "
+                "for 'simulation' of type FDTD 'Simulation'."
+            )
+        return fn(self, **kwargs)
+
+    return _fn
+
 
 class ModeSolver(Tidy3dBaseModel):
     """
@@ -89,12 +113,18 @@ class ModeSolver(Tidy3dBaseModel):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    simulation: Simulation = pydantic.Field(
-        ..., title="Simulation", description="Simulation defining all structures and mediums."
+    simulation: MODE_SIMULATION_TYPE = pydantic.Field(
+        ...,
+        title="Simulation",
+        description="Simulation or EMESimulation defining all structures and mediums.",
+        discriminator="type",
     )
 
-    plane: Box = pydantic.Field(
-        ..., title="Plane", description="Cross-sectional plane in which the mode will be computed."
+    plane: MODE_PLANE_TYPE = pydantic.Field(
+        ...,
+        title="Plane",
+        description="Cross-sectional plane in which the mode will be computed.",
+        discriminator=TYPE_TAG_STR,
     )
 
     mode_spec: ModeSpec = pydantic.Field(
@@ -311,56 +341,58 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _data_on_yee_grid(self) -> ModeSolverData:
         """Solve for all modes, and construct data with fields on the Yee grid."""
-        _, _solver_coords = self.plane.pop_axis(
-            self._solver_grid.boundaries.to_list, axis=self.normal_axis
+        solver = self.reduced_simulation_copy
+
+        _, _solver_coords = solver.plane.pop_axis(
+            solver._solver_grid.boundaries.to_list, axis=solver.normal_axis
         )
 
         # Compute and store the modes at all frequencies
-        n_complex, fields, eps_spec = self._solve_all_freqs(
-            coords=_solver_coords, symmetry=self.solver_symmetry
+        n_complex, fields, eps_spec = solver._solve_all_freqs(
+            coords=_solver_coords, symmetry=solver.solver_symmetry
         )
 
         # start a dictionary storing the data arrays for the ModeSolverData
         index_data = ModeIndexDataArray(
             np.stack(n_complex, axis=0),
             coords=dict(
-                f=list(self.freqs),
-                mode_index=np.arange(self.mode_spec.num_modes),
+                f=list(solver.freqs),
+                mode_index=np.arange(solver.mode_spec.num_modes),
             ),
         )
         data_dict = {"n_complex": index_data}
 
         # Construct the field data on Yee grid
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-            xyz_coords = self.grid_snapped[field_name].to_list
+            xyz_coords = solver.grid_snapped[field_name].to_list
             scalar_field_data = ScalarModeFieldDataArray(
                 np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
                 coords=dict(
                     x=xyz_coords[0],
                     y=xyz_coords[1],
                     z=xyz_coords[2],
-                    f=list(self.freqs),
-                    mode_index=np.arange(self.mode_spec.num_modes),
+                    f=list(solver.freqs),
+                    mode_index=np.arange(solver.mode_spec.num_modes),
                 ),
             )
             data_dict[field_name] = scalar_field_data
 
         # finite grid corrections
-        grid_factors = self._grid_correction(
-            simulation=self.simulation,
-            plane=self.plane,
-            mode_spec=self.mode_spec,
+        grid_factors = solver._grid_correction(
+            simulation=solver.simulation,
+            plane=solver.plane,
+            mode_spec=solver.mode_spec,
             n_complex=index_data,
-            direction=self.direction,
+            direction=solver.direction,
         )
 
         # make mode solver data on the Yee grid
-        mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
-        grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
+        mode_solver_monitor = solver.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
+        grid_expanded = solver.simulation.discretize_monitor(mode_solver_monitor)
         mode_solver_data = ModeSolverData(
             monitor=mode_solver_monitor,
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
+            symmetry=solver.simulation.symmetry,
+            symmetry_center=solver.simulation.center,
             grid_expanded=grid_expanded,
             grid_primal_correction=grid_factors[0],
             grid_dual_correction=grid_factors[1],
@@ -516,7 +548,7 @@ class ModeSolver(Tidy3dBaseModel):
         return mode_solver_data.symmetry_expanded_copy
 
     @cached_property
-    def sim_data(self) -> SimulationData:
+    def sim_data(self) -> MODE_SIMULATION_DATA_TYPE:
         """:class:`.SimulationData` object containing the :class:`.ModeSolverData` for this object.
 
         Returns
@@ -527,7 +559,17 @@ class ModeSolver(Tidy3dBaseModel):
         monitor_data = self.data
         new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
         new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
-        return SimulationData(simulation=new_simulation, data=(monitor_data,))
+        if isinstance(new_simulation, Simulation):
+            return SimulationData(simulation=new_simulation, data=(monitor_data,))
+        elif isinstance(new_simulation, EMESimulation):
+            return EMESimulationData(
+                simulation=new_simulation, data=(monitor_data,), smatrix=None, port_modes=None
+            )
+        else:
+            raise SetupError(
+                "The 'simulation' provided does not correspond to any known "
+                "'AbstractSimulationData' type."
+            )
 
     def _get_epsilon(self, freq: float) -> ArrayComplex4D:
         """Compute the epsilon tensor in the plane. Order of components is xx, xy, xz, yx, etc."""
@@ -790,7 +832,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     @staticmethod
     def _grid_correction(
-        simulation: Simulation,
+        simulation: MODE_SIMULATION_TYPE,
         plane: Box,
         mode_spec: ModeSpec,
         n_complex: ModeIndexDataArray,
@@ -993,6 +1035,7 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
+    @require_fdtd_simulation
     def sim_with_source(
         self,
         source_time: SourceTime,
@@ -1027,6 +1070,7 @@ class ModeSolver(Tidy3dBaseModel):
         new_sim = self.simulation.updated_copy(sources=new_sources)
         return new_sim
 
+    @require_fdtd_simulation
     def sim_with_monitor(
         self,
         freqs: List[float] = None,
@@ -1371,31 +1415,35 @@ class ModeSolver(Tidy3dBaseModel):
         if num_pml_0 > 0:
             pml_thick_0_plus = coord_0[-1] - coord_0[-num_pml_0 - 1]
             pml_thick_0_minus = coord_0[num_pml_0] - coord_0[0]
+            if self.solver_symmetry[0] != 0:
+                pml_thick_0_minus = pml_thick_0_plus
 
         pml_thick_1_plus = 0
         pml_thick_1_minus = 0
         if num_pml_1 > 0:
             pml_thick_1_plus = coord_1[-1] - coord_1[-num_pml_1 - 1]
             pml_thick_1_minus = coord_1[num_pml_1] - coord_1[0]
+            if self.solver_symmetry[1] != 0:
+                pml_thick_1_minus = pml_thick_1_plus
 
         # Mode Plane width and height
-        mp_w = coord_0[-1] - coord_0[0]
-        mp_h = coord_1[-1] - coord_1[0]
+        mp_w = h_lim[1] - h_lim[0]
+        mp_h = v_lim[1] - v_lim[0]
 
         # Plot the absorbing layers.
         if num_pml_0 > 0 or num_pml_1 > 0:
             pml_rect = []
             if pml_thick_0_minus > 0:
-                pml_rect.append(Rectangle((coord_0[0], coord_1[0]), pml_thick_0_minus, mp_h))
+                pml_rect.append(Rectangle((h_lim[0], v_lim[0]), pml_thick_0_minus, mp_h))
             if pml_thick_0_plus > 0:
                 pml_rect.append(
-                    Rectangle((coord_0[-num_pml_0 - 1], coord_1[0]), pml_thick_0_plus, mp_h)
+                    Rectangle((h_lim[1] - pml_thick_0_plus, v_lim[0]), pml_thick_0_plus, mp_h)
                 )
             if pml_thick_1_minus > 0:
-                pml_rect.append(Rectangle((coord_0[0], coord_1[0]), mp_w, pml_thick_1_minus))
+                pml_rect.append(Rectangle((h_lim[0], v_lim[0]), mp_w, pml_thick_1_minus))
             if pml_thick_1_plus > 0:
                 pml_rect.append(
-                    Rectangle((coord_0[0], coord_1[-num_pml_1 - 1]), mp_w, pml_thick_1_plus)
+                    Rectangle((h_lim[0], v_lim[1] - pml_thick_1_plus), mp_w, pml_thick_1_plus)
                 )
 
             pc = PatchCollection(
@@ -1416,14 +1464,24 @@ class ModeSolver(Tidy3dBaseModel):
         n_axis, t_axes = self.plane.pop_axis([0, 1, 2], self.normal_axis)
         a_center = [None, None, None]
         a_center[n_axis] = self.plane.center[n_axis]
+
+        _, (h_min_s, v_min_s) = Box.pop_axis(self.simulation.bounds[0], axis=n_axis)
+        _, (h_max_s, v_max_s) = Box.pop_axis(self.simulation.bounds[1], axis=n_axis)
+
+        h_min = a_center[n_axis] - self.plane.size[t_axes[0]] / 2
+        h_max = a_center[n_axis] + self.plane.size[t_axes[0]] / 2
+        v_min = a_center[n_axis] - self.plane.size[t_axes[1]] / 2
+        v_max = a_center[n_axis] + self.plane.size[t_axes[1]] / 2
+
         h_lim = [
-            a_center[n_axis] - self.plane.size[t_axes[0]] / 2,
-            a_center[n_axis] + self.plane.size[t_axes[0]] / 2,
+            h_min if abs(h_min) < abs(h_min_s) else h_min_s,
+            h_max if abs(h_max) < abs(h_max_s) else h_max_s,
         ]
         v_lim = [
-            a_center[n_axis] - self.plane.size[t_axes[1]] / 2,
-            a_center[n_axis] + self.plane.size[t_axes[1]] / 2,
+            v_min if abs(v_min) < abs(v_min_s) else v_min_s,
+            v_max if abs(v_max) < abs(v_max_s) else v_max_s,
         ]
+
         return a_center, h_lim, v_lim, t_axes
 
     def _validate_modes_size(self):
@@ -1448,6 +1506,12 @@ class ModeSolver(Tidy3dBaseModel):
         """Strip objects not used by the mode solver from simulation object.
         This might significantly reduce upload time in the presence of custom mediums.
         """
+
+        # for now, we handle EME simulation by converting to FDTD simulation
+        # because we can't take planar subsection of an EME simulation.
+        # eventually, we will convert to ModeSimulation
+        if isinstance(self.simulation, EMESimulation):
+            return self.to_fdtd_mode_solver().reduced_simulation_copy
 
         # we preserve extra cells along the normal direction to ensure there is enough data for
         # subpixel
@@ -1485,6 +1549,20 @@ class ModeSolver(Tidy3dBaseModel):
             boundary_spec=new_bspec,
             remove_outside_custom_mediums=True,
             remove_outside_structures=True,
+            include_pml_cells=True,
         )
 
         return self.updated_copy(simulation=new_sim)
+
+    def to_fdtd_mode_solver(self) -> ModeSolver:
+        """Construct a new :class:`.ModeSolver` by converting ``simulation``
+        from a :class:`.EMESimulation` to an FDTD :class:`.Simulation`.
+        Only used as a workaround until :class:`.EMESimulation` is natively supported in the
+        :class:`.ModeSolver` webapi."""
+        if not isinstance(self.simulation, EMESimulation):
+            raise ValidationError(
+                "The method 'to_fdtd_mode_solver' is only needed "
+                "when the 'simulation' is an 'EMESimulation'."
+            )
+        fdtd_sim = self.simulation._to_fdtd_sim()
+        return self.updated_copy(simulation=fdtd_sim)
