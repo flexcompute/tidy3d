@@ -10,7 +10,7 @@ import pydantic.v1 as pd
 from ...components.base import TYPE_TAG_STR, Tidy3dBaseModel, cached_property
 from ...components.data.sim_data import SimulationData
 from ...components.simulation import Simulation
-from ...log import get_logging_console, log
+from ...log import Console, get_logging_console, log
 from ...web.api.container import Batch, BatchData, Job
 from .method import (
     MethodBayOpt,
@@ -175,7 +175,7 @@ class DesignSpace(Tidy3dBaseModel):
 
         else:
             fn_args, fn_values, aux_values, opt_output, sim_names, sim_paths = self.run_pre_post(
-                fn_pre=fn, fn_post=fn_post, console=console
+                fn_pre=fn, fn_post=fn_post, console=console, verbose=verbose
             )
 
             if len(sim_names) == 0:
@@ -194,17 +194,17 @@ class DesignSpace(Tidy3dBaseModel):
             opt_output=opt_output,
         )
 
-    def run_single(self, fn: Callable, console) -> Tuple(list[dict], list, list[Any]):
+    def run_single(self, fn: Callable, console: Console) -> Tuple(list[dict], list, list[Any]):
         """Run a single function of parameter inputs."""
         evaluate_fn = self._get_evaluate_fn_single(fn=fn)
         return self.method._run(run_fn=evaluate_fn, parameters=self.parameters, console=console)
 
-    def run_pre_post(self, fn_pre: Callable, fn_post: Callable, console) -> Tuple(
-        list[dict], list[dict], list[Any]
-    ):
+    def run_pre_post(
+        self, fn_pre: Callable, fn_post: Callable, console: Console, verbose: bool
+    ) -> Tuple(list[dict], list[dict], list[Any]):
         """Run a function with Tidy3D implicitly called in between."""
         handler = self._get_evaluate_fn_pre_post(
-            fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid
+            fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid, verbose=verbose
         )
         fn_args, fn_values, aux_values, opt_output = self.method._run(
             run_fn=handler.fn_combined, parameters=self.parameters, console=console
@@ -222,14 +222,17 @@ class DesignSpace(Tidy3dBaseModel):
 
         return evaluate
 
-    def _get_evaluate_fn_pre_post(self, fn_pre: Callable, fn_post: Callable, fn_mid: Callable):
+    def _get_evaluate_fn_pre_post(
+        self, fn_pre: Callable, fn_post: Callable, fn_mid: Callable, verbose: bool
+    ):
         """Get function that tries to use batch processing on a set of arguments."""
 
         class Pre_Post_Handler:
-            def __init__(self):
+            def __init__(self, verbose):
                 self.sim_counter = 0
                 self.sim_names = []
                 self.sim_paths = []
+                self.verbose = verbose
 
             def fn_combined(self, args_list: list[dict[str, Any]]) -> list[Any]:
                 """Compute fn_pre and fn_post functions and capture other outputs."""
@@ -243,23 +246,21 @@ class DesignSpace(Tidy3dBaseModel):
                         "Unrecognized output of fn_pre. Please change the return of fn_pre."
                     )
 
-                data, task_names, task_paths = fn_mid(sim_dict, self.sim_counter)
+                data, task_names, task_paths = fn_mid(sim_dict, self.sim_counter, self.verbose)
                 self.sim_names.extend(task_names)
                 self.sim_paths.extend(task_paths)
                 self.sim_counter += len(task_names)
                 post_out = [fn_post(val) for val in data.values()]
                 return post_out
 
-        handler = Pre_Post_Handler()
+        handler = Pre_Post_Handler(verbose)
 
         return handler
 
     def _fn_mid(
-        self, pre_out: dict[int, Any], sim_counter: int
+        self, pre_out: dict[int, Any], sim_counter: int, verbose: bool
     ) -> Union[dict[int, Any], BatchData]:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
-
-        # NOTE: Need to check that pre_out has string keys!
 
         # Keep copy of original to use if no tidy3d simulation required
         original_pre_out = pre_out.copy()
@@ -330,6 +331,7 @@ class DesignSpace(Tidy3dBaseModel):
             simulations=named_sims,
             folder_name=self.folder_name,
             simulation_type="tidy3d_design",
+            verbose=verbose,
         ).run(path_dir=self.path_dir)
 
         batch_results = {}

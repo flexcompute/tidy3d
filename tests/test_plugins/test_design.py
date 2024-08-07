@@ -348,7 +348,7 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Ensure output of list and dict pre funcs is the same
     list_non_td_sweep = design_space.run(list_non_td_pre, list_non_td_post)
-    dict_non_td_sweep = design_space.run(dict_non_td_pre, dict_non_td_post)
+    dict_non_td_sweep = design_space.run(dict_non_td_pre, dict_non_td_post, verbose=False)
 
     assert list_non_td_sweep.values == dict_non_td_sweep.values
 
@@ -360,7 +360,7 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Try functions that include td objects
     # Ensure output of combined and pre-post functions is the same
-    td_sweep1 = design_space.run(scs_combined)
+    td_sweep1 = design_space.run(scs_combined, verbose=False)
     td_sweep2 = design_space.run(scs_pre, scs_post)
 
     assert td_sweep1.values == td_sweep2.values
@@ -377,7 +377,7 @@ def test_sweep(sweep_method, monkeypatch):
     assert td_batch.values == td_batch_combined.values
 
     # Test with list of sims
-    td_sim_list = design_space.run(scs_pre_list, scs_post_list)
+    td_sim_list = design_space.run(scs_pre_list, scs_post_list, verbose=False)
 
     assert "0_0" not in td_sim_list.task_names[0] and "0_3" not in td_sim_list.task_names[4]
 
