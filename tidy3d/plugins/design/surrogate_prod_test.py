@@ -25,20 +25,26 @@ np.random.seed(SEED)
 torch.cuda.empty_cache()
 torch.manual_seed(SEED)
 
-MODEL_DIR = "/home/matt/Documents/Flexcompute/bragg/model/first_model"
+MODEL_DIR = "/home/matt/Documents/Flexcompute/bragg/model/third_model"
 DATA_DIR = "/home/matt/Documents/Flexcompute/bragg/model/data"
 os.chdir(MODEL_DIR)
 
 MODEL_NAME = "model.pt"
 SAMPLE_POINTS = 25
-RESOLUTION = 100
+RESOLUTION = 65
 
 # Config for device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"Using device {device}")
 
+cl1 = 8
+cl2 = 32
+c_kernal = 9
+l1 = 1856
+dropout = 0.15
+
 label_scaler, feature_scaler = load_scalers()
-trained_net = NN().to(device)
+trained_net = NN(RESOLUTION - 1, cl1, cl2, c_kernal, l1, dropout).to(device)
 trained_net.load_state_dict(torch.load(MODEL_NAME))
 
 
