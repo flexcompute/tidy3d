@@ -29,29 +29,29 @@ jobs:
           NOTEBOOKS_PATH=docs/notebooks
           FAQ_PATH=docs/faq
 
-          # Checking out Notebooks submodule with the same branch as the main project
+          # Checking out Notebooks submodule with the same branch as the main project/develop
           echo "Checking $NOTEBOOKS_PATH for updates..."
           cd $NOTEBOOKS_PATH
           NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
           echo $(git fetch --all --verbose)
           echo $(git remote get-url origin)
-          if git show-ref --verify refs/remotes/origin/latest; then
-           echo "Branch latest exists."
+          if git show-ref --verify refs/remotes/origin/develop; then
+           echo "Branch develop exists."
           else
-            echo "::error::Branch latest does not exist on remote."
+            echo "::error::Branch develop does not exist on remote."
             exit 1
           fi
-          NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/latest)
+          NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
           echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
           echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
 
 
           cd ../..
           if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
-            echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the latest branch. Please update it."
+            echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the develop branch. Please update it."
             exit 1
           else
-            echo "Submodule $NOTEBOOKS_PATH is up to date with the latest branch."
+            echo "Submodule $NOTEBOOKS_PATH is up to date with the develop branch."
           fi
 
           # Checking FAQs only on the develop branch.
