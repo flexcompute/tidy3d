@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.2] - 2024-08-07
+
 ### Added
 - Mode solver plugin now supports 'EMESimulation'.
 - `TriangleMesh` class: automatic removal of zero-area faces, and functions `fill_holes` and `fix_winding` to attempt mesh repair.
@@ -28,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
 - Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
 
-## [2.7.1]
+## [2.7.1] - 2024-07-10
 
 ### Added
 - Support for differentiation with respect to `GeometryGroup.geometries` elements.
@@ -1265,7 +1267,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.2...develop
+[2.7.2]: https://github.com/flexcompute/tidy3d/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/flexcompute/tidy3d/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...v2.7.0
 [2.6.4]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.6.4
