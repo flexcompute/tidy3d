@@ -4,8 +4,8 @@
 Submitting Simulations
 ======================
 
-Through python API
-------------------
+Generic Web API
+----------------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -26,8 +26,8 @@ Through python API
    tidy3d.web.api.webapi.load_simulation
    tidy3d.web.api.asynchronous.run_async
 
-Convenience for Single and Batch
---------------------------------
+Job and Batch Containers
+-------------------------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -46,3 +46,15 @@ Information Containers
 
    tidy3d.web.core.task_info.TaskInfo
    tidy3d.web.core.task_info.TaskStatus
+
+
+Mode Solver Web API
+--------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.web.api.mode.run
+   tidy3d.web.api.mode.run_batch
+   tidy3d.web.api.mode.ModeSolverTask
