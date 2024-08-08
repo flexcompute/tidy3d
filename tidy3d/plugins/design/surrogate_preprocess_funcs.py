@@ -1,9 +1,10 @@
 import math
+import os
 import pickle
 
 import numpy as np
 import torch
-from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
+from sklearn.preprocessing import MinMaxScaler
 
 import tidy3d as td
 
@@ -78,7 +79,7 @@ def scale_label(y, pre_fit=None):
     data = y.reshape(-1, 1)
 
     if pre_fit is None:
-        standardiser = QuantileTransformer()
+        standardiser = MinMaxScaler()
         output = standardiser.fit_transform(data)
 
         return output, standardiser
@@ -119,13 +120,14 @@ def pytorch_load(x, y, batch_size, shuffle_data=False):
     return loaded
 
 
-def save_scalers(labelScaler, featScaler):
+def save_scalers(model_dir, label_scaler, feat_scaler):
     """
     Save the scaler used for the labels and features
     """
+    os.chdir(model_dir)
 
     with open("scalers.pkl", "wb") as outFile:
-        pickle.dump([labelScaler, featScaler], outFile)
+        pickle.dump([label_scaler, feat_scaler], outFile)
 
 
 def load_scalers():

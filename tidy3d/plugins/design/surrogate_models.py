@@ -30,9 +30,11 @@ class Basic1DCNN(nn.Module):
         self.conv1 = nn.Conv1d(
             in_channels=1, out_channels=cl1, kernel_size=c_kernal, stride=stride, padding=padding
         )
+        self.bn1 = nn.BatchNorm1d(cl1)
         self.conv2 = nn.Conv1d(
             in_channels=cl1, out_channels=cl2, kernel_size=c_kernal, stride=stride, padding=padding
         )
+        self.bn2 = nn.BatchNorm1d(cl2)
         self.pool = nn.MaxPool1d(kernel_size=p_kernal, stride=p_stride, padding=p_padding)
 
         # Calculate input size to fc1
@@ -49,9 +51,57 @@ class Basic1DCNN(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        x = self.pool(self.relu(self.conv1(x)))
-        x = self.pool(self.relu(self.conv2(x)))
+        x = self.pool(self.relu(self.bn1(self.conv1(x))))
+        x = self.pool(self.relu(self.bn2(self.conv2(x))))
         x = x.view(x.size(0), -1)  # Flatten the tensor
         x = self.dropout(self.relu(self.fc1(x)))
         x = self.fc2(x)
+        return x
+
+
+class ComplexCNN1DRegressor(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.conv1 = nn.Conv1d(in_channels=1, out_channels=32, kernel_size=5, padding=2)
+        self.bn1 = nn.BatchNorm1d(32)
+
+        self.conv2 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=5, padding=2)
+        self.bn2 = nn.BatchNorm1d(64)
+
+        self.conv3 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm1d(128)
+
+        self.conv4 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+        self.bn4 = nn.BatchNorm1d(256)
+
+        self.pool = nn.MaxPool1d(kernel_size=2, stride=2)
+
+        self.fc1 = nn.Linear(
+            256 * 6, 512
+        )  # Adjust input dimension based on the input signal length
+        self.fc2 = nn.Linear(512, 128)
+        self.fc3 = nn.Linear(128, 1)
+
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=0.2)
+
+    def forward(self, x):
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.pool(x)
+        x = self.relu(self.bn2(self.conv2(x)))
+        x = self.pool(x)
+        x = self.relu(self.bn3(self.conv3(x)))
+        x = self.pool(x)
+        x = self.relu(self.bn4(self.conv4(x)))
+        x = self.pool(x)
+
+        x = x.view(x.size(0), -1)  # Flatten the tensor
+
+        x = self.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.relu(self.fc2(x))
+        x = self.dropout(x)
+        x = self.fc3(x)
+
         return x

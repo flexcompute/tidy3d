@@ -4,7 +4,7 @@ import torch
 from sklearn.metrics import mean_absolute_error
 
 
-def train_regression_network(
+def train_network(
     net,
     optimizer,
     dataloader_train,
@@ -12,9 +12,10 @@ def train_regression_network(
     loss_function,
     device,
     output_dir,
+    model_name,
     epochs=10,
     pbar=None,
-    showPlot=False,
+    show_plot=False,
 ):
     test_loss_best = np.inf
 
@@ -53,7 +54,7 @@ def train_regression_network(
         # Update best results
         if test_loss < test_loss_best:
             test_loss_best = test_loss
-            torch.save(net.state_dict(), output_dir + "/model.pt")
+            torch.save(net.state_dict(), output_dir / model_name)
 
             print(f"Best State Updated. Epoch: {idx_epoch}")
 
@@ -65,16 +66,17 @@ def train_regression_network(
     # plt.plot(lossStore[150:], label='Loss')
     # plt.plot(testLossStore[150:], label='Test_Loss')
 
-    fig, ax = plt.subplots()
-    plt.xticks(np.array(range(epochs)))
-    ax.plot(np.array(range(epochs)), lossStore, color="blue")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Training Loss", color="blue")
+    if show_plot:
+        fig, ax = plt.subplots()
+        plt.xticks(np.array(range(epochs)))
+        ax.plot(np.array(range(epochs)), lossStore, color="blue")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Training Loss", color="blue")
 
-    ax2 = ax.twinx()
-    ax2.plot(np.array(range(epochs)), testLossStore, color="orange")
-    ax2.set_ylabel("Test Loss", color="orange")
-    if showPlot:
+        ax2 = ax.twinx()
+        ax2.plot(np.array(range(epochs)), testLossStore, color="orange")
+        ax2.set_ylabel("Test Loss", color="orange")
+
         # plt.legend([ax, ax2], ['Training Loss', 'Test Loss'])
         plt.show()
 
