@@ -272,3 +272,16 @@ def test_dispersion_guess(random_data):
     medium, rms = fitter.fit(num_tries=2)
 
     medium_new, rms_new = fitter.fit(num_tries=1, guess=medium)
+
+
+def test_dispersion_loss_samples():
+    wvls = np.array([275e-3, 260e-3, 255e-3])
+    n_nAlGaN = np.array([2.72, 2.68, 2.53])
+
+    nAlGaN_fitter = FastDispersionFitter(wvl_um=wvls, n_data=n_nAlGaN)
+    nAlGaN_mat, _ = nAlGaN_fitter.fit()
+
+    freq_list = nAlGaN_mat.angular_freq_to_Hz(nAlGaN_mat._imag_ep_extrema_with_samples())
+    ep = nAlGaN_mat.eps_model(freq_list)
+    for e in ep:
+        assert e.imag >= 0
