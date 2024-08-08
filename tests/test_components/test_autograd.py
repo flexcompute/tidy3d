@@ -816,6 +816,20 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
+def test_sim_traced_override_structures():
+    """Make sure that sims with traced override structures are handled properly."""
+
+    def f(x):
+        override_structure = td.MeshOverrideStructure(
+            geometry=td.Box(center=(0, 0, 0), size=(1, 1, x)),
+            dl=[1, 1, 1],
+        )
+        sim = SIM_FULL.updated_copy(override_structures=[override_structure], path="grid_spec")
+        return sim.grid_spec.override_structures[0].geometry.size[2]
+
+    ag.grad(f)(1.0)
+
+
 @pytest.mark.parametrize("structure_key", ("custom_med",))
 def test_sim_fields_io(structure_key, tmp_path):
     """Test that converging and AutogradFieldMap dictionary to a FieldMap object, saving and loading
