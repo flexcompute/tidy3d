@@ -254,19 +254,29 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         # shift the port to the left
         if port.direction == "+":
             shifted_index = port_index - 2
-            if shifted_index < 0:
+            if (
+                shifted_index < 0
+                or grid_centers[shifted_index] <= self.simulation.bounds[0][normal_axis]
+            ):
                 raise SetupError(
-                    f"Port {port.name} normal is too close to boundary "
-                    f"on -{'xyz'[normal_axis]} side."
+                    f"Port {port.name} normal is less than 2 cells to the boundary "
+                    f"on -{'xyz'[normal_axis]} side. "
+                    "Please either increase the mesh resolution near the port or "
+                    "move the port away from the boundary."
                 )
 
         # shift the port to the right
         else:
             shifted_index = port_index + 2
-            if shifted_index >= len(grid_centers):
+            if (
+                shifted_index >= len(grid_centers)
+                or grid_centers[shifted_index] >= self.simulation.bounds[1][normal_axis]
+            ):
                 raise SetupError(
-                    f"Port {port.name} normal is too close to boundary "
+                    f"Port {port.name} normal is tless than 2 cells to the boundary "
                     f"on +{'xyz'[normal_axis]} side."
+                    "Please either increase the mesh resolution near the port or "
+                    "move the port away from the boundary."
                 )
 
         new_pos = grid_centers[shifted_index]
