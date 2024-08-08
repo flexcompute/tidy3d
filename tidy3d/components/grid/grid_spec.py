@@ -721,7 +721,7 @@ class GridSpec(Tidy3dBaseModel):
         for idim, (dim, grid_1d) in enumerate(zip("xyz", grids_1d)):
             coords_dict[dim] = grid_1d.make_coords(
                 axis=idim,
-                structures=list(structures) + list(self.override_structures),
+                structures=list(structures) + [s.to_static() for s in self.override_structures],
                 symmetry=symmetry,
                 periodic=periodic[idim],
                 wavelength=wavelength,
