@@ -283,7 +283,7 @@ class FastFitterData(AdvancedFastFitterParam):
     def pole_residue(self) -> PoleResidue:
         """Corresponding :class:`.PoleResidue` model."""
         if self.eps_inf is None or self.poles is None:
-            return None
+            return PoleResidue(eps_inf=1, poles=[])
         return PoleResidue(
             eps_inf=self.eps_inf,
             poles=list(
@@ -307,12 +307,46 @@ class FastFitterData(AdvancedFastFitterParam):
         return self.evaluate(self.omega)
 
     @cached_property
+    def loss_omega_pole_samples(self) -> ArrayFloat1D:
+        """Samples to check around each pole for passivity."""
+        ranges_omega = []
+        for pole, res in zip(self.poles, self.residues):
+            cr = np.real(res)
+            ci = np.imag(res)
+            ar = np.real(pole)
+            ai = np.imag(pole)
+            # no extra checking needed for marginally stable poles; these are handled later
+            if ar == 0:
+                continue
+            if cr == 0:
+                pole_extrema = [-ai]
+            else:
+                disc = ci**2 + cr**2
+                pole_extrema = [
+                    -ai + ar * (ci + np.sqrt(disc)) / cr,
+                    -ai + ar * (ci - np.sqrt(disc)) / cr,
+                ]
+
+            ranges_omega.append(np.abs(pole_extrema))
+        if len(ranges_omega) == 0:
+            return []
+        return np.concatenate(ranges_omega)
+
+    @cached_property
+    def loss_omega_samples(self) -> ArrayFloat1D:
+        """Frequencies to sample loss to ensure it is within bounds."""
+        # let's check a big range in addition to the imag_extrema
+        range_omega = np.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
+        range_omega_poles = self.loss_omega_pole_samples
+        return np.concatenate((range_omega, range_omega_poles))
+
+    @cached_property
     def loss_in_bounds_violations(self) -> ArrayFloat1D:
         """Return list of frequencies where model violates loss bounds."""
 
         extrema_list = PoleResidue.imag_ep_extrema(zip(self.poles, self.residues))
-        # let's check a big range in addition to the imag_extrema
-        range_omega = np.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
+        range_omega = self.loss_omega_samples
+
         omega = np.concatenate((range_omega, extrema_list))
         loss = self.evaluate(omega).imag
         bmin, bmax = self.loss_bounds
@@ -598,7 +632,7 @@ class FastFitterData(AdvancedFastFitterParam):
 
         model = self.updated_copy(passivity_optimized=True)
         violations = model.loss_in_bounds_violations
-        range_omega = np.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
+        range_omega = model.loss_omega_samples
         violations = np.unique(np.concatenate((violations, range_omega)))
 
         # only need one iteration since poles are fixed
@@ -834,7 +868,6 @@ class FastDispersionFitter(DispersionFitter):
                 "Unweighted RMS error %.3g",
                 best_model.unweighted_rms_error,
             )
-
         return (
             best_model.pole_residue.updated_copy(frequency_range=self.frequency_range),
             best_model.rms_error,
