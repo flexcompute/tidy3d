@@ -509,3 +509,45 @@ def test_wave_port_to_mode_solver(tmp_path):
         path_dir=str(tmp_path), port_types=(WavePort, WavePort)
     )
     _ = modeler.ports[0].to_mode_solver(modeler.simulation, freqs=[1e9, 2e9, 3e9])
+
+
+def test_port_source_snapped_to_PML(tmp_path):
+    """Raise meaningful error message when source is snapped into PML because the port is too close
+    to the boundary.
+    """
+    modeler = make_component_modeler(planar_pec=True, path_dir=str(tmp_path))
+    port_pos = 5e4
+    voltage_path = VoltageIntegralAxisAligned(
+        center=(port_pos, 0, 0),
+        size=(0, 1e3, 0),
+        sign="+",
+    )
+    port = WavePort(
+        center=(port_pos, 0, 0),
+        size=(0, 1e3, 1e3),
+        name="wave_port",
+        mode_spec=td.ModeSpec(num_modes=1),
+        direction="-",
+        voltage_integral=voltage_path,
+        current_integral=None,
+    )
+    modeler = modeler.updated_copy(ports=[port])
+
+    # Error because port is snapped to PML layers; but the error message might not
+    # be very informative, e.g. "simulation.sources[0]' is outside of the simulation domain".
+    # So we also check where error should be raised immediately
+    with pytest.raises(SetupError):
+        modeler.sim_dict
+
+    with pytest.raises(SetupError):
+        modeler._shift_value_signed(port)
+
+    # also validate the negative side
+    voltage_path = voltage_path.updated_copy(center=(-port_pos, 0, 0))
+    port = port.updated_copy(direction="+", center=(-port_pos, 0, 0), voltage_integral=voltage_path)
+    modeler = modeler.updated_copy(ports=[port])
+    with pytest.raises(SetupError):
+        modeler.sim_dict
+
+    with pytest.raises(SetupError):
+        modeler._shift_value_signed(port)
