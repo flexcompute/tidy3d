@@ -5529,7 +5529,7 @@ doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linke
 test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", "jaraco.test", "more-itertools", "pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy", "pytest-ruff (>=0.2.1)"]
 
 [extras]
-dev = ["bump-my-version", "cma", "coverage", "devsim", "dill", "gdspy", "gdstk", "grcwa", "ipython", "ipython", "jax", "jaxlib", "jinja2", "jupyter", "memory_profiler", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "pydata-sphinx-theme", "pylint", "pyswarms", "pytest", "pytest-timeout", "rtree", "ruff", "sax", "scikit-rf", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "tox", "trimesh", "vtk"]
+dev = ["bump-my-version", "cma", "coverage", "devsim", "dill", "flax", "gdspy", "gdstk", "grcwa", "ipython", "ipython", "jax", "jaxlib", "jinja2", "jupyter", "memory_profiler", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "pydata-sphinx-theme", "pylint", "pyswarms", "pytest", "pytest-timeout", "rtree", "ruff", "sax", "scikit-rf", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "tox", "trimesh", "vtk"]
 docs = ["cma", "devsim", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
@@ -5541,4 +5541,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0.0"
-content-hash = "08216f09c8fa651fa543bb32d2305396afde84c069e4a6059d1761e752923394"
+content-hash = "effbcf007d2b0dafa6d32f0c06c208aa4f71da7f7346677549785d9fb6b763de"

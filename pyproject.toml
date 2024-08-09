@@ -115,6 +115,7 @@ dev = [
   "coverage",
   'dill',
   'divparams',
+  'flax',
   'gdspy',
   'gdstk',
   'grcwa',
