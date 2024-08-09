@@ -30,11 +30,9 @@ class Basic1DCNN(nn.Module):
         self.conv1 = nn.Conv1d(
             in_channels=1, out_channels=cl1, kernel_size=c_kernal, stride=stride, padding=padding
         )
-        self.bn1 = nn.BatchNorm1d(cl1)
         self.conv2 = nn.Conv1d(
             in_channels=cl1, out_channels=cl2, kernel_size=c_kernal, stride=stride, padding=padding
         )
-        self.bn2 = nn.BatchNorm1d(cl2)
         self.pool = nn.MaxPool1d(kernel_size=p_kernal, stride=p_stride, padding=p_padding)
 
         # Calculate input size to fc1
@@ -43,16 +41,14 @@ class Basic1DCNN(nn.Module):
         conv2Out = ((pool1Out - c_kernal + 2 * padding) / stride) + 1
         pool2Out = ((conv2Out - p_kernal) / p_stride) + 1
 
-        self.fc1 = nn.Linear(
-            int(pool2Out * cl2), l1
-        )  # Adjust the size according to your input length
+        self.fc1 = nn.Linear(int(pool2Out * cl2), l1)
         self.fc2 = nn.Linear(l1, 1)
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        x = self.pool(self.relu(self.bn1(self.conv1(x))))
-        x = self.pool(self.relu(self.bn2(self.conv2(x))))
+        x = self.pool(self.relu(self.conv1(x)))
+        x = self.pool(self.relu(self.conv2(x)))
         x = x.view(x.size(0), -1)  # Flatten the tensor
         x = self.dropout(self.relu(self.fc1(x)))
         x = self.fc2(x)

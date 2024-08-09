@@ -3,6 +3,7 @@ import os
 import pickle
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import optuna
 
@@ -37,7 +38,7 @@ def _build_directory(dir_path):
 
 
 class AI_Model:
-    def __init__(self, output_dir, data_dir, rng_seed=None) -> None:
+    def __init__(self, output_dir, data_dir: list, rng_seed=None) -> None:
         """Initialize the space building directories and finding the input models
 
         Current state:
@@ -48,17 +49,21 @@ class AI_Model:
         Investigate @property dec relevance here
         """
         self.output_dir = Path(output_dir)
-        # self.data_dir = _build_directory(self.output_dir / "data")
         self.pickle_dir = _build_directory(self.output_dir / "pickle_data")
         self.model_dir = _build_directory(self.output_dir / "models")
 
         # Get data files
-        self.data_dir = Path(data_dir)  # Separate as data will exist before building model
-        self.hdf5_files = [
-            fileName
-            for fileName in os.listdir(self.data_dir)
-            if ".hdf5" in fileName and fileName != "batch.hdf5"
-        ]
+        # Separate as data will exist before building model
+        self.data_dir = data_dir
+
+        self.hdf5_files = {}
+        for data in data_dir:
+            file_list = [
+                file_name
+                for file_name in os.listdir(data)
+                if ".hdf5" in file_name and file_name != "batch.hdf5"
+            ]
+            self.hdf5_files[data] = file_list
 
         # Setup device
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -73,7 +78,15 @@ class AI_Model:
             torch.cuda.empty_cache()
             torch.manual_seed(rng_seed)
 
-    def load_data(self, fn_data, test_percentage, valid_percentage, batch_size, pickle_name=None):
+    def load_data(
+        self,
+        fn_data,
+        test_percentage,
+        valid_percentage,
+        batch_size,
+        pickle_name=None,
+        fn_data_kwargs=(),
+    ):
         """Format the data used for an AI model"""
 
         # Checks
@@ -91,8 +104,19 @@ class AI_Model:
                 print("Loaded data from pickle")
             except FileNotFoundError:
                 print("Calculating data from scratch")
-                os.chdir(self.data_dir)
-                raw_features, raw_labels = fn_data(self.hdf5_files)
+                raw_features = []
+                raw_labels = []
+                for directory_path, file_list in self.hdf5_files.items():
+                    os.chdir(directory_path)
+                    features, labels = fn_data(hdf5_files=file_list, **fn_data_kwargs)
+
+                    labels = labels.reshape(-1, 1)
+                    raw_features.append(features)
+                    raw_labels.append(labels)
+
+                # Assemble feature and label arrays into one
+                raw_features = np.vstack(raw_features)
+                raw_labels = np.vstack(raw_labels)
 
                 print(f"Saving data to {pickle_name}")
                 os.chdir(self.pickle_dir)
@@ -266,13 +290,17 @@ class AI_Model:
 
         return best_network, best_optimizer
 
-    def print_array_stats(arr):
-        mean = arr.mean()
-        stdev = arr.std()
-        min = arr.min()
-        max = arr.max()
+    def print_array_stats(self, arr, rmse=None, round_val=3):
+        mean = round(arr.mean(), round_val)
+        stdev = round(arr.std(), round_val)
+        min = round(arr.min(), round_val)
+        max = round(arr.max(), round_val)
 
-        print(f"Mean: {mean}\nStandard Dev: {stdev}\nMin: {min}\nMax: {max}")
+        print(f"\nMean: {mean}\nStandard Dev: {stdev}\nMin: {min}\nMax: {max}")
+
+        if rmse is not None:
+            percent_error = round(rmse / mean * 100, 1)
+            print(f"% RMSE: {percent_error}%")
 
     def validate_model(self, trained_network, data_source):
         trained_network.to(self.device)
@@ -290,3 +318,45 @@ class AI_Model:
         )
 
         return rmse, mae, predictions
+
+    def plot_label_distribution(
+        self, label: np.array, bin_count=10, predictions=None, plot_error=False
+    ):
+        """Plot the distribution of the labels.
+
+        Optionally add distribution of predictions and error associated with each group
+        """
+
+        bins = np.linspace(label.min(), label.max(), bin_count)
+
+        # hist, bin_edges = np.histogram(label, bins='auto')
+
+        plt.hist(label, bins, alpha=0.5, label="label")
+
+        if predictions is not None:
+            plt.hist(predictions, bins, alpha=0.5, label="predictions")
+
+        plt.xlabel("Bins")
+        plt.ylabel("Count")
+        plt.title("Distribution of Labels")
+        plt.legend()
+        plt.show()
+
+        if plot_error and predictions is not None:
+            bin_idx = np.digitize(label, bins)
+            error_percent = abs(predictions - label) / label * 100
+            error_bins = {i: [] for i in range(1, len(bins) + 1)}
+            for idx, bin in enumerate(bin_idx):
+                error_bins[bin[0]].append(error_percent[idx])
+
+            error_bin_average = []
+            for error_bin in error_bins.values():
+                error_bin_average.append(list(sum(error_bin) / len(error_bin))[0])
+
+            bar_width = bins.max() / bin_count
+
+            plt.bar(bins.tolist(), error_bin_average, width=bar_width)
+            plt.xlabel("Bins")
+            plt.ylabel("Percentage Error / %")
+            plt.title("Percentage Error in Predictions")
+            plt.show()
