@@ -48,7 +48,7 @@ params0 = np.random.random(N_PARAMS) - 0.5
 params0 /= np.linalg.norm(params0)
 
 # whether to plot the simulation within the objective function
-PLOT_SIM = False
+PLOT_SIM = True
 
 # whether to include a call to `objective(params)` in addition to gradient
 CALL_OBJECTIVE = False
@@ -68,7 +68,7 @@ IS_3D = False
 
 # TODO: test 2D and 3D parameterized
 
-LX = 4 * WVL if IS_3D else 0.0
+LX = 0.5 * WVL if IS_3D else 0.0
 PML_X = True if IS_3D else False
 
 
@@ -81,12 +81,22 @@ NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 30
 
 # sim that we add traced structures and monitors to
 SIM_BASE = td.Simulation(
-    size=(LX, 3, LZ),
-    run_time=100 / FWIDTH,
+    size=(LX, 3.15, LZ),
+    run_time=200 / FWIDTH,
     sources=[
-        td.PointDipole(
+        # td.PointDipole(
+        #     center=(0, 0, -LZ / 2 + WVL),
+        #     polarization="Ey",
+        #     source_time=td.GaussianPulse(
+        #         freq0=FREQ0,
+        #         fwidth=FWIDTH,
+        #         amplitude=1.0,
+        #     ),
+        # ),
+        td.PlaneWave(
             center=(0, 0, -LZ / 2 + WVL),
-            polarization="Ey",
+            size=(td.inf, td.inf, 0),
+            direction="+",
             source_time=td.GaussianPulse(
                 freq0=FREQ0,
                 fwidth=FWIDTH,
@@ -112,7 +122,7 @@ SIM_BASE = td.Simulation(
         )
     ],
     boundary_spec=td.BoundarySpec.pml(x=False, y=True, z=True),
-    grid_spec=td.GridSpec.uniform(dl=0.005 * td.C_0 / FREQ0),
+    grid_spec=td.GridSpec.uniform(dl=0.01 * td.C_0 / FREQ0),
 )
 
 # variable to store whether the emulated run as used
@@ -239,7 +249,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     vector = vector / np.linalg.norm(vector)
 
     # static components
-    box = td.Box(center=(0, 0, 0), size=(1, 2, 1))
+    box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
     med = td.Medium(permittivity=3.0)
 
     # Structure with variable .medium
@@ -407,18 +417,28 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
 
     diff_mnt = td.DiffractionMonitor(
         size=(td.inf, td.inf, 0),
-        center=(0, 0, +LZ / 2 - WVL / 2.0),
+        center=(0, 0, +LZ / 2 - 2 * WVL),
         freqs=[FREQ0],
         normal_dir="+",
         name="diff",
     )
 
     def diff_postprocess_fn(sim_data, mnt_data):
-        return anp.sum(abs(mnt_data.amps.values) ** 2)
+        # with minus sign on amplitude
+        # orders_y= 0  (RMS 0.0615)
+        # orders_y= 1  (RMS 0.0177)
+        # orders_y= -1  (RMS 0.02)
+        # orders_y= 2  (RMS 2)
+        # orders_y= 3  (RMS 0.3965)
+        # all (RMS 1.965)
+
+        # import pdb; pdb.set_trace()
+
+        return anp.sum(abs(mnt_data.amps.sel(polarization=["s", "p"]).values) ** 2)
 
     field_vol = td.FieldMonitor(
         size=(1, 1, 0),
-        center=(0, 0, -LZ / 2 + WVL),
+        center=(0, 0, +LZ / 2 - WVL),
         freqs=[FREQ0],
         name="field_vol",
     )
@@ -426,7 +446,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
     def field_vol_postprocess_fn(sim_data, mnt_data):
         value = 0.0
         for _, val in mnt_data.field_components.items():
-            value += abs(anp.sum(val.values))
+            value = value + abs(anp.sum(val.values))
         # field components numerical is 3x higher
         # intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
         # value += intensity
@@ -571,7 +591,7 @@ def test_polyslab_axis_ops(axis):
     basis_vecs = p.edge_basis_vectors(edges=edges)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", (("polyslab", "mode"),))
+@pytest.mark.parametrize("structure_key, monitor_key", (("medium", "field_vol"),))
 def test_autograd_numerical(structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -598,7 +618,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 5e-3
+    delta = 4e-3
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))
