@@ -597,7 +597,21 @@ def _run_bwd(
         task_name_adj = str(task_name) + "_adjoint"
 
         if local_gradient:
+            sim_adj = sim_adj.updated_copy(
+                monitors=list(sim_adj.monitors)
+                + [
+                    td.FieldMonitor(
+                        size=(td.inf, td.inf, td.inf),
+                        center=(0, 0, 0),
+                        freqs=[299792458000000.0],
+                        name="adjoint fields",
+                    )
+                ]
+            )
+
             sim_data_adj, _ = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
+
+            # import pdb; pdb.set_trace()
 
             vjp_traced_fields = postprocess_adj(
                 sim_data_adj=sim_data_adj,
