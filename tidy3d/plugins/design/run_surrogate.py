@@ -1,25 +1,27 @@
 # %%
+# import os
 import math
 
-import matplotlib.pyplot as plt
+# import pickle
+# import matplotlib.pyplot as plt
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
 import tidy3d as td
-from tidy3d.plugins.design.surrogate_models import Basic1DCNN as NN
+from tidy3d.plugins.design.surrogate_models import SimpleLSTM as NN
 from tidy3d.plugins.design.surrogate_object import AI_Model
 
 # Constants
 output_dir = "/home/matt/Documents/Flexcompute/bragg"
-data_dir = ["/home/matt/Documents/Flexcompute/bragg/cosine"]
+data_dir = ["/home/matt/Documents/Flexcompute/bragg/cosine/"]
 
 test_percentage = 0.20
 valid_percentage = 0.20
 batch_size = 32
-epochs = 100
+epochs = 10
 
-trial_count = 40
+trial_count = 100
 
 
 def y_split_data(hdf5_files):
@@ -125,17 +127,27 @@ def bragg_grating_data(resolution, hdf5_files):
 
 model = AI_Model(output_dir, data_dir, rng_seed=2)
 bragg_kwargs = {"resolution": 65}
-model.load_data(
+model.load_data_from_hdf5(
     bragg_grating_data,
     test_percentage,
     valid_percentage,
     batch_size,
-    pickle_name="bragg_gaussian_750.pkl",
+    pickle_name="bragg_cosine_500.pkl",
     fn_data_kwargs=bragg_kwargs,
 )
 
-plt.plot(model.train_loaded.dataset[0][0].tolist()[0])
-plt.show()
+# os.chdir("/home/matt/Documents/Flexcompute/bragg/cosine/df")
+# with open("df.pkl", "rb") as dfInput:
+#     df = pickle.load(dfInput)
+
+# model.load_data_from_df(
+#     df=df,
+#     label_name="reflectance_max",
+#     feature_names=["delta_n", "sigma"],
+#     test_percentage=test_percentage,
+#     valid_percentage=valid_percentage,
+#     batch_size=batch_size,
+# )
 # model.plot_label_distribution(model.train_labels)
 
 # %%
@@ -157,17 +169,23 @@ loss_function = nn.MSELoss()
 
 # %%
 
+# network_dict = {
+#     "network": NN,
+#     "kwargs": {"input_size": 2},
+#     "optimize_kwargs": {
+#         "dropout": {"name": "dropout", "low": 0.0, "high": 0.5, "step": 0.05},
+#         "neurons": {"name": "neurons", "low": 16, "high": 256, "step": 16, "multi": np.random.randint(3, 6)},
+#     },
+# }
+
 network_dict = {
     "network": NN,
-    "kwargs": {"resolution": bragg_kwargs["resolution"] - 1},
+    "kwargs": {"input_size": bragg_kwargs["resolution"] - 1},
     "optimize_kwargs": {
-        "cl1": {"name": "cl1", "low": 4, "high": 16, "step": 4},
-        "cl2": {"name": "cl2", "low": 8, "high": 32, "step": 4},
-        "c_kernal": {"name": "c_kernal", "choices": [3, 5, 7, 9]},
-        "l1": {"name": "l1", "low": 64, "high": 2048, "step": 64},
-        "dropout": {"name": "dropout", "low": 0.0, "high": 0.5, "step": 0.05},
+        "hidden_size": {"name": "hidden_size", "low": 16, "high": 256, "step": 16},
     },
 }
+
 
 optimizer_dict = {
     "optimizer": optim.Adam,
@@ -186,7 +204,7 @@ best_network, best_optimizer = model.optimize_network(
 # %%
 
 trained_network = model.train_model(
-    "BestModel", best_network, best_optimizer, loss_function, 1000, True
+    "BestModel", best_network, best_optimizer, loss_function, 10000, True
 )
 test_rmse, _, test_predictions = model.validate_model(trained_network, "test")
 valid_rmse, _, valid_predictions = model.validate_model(trained_network, "valid")

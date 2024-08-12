@@ -78,7 +78,7 @@ class AI_Model:
             torch.cuda.empty_cache()
             torch.manual_seed(rng_seed)
 
-    def load_data(
+    def load_data_from_hdf5(
         self,
         fn_data,
         test_percentage,
@@ -87,7 +87,7 @@ class AI_Model:
         pickle_name=None,
         fn_data_kwargs=(),
     ):
-        """Format the data used for an AI model"""
+        """Format the data used for an AI model form HDF5 files"""
 
         # Checks
         # Percentages don't equal > 1
@@ -126,6 +126,24 @@ class AI_Model:
         else:
             raw_features, raw_labels = fn_data(self.hdf5_files)
 
+        self._prep_data(raw_features, raw_labels, test_percentage, valid_percentage, batch_size)
+
+    def load_data_from_df(
+        self,
+        df,
+        label_name,
+        feature_names,
+        test_percentage,
+        valid_percentage,
+        batch_size,
+    ):
+        raw_labels = df[label_name].values
+        raw_labels = raw_labels.reshape(-1, 1)
+        raw_features = df.loc[:, feature_names].values
+
+        self._prep_data(raw_features, raw_labels, test_percentage, valid_percentage, batch_size)
+
+    def _prep_data(self, raw_features, raw_labels, test_percentage, valid_percentage, batch_size):
         # Randomise labels for sanity check
         # if random_labels:
         #     raw_labels = np.random.uniform(raw_labels.min(), raw_labels.max(), size=raw_labels.shape)
@@ -217,14 +235,30 @@ class AI_Model:
         sampler = optuna.samplers.TPESampler(seed=self.rng_seed)
 
         def setup_trial(trial, input_dict):
+            multi = input_dict.pop("multi") if "multi" in input_dict else None
+
             if "choices" in input_dict:
-                return trial.suggest_categorical(**input_dict)
+                suggest_fn = trial.suggest_categorical
             elif isinstance(input_dict["low"], int):
-                return trial.suggest_int(**input_dict)
+                suggest_fn = trial.suggest_int
             elif isinstance(input_dict["low"], float):
-                return trial.suggest_float(**input_dict)
+                suggest_fn = trial.suggest_float
             else:
                 print("Unknown input dict")
+
+            if multi is not None:
+                output = []
+                for i in range(multi):
+                    new_input_dict = input_dict.copy()
+                    new_input_dict["name"] = new_input_dict["name"] + str(i)
+                    output.append(suggest_fn(**new_input_dict))
+
+                # Add multi back into the input_dict as the same input_dict is used every trial
+                input_dict["multi"] = multi
+            else:
+                output = suggest_fn(**input_dict)
+
+            return output
 
         def objective(trial):
             # Network
@@ -271,14 +305,40 @@ class AI_Model:
         for key, value in trial.params.items():
             print(f"    {key}: {value}")
 
+        # Get multi keys
+        network_multi = {
+            key: []
+            for key, input_dict in network_dict["optimize_kwargs"].items()
+            if "multi" in input_dict
+        }
+        optimizer_multi = {
+            key: []
+            for key, input_dict in optimizer_dict["optimize_kwargs"].items()
+            if "multi" in input_dict
+        }
+
         # Split into optimizer and network params
         optimizer_params = {}
         network_params = {}
         for key, value in trial.params.items():
             if key in optimizer_dict["optimize_kwargs"]:
                 optimizer_params[key] = value
-            else:
+            elif key in network_dict["optimize_kwargs"]:
                 network_params[key] = value
+            else:
+                for multi_key in network_multi:
+                    if multi_key in key:
+                        network_multi[multi_key].append(value)
+                        break
+
+                for multi_key in optimizer_multi:
+                    if multi_key in key:
+                        optimizer_multi[key].append(value)
+                        break
+
+        # Restore multi keys
+        network_params.update(network_multi)
+        optimizer_params.update(optimizer_multi)
 
         optimizer_params.update(optimizer_dict["kwargs"])
         network_params.update(network_dict["kwargs"])

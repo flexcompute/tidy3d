@@ -185,8 +185,8 @@ def fn_post(sim_data):
 
 
 method = tdd.MethodMonteCarlo(
-    num_points=100,
-    rng_seed=4,
+    num_points=600,
+    rng_seed=5,
 )
 
 parameters = [tdd.ParameterFloat(name=f"w_{i}", span=(0.5, 1.6)) for i in range(num_d)]
@@ -194,10 +194,9 @@ output_dir = "/home/matt/Documents/Flexcompute/y_split/data"
 design_space = tdd.DesignSpace(
     method=method,
     parameters=parameters,
-    task_name="y_split_4",
+    task_name="y_split_5",
     folder_name="YSplitV1",
     path_dir=output_dir,
 )
 
-results = design_space.run(fn_pre, fn_post)
-df = results.to_dataframe()
+results = design_space.run(fn_pre, fn_post, verbose=False)
