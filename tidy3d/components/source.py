@@ -352,6 +352,31 @@ class CustomSourceTime(Pulse):
             source_time_dataset=source_time_dataset,
         )
 
+    @property
+    def data_times(self) -> ArrayFloat1D:
+        """Times of envelope definition."""
+        if self.source_time_dataset is None:
+            return []
+        data_times = self.source_time_dataset.values.coords["t"].values.squeeze()
+        return data_times
+
+    def _all_outside_range(self, run_time: float) -> bool:
+        """Whether all times are outside range of definition."""
+
+        # can't validate if data isn't loaded
+        if self.source_time_dataset is None:
+            return False
+
+        # make time a numpy array for uniform handling
+        data_times = self.data_times
+
+        # shift time
+        twidth = 1.0 / (2 * np.pi * self.fwidth)
+        max_time_shifted = run_time - self.offset * twidth
+        min_time_shifted = -self.offset * twidth
+
+        return (max_time_shifted < min(data_times)) | (min_time_shifted > max(data_times))
+
     def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time.
 
@@ -370,8 +395,8 @@ class CustomSourceTime(Pulse):
             return None
 
         # make time a numpy array for uniform handling
-        times = np.array([time] if isinstance(time, float) else time)
-        data_times = self.source_time_dataset.values.coords["t"].values.squeeze()
+        times = np.array([time] if isinstance(time, (int, float)) else time)
+        data_times = self.data_times
 
         # shift time
         twidth = 1.0 / (2 * np.pi * self.fwidth)
@@ -384,12 +409,13 @@ class CustomSourceTime(Pulse):
         envelope = np.zeros(len(time_shifted), dtype=complex)
         values = self.source_time_dataset.values
         envelope[mask] = values.sel(t=time_shifted[mask], method="nearest").to_numpy()
-        envelope[~mask] = values.interp(t=time_shifted[~mask]).to_numpy()
+        if not all(mask):
+            envelope[~mask] = values.interp(t=time_shifted[~mask]).to_numpy()
 
         # modulation, phase, amplitude
         omega0 = 2 * np.pi * self.freq0
         offset = np.exp(1j * self.phase)
-        oscillation = np.exp(-1j * omega0 * time)
+        oscillation = np.exp(-1j * omega0 * times)
         amp = self.amplitude
 
         return offset * oscillation * amp * envelope

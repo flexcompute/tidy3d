@@ -3161,6 +3161,24 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
         self._validate_nonlinear_specs()
+        self._validate_custom_source_time()
+
+    def _validate_custom_source_time(self):
+        """Warn if all simulation times are outside CustomSourceTime definition range."""
+        run_time = self._run_time
+        for idx, source in enumerate(self.sources):
+            if isinstance(source.source_time, CustomSourceTime):
+                if source.source_time._all_outside_range(run_time=run_time):
+                    data_times = source.source_time.data_times
+                    mint = np.min(data_times)
+                    maxt = np.max(data_times)
+                    log.warning(
+                        f"'CustomSourceTime' at 'sources[{idx}]' is defined over a time range "
+                        f"'({mint}, {maxt})' which does not include any of the 'Simulation' "
+                        f"times '({0, run_time})'. The envelope will be constant extrapolated "
+                        "from the first or last value in the 'CustomSourceTime', which may not "
+                        "be the desired outcome."
+                    )
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
