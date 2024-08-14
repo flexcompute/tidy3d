@@ -191,7 +191,10 @@ class MethodOptimize(Method, ABC):
 
 
 class MethodBayOpt(MethodOptimize, ABC):
-    """A standard method for performing a bayesian optimization search."""
+    """A standard method for performing a bayesian optimization search.
+
+    The fitness function is maximising by default.
+    """
 
     initial_iter: pd.PositiveInt = pd.Field(
         ...,
@@ -311,7 +314,10 @@ class MethodBayOpt(MethodOptimize, ABC):
 
 
 class MethodGenAlg(MethodOptimize, ABC):
-    """A standard method for performing genetic algorithm search"""
+    """A standard method for performing genetic algorithm search
+
+    The fitness function is maximising by default.
+    """
 
     # Args for the user
     solutions_per_pop: pd.PositiveInt = pd.Field(
@@ -353,7 +359,13 @@ class MethodGenAlg(MethodOptimize, ABC):
     keep_parents: Union[pd.PositiveInt, Literal[-1, 0]] = pd.Field(
         default=-1,
         title="Keep Parents",
-        description="The number of parents to keep unaltered in the population of the next generation.",
+        description="The number of parents to keep unaltered in the population of the next generation. Default value of -1 keeps all current parents for the next generation. This value is overwritten if ``keep_parents`` is > 0. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+    )
+
+    keep_elitism: Union[pd.PositiveInt, Literal[0]] = pd.Field(
+        default=1,
+        title="Keep Elitism",
+        description="The number of top solutions to be included in the population of the next generation. Overwrites ``keep_parents`` if value is > 0. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
     crossover_type: Union[None, Literal["single_point", "two_points", "uniform", "scattered"]] = (
@@ -378,7 +390,7 @@ class MethodGenAlg(MethodOptimize, ABC):
         )
     )
 
-    mutation_prob: pd.confloat(ge=0, le=1) = pd.Field(
+    mutation_prob: Union[pd.confloat(ge=0, le=1), Literal[None]] = pd.Field(
         default=0.2,
         title="Mutation Probability",
         description="The probability of mutating a gene.",
@@ -558,7 +570,7 @@ class MethodGenAlg(MethodOptimize, ABC):
             gene_space=gene_spaces,
             gene_type=gene_types,
             stop_criteria=stop_criteria,
-            save_solutions=False,
+            save_solutions=self.save_solution,
         )
 
         ga_instance.run()
@@ -578,7 +590,10 @@ class MethodGenAlg(MethodOptimize, ABC):
 
 
 class MethodParticleSwarm(MethodOptimize, ABC):
-    """A standard method for performing particle swarm search"""
+    """A standard method for performing particle swarm search.
+
+    The fitness function is maximising by default.
+    """
 
     n_particles: pd.PositiveInt = pd.Field(
         ...,
@@ -622,6 +637,12 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="Number of iterations over which the relative error in the objective_func is acceptable for convergence.",
     )
 
+    init_pos: np.ndarray = pd.Field(
+        default=None,
+        title="Initial swarm positions",
+        description="Set the initial positions of the swarm using a numpy array of appropriate size.",
+    )
+
     def get_run_count(self, parameters: list = None) -> int:
         return self.n_particles * self.n_iter
 
@@ -639,7 +660,8 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             )
 
         # Pyswarms doesn't have a seed set outside of numpy std method
-        np.random.seed(self.rng_seed)
+        if self.rng_seed is not None:
+            np.random.seed(self.rng_seed)
 
         # Variable assignment here so it is available to the fitness function
         param_keys = [param.name for param in parameters]
@@ -689,6 +711,7 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             bounds=bounds,
             ftol=self.ftol,
             ftol_iter=self.ftol_iter,
+            init_pos=self.init_pos,
             # TODO: including oh_strategy would be nice but complicated to specify with pydantic oh_strategy={"w": "exp_decay"},
         )
 

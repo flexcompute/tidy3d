@@ -246,10 +246,12 @@ class DesignSpace(Tidy3dBaseModel):
                         "Unrecognized output of fn_pre. Please change the return of fn_pre."
                     )
 
-                data, task_names, task_paths = fn_mid(sim_dict, self.sim_counter, self.verbose)
+                data, task_names, task_paths, sim_counter = fn_mid(
+                    sim_dict, self.sim_counter, self.verbose
+                )
                 self.sim_names.extend(task_names)
                 self.sim_paths.extend(task_paths)
-                self.sim_counter += len(task_names)
+                self.sim_counter = sim_counter
                 post_out = [fn_post(val) for val in data.values()]
                 return post_out
 
@@ -304,18 +306,14 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Exit fn_mid here if no td computation is required
         if not len(simulations) and not len(batches):
-            return original_pre_out, list(), list()
+            return original_pre_out, list(), list(), sim_counter
 
         # Create task names for simulations
         named_sims = {}
         translate_sims = {}
         for sim_key, sim in simulations.items():
             # Checks stop standard indexing keys being included in the name
-            suffix = (
-                f"{naming_keys[sim_key]}_{sim_counter}"
-                if naming_keys[sim_key] != str(sim_counter) and not was_list
-                else str(sim_counter)
-            )
+            suffix = f"{naming_keys[sim_key]}_{sim_counter}"
 
             # Handle if the user does not want a task name
             if len(self.task_name) > 0:
@@ -392,7 +390,7 @@ class DesignSpace(Tidy3dBaseModel):
             task_names = [list(sub_dict.values()) for sub_dict in task_names]
             task_paths = [list(sub_dict.values()) for sub_dict in task_paths]
 
-        return pre_out, task_names, task_paths
+        return pre_out, task_names, task_paths, sim_counter
 
     def run_batch(
         self,
@@ -577,8 +575,8 @@ class DesignSpace(Tidy3dBaseModel):
 
         if isinstance(self.method, MethodGenAlg):
             notes.append(
-                "The maximum run count for MethodGenAlg is difficult to predict."
-                "Repeated solutions are not executed, reducing the total number of simulations."
+                "The maximum run count for MethodGenAlg is difficult to predict. "
+                "Repeated solutions are not executed, reducing the total number of simulations. "
                 "High crossover and mutation probabilities may result in an increased number of simulations, potentially exceeding the predicted maximum run count."
             )
 

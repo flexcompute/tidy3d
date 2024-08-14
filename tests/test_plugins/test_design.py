@@ -26,6 +26,15 @@ SWEEP_METHODS = dict(
     part_swarm=tdd.MethodParticleSwarm(n_particles=3, n_iter=2, rng_seed=1),
 )
 
+# Task names that should be produced for the different methods
+expected_task_names = {
+    "MethodGrid": ["MethodGrid_10_10", "MethodGrid_41_41"],
+    "MethodMonteCarlo": ["MethodMonteCarlo_0_0", "MethodMonteCarlo_3_3"],
+    "MethodBayOpt": ["MethodBayOpt_2_2", "MethodBayOpt_0_5"],
+    "MethodGenAlg": ["MethodGenAlg_3_3", "MethodGenAlg_0_8"],
+    "MethodParticleSwarm": ["MethodParticleSwarm_2_2", "MethodParticleSwarm_1_4"],
+}
+
 
 def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
     data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()}
@@ -365,6 +374,12 @@ def test_sweep(sweep_method, monkeypatch):
 
     assert td_sweep1.values == td_sweep2.values
 
+    # Check names are what they should be
+    assert (
+        expected_task_names[sweep_method.type][0] in td_sweep2.task_names
+        and expected_task_names[sweep_method.type][0] in td_sweep2.task_names
+    )
+
     # Try with batch output from pre
     td_batch = design_space.run(scs_pre_batch, scs_post_batch)
     td_batch_run_batch = design_space.run_batch(
@@ -380,6 +395,12 @@ def test_sweep(sweep_method, monkeypatch):
     td_sim_list = design_space.run(scs_pre_list, scs_post_list, verbose=False)
 
     assert "0_0" not in td_sim_list.task_names[0] and "0_3" not in td_sim_list.task_names[4]
+
+    # Collect the sim names and check there are no repeats
+    total_sim_names = [sim_name for sim_list in td_sim_list.task_names for sim_name in sim_list]
+    unique_sim_names = set(total_sim_names)
+
+    assert len(total_sim_names) == len(unique_sim_names)
 
     # Test with dict of sims
     td_sim_dict = design_space.run(scs_pre_dict, scs_post_dict)
