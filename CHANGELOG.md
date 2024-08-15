@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added value_and_grad function to the autograd plugin, importable via `from tidy3d.plugins.autograd import value_and_grad`. Supports differentiating functions with auxiliary data (`value_and_grad(f, has_aux=True)`).
-
+- `Simulation.num_computational_grid_points` property to examine the number of grid cells that compose the computational domain corresponding to the simulation. This can differ from `Simulation.num_cells` based on boundary conditions and symmetries.
+ 
 ### Fixed
 - `DataArray` interpolation failure due to incorrect ordering of coordinates when interpolating with autograd tracers.
 - Error in `CustomSourceTime` when evaluating at a list of times entirely outside of the range of the envelope definition times.
