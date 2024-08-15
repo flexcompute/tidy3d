@@ -182,8 +182,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
             freq0=freq0, fwidth=fwidth, remove_dc_component=self.remove_dc_component
         )
 
-    def _construct_smatrix(self, batch_data: BatchData) -> TerminalPortDataArray:
+    def _construct_smatrix(self) -> TerminalPortDataArray:
         """Post process ``BatchData`` to generate scattering matrix."""
+
+        batch_data = self.batch_data
 
         port_names = [port.name for port in self.ports]
 

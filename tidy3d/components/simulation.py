@@ -3198,6 +3198,7 @@ class Simulation(AbstractYeeGridSimulation):
         with log as consolidated_logger:
             for i, structure in enumerate(self.structures):
                 geo_bounds = structure.geometry.bounds
+                warn = False  # will only warn once per structure
                 for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
                     sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
                 ):
@@ -3208,14 +3209,16 @@ class Simulation(AbstractYeeGridSimulation):
                         in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
                         in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
                         if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
-                            consolidated_logger.warning(
-                                f"A bound of Simulation.structures[{i}] was detected as being "
-                                "within the simulation PML. We recommend extending structures to "
-                                "infinity or completely outside of the simulation PML to avoid "
-                                "unexpected effects when the structures are not translationally "
-                                "invariant within the PML.",
-                                custom_loc=["structures", i],
-                            )
+                            warn = True
+                if warn:
+                    consolidated_logger.warning(
+                        f"A bound of Simulation.structures[{i}] was detected as being "
+                        "within the simulation PML. We recommend extending structures to "
+                        "infinity or completely outside of the simulation PML to avoid "
+                        "unexpected effects when the structures are not translationally "
+                        "invariant within the PML.",
+                        custom_loc=["structures", i],
+                    )
 
     def _validate_tfsf_nonuniform_grid(self) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,
@@ -4247,7 +4250,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @cached_property
     def num_cells(self) -> int:
-        """Number of cells in the simulation.
+        """Number of cells in the simulation grid.
 
         Returns
         -------
@@ -4256,6 +4259,36 @@ class Simulation(AbstractYeeGridSimulation):
         """
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
+
+    @property
+    def _num_computational_grid_points_dim(self):
+        """Number of cells in the computational domain for this simulation along each dimension."""
+        num_cells = self.grid.num_cells
+        num_cells_comp_domain = []
+        # symmetry overrides other boundaries so should be checked first
+        for sym, npts, boundary in zip(self.symmetry, num_cells, self.boundary_spec.to_list):
+            if sym != 0:
+                num_cells_comp_domain.append(npts // 2 + 2)
+            elif isinstance(boundary[0], Periodic):
+                num_cells_comp_domain.append(npts)
+            else:
+                num_cells_comp_domain.append(npts + 2)
+        return num_cells_comp_domain
+
+    @property
+    def num_computational_grid_points(self):
+        """Number of cells in the computational domain for this simulation. This is usually
+        different from ``num_cells`` due to the boundary conditions. Specifically, all boundary
+        conditions apart from ``Periodic`` require an extra pixel at the end of the simulation
+        domain. On the other hand, if a symmetry is present along a given dimension, only half of
+        the grid cells along that dimension will be in the computational domain.
+
+        Returns
+        -------
+        int
+            Number of yee cells in the computational domain corresponding to the simulation.
+        """
+        return np.prod(self._num_computational_grid_points_dim, dtype=np.int64)
 
     def get_refractive_indices(self, freq: float) -> list[float]:
         """List of refractive indices in the simulation at a given frequency."""

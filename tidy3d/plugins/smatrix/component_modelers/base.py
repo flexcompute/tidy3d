@@ -15,7 +15,6 @@ from ....components.simulation import Simulation
 from ....components.types import FreqArray
 from ....constants import HERTZ
 from ....exceptions import SetupError, Tidy3dKeyError
-from ....log import log
 from ....web.api.container import Batch, BatchData
 from ..ports.coaxial_lumped import CoaxialLumpedPort
 from ..ports.modal import Port
@@ -172,22 +171,23 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     @cached_property
     def batch_path(self) -> str:
         """Path to the batch saved to file."""
+        return self.batch._batch_path(path_dir=self.path_dir)
 
-        return self.batch._batch_path(path_dir=DEFAULT_DATA_DIR)
+    @cached_property
+    def batch_data(self) -> BatchData:
+        """Path to the batch saved to file."""
+        return self.batch.run(path_dir=self.path_dir)
 
     def get_path_dir(self, path_dir: str) -> None:
         """Check whether the supplied 'path_dir' matches the internal field value."""
 
-        if path_dir not in (DEFAULT_DATA_DIR, self.path_dir):
-            log.warning(
-                f"'ComponentModeler' method was supplied a 'path_dir' of '{path_dir}' "
-                f"when its internal 'path_dir' field was set to '{self.path_dir}'. "
-                "The passed value will be deprecated in later versions. "
-                "Please set the internal 'path_dir' field to the desired value and "
-                "remove the 'path_dir' from the method argument. "
-                f"Using supplied '{path_dir}'."
+        if path_dir != self.path_dir:
+            raise ValueError(
+                f"'path_dir' of '{path_dir}' passed, but 'ComponentModeler.path_dir' is "
+                f"{self.path_dir}. Moving forward, only the 'ComponentModeler.path_dir' will be "
+                "used internally, please update your scripts accordingly to avoid passing this "
+                "value to methods. "
             )
-            return path_dir
 
         return self.path_dir
 
@@ -198,10 +198,9 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     def _run_sims(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Run :class:`Simulations` for each port and return the batch after saving."""
-        batch = self.batch
-
-        batch_data = batch.run(path_dir=path_dir)
-        batch.to_file(self._batch_path)
+        _ = self.get_path_dir(path_dir)
+        self.batch.to_file(self._batch_path)
+        batch_data = self.batch_data
         return batch_data
 
     def get_port_by_name(self, port_name: str) -> Port:
@@ -217,16 +216,15 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> DataArray:
         """Solves for the scattering matrix of the system."""
-        path_dir = self.get_path_dir(path_dir)
-        batch_data = self._run_sims(path_dir=path_dir)
-        return self._construct_smatrix(batch_data=batch_data)
+        _ = self.get_path_dir(path_dir)
+        # batch_data = self._run_sims(path_dir=path_dir)
+        return self._construct_smatrix()
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> DataArray:
         """Load a scattering matrix from saved :class:`BatchData` object."""
-        path_dir = self.get_path_dir(path_dir)
-
-        batch_data = BatchData.load(path_dir=path_dir)
-        return self._construct_smatrix(batch_data=batch_data)
+        _ = self.get_path_dir(path_dir)
+        # batch_data = self.batch_data
+        return self._construct_smatrix()
 
     @staticmethod
     def inv(matrix: DataArray):

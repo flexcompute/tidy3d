@@ -1045,6 +1045,9 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
                 forward_amp = self.get_amplitude(field_component.sel(f=freq0))
 
+                if forward_amp == 0.0:
+                    continue
+
                 adj_phase = np.pi + np.angle(forward_amp)
                 adj_amp = scaling_factor * forward_amp
 
@@ -1946,6 +1949,20 @@ class FluxData(MonitorData):
     flux: FluxDataArray = pd.Field(
         ..., title="Flux", description="Flux values in the frequency-domain."
     )
+
+    def make_adjoint_sources(
+        self, dataset_names: list[str], fwidth: float
+    ) -> List[Union[CustomCurrentSource, PointDipole]]:
+        """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
+
+        raise NotImplementedError(
+            "Could not formulate adjoint source for 'FluxMonitor' output. To compute derivatives "
+            "with respect to flux data, please use a 'FieldMonitor' and call '.flux' on the "
+            "resulting 'FieldData' object. Using 'FluxMonitor' directly is not supported as "
+            "the full field information is required to construct the adjoint source for this "
+            "problem. The 'FluxData' does not contain the information necessary for gradient "
+            "computation."
+        )
 
     def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
@@ -3004,7 +3021,7 @@ class DiffractionData(AbstractFieldProjectionData):
         theta_data, phi_data = self.angles
         angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq0))
         angle_theta = float(theta_data.sel(**angle_sel_kwargs))
-        angle_phi = float(phi_data.sel(**angle_sel_kwargs))
+        angle_phi = np.pi + float(phi_data.sel(**angle_sel_kwargs))
 
         # if the angle is nan, this amplitude is set to 0 in the fwd pass, so should skip adj
         if np.isnan(angle_theta):
@@ -3030,7 +3047,7 @@ class DiffractionData(AbstractFieldProjectionData):
             center=self.monitor.center,
             source_time=GaussianPulse(
                 amplitude=abs(src_amp),
-                phase=np.angle(src_amp),
+                phase=np.pi + np.angle(src_amp),
                 freq0=freq0,
                 fwidth=fwidth,
             ),

@@ -9,7 +9,7 @@ from typing import List, Tuple
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
-import xarray as xr
+from autograd.tracer import isbox
 from matplotlib import path
 
 from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
@@ -19,7 +19,6 @@ from ...packaging import verify_packages_import
 from ..autograd import AutogradFieldMap, TracedVertices, get_static
 from ..autograd.derivative_utils import DerivativeInfo
 from ..base import cached_property, skip_if_fields_missing
-from ..data.dataset import ElectromagneticFieldDataset
 from ..types import (
     ArrayFloat2D,
     ArrayLike,
@@ -1316,6 +1315,13 @@ class PolySlab(base.Planar):
         shapely_poly = PolySlab.make_shapely_polygon(vertices)
         if shapely_poly.is_valid:
             return vertices
+        elif isbox(vertices):
+            raise NotImplementedError(
+                "The dilation caused damage to the polygon. "
+                "Automatically healing this is currently not supported when "
+                "differentiating w.r.t. the vertices. Try increasing the spacing "
+                "between vertices or reduce the amount of dilation."
+            )
         # perform healing
         poly_heal = shapely.make_valid(shapely_poly)
         return PolySlab._proper_vertices(list(poly_heal.exterior.coords))
@@ -1388,7 +1394,7 @@ class PolySlab(base.Planar):
 
         # compute edges between vertices
 
-        vertices_next = np.roll(self.vertices, axis=0, shift=1)
+        vertices_next = np.roll(self.vertices, axis=0, shift=-1)
         edges = vertices_next - vertices
 
         # compute center positions between each edge
@@ -1399,21 +1405,17 @@ class PolySlab(base.Planar):
         if edge_centers_xyz.shape != (num_vertices, 3):
             raise AssertionError("something bad happened")
 
-        # compute the E and D fields at the edge centers
-        E_der_at_edges = self.der_at_centers(
-            der_map=derivative_info.E_der_map, edge_centers=edge_centers_xyz
-        )
-        D_der_at_edges = self.der_at_centers(
-            der_map=derivative_info.D_der_map, edge_centers=edge_centers_xyz
-        )
-
-        # compute the basis vectors along each edge
+        # get basis vectors for every edge segment
         basis_vectors = self.edge_basis_vectors(edges=edges)
 
-        # project the D and E fields into the basis vectors
-        D_der_norm = self.project_in_basis(D_der_at_edges, basis_vector=basis_vectors["norm"])
-        E_der_edge = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["edge"])
-        E_der_slab = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["slab"])
+        grad_bases = derivative_info.grad_in_bases(
+            spatial_coords=edge_centers_xyz, basis_vectors=basis_vectors
+        )
+
+        # unpack gradient contributions from different bases
+        D_der_norm = grad_bases["D_norm"]
+        E_der_edge = grad_bases["E_perp1"]
+        E_der_slab = grad_bases["E_perp2"]
 
         # approximate permittivity in and out
         delta_eps_inv = 1.0 / derivative_info.eps_in - 1.0 / derivative_info.eps_out
@@ -1423,7 +1425,7 @@ class PolySlab(base.Planar):
         vjps_edges = 0.0
 
         # perform D-normal integral
-        contrib_D = -delta_eps_inv * D_der_norm
+        contrib_D = delta_eps_inv * D_der_norm
         vjps_edges += contrib_D
 
         # perform E-perpendicular integrals
@@ -1454,74 +1456,8 @@ class PolySlab(base.Planar):
         # sign change if counter clockwise, because normal direction is flipped
         if self.is_ccw:
             vjps_vertices *= -1
-            # TODO: verify sign, or if this is rather when `not self.is_ccw`
 
         return vjps_vertices.real
-
-    def der_at_centers(
-        self,
-        der_map: ElectromagneticFieldDataset,
-        edge_centers: np.ndarray,  # (N, 3)
-    ) -> xr.Dataset:
-        """Compute the value of an ``ElectromagneticFieldDataset`` at a set of edge centers."""
-
-        xs, ys, zs = edge_centers.T
-        edge_index_dim = "edge_index"
-
-        interp_kwargs = {}
-        for dim, centers_dim in zip("xyz", edge_centers.T):
-            # only include dims where the data has more than 1 coord, to avoid warnings and errors
-            coords_data = der_map[f"E{dim}"].coords
-            if np.array(coords_data).size > 1:
-                interp_kwargs[dim] = xr.DataArray(centers_dim, dims=edge_index_dim)
-
-        components = {}
-        for fld_name, arr in der_map.items():
-            components[fld_name] = arr.interp(**interp_kwargs).sum("f")
-
-        return xr.Dataset(components)
-
-    def project_in_basis(
-        self,
-        der_dataset: xr.Dataset,
-        basis_vector: np.ndarray,
-    ) -> xr.DataArray:
-        """Project a derivative dataset along a supplied basis vector."""
-
-        value = 0.0
-        for coeffs, dim in zip(basis_vector.T, "xyz"):
-            value += coeffs * der_dataset.data_vars[f"E{dim}"]
-        return value
-
-    def unpop_axis_vect(self, ax_coords: np.ndarray, plane_coords: np.ndarray) -> np.ndarray:
-        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
-
-        ax_coords.shape == [N] or [N, 1]
-        plane_coords.shape == [N, 2]
-        return shape == [N, 3]
-
-        """
-        arr_xyz = self.unpop_axis(ax_coords, plane_coords.T, axis=self.axis)
-        arr_xyz = np.stack(arr_xyz, axis=-1)
-        return arr_xyz
-
-    def pop_axis_vect(self, coord: np.ndarray) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
-        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
-
-        coord.shape == [N, 3]
-        return shape == ([N], [N, 2]
-
-        """
-
-        arr_axis, arrs_plane = self.pop_axis(coord.T, axis=self.axis)
-        arrs_plane = np.array(arrs_plane).T
-
-        return arr_axis, arrs_plane
-
-    @staticmethod
-    def normalize_vect(arr: np.ndarray) -> np.ndarray:
-        """normalize an array shaped (N, d) along the `d` axis and return (N, 1)."""
-        return arr / np.linalg.norm(arr, axis=-1)[..., None]
 
     def edge_basis_vectors(
         self,
@@ -1547,7 +1483,40 @@ class PolySlab(base.Planar):
         # normalized vectors pointing in normal direction of edge
         normals_norm_xyz = np.cross(edges_norm_xyz, slabs_norm_xyz)
 
-        return dict(edge=edges_norm_xyz, norm=normals_norm_xyz, slab=slabs_norm_xyz)
+        if self.axis != 1:
+            normals_norm_xyz *= -1
+
+        return dict(norm=normals_norm_xyz, perp1=edges_norm_xyz, perp2=slabs_norm_xyz)
+
+    def unpop_axis_vect(self, ax_coords: np.ndarray, plane_coords: np.ndarray) -> np.ndarray:
+        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
+
+        ax_coords.shape == [N]
+        plane_coords.shape == [N, 2]
+        return shape == [N, 3]
+
+        """
+        arr_xyz = self.unpop_axis(ax_coords, plane_coords.T, axis=self.axis)
+        arr_xyz = np.stack(arr_xyz, axis=-1)
+        return arr_xyz
+
+    def pop_axis_vect(self, coord: np.ndarray) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
+
+        coord.shape == [N, 3]
+        return shape == ([N], [N, 2]
+
+        """
+
+        arr_axis, arrs_plane = self.pop_axis(coord.T, axis=self.axis)
+        arrs_plane = np.array(arrs_plane).T
+
+        return arr_axis, arrs_plane
+
+    @staticmethod
+    def normalize_vect(arr: np.ndarray) -> np.ndarray:
+        """normalize an array shaped (N, d) along the `d` axis and return (N, 1)."""
+        return arr / np.linalg.norm(arr, axis=-1)[..., None]
 
 
 class ComplexPolySlabBase(PolySlab):

@@ -22,9 +22,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
 - Gradients for autograd are computed server-side by default. They can be computed locally (requiring more data download) by passing `local_gradient=True` to the `web.run()` and related functions.
 
+- Added value_and_grad function to the autograd plugin, importable via `from tidy3d.plugins.autograd import value_and_grad`. Supports differentiating functions with auxiliary data (`value_and_grad(f, has_aux=True)`).
+- `Simulation.num_computational_grid_points` property to examine the number of grid cells that compose the computational domain corresponding to the simulation. This can differ from `Simulation.num_cells` based on boundary conditions and symmetries.
+- Support for `dilation` argument in `JaxPolySlab`.
+- Support for autograd differentiation with respect to `Cylinder.radius` and `Cylinder.center` (for elements not along axis dimension).
+- `Cylinder.to_polyslab(num_pts_circumference, **kwargs)` to convert a cylinder into a discretized version represented by a `PolySlab`.
+- `ComponentModeler.batch_data` convenience property to access the `BatchData` corresponding to the component modeler run.
+
+### Changed
+- `PolySlab` now raises error when differentiating and dilation causes damage to the polygon.
+- Passing `path_dir` to `ComponentModeler` methods is deprecated in favor of setting `ComponentModeler.path_dir` and will result in an error if the two don't match.
+
 ### Fixed
 - Significant speedup for field projection computations.
 - Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
+
+### Fixed
+- `DataArray` interpolation failure due to incorrect ordering of coordinates when interpolating with autograd tracers.
+- Error in `CustomSourceTime` when evaluating at a list of times entirely outside of the range of the envelope definition times.
+- Improved passivity enforcement near high-Q poles in `FastDispersionFitter`. Failed passivity enforcement could lead to simulation divergences.
+- More helpful error and suggestion if users try to differentiate w.r.t. unsupported `FluxMonitor` output.
 
 ## [2.7.2] - 2024-08-07
 
@@ -49,6 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Error when plotting mode plane PML and the simulation has symmetry.
 - Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
 - Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
+- Gradient monitors for `PolySlab` only store fields at the center location along axis, reducing data usage.
+- Validate the forward simulation on the client side even when using `local_gradient=False` for server-side gradient processing.
+- Gradient inaccuracies in `PolySlab.vertices`, `Medium.conductivity`, and `DiffractionData` s-polarization.
+- Adjoint field monitors no longer store H fields, which aren't needed for gradient calculation.
+- `MeshOverrideStructures` in a `Simulation.GridSpec` are properly handled to remove any derivative tracers.
 
 ## [2.7.1] - 2024-07-10
 
