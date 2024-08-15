@@ -16,7 +16,7 @@ from ....components.source import GaussianPulse
 from ....components.types import Ax
 from ....components.viz import add_ax_if_none, equal_aspect
 from ....constants import C_0, OHM
-from ....exceptions import ValidationError
+from ....exceptions import Tidy3dError, ValidationError
 from ....web.api.container import BatchData
 from ..ports.base_lumped import AbstractLumpedPort
 from ..ports.base_terminal import AbstractTerminalPort, TerminalPortDataArray
@@ -174,7 +174,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
     @cached_property
     def _source_time(self):
-        """Helper to create a time domain pulse for the frequeny range of interest."""
+        """Helper to create a time domain pulse for the frequency range of interest."""
         freq0 = np.mean(self.freqs)
         fdiff = max(self.freqs) - min(self.freqs)
         fwidth = max(fdiff, freq0 * FWIDTH_FRAC)
@@ -238,6 +238,15 @@ class TerminalComponentModeler(AbstractComponentModeler):
         Z_numpy = port_impedances.transpose(*PortDataArray._dims).values.reshape(
             (len(self.freqs), len(port_names), 1)
         )
+
+        # Check to make sure sign is consistent for all impedance values
+        self._check_port_impedance_sign(Z_numpy)
+
+        # Check for negative real part of port impedance and flip the V and Z signs accordingly
+        negative_real_Z = np.real(Z_numpy) < 0
+        V_numpy = np.where(negative_real_Z, -V_numpy, V_numpy)
+        Z_numpy = np.where(negative_real_Z, -Z_numpy, Z_numpy)
+
         F_numpy = TerminalComponentModeler._compute_F(Z_numpy)
 
         # Equation 4.67 - Pozar - Microwave Engineering 4ed
@@ -385,3 +394,15 @@ class TerminalComponentModeler(AbstractComponentModeler):
         """Helper to set additional metadata for ``PortDataArray``."""
         data_array.name = "Z0"
         return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
+
+    def _check_port_impedance_sign(self, Z_numpy: np.ndarray):
+        """Sanity check for consistent sign of real part of Z for each port across all frequencies."""
+        for port_idx in range(Z_numpy.shape[1]):
+            port_Z = Z_numpy[:, port_idx, 0]
+            signs = np.sign(np.real(port_Z))
+            if not np.all(signs == signs[0]):
+                raise Tidy3dError(
+                    f"Inconsistent sign of real part of Z detected for port {port_idx}. "
+                    "If you received this error, please create an issue in the Tidy3D "
+                    "github repository."
+                )

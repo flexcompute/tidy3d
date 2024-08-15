@@ -32,6 +32,12 @@ def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
         "_compute_F",
         lambda matrix: 1.0 / (2.0 * np.sqrt(np.abs(matrix) + 1e-4)),
     )
+    monkeypatch.setattr(
+        TerminalComponentModeler,
+        "_check_port_impedance_sign",
+        lambda self, Z_numpy: (),
+    )
+
     s_matrix = modeler._construct_smatrix()
     return s_matrix
 
@@ -547,3 +553,12 @@ def test_port_source_snapped_to_PML(tmp_path):
 
     with pytest.raises(SetupError):
         modeler._shift_value_signed(port)
+
+
+def test_wave_port_validate_current_integral(tmp_path):
+    """Checks that the current integral direction validator runs correctly."""
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_types=(WavePort, WavePort)
+    )
+    with pytest.raises(pydantic.ValidationError):
+        _ = modeler.updated_copy(direction="-", path="ports/0/")
