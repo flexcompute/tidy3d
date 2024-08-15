@@ -108,6 +108,27 @@ def test_sim_init():
     sim.epsilon(m)
 
 
+def test_num_cells():
+    """Test num_cells and num_computational_grid_points."""
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14),
+            )
+        ],
+    )
+    assert sim.num_computational_grid_points > sim.num_cells  # due to extra pixels at boundaries
+
+    sim = sim.updated_copy(symmetry=(1, 0, 0))
+    assert sim.num_computational_grid_points < sim.num_cells  # due to symmetry
+
+
 def test_monitors_data_size():
     """make sure a simulation can be initialized"""
 
