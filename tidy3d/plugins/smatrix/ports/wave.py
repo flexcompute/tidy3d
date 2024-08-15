@@ -15,7 +15,11 @@ from ....components.simulation import Simulation
 from ....components.source import GaussianPulse, ModeSource, ModeSpec
 from ....components.types import Bound, Direction, FreqArray
 from ....exceptions import ValidationError
-from ...microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
+from ...microwave import (
+    CurrentIntegralTypes,
+    ImpedanceCalculator,
+    VoltageIntegralTypes,
+)
 from ...mode import ModeSolver
 from .base_terminal import AbstractTerminalPort
 
@@ -183,5 +187,21 @@ class WavePort(AbstractTerminalPort, Box):
         if not values.get("voltage_integral") and not val:
             raise ValidationError(
                 "At least one of 'voltage_integral' or 'current_integral' must be provided."
+            )
+        return val
+
+    @pd.validator("current_integral", always=True)
+    def validate_current_integral_sign(cls, val, values):
+        """
+        Validate that the sign of ``current_integral`` matches the port direction.
+        """
+        if val is None:
+            return val
+
+        direction = values.get("direction")
+        name = values.get("name")
+        if val.sign != direction:
+            raise ValidationError(
+                f"'current_integral' sign must match the '{name}' direction '{direction}'."
             )
         return val

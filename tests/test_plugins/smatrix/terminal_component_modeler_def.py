@@ -295,7 +295,7 @@ def make_coaxial_component_modeler(
                     radius=mean_radius,
                     num_points=41,
                     normal_axis=2,
-                    clockwise=False,
+                    clockwise=direction != "+",
                 ),
             )
         return port

@@ -6,13 +6,14 @@ from typing import Literal
 
 import numpy as np
 import pydantic.v1 as pd
+import shapely
 import xarray as xr
 
 from ...components.base import cached_property
 from ...components.data.data_array import FreqDataArray, FreqModeDataArray, TimeDataArray
 from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
 from ...components.geometry.base import Geometry
-from ...components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate
+from ...components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
 from ...components.viz import add_ax_if_none
 from ...constants import MICROMETER, fp_eps
 from ...exceptions import DataError, SetupError
@@ -396,3 +397,16 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
             arrowprops=ARROW_CURRENT,
         )
         return ax
+
+    @cached_property
+    def sign(self) -> Direction:
+        """Uses the ordering of the vertices to determine the direction of the current flow."""
+        linestr = shapely.LineString(coordinates=self.vertices)
+        is_ccw = shapely.is_ccw(linestr)
+        # Invert statement when the vertices are given as (x, z)
+        if self.axis == 1:
+            is_ccw = not is_ccw
+        if is_ccw:
+            return "+"
+        else:
+            return "-"
