@@ -392,6 +392,17 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     custom_med_pole_res = td.CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
     custom_pole_res = td.Structure(geometry=box, medium=custom_med_pole_res)
 
+    radius = 0.4 * (1 + anp.abs(vector @ params))
+    cyl_center_y = vector @ params
+    cyl_center_z = -vector @ params
+    cylinder_geo = td.Cylinder(
+        radius=radius,
+        center=(0, cyl_center_y, cyl_center_z),
+        axis=0,
+        length=LX / 2 if IS_3D else td.inf,
+    )
+    cylinder = td.Structure(geometry=cylinder_geo, medium=med)
+
     return dict(
         medium=medium,
         center_list=center_list,
@@ -402,6 +413,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         geo_group=geo_group,
         pole_res=pole_res,
         custom_pole_res=custom_pole_res,
+        cylinder=cylinder,
     )
 
 
@@ -496,6 +508,7 @@ structure_keys_ = (
     "geo_group",
     "pole_res",
     "custom_pole_res",
+    "cylinder",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -586,7 +599,7 @@ def test_polyslab_axis_ops(axis):
 
 
 @pytest.mark.skipif(not RUN_NUMERICAL, reason="Numerical gradient tests runs through web API.")
-@pytest.mark.parametrize("structure_key, monitor_key", (("medium", "mode"),))
+@pytest.mark.parametrize("structure_key, monitor_key", (("cylinder", "mode"),))
 def test_autograd_numerical(structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -610,7 +623,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 1e-1
+    delta = 1e-3
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))
