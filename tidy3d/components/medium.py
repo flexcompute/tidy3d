@@ -1636,7 +1636,10 @@ class Medium(AbstractMedium):
         freqs = vjp_eps_complex.coords["f"].values
         values = vjp_eps_complex.values
 
-        eps_vjp, sigma_vjp = self.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
+        # vjp of eps_complex_to_eps_sigma
+        omegas = 2 * np.pi * freqs
+        eps_vjp = np.real(values)
+        sigma_vjp = -np.imag(values) / omegas / EPSILON_0
 
         eps_vjp = np.sum(eps_vjp)
         sigma_vjp = np.sum(sigma_vjp)

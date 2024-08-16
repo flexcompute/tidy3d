@@ -20,7 +20,7 @@ from tidy3d.components.data.sim_data import AdjointSourceInfo
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.utils import FieldMap
 
-from ..utils import SIM_FULL, run_emulated
+from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
 """ Test configuration """
 
@@ -35,8 +35,10 @@ from ..utils import SIM_FULL, run_emulated
 TEST_CUSTOM_MEDIUM_SPEED = False
 TEST_POLYSLAB_SPEED = False
 
+# whether to run numerical gradient tests, off by default because it runs real simulations
+RUN_NUMERICAL = False
 
-TEST_MODES = ("pipeline", "adjoint", "numerical", "speed")
+TEST_MODES = ("pipeline", "adjoint", "speed")
 TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
 
 # number of elements in the parameters / input to the objective function
@@ -48,7 +50,7 @@ params0 = np.random.random(N_PARAMS) - 0.5
 params0 /= np.linalg.norm(params0)
 
 # whether to plot the simulation within the objective function
-PLOT_SIM = True
+PLOT_SIM = False
 
 # whether to include a call to `objective(params)` in addition to gradient
 CALL_OBJECTIVE = False
@@ -63,7 +65,6 @@ FWIDTH = FREQ0 / 10
 # sim sizes
 LZ = 7 * WVL
 
-# NOTE: regular stuff is broken in 2D need to change volume and face integration to handle this
 IS_3D = False
 
 # TODO: test 2D and 3D parameterized
@@ -74,44 +75,45 @@ PML_X = True if IS_3D else False
 
 # shape of the custom medium
 DA_SHAPE_X = 1 if IS_3D else 1
-DA_SHAPE = (DA_SHAPE_X, 1_0, 1_0) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
+DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
 
 # number of vertices in the polyslab
 NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 30
+
+PNT_DIPOLE = td.PointDipole(
+    center=(0, 0, -LZ / 2 + WVL),
+    polarization="Ey",
+    source_time=td.GaussianPulse(
+        freq0=FREQ0,
+        fwidth=FWIDTH,
+        amplitude=1.0,
+    ),
+)
+
+PLANE_WAVE = td.PlaneWave(
+    center=(0, 0, -LZ / 2 + WVL),
+    size=(td.inf, td.inf, 0),
+    direction="+",
+    source_time=td.GaussianPulse(
+        freq0=FREQ0,
+        fwidth=FWIDTH,
+        amplitude=1.0,
+    ),
+)
 
 # sim that we add traced structures and monitors to
 SIM_BASE = td.Simulation(
     size=(LX, 3.15, LZ),
     run_time=200 / FWIDTH,
-    sources=[
-        # td.PointDipole(
-        #     center=(0, 0, -LZ / 2 + WVL),
-        #     polarization="Ey",
-        #     source_time=td.GaussianPulse(
-        #         freq0=FREQ0,
-        #         fwidth=FWIDTH,
-        #         amplitude=1.0,
-        #     ),
-        # ),
-        td.PlaneWave(
-            center=(0, 0, -LZ / 2 + WVL),
-            size=(td.inf, td.inf, 0),
-            direction="+",
-            source_time=td.GaussianPulse(
-                freq0=FREQ0,
-                fwidth=FWIDTH,
-                amplitude=1.0,
-            ),
-        )
-    ],
+    sources=[PLANE_WAVE],
     structures=[
-        # td.Structure(
-        #     geometry=td.Box(
-        #         size=(0.5, 0.5, LZ / 2),
-        #         center=(0, 0, LZ / 2),
-        #     ),
-        #     medium=td.Medium(permittivity=1.0),
-        # )
+        td.Structure(
+            geometry=td.Box(
+                size=(0.5, 0.5, LZ / 2),
+                center=(0, 0, LZ / 2),
+            ),
+            medium=td.Medium(permittivity=2.0),
+        )
     ],
     monitors=[
         td.FieldMonitor(
@@ -254,11 +256,13 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
 
     # Structure with variable .medium
     eps = 1 + anp.abs(vector @ params)
+    sigma = 0.1 * (anp.tanh(vector @ params) + 1)
 
-    conductivity = 0  # eps / 10.0
+    permittivity, conductivity = eps, sigma
+
     medium = td.Structure(
         geometry=box,
-        medium=td.Medium(permittivity=eps, conductivity=conductivity),
+        medium=td.Medium(permittivity=permittivity, conductivity=conductivity),
     )
 
     # Structure with variable Box.center
@@ -336,8 +340,8 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
             vertices=vertices,
             slab_bounds=(-0.5, 0.5),
             axis=0,
-            sidewall_angle=0.0,  # 1,
-            dilation=0.00,  # 1,
+            sidewall_angle=0.01,
+            dilation=0.01,
         ),
         medium=med,
     )
@@ -424,16 +428,6 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
     )
 
     def diff_postprocess_fn(sim_data, mnt_data):
-        # with minus sign on amplitude
-        # orders_y= 0  (RMS 0.0615)
-        # orders_y= 1  (RMS 0.0177)
-        # orders_y= -1  (RMS 0.02)
-        # orders_y= 2  (RMS 2)
-        # orders_y= 3  (RMS 0.3965)
-        # all (RMS 1.965)
-
-        # import pdb; pdb.set_trace()
-
         return anp.sum(abs(mnt_data.amps.sel(polarization=["s", "p"]).values) ** 2)
 
     field_vol = td.FieldMonitor(
@@ -448,10 +442,10 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         for _, val in mnt_data.field_components.items():
             value = value + abs(anp.sum(val.values))
         # field components numerical is 3x higher
-        # intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
-        # value += intensity
+        intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
+        value += intensity
         # intensity numerical is 4.79x higher
-        # value += anp.sum(mnt_data.flux.values)
+        value += anp.sum(mnt_data.flux.values)
         # flux is 18.4x lower
         return value
 
@@ -464,8 +458,8 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
 
     def field_point_postprocess_fn(sim_data, mnt_data):
         value = 0.0
-        # for _, val in mnt_data.field_components.items():
-        #     value += abs(anp.sum(val.values))
+        for _, val in mnt_data.field_components.items():
+            value += abs(anp.sum(val.values))
         value += anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values)
         return value
 
@@ -591,14 +585,12 @@ def test_polyslab_axis_ops(axis):
     basis_vecs = p.edge_basis_vectors(edges=edges)
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", (("medium", "field_vol"),))
+@pytest.mark.skipif(not RUN_NUMERICAL, reason="Numerical gradient tests runs through web API.")
+@pytest.mark.parametrize("structure_key, monitor_key", (("medium", "mode"),))
 def test_autograd_numerical(structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
     import tidy3d.web as web
-
-    if False and TEST_MODE != "numerical":
-        return
 
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
@@ -618,7 +610,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 4e-3
+    delta = 1e-1
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))
@@ -666,13 +658,9 @@ def test_autograd_numerical(structure_key, monitor_key):
     print(f"|grad| / |grad_num| = {norm_factor:.4f}")
     print(f"avg(diff(objectives)) = {diff_objectives_num:.4f}")
 
-    # import pdb
 
-    # pdb.set_trace()
-
-
-@pytest.mark.parametrize("structure_key, monitor_key", (("polyslab", "mode"),))
-def test_autograd_objective_tyler(use_emulated_run, structure_key, monitor_key):
+@pytest.mark.parametrize("structure_key, monitor_key", args)
+def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
     fn_dict = get_functions(structure_key, monitor_key)
@@ -836,7 +824,7 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
-def test_sim_traced_override_structures():
+def test_sim_traced_override_structures(log_capture):
     """Make sure that sims with traced override structures are handled properly."""
 
     def f(x):
@@ -847,7 +835,8 @@ def test_sim_traced_override_structures():
         sim = SIM_FULL.updated_copy(override_structures=[override_structure], path="grid_spec")
         return sim.grid_spec.override_structures[0].geometry.size[2]
 
-    ag.grad(f)(1.0)
+    with AssertLogLevel(log_capture, "WARNING", contains_str="override structures"):
+        ag.grad(f)(1.0)
 
 
 @pytest.mark.parametrize("structure_key", ("custom_med",))
@@ -1020,6 +1009,10 @@ def test_pole_residue(monkeypatch):
         paths=field_paths,
         E_der_map={},
         D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
         eps_data={},
         eps_in=2.0,
         eps_out=1.0,
@@ -1095,6 +1088,10 @@ def test_custom_pole_residue(monkeypatch):
         paths=field_paths,
         E_der_map={},
         D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
         eps_data={},
         eps_in=2.0,
         eps_out=1.0,
@@ -1228,7 +1225,7 @@ def get_amps(sim_data: td.SimulationData, mnt_name: str) -> xr.DataArray:
 
 def power(amps: xr.DataArray) -> float:
     """Reduce a selected DataArray into just a float for objective function."""
-    return anp.sum(anp.abs(amps.sel(orders_x=[0], orders_y=[0]) ** 2))
+    return anp.sum(anp.abs(amps.values) ** 2)
 
 
 def postprocess_0_src(sim_data: td.SimulationData) -> float:
