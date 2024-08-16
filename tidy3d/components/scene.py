@@ -240,6 +240,7 @@ class Scene(Tidy3dBaseModel):
         List[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
+        structures = [s.to_static() for s in structures]
         if test_object.size.count(0.0) == 1:
             # get all merged structures on the test_object, which is already planar
             structures_merged = Scene._filter_structures_plane_medium(structures, test_object)
