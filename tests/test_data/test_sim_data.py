@@ -303,7 +303,7 @@ def test_to_hdf5(tmp_path):
     sim_data.to_file(fname=FNAME)
     # Make sure data is loaded as Tidy3dDataArray and not xarray DataArray
     for data, data2 in zip(sim_data.data, sim_data2.data):
-        assert type(data) == type(data2)
+        assert type(data) is type(data2)
     assert sim_data == sim_data2
 
 

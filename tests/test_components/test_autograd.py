@@ -5,6 +5,7 @@ import cProfile
 import typing
 import warnings
 from importlib import reload
+from os.path import join
 
 import autograd as ag
 import autograd.numpy as anp
@@ -12,12 +13,15 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
+import tidy3d.web as web
+import xarray as xr
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.data.sim_data import AdjointSourceInfo
 from tidy3d.plugins.polyslab import ComplexPolySlab
-from tidy3d.web import run_async
-from tidy3d.web.api.autograd.autograd import run
+from tidy3d.web import run, run_async
+from tidy3d.web.api.autograd.utils import FieldMap
 
-from ..utils import SIM_FULL, AssertLogLevel, run_emulated
+from ..utils import SIM_FULL, run_emulated
 
 """ Test configuration """
 
@@ -54,6 +58,7 @@ CALL_OBJECTIVE = False
 
 WVL = 1.0
 FREQ0 = td.C_0 / WVL
+FREQS = [FREQ0]
 
 # sim sizes
 LZ = 7 * WVL
@@ -117,46 +122,120 @@ _run_was_emulated = [False]
 def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
+    import tidy3d
+
     if TEST_MODE in ("pipeline", "speed"):
+        task_id_fwd = "task_fwd"
+        AUX_KEY_SIM_FIELDS_KEYS = "sim_fields_keys"
+
+        cache = {}
+
         import tidy3d.web.api.webapi as webapi
 
+        # reload(tidy3d.web.api.autograd.autograd)
+        from tidy3d.web.api.autograd.autograd import (
+            AUX_KEY_SIM_DATA_FWD,
+            AUX_KEY_SIM_DATA_ORIGINAL,
+            postprocess_adj,
+            postprocess_fwd,
+        )
+
+        def emulated_run_fwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
+            """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
+            task_id_fwd = task_name
+            if run_kwargs.get("simulation_type") == "autograd_fwd":
+                sim_original = simulation
+                sim_fields_keys = run_kwargs["sim_fields_keys"]
+                # add gradient monitors and make combined simulation
+                sim_combined = sim_original.with_adjoint_monitors(sim_fields_keys)
+                sim_data_combined = run_emulated(sim_combined, task_name=task_name)
+
+                # store both original and fwd data aux_data
+                aux_data = {}
+
+                _ = postprocess_fwd(
+                    sim_data_combined=sim_data_combined,
+                    sim_original=sim_original,
+                    aux_data=aux_data,
+                )
+
+                # cache original and fwd data locally for test
+                cache[task_id_fwd] = copy.copy(aux_data)
+                cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS] = sim_fields_keys
+                # return original data only
+                return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_id_fwd
+            else:
+                return run_emulated(simulation, task_name=task_name), task_id_fwd
+
+        def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
+            """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
+
+            task_id_fwd = task_name[:-8]
+
+            # run the adjoint sim
+            sim_data_adj = run_emulated(simulation, task_name="task_name")
+
+            # grab the fwd and original data from the cache
+            aux_data_fwd = cache[task_id_fwd]
+            sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
+            sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
+
+            # get the original traced fields
+            sim_fields_keys = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS]
+
+            adjoint_source_info = AdjointSourceInfo(sources=[], post_norm=1.0, normalize_sim=True)
+
+            # postprocess (compute adjoint gradients)
+            traced_fields_vjp = postprocess_adj(
+                sim_data_adj=sim_data_adj,
+                sim_data_orig=sim_data_orig,
+                sim_data_fwd=sim_data_fwd,
+                sim_fields_keys=sim_fields_keys,
+                adjoint_source_info=adjoint_source_info,
+            )
+
+            return traced_fields_vjp
+
+        def emulated_run_async_fwd(simulations, **run_kwargs) -> td.SimulationData:
+            batch_data_orig, task_ids_fwd = {}, {}
+            sim_fields_keys_dict = run_kwargs.pop("sim_fields_keys_dict", None)
+            for task_name, simulation in simulations.items():
+                if sim_fields_keys_dict is not None:
+                    run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
+                sim_data_orig, task_id_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
+                batch_data_orig[task_name] = sim_data_orig
+                task_ids_fwd[task_name] = task_id_fwd
+
+            return batch_data_orig, task_ids_fwd
+
+        def emulated_run_async_bwd(simulations, **run_kwargs) -> td.SimulationData:
+            vjp_dict = {}
+            for task_name, simulation in simulations.items():
+                task_id_fwd = task_name[:-8]
+                vjp_dict[task_name] = emulated_run_bwd(simulation, task_name, **run_kwargs)
+            return vjp_dict
+
         monkeypatch.setattr(webapi, "run", run_emulated)
+        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
+        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d_bwd", emulated_run_bwd)
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d", emulated_run_async_fwd
+        )
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd, "_run_async_tidy3d_bwd", emulated_run_async_bwd
+        )
+
         _run_was_emulated[0] = True
-
-        # import here so it uses emulated run
-        from tidy3d.web.api.autograd import autograd
-
-        reload(autograd)
-
-
-@pytest.fixture
-def use_emulated_run_async(monkeypatch):
-    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
-
-    if TEST_MODE in ("pipeline", "speed"):
-        import tidy3d.web.api.asynchronous as asynchronous
-
-        def run_async_emulated(simulations, **kwargs):
-            """Mock version of ``run_async``."""
-            return {
-                task_name: run_emulated(sim, task_name=task_name)
-                for task_name, sim in simulations.items()
-            }
-
-        monkeypatch.setattr(asynchronous, "run_async", run_async_emulated)
-        _run_was_emulated[0] = True
-
-        # import here so it uses emulated run
-        from tidy3d.web.api.autograd import autograd
-
-        reload(autograd)
+        return emulated_run_fwd, emulated_run_bwd
 
 
 def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
+    np.random.seed(0)
+
     vector = np.random.random(N_PARAMS) - 0.5
-    vector /= np.linalg.norm(vector)
+    vector = vector / np.linalg.norm(vector)
 
     # static components
     box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
@@ -283,18 +362,6 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
 
     complex_polyslab_geo_group = td.Structure(
         geometry=td.GeometryGroup(geometries=polyslab_geometries),
-        medium=td.Medium(permittivity=eps, conductivity=conductivity),
-    )
-
-    # geometry group
-    geo_group = td.Structure(
-        geometry=td.GeometryGroup(
-            geometries=[
-                medium.geometry,
-                center_list.geometry,
-                size_element.geometry,
-            ],
-        ),
         medium=td.Medium(permittivity=eps, conductivity=conductivity),
     )
 
@@ -453,7 +520,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("custom_med_vec", "mode")]
+# args = [("custom_med", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
@@ -569,7 +636,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
+def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
     fn_dict = get_functions(structure_key, monitor_key)
@@ -601,7 +668,6 @@ def test_autograd_speed_num_structures(use_emulated_run):
     import time
 
     fn_dict = get_functions(ALL_KEY, ALL_KEY)
-    make_sim = fn_dict["sim"]
 
     monitor_key = "mode"
     structure_key = "size_element"
@@ -629,6 +695,53 @@ def test_autograd_speed_num_structures(use_emulated_run):
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
 
 
+@pytest.mark.parametrize("structure_key, monitor_key", args)
+def test_autograd_server(use_emulated_run, structure_key, monitor_key):
+    """Test an objective function through tidy3d autograd."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        data = run(sim, task_name="autograd_test", verbose=False, local_gradient=False)
+        value = postprocess(data)
+        return value
+
+        val, grad = ag.value_and_grad(objective)(params0)
+        print(val, grad)
+        assert anp.all(grad != 0.0), "some gradients are 0"
+
+    val, grad = ag.value_and_grad(objective)(params0)
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", args)
+def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
+    """Test an async objective function through tidy3d autograd."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        sims = {"autograd_test1": sim, "autograd_test2": sim}
+        batch_data = run_async(sims, verbose=False, local_gradient=False)
+        value = 0.0
+        for _, sim_data in batch_data.items():
+            value = value + postprocess(sim_data)
+        return value
+
+        val, grad = ag.value_and_grad(objective)(params0)
+        print(val, grad)
+        assert anp.all(grad != 0.0), "some gradients are 0"
+
+    val, grad = ag.value_and_grad(objective)(params0)
+
+
 @pytest.mark.parametrize("structure_key", ("custom_med",))
 def test_sim_full_ops(structure_key):
     """make sure the autograd operations don't error on a simulation containing everything."""
@@ -654,79 +767,21 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
-def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
-    """Make sure we get the right warning with no adjoint sources, and no error."""
+@pytest.mark.parametrize("structure_key", ("custom_med",))
+def test_sim_fields_io(structure_key, tmp_path):
+    """Test that converging and AutogradFieldMap dictionary to a FieldMap object, saving and loading
+    from file, and then converting back, returns the same object."""
+    s = make_structures(params0)[structure_key]
+    s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
+    sim_full_traced = SIM_FULL.updated_copy(structures=list(SIM_FULL.structures) + [s])
+    sim_fields = sim_full_traced.strip_traced_fields()
 
-    monitor_key = "mode"
-    structure_key = "size_element"
-    monitor, postprocess = make_monitors()[monitor_key]
-
-    def make_sim(*args):
-        structure = make_structures(*args)[structure_key]
-        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
-
-    def objective(*args):
-        """Objective function."""
-        sim = make_sim(*args)
-        data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data, data[monitor_key])
-        return value
-
-    monkeypatch.setattr(td.SimulationData, "make_adjoint_sources", lambda *args, **kwargs: [])
-
-    with AssertLogLevel(log_capture, "WARNING", contains_str="No adjoint sources"):
-        ag.grad(objective)(params0)
-
-
-def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_emulated_run_async):
-    """Test what happens when autograd run pipeline fails."""
-
-    monitor_key = "mode"
-    structure_key = "size_element"
-    monitor, postprocess = make_monitors()[monitor_key]
-
-    def make_sim(*args):
-        structure = make_structures(*args)[structure_key]
-        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
-
-    def objective(*args):
-        """Objective function."""
-        sim = make_sim(*args)
-        data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data, data[monitor_key])
-        return value
-
-    def fail(*args, **kwargs):
-        """Just raise an exception."""
-        raise ValueError("test")
-
-    """ if autograd run raises exception, raise a warning and continue with regular ."""
-
-    monkeypatch.setattr(td.web.api.autograd.autograd, "_run", fail)
-
-    with AssertLogLevel(
-        log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
-    ):
-        ag.grad(objective)(params0)
-
-    def objective_async(*args):
-        sims = {"key": make_sim(*args)}
-        data = run_async(sims, verbose=False)
-        value = 0.0
-        for _, val in data.items():
-            value += postprocess(val, val[monitor_key])
-        return value
-
-    """ if autograd run_async raises exception, raise a warning and continue with regular ."""
-
-    monkeypatch.setattr(td.web.api.autograd.autograd, "_run_async", fail)
-
-    with AssertLogLevel(
-        log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
-    ):
-        ag.grad(objective_async)(params0)
-
-    """ if the regular web functions are called, raise custom exception and catch it in tests ."""
+    field_map = FieldMap.from_autograd_field_map(sim_fields)
+    field_map_file = join(tmp_path, "test_sim_fields.hdf5.gz")
+    field_map.to_file(field_map_file)
+    autograd_field_map = FieldMap.from_file(field_map_file).to_autograd_field_map
+    for path, data in sim_fields.items():
+        assert np.all(data == autograd_field_map[path])
 
 
 def test_web_incompatible_inputs(log_capture, monkeypatch):
@@ -737,6 +792,7 @@ def test_web_incompatible_inputs(log_capture, monkeypatch):
         raise AssertionError()
 
     monkeypatch.setattr(td.web.api.webapi, "run", catch)
+    monkeypatch.setattr(td.web.api.container.Job, "run", catch)
     monkeypatch.setattr(td.web.api.asynchronous, "run_async", catch)
 
     from tidy3d.web.api.autograd import autograd
@@ -1050,3 +1106,219 @@ def _test_many_structures():
 * no copy : 16 sec
 * no to_static(): 13 sec
 """
+
+FREQ1 = FREQ0 * 1.6
+
+mnt_single = td.ModeMonitor(
+    size=(2, 2, 0),
+    center=(0, 0, LZ / 2 - WVL),
+    mode_spec=td.ModeSpec(num_modes=2),
+    freqs=[FREQ0],
+    name="single",
+)
+
+mnt_multi = td.ModeMonitor(
+    size=(2, 2, 0),
+    center=(0, 0, LZ / 2 - WVL),
+    mode_spec=td.ModeSpec(num_modes=2),
+    freqs=[FREQ0, FREQ1],
+    name="multi",
+)
+
+
+def make_objective(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
+    def objective(params):
+        structure_traced = make_structures(params)[structure_key]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+        )
+        data = run(sim, task_name="multifreq_test")
+        return postprocess_fn(data)
+
+    return objective
+
+
+def get_amps(sim_data: td.SimulationData, mnt_name: str) -> xr.DataArray:
+    return sim_data[mnt_name].amps
+
+
+def power(amps: xr.DataArray) -> float:
+    """Reduce a selected DataArray into just a float for objective function."""
+    return anp.sum(anp.abs(amps.values) ** 2)
+
+
+def postprocess_0_src(sim_data: td.SimulationData) -> float:
+    """Postprocess function that should return 0 adjoint sources."""
+    return 0.0
+
+
+def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
+    objective = make_objective(postprocess_fn, structure_key=structure_key)
+    params = params0 + 1.0  # +1 is to avoid a warning in size_element with value 0
+    return ag.grad(objective)(params)
+
+
+def check_1_src_single(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 adjoint sources."""
+        amps = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    return postprocess
+
+
+def check_2_src_single(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps = get_amps(sim_data, "single").sel(mode_index=0)
+        return power(amps)
+
+    return postprocess
+
+
+def check_1_src_multi(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 adjoint sources."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
+        return power(amps)
+
+    return postprocess
+
+
+def check_2_src_multi(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, f=FREQ1)
+        return power(amps)
+
+    return postprocess
+
+
+def check_2_src_both(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
+        return power(amps_single) + power(amps_multi)
+
+    return postprocess
+
+
+def check_1_multisrc(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should raise ValueError because diff sources, diff freqs."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ1)
+        return power(amps_single) + power(amps_multi)
+
+    return postprocess
+
+
+def check_2_multisrc(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should raise ValueError because diff sources, diff freqs."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps_single) + power(amps_multi)
+
+    return postprocess
+
+
+def check_1_src_broadband(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 broadband adjoint sources with many freqs."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    return postprocess
+
+
+MULT_FREQ_TEST_CASES = dict(
+    src_1_freq_1=check_1_src_single,
+    src_2_freq_1=check_2_src_single,
+    src_1_freq_2=check_1_src_multi,
+    src_2_freq_1_mon_1=check_1_src_multi,
+    src_2_freq_1_mon_2=check_2_src_both,
+    src_2_freq_2_mon_1=check_1_multisrc,
+    src_2_freq_2_mon_2=check_2_multisrc,
+    src_1_freq_2_broadband=check_1_src_broadband,
+)
+
+checks = list(MULT_FREQ_TEST_CASES.items())
+
+
+@pytest.mark.parametrize("label, check_fn", checks)
+@pytest.mark.parametrize("structure_key", ("custom_med",))
+def test_multi_freq_edge_cases(
+    log_capture, use_emulated_run, structure_key, label, check_fn, monkeypatch
+):
+    # test multi-frequency adjoint handling
+
+    import tidy3d.components.data.sim_data as sd
+
+    monkeypatch.setattr(sd, "RESIDUAL_CUTOFF_ADJOINT", 1)
+    reload(td)
+
+    postprocess_fn = check_fn(structure_key=structure_key, log_capture=log_capture)
+
+    def objective(params):
+        structure_traced = make_structures(params)[structure_key]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+        )
+        data = run(sim, task_name="multifreq_test")
+        return postprocess_fn(data)
+
+    if label == "src_2_freq_2_mon_2":
+        with pytest.raises(NotImplementedError):
+            g = ag.grad(objective)(params0)
+    else:
+        g = ag.grad(objective)(params0)
+        print(g)
+
+
+@pytest.mark.parametrize("structure_key", structure_keys_)
+def test_multi_frequency_equivalence(use_emulated_run, structure_key):
+    """Test an objective function through tidy3d autograd."""
+
+    def objective_indi(params, structure_key) -> float:
+        power_sum = 0.0
+
+        for f in mnt_multi.freqs:
+            structure_traced = make_structures(params)[structure_key]
+            sim = SIM_BASE.updated_copy(
+                structures=[structure_traced],
+                monitors=list(SIM_BASE.monitors) + [mnt_multi],
+            )
+
+            sim_data = web.run(sim, task_name="multifreq_test")
+            amps_i = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=f)
+            power_i = power(amps_i)
+            power_sum = power_sum + power_i
+
+        return power_sum
+
+    def objective_multi(params, structure_key) -> float:
+        structure_traced = make_structures(params)[structure_key]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=list(SIM_BASE.monitors) + [mnt_multi],
+        )
+        sim_data = web.run(sim, task_name="multifreq_test")
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    params0_ = params0 + 1.0
+
+    # J_indi = objective_indi(params0_, structure_key)
+    # J_multi = objective_multi(params0_, structure_key)
+
+    # np.testing.assert_allclose(J_indi, J_multi)
+
+    grad_indi = ag.grad(objective_indi)(params0_, structure_key=structure_key)
+    grad_multi = ag.grad(objective_multi)(params0_, structure_key=structure_key)
+
+    assert not np.any(np.isclose(grad_indi, 0))
+    assert not np.any(np.isclose(grad_multi, 0))

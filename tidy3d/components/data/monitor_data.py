@@ -129,7 +129,7 @@ class MonitorData(AbstractMonitorData, ABC):
         data_dict.update(update)
         return type(self).parse_obj(data_dict)
 
-    def make_adjoint_sources(self, dataset_names: list[str]) -> list[Source]:
+    def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
         """Generate adjoint sources for this ``MonitorData`` instance."""
 
         # TODO: if there's data in the MonitorData, but no adjoint source, then
@@ -1021,16 +1021,16 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         )
 
     def make_adjoint_sources(
-        self, dataset_names: list[str]
+        self, dataset_names: list[str], fwidth: float
     ) -> List[Union[CustomCurrentSource, PointDipole]]:
         """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
 
         if np.allclose(self.monitor.size, 0):
-            return self.to_adjoint_point_sources()
+            return self.to_adjoint_point_sources(fwidth=fwidth)
 
-        return self.to_adjoint_field_sources()
+        return self.to_adjoint_field_sources(fwidth=fwidth)
 
-    def to_adjoint_point_sources(self) -> List[PointDipole]:
+    def to_adjoint_point_sources(self, fwidth: float) -> List[PointDipole]:
         """Create adjoint point dipole source if this field data contains one item."""
 
         sources = []
@@ -1053,7 +1053,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                     polarization=polarization,
                     source_time=GaussianPulse(
                         freq0=freq0,
-                        fwidth=freq0 / 10,  # TODO: how to set this properly?
+                        fwidth=fwidth,
                         amplitude=abs(adj_amp),
                         phase=adj_phase,
                     ),
@@ -1064,7 +1064,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
         return sources
 
-    def to_adjoint_field_sources(self) -> List[CustomCurrentSource]:
+    def to_adjoint_field_sources(self, fwidth: float) -> List[CustomCurrentSource]:
         """Create adjoint custom field sources if this field data has some dimensionality."""
 
         sources = []
@@ -1114,7 +1114,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 size=source_geo.size,
                 source_time=GaussianPulse(
                     freq0=freq0,
-                    fwidth=freq0 / 10,  # TODO: how to set this properly?
+                    fwidth=fwidth,
                 ),
                 current_dataset=dataset,
                 interpolate=True,
@@ -1724,10 +1724,10 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             "n eff": self.n_eff,
             "k eff": self.k_eff,
             "loss (dB/cm)": loss_db_cm,
-            f"TE (E{self._tangential_dims[0]}) fraction": self.pol_fraction["te"],
-            "wg TE fraction": self.pol_fraction_waveguide["te"],
-            "wg TM fraction": self.pol_fraction_waveguide["tm"],
-            "mode area": self.mode_area,
+            f"TE (E{self._tangential_dims[0]}) fraction": None,
+            "wg TE fraction": None,
+            "wg TM fraction": None,
+            "mode area": None,
             "group index": self.n_group_raw,  # Use raw field to avoid issuing a warning
             "dispersion (ps/(nm km))": self.dispersion_raw,  # Use raw field to avoid issuing a warning
         }
@@ -1759,14 +1759,14 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return dataset.drop_vars(drop).to_dataframe()
 
-    def make_adjoint_sources(self, dataset_names: list[str]) -> list[ModeSource]:
+    def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitorData``."""
 
         adjoint_sources = []
 
         for name in dataset_names:
             if name == "amps":
-                adjoint_sources += self.make_adjoint_sources_amps()
+                adjoint_sources += self.make_adjoint_sources_amps(fwidth=fwidth)
             else:
                 log.warning(
                     f"Can't create adjoint source for 'ModeData.{type(self)}.{name}'. "
@@ -1777,7 +1777,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return adjoint_sources
 
-    def make_adjoint_sources_amps(self) -> list[ModeSource]:
+    def make_adjoint_sources_amps(self, fwidth: float) -> list[ModeSource]:
         """Generate adjoint sources for ``ModeMonitorData.amps``."""
 
         coords = self.amps.coords
@@ -1793,12 +1793,12 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                     if self.get_amplitude(amp_single) == 0.0:
                         continue
 
-                    adjoint_source = self.adjoint_source_amp(amp=amp_single)
+                    adjoint_source = self.adjoint_source_amp(amp=amp_single, fwidth=fwidth)
                     adjoint_sources.append(adjoint_source)
 
         return adjoint_sources
 
-    def adjoint_source_amp(self, amp: DataArray) -> ModeSource:
+    def adjoint_source_amp(self, amp: DataArray, fwidth: float) -> ModeSource:
         """Generate an adjoint ``ModeSource`` for a single amplitude."""
 
         monitor = self.monitor
@@ -1821,7 +1821,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 amplitude=abs(src_amp),
                 phase=np.angle(src_amp),
                 freq0=freq0,
-                fwidth=freq0 / 10,  # TODO: how to set this properly?
+                fwidth=fwidth,
             ),
             mode_spec=monitor.mode_spec,
             size=monitor.size,
@@ -2202,7 +2202,7 @@ class AbstractFieldProjectionData(MonitorData):
             return 1.0
 
         if is_2d_simulation:
-            return -np.exp(1j * k * dist) * np.sqrt(1j * k / (8 * np.pi * dist))
+            return np.exp(1j * k * dist) * np.sqrt(-1j * k / (8 * np.pi * dist))
 
         return -1j * k * np.exp(1j * k * dist) / (4 * np.pi * dist)
 
@@ -2505,6 +2505,35 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
     def z(self) -> np.ndarray:
         """Z positions."""
         return self.Etheta.z.values
+
+    @property
+    def tangential_dims(self):
+        tangential_dims = ["x", "y", "z"]
+        tangential_dims.pop(self.monitor.proj_axis)
+        return tangential_dims
+
+    @property
+    def poynting(self) -> xr.DataArray:
+        """Time-averaged Poynting vector for field data associated to a Cartesian field projection monitor."""
+        fc = self.fields_cartesian
+        dim1, dim2 = self.tangential_dims
+
+        e1 = fc["E" + dim1]
+        e2 = fc["E" + dim2]
+        h1 = fc["H" + dim1]
+        h2 = fc["H" + dim2]
+
+        e1_h2 = e1 * h2.conj()
+        e2_h1 = e2 * h1.conj()
+
+        e_x_h_star = e1_h2 - e2_h1
+        return 0.5 * np.real(e_x_h_star)
+
+    @cached_property
+    def flux(self) -> FluxDataArray:
+        """Flux for projecteded field data corresponding to a Cartesian field projection monitor."""
+        flux = self.poynting.integrate(self.tangential_dims)
+        return FluxDataArray(flux)
 
     def renormalize_fields(self, proj_distance: float) -> FieldProjectionCartesianData:
         """Return a :class:`.FieldProjectionCartesianData` with fields re-normalized to a new
@@ -2920,13 +2949,13 @@ class DiffractionData(AbstractFieldProjectionData):
 
     """ Autograd code """
 
-    def make_adjoint_sources(self, dataset_names: list[str]) -> list[PlaneWave]:
+    def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[PlaneWave]:
         """Get all adjoint sources for the ``DiffractionMonitor.amps``."""
 
         # NOTE: everything just goes through `.amps`, any post-processing is encoded in E-fields
-        return self.make_adjoint_sources_amps()
+        return self.make_adjoint_sources_amps(fwidth=fwidth)
 
-    def make_adjoint_sources_amps(self) -> list[PlaneWave]:
+    def make_adjoint_sources_amps(self, fwidth: float) -> list[PlaneWave]:
         """Make adjoint sources for outputs that depend on DiffractionData.`amps`."""
 
         amps = self.amps
@@ -2953,13 +2982,13 @@ class DiffractionData(AbstractFieldProjectionData):
                             continue
 
                         # compute a plane wave for this amplitude (if propagating / not None)
-                        adjoint_source = self.adjoint_source_amp(amp=amp_single)
+                        adjoint_source = self.adjoint_source_amp(amp=amp_single, fwidth=fwidth)
                         if adjoint_source is not None:
                             adjoint_sources.append(adjoint_source)
 
         return adjoint_sources
 
-    def adjoint_source_amp(self, amp: DataArray) -> PlaneWave:
+    def adjoint_source_amp(self, amp: DataArray, fwidth: float) -> PlaneWave:
         """Generate an adjoint ``PlaneWave`` for a single amplitude."""
 
         monitor = self.monitor
@@ -3003,7 +3032,7 @@ class DiffractionData(AbstractFieldProjectionData):
                 amplitude=abs(src_amp),
                 phase=np.angle(src_amp),
                 freq0=freq0,
-                fwidth=freq0 / 10,  # TODO: how to set this properly?
+                fwidth=fwidth,
             ),
             direction=self.flip_direction(monitor.normal_dir),
             angle_theta=angle_theta,

@@ -517,7 +517,8 @@ class Grid(Tidy3dBaseModel):
         # for each dimension
         for axis, (pt_min, pt_max) in enumerate(zip(pts_min, pts_max)):
             bound_coords = np.array(boundaries.to_list[axis])
-            assert pt_min <= pt_max, "min point was greater than max point"
+            if pt_min > pt_max:
+                raise AssertionError("min point was greater than max point")
 
             # index of smallest coord greater than pt_max
             inds_gt_pt_max = np.where(bound_coords > pt_max)[0]

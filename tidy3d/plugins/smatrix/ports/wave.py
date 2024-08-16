@@ -118,7 +118,7 @@ class WavePort(AbstractTerminalPort, Box):
         """Helper to create a :class:`.ModeSolver` instance."""
         mode_solver = ModeSolver(
             simulation=simulation,
-            plane=self,
+            plane=self.geometry,
             mode_spec=self.mode_spec,
             freqs=freqs,
             direction=self.direction,

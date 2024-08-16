@@ -294,6 +294,20 @@ def test_mode_solver_data():
     data_reversed = data.time_reversed_copy
     assert data_reversed.monitor.store_fields_direction == "-"
 
+    # check mode summary table with and without fields
+    modes_info = data.modes_info
+    assert all(
+        np.shape(modes_info[key]) != ()
+        for key in ["TE (Ex) fraction", "wg TE fraction", "wg TM fraction", "mode area"]
+    )
+
+    data_no_fields = data.updated_copy(Ex=None)
+    modes_info = data_no_fields.modes_info
+    assert all(
+        np.shape(modes_info[key]) == ()
+        for key in ["TE (Ex) fraction", "wg TE fraction", "wg TM fraction", "mode area"]
+    )
+
 
 def test_permittivity_data():
     data = make_permittivity_data()

@@ -330,11 +330,13 @@ class DataArray(xr.DataArray):
 
             obj = self if assume_sorted else self.sortby(list(coords.keys()))
 
+            out_coords = {k: coords.get(k, obj.coords[k]) for k in obj.dims}
             points = tuple(obj.coords[k] for k in obj.dims)
-            xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
+            xi = tuple(out_coords.values())
+
             vals = interpn(points, obj.tracers, xi, method=method)
 
-            da = DataArray(vals, dict(obj.coords) | coords)  # tracers go into .attrs
+            da = DataArray(vals, out_coords)  # tracers go into .attrs
             if isbox(self.values.flat[0]):  # if tracing .values instead of .attrs
                 da = da.copy(deep=False, data=vals)  # copy over tracers
 

@@ -3,8 +3,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
 ## [2.8.0rc1]
 
 ### Added
@@ -22,27 +20,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
+- Gradients for autograd are computed server-side by default. They can be computed locally (requiring more data download) by passing `local_gradient=True` to the `web.run()` and related functions.
 
 ### Fixed
 - Significant speedup for field projection computations.
 - Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
 
-## [2.7.2]
+## [2.7.2] - 2024-08-07
 
 ### Added
 - Mode solver plugin now supports 'EMESimulation'.
-- TriangleMesh class: automatic removal of zero-area faces, and functions fill_holes and fix_winding to attempt mesh repair.
+- `TriangleMesh` class: automatic removal of zero-area faces, and functions `fill_holes` and `fix_winding` to attempt mesh repair.
+- Added progress bar for EME simulations.
+- Support for grid specifications from grid cell boundary coordinates via `CustomGridBoundaries` that subclasses from `GridSpec1d`.
+- More convenient mesh importing from another simulation through `grid_spec = GridSpec.from_grid(sim.grid)`.
+- `autograd` gradient calculations can be performed on the server by passing `local_gradient = False` into `web.run()` or `web.run_async()`.
+- Automatic differentiation with `autograd` supports multiple frequencies through single, broadband adjoint simulation when the objective function can be formulated as depending on a single dataset in the output `SimulationData` with frequency dependence only.
+- Convenience method `EMESimulation.subsection` to create a new EME simulation based on a subregion of an existing one.
+- Added `flux` and `poynting` properties to `FieldProjectionCartesianData`.
 
 ### Changed
-- Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
+- Mode solver now always operates on a reduced simulation copy.
+- Moved `EMESimulation` size limit validators to preupload.
+- Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` or `FieldProjectionCartesianMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
 
 ### Fixed
-- Error when loading a previously run Batch or ComponentModeler containing custom data.
+- Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.
 - Error when plotting mode plane PML and the simulation has symmetry.
-- Validators using TriangleMesh.intersections_plane will fall back on bounding box in case the method fails for a non-watertight mesh.
+- Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
+- Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
 
-
-## [2.7.1]
+## [2.7.1] - 2024-07-10
 
 ### Added
 - Support for differentiation with respect to `GeometryGroup.geometries` elements.

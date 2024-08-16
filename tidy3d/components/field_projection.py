@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -89,13 +89,6 @@ class FieldProjector(Tidy3dBaseModel):
         description="Local origin used for defining observation points. If ``None``, uses the "
         "average of the centers of all surface monitors.",
         units=MICROMETER,
-    )
-
-    currents: Dict[str, xr.Dataset] = pydantic.Field(
-        None,
-        title="Surface current densities",
-        description="Dictionary mapping monitor name to an ``xarray.Dataset`` storing the "
-        "surface current densities.",
     )
 
     @cached_property
@@ -362,7 +355,7 @@ class FieldProjector(Tidy3dBaseModel):
         pts_u: np.ndarray,
     ):
         """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)
+        return np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)  # noqa: NPY201
 
     def integrate_2d(
         self,
@@ -372,7 +365,7 @@ class FieldProjector(Tidy3dBaseModel):
         pts_v: np.ndarray,
     ):
         """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
+        return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)  # noqa: NPY201
 
     def _far_fields_for_surface(
         self,
@@ -420,10 +413,15 @@ class FieldProjector(Tidy3dBaseModel):
         _, source_names = surface.monitor.pop_axis(("x", "y", "z"), axis=surface.axis)
 
         # integration dimension for 2d far field projection
-        zero_dim = (dim for dim, size in enumerate(self.sim_data.simulation.size) if size == 0)
+        zero_dim = [dim for dim, size in enumerate(self.sim_data.simulation.size) if size == 0]
         if self.is_2d_simulation:
+            # Ensure zero_dim has a single element since {zero_dim} expects a value
+            if len(zero_dim) != 1:
+                raise ValueError("Expected exactly one dimension with size 0 for 2D simulation")
+
+            zero_dim = zero_dim[0]
             integration_axis = {0, 1, 2} - {zero_dim, surface.axis}
-            idx_int_1d = integration_axis.pop()  # Get the remaining axis as an integer
+            idx_int_1d = integration_axis.pop()
 
         idx_u, idx_v = idx_uv
         cmp_1, cmp_2 = source_names

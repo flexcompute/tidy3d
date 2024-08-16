@@ -307,7 +307,19 @@ def test_custom_source_time(log_capture):
         atol=ATOL,
     )
 
+    # all times out of range
+    _ = cst.amp_time([-1])
+    _ = cst.amp_time(-1)
+    assert np.allclose(cst.amp_time([2]), np.exp(-1j * 2 * np.pi * 2 * freq0), rtol=0, atol=ATOL)
+
     assert_log_level(log_capture, None)
+
+    vals = td.components.data.data_array.TimeDataArray([1, 2], coords=dict(t=[-1, -0.5]))
+    dataset = td.components.data.dataset.TimeDataset(values=vals)
+    cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
+    source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
+    with AssertLogLevel(log_capture, "WARNING", contains_str="defined over a time range"):
+        sim = sim.updated_copy(sources=[source])
 
     # test normalization warning
     with AssertLogLevel(log_capture, "WARNING"):
