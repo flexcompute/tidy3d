@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
 - Gradient monitors for `PolySlab` only store fields at the center location along axis, reducing data usage.
 - Validate the forward simulation on the client side even when using `local_gradient=False` for server-side gradient processing.
+- Gradient inaccuracies in `PolySlab.vertices`, `Medium.conductivity`, and `DiffractionData` s-polarization.
+- Adjoint field monitors no longer store H fields, which aren't needed for gradient calculation.
+- `MeshOverrideStructures` in a `Simulation.GridSpec` are properly handled to remove any derivative tracers.
 
 ## [2.7.1] - 2024-07-10
 
