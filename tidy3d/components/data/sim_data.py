@@ -1074,6 +1074,14 @@ class SimulationData(AbstractYeeGridSimulationData):
             )
             sources_adj_all[mnt_data.monitor.name] = sources_adj
 
+        if not sources_adj_all:
+            raise ValueError(
+                "No adjoint sources created for this simulation. "
+                "This could indicate a bug in your setup, for example the objective function "
+                "output depending on a monitor that is not supported. If you encounter this error, "
+                "please examine your set up or contact customer support if you need more help."
+            )
+
         return sources_adj_all
 
     @property
