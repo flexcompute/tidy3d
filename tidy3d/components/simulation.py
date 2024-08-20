@@ -3190,6 +3190,7 @@ class Simulation(AbstractYeeGridSimulation):
         with log as consolidated_logger:
             for i, structure in enumerate(self.structures):
                 geo_bounds = structure.geometry.bounds
+                warn = False  # will only warn once per structure
                 for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
                     sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
                 ):
@@ -3200,14 +3201,16 @@ class Simulation(AbstractYeeGridSimulation):
                         in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
                         in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
                         if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
-                            consolidated_logger.warning(
-                                f"A bound of Simulation.structures[{i}] was detected as being "
-                                "within the simulation PML. We recommend extending structures to "
-                                "infinity or completely outside of the simulation PML to avoid "
-                                "unexpected effects when the structures are not translationally "
-                                "invariant within the PML.",
-                                custom_loc=["structures", i],
-                            )
+                            warn = True
+                if warn:
+                    consolidated_logger.warning(
+                        f"A bound of Simulation.structures[{i}] was detected as being "
+                        "within the simulation PML. We recommend extending structures to "
+                        "infinity or completely outside of the simulation PML to avoid "
+                        "unexpected effects when the structures are not translationally "
+                        "invariant within the PML.",
+                        custom_loc=["structures", i],
+                    )
 
     def _validate_tfsf_nonuniform_grid(self) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,

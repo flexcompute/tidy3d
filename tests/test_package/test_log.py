@@ -129,7 +129,7 @@ def test_logging_warning_capture():
         medium=td.Medium(permittivity=2, frequency_range=[0.5, 1]),
     )
 
-    # 2 warnings: inside pml
+    # 1 warning: inside pml
     box_in_pml = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(domain_size * 1.001, 5, 5)),
         medium=td.Medium(permittivity=10),
@@ -216,7 +216,7 @@ def test_logging_warning_capture():
     sim.validate_pre_upload()
     warning_list = td.log.captured_warnings()
     print(json.dumps(warning_list, indent=4))
-    assert len(warning_list) == 32
+    assert len(warning_list) == 31
     td.log.set_capture(False)
 
     # check that capture doesn't change validation errors
