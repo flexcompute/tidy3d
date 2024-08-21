@@ -16,6 +16,7 @@ def train_network(
     epochs=10,
     pbar=None,
     show_plot=False,
+    verbose=True,
 ):
     test_loss_best = np.inf
 
@@ -56,7 +57,8 @@ def train_network(
             test_loss_best = test_loss
             torch.save(net.state_dict(), output_dir / model_name)
 
-            print(f"Best State Updated. Epoch: {idx_epoch}")
+            if verbose:
+                print(f"Best State Updated. Epoch: {idx_epoch}")
 
         if pbar is not None:
             pbar.update()

@@ -1,57 +1,83 @@
 import os
 import pickle
 
+import numpy as np
 import torch
 from sklearn.preprocessing import MinMaxScaler
 
 
-def split_data(dataArray, testPercent, validPercent):
+def split_data(data_array, test_percent, valid_percent):
     # Calculate indexes
-    arrayLen = len(dataArray)
-    trainFinishIndex = arrayLen - int(testPercent * arrayLen + validPercent * arrayLen)
-    testStartIndex = trainFinishIndex
-    testFinishIndex = arrayLen - int(validPercent * arrayLen)
-    validationStartIndex = testFinishIndex
+    array_len = len(data_array)
+    train_finish_index = array_len - int(test_percent * array_len + valid_percent * array_len)
+    test_start_index = train_finish_index
+    test_finish_index = array_len - int(valid_percent * array_len)
+    validation_start_index = test_finish_index
 
     # Divide up array
-    trainArr = dataArray[:trainFinishIndex]
-    testArr = dataArray[testStartIndex:testFinishIndex]
-    validArr = dataArray[validationStartIndex:]
+    train_arr = data_array[:train_finish_index]
+    test_arr = data_array[test_start_index:test_finish_index]
+    valid_arr = data_array[validation_start_index:]
 
-    return trainArr, testArr, validArr
+    return train_arr, test_arr, valid_arr
 
 
 def scale_label(y, pre_fit=None):
-    data = y.reshape(-1, 1)
-
     if pre_fit is None:
         standardiser = MinMaxScaler()
-        output = standardiser.fit_transform(data)
+        output = standardiser.fit_transform(y)
 
         return output, standardiser
     else:
-        output = pre_fit.transform(data)
+        output = pre_fit.transform(y)
         return output
 
 
-def scale_feature(x, pre_fit=None):
+def scale_feature(x, individual_feature_scaling: bool, feature_scaler=None):
     original_shape = x.shape
-    # Reduce to 1D array and scale
-    flattened_x = x.reshape(-1, 1)
 
-    if pre_fit is None:
-        scaler = MinMaxScaler()
-        scaled_flat_arr = scaler.fit_transform(flattened_x)
+    if len(original_shape) > 2:
+        print(
+            "Warning: scaling of features does not currently accept feature arrays with this many dimensions"
+        )
+
+    if individual_feature_scaling:
+        scaler_dict = {}
+        scaled_arrays = []
+        for i in range(0, original_shape[1]):
+            sub_array = x[:, i].reshape(-1, 1)
+            if feature_scaler is None:
+                scaler_dict[i] = MinMaxScaler()
+                scaled_arrays.append(scaler_dict[i].fit_transform(sub_array))
+
+            else:
+                scaled_arrays.append(feature_scaler[i].transform(sub_array))
+
+        scaled_arrays = np.concatenate(scaled_arrays, axis=1)
+
+        if feature_scaler is None:
+            return scaled_arrays, scaler_dict
+        else:
+            return scaled_arrays
+
     else:
-        scaled_flat_arr = pre_fit.transform(flattened_x)
+        # Reduce to 1D array and scale
+        flattened_x = x.reshape(-1, 1)
 
-    # Return to original shape
-    scaledArr = scaled_flat_arr.reshape(original_shape)
+        if feature_scaler is None:
+            scaler = MinMaxScaler()
+            scaled_array = scaler.fit_transform(flattened_x)
 
-    if pre_fit is None:
-        return scaledArr, scaler
-    else:
-        return scaledArr
+        else:
+            scaled_array = feature_scaler.transform(flattened_x)
+
+        # Return to original shape
+        scaled_array = scaled_array.reshape(original_shape)
+
+        if feature_scaler is None:
+            return scaled_array, scaler
+        else:
+            return scaled_array
 
 
 def pytorch_load(x, y, batch_size, shuffle_data=False):

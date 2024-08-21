@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import optuna
+import pandas as pd
 
 # PyTorch
 import torch
@@ -38,7 +39,7 @@ def _build_directory(dir_path):
 
 
 class AI_Model:
-    def __init__(self, output_dir, data_dir: list, rng_seed=None) -> None:
+    def __init__(self, output_dir, data_dir: list, seed=None) -> None:
         """Initialize the space building directories and finding the input models
 
         Current state:
@@ -70,13 +71,13 @@ class AI_Model:
         print(f"Using device {self.device}")
 
         # Set seeds
-        self.rng_seed = rng_seed
-        np.random.seed(rng_seed)
+        self.seed = seed
+        np.random.seed(seed)
 
         # Torch cannot cope with None seed like numpy can - don't set seed so Torch is random
-        if rng_seed is not None:
+        if seed is not None:
             torch.cuda.empty_cache()
-            torch.manual_seed(rng_seed)
+            torch.manual_seed(seed)
 
     def load_data_from_hdf5(
         self,
@@ -84,6 +85,7 @@ class AI_Model:
         test_percentage,
         valid_percentage,
         batch_size,
+        individual_feature_scaling: bool,
         pickle_name=None,
         fn_data_kwargs=(),
     ):
@@ -110,7 +112,7 @@ class AI_Model:
                     os.chdir(directory_path)
                     features, labels = fn_data(hdf5_files=file_list, **fn_data_kwargs)
 
-                    labels = labels.reshape(-1, 1)
+                    labels = labels.reshape(-1, 1)  # NEED TO CHANGE!
                     raw_features.append(features)
                     raw_labels.append(labels)
 
@@ -126,24 +128,46 @@ class AI_Model:
         else:
             raw_features, raw_labels = fn_data(self.hdf5_files)
 
-        self._prep_data(raw_features, raw_labels, test_percentage, valid_percentage, batch_size)
+        self._prep_data(
+            raw_features,
+            raw_labels,
+            test_percentage,
+            valid_percentage,
+            batch_size,
+            individual_feature_scaling,
+        )
 
     def load_data_from_df(
         self,
-        df,
-        label_name,
-        feature_names,
+        df: pd.DataFrame,
+        label_names: list[str],
+        feature_names: list[str],
+        test_percentage: float,
+        valid_percentage: float,
+        batch_size: int,
+        individual_feature_scaling: bool,
+    ):
+        raw_labels = df.loc[:, label_names].values.reshape(-1, len(label_names))
+        raw_features = df.loc[:, feature_names].values
+
+        self._prep_data(
+            raw_features,
+            raw_labels,
+            test_percentage,
+            valid_percentage,
+            batch_size,
+            individual_feature_scaling,
+        )
+
+    def _prep_data(
+        self,
+        raw_features,
+        raw_labels,
         test_percentage,
         valid_percentage,
         batch_size,
+        individual_feature_scaling,
     ):
-        raw_labels = df[label_name].values
-        raw_labels = raw_labels.reshape(-1, 1)
-        raw_features = df.loc[:, feature_names].values
-
-        self._prep_data(raw_features, raw_labels, test_percentage, valid_percentage, batch_size)
-
-    def _prep_data(self, raw_features, raw_labels, test_percentage, valid_percentage, batch_size):
         # Randomise labels for sanity check
         # if random_labels:
         #     raw_labels = np.random.uniform(raw_labels.min(), raw_labels.max(), size=raw_labels.shape)
@@ -166,9 +190,15 @@ class AI_Model:
         scaled_valid_labels = scale_label(valid_labels, label_scaler)
 
         # Scale features
-        scaled_train_features, feature_scaler = scale_feature(train_features)
-        scaled_test_features = scale_feature(test_features, feature_scaler)
-        scaled_valid_features = scale_feature(valid_features, feature_scaler)
+        scaled_train_features, feature_scaler = scale_feature(
+            train_features, individual_feature_scaling
+        )
+        scaled_test_features = scale_feature(
+            test_features, individual_feature_scaling, feature_scaler=feature_scaler
+        )
+        scaled_valid_features = scale_feature(
+            valid_features, individual_feature_scaling, feature_scaler=feature_scaler
+        )
 
         # Load data into PyTorch DataLoaders
         train_loaded = pytorch_load(scaled_train_features, scaled_train_labels, batch_size)
@@ -190,7 +220,14 @@ class AI_Model:
         self.scaled_valid_labels = scaled_valid_labels
 
     def train_model(
-        self, model_name, network_model, optimizer, loss_function, epochs: int, plot_output: bool
+        self,
+        model_name,
+        network_model,
+        optimizer,
+        loss_function,
+        epochs: int,
+        plot_output: bool,
+        verbose: bool = True,
     ):
         network_model.to(self.device)
         if model_name is not None:
@@ -221,10 +258,13 @@ class AI_Model:
                 epochs=epochs,
                 pbar=pbar,
                 show_plot=plot_output,
+                verbose=verbose,
             )
             print(f" Best Test Loss: {loss}")
 
-        trained_network.load_state_dict(torch.load(current_model_dir / model_name))
+        trained_network.load_state_dict(
+            torch.load(current_model_dir / model_name, weights_only=True)
+        )
 
         return trained_network
 
@@ -232,7 +272,7 @@ class AI_Model:
         self, trial_count, direction, network_dict, optimizer_dict, loss_function, epochs
     ):
         # Set sampler for Optuna if seed is provided - TPESampler appears to be the default
-        sampler = optuna.samplers.TPESampler(seed=self.rng_seed)
+        sampler = optuna.samplers.TPESampler(seed=self.seed)
 
         def setup_trial(trial, input_dict):
             multi = input_dict.pop("multi") if "multi" in input_dict else None
@@ -279,7 +319,13 @@ class AI_Model:
             optimizer = optimizer_dict["optimizer"](params, **optimizer_trials)
 
             trained_model = self.train_model(
-                None, network_model, optimizer, loss_function, epochs, plot_output=False
+                None,
+                network_model,
+                optimizer,
+                loss_function,
+                epochs,
+                plot_output=False,
+                verbose=False,
             )
             rmse, _, _ = self.validate_model(trained_model, "test")
 
@@ -378,6 +424,26 @@ class AI_Model:
         )
 
         return rmse, mae, predictions
+
+    def make_prediction(self, network, individual_feature_scaling, raw_features, output_size):
+        """Make a prediction"""
+
+        scaled_features = scale_feature(
+            raw_features, individual_feature_scaling, self.feature_scaler
+        )
+
+        torch_tensor = torch.Tensor(scaled_features)
+        torch_data = torch.utils.data.TensorDataset(torch_tensor)
+
+        with torch.no_grad():
+            network.eval()
+            output = network(torch_data[0][0].to(self.device)).cpu().numpy()
+
+            prediction = output.reshape(-1, output_size)
+            prediction = self.label_scaler.inverse_transform(prediction)
+            prediction = prediction.reshape(output_size)
+
+            return prediction.tolist()
 
     def plot_label_distribution(
         self, label: np.array, bin_count=10, predictions=None, plot_error=False
