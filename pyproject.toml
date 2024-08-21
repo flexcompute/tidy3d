@@ -31,7 +31,7 @@ rich = "^13.0"
 numpy = "*"
 matplotlib = "*"
 shapely = "^2.0"
-pandas = "<=2.2.1"
+pandas = "*"
 pydantic = "^2.0"
 PyYAML = "*"
 dask = "*"
@@ -39,7 +39,7 @@ toml = "*"
 autograd = "1.6.2"
 scipy = "*"
 ### NOT CORE
-boto3 = "^1.28.0"
+boto3 = ">=1.28.0"
 requests = "^2.31.0"
 pyjwt = "*"
 click = "^8.1.0"
@@ -68,8 +68,8 @@ gdspy = { version = "*", optional = true }
 gdstk = { version = ">=0.9.49, <0.9.52", optional = true }
 
 # jax
-jaxlib = { version = "0.4.25", source = "jaxsource", optional = true }
-jax = { version = "0.4.25", extras = [
+jaxlib = { version = ">=0.4.25, <=0.4.31", source = "jaxsource", optional = true }
+jax = { version = ">=0.4.25, <=0.4.31", extras = [
   "cpu",
 ], source = "jaxsource", optional = true }
 
