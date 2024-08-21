@@ -26,6 +26,27 @@ from .result import Result
 class DesignSpace(Tidy3dBaseModel):
     """Manages all exploration of a parameter space within specified parameters using a supplied search method.
 
+    The ``DesignSpace`` forms the basis of the ``Design`` plugin, and receives a ``Method`` and ``Parameter`` list that
+    define the scope of the design space and how it should be searched. ``DesignSpace.run()`` can then be called with
+    a function(s) to generate different solutions from parameters suggested by the ``Method``. The ``Method`` can either
+    sample the design space systematically or randomly, or can optimize for a given problem through an iterative search
+    and evaluate approach.
+
+    Schematic outline of how to use the ``Design`` plugin to explore a design space.
+    .. image:: ../../_static/img/design.png
+        :width: 50%
+        :align: left
+
+    The `Design <https://www.flexcompute.com/tidy3d/examples/notebooks/Design/>'_ notebook contains an overview of the
+    ``Design`` plugin and is the best place to learn how to get started.
+
+    Detailed examples using the ``Design`` plugin can be found in the following notebooks:
+    `All-Dielectric Structural Colors <https://www.flexcompute.com/tidy3d/examples/notebooks/AllDielectricStructuralColor/>'_
+    `Bayesian Optimization of Y-Junction <https://www.flexcompute.com/tidy3d/examples/notebooks/BayesianOptimizationYJunction/>'_
+    `Genetic Algorithm Reflector <https://www.flexcompute.com/tidy3d/examples/notebooks/GeneticAlgorithmReflector/>'_
+    `Particle Swarm Optimizer PBS <https://www.flexcompute.com/tidy3d/examples/notebooks/ParticleSwarmOptimizedPBS/>'_
+    `Particle Swarm Optimizer Bullseye Cavity <https://www.flexcompute.com/tidy3d/examples/notebooks/BullseyeCavityPSO/>'_
+
     Example
     -------
     >>> import tidy3d.plugins.design as tdd
@@ -55,9 +76,9 @@ class DesignSpace(Tidy3dBaseModel):
     task_name: str = pd.Field(
         "",
         title="Task Name",
-        description="Task name assigned to tasks along with a simulation counter in the form of {task_name}_{counter}. \
-            If the pre function outputs a dictionary the key will be included in the task name as {task_name}_{dict_key}_{counter}. \
-            Only used when pre-post functions are supplied.",
+        description="Task name assigned to tasks along with a simulation counter in the form of {task_name}_{counter}. "
+        "If the pre function outputs a dictionary the key will be included in the task name as {task_name}_{dict_key}_{counter}. "
+        "Only used when pre-post functions are supplied.",
     )
 
     name: str = pd.Field(None, title="Name", description="Optional name for the design space.")
@@ -65,7 +86,7 @@ class DesignSpace(Tidy3dBaseModel):
     path_dir: str = pd.Field(
         ".",
         title="Path Directory",
-        description="Directory where simulation data files will be locally saved to. Only used when pre-post functions are supplied.",
+        description="Directory where simulation data files will be locally saved to. Only used when pre and post functions are supplied.",
     )
 
     folder_name: str = pd.Field(
@@ -132,7 +153,20 @@ class DesignSpace(Tidy3dBaseModel):
 
         If used as a pre function, the output of ``fn`` must be a float, ``Simulation``, ``Batch``, list, or dict. Supplied ``Batch`` objects are
         run without modification and are run in series. A list or dict of ``Simulation`` objects is flattened into a single ``Batch`` to enable
-        parallel computation on the cloud. The original structure is then restored for output; all `Simulation`` objects are replaced by ``SimulationData`` objects.
+        parallel computation on the cloud. The original structure is then restored for output; all ``Simulation`` objects are replaced by ``SimulationData`` objects.
+        Example pre return formats and associated post inputs can be seen in the table below.
+
+        | fn_pre return                             | fn_post call                                      |
+        |-------------------------------------------|---------------------------------------------------|
+        | 1.0                                       | fn_post(1.0)                                      |
+        | [1,2,3]                                   | fn_post(1,2,3)                                    |
+        | {'a': 2, 'b': 'hi'}                       | fn_post(a=2, b='hi')                              |
+        | Simulation                                | fn_post(SimulationData)                           |
+        | Batch                                     | fn_post(BatchData)                                |
+        | [Simulation, Simulation]                  | fn_post(SimulationData, SimulationData)           |
+        | [Simulation, 1.0]                         | fn_post(SimulationData, 1.0)                      |
+        | [Simulation, Batch]                       | fn_post(SimulationData, BatchData)                |
+        | {'a': Simulation, 'b': Batch, 'c': 2.0}   | fn_post(a=SimulationData, b=BatchData, c=2.0)     |
 
         The output of ``fn_post`` (or ``fn`` if only one function is supplied) must be a float
         or a container where the first element is a ``float`` and second element is a ``list`` / ``dict`` e,g. [float {"aux_1": str}].
@@ -175,7 +209,7 @@ class DesignSpace(Tidy3dBaseModel):
 
         else:
             fn_args, fn_values, aux_values, opt_output, sim_names, sim_paths = self.run_pre_post(
-                fn_pre=fn, fn_post=fn_post, console=console, verbose=verbose
+                fn_pre=fn, fn_post=fn_post, console=console
             )
 
             if len(sim_names) == 0:
@@ -199,12 +233,12 @@ class DesignSpace(Tidy3dBaseModel):
         evaluate_fn = self._get_evaluate_fn_single(fn=fn)
         return self.method._run(run_fn=evaluate_fn, parameters=self.parameters, console=console)
 
-    def run_pre_post(
-        self, fn_pre: Callable, fn_post: Callable, console: Console, verbose: bool
-    ) -> Tuple(list[dict], list[dict], list[Any]):
+    def run_pre_post(self, fn_pre: Callable, fn_post: Callable, console: Console) -> Tuple(
+        list[dict], list[dict], list[Any]
+    ):
         """Run a function with Tidy3D implicitly called in between."""
         handler = self._get_evaluate_fn_pre_post(
-            fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid, verbose=verbose
+            fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid, console=console
         )
         fn_args, fn_values, aux_values, opt_output = self.method._run(
             run_fn=handler.fn_combined, parameters=self.parameters, console=console
@@ -223,16 +257,16 @@ class DesignSpace(Tidy3dBaseModel):
         return evaluate
 
     def _get_evaluate_fn_pre_post(
-        self, fn_pre: Callable, fn_post: Callable, fn_mid: Callable, verbose: bool
+        self, fn_pre: Callable, fn_post: Callable, fn_mid: Callable, console: Console
     ):
         """Get function that tries to use batch processing on a set of arguments."""
 
         class Pre_Post_Handler:
-            def __init__(self, verbose):
+            def __init__(self, console):
                 self.sim_counter = 0
                 self.sim_names = []
                 self.sim_paths = []
-                self.verbose = verbose
+                self.console = console
 
             def fn_combined(self, args_list: list[dict[str, Any]]) -> list[Any]:
                 """Compute fn_pre and fn_post functions and capture other outputs."""
@@ -247,7 +281,7 @@ class DesignSpace(Tidy3dBaseModel):
                     )
 
                 data, task_names, task_paths, sim_counter = fn_mid(
-                    sim_dict, self.sim_counter, self.verbose
+                    sim_dict, self.sim_counter, self.console
                 )
                 self.sim_names.extend(task_names)
                 self.sim_paths.extend(task_paths)
@@ -255,12 +289,12 @@ class DesignSpace(Tidy3dBaseModel):
                 post_out = [fn_post(val) for val in data.values()]
                 return post_out
 
-        handler = Pre_Post_Handler(verbose)
+        handler = Pre_Post_Handler(console)
 
         return handler
 
     def _fn_mid(
-        self, pre_out: dict[int, Any], sim_counter: int, verbose: bool
+        self, pre_out: dict[int, Any], sim_counter: int, console: Console
     ) -> Union[dict[int, Any], BatchData]:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
 
@@ -324,12 +358,21 @@ class DesignSpace(Tidy3dBaseModel):
             translate_sims[sim_name] = sim_key
             sim_counter += 1
 
+        # Log the simulations and batches for the user
+        if console is not None:
+            # Writen like this to include batches on the same line if present
+            run_statement = f"{len(named_sims)} Simulations"
+            if len(batches) > 0:
+                run_statement = run_statement + f" and {len(batches)} user Batches"
+
+            console.log(f"Running {run_statement}")
+
         # Running simulations and batches
         sims_out = Batch(
             simulations=named_sims,
             folder_name=self.folder_name,
             simulation_type="tidy3d_design",
-            verbose=verbose,
+            verbose=False,  # Using a custom output instead of Batch.monitor updates
         ).run(path_dir=self.path_dir)
 
         batch_results = {}
@@ -337,7 +380,7 @@ class DesignSpace(Tidy3dBaseModel):
             batch_out = batch.run(path_dir=self.path_dir)
             batch_results[batch_key] = batch_out
 
-        def _return_to_dict(return_dict, key, return_obj):
+        def _return_to_dict(return_dict: dict, key: str, return_obj: Any) -> None:
             """Recursively insert items into a dict by keys split with underscore. Only works for dict or dict of dict inputs."""
             split_key = key.split("_", 1)
             if len(split_key) > 1:
@@ -356,7 +399,7 @@ class DesignSpace(Tidy3dBaseModel):
         for batch_name, batch in batch_results.items():
             _return_to_dict(pre_out, batch_name, batch)
 
-        def _remove_or_replace(search_dict, attr_name):
+        def _remove_or_replace(search_dict: dict, attr_name: str) -> dict:
             """Recursively search through a dict replacing Sims and Batches or ignoring other items thus removing them"""
             new_dict = {}
             for key, value in search_dict.items():
@@ -398,7 +441,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_post: Callable[
             Union[SimulationData, List[SimulationData], Dict[str, SimulationData]], Any
         ],
-        path_dir: str = None,
+        path_dir: str = ".",
         **batch_kwargs,
     ) -> Result:
         """
@@ -495,7 +538,7 @@ class DesignSpace(Tidy3dBaseModel):
             raise ValueError("Unrecognized output from pre-function, unable to estimate cost.")
 
         # Calculate maximum number of runs for different methods
-        run_count = self.method.get_run_count(self.parameters)
+        run_count = self.method._get_run_count(self.parameters)
 
         # For if tidy3d server cannot determine the estimate
         if per_run_estimate is None:
@@ -503,7 +546,7 @@ class DesignSpace(Tidy3dBaseModel):
         else:
             return round(per_run_estimate * run_count, 3)
 
-    def summarize(self, fn_pre: Callable = None) -> dict[str, Any]:
+    def summarize(self, fn_pre: Callable = None, verbose: bool = True) -> dict[str, Any]:
         """Summarize the setup of the DesignSpace
 
         Prints a summary of the DesignSpace including the method and associated args, the parameters,
@@ -516,6 +559,8 @@ class DesignSpace(Tidy3dBaseModel):
             Function accepting arguments that correspond to the ``name`` fields
             of the ``DesignSpace.parameters``. Allows for estimated cost to be included
             in the summary.
+        verbose: bool = True
+            Toggle if the summary should be output to log. If False, the dict is returned silently.
 
         Returns
         -------
@@ -541,7 +586,7 @@ class DesignSpace(Tidy3dBaseModel):
             else:
                 param_values.append(f"{param.name}: {param.type} {param.span}\n")
 
-        run_count = self.method.get_run_count(self.parameters)
+        run_count = self.method._get_run_count(self.parameters)
 
         # Compile data into a dict for return
         summary_dict = {
@@ -553,22 +598,23 @@ class DesignSpace(Tidy3dBaseModel):
             "max_run_count": run_count,
         }
 
-        console.log(
-            "\nSummary of DesignSpace\n\n"
-            f"Method: {summary_dict['method']}\n"
-            f"Method Args\n{summary_dict['method_args']}\n"
-            f"No. of Parameters: {summary_dict['param_count']}\n"
-            f"Parameters: {summary_dict['param_names']}\n"
-            f"{summary_dict['param_vals']}\n"
-            f"Maximum Run Count: {summary_dict['max_run_count']}\n"
-        )
+        if verbose:
+            console.log(
+                "\nSummary of DesignSpace\n\n"
+                f"Method: {summary_dict['method']}\n"
+                f"Method Args\n{summary_dict['method_args']}\n"
+                f"No. of Parameters: {summary_dict['param_count']}\n"
+                f"Parameters: {summary_dict['param_names']}\n"
+                f"{summary_dict['param_vals']}\n"
+                f"Maximum Run Count: {summary_dict['max_run_count']}\n"
+            )
 
-        if fn_pre is not None:
-            cost_estimate = self.estimate_cost(fn_pre)
-            summary_dict["cost_estimate"] = cost_estimate
-            console.log(f"Estimated Maximum Cost: {cost_estimate} FlexCredits")
+            if fn_pre is not None:
+                cost_estimate = self.estimate_cost(fn_pre)
+                summary_dict["cost_estimate"] = cost_estimate
+                console.log(f"Estimated Maximum Cost: {cost_estimate} FlexCredits")
 
-            # NOTE: Could then add more details regarding the output of fn_pre - confirm batching?
+                # NOTE: Could then add more details regarding the output of fn_pre - confirm batching?
 
         # Include additional notes/warnings
         notes = []
@@ -591,7 +637,7 @@ class DesignSpace(Tidy3dBaseModel):
                     "Discrete 'int' values are automatically rounded if optimizers generate 'float' predictions.\n"
                 )
 
-        if len(notes) > 0:
+        if len(notes) > 0 and verbose:
             console.log(
                 "Notes:",
             )

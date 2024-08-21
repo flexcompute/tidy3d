@@ -13,17 +13,17 @@ from ..utils import run_emulated
 
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
-    monte_carlo=tdd.MethodMonteCarlo(num_points=5, rng_seed=1),
-    bay_opt=tdd.MethodBayOpt(initial_iter=5, n_iter=2, rng_seed=1),
+    monte_carlo=tdd.MethodMonteCarlo(num_points=5, seed=1),
+    bay_opt=tdd.MethodBayOpt(initial_iter=5, n_iter=2, seed=1),
     gen_alg=tdd.MethodGenAlg(
         solutions_per_pop=6,
         n_generations=2,
         n_parents_mating=4,
-        rng_seed=1,
+        seed=1,
         mutation_prob=0,
         keep_parents=0,
     ),
-    part_swarm=tdd.MethodParticleSwarm(n_particles=3, n_iter=2, rng_seed=1),
+    part_swarm=tdd.MethodParticleSwarm(n_particles=3, n_iter=2, seed=1),
 )
 
 # Task names that should be produced for the different methods
@@ -245,12 +245,16 @@ def scs_post_list(sim_list):
 
 def scs_pre_dict(radius: float, num_spheres: int, tag: str):
     sim = scs_pre(radius, num_spheres, tag)
-    return {"test1": sim, "test2": sim, "3": sim}
+    batch = web.Batch(simulations={"a": sim, "b": sim})
+    return {"test1": sim, "test2": sim, "batch1": batch}
 
 
 def scs_post_dict(sim_dict):
-    sim_data = [scs_post(sim) for sim in sim_dict.values()]
-    return sum(sim_data)
+    sim_data = [sim_dict["test1"], sim_dict["test2"]]
+    batched_data = [sim for _, sim in sim_dict["batch1"].items()]
+    sim_data.extend(batched_data)
+    post_sim_data = [scs_post(sim) for sim in sim_data]
+    return sum(post_sim_data)
 
 
 def scs_pre_list_const(radius: float, num_spheres: int, tag: str):
@@ -690,7 +694,7 @@ def test_genalg_early_stop():
         n_parents_mating=2,
         stop_criteria_type="reach",
         stop_criteria_number=1,
-        rng_seed=1,
+        seed=1,
     )
     design_space_pass = init_design_space(gen_alg_pass)
 
@@ -706,7 +710,7 @@ def test_genalg_early_stop():
         n_parents_mating=2,
         stop_criteria_type=None,
         stop_criteria_number=1,
-        rng_seed=1,
+        seed=1,
     )
 
     design_space_fail = init_design_space(gen_alg_fail)
@@ -729,7 +733,7 @@ def test_genalg_run_count():
         mutation_type="scramble",
         crossover_prob=0.6,
         crossover_type="uniform",
-        rng_seed=1,
+        seed=1,
         save_solution=True,
     )
     design_space = init_design_space(gen_alg)

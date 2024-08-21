@@ -62,7 +62,7 @@ class ParameterNumeric(Parameter, ABC):
     span: Tuple[Union[float, int], Union[float, int]] = pd.Field(
         ...,
         title="Span",
-        description="(min, max) inclusive range within which are allowed values for the variable.",
+        description="(min, max) range within which are allowed values for the variable. Is inclusive of max value.",
     )
 
     @pd.validator("span", always=True)
@@ -83,6 +83,7 @@ class ParameterNumeric(Parameter, ABC):
         return span_max - span_min
 
     def sample_first(self) -> tuple:
+        """Output the first allowed sample."""
         return self.span[0]
 
 
@@ -211,6 +212,7 @@ class ParameterAny(Parameter):
         return np.array(self.allowed_values)[indices].tolist()
 
     def sample_first(self) -> Any:
+        """Output the first allowed sample."""
         return self.allowed_values[0]
 
 

@@ -24,7 +24,7 @@ class Method(Tidy3dBaseModel, ABC):
         """Defines the search algorithm."""
 
     @abstractmethod
-    def get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: list = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
 
     def _force_int(self, next_point: dict, parameters: list) -> None:
@@ -45,7 +45,7 @@ class Method(Tidy3dBaseModel, ABC):
         if not all(isinstance(val, type(output[0])) for val in output):
             raise ValueError(
                 "Unrecognized output from supplied post function. The type of output varies across the output."
-                "Use of multiple return functions in fn_post is discouraged."
+                "Use of multiple return functions in 'fn_post' is discouraged."
                 "If this is a problem please raise an issue on the Tidy3D Github page."
             )
 
@@ -64,7 +64,7 @@ class Method(Tidy3dBaseModel, ABC):
                 for val in output:
                     if len(val) > 2:
                         raise ValueError(
-                            "Unrecognized output from supplied post function. Too many elements in the return object, it should be a float and a list/tuple/dict."
+                            "Unrecognized output from supplied post function. Too many elements in the return object, it should be a 'float' and a 'list'/'tuple'/'dict'."
                         )
 
                     float_out.append(val[0])
@@ -75,12 +75,12 @@ class Method(Tidy3dBaseModel, ABC):
 
             else:
                 raise ValueError(
-                    "Unrecognized output from supplied post function. The first element in the iterable object should be a float."
+                    "Unrecognized output from supplied post function. The first element in the iterable object should be a 'float'."
                 )
 
         else:
             raise ValueError(
-                "Unrecognized output from supplied post function. Output should be a float or an iterable object."
+                "Unrecognized output from supplied post function. Output should be a 'float' or an iterable object."
             )
 
     @staticmethod
@@ -126,8 +126,8 @@ class MethodGrid(MethodSample):
     """Select parameters uniformly on a grid.
 
     Size of the grid is specified by the parameter type,
-    either as the number of unique discrete values (ParameterInt, ParameterAny)
-    or with the num_points argument (ParameterFloat).
+    either as the number of unique discrete values (``ParameterInt``, ``ParameterAny``)
+    or with the num_points argument (``ParameterFloat``).
 
     Example
     -------
@@ -135,7 +135,8 @@ class MethodGrid(MethodSample):
     >>> method = tdd.MethodGrid()
     """
 
-    def get_run_count(self, parameters: list) -> int:
+    def _get_run_count(self, parameters: list) -> int:
+        """Return the maximum number of runs for the method based on current method arguments."""
         return len(self.sample(parameters))
 
     @staticmethod
@@ -161,13 +162,13 @@ class MethodOptimize(Method, ABC):
     """A method for handling design searches that optimize the design"""
 
     # NOTE: We could move this to the Method base class but it's not relevant to MethodGrid
-    rng_seed: pd.PositiveInt = pd.Field(
+    seed: pd.PositiveInt = pd.Field(
         default=None,
         title="Seed for random number generation",
         description="Set the seed used by the optimizers to ensure consistant random number generation.",
     )
 
-    def any_to_int_param(self, parameter):
+    def any_to_int_param(self, parameter: ParameterAny) -> dict:
         """Convert ParameterAny object to integers and provide a conversion dict to return"""
 
         return dict(enumerate(parameter.allowed_values))
@@ -191,62 +192,64 @@ class MethodOptimize(Method, ABC):
 
 
 class MethodBayOpt(MethodOptimize, ABC):
-    """A standard method for performing a bayesian optimization search.
+    """A standard method for performing a Bayesian optimization search.
 
     The fitness function is maximising by default.
     """
 
     initial_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of initial random search iterations",
+        title="Number of Initial Random Search Iterations",
         description="The number of search runs to be done initialially with parameter values picked randomly. This provides a starting point for the Gaussian processor to optimize from. These solutions can be computed as a single ``Batch`` if the pre function generates ``Simulation`` objects.",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of bayesian optimization iterations",
+        title="Number of Bayesian Optimization Iterations",
         description="Following the initial search, this is number of iterations the Gaussian processor should be sequentially called to suggest parameter values and register the results.",
     )
 
     acq_func: Literal["ucb", "ei", "poi"] = pd.Field(
         default="ucb",
-        title="Type of acquisition function",
-        description="The type of acquisition function that should be used to suggest parameter values. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
+        title="Type of Acquisition Function",
+        description="The type of acquisition function that should be used to suggest parameter values. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
     kappa: pd.PositiveFloat = pd.Field(
         default=2.5,
         title="Kappa",
-        description="The kappa coefficient used by the ``ucb`` acquisition function. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
+        description="The kappa coefficient used by the ``ucb`` acquisition function. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
     xi: pd.NonNegativeFloat = pd.Field(
         default=0.0,
         title="Xi",
-        description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_",
+        description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
-    def get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: list = None) -> int:
+        """Return the maximum number of runs for the method based on current method arguments."""
         return self.initial_iter + self.n_iter
 
     def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
-        """Defines the bayesian optimization search algorithm for the method.
+        """Defines the Bayesian optimization search algorithm for the method.
 
         Uses the ``bayes_opt`` package to carry out a Bayesian optimization. Utilizes the ``.suggest`` and ``.register`` methods instead of
         the ``BayesianOptimization`` helper class as this allows more control over batching and preprocessing.
-        More details of the package can be found `here <https://bayesian-optimization.github.io/BayesianOptimization/basic-tour.html>'_
+        More details of the package can be found `here <https://bayesian-optimization.github.io/BayesianOptimization/basic-tour.html>'_.
         """
         try:
             from bayes_opt import BayesianOptimization, UtilityFunction
         except ImportError:
             raise ImportError(
-                "Cannot run bayesian optimization as 'bayes_opt' module not found. Please check installation or run 'pip install bayesian-optimization'."
+                "Cannot run Bayesian optimization as 'bayes_opt' module not found. Please check installation or run 'pip install bayesian-optimization'."
             )
 
+        # Identify non-numeric params and define boundaries for Bay-opt
         param_converter = {}
         boundary_dict = {}
         for param in parameters:
-            if type(param) == ParameterAny:
+            if isinstance(param, ParameterAny):
                 param_converter[param.name] = self.any_to_int_param(param)
                 boundary_dict[param.name] = (
                     0,
@@ -261,13 +264,13 @@ class MethodBayOpt(MethodOptimize, ABC):
             for param_name, param_values in param_converter.items()
         }
 
-        # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
+        # Initialize optimizer and utility function. Carry out optimization manually instead of using helper for more control
         utility = UtilityFunction(kind=self.acq_func, kappa=self.kappa, xi=self.xi)
         opt = BayesianOptimization(
-            f=run_fn, pbounds=boundary_dict, random_state=self.rng_seed, allow_duplicate_points=True
+            f=run_fn, pbounds=boundary_dict, random_state=self.seed, allow_duplicate_points=True
         )
 
-        # Run variables
+        # Build the initial starting set of solutions - randomly chosen and batched together
         arg_list = []
         total_aux_out = []
         result = []
@@ -277,19 +280,28 @@ class MethodBayOpt(MethodOptimize, ABC):
             self._handle_param_convert(param_converter, [next_point])
             arg_list.append(next_point)
 
+        # Compute batch
         init_output, aux_out = self._extract_output(run_fn(arg_list))
         self._flatten_and_append(aux_out, total_aux_out)
 
+        # Update the sampler with results from random initial solutions
         for next_point, next_out in zip(arg_list, init_output):
             result.append(next_out)
             self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out)
 
-        # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
-        for _ in range(self.n_iter):
+        best_fit = max(init_output)
+
+        if console is not None:
+            console.log(f"Best Fit from Initial Solutions: {round(best_fit, 3)}\n")
+
+        # Handle further iterations sequentially
+        # BayOpt package does not allow for batched non-random predictions
+        for iter_num in range(self.n_iter):
             next_point = opt.suggest(utility)
             self._force_int(next_point, parameters)
             self._handle_param_convert(param_converter, [next_point])
+
             next_out, aux_out = self._extract_output(run_fn([next_point]))
             result.append(next_out[0])
             self._flatten_and_append(aux_out, total_aux_out)
@@ -297,6 +309,11 @@ class MethodBayOpt(MethodOptimize, ABC):
             # ParameterAny values in next_point need to be converted back for the optimizer
             self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out[0])
+
+            if next_out[0] > best_fit:
+                best_fit = next_out[0]
+                if console is not None:
+                    console.log(f"Latest Best Fit on Iter {iter_num}: {round(best_fit, 3)}\n")
 
         if console is not None:
             console.log(
@@ -344,7 +361,7 @@ class MethodGenAlg(MethodOptimize, ABC):
         description="Define the early stopping criteria. Supported words are 'reach' or 'saturate'. 'reach' stops at a desired fitness, 'saturate' stops when the fitness stops improving. Must set ``stop_criteria_number``. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
     )
 
-    stop_criteria_number: pd.PositiveInt = pd.Field(
+    stop_criteria_number: pd.PositiveFloat = pd.Field(
         default=None,
         title="Early Stopping Criteria Number",
         description="Must set ``stop_criteria_type``. If type is 'reach' the number is acceptable fitness value to stop the optimization. If type is 'saturate' the number is the number generations where the fitness doesn't improve before optimization is stopped. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
@@ -404,7 +421,8 @@ class MethodGenAlg(MethodOptimize, ABC):
 
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
 
-    def get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: list = None) -> int:
+        """Return the maximum number of runs for the method based on current method arguments."""
         # +1 to generations as pygad creates an initial population which is effectively "Generation 0"
         run_count = self.solutions_per_pop * (self.n_generations + 1)
         return run_count
@@ -414,7 +432,7 @@ class MethodGenAlg(MethodOptimize, ABC):
 
         Uses the ``pygad`` package to carry out a particle search optimization. Additional development has ensured that
         previously suggested solutions are not repeatedly computed, and that all computed solutions are captured.
-        More details of the package can be found `here <https://pygad.readthedocs.io/en/latest/index.html>'_
+        More details of the package can be found `here <https://pygad.readthedocs.io/en/latest/index.html>'_.
         """
         try:
             import pygad
@@ -437,10 +455,10 @@ class MethodGenAlg(MethodOptimize, ABC):
         gene_spaces = []
         gene_types = []
         for param in parameters:
-            if type(param) == ParameterFloat:
+            if isinstance(param, ParameterFloat):
                 gene_spaces.append({"low": param.span[0], "high": param.span[1]})
                 gene_types.append(float)
-            elif type(param) == ParameterInt:
+            elif isinstance(param, ParameterInt):
                 gene_spaces.append(
                     range(param.span[0], param.span[1] + 1)
                 )  # +1 included so as to be inclusive of upper range value
@@ -452,7 +470,7 @@ class MethodGenAlg(MethodOptimize, ABC):
                 gene_spaces.append(range(0, len(param.allowed_values)))
                 gene_types.append(int)
 
-        def capture_aux(sol_dict_list):
+        def capture_aux(sol_dict_list: list[dict]) -> None:
             """Store the aux data by pulling from previous_solutions."""
             aux_out = []
             for sol in sol_dict_list:
@@ -463,7 +481,8 @@ class MethodGenAlg(MethodOptimize, ABC):
             self._flatten_and_append(aux_out, store_aux)
 
         # Create fitness function combining pre and post fn with the tidy3d call
-        def fitness_function(ga_instance, solution, solution_idx):
+        def fitness_function(ga_instance: pygad.GA, solution: np.array, solution_idx) -> dict:
+            """Fitness function for GA. Format of inputs cannot be changed."""
             # Break solution down to list of dict
             sol_dict_list = self.sol_array_to_dict(solution, param_keys, param_converter)
 
@@ -505,7 +524,8 @@ class MethodGenAlg(MethodOptimize, ABC):
 
             return sol_out
 
-        def on_generation(ga_instance):
+        def on_generation(ga_instance: pygad.GA) -> None:
+            """Additional code run after every generation. Format of input cannot be changed"""
             sol_dict_list = self.sol_array_to_dict(
                 ga_instance.population.copy(), param_keys, param_converter
             )
@@ -521,13 +541,13 @@ class MethodGenAlg(MethodOptimize, ABC):
                     f"Generation {ga_instance.generations_completed} Best Fitness: {best_fitness:.3f}"
                 )
 
-        # Build stop criteria string
+        # Build stop criteria string - check if both stop criteria fields have been set
         if any(val is not None for val in (self.stop_criteria_type, self.stop_criteria_number)):
             if all(val is not None for val in (self.stop_criteria_type, self.stop_criteria_number)):
                 stop_criteria = f"{self.stop_criteria_type}_{self.stop_criteria_number}"
             else:
                 raise ValueError(
-                    "Both ``stop_criteria_type`` and ``stop_criteria_number`` fields need to be set to define the GA stop criteria."
+                    "Both 'stop_criteria_type' and 'stop_criteria_number' fields need to be set to define the GA stop criteria."
                 )
         else:
             stop_criteria = None
@@ -538,7 +558,11 @@ class MethodGenAlg(MethodOptimize, ABC):
         # PyGAD doesn't store the initial population fitness - this captures parameters, fitness and aux data
         init_state = []
 
-        def capture_init_pop_fitness(ga_instance, population_fitness):
+        def capture_init_pop_fitness(ga_instance: pygad.GA, population_fitness) -> None:
+            """Store the initial population fitness which PyGAD otherwise ignores
+
+            Has to be run ``on_fitness`` but contains a check so that it only runs on the first pass
+            """
             # Have to check len of list instead of bool as can't pass any args into this func, or capture a return
             if not len(init_state):
                 sol_dict_list = self.sol_array_to_dict(
@@ -566,11 +590,12 @@ class MethodGenAlg(MethodOptimize, ABC):
             num_genes=num_genes,
             fitness_batch_size=self.solutions_per_pop,
             on_generation=on_generation,
-            random_seed=self.rng_seed,
+            random_seed=self.seed,
             gene_space=gene_spaces,
             gene_type=gene_types,
             stop_criteria=stop_criteria,
             save_solutions=self.save_solution,
+            suppress_warnings=True,  # Used to prevent delay_on_generation depreciation warning for PyGAD 3.3.0
         )
 
         ga_instance.run()
@@ -633,24 +658,25 @@ class MethodParticleSwarm(MethodOptimize, ABC):
 
     ftol_iter: pd.PositiveInt = pd.Field(
         default=1,
-        title="Number of iterations before acceptable convergence",
+        title="Number of Iterations Before Convergence",
         description="Number of iterations over which the relative error in the objective_func is acceptable for convergence.",
     )
 
     init_pos: np.ndarray = pd.Field(
         default=None,
-        title="Initial swarm positions",
+        title="Initial Swarm Positions",
         description="Set the initial positions of the swarm using a numpy array of appropriate size.",
     )
 
-    def get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: list = None) -> int:
+        """Return the maximum number of runs for the method based on current method arguments."""
         return self.n_particles * self.n_iter
 
     def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
         """Defines the particle search optimization algorithm for the method.
 
         Uses the ``pyswarms`` package to carry out a particle search optimization.
-        More details of the package can be found `here <https://pyswarms.readthedocs.io/en/latest/index.html>'_
+        More details of the package can be found `here <https://pyswarms.readthedocs.io/en/latest/index.html>'_.
         """
         try:
             from pyswarms.single.global_best import GlobalBestPSO
@@ -660,8 +686,8 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             )
 
         # Pyswarms doesn't have a seed set outside of numpy std method
-        if self.rng_seed is not None:
-            np.random.seed(self.rng_seed)
+        if self.seed is not None:
+            np.random.seed(self.seed)
 
         # Variable assignment here so it is available to the fitness function
         param_keys = [param.name for param in parameters]
@@ -685,7 +711,8 @@ class MethodParticleSwarm(MethodOptimize, ABC):
 
         bounds = (min_bound, max_bound)
 
-        def fitness_function(solution):
+        def fitness_function(solution: np.array) -> np.array:
+            """Fitness function for PSO. Input format cannot be changed"""
             # Correct solutions that should be ints
             sol_dict_list = self.sol_array_to_dict(solution, param_keys, param_converter)
             for arg_dict in sol_dict_list:
@@ -715,11 +742,11 @@ class MethodParticleSwarm(MethodOptimize, ABC):
             # TODO: including oh_strategy would be nice but complicated to specify with pydantic oh_strategy={"w": "exp_decay"},
         )
 
-        opt_out = optimizer.optimize(fitness_function, self.n_iter, verbose=False)
+        opt_out = optimizer.optimize(fitness_function, self.n_iter, verbose=True)
 
         if console is not None:
             console.log(
-                f"Best Result = {opt_out[0]}\n"
+                f"Best Result: {opt_out[0]}\n"
                 f"Best Parameters: {' '.join([f'{param.name}: {value}' for param, value in zip(parameters, opt_out[1])])}\n"
             )
 
@@ -739,23 +766,24 @@ class AbstractMethodRandom(MethodSample, ABC):
         description="The number of points to be generated for sampling.",
     )
 
-    rng_seed: pd.PositiveInt = pd.Field(
+    seed: pd.PositiveInt = pd.Field(
         default=None,
         title="Seed",
         description="Sets the seed used by the optimizers to set constant random number generation.",
     )
 
     @abstractmethod
-    def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
+    def _get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
-    def get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: list = None) -> int:
+        """Return the maximum number of runs for the method based on current method arguments."""
         return self.num_points
 
     def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
         """Defines how the design parameters are sampled on grid."""
 
-        sampler = self.get_sampler(parameters)
+        sampler = self._get_sampler(parameters)
         pts_01 = sampler.random(self.num_points)
 
         # Convert value from 0-1 to fit within the parameter spans
@@ -774,7 +802,6 @@ class AbstractMethodRandom(MethodSample, ABC):
 
 class MethodMonteCarlo(AbstractMethodRandom):
     """Select sampling points using Monte Carlo sampling.
-
     The sampling is done with the Latin Hypercube method from scipy.
 
     Example
@@ -783,11 +810,11 @@ class MethodMonteCarlo(AbstractMethodRandom):
     >>> method = tdd.MethodMonteCarlo(num_points=20)
     """
 
-    def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
+    def _get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
         """Sampler for this ``Method`` class."""
 
         d = len(parameters)
-        return DEFAULT_MONTE_CARLO_SAMPLER_TYPE(d=d, seed=self.rng_seed)
+        return DEFAULT_MONTE_CARLO_SAMPLER_TYPE(d=d, seed=self.seed)
 
 
 MethodType = Union[

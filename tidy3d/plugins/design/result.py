@@ -106,7 +106,7 @@ class Result(Tidy3dBaseModel):
             if len(_val) != num_dims:
                 raise ValueError(
                     f"Number of 'coords' at index '{i}' ({len(_val)}) "
-                    "doesn't match the number of 'dims' ({num_dims})."
+                    f"doesn't match the number of 'dims' ({num_dims})."
                 )
 
         return val
