@@ -10,6 +10,7 @@ import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 import xarray as xr
+from autograd.tracer import isbox
 from matplotlib import path
 
 from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
@@ -1316,6 +1317,13 @@ class PolySlab(base.Planar):
         shapely_poly = PolySlab.make_shapely_polygon(vertices)
         if shapely_poly.is_valid:
             return vertices
+        elif isbox(vertices):
+            raise NotImplementedError(
+                "The dilation caused damage to the polygon. "
+                "Automatically healing this is currently not supported when "
+                "differentiating w.r.t. the vertices. Try increasing the spacing "
+                "between vertices or reduce the amount of dilation."
+            )
         # perform healing
         poly_heal = shapely.make_valid(shapely_poly)
         return PolySlab._proper_vertices(list(poly_heal.exterior.coords))

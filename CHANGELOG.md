@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Simulation.num_computational_grid_points` property to examine the number of grid cells that compose the computational domain corresponding to the simulation. This can differ from `Simulation.num_cells` based on boundary conditions and symmetries.
 - Support for `dilation` argument in `JaxPolySlab`.
 
+### Changed
+- `PolySlab` now raises error when differentiating and dilation causes damage to the polygon.
+
 ### Fixed
 - `DataArray` interpolation failure due to incorrect ordering of coordinates when interpolating with autograd tracers.
 - Error in `CustomSourceTime` when evaluating at a list of times entirely outside of the range of the envelope definition times.
