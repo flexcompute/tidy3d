@@ -15,6 +15,7 @@ from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap
 from .autograd.utils import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
 from .medium import AbstractCustomMedium, Medium2D, MediumType
@@ -203,8 +204,13 @@ class Structure(AbstractStructure):
         box = self.geometry.bounding_box
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
-        size = tuple(get_static(x) for x in box.size)  # TODO: expand slightly?
-        center = tuple(get_static(x) for x in box.center)
+
+        size = [get_static(x) for x in box.size]  # TODO: expand slightly?
+        center = [get_static(x) for x in box.center]
+
+        # polyslab only needs fields at the midpoint along axis
+        if isinstance(self.geometry, PolySlab):
+            size[self.geometry.axis] = 0
 
         mnt_fld = FieldMonitor(
             size=size,
