@@ -633,6 +633,228 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             fields[component] = field.interp(kwargs=kwargs, **interp_dict)
 
         return fields
+    
+
+    def _interpolate_and_shift(self, field: xr.DataArray, t1_new: np.ndarray, t2_new: np.ndarray, 
+                               dt1_shift: float, dt2_shift: float, res: float) -> xr.DataArray:
+        r"""Helper method to interpolate and shift a single field component.
+
+        Parameters
+        ----------
+        field : xr.DataArray
+            The field component to be interpolated and shifted
+        t1_new : np.ndarray
+            New coordinates for the first transverse dimension
+        t2_new : np.ndarray
+            New coordinates for the second transverse dimension
+        dt1_shift : float
+            Shift in the first transverse dimension [μm]
+        dt2_shift : float
+            Shift in the second transverse dimension [μm]
+        res : float
+            Resolution of the new grid [μm]
+
+        Returns
+        -------
+        xr.DataArray
+            Interpolated and shifted field component
+        """
+        tan_dims = self._tangential_dims
+
+        # Interpolate the field onto the new, extended grid
+        field_interp = field.interp({tan_dims[0]: t1_new, tan_dims[1]: t2_new}, 
+                                    method='linear', kwargs={"fill_value": 0})
+        
+        # Shift and return the interpolated field
+        return field_interp.shift({tan_dims[0]: int(round(dt1_shift / res)), 
+                                   tan_dims[1]: int(round(dt2_shift / res))}, 
+                                  fill_value=0)
+
+    def _get_extended_grid(self, fields: Dict[str, xr.DataArray], dt1: float, dt2: float, res: float) -> Tuple[np.ndarray, np.ndarray]:
+        r"""Helper method to create extended grid.
+
+        Parameters
+        ----------
+        fields : Dict[str, xr.DataArray]
+            Dictionary of field components
+        dt1 : float
+            Shift in the first transverse dimension [μm]
+        dt2 : float
+            Shift in the second transverse dimension [μm]
+        res : float
+            Resolution for the new grid [μm]
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            Extended grids for the first and second transverse dimensions
+        """
+        tan_dims = self._tangential_dims
+        t1 = fields[list(fields.keys())[0]][tan_dims[0]].values
+        t2 = fields[list(fields.keys())[0]][tan_dims[1]].values
+
+        # Create extended meshgrid
+        # We extend the grid to accommodate the shift and ensure we don't lose data at the edges
+        t1_extended = np.arange(t1.min() - abs(dt1) - res, t1.max() + abs(dt1) + res, res)
+        t2_extended = np.arange(t2.min() - abs(dt2) - res, t2.max() + abs(dt2) + res, res)
+        return t1_extended, t2_extended
+
+    def shift_field(self, dt1: float = 0, dt2: float = 0, res: float = 0.01) -> Dict[str, xr.DataArray]:
+        r"""Create shifted fields based on the current FieldData object.
+
+        This method interpolates the field data onto an extended grid and then shifts it
+        by the specified amounts in the two transverse directions. The shifted fields are returned
+        as a dictionary of xarray.DataArrays.
+
+        Parameters
+        ----------
+        dt1 : float
+            Shift in first transverse direction [μm]
+        dt2 : float
+            Shift in second transverse direction [μm]
+        res : float
+            Resolution for interpolation grid [μm]
+
+        Returns
+        -------
+        Dict[str, xr.DataArray]
+            A dictionary of shifted fields, with keys corresponding to field components
+            (e.g., 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
+        """
+        # Extract field components
+        fields = self._colocated_tangential_fields
+
+        # Extract frequencies
+        f = fields[list(fields.keys())[0]].f.values
+
+        # Get extended grid
+        t1_extended, t2_extended = self._get_extended_grid(fields, dt1, dt2, res)
+        
+        # Apply the interpolation and shift to all field components
+        return {
+            key: self._interpolate_and_shift(field.sel(f=f), t1_extended, t2_extended, dt1, dt2, res)
+            for key, field in fields.items()
+        }
+
+
+    def outer_dot_shifted(self, field_data: Union[FieldData, ModeData], dt1: float = 0, dt2: float = 0, 
+                          res: float = 0.01, conjugate: bool = True) -> xr.DataArray:
+        r"""Compute the overlap integral between this field and a shifted version of another field.
+
+        The tangential fields from ``field_data`` are interpolated to an extended grid and shifted,
+        allowing for overlap calculations with relative displacements between the fields.
+        The calculation is performed for all common frequencies between data arrays.
+        If the input data contains mode indices, the output will include overlaps for all mode pairs.
+
+        The shifted dot product is defined as:
+
+        .. math::
+
+           \frac{1}{4} \int \left( E_0 \times H_1^*(y+dy,z+dz) + H_0^* \times E_1(y+dy,z+dz) \) \, {\rm d}S
+
+        Parameters
+        ----------
+        field_data : :class:`ElectromagneticFieldData`
+            A data instance to compute the shifted dot product with.
+        dt1 : float
+            Shift in the first transverse dimension for the other field [μm]
+        dt2 : float
+            Shift in the second transverse dimension for the other field [μm]
+        res : float
+            Resolution for interpolation grid [μm]
+        conjugate : bool = True
+            If ``True`` (default), the dot product is defined as above. If ``False``, the definition
+            is similar, but without the complex conjugation of the $H$ fields.
+
+        Returns
+        -------
+        :class:`xarray.DataArray`
+            Data array with the complex-valued modal overlaps between the two mode data.
+
+        See also
+        --------
+        :member:`outer_dot`
+        """
+        tan_dims = self._tangential_dims
+
+        if not all(a == b for a, b in zip(tan_dims, field_data._tangential_dims)):
+            raise ValueError("Tangential dimensions must match between the two datasets.")
+
+        fields_self = self._colocated_tangential_fields
+        fields_other = field_data._colocated_tangential_fields
+
+        # Prepare array with proper dimensions for the dot product data
+        arrays = (fields_self[list(fields_self.keys())[0]], fields_other[list(fields_other.keys())[0]])
+        coords = (arrays[0].coords, arrays[1].coords)
+
+        # Common frequencies to both data arrays
+        f = np.array(sorted(set(coords[0]["f"].values).intersection(coords[1]["f"].values)))
+        isel1 = [list(coords[0]["f"].values).index(freq) for freq in f]
+        isel2 = [list(coords[1]["f"].values).index(freq) for freq in f]
+
+        # Mode indices, if available
+        modes_in_self = "mode_index" in coords[0]
+        modes_in_other = "mode_index" in coords[1]
+
+        # Prepare fields and handle mode indices
+        for key in fields_self.keys():
+            fields_self[key] = fields_self[key].isel(f=isel1)
+            fields_other[key] = fields_other[key].isel(f=isel2)
+            
+            if modes_in_self:
+                fields_self[key] = fields_self[key].rename(mode_index="mode_index_0")
+            else:
+                fields_self[key] = fields_self[key].expand_dims(
+                    dim={"mode_index_0": [0]}, axis=len(fields_self[key].shape)
+                )
+            
+            if modes_in_other:
+                fields_other[key] = fields_other[key].rename(mode_index="mode_index_1")
+            else:
+                fields_other[key] = fields_other[key].expand_dims(
+                    dim={"mode_index_1": [0]}, axis=len(fields_other[key].shape)
+                )
+
+        if conjugate:
+            fields_self = {component: field.conj() for component, field in fields_self.items()}
+
+        # Create extended meshgrid
+        t1_extended, t2_extended = self._get_extended_grid(fields_self, dt1, dt2, res)
+        
+        # Interpolate and shift fields
+        fields_self_extended = {
+            key: self._interpolate_and_shift(field, t1_extended, t2_extended, 0, 0, res)
+            for key, field in fields_self.items()
+        }
+        fields_other_shifted = {
+            key: field_data._interpolate_and_shift(field, t1_extended, t2_extended, dt1, dt2, res)
+            for key, field in fields_other.items()
+        }
+
+        # Tangential field component names
+        e_1, e_2 = f'E{tan_dims[0]}', f'E{tan_dims[1]}'
+        h_1, h_2 = f'H{tan_dims[0]}', f'H{tan_dims[1]}'
+
+        # Calculate cross products
+        e_self_x_h_other = (fields_self_extended[e_1] * fields_other_shifted[h_2] - 
+                            fields_self_extended[e_2] * fields_other_shifted[h_1])
+        h_self_x_e_other = (fields_self_extended[h_1] * fields_other_shifted[e_2] - 
+                            fields_self_extended[h_2] * fields_other_shifted[e_1])
+
+        # Calculate the integrand
+        integrand = 0.25 * (e_self_x_h_other - h_self_x_e_other)
+
+        # Perform the integration
+        d_area = (t1_extended[1] - t1_extended[0]) * (t2_extended[1] - t2_extended[0])
+        overlap = (integrand * d_area).sum(dim=tan_dims)
+
+        # Remove mode index coordinate if the input did not have it
+        if not modes_in_self:
+            overlap = overlap.isel(mode_index_0=0, drop=True)
+        if not modes_in_other:
+            overlap = overlap.isel(mode_index_1=0, drop=True)
+
+        return overlap
 
     def outer_dot(
         self, field_data: Union[FieldData, ModeData], conjugate: bool = True
