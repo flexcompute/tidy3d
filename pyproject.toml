@@ -28,7 +28,7 @@ importlib-metadata = ">=6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
 rich = "^13.0"
-numpy = "*"
+numpy = ">=1.2"
 matplotlib = "*"
 shapely = "^2.0"
 pandas = "*"
@@ -69,9 +69,7 @@ gdstk = { version = ">=0.9.49, <0.9.52", optional = true }
 
 # jax
 jaxlib = { version = ">=0.4.25, <=0.4.31", source = "jaxsource", optional = true }
-jax = { version = ">=0.4.25, <=0.4.31", extras = [
-  "cpu",
-], source = "jaxsource", optional = true }
+jax = { version = ">=0.4.25, <=0.4.31", source = "jaxsource", optional = true }
 
 # scikit-rf
 scikit-rf = { version = "*", optional = true }
