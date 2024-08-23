@@ -2410,7 +2410,7 @@ class Simulation(AbstractYeeGridSimulation):
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["size", "symmetry"])
     def boundaries_for_zero_dims(cls, val, values):
-        """Error if absorbing boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
+        """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
         boundaries = val.to_list
         size = values.get("size")
         symmetry = values.get("symmetry")
@@ -2420,12 +2420,21 @@ class Simulation(AbstractYeeGridSimulation):
             if size_dim == 0:
                 axis = axis_names[dim]
                 num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+                num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
 
                 if num_absorbing_bdries > 0:
                     raise SetupError(
                         f"The simulation has zero size along the {axis} axis, so "
                         "using a PML or absorbing boundary along that axis is incorrect. "
                         f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
+                    )
+
+                if num_bloch_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, "
+                        "using a Bloch boundary along such an axis is not supported because of "
+                        "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
+                        "but nonzero size along the dimension instead."
                     )
 
                 if symmetry_dim != 0:
