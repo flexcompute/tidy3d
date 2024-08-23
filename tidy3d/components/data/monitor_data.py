@@ -1943,6 +1943,20 @@ class FluxData(MonitorData):
         ..., title="Flux", description="Flux values in the frequency-domain."
     )
 
+    def make_adjoint_sources(
+        self, dataset_names: list[str], fwidth: float
+    ) -> List[Union[CustomCurrentSource, PointDipole]]:
+        """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
+
+        raise NotImplementedError(
+            "Could not formulate adjoint source for 'FluxMonitor' output. To compute derivatives "
+            "with respect to flux data, please use a 'FieldMonitor' and call '.flux' on the "
+            "resulting 'FieldData' object. Using 'FluxMonitor' directly is not supported as "
+            "the full field information is required to construct the adjoint source for this "
+            "problem. The 'FluxData' does not contain the information necessary for gradient "
+            "computation."
+        )
+
     def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.flux.f)

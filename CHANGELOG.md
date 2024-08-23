@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DataArray` interpolation failure due to incorrect ordering of coordinates when interpolating with autograd tracers.
 - Error in `CustomSourceTime` when evaluating at a list of times entirely outside of the range of the envelope definition times.
 - Improved passivity enforcement near high-Q poles in `FastDispersionFitter`. Failed passivity enforcement could lead to simulation divergences.
+- More helpful error and suggestion if users try to differentiate w.r.t. unsupported `FluxMonitor` output.
 
 ## [2.7.2] - 2024-08-07
 

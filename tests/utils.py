@@ -1004,6 +1004,13 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             grid_expanded=simulation.discretize_monitor(monitor),
         )
 
+    def make_flux_data(monitor: td.FluxMonitor) -> td.FluxData:
+        """make a random ModeData from a ModeMonitor."""
+
+        coords = dict(f=list(monitor.freqs))
+        flux = make_data(coords=coords, data_array_type=td.FluxDataArray, is_complex=False)
+        return td.FluxData(monitor=monitor, flux=flux)
+
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
         td.FieldTimeMonitor: make_field_time_data,
@@ -1011,6 +1018,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.ModeMonitor: make_mode_data,
         td.PermittivityMonitor: make_eps_data,
         td.DiffractionMonitor: make_diff_data,
+        td.FluxMonitor: make_flux_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
