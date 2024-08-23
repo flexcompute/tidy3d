@@ -3,6 +3,7 @@ import pickle
 
 import numpy as np
 import torch
+import torch.utils
 from sklearn.preprocessing import MinMaxScaler
 
 
@@ -81,12 +82,25 @@ def scale_feature(x, individual_feature_scaling: bool, feature_scaler=None):
 
 
 def pytorch_load(x, y, batch_size, shuffle_data=False):
-    y_tensor = torch.Tensor(y)
-    x_tensor = torch.Tensor(x)
+    class SampleDataset(torch.utils.data.Dataset):
+        def __init__(self, x, y):
+            self.x = torch.tensor(x, dtype=torch.float32)
+            self.y = torch.tensor(y, dtype=torch.float32)
 
-    dataset = torch.utils.data.TensorDataset(x_tensor, y_tensor)
+        def __len__(self):
+            return len(self.x)
+
+        def __getitem__(self, idx):
+            features = self.x[idx]
+            target = self.y[idx]
+            return features, target
+
     loaded = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=shuffle_data, pin_memory=True, num_workers=0
+        SampleDataset(x, y),
+        batch_size=batch_size,
+        shuffle=shuffle_data,
+        pin_memory=True,
+        num_workers=0,
     )
 
     return loaded
