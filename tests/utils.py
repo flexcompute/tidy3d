@@ -402,6 +402,11 @@ SIM_FULL = td.Simulation(
     run_time=1e-12,
     structures=[
         td.Structure(
+            geometry=td.Cylinder(length=1, center=(-1 * tracer, 0, 0), radius=tracer, axis=2),
+            medium=td.Medium(permittivity=1 + tracer, name="dieletric"),
+            name="traced_dieletric_cylinder",
+        ),
+        td.Structure(
             geometry=td.Box(size=(1, tracer, tracer), center=(-1 * tracer, 0, 0)),
             medium=td.Medium(permittivity=1 + tracer, name="dieletric"),
             name="traced_dieletric_box",

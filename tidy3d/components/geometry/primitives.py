@@ -486,13 +486,15 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
+        static_self = self.to_static()
+
         # radius at z
-        radius_offset = self._radius_z(z)
+        radius_offset = static_self._radius_z(z)
 
         if radius_offset <= 0:
             return []
 
-        _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
+        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis):
