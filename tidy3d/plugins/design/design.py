@@ -25,27 +25,31 @@ from .result import Result
 
 class DesignSpace(Tidy3dBaseModel):
     """Manages all exploration of a parameter space within specified parameters using a supplied search method.
-
     The ``DesignSpace`` forms the basis of the ``Design`` plugin, and receives a ``Method`` and ``Parameter`` list that
     define the scope of the design space and how it should be searched. ``DesignSpace.run()`` can then be called with
     a function(s) to generate different solutions from parameters suggested by the ``Method``. The ``Method`` can either
     sample the design space systematically or randomly, or can optimize for a given problem through an iterative search
     and evaluate approach.
 
-    Schematic outline of how to use the ``Design`` plugin to explore a design space.
-    .. image:: ../../_static/img/design.png
-        :width: 50%
-        :align: left
 
-    The `Design <https://www.flexcompute.com/tidy3d/examples/notebooks/Design/>'_ notebook contains an overview of the
-    ``Design`` plugin and is the best place to learn how to get started.
+    Notes
+    -----
 
-    Detailed examples using the ``Design`` plugin can be found in the following notebooks:
-    `All-Dielectric Structural Colors <https://www.flexcompute.com/tidy3d/examples/notebooks/AllDielectricStructuralColor/>'_
-    `Bayesian Optimization of Y-Junction <https://www.flexcompute.com/tidy3d/examples/notebooks/BayesianOptimizationYJunction/>'_
-    `Genetic Algorithm Reflector <https://www.flexcompute.com/tidy3d/examples/notebooks/GeneticAlgorithmReflector/>'_
-    `Particle Swarm Optimizer PBS <https://www.flexcompute.com/tidy3d/examples/notebooks/ParticleSwarmOptimizedPBS/>'_
-    `Particle Swarm Optimizer Bullseye Cavity <https://www.flexcompute.com/tidy3d/examples/notebooks/BullseyeCavityPSO/>'_
+        Schematic outline of how to use the ``Design`` plugin to explore a design space.
+
+        .. image:: ../../../../_static/img/design.png
+            :width: 80%
+            :align: center
+
+        The `Design <https://www.flexcompute.com/tidy3d/examples/notebooks/Design/>`_ notebook contains an overview of the
+        ``Design`` plugin and is the best place to learn how to get started.
+        Detailed examples using the ``Design`` plugin can be found in the following notebooks:
+
+        * `All-Dielectric Structural Colors <https://www.flexcompute.com/tidy3d/examples/notebooks/AllDielectricStructuralColor/>`_
+        * `Bayesian Optimization of Y-Junction <https://www.flexcompute.com/tidy3d/examples/notebooks/BayesianOptimizationYJunction/>`_
+        * `Genetic Algorithm Reflector <https://www.flexcompute.com/tidy3d/examples/notebooks/GeneticAlgorithmReflector/>`_
+        * `Particle Swarm Optimizer PBS <https://www.flexcompute.com/tidy3d/examples/notebooks/ParticleSwarmOptimizedPBS/>`_
+        * `Particle Swarm Optimizer Bullseye Cavity <https://www.flexcompute.com/tidy3d/examples/notebooks/BullseyeCavityPSO/>`_
 
     Example
     -------
@@ -76,7 +80,8 @@ class DesignSpace(Tidy3dBaseModel):
     task_name: str = pd.Field(
         "",
         title="Task Name",
-        description="Task name assigned to tasks along with a simulation counter in the form of {task_name}_{counter}. "
+        description="Task name assigned to tasks along with a simulation counter in the form of {task_name}_{sim_index}_{counter} where ``sim_index`` is "
+        "the index of the ``Simulation`` from the pre function output. "
         "If the pre function outputs a dictionary the key will be included in the task name as {task_name}_{dict_key}_{counter}. "
         "Only used when pre-post functions are supplied.",
     )
@@ -139,7 +144,6 @@ class DesignSpace(Tidy3dBaseModel):
 
     def run(self, fn: Callable, fn_post: Callable = None, verbose: bool = True) -> Result:
         """Explore a parameter space with a supplied method using the user supplied function.
-
         Supplied functions are used to evaluate the design space and are called within the method.
         For optimization methods these functions act as the fitness function. A single function can be
         supplied which will contain the preprocessing, computation, and analysis of the desired problem.
@@ -156,17 +160,30 @@ class DesignSpace(Tidy3dBaseModel):
         parallel computation on the cloud. The original structure is then restored for output; all ``Simulation`` objects are replaced by ``SimulationData`` objects.
         Example pre return formats and associated post inputs can be seen in the table below.
 
-        | fn_pre return                             | fn_post call                                      |
-        |-------------------------------------------|---------------------------------------------------|
-        | 1.0                                       | fn_post(1.0)                                      |
-        | [1,2,3]                                   | fn_post(1,2,3)                                    |
-        | {'a': 2, 'b': 'hi'}                       | fn_post(a=2, b='hi')                              |
-        | Simulation                                | fn_post(SimulationData)                           |
-        | Batch                                     | fn_post(BatchData)                                |
-        | [Simulation, Simulation]                  | fn_post(SimulationData, SimulationData)           |
-        | [Simulation, 1.0]                         | fn_post(SimulationData, 1.0)                      |
-        | [Simulation, Batch]                       | fn_post(SimulationData, BatchData)                |
-        | {'a': Simulation, 'b': Batch, 'c': 2.0}   | fn_post(a=SimulationData, b=BatchData, c=2.0)     |
+        .. list-table:: Pre return formats and post input formats
+            :widths: 50 50
+            :header-rows: 1
+
+            * - fn_pre return
+              - fn_post call
+            * - 1.0
+              - fn_post(1.0)
+            * - [1,2,3]
+              - fn_post(1,2,3)
+            * - {'a': 2, 'b': 'hi'}
+              - fn_post(a=2, b='hi')
+            * - Simulation
+              - fn_post(SimulationData)
+            * - Batch
+              - fn_post(BatchData)
+            * - [Simulation, Simulation]
+              - fn_post(SimulationData, SimulationData)
+            * - [Simulation, 1.0]
+              - fn_post(SimulationData, 1.0)
+            * - [Simulation, Batch]
+              - fn_post(SimulationData, BatchData)
+            * - {'a': Simulation, 'b': Batch, 'c': 2.0}
+              - fn_post(a=SimulationData, b=BatchData, c=2.0)
 
         The output of ``fn_post`` (or ``fn`` if only one function is supplied) must be a float
         or a container where the first element is a ``float`` and second element is a ``list`` / ``dict`` e,g. [float {"aux_1": str}].

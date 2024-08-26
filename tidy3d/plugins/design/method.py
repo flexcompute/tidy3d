@@ -124,7 +124,6 @@ class MethodSample(Method, ABC):
 
 class MethodGrid(MethodSample):
     """Select parameters uniformly on a grid.
-
     Size of the grid is specified by the parameter type,
     either as the number of unique discrete values (``ParameterInt``, ``ParameterAny``)
     or with the num_points argument (``ParameterFloat``).
@@ -159,7 +158,7 @@ class MethodGrid(MethodSample):
 
 
 class MethodOptimize(Method, ABC):
-    """A method for handling design searches that optimize the design"""
+    """A method for handling design searches that optimize the design."""
 
     # NOTE: We could move this to the Method base class but it's not relevant to MethodGrid
     seed: pd.PositiveInt = pd.Field(
@@ -192,9 +191,13 @@ class MethodOptimize(Method, ABC):
 
 
 class MethodBayOpt(MethodOptimize, ABC):
-    """A standard method for performing a Bayesian optimization search.
-
+    """A standard method for performing a Bayesian optimization search, built around the `Bayesian Optimization <https://bayesian-optimization.github.io/BayesianOptimization/basic-tour.html>`_ package.
     The fitness function is maximising by default.
+
+    Example
+    -------
+    >>> import tidy3d.plugins.design as tdd
+    >>> method = tdd.MethodBayOpt(initial_iter=4, n_iter=10)
     """
 
     initial_iter: pd.PositiveInt = pd.Field(
@@ -212,19 +215,19 @@ class MethodBayOpt(MethodOptimize, ABC):
     acq_func: Literal["ucb", "ei", "poi"] = pd.Field(
         default="ucb",
         title="Type of Acquisition Function",
-        description="The type of acquisition function that should be used to suggest parameter values. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
+        description="The type of acquisition function that should be used to suggest parameter values. More detail available in the `package docs <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
     kappa: pd.PositiveFloat = pd.Field(
         default=2.5,
         title="Kappa",
-        description="The kappa coefficient used by the ``ucb`` acquisition function. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
+        description="The kappa coefficient used by the ``ucb`` acquisition function. More detail available in the `package docs <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
     xi: pd.NonNegativeFloat = pd.Field(
         default=0.0,
         title="Xi",
-        description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available `here <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
+        description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available in the `package docs <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
     def _get_run_count(self, parameters: list = None) -> int:
@@ -236,7 +239,7 @@ class MethodBayOpt(MethodOptimize, ABC):
 
         Uses the ``bayes_opt`` package to carry out a Bayesian optimization. Utilizes the ``.suggest`` and ``.register`` methods instead of
         the ``BayesianOptimization`` helper class as this allows more control over batching and preprocessing.
-        More details of the package can be found `here <https://bayesian-optimization.github.io/BayesianOptimization/basic-tour.html>'_.
+        More details of the package can be found `here <https://bayesian-optimization.github.io/BayesianOptimization/basic-tour.html>`_.
         """
         try:
             from bayes_opt import BayesianOptimization, UtilityFunction
@@ -331,9 +334,13 @@ class MethodBayOpt(MethodOptimize, ABC):
 
 
 class MethodGenAlg(MethodOptimize, ABC):
-    """A standard method for performing genetic algorithm search
-
+    """A standard method for performing genetic algorithm search, built around the `PyGAD <https://pygad.readthedocs.io/en/latest/index.html>`_ package.
     The fitness function is maximising by default.
+
+    Example
+    -------
+    >>> import tidy3d.plugins.design as tdd
+    >>> method = tdd.MethodGenAlg(solutions_per_pop=2, n_generations=1, n_parents_mating=2)
     """
 
     # Args for the user
@@ -358,38 +365,38 @@ class MethodGenAlg(MethodOptimize, ABC):
     stop_criteria_type: Literal["reach", "saturate"] = pd.Field(
         default=None,
         title="Early Stopping Criteria Type",
-        description="Define the early stopping criteria. Supported words are 'reach' or 'saturate'. 'reach' stops at a desired fitness, 'saturate' stops when the fitness stops improving. Must set ``stop_criteria_number``. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+        description="Define the early stopping criteria. Supported words are 'reach' or 'saturate'. 'reach' stops at a desired fitness, 'saturate' stops when the fitness stops improving. Must set ``stop_criteria_number``. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
     stop_criteria_number: pd.PositiveFloat = pd.Field(
         default=None,
         title="Early Stopping Criteria Number",
-        description="Must set ``stop_criteria_type``. If type is 'reach' the number is acceptable fitness value to stop the optimization. If type is 'saturate' the number is the number generations where the fitness doesn't improve before optimization is stopped. See PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+        description="Must set ``stop_criteria_type``. If type is 'reach' the number is acceptable fitness value to stop the optimization. If type is 'saturate' the number is the number generations where the fitness doesn't improve before optimization is stopped. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
     parent_selection_type: Literal["sss", "rws", "sus", "rank", "random", "tournament"] = pd.Field(
         default="sss",
         title="Parent Selection Type",
-        description="The style of parent selector. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+        description="The style of parent selector. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
     keep_parents: Union[pd.PositiveInt, Literal[-1, 0]] = pd.Field(
         default=-1,
         title="Keep Parents",
-        description="The number of parents to keep unaltered in the population of the next generation. Default value of -1 keeps all current parents for the next generation. This value is overwritten if ``keep_parents`` is > 0. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+        description="The number of parents to keep unaltered in the population of the next generation. Default value of -1 keeps all current parents for the next generation. This value is overwritten if ``keep_parents`` is > 0. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
     keep_elitism: Union[pd.PositiveInt, Literal[0]] = pd.Field(
         default=1,
         title="Keep Elitism",
-        description="The number of top solutions to be included in the population of the next generation. Overwrites ``keep_parents`` if value is > 0. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+        description="The number of top solutions to be included in the population of the next generation. Overwrites ``keep_parents`` if value is > 0. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
     )
 
     crossover_type: Union[None, Literal["single_point", "two_points", "uniform", "scattered"]] = (
         pd.Field(
             default="single_point",
             title="Crossover Type",
-            description="The style of crossover operation. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+            description="The style of crossover operation. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
         )
     )
 
@@ -403,7 +410,7 @@ class MethodGenAlg(MethodOptimize, ABC):
         pd.Field(
             default="random",
             title="Mutation Type",
-            description="The style of gene mutation. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+            description="The style of gene mutation. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>`_ for more details.",
         )
     )
 
@@ -416,7 +423,7 @@ class MethodGenAlg(MethodOptimize, ABC):
     save_solution: pd.StrictBool = pd.Field(
         default=False,
         title="Save Solutions",
-        description="Save all solutions from all generations within a numpy array. Can be accessed from the optimizer object stored in the Result. May cause memory issues with large populations or many generations. See the PyGAD docs https://pygad.readthedocs.io/en/latest/pygad.html for more details.",
+        description="Save all solutions from all generations within a numpy array. Can be accessed from the optimizer object stored in the Result. May cause memory issues with large populations or many generations. See the `PyGAD docs <https://pygad.readthedocs.io/en/latest/pygad.html>_` for more details.",
     )
 
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
@@ -432,7 +439,7 @@ class MethodGenAlg(MethodOptimize, ABC):
 
         Uses the ``pygad`` package to carry out a particle search optimization. Additional development has ensured that
         previously suggested solutions are not repeatedly computed, and that all computed solutions are captured.
-        More details of the package can be found `here <https://pygad.readthedocs.io/en/latest/index.html>'_.
+        More details of the package can be found `here <https://pygad.readthedocs.io/en/latest/index.html>`_.
         """
         try:
             import pygad
@@ -615,9 +622,13 @@ class MethodGenAlg(MethodOptimize, ABC):
 
 
 class MethodParticleSwarm(MethodOptimize, ABC):
-    """A standard method for performing particle swarm search.
-
+    """A standard method for performing particle swarm search, build around the `PySwarms <https://pyswarms.readthedocs.io/en/latest/index.html>`_ package.
     The fitness function is maximising by default.
+
+    Example
+    -------
+    >>> import tidy3d.plugins.design as tdd
+    >>> method = tdd.MethodParticleSwarm(n_particles=5, n_iter=3)
     """
 
     n_particles: pd.PositiveInt = pd.Field(
@@ -653,7 +664,7 @@ class MethodParticleSwarm(MethodOptimize, ABC):
     ftol: Union[pd.confloat(ge=0, le=1), Literal[-inf]] = pd.Field(
         default=-inf,
         title="Relative Error for Convergence",
-        description="Relative error in ``objective_func(best_solution)`` acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
+        description="Relative error in ``objective_func(best_solution)`` acceptable for convergence. See the `PySwarms docs <https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html>`_ for details. Off by default.",
     )
 
     ftol_iter: pd.PositiveInt = pd.Field(
@@ -676,7 +687,7 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         """Defines the particle search optimization algorithm for the method.
 
         Uses the ``pyswarms`` package to carry out a particle search optimization.
-        More details of the package can be found `here <https://pyswarms.readthedocs.io/en/latest/index.html>'_.
+        More details of the package can be found `here <https://pyswarms.readthedocs.io/en/latest/index.html>`_.
         """
         try:
             from pyswarms.single.global_best import GlobalBestPSO

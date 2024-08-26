@@ -89,7 +89,7 @@ class Result(Tidy3dBaseModel):
         None,
         title="Optimizer object",
         description="The optimizer returned at the end of an optimizer run. Can be used to analyze and plot how the optimization progressed. "
-        "Attributes depend on the optimizer used; a full explaination of the optimizer can be found on associated library doc pages. Will be None for sampling based methods.",
+        "Attributes depend on the optimizer used; a full explaination of the optimizer can be found on associated library doc pages. Will be ``None`` for sampling based methods.",
     )
 
     @pd.validator("coords", always=True)
