@@ -6,10 +6,9 @@ import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
 
-from ..utils import AssertLogLevel, run_async_emulated, run_emulated
-
 # use single threading pipeline
-from .test_adjoint import use_emulated_run, use_emulated_run_async  # noqa: F401
+from ..test_components.test_autograd import use_emulated_run  # noqa: F401
+from ..utils import AssertLogLevel, run_emulated
 
 FREQ0 = 1e14
 L_SIM = 1.0
@@ -46,19 +45,21 @@ simulation = td.Simulation(
 
 
 @pytest.fixture
-def use_emulated_run_autograd(monkeypatch):
-    """Emulate the tidy3d web function used in autograd web API."""
-    import tidy3d.web.api.autograd.autograd as web_ag
-
-    monkeypatch.setattr(web_ag, "_run_tidy3d", run_emulated)
-
-
-@pytest.fixture
-def use_emulated_run_autograd_async(monkeypatch):
-    """Emulate the tidy3d web function used in autograd web API."""
-    import tidy3d.web.api.autograd.autograd as web_ag
-
-    monkeypatch.setattr(web_ag, "_run_async_tidy3d", run_async_emulated)
+def use_emulated_to_sim_data(monkeypatch):
+    """Emulate the InverseDesign.to_simulation_data to call emulated run."""
+    monkeypatch.setattr(
+        tdi.InverseDesign,
+        "to_simulation_data",
+        lambda self, params, **kwargs: run_emulated(self.simulation, task_name="test"),
+    )
+    monkeypatch.setattr(
+        tdi.InverseDesignMulti,
+        "to_simulation_data",
+        lambda self, params, **kwargs: {
+            task_name: run_emulated(sim, task_name=task_name)
+            for task_name, sim in zip(self.task_names, self.simulations)
+        },
+    )
 
 
 def make_design_region():
@@ -187,8 +188,10 @@ class MockSimData:
         return MockDataArray()
 
 
-def test_invdes_simulation_data(use_emulated_run):  # noqa: F811
+def test_invdes_simulation_data(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
     """Test convenience function to convert ``InverseDesign`` to simulation and run it."""
+
+    # monkeypatch.setattr(tdi.InverseDesign, "to_simulation_data", lambda self, params, **kwargs: run_emulated(self.simulation, task_name='test'))
 
     invdes = make_invdes()
     params = invdes.design_region.params_random
@@ -271,7 +274,7 @@ def make_optimizer():
     )
 
 
-def make_result(use_emulated_run_autograd):
+def make_result(use_emulated_run):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -281,7 +284,7 @@ def make_result(use_emulated_run_autograd):
     return optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn)
 
 
-def test_default_params(use_emulated_run_autograd):  # noqa: F811
+def test_default_params(use_emulated_run):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -291,7 +294,7 @@ def test_default_params(use_emulated_run_autograd):  # noqa: F811
     optimizer.run(post_process_fn=post_process_fn)
 
 
-def test_warn_zero_grad(log_capture, use_emulated_run_autograd):
+def test_warn_zero_grad(log_capture, use_emulated_run):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -301,7 +304,7 @@ def test_warn_zero_grad(log_capture, use_emulated_run_autograd):
         _ = optimizer.run(post_process_fn=post_process_fn_untraced)
 
 
-def make_result_multi(use_emulated_run_autograd_async):
+def make_result_multi(use_emulated_run):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesignMulti`` object."""
 
     optimizer = make_optimizer()
@@ -314,7 +317,7 @@ def make_result_multi(use_emulated_run_autograd_async):
     return optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn_multi)
 
 
-def test_result_store_full_results_is_false(use_emulated_run_autograd):  # noqa: F811
+def test_result_store_full_results_is_false(use_emulated_run):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -337,9 +340,9 @@ def test_result_store_full_results_is_false(use_emulated_run_autograd):  # noqa:
     _ = result.last["params"]
 
 
-def test_continue_run_fns(use_emulated_run_autograd):
+def test_continue_run_fns(use_emulated_run):  # noqa: F811
     """Test continuing an already run inverse design from result."""
-    result_orig = make_result(use_emulated_run_autograd)
+    result_orig = make_result(use_emulated_run)
     optimizer = make_optimizer()
     result_full = optimizer.continue_run(result=result_orig, post_process_fn=post_process_fn)
 
@@ -350,9 +353,9 @@ def test_continue_run_fns(use_emulated_run_autograd):
     ), "wrong number of elements in the combined run history."
 
 
-def test_continue_run_from_file(use_emulated_run_autograd):
+def test_continue_run_from_file(use_emulated_run):  # noqa: F811
     """Test continuing an already run inverse design from file."""
-    result_orig = make_result(use_emulated_run_autograd)
+    result_orig = make_result(use_emulated_run)
     optimizer_orig = make_optimizer()
     optimizer = optimizer_orig.updated_copy(num_steps=optimizer_orig.num_steps + 1)
     result_full = optimizer.continue_run_from_file(HISTORY_FNAME, post_process_fn=post_process_fn)
@@ -368,13 +371,12 @@ def test_continue_run_from_file(use_emulated_run_autograd):
 
 def test_result(
     use_emulated_run,  # noqa: F811
-    use_emulated_run_autograd,
-    use_emulated_run_autograd_async,
+    use_emulated_to_sim_data,
     tmp_path,
 ):
     """Test methods of the ``InverseDesignResult`` object."""
 
-    result = make_result(use_emulated_run_autograd)
+    result = make_result(use_emulated_run)
 
     with pytest.raises(KeyError):
         _ = result.get_last("blah")
@@ -387,21 +389,20 @@ def test_result(
     _ = result.sim_data_last(task_name="last")
 
 
-def test_result_data(use_emulated_run, use_emulated_run_autograd):  # noqa: F811
+def test_result_data(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
     """Test methods of the ``InverseDesignResult`` object."""
 
-    result = make_result(use_emulated_run_autograd)
+    result = make_result(use_emulated_run)
     _ = result.sim_last
     _ = result.sim_data_last(task_name="last")
 
 
 def test_result_data_multi(
-    use_emulated_run_async,  # noqa: F811
-    use_emulated_run_autograd_async,
-    use_emulated_run_autograd,
+    use_emulated_to_sim_data,  # noqa: F811
+    use_emulated_run,  # noqa: F811
     tmp_path,
 ):
-    result_multi = make_result_multi(use_emulated_run_autograd_async)
+    result_multi = make_result_multi(use_emulated_run)
     _ = result_multi.sim_last
     _ = result_multi.sim_data_last()
 
@@ -413,10 +414,10 @@ def test_result_empty():
         result_empty.get_last("params")
 
 
-def test_invdes_io(tmp_path, log_capture, use_emulated_run_autograd):
+def test_invdes_io(tmp_path, log_capture, use_emulated_run):  # noqa: F811
     """Test saving a loading ``invdes`` components to file."""
 
-    result = make_result(use_emulated_run_autograd)
+    result = make_result(use_emulated_run)
     optimizer = make_optimizer()
     design = optimizer.design
 
@@ -430,7 +431,7 @@ def test_invdes_io(tmp_path, log_capture, use_emulated_run_autograd):
         assert obj2.json() == obj.json()
 
 
-def test_objective_utilities(use_emulated_run_autograd):
+def test_objective_utilities(use_emulated_run):  # noqa: F811
     """Test objective function helpers."""
 
     sim_data = run_emulated(simulation, task_name="test")

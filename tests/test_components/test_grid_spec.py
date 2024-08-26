@@ -344,3 +344,40 @@ def test_zerosize_dimensions():
             ),
             run_time=1e-12,
         )
+
+
+def test_custom_grid_boundaries():
+    custom = td.CustomGridBoundaries(coords=np.linspace(-1, 1, 11))
+    grid_spec = td.GridSpec(grid_x=custom, grid_y=custom, grid_z=custom)
+    source = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
+    )
+
+    # matches exactly
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        sources=[source],
+        grid_spec=grid_spec,
+        run_time=1e-12,
+        medium=td.Medium(permittivity=4),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+    assert np.allclose(sim.grid.boundaries.x, custom.coords)
+
+    # chop off
+    sim_chop = sim.updated_copy(size=(1, 1, 1))
+    assert np.allclose(sim_chop.grid.boundaries.x, np.linspace(-0.4, 0.4, 5))
+
+    sim_chop = sim.updated_copy(size=(1.2, 1, 1))
+    assert np.allclose(sim_chop.grid.boundaries.x, np.linspace(-0.6, 0.6, 7))
+
+    # expand
+    sim_expand = sim.updated_copy(size=(4, 4, 4))
+    assert np.allclose(sim_expand.grid.boundaries.x, np.linspace(-2, 2, 21))
+
+    # pml
+    num_layers = 10
+    sim_pml = sim.updated_copy(
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML(num_layers=num_layers))
+    )
+    assert np.allclose(sim_pml.grid.boundaries.x, np.linspace(-3, 3, 31))

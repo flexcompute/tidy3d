@@ -344,6 +344,8 @@ def test_proj_clientside():
     far_fields_cartesian.fields_cartesian
     far_fields_cartesian.radar_cross_section
     far_fields_cartesian.power
+    far_fields_cartesian.poynting
+    far_fields_cartesian.flux
     for val in far_fields_cartesian.field_components.values():
         val.sel(f=f0)
     far_fields_cartesian.renormalize_fields(proj_distance=5e6)
@@ -366,7 +368,198 @@ def test_proj_clientside():
     exact_fields_cartesian.fields_cartesian
     exact_fields_cartesian.radar_cross_section
     exact_fields_cartesian.power
+    exact_fields_cartesian.poynting
+    exact_fields_cartesian.flux
     for val in exact_fields_cartesian.field_components.values():
         val.sel(f=f0)
     with pytest.raises(DataError):
         exact_fields_cartesian.renormalize_fields(proj_distance=5e6)
+
+
+def make_2d_proj_monitors(center, size, freqs, plane):
+    """Helper function to make near-to-far monitors in 2D simulations."""
+
+    if plane == "xy":
+        thetas = [np.pi / 2]
+        phis = np.linspace(0, 2 * np.pi, 100)
+        far_size = 10 * WAVELENGTH
+        Ns = 40
+        xs = np.linspace(-far_size, far_size, Ns)
+        ys = [0]
+        projection_axis = 0
+    elif plane == "yz":
+        thetas = np.linspace(0, np.pi, 1)
+        phis = [np.pi / 2]
+        far_size = 10 * WAVELENGTH
+        Ns = 40
+        xs = [0]
+        ys = np.linspace(-far_size, far_size, Ns)
+        projection_axis = 1
+    elif plane == "xz":
+        thetas = np.linspace(0, np.pi, 100)
+        phis = [0]
+        far_size = 10 * WAVELENGTH
+        Ns = 40
+        xs = [0]
+        ys = np.linspace(-far_size, far_size, Ns)
+        projection_axis = 0
+    else:
+        raise ValueError("Invalid plane. Use 'xy', 'yz', or 'xz'.")
+
+    n2f_angle_monitor_2d = td.FieldProjectionAngleMonitor(
+        center=center,
+        size=size,
+        freqs=freqs,
+        name="far_field_angle",
+        phi=list(phis),
+        theta=list(thetas),
+        proj_distance=R_FAR,
+        far_field_approx=True,  # Fields are far enough for geometric far field approximations
+    )
+
+    n2f_car_monitor_2d = td.FieldProjectionCartesianMonitor(
+        center=center,
+        size=size,
+        freqs=freqs,
+        name="far_field_cartesian",
+        x=list(xs),
+        y=list(ys),
+        proj_axis=projection_axis,
+        proj_distance=R_FAR,
+        far_field_approx=True,  # Fields are far enough for geometric far field approximations
+    )
+
+    return (n2f_angle_monitor_2d, n2f_car_monitor_2d)
+
+
+def make_2d_proj(plane):
+    center = (0, 0, 0)
+    f0 = 1e13
+
+    if plane == "xy":
+        sim_size = (5, 5, 0)
+        monitor_size = (0, 2, td.inf)
+        # boundary conditions
+        boundary_conds = td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.periodic(),
+        )
+        # data coordinates
+        x = np.array([0.0])
+        y = np.linspace(-1, 1, 10)
+        z = np.array([0.0])
+        coords = dict(x=x, y=y, z=z, f=[f0])
+        scalar_field = td.ScalarFieldDataArray(
+            (1 + 1j) * np.random.random((1, 10, 1, 1)), coords=coords
+        )
+    elif plane == "yz":
+        sim_size = (0, 5, 5)
+        monitor_size = (td.inf, 0, 2)
+        # boundary conditions
+        boundary_conds = td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pml(),
+        )
+        # data coordinates
+        x = np.array([0.0])
+        y = np.array([0.0])
+        z = np.linspace(-1, 1, 10)
+        coords = dict(x=x, y=y, z=z, f=[f0])
+        scalar_field = td.ScalarFieldDataArray(
+            (1 + 1j) * np.random.random((1, 1, 10, 1)), coords=coords
+        )
+    elif plane == "xz":
+        sim_size = (5, 0, 5)
+        monitor_size = (0, td.inf, 2)
+        # boundary conditions
+        boundary_conds = td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        )
+        # data coordinates
+        x = np.array([0.0])
+        y = np.array([0.0])
+        z = np.linspace(-1, 1, 10)
+        coords = dict(x=x, y=y, z=z, f=[f0])
+        scalar_field = td.ScalarFieldDataArray(
+            (1 + 1j) * np.random.random((1, 1, 10, 1)), coords=coords
+        )
+    else:
+        raise ValueError("Invalid plane. Use 'xy', 'yz', or 'xz'.")
+
+    monitor = td.FieldMonitor(
+        center=center, size=monitor_size, freqs=[f0], name="near_field", colocate=False
+    )
+
+    # Set up the simulation
+    sim = td.Simulation(
+        size=sim_size,
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
+        boundary_spec=boundary_conds,
+        monitors=[monitor],
+        run_time=1e-12,
+    )
+
+    data = td.FieldData(
+        monitor=monitor,
+        Ex=scalar_field,
+        Ey=scalar_field,
+        Ez=scalar_field,
+        Hx=scalar_field,
+        Hy=scalar_field,
+        Hz=scalar_field,
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize_monitor(monitor),
+    )
+
+    sim_data = td.SimulationData(simulation=sim, data=(data,))
+
+    proj = td.FieldProjector.from_near_field_monitors(
+        sim_data=sim_data,
+        near_monitors=[monitor],
+        normal_dirs=["+"],
+    )
+
+    # make near-to-far monitors
+    (
+        n2f_angle_monitor_2d,
+        n2f_cart_monitor_2d,
+    ) = make_2d_proj_monitors(center, monitor_size, [f0], plane)
+
+    far_fields_angular_2d = proj.project_fields(n2f_angle_monitor_2d)
+    far_fields_cartesian_2d = proj.project_fields(n2f_cart_monitor_2d)
+
+    # compute far field quantities
+    far_fields_angular_2d.r
+    far_fields_angular_2d.theta
+    far_fields_angular_2d.phi
+    far_fields_angular_2d.fields_spherical
+    far_fields_angular_2d.fields_cartesian
+    far_fields_angular_2d.radar_cross_section
+    far_fields_angular_2d.power
+    for val in far_fields_angular_2d.field_components.values():
+        val.sel(f=f0)
+    far_fields_angular_2d.renormalize_fields(proj_distance=5e6)
+
+    far_fields_cartesian_2d.x
+    far_fields_cartesian_2d.y
+    far_fields_cartesian_2d.z
+    far_fields_cartesian_2d.fields_spherical
+    far_fields_cartesian_2d.fields_cartesian
+    far_fields_cartesian_2d.radar_cross_section
+    far_fields_cartesian_2d.power
+    for val in far_fields_cartesian_2d.field_components.values():
+        val.sel(f=f0)
+    far_fields_cartesian_2d.renormalize_fields(proj_distance=5e6)
+
+
+def test_2d_proj_clientside():
+    # Run simulations and tests for all three planes
+    planes = ["xy", "yz", "xz"]
+
+    for plane in planes:
+        make_2d_proj(plane)

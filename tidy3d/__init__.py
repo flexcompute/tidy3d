@@ -122,7 +122,13 @@ from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
 from .components.geometry.primitives import Cylinder, Sphere
 from .components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
-from .components.grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
+from .components.grid.grid_spec import (
+    AutoGrid,
+    CustomGrid,
+    CustomGridBoundaries,
+    GridSpec,
+    UniformGrid,
+)
 from .components.heat_charge.boundary import (
     ConvectionBC,
     CurrentBC,
@@ -301,6 +307,7 @@ __all__ = [
     "UniformGrid",
     "CustomGrid",
     "AutoGrid",
+    "CustomGridBoundaries",
     "Box",
     "Sphere",
     "Cylinder",

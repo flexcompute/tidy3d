@@ -372,6 +372,39 @@ def test_mode_solver_simple(mock_remote_api, local):
     assert len(nS_add_mode_solver_monitor.monitors) == len(simulation.monitors) + 1
 
 
+@responses.activate
+def test_mode_solver_remote_after_local(mock_remote_api):
+    """Test that running a remote solver after a local one modifies the stored data. This is to
+    catch a bug if ``_cached_properties["data"]`` is inadvertently used."""
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=3,
+        target_neff=2.0,
+        filter_pol="tm",
+        track_freq="lowest",
+    )
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[td.C_0 / 1.0],
+        direction="-",
+    )
+    data_local = ms.data
+    data_remote = msweb.run(ms)
+    assert np.all(data_local.n_eff != data_remote.n_eff)
+
+
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
 def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
@@ -999,3 +1032,5 @@ def test_modes_eme_sim(mock_remote_api, local):
         with pytest.raises(SetupError):
             _ = msweb.run(solver)
         _ = msweb.run(solver.to_fdtd_mode_solver())
+
+    _ = solver.reduced_simulation_copy

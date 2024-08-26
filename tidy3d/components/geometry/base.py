@@ -729,7 +729,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Index into xyz axis (0,1,2) and position along that axis.
         """
         xyz_filtered = {k: v for k, v in xyz.items() if v is not None}
-        assert len(xyz_filtered) == 1, "exactly one kwarg in [x,y,z] must be specified."
+        if len(xyz_filtered) != 1:
+            raise ValueError("exactly one kwarg in [x,y,z] must be specified.")
         axis_label, position = list(xyz_filtered.items())[0]
         axis = "xyz".index(axis_label)
         return axis, position
@@ -3289,7 +3290,10 @@ class GeometryGroup(Geometry):
             )
             vjp_dict_geo = geo.compute_derivatives(geo_info)
             grad_vjp_values = list(vjp_dict_geo.values())
-            assert len(grad_vjp_values) == 1, "Got multiple gradients for single geometry field."
+
+            if len(grad_vjp_values) != 1:
+                raise AssertionError("Got multiple gradients for single geometry field.")
+
             grad_vjps[field_path] = grad_vjp_values[0]
 
         return grad_vjps

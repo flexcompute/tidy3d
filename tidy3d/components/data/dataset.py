@@ -2898,7 +2898,7 @@ def _check_same_coordinates(
     # we can have xarray.DataArray's of different types but still same coordinates
     # we will deal with that case separately
     both_xarrays = isinstance(a, xr.DataArray) and isinstance(b, xr.DataArray)
-    if (not both_xarrays) and type(a) != type(b):
+    if (not both_xarrays) and type(a) is not type(b):
         return False
 
     if isinstance(a, UnstructuredGridDataset):

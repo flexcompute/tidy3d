@@ -16,7 +16,6 @@ from ..constants import C_0, SECOND, fp_eps, inf
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from ..log import log
 from ..updater import Updater
-from .autograd import AutogradFieldMap
 from .base import cached_property, skip_if_fields_missing
 from .base_sim.simulation import AbstractSimulation
 from .boundary import (
@@ -37,7 +36,7 @@ from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Coords1D, Grid
-from .grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
+from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
 from .lumped_element import LumpedElementType
 from .medium import (
     AbstractCustomMedium,
@@ -203,6 +202,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         "``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` "
         ", or ``False`` to apply staircasing.",
     )
+
+    simulation_type: Literal["autograd_fwd", "autograd_bwd", None] = pydantic.Field(
+        None,
+        title="Simulation Type",
+        description="Tag used internally to distinguish types of simulations for "
+        "``autograd`` gradient processing.",
+    )
+
     """
     Supply :class:`SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
     PEC material interfaces. Alternatively, supply ``True`` to use default subpixel averaging methods,
@@ -1269,7 +1276,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
             """Snap a 2D material to the Yee grid."""
             center = get_bounds(geom, axis)[0]
-            assert get_bounds(geom, axis)[0] == get_bounds(geom, axis)[1]
+            if get_bounds(geom, axis)[0] != get_bounds(geom, axis)[1]:
+                raise AssertionError(
+                    "Unexpected error encountered while processing 2D material. "
+                    "The upper and lower bounds of the geometry in the normal direction are not equal. "
+                    "If you encounter this error, please create an issue in the Tidy3D github repository."
+                )
             snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
             return geom._update_from_bounds(bounds=(snapped_center, snapped_center), axis=axis)
 
@@ -1343,6 +1355,213 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             mesh_overrides.extend(lumped_element.to_mesh_overrides())
 
         return mesh_overrides
+
+    def subsection(
+        self,
+        region: Box,
+        boundary_spec: BoundarySpec = None,
+        grid_spec: Union[GridSpec, Literal["identical"]] = None,
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry] = None,
+        sources: Tuple[SourceType, ...] = None,
+        monitors: Tuple[MonitorType, ...] = None,
+        remove_outside_structures: bool = True,
+        remove_outside_custom_mediums: bool = False,
+        include_pml_cells: bool = False,
+        **kwargs,
+    ) -> AbstractYeeGridSimulation:
+        """Generate a simulation instance containing only the ``region``.
+
+        Parameters
+        ----------
+        region : :class:.`Box`
+            New simulation domain.
+        boundary_spec : :class:.`BoundarySpec` = None
+            New boundary specification. If ``None``, then it is inherited from the original
+            simulation.
+        grid_spec : :class:.`GridSpec` = None
+            New grid specification. If ``None``, then it is inherited from the original
+            simulation. If ``identical``, then the original grid is transferred directly as a
+            :class:.`CustomGrid`. Note that in the latter case the region of the new simulation is
+            snapped to the original grid lines.
+        symmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = None
+            New simulation symmetry. If ``None``, then it is inherited from the original
+            simulation. Note that in this case the size and placement of new simulation domain
+            must be commensurate with the original symmetry.
+        sources : Tuple[SourceType, ...] = None
+            New list of sources. If ``None``, then the sources intersecting the new simulation
+            domain are inherited from the original simulation.
+        monitors : Tuple[MonitorType, ...] = None
+            New list of monitors. If ``None``, then the monitors intersecting the new simulation
+            domain are inherited from the original simulation.
+        remove_outside_structures : bool = True
+            Remove structures outside of the new simulation domain.
+        remove_outside_custom_mediums : bool = True
+            Remove custom medium data outside of the new simulation domain.
+        include_pml_cells : bool = False
+            Keep PML cells in simulation boundaries. Note that retained PML cells will be converted
+            to regular cells, and the simulation domain boundary will be moved accordingly.
+        **kwargs
+            Other arguments passed to new simulation instance.
+        """
+
+        # must intersect the original domain
+        if not self.intersects(region):
+            raise SetupError("Requested region does not intersect simulation domain")
+
+        # restrict to the original simulation domain
+        if include_pml_cells:
+            new_bounds = Box.bounds_intersection(self.simulation_bounds, region.bounds)
+        else:
+            new_bounds = Box.bounds_intersection(self.bounds, region.bounds)
+        new_bounds = [list(new_bounds[0]), list(new_bounds[1])]
+
+        # grid spec inheritace
+        if grid_spec is None:
+            grid_spec = self.grid_spec
+        elif isinstance(grid_spec, str) and grid_spec == "identical":
+            # create a custom grid from existing one
+            grids_1d = self.grid.boundaries.to_list
+            grid_spec = GridSpec.from_grid(self.grid)
+
+            # adjust region bounds to perfectly coincide with the grid
+            # note, sometimes (when a box already seems to perfrecty align with the grid)
+            # this causes the new region to expand one more pixel because of numerical roundoffs
+            # To help to avoid that we shrink new region by a small amount.
+            center = [(bmin + bmax) / 2 for bmin, bmax in zip(*new_bounds)]
+            size = [max(0.0, bmax - bmin - 2 * fp_eps) for bmin, bmax in zip(*new_bounds)]
+            aux_box = Box(center=center, size=size)
+            grid_inds = self.grid.discretize_inds(box=aux_box)
+
+            for dim in range(3):
+                # preserve zero size dimensions
+                if new_bounds[0][dim] != new_bounds[1][dim]:
+                    new_bounds[0][dim] = grids_1d[dim][grid_inds[dim][0]]
+                    new_bounds[1][dim] = grids_1d[dim][grid_inds[dim][1]]
+
+        # if symmetry is not overriden we inherit it from the original simulation where is needed
+        if symmetry is None:
+            # start with no symmetry
+            symmetry = [0, 0, 0]
+
+            # now check in each dimension whether we cross symmetry plane
+            for dim in range(3):
+                if self.symmetry[dim] != 0:
+                    crosses_symmetry = (
+                        new_bounds[0][dim] < self.center[dim]
+                        and new_bounds[1][dim] > self.center[dim]
+                    )
+
+                    # inherit symmetry only if we cross symmetry plane, otherwise we don't impose
+                    # symmetry even if the original simulation had symmetry
+                    if crosses_symmetry:
+                        symmetry[dim] = self.symmetry[dim]
+                        center = (new_bounds[0][dim] + new_bounds[1][dim]) / 2
+
+                        if not math.isclose(center, self.center[dim]):
+                            log.warning(
+                                f"The original simulation is symmetric along {'xyz'[dim]} direction. "
+                                "The requested new simulation region does cross the symmetry plane but is "
+                                "not symmetric with respect to it. To preserve correct symmetry, "
+                                "the requested simulation region is expanded symmetrically."
+                            )
+                            new_bounds[0][dim] = 2 * self.center[dim] - new_bounds[1][dim]
+
+        # symmetry and grid spec treatments could change new simulation bounds
+        # thus, recreate a box instance
+        new_box = Box.from_bounds(*new_bounds)
+
+        # inheritance of structures, sources, monitors, and boundary specs
+        if remove_outside_structures:
+            new_structures = [strc for strc in self.structures if new_box.intersects(strc.geometry)]
+        else:
+            new_structures = self.structures
+
+        if sources is None:
+            sources = [src for src in self.sources if new_box.intersects(src)]
+
+        if monitors is None:
+            monitors = [mnt for mnt in self.monitors if new_box.intersects(mnt)]
+
+        if boundary_spec is None:
+            boundary_spec = self.boundary_spec
+
+        # set boundary conditions in zero-size dimension to periodic
+        for dim in range(3):
+            if new_bounds[0][dim] == new_bounds[1][dim] and not isinstance(
+                boundary_spec.to_list[dim][0], Periodic
+            ):
+                axis_name = "xyz"[dim]
+                log.warning(
+                    f"The resulting simulation subsection has size zero along axis '{axis_name}'. "
+                    "Periodic boundary conditions are automatically set along this dimension."
+                )
+                boundary_spec = boundary_spec.updated_copy(**{"xyz"[dim]: Boundary.periodic()})
+
+        # reduction of custom medium data
+        new_sim_medium = self.medium
+        if remove_outside_custom_mediums:
+            # check for special treatment in case of PML
+            if any(
+                any(isinstance(edge, (PML, StablePML, Absorber)) for edge in boundary)
+                for boundary in boundary_spec.to_list
+            ):
+                # if we need to cut out outside custom medium we have to be careful about PML/Absorber
+                # we should include data in PML so that there is no artificial reflection at PML boundaries
+
+                # to do this, we first create an auxiliary simulation
+                aux_sim = self.updated_copy(
+                    center=new_box.center,
+                    size=new_box.size,
+                    grid_spec=grid_spec,
+                    boundary_spec=boundary_spec,
+                    monitors=[],
+                    sources=sources,  # need wavelength in case of auto grid
+                    symmetry=symmetry,
+                    structures=new_structures,
+                )
+
+                # then use its bounds as region for data cut off
+                new_bounds = aux_sim.simulation_bounds
+
+                # Note that this is not a full proof strategy. For example, if grid_spec is AutoGrid
+                # then after outside custom medium data is removed the grid sizes and, thus,
+                # pml extents can change as well
+
+            # now cut out custom medium data
+            new_structures_reduced_data = []
+
+            for structure in new_structures:
+                medium = structure.medium
+                if isinstance(medium, AbstractCustomMedium):
+                    new_structure_bounds = Box.bounds_intersection(
+                        new_bounds, structure.geometry.bounds
+                    )
+                    new_medium = medium.sel_inside(bounds=new_structure_bounds)
+                    new_structure = structure.updated_copy(medium=new_medium)
+                    new_structures_reduced_data.append(new_structure)
+                else:
+                    new_structures_reduced_data.append(structure)
+
+            new_structures = new_structures_reduced_data
+
+            if isinstance(self.medium, AbstractCustomMedium):
+                new_sim_medium = self.medium.sel_inside(bounds=new_bounds)
+
+        # finally, create an updated copy with all modifications
+        new_sim = self.updated_copy(
+            center=new_box.center,
+            size=new_box.size,
+            medium=new_sim_medium,
+            grid_spec=grid_spec,
+            boundary_spec=boundary_spec,
+            monitors=monitors,
+            sources=sources,
+            symmetry=symmetry,
+            structures=new_structures,
+            **kwargs,
+        )
+
+        return new_sim
 
 
 class Simulation(AbstractYeeGridSimulation):
@@ -2673,14 +2892,14 @@ class Simulation(AbstractYeeGridSimulation):
     def _projection_monitors_2d(cls, val, values):
         """
         Validate if the field projection monitor is set up for a 2D simulation and
-        ensure the observation angle is configured correctly.
+        ensure the observation parameters are configured correctly.
 
-        - For a 2D simulation in the x-y plane, 'theta' should be set to 'pi/2'.
-        - For a 2D simulation in the y-z plane, 'phi' should be set to 'pi/2'.
-        - For a 2D simulation in the x-z plane, 'phi' should be set to '0'.
+        - For a 2D simulation in the x-y plane, ``theta`` should be set to ``pi/2``.
+        - For a 2D simulation in the y-z plane, ``phi`` should be set to ``pi/2`` or ``3*pi/2``.
+        - For a 2D simulation in the x-z plane, ``phi`` should be set to ``0`` or ``pi``.
 
         Note: Exact far field projection is not available yet. Currently, only
-        'far_field_approx = True' is supported.
+        ``far_field_approx = True`` is supported.
         """
 
         if val is None:
@@ -2693,19 +2912,12 @@ class Simulation(AbstractYeeGridSimulation):
         if non_zero_dims == 3:
             return val
 
-        plane = None
-        phi_value = None
-        theta_value = None
-
         if sim_size[0] == 0:
             plane = "y-z"
-            phi_value = np.pi / 2
         elif sim_size[1] == 0:
             plane = "x-z"
-            phi_value = 0
         elif sim_size[2] == 0:
             plane = "x-y"
-            theta_value = np.pi / 2
 
         for monitor in val:
             if isinstance(monitor, AbstractFieldProjectionMonitor):
@@ -2714,37 +2926,63 @@ class Simulation(AbstractYeeGridSimulation):
                         f"Monitor '{monitor.name}' is not supported in 1D simulations."
                     )
 
-                if isinstance(
-                    monitor, (FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor)
-                ):
+                if isinstance(monitor, (FieldProjectionKSpaceMonitor)):
                     raise SetupError(
                         f"Monitor '{monitor.name}' in 2D simulations is coming soon. "
                         "Please use 'FieldProjectionAngleMonitor' instead."
+                        "Please use 'FieldProjectionAngleMonitor' or 'FieldProjectionCartesianMonitor' instead."
                     )
 
+                if isinstance(monitor, (FieldProjectionCartesianMonitor)):
+                    config = {
+                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
+                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
+                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
+                    }[plane]
+
+                    valid_proj_axes = config["valid_proj_axes"]
+                    invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
+
+                    if monitor.proj_axis in invalid_proj_axis:
+                        raise SetupError(
+                            f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
+                            f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
+                        )
+
+                    for idx, axis in enumerate(valid_proj_axes):
+                        coord = getattr(monitor, config["coord"][idx])
+                        if monitor.proj_axis == axis and not all(value in [0] for value in coord):
+                            raise SetupError(
+                                f"For a 2D simulation in the {plane} plane with "
+                                f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
+                                f"'{monitor.name}' should be set to '[0]'."
+                            )
+
                 if isinstance(monitor, FieldProjectionAngleMonitor):
-                    if not monitor.far_field_approx:
-                        raise SetupError(
-                            "Exact far field projection in 2D simulations is coming soon."
-                            "Please set 'far_field_approx = True'."
+                    config = {
+                        "y-z": {"valid_value": [np.pi / 2, 3 * np.pi / 2], "coord": "phi"},
+                        "x-z": {"valid_value": [0, np.pi], "coord": "phi"},
+                        "x-y": {"valid_value": [np.pi / 2], "coord": "theta"},
+                    }[plane]
+
+                    coord = getattr(monitor, config["coord"])
+                    if not all(value in config["valid_value"] for value in coord):
+                        replacements = {
+                            np.pi: "np.pi",
+                            np.pi / 2: "np.pi/2",
+                            3 * np.pi / 2: "3*np.pi/2",
+                            0: "0",
+                        }
+                        valid_values_str = ", ".join(
+                            replacements.get(val) for val in config["valid_value"]
                         )
-                    if plane == "y-z" and (len(monitor.phi) != 1 or monitor.phi[0] != phi_value):
                         raise SetupError(
-                            "For a 2D simulation in the y-z plane, the observation angle 'phi' "
-                            f"of monitor '{monitor.name}' should be set to 'np.pi/2'."
+                            f"For a 2D simulation in the {plane} plane, the observation "
+                            f"angle '{config['coord']}' of monitor "
+                            f"'{monitor.name}' should be set to "
+                            f"'{valid_values_str}'"
                         )
-                    elif plane == "x-z" and (len(monitor.phi) != 1 or monitor.phi[0] != phi_value):
-                        raise SetupError(
-                            "For a 2D simulation in the x-z plane, the observation angle 'phi' "
-                            f"of monitor '{monitor.name}' should be set to '0'."
-                        )
-                    elif plane == "x-y" and (
-                        len(monitor.theta) != 1 or monitor.theta[0] != theta_value
-                    ):
-                        raise SetupError(
-                            "For a 2D simulation in the x-y plane, the observation angle 'theta' "
-                            f"of monitor '{monitor.name}' should be set to 'np.pi/2'."
-                        )
+
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -2931,6 +3169,24 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
         self._validate_nonlinear_specs()
+        self._validate_custom_source_time()
+
+    def _validate_custom_source_time(self):
+        """Warn if all simulation times are outside CustomSourceTime definition range."""
+        run_time = self._run_time
+        for idx, source in enumerate(self.sources):
+            if isinstance(source.source_time, CustomSourceTime):
+                if source.source_time._all_outside_range(run_time=run_time):
+                    data_times = source.source_time.data_times
+                    mint = np.min(data_times)
+                    maxt = np.max(data_times)
+                    log.warning(
+                        f"'CustomSourceTime' at 'sources[{idx}]' is defined over a time range "
+                        f"'({mint}, {maxt})' which does not include any of the 'Simulation' "
+                        f"times '({0, run_time})'. The envelope will be constant extrapolated "
+                        "from the first or last value in the 'CustomSourceTime', which may not "
+                        "be the desired outcome."
+                    )
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
@@ -3306,11 +3562,11 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    def with_adjoint_monitors(self, sim_fields: AutogradFieldMap) -> Simulation:
+    def with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
         # set of indices in the structures needing adjoint monitors
-        structure_indices = {index for (_, index, *_), _ in sim_fields.items()}
+        structure_indices = {index for (_, index, *_) in sim_fields_keys}
 
         mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
@@ -3344,14 +3600,6 @@ class Simulation(AbstractYeeGridSimulation):
             if isinstance(mnt, FreqMonitor):
                 freqs.update(mnt.freqs)
         freqs = sorted(freqs)
-
-        if len(freqs) > 1:
-            raise ValueError(
-                "Only the same, single frequency is supported in all monitors "
-                "when using autograd differentiation. "
-                f"Found {len(freqs)} distinct frequencies in the monitors."
-            )
-
         return freqs
 
     """ Accounting """
@@ -4291,207 +4539,3 @@ class Simulation(AbstractYeeGridSimulation):
             medium=scene.medium,
             **kwargs,
         )
-
-    def subsection(
-        self,
-        region: Box,
-        boundary_spec: BoundarySpec = None,
-        grid_spec: Union[GridSpec, Literal["identical"]] = None,
-        symmetry: Tuple[Symmetry, Symmetry, Symmetry] = None,
-        sources: Tuple[SourceType, ...] = None,
-        monitors: Tuple[MonitorType, ...] = None,
-        remove_outside_structures: bool = True,
-        remove_outside_custom_mediums: bool = False,
-        **kwargs,
-    ) -> Simulation:
-        """Generate a simulation instance containing only the ``region``.
-
-        Parameters
-        ----------
-        region : :class:.`Box`
-            New simulation domain.
-        boundary_spec : :class:.`BoundarySpec` = None
-            New boundary specification. If ``None``, then it is inherited from the original
-            simulation.
-        grid_spec : :class:.`GridSpec` = None
-            New grid specification. If ``None``, then it is inherited from the original
-            simulation. If ``identical``, then the original grid is transferred directly as a
-            :class:.`CustomGrid`. Note that in the latter case the region of the new simulation is
-            snapped to the original grid lines.
-        symmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = None
-            New simulation symmetry. If ``None``, then it is inherited from the original
-            simulation. Note that in this case the size and placement of new simulation domain
-            must be commensurate with the original symmetry.
-        sources : Tuple[SourceType, ...] = None
-            New list of sources. If ``None``, then the sources intersecting the new simulation
-            domain are inherited from the original simulation.
-        monitors : Tuple[MonitorType, ...] = None
-            New list of monitors. If ``None``, then the monitors intersecting the new simulation
-            domain are inherited from the original simulation.
-        remove_outside_structures : bool = True
-            Remove structures outside of the new simulation domain.
-        remove_outside_custom_mediums : bool = True
-            Remove custom medium data outside of the new simulation domain.
-        **kwargs
-            Other arguments passed to new simulation instance.
-        """
-
-        # must intersect the original domain
-        if not self.intersects(region):
-            raise SetupError("Requested region does not intersect simulation domain")
-
-        # restrict to the original simulation domain
-        new_bounds = Box.bounds_intersection(self.bounds, region.bounds)
-        new_bounds = [list(new_bounds[0]), list(new_bounds[1])]
-
-        # grid spec inheritace
-        if grid_spec is None:
-            grid_spec = self.grid_spec
-        elif isinstance(grid_spec, str) and grid_spec == "identical":
-            # create a custom grid from existing one
-            grids_1d = self.grid.boundaries.to_list
-            new_grids = [
-                CustomGrid(dl=tuple(np.diff(grids_1d[dim])), custom_offset=grids_1d[dim][0])
-                for dim in range(3)
-            ]
-            grid_spec = GridSpec(grid_x=new_grids[0], grid_y=new_grids[1], grid_z=new_grids[2])
-
-            # adjust region bounds to perfectly coincide with the grid
-            # note, sometimes (when a box already seems to perfrecty align with the grid)
-            # this causes the new region to expand one more pixel because of numerical roundoffs
-            # To help to avoid that we shrink new region by a small amount.
-            center = [(bmin + bmax) / 2 for bmin, bmax in zip(*new_bounds)]
-            size = [max(0.0, bmax - bmin - 2 * fp_eps) for bmin, bmax in zip(*new_bounds)]
-            aux_box = Box(center=center, size=size)
-            grid_inds = self.grid.discretize_inds(box=aux_box)
-
-            for dim in range(3):
-                # preserve zero size dimensions
-                if new_bounds[0][dim] != new_bounds[1][dim]:
-                    new_bounds[0][dim] = grids_1d[dim][grid_inds[dim][0]]
-                    new_bounds[1][dim] = grids_1d[dim][grid_inds[dim][1]]
-
-        # if symmetry is not overriden we inherit it from the original simulation where is needed
-        if symmetry is None:
-            # start with no symmetry
-            symmetry = [0, 0, 0]
-
-            # now check in each dimension whether we cross symmetry plane
-            for dim in range(3):
-                if self.symmetry[dim] != 0:
-                    crosses_symmetry = (
-                        new_bounds[0][dim] < self.center[dim]
-                        and new_bounds[1][dim] > self.center[dim]
-                    )
-
-                    # inherit symmetry only if we cross symmetry plane, otherwise we don't impose
-                    # symmetry even if the original simulation had symmetry
-                    if crosses_symmetry:
-                        symmetry[dim] = self.symmetry[dim]
-                        center = (new_bounds[0][dim] + new_bounds[1][dim]) / 2
-
-                        if not math.isclose(center, self.center[dim]):
-                            log.warning(
-                                f"The original simulation is symmetric along {'xyz'[dim]} direction. "
-                                "The requested new simulation region does cross the symmetry plane but is "
-                                "not symmetric with respect to it. To preserve correct symmetry, "
-                                "the requested simulation region is expanded symmetrically."
-                            )
-                            new_bounds[0][dim] = 2 * self.center[dim] - new_bounds[1][dim]
-
-        # symmetry and grid spec treatments could change new simulation bounds
-        # thus, recreate a box instance
-        new_box = Box.from_bounds(*new_bounds)
-
-        # inheritance of structures, sources, monitors, and boundary specs
-        if remove_outside_structures:
-            new_structures = [strc for strc in self.structures if new_box.intersects(strc.geometry)]
-        else:
-            new_structures = self.structures
-
-        if sources is None:
-            sources = [src for src in self.sources if new_box.intersects(src)]
-
-        if monitors is None:
-            monitors = [mnt for mnt in self.monitors if new_box.intersects(mnt)]
-
-        if boundary_spec is None:
-            boundary_spec = self.boundary_spec
-
-        # set boundary conditions in zero-size dimension to periodic
-        for dim in range(3):
-            if new_bounds[0][dim] == new_bounds[1][dim] and not isinstance(
-                boundary_spec.to_list[dim][0], Periodic
-            ):
-                axis_name = "xyz"[dim]
-                log.warning(
-                    f"The resulting simulation subsection has size zero along axis '{axis_name}'. "
-                    "Periodic boundary conditions are automatically set along this dimension."
-                )
-                boundary_spec = boundary_spec.updated_copy(**{"xyz"[dim]: Boundary.periodic()})
-
-        # reduction of custom medium data
-        new_sim_medium = self.medium
-        if remove_outside_custom_mediums:
-            # check for special treatment in case of PML
-            if any(
-                any(isinstance(edge, (PML, StablePML, Absorber)) for edge in boundary)
-                for boundary in boundary_spec.to_list
-            ):
-                # if we need to cut out outside custom medium we have to be careful about PML/Absorber
-                # we should include data in PML so that there is no artificial reflection at PML boundaries
-
-                # to do this, we first create an auxiliary simulation
-                aux_sim = self.updated_copy(
-                    center=new_box.center,
-                    size=new_box.size,
-                    grid_spec=grid_spec,
-                    boundary_spec=boundary_spec,
-                    monitors=[],
-                    sources=sources,  # need wavelength in case of auto grid
-                    symmetry=symmetry,
-                    structures=new_structures,
-                )
-
-                # then use its bounds as region for data cut off
-                new_bounds = aux_sim.simulation_bounds
-
-                # Note that this is not a full proof strategy. For example, if grid_spec is AutoGrid
-                # then after outside custom medium data is removed the grid sizes and, thus,
-                # pml extents can change as well
-
-            # now cut out custom medium data
-            new_structures_reduced_data = []
-
-            for structure in new_structures:
-                medium = structure.medium
-                if isinstance(medium, AbstractCustomMedium):
-                    new_structure_bounds = Box.bounds_intersection(
-                        new_bounds, structure.geometry.bounds
-                    )
-                    new_medium = medium.sel_inside(bounds=new_structure_bounds)
-                    new_structure = structure.updated_copy(medium=new_medium)
-                    new_structures_reduced_data.append(new_structure)
-                else:
-                    new_structures_reduced_data.append(structure)
-
-            new_structures = new_structures_reduced_data
-
-            if isinstance(self.medium, AbstractCustomMedium):
-                new_sim_medium = self.medium.sel_inside(bounds=new_bounds)
-
-        # finally, create an updated copy with all modifications
-        new_sim = self.updated_copy(
-            center=new_box.center,
-            size=new_box.size,
-            medium=new_sim_medium,
-            grid_spec=grid_spec,
-            boundary_spec=boundary_spec,
-            monitors=monitors,
-            sources=sources,
-            symmetry=symmetry,
-            structures=new_structures,
-            **kwargs,
-        )
-
-        return new_sim

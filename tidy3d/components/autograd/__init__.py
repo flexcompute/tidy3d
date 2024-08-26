@@ -11,7 +11,6 @@ from .types import (
 from .utils import get_static
 
 __all__ = [
-    "DerivativeInfo",
     "TracedFloat",
     "TracedSize1D",
     "TracedSize",
@@ -20,6 +19,5 @@ __all__ = [
     "AutogradTraced",
     "AutogradFieldMap",
     "get_static",
-    "integrate_within_bounds",
     "interpn",
 ]

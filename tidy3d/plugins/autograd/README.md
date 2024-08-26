@@ -109,54 +109,60 @@ Finally, the regular `web.run()` and `web.run_async()` functions have their deri
 
 The following components are traceable as inputs to the `td.Simulation`
 
+rectangular prisms
 - `Box.center`
 - `Box.size`
 
+polyslab (including those with dilation or slanted sidewalls)
 - `PolySlab.vertices`
 
+regular mediums
 - `Medium.permittivity`
 - `Medium.conductivity`
 
+spatially varying mediums (for topology optimization mainly)
 - `CustomMedium.permittivity`
 - `CustomMedium.eps_dataset`
 
+groups of geometries with the same medium (for faster processing)
 - `GeometryGroup.geometries`
 
+complex and self-intersecting polyslabs
 - `ComplexPolySlab.vertices`
 
+dispersive materials
 - `PoleResidue.eps_inf`
 - `PoleResidue.poles`
 
+spatially dependent dispersive materials:
 - `CustomPoleResidue.eps_inf`
 - `CustomPoleResidue.poles`
 
-The following components are traceable as outputs of the `td.SimulationData`
+The following data types are traceable as outputs of the `td.SimulationData`
 
 - `ModeData.amps`
 - `DiffractionData.amps`
 - `FieldData.field_components`
+- `FieldData` operations:
+  - `FieldData.flux`
+  - `SimulationData.get_intensity(fld_monitor_name)`
+  - `SimulationData.get_poynting(fld_monitor_name)`
+
+We also support the following high level features
+
+- gradients for objective functions depending on multi-frequency data with single broadband adjoint source.
+- server-side gradient processing by default, which saves transfer.  This can be turned off by passing `local_gradient=True` to the `web.run()` and related functions.
 
 We currently have the following restrictions:
 
-- All monitors in the `Simulation` must be single frequency only.
-- Only 500 max structures containing tracers can be added to the `Simulation` to cut down on processing time. In the future, `GeometryGroup` support will allow us to relax this restriction.
-- `web.run_async` for simulations with tracers does not return a `BatchData` but rather a `dict` mapping task name to `SimulationData`. There may be high memory usage with many simulations or a lot of data for each.
-- Gradient calculations are done client-side, meaning the field data in the traced structure regions must be downloaded. This can be a large amount of data for large, 3D structures.
+- Only 500 max structures containing tracers can be added to the `Simulation` to cut down on processing time. If you hit this, try using `GeometryGroup` to group any structures with the same `.medium` to relax the requirement.
 
 ### To be supported soon
 
-Next on our roadmap (targeting 2.8 and 2.9, summer 2024) is to support:
+Next on our roadmap (targeting 2.8 and 2.9, fall 2024) is to support:
 
-- support for multi-frequency monitors in certain situations (single adjoint source).
-- server-side gradient processing.
-
-- `FieldData` operations:
-  - `FieldData.flux`
-  - `SimulationData.get_intensity`
-  - `SimulationData.get_poynting`
-
-- `PoleResidue` and other dispersive models.
-- custom (spatially-dependent) dispersive models, allowing topology optimization with metals.
+- Field projection support
+- Automatic handling of all broadband objective functions using a fitting approach.
 
 Later this year (2024), we plan to support:
 
@@ -177,5 +183,6 @@ To convert existing tidy3d front end code to be autograd compatible, will need t
 - `float()` is not supported as far as I can tell.
 - `isclose()` -> `np.isclose()`
 - `array[i] = something` needs a different approach (happens in mesher a lot)
+- be careful with `+=` in autograd, it can fail silently..
 - whenever we pass things to other modules, like `shapely` especially, we need to be careful that they are untraced.
-- I just made structures static before any meshing, as a cutoff point. So if we add a new `make_grid()` call somewhere, eg in a validator, just need to be aware.
+- I just made structures static (`obj = obj.to_static()`) before any meshing, as a cutoff point. So if we add a new `make_grid()` call somewhere, eg in a validator, just need to be aware.

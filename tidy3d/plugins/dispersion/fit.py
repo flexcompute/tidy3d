@@ -167,7 +167,8 @@ class DispersionFitter(Tidy3dBaseModel):
         Tuple[np.ndarray[complex], np.ndarray[complex]]
             "a" and "c" poles for the PoleResidue model.
         """
-        assert len(coeffs) % 4 == 0, "len(coeffs) must be multiple of 4."
+        if len(coeffs) % 4 != 0:
+            raise ValueError(f"len(coeffs) must be multiple of 4, got {len(coeffs)=}.")
 
         a_real = coeffs[0::4]
         a_imag = coeffs[1::4]
@@ -692,8 +693,10 @@ class DispersionFitter(Tidy3dBaseModel):
             A :class:`DispersionFitter` instance.
         """
         data = np.loadtxt(fname, **loadtxt_kwargs)
-        assert len(data.shape) == 2, "data must contain [wavelength, ndata, kdata] in columns"
-        assert data.shape[-1] in (2, 3), "data must have either 2 or 3 rows (if k data)"
+        if len(data.shape) != 2:
+            raise ValueError("data must contain [wavelength, ndata, kdata] in columns")
+        if data.shape[-1] not in (2, 3):
+            raise ValueError("data must have either 2 or 3 rows (if k data)")
         if data.shape[-1] == 2:
             wvl_um, n_data = data.T
             k_data = None

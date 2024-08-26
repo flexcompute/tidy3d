@@ -42,6 +42,16 @@ jobs:
           token: ${{ secrets.GH_PAT }}
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
 
+      - name: Push corresponding reference to mirror repo if a branch
+        if: contains(github.ref, 'refs/heads/')
+        run: |
+          git fetch --unshallow origin ${{ needs.extract_branch_or_tag.outputs.ref_name }}
+          git pull origin ${{ needs.extract_branch_or_tag.outputs.ref_name }}
+          git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
+          git push mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }} --force # overwrites always
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # Conditional Checkout for Tag
       - name: Checkout Tag if tag-triggered-sync
         if: contains(github.ref, 'refs/tags/')
@@ -53,10 +63,10 @@ jobs:
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           fetch-tags: true
 
-      - name: Push corresponding reference to mirror repo
+
+      - name: Push corresponding reference to mirror repo if a tag
+        if: contains(github.ref, 'refs/tags/')
         run: |
-          git fetch --unshallow origin ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-          git pull origin ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
           git push mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }} --force # overwrites always
         env:

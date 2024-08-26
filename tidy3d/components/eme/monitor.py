@@ -105,6 +105,14 @@ class EMEModeSolverMonitor(EMEMonitor):
     """EME mode solver monitor.
     Records EME modes computed in planes intersecting the monitor geometry.
 
+    Note
+    ----
+
+        This is different than a :class:`.ModeSolverMonitor`, which computes modes within
+        its planar geometry. In contrast, this monitor does not compute new modes; instead,
+        it records the modes used for EME expansion and propagation, but only within the
+        monitor geometry.
+
     Example
     -------
     >>> monitor = EMEModeSolverMonitor(

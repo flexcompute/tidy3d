@@ -604,6 +604,19 @@ def verify_custom_medium_methods(mat, reduced_fields):
     sim.subsection(subsection, remove_outside_custom_mediums=False)
     sim.subsection(subsection, remove_outside_custom_mediums=True)
 
+    # eme
+    eme_sim = td.EMESimulation(
+        axis=2,
+        freqs=[td.C_0],
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        structures=(struct,),
+        eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec()),
+    )
+    _ = eme_sim.grid
+    eme_sim.subsection(subsection, remove_outside_custom_mediums=False)
+    eme_sim.subsection(subsection, remove_outside_custom_mediums=True)
+
 
 def test_anisotropic_custom_medium():
     """Anisotropic CustomMedium."""

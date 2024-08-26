@@ -437,32 +437,47 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
         time.sleep(REFRESH_TIME)
 
     # while running but percentage done is available
-    if verbose and task_type == "FDTD":
+    if verbose:
         # verbose case, update progressbar
         console.log("running solver")
-        with Progress(console=console) as progress:
-            pbar_pd = progress.add_task("% done", total=100)
-            perc_done, _ = get_run_info(task_id)
+        if task_type == "FDTD":
+            with Progress(console=console) as progress:
+                pbar_pd = progress.add_task("% done", total=100)
+                perc_done, _ = get_run_info(task_id)
 
-            while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
+                while (
+                    perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
+                ):
+                    perc_done, field_decay = get_run_info(task_id)
+                    new_description = f"solver progress (field decay = {field_decay:.2e})"
+                    progress.update(pbar_pd, completed=perc_done, description=new_description)
+                    time.sleep(RUN_REFRESH_TIME)
+
                 perc_done, field_decay = get_run_info(task_id)
+                if perc_done is not None and perc_done < 100 and field_decay > 0:
+                    console.log(f"early shutoff detected at {perc_done:1.0f}%, exiting.")
+
                 new_description = f"solver progress (field decay = {field_decay:.2e})"
-                progress.update(pbar_pd, completed=perc_done, description=new_description)
-                time.sleep(RUN_REFRESH_TIME)
+                progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
+        elif task_type == "EME":
+            with Progress(console=console) as progress:
+                pbar_pd = progress.add_task("% done", total=100)
+                perc_done, _ = get_run_info(task_id)
 
-            perc_done, field_decay = get_run_info(task_id)
-            if perc_done is not None and perc_done < 100 and field_decay > 0:
-                console.log(f"early shutoff detected at {perc_done:1.0f}%, exiting.")
+                while (
+                    perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
+                ):
+                    perc_done, _ = get_run_info(task_id)
+                    new_description = "solver progress"
+                    progress.update(pbar_pd, completed=perc_done, description=new_description)
+                    time.sleep(RUN_REFRESH_TIME)
 
-            new_description = f"solver progress (field decay = {field_decay:.2e})"
-            progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
-
-    # TODO: progressbar for EME
+                perc_done, _ = get_run_info(task_id)
+                new_description = "solver progress"
+                progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
-        if verbose:
-            console.log("running solver")
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
             perc_done, field_decay = get_run_info(task_id)

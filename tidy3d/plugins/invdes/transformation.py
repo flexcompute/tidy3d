@@ -27,7 +27,10 @@ class AbstractTransformation(InvdesBaseModel, abc.ABC):
 class FilterProject(InvdesBaseModel):
     """Transformation involving convolution by a conic filter followed by a ``tanh`` projection.
 
-    .. image:: ../../_static/img/filter_project.png
+    Notes
+    -----
+
+        .. image:: ../../_static/img/filter_project.png
 
     """
 

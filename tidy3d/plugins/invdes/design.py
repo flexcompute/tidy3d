@@ -129,8 +129,9 @@ class InverseDesign(AbstractInverseDesign):
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
         simulation = self.to_simulation(params=params)
         kwargs.setdefault("task_name", self.task_name)
-        sim_data = web.run(simulation, verbose=self.verbose, **kwargs)
-        return sim_data
+        return web.run(simulation, verbose=self.verbose, **kwargs)
+        # sim_data = job.run()
+        # return sim_data
 
 
 class InverseDesignMulti(AbstractInverseDesign):

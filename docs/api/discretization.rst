@@ -11,6 +11,7 @@ Discretization
    tidy3d.AutoGrid
    tidy3d.UniformGrid
    tidy3d.CustomGrid
+   tidy3d.CustomGridBoundaries
    tidy3d.Coords
    tidy3d.FieldGrid
    tidy3d.YeeGrid
