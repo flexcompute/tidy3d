@@ -135,7 +135,7 @@ Some users or systems may require a more specialized installation, which we will
 
         If you already have Python installed on your computer, it is possible that some packages in your current environment could have version conflicts with Tidy3D. To avoid this, we strongly recommend that you create a clean Python virtual environment to install Tidy3D.
 
-        We recommend using the Mamba package management system to manage your Python virtual environment as well as installing Tidy3D. You can install Mamba conveniently following `these instructions <https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html/>`__.
+        We recommend using the Mamba package management system to manage your Python virtual environment as well as installing Tidy3D. You can install Mamba conveniently following `these instructions <https://mamba.readthedocs.io/en/latest/installation/mamba-installation.html>`__.
 
         After you install Anaconda, open the Anaconda Prompt and enter
 
