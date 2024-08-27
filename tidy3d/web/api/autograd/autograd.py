@@ -42,6 +42,10 @@ MAX_NUM_TRACED_STRUCTURES = 500
 # default value for whether to do local gradient calculation (True) or server side (False)
 LOCAL_GRADIENT = True
 
+# if True, will plot the adjoint fields on the plane provided. used for debugging only
+_INSPECT_ADJOINT_FIELDS = False
+_INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, td.inf, 0))
+
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
     """Check whether a supplied simulation can use autograd run."""
@@ -732,9 +736,7 @@ def setup_adj(
     td.log.info("Running custom vjp (adjoint) pipeline.")
 
     # immediately filter out any data_vjps with all 0's in the data
-    data_fields_vjp = {
-        key: get_static(value) for key, value in data_fields_vjp.items() if not np.all(value == 0.0)
-    }
+    data_fields_vjp = {key: get_static(value) for key, value in data_fields_vjp.items()}
 
     # insert the raw VJP data into the .data of the original SimulationData
     sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
@@ -750,6 +752,29 @@ def setup_adj(
     sim_adj, adjoint_source_info = sim_data_vjp.make_adjoint_sim(
         data_vjp_paths=data_vjp_paths, adjoint_monitors=adjoint_monitors
     )
+
+    if _INSPECT_ADJOINT_FIELDS:
+        adj_fld_mnt = td.FieldMonitor(
+            center=_INSPECT_ADJOINT_PLANE.center,
+            size=_INSPECT_ADJOINT_PLANE.size,
+            freqs=adjoint_monitors[0].freqs,
+            name="adjoint_fields",
+        )
+
+        import matplotlib.pylab as plt
+
+        import tidy3d.web as web
+
+        sim_data_new = web.run(
+            sim_adj.updated_copy(monitors=[adj_fld_mnt]),
+            task_name="adjoint_field_viz",
+            verbose=False,
+        )
+        _, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True, figsize=(10, 4))
+        sim_data_new.plot_field("adjoint_fields", "Ex", "re", ax=ax1)
+        sim_data_new.plot_field("adjoint_fields", "Ey", "re", ax=ax2)
+        sim_data_new.plot_field("adjoint_fields", "Ez", "re", ax=ax3)
+        plt.show()
 
     td.log.info(f"Adjoint simulation created with {len(sim_adj.sources)} sources.")
 

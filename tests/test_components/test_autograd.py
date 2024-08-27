@@ -63,7 +63,7 @@ FREQS = [FREQ0]
 FWIDTH = FREQ0 / 10
 
 # sim sizes
-LZ = 7 * WVL
+LZ = 7.0 * WVL
 
 IS_3D = False
 
@@ -420,9 +420,11 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
 def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.SimulationData], float]]]:
     """Make a dictionary of all the possible monitors in the simulation."""
 
+    X = 0.75
+
     mode_mnt = td.ModeMonitor(
         size=(2, 2, 0),
-        center=(0, 0, LZ / 2 - WVL),
+        center=(0, 0, +LZ / 2 - X * WVL),
         mode_spec=td.ModeSpec(),
         freqs=[FREQ0],
         name="mode",
@@ -444,7 +446,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
 
     field_vol = td.FieldMonitor(
         size=(1, 1, 0),
-        center=(0, 0, +LZ / 2 - WVL),
+        center=(0, 0, +LZ / 2 - X * WVL),
         freqs=[FREQ0],
         name="field_vol",
     )
@@ -453,12 +455,9 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         value = 0.0
         for _, val in mnt_data.field_components.items():
             value = value + abs(anp.sum(val.values))
-        # field components numerical is 3x higher
         intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
         value += intensity
-        # intensity numerical is 4.79x higher
         value += anp.sum(mnt_data.flux.values)
-        # flux is 18.4x lower
         return value
 
     field_point = td.FieldMonitor(
@@ -471,7 +470,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
     def field_point_postprocess_fn(sim_data, mnt_data):
         value = 0.0
         for _, val in mnt_data.field_components.items():
-            value += abs(anp.sum(val.values))
+            value += abs(anp.sum(abs(val.values)))
         value += anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values)
         return value
 
@@ -599,7 +598,7 @@ def test_polyslab_axis_ops(axis):
 
 
 @pytest.mark.skipif(not RUN_NUMERICAL, reason="Numerical gradient tests runs through web API.")
-@pytest.mark.parametrize("structure_key, monitor_key", (("cylinder", "mode"),))
+@pytest.mark.parametrize("structure_key, monitor_key", (("medium", "field_vol"),))
 def test_autograd_numerical(structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -623,7 +622,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 1e-3
+    delta = 1e-2
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))

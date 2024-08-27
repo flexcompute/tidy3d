@@ -46,7 +46,7 @@ RESIDUAL_CUTOFF_ADJOINT = 1e-6
 class AdjointSourceInfo(Tidy3dBaseModel):
     """Stores information about the adjoint sources to pass to autograd pipeline."""
 
-    sources: tuple[SourceType, ...] = pd.Field(
+    sources: Tuple[annotate_type(SourceType), ...] = pd.Field(
         ...,
         title="Adjoint Sources",
         description="Set of processed sources to include in the adjoint simulation.",
@@ -1117,6 +1117,9 @@ class SimulationData(AbstractYeeGridSimulationData):
             adj_srcs, post_norm = self.process_adjoint_sources_broadband(adj_srcs)
             return AdjointSourceInfo(sources=adj_srcs, post_norm=post_norm, normalize_sim=True)
 
+        import pdb
+
+        pdb.set_trace()
         # if several spatial ports and several frequencies, try to fit
         log.info("Adjoint source creation: trying multifrequency fit.")
         adj_srcs, post_norm = self.process_adjoint_sources_fit(
