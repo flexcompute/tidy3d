@@ -324,10 +324,10 @@ class EigSolver(Tidy3dBaseModel):
         """
 
         # use a high-conductivity model for locations associated with a PEC
-        def conductivity_model_for_pec(eps, threshold=0.9 * pec_val):
+        def conductivity_model_for_pec(eps, threshold=0.9 * np.abs(pec_val)):
             """PEC entries associated with 'eps' are converted to a high-conductivity model."""
             eps = eps.astype(complex)
-            eps[eps <= threshold] = 1 + 1j * np.abs(pec_val)
+            eps[np.abs(eps) >= threshold] = 1 + 1j * np.abs(pec_val)
             return eps
 
         eps_tensor = conductivity_model_for_pec(eps_tensor)
