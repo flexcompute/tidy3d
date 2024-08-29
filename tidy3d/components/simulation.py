@@ -2323,6 +2323,46 @@ class Simulation(AbstractYeeGridSimulation):
                     )
         return val
 
+    @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["boundary_spec", "medium", "size", "structures", "sources"])
+    def bloch_boundaries_diff_mnt(cls, val, values):
+        """Error if there are diffraction monitors incompatible with boundary conditions."""
+
+        monitors = val
+
+        if not val or not any(isinstance(mnt, DiffractionMonitor) for mnt in monitors):
+            return val
+
+        boundaries = values.get("boundary_spec").to_list
+        sources = values.get("sources")
+        size = values.get("size")
+        sim_medium = values.get("medium")
+        structures = values.get("structures")
+        for source_ind, source in enumerate(sources):
+            if not isinstance(source, PlaneWave):
+                continue
+
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            medium_set = Scene.intersecting_media(source, structures)
+            medium = medium_set.pop() if medium_set else sim_medium
+
+            for tan_dir in tan_dirs:
+                boundary = boundaries[tan_dir]
+
+                # check the Bloch boundary + angled plane wave case
+                num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                if num_bloch > 0:
+                    cls._check_bloch_vec(
+                        source=source,
+                        source_ind=source_ind,
+                        bloch_vec=boundary[0].bloch_vec,
+                        dim=tan_dir,
+                        medium=medium,
+                        domain_size=size[tan_dir],
+                        has_diff_mnt=True,
+                    )
+        return val
+
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["medium", "center", "size", "structures", "sources"])
     def tfsf_boundaries(cls, val, values):
@@ -3774,6 +3814,7 @@ class Simulation(AbstractYeeGridSimulation):
         dim: Axis,
         medium: MediumType,
         domain_size: float,
+        has_diff_mnt: bool = False,
     ):
         """Helper to check if a given Bloch vector is consistent with a given source."""
 
@@ -3786,10 +3827,13 @@ class Simulation(AbstractYeeGridSimulation):
         if bloch_vec != expected_bloch_vec:
             test_val = np.real(expected_bloch_vec - bloch_vec)
 
-            if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
+            test_val_is_int = np.isclose(test_val, np.round(test_val))
+            src_name = f" '{source.name}'" if source.name else ""
+
+            if has_diff_mnt and test_val_is_int and not np.isclose(test_val, 0):
                 # the given Bloch vector is offset by an integer
                 log.warning(
-                    f"The wave vector of source '{source.name}' along dimension "
+                    f"The wave vector of source{src_name} along dimension "
                     f"'{dim}' is equal to the Bloch vector of the simulation "
                     "boundaries along that dimension plus an integer reciprocal "
                     "lattice vector. If using a 'DiffractionMonitor', diffraction "
@@ -3797,12 +3841,13 @@ class Simulation(AbstractYeeGridSimulation):
                     "of the source. Consider using 'BlochBoundary.from_source()'.",
                     custom_loc=["boundary_spec", "xyz"[dim]],
                 )
-            elif not np.isclose(test_val % 1, 0):
+
+            if not test_val_is_int:
                 # the given Bloch vector is neither equal to the expected value, nor
                 # off by an integer
                 log.warning(
                     f"The Bloch vector along dimension '{dim}' may be incorrectly "
-                    f"set with respect to the source '{source.name}'. The absolute "
+                    f"set with respect to the source{src_name}. The absolute "
                     "difference between the expected and provided values in "
                     "bandstructure units, up to an integer offset, is greater than "
                     "1e-6. Consider using ``BlochBoundary.from_source()``, or "
