@@ -386,6 +386,8 @@ def make_2d_proj_monitors(center, size, freqs, plane):
         Ns = 40
         xs = np.linspace(-far_size, far_size, Ns)
         ys = [0]
+        kx = np.linspace(-0.7, 0.7, Ns)
+        ky = [0]
         projection_axis = 0
     elif plane == "yz":
         thetas = np.linspace(0, np.pi, 1)
@@ -394,6 +396,8 @@ def make_2d_proj_monitors(center, size, freqs, plane):
         Ns = 40
         xs = [0]
         ys = np.linspace(-far_size, far_size, Ns)
+        kx = [0]
+        ky = np.linspace(-0.7, 0.7, Ns)
         projection_axis = 1
     elif plane == "xz":
         thetas = np.linspace(0, np.pi, 100)
@@ -402,6 +406,8 @@ def make_2d_proj_monitors(center, size, freqs, plane):
         Ns = 40
         xs = [0]
         ys = np.linspace(-far_size, far_size, Ns)
+        kx = [0]
+        ky = np.linspace(-0.7, 0.7, Ns)
         projection_axis = 0
     else:
         raise ValueError("Invalid plane. Use 'xy', 'yz', or 'xz'.")
@@ -429,7 +435,19 @@ def make_2d_proj_monitors(center, size, freqs, plane):
         far_field_approx=True,  # Fields are far enough for geometric far field approximations
     )
 
-    return (n2f_angle_monitor_2d, n2f_car_monitor_2d)
+    n2f_k_monitor_2d = td.FieldProjectionKSpaceMonitor(
+        center=center,
+        size=size,
+        freqs=freqs,
+        name="far_field_kspace",
+        ux=list(kx),
+        uy=list(ky),
+        proj_axis=projection_axis,
+        proj_distance=R_FAR,
+        far_field_approx=True,  # Fields are far enough for geometric far field approximations
+    )
+
+    return (n2f_angle_monitor_2d, n2f_car_monitor_2d, n2f_k_monitor_2d)
 
 
 def make_2d_proj(plane):
@@ -528,10 +546,12 @@ def make_2d_proj(plane):
     (
         n2f_angle_monitor_2d,
         n2f_cart_monitor_2d,
+        n2f_kspace_monitor_2d,
     ) = make_2d_proj_monitors(center, monitor_size, [f0], plane)
 
     far_fields_angular_2d = proj.project_fields(n2f_angle_monitor_2d)
     far_fields_cartesian_2d = proj.project_fields(n2f_cart_monitor_2d)
+    far_fields_kspace_2d = proj.project_fields(n2f_kspace_monitor_2d)
 
     # compute far field quantities
     far_fields_angular_2d.r
@@ -555,6 +575,17 @@ def make_2d_proj(plane):
     for val in far_fields_cartesian_2d.field_components.values():
         val.sel(f=f0)
     far_fields_cartesian_2d.renormalize_fields(proj_distance=5e6)
+
+    far_fields_kspace_2d.ux
+    far_fields_kspace_2d.uy
+    far_fields_kspace_2d.r
+    far_fields_kspace_2d.fields_spherical
+    far_fields_kspace_2d.fields_cartesian
+    far_fields_kspace_2d.radar_cross_section
+    far_fields_kspace_2d.power
+    for val in far_fields_kspace_2d.field_components.values():
+        val.sel(f=f0)
+    far_fields_kspace_2d.renormalize_fields(proj_distance=5e6)
 
 
 def test_2d_proj_clientside():
