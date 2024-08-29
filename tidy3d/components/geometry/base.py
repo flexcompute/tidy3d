@@ -2437,6 +2437,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         # if not enough data, just use best guess using eps in medium and simulation
         needs_eps_approx = any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz)
+
         if derivative_info.eps_approx or needs_eps_approx:
             eps_xyz_inside = 3 * [derivative_info.eps_in]
             eps_xyz_outside = 3 * [derivative_info.eps_out]
@@ -2447,7 +2448,7 @@ class Box(SimplePlaneIntersection, Centered):
             if min_max_index == 0:
                 index_out, index_in = (0, num_cells_in - 1)
             else:
-                index_out, index_in = (-1, -num_cells_in - 1)
+                index_out, index_in = (-1, -num_cells_in)
             eps_xyz_inside = [eps.isel(**{dim_normal: index_in}) for eps in eps_xyz]
             eps_xyz_outside = [eps.isel(**{dim_normal: index_out}) for eps in eps_xyz]
 

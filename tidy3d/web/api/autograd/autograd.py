@@ -738,6 +738,8 @@ def setup_adj(
     # immediately filter out any data_vjps with all 0's in the data
     data_fields_vjp = {key: get_static(value) for key, value in data_fields_vjp.items()}
 
+    # import pdb; pdb.set_trace()
+
     # insert the raw VJP data into the .data of the original SimulationData
     sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
 

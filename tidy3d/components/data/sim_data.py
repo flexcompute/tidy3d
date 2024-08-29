@@ -1074,7 +1074,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             )
             sources_adj_all[mnt_data.monitor.name] = sources_adj
 
-        if not sources_adj_all:
+        if not any(src for _, src in sources_adj_all.items()):
             raise ValueError(
                 "No adjoint sources created for this simulation. "
                 "This could indicate a bug in your setup, for example the objective function "
@@ -1117,9 +1117,6 @@ class SimulationData(AbstractYeeGridSimulationData):
             adj_srcs, post_norm = self.process_adjoint_sources_broadband(adj_srcs)
             return AdjointSourceInfo(sources=adj_srcs, post_norm=post_norm, normalize_sim=True)
 
-        import pdb
-
-        pdb.set_trace()
         # if several spatial ports and several frequencies, try to fit
         log.info("Adjoint source creation: trying multifrequency fit.")
         adj_srcs, post_norm = self.process_adjoint_sources_fit(

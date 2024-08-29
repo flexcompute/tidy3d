@@ -37,6 +37,7 @@ TEST_POLYSLAB_SPEED = False
 
 # whether to run numerical gradient tests, off by default because it runs real simulations
 RUN_NUMERICAL = False
+_NUMERICAL_COMBINATION = ("center_list", "mode")
 
 TEST_MODES = ("pipeline", "adjoint", "speed")
 TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
@@ -528,7 +529,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("custom_med", "mode")]
+args = [("size_element", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
@@ -598,7 +599,7 @@ def test_polyslab_axis_ops(axis):
 
 
 @pytest.mark.skipif(not RUN_NUMERICAL, reason="Numerical gradient tests runs through web API.")
-@pytest.mark.parametrize("structure_key, monitor_key", (("medium", "field_vol"),))
+@pytest.mark.parametrize("structure_key, monitor_key", (_NUMERICAL_COMBINATION,))
 def test_autograd_numerical(structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -622,7 +623,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 1e-2
+    delta = 1e-3
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))

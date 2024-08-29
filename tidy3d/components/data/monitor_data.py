@@ -1749,7 +1749,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         for name in dataset_names:
             if name == "amps":
                 adjoint_sources += self.make_adjoint_sources_amps(fwidth=fwidth)
-            else:
+            elif not np.all(self.n_complex.values == 0.0):
                 log.warning(
                     f"Can't create adjoint source for 'ModeData.{type(self)}.{name}'. "
                     f"for monitor '{self.monitor.name}'. "
