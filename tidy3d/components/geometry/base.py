@@ -986,11 +986,11 @@ class Geometry(Tidy3dBaseModel, ABC):
             return theta_local, phi_local
 
         x = np.cos(theta_local)
-        y = np.sin(theta_local) * np.sin(phi_local)
-        z = -np.sin(theta_local) * np.cos(phi_local)
+        y = np.sin(theta_local) * np.cos(phi_local)
+        z = np.sin(theta_local) * np.sin(phi_local)
 
         if axis == 1:
-            x, y, z = -z, x, -y
+            x, y, z = y, x, z
 
         theta = np.arccos(z)
         phi = np.arctan2(y, x)

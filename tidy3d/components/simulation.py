@@ -2928,14 +2928,14 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["size"])
-    def _projection_monitors_2d(cls, val, values):
+    def _projection_mnts_2d(cls, val, values):
         """
         Validate if the field projection monitor is set up for a 2D simulation and
         ensure the observation parameters are configured correctly.
 
-        - For a 2D simulation in the x-y plane, 'theta' should be set to 'pi/2'.
-        - For a 2D simulation in the y-z plane, 'phi' should be set to 'pi/2' or '2*pi/3'.
-        - For a 2D simulation in the x-z plane, 'phi' should be set to '0' or 'pi'.
+        - For a 2D simulation in the x-y plane, ``theta`` should be set to ``pi/2``.
+        - For a 2D simulation in the y-z plane, ``phi`` should be set to ``pi/2`` or ``3*pi/2``.
+        - For a 2D simulation in the x-z plane, ``phi`` should be set to ``0`` or ``pi``.
 
         Note: Exact far field projection is not available yet. Currently, only
         'far_field_approx = True' is supported.
@@ -2967,38 +2967,6 @@ class Simulation(AbstractYeeGridSimulation):
                         f"Monitor '{monitor.name}' is not supported in 1D simulations."
                     )
 
-                if isinstance(monitor, (FieldProjectionKSpaceMonitor)):
-                    raise SetupError(
-                        f"Monitor '{monitor.name}' in 2D simulations is coming soon. "
-                        "Please use 'FieldProjectionAngleMonitor' instead."
-                        "Please use 'FieldProjectionAngleMonitor' or 'FieldProjectionCartesianMonitor' instead."
-                    )
-
-                if isinstance(monitor, (FieldProjectionCartesianMonitor)):
-                    config = {
-                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
-                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
-                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
-                    }[plane]
-
-                    valid_proj_axes = config["valid_proj_axes"]
-                    invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
-
-                    if monitor.proj_axis in invalid_proj_axis:
-                        raise SetupError(
-                            f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
-                            f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
-                        )
-
-                    for idx, axis in enumerate(valid_proj_axes):
-                        coord = getattr(monitor, config["coord"][idx])
-                        if monitor.proj_axis == axis and not all(value in [0] for value in coord):
-                            raise SetupError(
-                                f"For a 2D simulation in the {plane} plane with "
-                                f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
-                                f"'{monitor.name}' should be set to '[0]'."
-                            )
-
                 if isinstance(monitor, FieldProjectionAngleMonitor):
                     config = {
                         "y-z": {"valid_value": [np.pi / 2, 3 * np.pi / 2], "coord": "phi"},
@@ -3022,6 +2990,39 @@ class Simulation(AbstractYeeGridSimulation):
                             f"angle '{config['coord']}' of monitor "
                             f"'{monitor.name}' should be set to "
                             f"'{valid_values_str}'"
+                        )
+
+                    continue
+
+                if isinstance(monitor, (FieldProjectionCartesianMonitor)):
+                    config = {
+                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
+                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
+                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
+                    }[plane]
+                elif isinstance(monitor, (FieldProjectionKSpaceMonitor)):
+                    config = {
+                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["ux", "ux"]},
+                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["ux", "uy"]},
+                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["uy", "uy"]},
+                    }[plane]
+
+                valid_proj_axes = config["valid_proj_axes"]
+                invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
+
+                if monitor.proj_axis in invalid_proj_axis:
+                    raise SetupError(
+                        f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
+                        f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
+                    )
+
+                for idx, axis in enumerate(valid_proj_axes):
+                    coord = getattr(monitor, config["coord"][idx])
+                    if monitor.proj_axis == axis and not all(value in [0] for value in coord):
+                        raise SetupError(
+                            f"For a 2D simulation in the {plane} plane with "
+                            f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
+                            f"'{monitor.name}' should be set to '[0]'."
                         )
 
         return val
