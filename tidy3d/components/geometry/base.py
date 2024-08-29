@@ -2433,7 +2433,7 @@ class Box(SimplePlaneIntersection, Centered):
         eps_xyz = [derivative_info.eps_data[f"eps_{dim}{dim}"] for dim in "xyz"]
 
         # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
-        num_cells_in = 4
+        num_cells_in = 3
 
         # if not enough data, just use best guess using eps in medium and simulation
         needs_eps_approx = any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz)
