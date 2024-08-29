@@ -37,7 +37,7 @@ TEST_POLYSLAB_SPEED = False
 
 # whether to run numerical gradient tests, off by default because it runs real simulations
 RUN_NUMERICAL = False
-_NUMERICAL_COMBINATION = ("center_list", "mode")
+_NUMERICAL_COMBINATION = ("size_element", "mode")
 
 TEST_MODES = ("pipeline", "adjoint", "speed")
 TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
@@ -529,7 +529,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-args = [("size_element", "mode")]
+# args = [("size_element", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:

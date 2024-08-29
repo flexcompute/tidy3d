@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved passivity enforcement near high-Q poles in `FastDispersionFitter`. Failed passivity enforcement could lead to simulation divergences.
 - More helpful error and suggestion if users try to differentiate w.r.t. unsupported `FluxMonitor` output.
 - Removed positive warnings in Simulation validators for Bloch boundary conditions.
+- Improve accuracy in `Box` shifting boundary gradients.
+- Improve accuracy in `FieldData` operations involving H fields (like `.flux`).
+- Better error and warning handling in autograd pipeline.
 
 ## [2.7.2] - 2024-08-07
 
