@@ -22,6 +22,8 @@ TOL_EIGS = fp_eps
 TOL_TENSORIAL = 1e-6
 # shift target neff by this value, both rel and abs, whichever results in larger shift
 TARGET_SHIFT = 10 * fp_eps
+# Preconditioner: "Jacobi" or "Material" based
+PRECONDITIONER = "Material"
 
 
 class EigSolver(Tidy3dBaseModel):
@@ -90,7 +92,7 @@ class EigSolver(Tidy3dBaseModel):
         angle_phi = mode_spec.angle_phi
         omega = 2 * np.pi * freq
         k0 = omega / C_0
-        enable_incidence_matrices = split_curl_scaling is not None or mu_cross is not None
+        enable_incidence_matrices = False  # Experimental feature, always off for now
 
         eps_formated = cls.format_medium_data(eps_cross)
         eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_formated
@@ -331,6 +333,7 @@ class EigSolver(Tidy3dBaseModel):
             return eps
 
         eps_tensor = conductivity_model_for_pec(eps_tensor)
+        mu_tensor = conductivity_model_for_pec(mu_tensor)
 
         # Determine if ``eps`` and ``mu`` are diagonal or tensorial
         off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
@@ -464,7 +467,7 @@ class EigSolver(Tidy3dBaseModel):
             """Check if there are any PEC values in the given permittivity array."""
             return np.any(np.abs(eps_vec) >= threshold)
 
-        if any(any_pec(i) for i in [eps_xx, eps_yy, eps_zz]):
+        if any(any_pec(i) for i in [eps_xx, eps_yy, eps_zz, mu_xx, mu_yy, mu_zz]):
             enable_preconditioner = True
 
         # Compute the matrix for diagonalization
@@ -507,18 +510,55 @@ class EigSolver(Tidy3dBaseModel):
             mat = dnz * mat * dnz.T
             vec_init = dnz * vec_init
 
+        # Denote the original eigenvalue problem as Ax = lambda x,
+        # with left and right preconditioners, we solve for the following eigenvalue problem,
+        # L A R y = lambda LR y, where x = R y
+        precon_left = None
+        precon_right = None
+        generalized_M = None  # matrix in the generalized eigenvalue problem
         if enable_preconditioner:
-            precon = sp.diags(1 / mat.diagonal())
-            mat = mat * precon
-        else:
-            precon = None
+            if PRECONDITIONER == "Jacobi":
+                precon_right = sp.diags(1 / mat.diagonal())
+
+            elif PRECONDITIONER == "Material":
+
+                def conditional_inverted_vec(eps_vec, threshold=1):
+                    """Returns a diagonal sparse matrix whose i-th element in the diagonal
+                    is |eps_i|^-1 if |eps_i|>threshold, and |eps_i| otherwise.
+                    """
+                    abs_vec = np.abs(eps_vec)
+                    return sp.spdiags(
+                        np.where(abs_vec > threshold, 1.0 / abs_vec, abs_vec), [0], N, N
+                    )
+
+                precon_left = sp.bmat(
+                    [
+                        [conditional_inverted_vec(mu_yy), None],
+                        [None, conditional_inverted_vec(mu_xx)],
+                    ]
+                )
+                precon_right = sp.bmat(
+                    [
+                        [conditional_inverted_vec(eps_xx), None],
+                        [None, conditional_inverted_vec(eps_yy)],
+                    ]
+                )
+            generalized_M = precon_right
+            mat = mat @ precon_right
+            if precon_left is not None:
+                generalized_M = precon_left @ generalized_M
+                mat = precon_left @ mat
 
         if analyze_conditioning:
             aca = mat.conjugate().T * mat
             aac = mat * mat.conjugate().T
             diff = aca - aac
-            print(spl.norm(diff, ord=np.inf), spl.norm(aca, ord=np.inf), spl.norm(aac, ord=np.inf))
-            print(spl.norm(diff, ord="fro"), spl.norm(aca, ord="fro"), spl.norm(aac, ord="fro"))
+            print(
+                f"inf-norm: A*A: {spl.norm(aca, ord=np.inf)}, AA*: {spl.norm(aac, ord=np.inf)}, nonnormality: {spl.norm(diff, ord=np.inf)}, relative nonnormality: {spl.norm(diff, ord=np.inf)/spl.norm(aca, ord=np.inf)}"
+            )
+            print(
+                f"fro-norm: A*A: {spl.norm(aca, ord='fro')}, AA*: {spl.norm(aac, ord='fro')}, nonnormality: {spl.norm(diff, ord='fro')}, relative nonnormality: {spl.norm(diff, ord='fro')/spl.norm(aca, ord='fro')}"
+            )
 
         # preprocess basis modes
         basis_vecs = None
@@ -541,7 +581,7 @@ class EigSolver(Tidy3dBaseModel):
                 vec_init,
                 guess_value=eig_guess,
                 mode_solver_type=mode_solver_type,
-                M=precon,
+                M=generalized_M,
             )
         else:
             vals, vecs = cls.solver_eigs_relative(
@@ -550,7 +590,7 @@ class EigSolver(Tidy3dBaseModel):
                 vec_init,
                 guess_value=eig_guess,
                 mode_solver_type=mode_solver_type,
-                M=precon,
+                M=generalized_M,
                 basis_vecs=basis_vecs,
             )
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
@@ -562,8 +602,8 @@ class EigSolver(Tidy3dBaseModel):
 
         E, H = None, None
         if basis_E is None:
-            if enable_preconditioner:
-                vecs = precon * vecs
+            if precon_right is not None:
+                vecs = precon_right * vecs
 
             if enable_incidence_matrices:
                 vecs = dnz.T * vecs
@@ -744,6 +784,17 @@ class EigSolver(Tidy3dBaseModel):
         values, vectors = spl.eigs(
             mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init, M=M
         )
+
+        # for i, eig_i in enumerate(values):
+        #     vec = vectors[:, i]
+        #     rhs = vec
+        #     if M is not None:
+        #         rhs = M @ rhs
+        #     eig_from_vec = (vec.T @ (mat @ vec)) / (vec.T @ rhs)
+        #     residue = np.linalg.norm(mat @ vec - eig_i * rhs) / np.linalg.norm(vec)
+        #     print(
+        #         f"{i}-th eigenvalue: {eig_i}, referred from eigenvectors: {eig_from_vec}, relative residual: {residue}."
+        #     )
         return values, vectors
 
     @classmethod
