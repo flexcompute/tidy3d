@@ -17,26 +17,22 @@ from tidy3d.plugins.smatrix import (
 )
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 
-from ..utils import run_emulated
+from ...utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
 
 
 def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
-    monkeypatch.setattr(TerminalComponentModeler, "_run_sims", lambda self, path_dir: batch_data)
-    # for the random data, the power wave matrix might be singular, leading to an error
-    # during inversion, so monkeypatch the inv method so that it operates on a random matrix
-    monkeypatch.setattr(
-        AbstractComponentModeler, "inv", lambda matrix: np.random.rand(*matrix.shape) + 1e-4
-    )
-    # Need to do something similar when computing F
+    monkeypatch.setattr(AbstractComponentModeler, "batch_data", property(lambda self: batch_data))
+    monkeypatch.setattr(TerminalComponentModeler, "batch_data", property(lambda self: batch_data))
+    monkeypatch.setattr(AbstractComponentModeler, "inv", lambda matrix: np.eye(len(modeler.ports)))
     monkeypatch.setattr(
         TerminalComponentModeler,
         "_compute_F",
         lambda matrix: 1.0 / (2.0 * np.sqrt(np.abs(matrix) + 1e-4)),
     )
-    s_matrix = modeler.run(path_dir=modeler.path_dir)
+    s_matrix = modeler._construct_smatrix()
     return s_matrix
 
 

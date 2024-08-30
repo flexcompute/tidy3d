@@ -17,7 +17,6 @@ from ....components.source import GaussianPulse, ModeSource
 from ....components.types import Ax, Complex
 from ....components.viz import add_ax_if_none, equal_aspect
 from ....exceptions import SetupError
-from ....web.api.container import BatchData
 from ..ports.modal import ModalPortDataArray, Port
 from .base import FWIDTH_FRAC, AbstractComponentModeler
 
@@ -256,8 +255,10 @@ class ComponentModeler(AbstractComponentModeler):
 
         return max_mode_index_out, max_mode_index_in
 
-    def _construct_smatrix(self, batch_data: BatchData) -> ModalPortDataArray:
+    def _construct_smatrix(self) -> ModalPortDataArray:
         """Post process `BatchData` to generate scattering matrix."""
+
+        batch_data = self.batch_data
 
         max_mode_index_out, max_mode_index_in = self.max_mode_index
         num_modes_out = max_mode_index_out + 1
