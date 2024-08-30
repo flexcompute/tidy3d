@@ -371,9 +371,15 @@ class FieldProjector(Tidy3dBaseModel):
     ):
         """Trapezoidal integration in two dimensions."""
         if get_numpy_major_version() == "2":
-            integration = np.trapezoid(np.trapezoid(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)  # noqa: NPY201
+            integration = np.trapezoid(
+                np.trapezoid(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0
+            )  # noqa: NPY201
         else:
-            integration = np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)  # noqa: NPY201
+            integration = np.trapz(  # noqa: NPY201
+                np.trapz(np.squeeze(function) * phase, pts_u, axis=0),  # noqa: NPY201
+                pts_v,
+                axis=0,  # noqa: NPY201
+            )  # noqa: NPY201
         return integration
 
     def _far_fields_for_surface(
