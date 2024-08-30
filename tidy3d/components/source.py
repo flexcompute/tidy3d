@@ -1119,6 +1119,14 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     direction='+',
     ...     waist_radius=1.0)
 
+    Notes
+    --------
+    If one wants the focus 'in front' of the source, a negative value of ``beam_distance`` is needed.
+
+    .. image:: ../../_static/img/beam_waist.png
+        :width: 30%
+        :align: center
+
     See Also
     --------
 
@@ -1137,10 +1145,11 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         0.0,
         title="Waist Distance",
         description="Distance from the beam waist along the propagation direction. "
-        "When ``direction`` is ``+`` and ``waist_distance`` is positive, the waist "
-        "is on the ``-`` side (behind) the source plane. When ``direction`` is ``+`` and "
-        " ``waist_distance``is negative, the waist is on the ``+`` side (in front) of "
-        "the source plane.",
+        "A positive value means the waist is positioned behind the source, considering the propagation direction. "
+        "For example, for a beam propagating in the ``+`` direction, a positive value of ``beam_distance`` "
+        "means the beam waist is positioned in the ``-`` direction (behind the source). "
+        "A negative value means the beam waist is in the ``+`` direction (in front of the source). "
+        "For an angled source, the distance is defined along the rotated propagation direction.",
         units=MICROMETER,
     )
 
