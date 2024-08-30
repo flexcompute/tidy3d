@@ -496,10 +496,6 @@ class EigSolver(Tidy3dBaseModel):
         mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=False)
         mat = cls.type_conversion(mat, mat_dtype)
 
-        # Trim small values in single precision case
-        if mat_precision == "single":
-            cls.trim_small_values(mat, tol=fp_eps)
-
         # Casting starting vector to target data type
         vec_init = cls.type_conversion(vec_init, mat_dtype)
 
@@ -548,6 +544,10 @@ class EigSolver(Tidy3dBaseModel):
             if precon_left is not None:
                 generalized_M = precon_left @ generalized_M
                 mat = precon_left @ mat
+
+        # Trim small values in single precision case
+        if mat_precision == "single":
+            cls.trim_small_values(mat, tol=fp_eps)
 
         if analyze_conditioning:
             aca = mat.conjugate().T * mat
