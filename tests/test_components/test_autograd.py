@@ -16,7 +16,6 @@ import tidy3d as td
 import tidy3d.web as web
 import xarray as xr
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.data.sim_data import AdjointSourceInfo
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.utils import FieldMap
@@ -183,15 +182,12 @@ def use_emulated_run(monkeypatch):
             # get the original traced fields
             sim_fields_keys = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS]
 
-            adjoint_source_info = AdjointSourceInfo(sources=[], post_norm=1.0, normalize_sim=True)
-
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
                 sim_data_adj=sim_data_adj,
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_keys=sim_fields_keys,
-                adjoint_source_info=adjoint_source_info,
             )
 
             return traced_fields_vjp

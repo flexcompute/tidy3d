@@ -30,6 +30,7 @@ from .boundary import (
     PMCBoundary,
     StablePML,
 )
+from .data.data_array import FreqDataArray
 from .data.dataset import CustomSpatialDataType, Dataset
 from .geometry.base import Box, Geometry
 from .geometry.mesh import TriangleMesh
@@ -208,6 +209,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         title="Simulation Type",
         description="Tag used internally to distinguish types of simulations for "
         "``autograd`` gradient processing.",
+    )
+
+    post_norm: Union[float, FreqDataArray] = pydantic.Field(
+        1.0,
+        title="Post Normalization Values",
+        description="Factor to multiply the fields by after running, "
+        "given the adjoint source pipeline used. Note: this is used internally only.",
     )
 
     """
