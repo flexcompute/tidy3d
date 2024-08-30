@@ -333,6 +333,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -370,6 +371,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
 
         """
+        # if transpose:
+        #     from matplotlib.transforms import Affine2D
+        #     import mpl_toolkits.axisartist.floating_axes as floating_axes
+        #     # Rotate
+        #     fig, ax = mpl.pyplot.subplots(1, 1, tight_layout=True)
+
+        #     transform = Affine2D().rotate_deg(90)
+        #     helper = floating_axes.GridHelperCurveLinear(transform, (self.simulation_bounds[0][1], self.simulation_bounds[1][1], self.simulation_bounds[0][2], self.simulation_bounds[1][2]))
+        #     ax = floating_axes.FloatingSubplot(fig, 111, grid_helper=helper)
+
+        #     # Mirror
+        #     ax.invert_xaxis()
+
         hlim, vlim = Scene._get_plot_lims(
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )

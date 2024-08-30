@@ -34,6 +34,21 @@ ARROW_LENGTH = 0.3
 """ Decorators """
 
 
+def make_floating_ax() -> Ax:
+    """makes an empty ``ax``."""
+    from matplotlib.transforms import Affine2D
+    from mpl_toolkits.axisartist import Subplot
+    from mpl_toolkits.axisartist.grid_helper_curvelinear import GridHelperCurveLinear
+
+    fig = plt.figure()
+
+    transform = Affine2D().rotate_deg(90)
+    helper = GridHelperCurveLinear(transform, (-6, 6, -4, 4))
+    ax = Subplot(fig, 111, grid_helper=helper)
+    fig.add_subplot(ax)
+    return ax
+
+
 def make_ax() -> Ax:
     """makes an empty ``ax``."""
     _, ax = plt.subplots(1, 1, tight_layout=True)
