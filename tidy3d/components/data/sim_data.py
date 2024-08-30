@@ -1022,7 +1022,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
     def make_adjoint_sim(
         self, data_vjp_paths: set[tuple], adjoint_monitors: list[Monitor]
-    ) -> tuple[Simulation, AdjointSourceInfo]:
+    ) -> Simulation:
         """Make the adjoint simulation from the original simulation and the VJP-containing data."""
 
         sim_original = self.simulation
@@ -1043,6 +1043,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             sources=adjoint_source_info.sources,
             boundary_spec=bc_adj,
             monitors=adjoint_monitors,
+            post_norm=adjoint_source_info.post_norm,
         )
 
         if not adjoint_source_info.normalize_sim:
@@ -1055,7 +1056,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             grid_spec_adj = grid_spec_original.updated_copy(wavelength=wavelength_original)
             sim_adj_update_dict["grid_spec"] = grid_spec_adj
 
-        return sim_original.updated_copy(**sim_adj_update_dict), adjoint_source_info
+        return sim_original.updated_copy(**sim_adj_update_dict)
 
     def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, SourceType]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
