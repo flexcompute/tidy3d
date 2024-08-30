@@ -17,10 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added plotting functionality to voltage and current path integrals in the `microwave` plugin.
 - Added convenience functions `from_terminal_positions` and `from_circular_path` to simplify setup of `VoltageIntegralAxisAligned` and `CustomCurrentIntegral2D`, respectively.
 - Added `axial_ratio` to `DirectivityData.axial_ratio` for the `DirectivityMonitor`, defined as the ratio of the major axis to the minor axis of the polarization ellipse. 
+`ComponentModeler.batch_data` convenience property to access the `BatchData` corresponding to the component modeler run.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
 - Gradients for autograd are computed server-side by default. They can be computed locally (requiring more data download) by passing `local_gradient=True` to the `web.run()` and related functions.
+- Passing `path_dir` to `ComponentModeler` methods is deprecated in favor of setting `ComponentModeler.path_dir` and will result in an error if the two don't match.
 
 ### Fixed
 - Significant speedup for field projection computations.
