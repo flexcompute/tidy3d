@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `PolySlab` now raises error when differentiating and dilation causes damage to the polygon.
+- Validator `boundaries_for_zero_dims` to raise error when Bloch boundaries are used along 0-sized dims.
 
 ### Fixed
 - `DataArray` interpolation failure due to incorrect ordering of coordinates when interpolating with autograd tracers.
