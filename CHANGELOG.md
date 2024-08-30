@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve accuracy in `Box` shifting boundary gradients.
 - Improve accuracy in `FieldData` operations involving H fields (like `.flux`).
 - Better error and warning handling in autograd pipeline.
+- Added the option to specify the `num_freqs` argument and `kwargs` to the `.to_source` method for both `ModeSolver` and `ComponentModeler`. 
 
 ## [2.7.2] - 2024-08-07
 
