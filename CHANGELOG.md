@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Significant speedup for field projection computations.
 - Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
+- Silence warning in graphene from checking fit quality at large frequencies.
 
 ## [2.7.2] - 2024-08-07
 
