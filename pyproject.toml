@@ -65,7 +65,7 @@ tox = { version = "*", optional = true }
 gdspy = { version = "*", optional = true }
 
 # gdstk
-gdstk = { version = ">=0.9.49, <0.9.53", optional = true }
+gdstk = { version = ">=0.9.49", optional = true }
 
 # jax
 jaxlib = { version = "0.4.25", source = "jaxsource", optional = true }
