@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug when adding 2D structures to the `Simulation` that are composed of multiple overlapping polygons.
 - Fields stored in `ModeMonitor` objects were computed colocated to the grid boundaries, but the built-in `ModeMonitor.colocate=False` was resulting in wrong results in some cases, most notably if symmetries are also involved.
 - Small inaccuracy when applying a mode solver `bend_radius` when the simulation grid is not symmetric w.r.t. the mode plane center. Previously, the radius was defined w.r.t. the middle grid coordinate, while now it is correctly applied w.r.t. the plane center.
+- Silence warning in graphene from checking fit quality at large frequencies.
 
 ## [2.7.2] - 2024-08-07
 

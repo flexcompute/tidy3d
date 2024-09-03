@@ -191,7 +191,8 @@ class Graphene(ParametricVariantItem2D):
 
         pole_residue = self._fit_interband_conductivity(flattened_freqs, sigma_inds, inds)
         pole_residue_filtered = self._filter_poles(pole_residue)
-        sigma_fit = pole_residue_filtered.sigma_model(freqs)
+        # silence warnings associated with frequency range just for checking fit
+        sigma_fit = pole_residue_filtered.updated_copy(frequency_range=None).sigma_model(freqs)
         if not np.allclose(sigma, sigma_fit, rtol=0, atol=GRAPHENE_FIT_ATOL):
             log.warning(
                 "Graphene fit may not be good. Try changing the physical or fitting parameters."
