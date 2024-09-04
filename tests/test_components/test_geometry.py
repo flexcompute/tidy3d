@@ -241,7 +241,7 @@ def test_slanted_cylinder_infinite_length_validate():
 
 
 def test_cylinder_to_polyslab():
-    ps = CYLINDER.to_polyslab(num_pts_circumference=10, sidewall_angle=0.02)
+    ps = CYLINDER.to_polyslab(num_pts_circumference=10, dilation=0.02)
 
 
 def test_box_from_bounds():

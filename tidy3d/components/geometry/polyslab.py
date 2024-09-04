@@ -1516,7 +1516,9 @@ class PolySlab(base.Planar):
     @staticmethod
     def normalize_vect(arr: np.ndarray) -> np.ndarray:
         """normalize an array shaped (N, d) along the `d` axis and return (N, 1)."""
-        return arr / np.linalg.norm(arr, axis=-1)[..., None]
+        norm = np.linalg.norm(arr, axis=-1, keepdims=True)
+        norm = np.where(norm == 0, 1, norm)
+        return arr / norm
 
 
 class ComplexPolySlabBase(PolySlab):
