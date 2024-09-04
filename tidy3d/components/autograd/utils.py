@@ -27,10 +27,10 @@ def get_tracer(x: typing.Any) -> typing.Any:
     if not is_traced(x):
         return None
 
-    if not _is_traced_objary(x):
-        return x
+    if _is_traced_objary(x):
+        return anp.array(x.tolist())
 
-    return anp.array(x.tolist())
+    return x
 
 
 def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):

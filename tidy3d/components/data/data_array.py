@@ -161,10 +161,6 @@ class DataArray(xr.DataArray):
         This does not check every 'DataArray' by default. Instead, when required, this check can be
         called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
         """
-        # skip this validator if currently tracing for autograd
-        if self.has_tracers:
-            return
-
         if field_name is None:
             field_name = "DataArray"
 
