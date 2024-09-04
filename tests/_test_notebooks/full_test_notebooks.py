@@ -26,8 +26,6 @@ for _, path in enumerate(notebook_filenames_all):
     notebook_base = path.split("/")[-1]
     print(f"'{notebook_base[:-6]}',")
 
-raise
-
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = []
 
