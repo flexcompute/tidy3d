@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 import tidy3d as td
+from tidy3d.components.field_projection import FieldProjector
 from tidy3d.exceptions import DataError
 
 MEDIUM = td.Medium(permittivity=3)
@@ -594,3 +595,25 @@ def test_2d_proj_clientside():
 
     for plane in planes:
         make_2d_proj(plane)
+
+
+@pytest.mark.parametrize(
+    "array, pts, axes, expected",
+    [
+        # 1D array, integrate over axis 0
+        (np.array([1, 2, 3]), np.array([0, 1, 2]), 0, 4.0),
+        # 2D array, integrate over axis 0
+        (np.array([[1, 2, 3], [4, 5, 6]]), np.array([0, 1]), 0, np.array([2.5, 3.5, 4.5])),
+        # 2D array, integrate over axis 1
+        (np.array([[1, 2], [3, 4], [5, 6]]), np.array([0, 1]), 1, np.array([1.5, 3.5, 5.5])),
+        # 3D array, integrate over axes 0 and 1
+        (np.ones((2, 2, 2)), [np.array([0, 1]), np.array([0, 1])], [0, 1], np.array([1.0, 1.0])),
+        # one element along integration axis but two points in pts
+        (np.array([[1, 1], [2, 2], [3, 3]]), np.array([0, 1]), 1, np.array([1.0, 2.0, 3.0])),
+        # 2D array of shape (1, 3), integrate over both axes
+        (np.array([[1, 2, 3]]), [np.array([0]), np.array([0, 1, 2])], [0, 1], 4.0),
+    ],
+)
+def test_trapezoid(array, pts, axes, expected):
+    result = FieldProjector.trapezoid(array, pts, axes)
+    assert np.allclose(result, expected)

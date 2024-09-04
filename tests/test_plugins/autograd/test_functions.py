@@ -6,6 +6,7 @@ import scipy.ndimage
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
 from tidy3d.plugins.autograd.functions import (
+    add_at,
     convolve,
     grey_closing,
     grey_dilation,
@@ -18,6 +19,7 @@ from tidy3d.plugins.autograd.functions import (
     pad,
     rescale,
     threshold,
+    trapz,
 )
 from tidy3d.plugins.autograd.types import PaddingType
 
@@ -330,3 +332,59 @@ class TestInterpnExceptions:
         points, values, xi = TestInterpn.generate_points_values_xi(rng, 2)
         with pytest.raises(ValueError, match="interpolation method"):
             interpn(points, values, xi, method="invalid_method")
+
+
+@pytest.mark.parametrize("axis", [0, -1])
+@pytest.mark.parametrize("shape", [(10,), (10, 10)])
+@pytest.mark.parametrize("use_x", [True, False])
+class TestTrapz:
+    @staticmethod
+    def generate_y_x_dx(rng, shape, use_x):
+        y = rng.uniform(-1, 1, shape)
+        if use_x:
+            x = rng.random(shape)
+            dx = 1.0  # dx is not used when x is provided
+        else:
+            x = None
+            dx = rng.random() + 0.1  # ensure dx is not zero
+        return y, x, dx
+
+    def test_trapz_val(self, rng, shape, axis, use_x):
+        """Test trapz values against NumPy for different array dimensions and integration axes."""
+        y, x, dx = self.generate_y_x_dx(rng, shape, use_x)
+        result_custom = trapz(y, x=x, dx=dx, axis=axis)
+        result_numpy = np.trapz(y, x=x, dx=dx, axis=axis)
+        npt.assert_allclose(result_custom, result_numpy)
+
+    @pytest.mark.parametrize("order", [1, 2])
+    @pytest.mark.parametrize("mode", ["fwd", "rev"])
+    def test_trapz_grad(self, rng, shape, axis, use_x, order, mode):
+        """Test gradients of trapz function for different array dimensions and integration axes."""
+        y, x, dx = self.generate_y_x_dx(rng, shape, use_x)
+        check_grads(lambda y: trapz(y, x=x, dx=dx, axis=axis), modes=[mode], order=order)(y)
+
+
+@pytest.mark.parametrize("shape", [(10,), (10, 10)])
+@pytest.mark.parametrize("indices", [(0,), (slice(3, 8),)])
+class TestAddAt:
+    @staticmethod
+    def generate_x_y(rng, shape, indices):
+        x = rng.uniform(-1, 1, shape)
+        y = rng.uniform(-1, 1, x[tuple(indices)].shape)
+        return x, y
+
+    def test_add_at_val(self, rng, shape, indices):
+        """Test add_at values against NumPy for different array dimensions and indices."""
+        x, y = self.generate_x_y(rng, shape, indices)
+        result_custom = add_at(x, indices, y)
+        result_numpy = np.array(x)
+        result_numpy[indices] += y
+        npt.assert_allclose(result_custom, result_numpy)
+
+    @pytest.mark.parametrize("order", [1, 2])
+    @pytest.mark.parametrize("mode", ["fwd", "rev"])
+    def test_add_at_grad(self, rng, shape, indices, order, mode):
+        """Test gradients of add_at function for different array dimensions and indices."""
+        x, y = self.generate_x_y(rng, shape, indices)
+        check_grads(lambda x: add_at(x, indices, y), modes=[mode], order=order)(x)
+        check_grads(lambda y: add_at(x, indices, y), modes=[mode], order=order)(y)

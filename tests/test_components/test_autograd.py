@@ -1002,6 +1002,109 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
     assert np.any(grads > 0)
 
 
+@pytest.mark.parametrize("far_field_approx", [True, False])
+@pytest.mark.parametrize("projection_type", ["angular", "cartesian"])
+@pytest.mark.parametrize("sim_2d", [True, False])
+class TestFieldProjection:
+    @staticmethod
+    def setup(far_field_approx, projection_type, sim_2d):
+        if sim_2d and not far_field_approx:
+            pytest.skip("Exact field projection not implemented for 2d simulations")
+
+        r_proj = 50 * WVL
+        monitor = td.FieldMonitor(
+            center=(0, SIM_BASE.size[1] / 2 - 0.1, 0),
+            size=(td.inf, 0, td.inf),
+            freqs=[FREQ0],
+            name="near_field",
+            colocate=False,
+        )
+
+        if projection_type == "angular":
+            theta_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 2)
+            phi_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 3)
+            monitor_far = td.FieldProjectionAngleMonitor(
+                center=monitor.center,
+                size=monitor.size,
+                freqs=monitor.freqs,
+                phi=tuple(phi_proj),
+                theta=tuple(theta_proj),
+                proj_distance=r_proj,
+                far_field_approx=far_field_approx,
+                name="far_field",
+            )
+        elif projection_type == "cartesian":
+            x_proj = np.linspace(-10, 10, 2)
+            y_proj = np.linspace(-10, 10, 3)
+            monitor_far = td.FieldProjectionCartesianMonitor(
+                center=monitor.center,
+                size=monitor.size,
+                freqs=monitor.freqs,
+                x=x_proj,
+                y=y_proj,
+                proj_axis=1,
+                proj_distance=r_proj,
+                far_field_approx=far_field_approx,
+                name="far_field",
+            )
+
+        sim = SIM_BASE.updated_copy(monitors=[monitor])
+
+        if sim_2d and IS_3D:
+            sim = sim.updated_copy(size=(0, *sim.size[1:]))
+
+        return sim, monitor_far
+
+    @staticmethod
+    def objective(sim_data, monitor_far):
+        projector = td.FieldProjector.from_near_field_monitors(
+            sim_data=sim_data,
+            near_monitors=[sim_data.simulation.monitors[0]],
+            normal_dirs=["+"],
+        )
+
+        projected_fields = projector.project_fields(monitor_far)
+
+        return projected_fields.power.sum().item()
+
+    def test_field_projection_grad_prop(
+        self, use_emulated_run, far_field_approx, projection_type, sim_2d
+    ):
+        """Tests whether field projection gradients are propagated through simulation.
+        x0 <-> structures <-> sim <-> run <-> fields <-> projection <-> objval
+        Does _not_ test gradient accuracy!
+        """
+        sim_base, monitor_far = self.setup(far_field_approx, projection_type, sim_2d)
+
+        def objective(args):
+            structures_traced_dict = make_structures(args)
+            structures = list(SIM_BASE.structures)
+            for structure_key in structure_keys_:
+                structures.append(structures_traced_dict[structure_key])
+
+            sim = sim_base.updated_copy(structures=structures)
+            sim_data = run(sim, task_name="field_projection_test")
+
+            return self.objective(sim_data, monitor_far)
+
+        grads = ag.grad(objective)(params0)
+        assert np.linalg.norm(grads) > 0
+
+    def test_field_projection_grads(
+        self, use_emulated_run, far_field_approx, projection_type, sim_2d
+    ):
+        """Tests projection gradient accuracy w.r.t. fields.
+        fields <-> projection <-> objval
+        """
+        sim_base, monitor_far = self.setup(far_field_approx, projection_type, sim_2d)
+
+        def objective(x0):
+            sim_data = run_emulated(sim_base, task_name="field_projection_test", x0=x0)
+            return self.objective(sim_data, monitor_far)
+
+        check_grads(objective, modes=["rev"], order=1)(1.0)
+
+
 def test_autograd_deepcopy():
     """make sure deepcopy works as expected in autograd."""
 

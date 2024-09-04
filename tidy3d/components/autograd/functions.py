@@ -2,6 +2,9 @@ import itertools
 
 import autograd.numpy as anp
 import numpy as np
+from autograd.extend import defjvp, defvjp, primitive
+from autograd.numpy.numpy_jvps import broadcast
+from autograd.numpy.numpy_vjps import unbroadcast_f
 from numpy.typing import NDArray
 from scipy.interpolate import RegularGridInterpolator
 
@@ -18,17 +21,17 @@ def _evaluate_nearest(
 
     Parameters
     ----------
-    indices : NDArray[np.int64]
+    indices : np.ndarray[np.int64]
         Indices of the lower bounds of the grid cell containing the interpolation point.
-    norm_distances : NDArray[np.float64]
+    norm_distances : np.ndarray[np.float64]
         Normalized distances from the lower bounds of the grid cell to the
         interpolation point, for each dimension.
-    values : NDArray[np.float64]
+    values : np.ndarray[np.float64]
         The n-dimensional array of values to interpolate from.
 
     Returns
     -------
-    NDArray[np.float64]
+    np.ndarray[np.float64]
         The value of the nearest neighbor to the interpolation point.
     """
     idx_res = tuple(anp.where(yi <= 0.5, i, i + 1) for i, yi in zip(indices, norm_distances))
@@ -49,17 +52,17 @@ def _evaluate_linear(
 
     Parameters
     ----------
-    indices : NDArray[np.int64]
+    indices : np.ndarray[np.int64]
         Indices of the lower bounds of the grid cell containing the interpolation point.
-    norm_distances : NDArray[np.float64]
+    norm_distances : np.ndarray[np.float64]
         Normalized distances from the lower bounds of the grid cell to the
         interpolation point, for each dimension.
-    values : NDArray[np.float64]
+    values : np.ndarray[np.float64]
         The n-dimensional array of values to interpolate from.
 
     Returns
     -------
-    NDArray[np.float64]
+    np.ndarray[np.float64]
         The interpolated value at the desired point.
     """
     # Create a slice object for broadcasting over trailing dimensions
@@ -101,18 +104,18 @@ def interpn(
 
     Parameters
     ----------
-    points : tuple[NDArray[np.float64], ...]
+    points : tuple[np.ndarray[np.float64], ...]
         The points defining the rectilinear grid in n dimensions.
-    values : NDArray[np.float64]
+    values : np.ndarray[np.float64]
         The data values on the rectilinear grid.
-    xi : tuple[NDArray[np.float64], ...]
+    xi : tuple[np.ndarray[np.float64], ...]
         The coordinates to sample the gridded data at.
     method : InterpolationType = "linear"
         The method of interpolation to perform. Supported are "linear" and "nearest".
 
     Returns
     -------
-    NDArray[np.float64]
+    np.ndarray[np.float64]
         The interpolated values.
 
     Raises
@@ -154,6 +157,89 @@ def interpn(
     return anp.reshape(result, shape[:-1] + values.shape[ndim:])
 
 
+def trapz(y: NDArray, x: NDArray = None, dx: float = 1.0, axis: int = -1) -> float:
+    """
+    Integrate along the given axis using the composite trapezoidal rule.
+
+    Parameters
+    ----------
+    y : np.ndarray
+        Input array to integrate.
+    x : np.ndarray = None
+        The sample points corresponding to the y values. If None, the sample points are assumed to be evenly spaced
+        with spacing `dx`.
+    dx : float = 1.0
+        The spacing between sample points when `x` is None. Default is 1.0.
+    axis : int = -1
+        The axis along which to integrate. Default is the last axis.
+
+    Returns
+    -------
+    float
+        Definite integral as approximated by the trapezoidal rule.
+    """
+    if x is None:
+        d = dx
+    elif x.ndim == 1:
+        d = np.diff(x)
+        shape = [1] * y.ndim
+        shape[axis] = d.shape[0]
+        d = np.reshape(d, shape)
+    else:
+        d = np.diff(x, axis=axis)
+
+    slice1 = [slice(None)] * y.ndim
+    slice2 = [slice(None)] * y.ndim
+    slice1[axis] = slice(1, None)
+    slice2[axis] = slice(None, -1)
+
+    return anp.sum((y[tuple(slice1)] + y[tuple(slice2)]) * d / 2, axis=axis)
+
+
+@primitive
+def add_at(x: NDArray, indices_x: tuple, y: NDArray) -> NDArray:
+    """
+    Add values to specified indices of an array.
+
+    This function creates a copy of the input array `x`, adds the values from `y` to the specified
+    indices `indices_x`, and returns the modified array.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input array to which values will be added.
+    indices_x : tuple
+        Indices of `x` where values from `y` will be added.
+    y : np.ndarray
+        Values to add to the specified indices of `x`.
+
+    Returns
+    -------
+    np.ndarray
+        The modified array with values added at the specified indices.
+    """
+    out = np.copy(x)  # Copy to preserve 'x' for gradient computation
+    out[tuple(indices_x)] += y
+    return out
+
+
+defvjp(
+    add_at,
+    lambda ans, x, indices_x, y: unbroadcast_f(x, lambda g: g),
+    lambda ans, x, indices_x, y: lambda g: g[tuple(indices_x)],
+    argnums=(0, 2),
+)
+
+defjvp(
+    add_at,
+    lambda g, ans, x, indices_x, y: broadcast(g, ans),
+    lambda g, ans, x, indices_x, y: add_at(anp.zeros_like(ans), indices_x, g),
+    argnums=(0, 2),
+)
+
+
 __all__ = [
     "interpn",
+    "trapz",
+    "add_at",
 ]

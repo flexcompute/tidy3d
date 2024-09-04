@@ -29,4 +29,6 @@ __all__ = [
     "interpn",
     "split_list",
     "is_tidy_box",
+    "trapz",
+    "add_at",
 ]

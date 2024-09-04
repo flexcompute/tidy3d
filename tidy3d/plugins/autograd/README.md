@@ -208,6 +208,7 @@ The following components are traceable as outputs of the `td.SimulationData`
 | `SimulationData`  | `get_intensity(field_monitor)`, `get_poynting(field_monitor)` |
 
 We also support the following high-level features:
+
 - To manually set the background permittivity of a structure for purposes of shape optimization, one can set `Structure.background_permittivity`.
   This is useful when there is a substrate or multiple overlapping structures as some geometries, such as `PolySlab`, do not automatically detect background permittivity and instead use the `Simulation.medium` by default.
 - Compute gradients for objective functions that rely on multi-frequency data using a single broadband adjoint source.

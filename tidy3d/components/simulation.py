@@ -1289,7 +1289,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             lumped_structures.append(lumped_element.to_structure)
 
         # Begin volumetric structures grid
-        all_structures = list(self.structures) + lumped_structures
+        all_structures = list(self.static_structures) + lumped_structures
 
         # For 1D and 2D simulations, a nonzero size is needed for the polygon operations in subdivide
         placeholder_size = tuple(i if i > 0 else inf for i in self.geometry.size)
@@ -4364,7 +4364,7 @@ class Simulation(AbstractYeeGridSimulation):
     def get_refractive_indices(self, freq: float) -> list[float]:
         """List of refractive indices in the simulation at a given frequency."""
 
-        eps_values = [structure.medium.eps_model(freq) for structure in self.structures]
+        eps_values = [structure.medium.eps_model(freq) for structure in self.static_structures]
         eps_values.append(self.medium.eps_model(freq))
 
         return [AbstractMedium.eps_complex_to_nk(eps)[0] for eps in eps_values]

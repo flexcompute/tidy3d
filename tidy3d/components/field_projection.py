@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
+import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
@@ -12,6 +13,7 @@ from rich.progress import track
 from ..constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
 from ..exceptions import SetupError
 from ..log import get_logging_console
+from .autograd.functions import add_at, trapz
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import (
     FieldProjectionAngleDataArray,
@@ -278,7 +280,7 @@ class FieldProjector(Tidy3dBaseModel):
 
     @staticmethod
     def _resample_surface_currents(
-        currents: xr.Dataset,
+        currents: FieldData,
         sim_data: SimulationData,
         surface: FieldProjectionSurface,
         medium: MediumType,
@@ -288,7 +290,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         Parameters
         ----------
-        currents : xarray.Dataset
+        currents : :class:`.FieldData`
             Surface currents defined on the original Yee grid.
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
@@ -348,24 +350,38 @@ class FieldProjector(Tidy3dBaseModel):
         currents = currents.colocate(*colocation_points)
         return currents
 
-    def integrate_1d(
-        self,
-        function: np.ndarray,
-        phase: np.ndarray,
-        pts_u: np.ndarray,
+    @staticmethod
+    def trapezoid(
+        ary: np.ndarray,
+        pts: Union[Iterable[np.ndarray], np.ndarray],
+        axes: Union[Iterable[int], int] = 0,
     ):
-        """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)  # noqa: NPY201
+        """Trapezoidal integration in n dimensions.
 
-    def integrate_2d(
-        self,
-        function: np.ndarray,
-        phase: np.ndarray,
-        pts_u: np.ndarray,
-        pts_v: np.ndarray,
-    ):
-        """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)  # noqa: NPY201
+        Parameters
+        ----------
+        ary : np.ndarray
+            Array to integrate.
+        pts : Iterable[np.ndarray]
+            Iterable of points for each dimension.
+        axes : Union[Iterable[int], int]
+            Iterable of axes along which to integrate. If not an iterable, assume 1D integration.
+
+        Returns
+        -------
+        np.ndarray
+            Integrated array.
+        """
+        if not isinstance(axes, Iterable):
+            axes = [axes]
+            pts = [pts]
+
+        for idx, (axis, pt) in enumerate(zip(axes, pts)):
+            if ary.shape[axis - idx] > 1:
+                ary = trapz(ary, pt, axis=axis - idx)
+            else:  # array has only one element along axis
+                ary = ary[(slice(None),) * (axis - idx) + (0,)]
+        return ary
 
     def _far_fields_for_surface(
         self,
@@ -375,7 +391,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
         medium: MediumType,
-    ):
+    ) -> np.ndarray:
         """Compute far fields at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
 
@@ -397,11 +413,10 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        tuple(numpy.ndarray[float], ...)
-            ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi`` for the given surface.
+        np.ndarray
+            With leading dimension containing ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``
+            projected fields for each frequency.
         """
-        pts = [currents[name].values for name in ["x", "y", "z"]]
-
         try:
             currents_f = currents.sel(f=frequency)
         except Exception as e:
@@ -429,82 +444,58 @@ class FieldProjector(Tidy3dBaseModel):
         theta = np.atleast_1d(theta)
         phi = np.atleast_1d(phi)
 
+        propagation_factor = -1j * AbstractFieldProjectionData.wavenumber(
+            medium=medium, frequency=frequency
+        )
+
         sin_theta = np.sin(theta)
         cos_theta = np.cos(theta)
         sin_phi = np.sin(phi)
         cos_phi = np.cos(phi)
 
-        J = np.zeros((3, len(theta), len(phi)), dtype=complex)
-        M = np.zeros_like(J)
+        pts = [currents[name].values for name in ["x", "y", "z"]]
 
-        phase = [None] * 3
-        propagation_factor = -1j * AbstractFieldProjectionData.wavenumber(
-            medium=medium, frequency=frequency
-        )
+        phase_0 = np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[0], sin_theta, cos_phi))
+        phase_1 = np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[1], sin_theta, sin_phi))
+        phase_2 = np.exp(np.einsum("i,j->ij", propagation_factor * pts[2], cos_theta))
 
-        def integrate_for_one_theta(i_th: int):
-            """Perform integration for a given theta angle index"""
+        E1 = "E" + cmp_1
+        E2 = "E" + cmp_2
+        H1 = "H" + cmp_1
+        H2 = "H" + cmp_2
 
-            for j_ph in np.arange(len(phi)):
-                phase[0] = np.exp(propagation_factor * pts[0] * sin_theta[i_th] * cos_phi[j_ph])
-                phase[1] = np.exp(propagation_factor * pts[1] * sin_theta[i_th] * sin_phi[j_ph])
-                phase[2] = np.exp(propagation_factor * pts[2] * cos_theta[i_th])
+        def contract(currents):
+            return anp.einsum("xtp,ytp,zt,xyz->xyztp", phase_0, phase_1, phase_2, currents)
 
-                phase_ij = phase[idx_u][:, None] * phase[idx_v][None, :] * phase[idx_w]
+        jm = []
+        for field_component in (E1, E2, H1, H2):
+            currents = currents_f[field_component].data
+            currents = anp.reshape(currents, currents_f[field_component].shape)
+            currents_phase = contract(currents)
 
-                if self.is_2d_simulation:
-                    J[idx_u, i_th, j_ph] = self.integrate_1d(
-                        currents_f[f"E{cmp_1}"].values, phase_ij, pts[idx_int_1d]
-                    )
-                    J[idx_v, i_th, j_ph] = self.integrate_1d(
-                        currents_f[f"E{cmp_2}"].values, phase_ij, pts[idx_int_1d]
-                    )
+            if self.is_2d_simulation:
+                jm_i = self.trapezoid(currents_phase, pts[idx_int_1d], idx_int_1d)
+            else:
+                jm_i = self.trapezoid(currents_phase, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
 
-                    M[idx_u, i_th, j_ph] = self.integrate_1d(
-                        currents_f[f"H{cmp_1}"].values, phase_ij, pts[idx_int_1d]
-                    )
+            jm.append(anp.reshape(jm_i, (len(theta), len(phi))))
 
-                    M[idx_v, i_th, j_ph] = self.integrate_1d(
-                        currents_f[f"H{cmp_2}"].values, phase_ij, pts[idx_int_1d]
-                    )
-                else:
-                    J[idx_u, i_th, j_ph] = self.integrate_2d(
-                        currents_f[f"E{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                    )
+        order = [idx_u, idx_v, idx_w]
+        zeros = np.zeros(jm[0].shape)
+        J = anp.array([*jm[:2], zeros])[order]
+        M = anp.array([*jm[2:], zeros])[order]
 
-                    J[idx_v, i_th, j_ph] = self.integrate_2d(
-                        currents_f[f"E{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                    )
-
-                    M[idx_u, i_th, j_ph] = self.integrate_2d(
-                        currents_f[f"H{cmp_1}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                    )
-
-                    M[idx_v, i_th, j_ph] = self.integrate_2d(
-                        currents_f[f"H{cmp_2}"].values, phase_ij, pts[idx_u], pts[idx_v]
-                    )
-
-        if len(theta) < 2:
-            integrate_for_one_theta(0)
-        else:
-            for i_th in track(
-                np.arange(len(theta)),
-                description=f"Processing surface monitor '{surface.monitor.name}'...",
-                console=get_logging_console(),
-            ):
-                integrate_for_one_theta(i_th)
-
-        cos_th_cos_phi = cos_theta[:, None] * cos_phi[None, :]
-        cos_th_sin_phi = cos_theta[:, None] * sin_phi[None, :]
+        cos_theta_cos_phi = cos_theta[:, None] * cos_phi[None, :]
+        cos_theta_sin_phi = cos_theta[:, None] * sin_phi[None, :]
 
         # Ntheta (8.33a)
-        Ntheta = J[0] * cos_th_cos_phi + J[1] * cos_th_sin_phi - J[2] * sin_theta[:, None]
+        Ntheta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta[:, None]
 
         # Nphi (8.33b)
         Nphi = -J[0] * sin_phi[None, :] + J[1] * cos_phi[None, :]
 
         # Ltheta  (8.34a)
-        Ltheta = M[0] * cos_th_cos_phi + M[1] * cos_th_sin_phi - M[2] * sin_theta[:, None]
+        Ltheta = M[0] * cos_theta_cos_phi + M[1] * cos_theta_sin_phi - M[2] * sin_theta[:, None]
 
         # Lphi  (8.34b)
         Lphi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
@@ -513,12 +504,12 @@ class FieldProjector(Tidy3dBaseModel):
 
         Etheta = -(Lphi + eta * Ntheta)
         Ephi = Ltheta - eta * Nphi
-        Er = np.zeros_like(Ephi)
+        Er = anp.zeros_like(Ephi)
         Htheta = -Ephi / eta
         Hphi = Etheta / eta
-        Hr = np.zeros_like(Hphi)
+        Hr = anp.zeros_like(Hphi)
 
-        return Er, Etheta, Ephi, Hr, Htheta, Hphi
+        return anp.array([Er, Etheta, Ephi, Hr, Htheta, Hphi])
 
     @staticmethod
     def apply_window_to_currents(
@@ -603,9 +594,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         # compute projected fields for the dataset associated with each monitor
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
-        fields = [
-            np.zeros((1, len(theta), len(phi), len(freqs)), dtype=complex) for _ in field_names
-        ]
+        fields = np.zeros((len(field_names), 1, len(theta), len(phi), len(freqs)), dtype=complex)
 
         medium = monitor.medium if monitor.medium else self.medium
         k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
@@ -629,8 +618,7 @@ class FieldProjector(Tidy3dBaseModel):
                         currents=currents,
                         medium=medium,
                     )
-                    for field, _field in zip(fields, _fields):
-                        field[..., idx_f] += _field * phase[idx_f]
+                    fields = add_at(fields, [..., idx_f], _fields[:, None] * phase[idx_f])
             else:
                 iter_coords = [
                     ([_theta, _phi], [i, j])
@@ -646,8 +634,9 @@ class FieldProjector(Tidy3dBaseModel):
                     _fields = self._fields_for_surface_exact(
                         x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
                     )
-                    for field, _field in zip(fields, _fields):
-                        field[0, i, j, :] += _field
+                    where = (slice(None), 0, i, j)
+                    _fields = anp.reshape(_fields, fields[where].shape)
+                    fields = add_at(fields, where, _fields)
 
         coords = {"r": np.atleast_1d(monitor.proj_distance), "theta": theta, "phi": phi, "f": freqs}
         fields = {
@@ -686,9 +675,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         # compute projected fields for the dataset associated with each monitor
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
-        fields = [
-            np.zeros((len(x), len(y), len(z), len(freqs)), dtype=complex) for _ in field_names
-        ]
+        fields = np.zeros((len(field_names), len(x), len(y), len(z), len(freqs)), dtype=complex)
 
         medium = monitor.medium if monitor.medium else self.medium
         wavenumber = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
@@ -727,14 +714,16 @@ class FieldProjector(Tidy3dBaseModel):
                             currents=currents,
                             medium=medium,
                         )
-                        for field, _field in zip(fields, _fields):
-                            field[i, j, k, idx_f] += _field * phase[idx_f]
+                        where = (slice(None), i, j, k, idx_f)
+                        _fields = anp.reshape(_fields, fields[where].shape)
+                        fields = add_at(fields, where, _fields * phase[idx_f])
                 else:
                     _fields = self._fields_for_surface_exact(
                         x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
                     )
-                    for field, _field in zip(fields, _fields):
-                        field[i, j, k, :] += _field
+                    where = (slice(None), i, j, k)
+                    _fields = anp.reshape(_fields, fields[where].shape)
+                    fields = add_at(fields, where, _fields)
 
         coords = {"x": x, "y": y, "z": z, "f": freqs}
         fields = {
@@ -802,7 +791,7 @@ class FieldProjector(Tidy3dBaseModel):
                             medium=medium,
                         )
                         for field, _field in zip(fields, _fields):
-                            field[i, j, 0, idx_f] += _field * phase[idx_f]
+                            field = add_at(field, [i, j, 0, idx_f], _field * phase[idx_f])
 
                 else:
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, theta, phi)
@@ -810,7 +799,7 @@ class FieldProjector(Tidy3dBaseModel):
                         x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
                     )
                     for field, _field in zip(fields, _fields):
-                        field[i, j, 0, :] += _field
+                        field = add_at(field, [i, j, 0], _field)
 
         coords = {
             "ux": np.array(monitor.ux),
@@ -836,7 +825,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
         medium: MediumType,
-    ):
+    ) -> np.ndarray:
         """Compute projected fields in spherical coordinates at a given projection point on a
         Cartesian grid for a given set of surface currents using the exact homogeneous medium
         Green's function without geometric approximations.
@@ -858,11 +847,11 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        tuple(np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray)
-            ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi`` projected fields for
-            each frequency.
+        np.ndarray
+            With leading dimension containing ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``
+            projected fields for each frequency.
         """
-        freqs = np.array(self.frequencies)
+        freqs = anp.array(self.frequencies)
         i_omega = 1j * 2.0 * np.pi * freqs[None, None, None, :]
         wavenumber = AbstractFieldProjectionData.wavenumber(frequency=freqs, medium=medium)
         wavenumber = wavenumber[None, None, None, :]  # add space dimensions
@@ -885,15 +874,22 @@ class FieldProjector(Tidy3dBaseModel):
         cmp_1, cmp_2 = source_names
 
         # set the surface current density Cartesian components
-        J = [np.atleast_1d(0)] * 3
-        M = [np.atleast_1d(0)] * 3
-
-        J[idx_u] = currents[f"E{cmp_1}"].values
-        J[idx_v] = currents[f"E{cmp_2}"].values
-        J[idx_w] = np.zeros_like(J[idx_u])
-        M[idx_u] = currents[f"H{cmp_1}"].values
-        M[idx_v] = currents[f"H{cmp_2}"].values
-        M[idx_w] = np.zeros_like(M[idx_u])
+        order = [idx_u, idx_v, idx_w]
+        zeros = anp.zeros(currents[f"E{cmp_1}"].shape)
+        J = anp.array(
+            [
+                currents[f"E{cmp_1}"].data,
+                currents[f"E{cmp_2}"].data,
+                zeros,
+            ]
+        )[order]
+        M = anp.array(
+            [
+                currents[f"H{cmp_1}"].data,
+                currents[f"H{cmp_2}"].data,
+                zeros,
+            ]
+        )[order]
 
         # observation point in the new spherical system
         r, theta_obs, phi_obs = surface.monitor.car_2_sph(
@@ -901,14 +897,14 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
         # angle terms
-        sin_theta = np.sin(theta_obs)
-        cos_theta = np.cos(theta_obs)
-        sin_phi = np.sin(phi_obs)
-        cos_phi = np.cos(phi_obs)
+        sin_theta = anp.sin(theta_obs)
+        cos_theta = anp.cos(theta_obs)
+        sin_phi = anp.sin(phi_obs)
+        cos_phi = anp.cos(phi_obs)
 
         # Green's function and terms related to its derivatives
         ikr = 1j * wavenumber * r
-        G = np.exp(ikr) / (4.0 * np.pi * r)
+        G = anp.exp(ikr) / (4.0 * np.pi * r)
         dG_dr = G * (ikr - 1.0) / r
         d2G_dr2 = dG_dr * (ikr - 1.0) / r + G / (r**2)
 
@@ -981,12 +977,12 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
         # integrate over the surface
-        e_x = self.integrate_2d(e_x_integrand, 1.0, pts[idx_u], pts[idx_v])
-        e_y = self.integrate_2d(e_y_integrand, 1.0, pts[idx_u], pts[idx_v])
-        e_z = self.integrate_2d(e_z_integrand, 1.0, pts[idx_u], pts[idx_v])
-        h_x = self.integrate_2d(h_x_integrand, 1.0, pts[idx_u], pts[idx_v])
-        h_y = self.integrate_2d(h_y_integrand, 1.0, pts[idx_u], pts[idx_v])
-        h_z = self.integrate_2d(h_z_integrand, 1.0, pts[idx_u], pts[idx_v])
+        e_x = self.trapezoid(e_x_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        e_y = self.trapezoid(e_y_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        e_z = self.trapezoid(e_z_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        h_x = self.trapezoid(h_x_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        h_y = self.trapezoid(h_y_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        h_z = self.trapezoid(h_z_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
 
         # observation point in the original spherical system
         _, theta_obs, phi_obs = surface.monitor.car_2_sph(x, y, z)
@@ -995,4 +991,4 @@ class FieldProjector(Tidy3dBaseModel):
         e_r, e_theta, e_phi = surface.monitor.car_2_sph_field(e_x, e_y, e_z, theta_obs, phi_obs)
         h_r, h_theta, h_phi = surface.monitor.car_2_sph_field(h_x, h_y, h_z, theta_obs, phi_obs)
 
-        return [e_r, e_theta, e_phi, h_r, h_theta, h_phi]
+        return anp.array([e_r, e_theta, e_phi, h_r, h_theta, h_phi])
