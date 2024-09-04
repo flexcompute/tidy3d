@@ -2,7 +2,7 @@
 
 ### Context
 
-As of version 2.7.0, `tidy3d` supports the ability to differentiate functions involving a `web.run` of a `tidy3d` simulation. This allows users to optimize objective functions involving `tidy3d` simulations using gradient-descent. This gradient calculation is done under the hood using the adjoint method, which requires just 1 additional simulation, no matter how many design parameters are involved.
+As of version 2.7.0, `tidy3d` supports the ability to differentiate functions involving a `web.run` of a `tidy3d` simulation. This allows users to optimize objective functions involving `tidy3d` simulations using gradient descent. This gradient calculation is done under the hood using the adjoint method, which requires just 1 additional simulation, no matter how many design parameters are involved.
 
 This functionality was previously available using the `adjoint` plugin, which used `jax`. There were a few issues with this approach:
 
@@ -19,19 +19,19 @@ Automatic differentiation in 2.7 is built directly into `tidy3d`. One can perfor
 ```py
 def objective(eps: float) -> float:
 
-	structure = td.Structure(
-		medium=td.Medium(permittivity=eps),
-		geometry=td.Box(...),
-	)
+ structure = td.Structure(
+  medium=td.Medium(permittivity=eps),
+  geometry=td.Box(...),
+ )
 
-	sim = td.Simulation(
-		structures=[structure],
-		...
-	)
+ sim = td.Simulation(
+  structures=[structure],
+  ...
+ )
 
-	data = td.web.run(sim)
+ data = td.web.run(sim)
 
-	return np.sum(abs(data['mode'].amps.sel(mode_index=0).values))
+ return np.sum(abs(data['mode'].amps.sel(mode_index=0).values))
 
 # compute derivative of objective(1.0) with respect to input
 autograd.grad(objective)(1.0)
@@ -69,6 +69,7 @@ jnp.sum(...)
 ```
 
 becomes
+
 ```py
 import autograd.numpy as anp
 anp.sum(...)
@@ -109,49 +110,30 @@ Finally, the regular `web.run()` and `web.run_async()` functions have their deri
 
 The following components are traceable as inputs to the `td.Simulation`
 
-rectangular prisms
-- `Box.center`
-- `Box.size`
-
-polyslab (including those with dilation or slanted sidewalls)
-- `PolySlab.vertices`
-
-regular mediums
-- `Medium.permittivity`
-- `Medium.conductivity`
-
-spatially varying mediums (for topology optimization mainly)
-- `CustomMedium.permittivity`
-- `CustomMedium.eps_dataset`
-
-groups of geometries with the same medium (for faster processing)
-- `GeometryGroup.geometries`
-
-complex and self-intersecting polyslabs
-- `ComplexPolySlab.vertices`
-
-dispersive materials
-- `PoleResidue.eps_inf`
-- `PoleResidue.poles`
-
-spatially dependent dispersive materials:
-- `CustomPoleResidue.eps_inf`
-- `CustomPoleResidue.poles`
+| Component Type                                                    | Traceable Attributes                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------- |
+| rectangular prisms                                                | `Box.center`, `Box.size`                                |
+| polyslab (including those with dilation or slanted sidewalls)     | `PolySlab.vertices`                                     |
+| regular mediums                                                   | `Medium.permittivity`, `Medium.conductivity`            |
+| spatially varying mediums (for topology optimization mainly)      | `CustomMedium.permittivity`, `CustomMedium.eps_dataset` |
+| groups of geometries with the same medium (for faster processing) | `GeometryGroup.geometries`                              |
+| complex and self-intersecting polyslabs                           | `ComplexPolySlab.vertices`                              |
+| dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
+| spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
 
 The following data types are traceable as outputs of the `td.SimulationData`
 
-- `ModeData.amps`
-- `DiffractionData.amps`
-- `FieldData.field_components`
-- `FieldData` operations:
-  - `FieldData.flux`
-  - `SimulationData.get_intensity(fld_monitor_name)`
-  - `SimulationData.get_poynting(fld_monitor_name)`
+| Data Type         | Traceable Attributes & Methods                                |
+| ----------------- | ------------------------------------------------------------- |
+| `ModeData`        | `amps`                                                        |
+| `DiffractionData` | `amps`                                                        |
+| `FieldData`       | `field_components`, `flux`                                    |
+| `SimulationData`  | `get_intensity(field_monitor)`, `get_poynting(field_monitor)` |
 
-We also support the following high level features
+We also support the following high-level features
 
-- gradients for objective functions depending on multi-frequency data with single broadband adjoint source.
-- server-side gradient processing by default, which saves transfer.  This can be turned off by passing `local_gradient=True` to the `web.run()` and related functions.
+- Gradients for objective functions depending on multi-frequency data with a single broadband adjoint source.
+- Server-side gradient processing by default, which saves transfer. This can be turned off by passing `local_gradient=True` to the `web.run()` and related functions.
 
 We currently have the following restrictions:
 
@@ -171,7 +153,7 @@ Later this year (2024), we plan to support:
 
 ### Finally
 
-If you have feature requests or questions, please feel free to file an issue or discussion on the `tidy3d` front end repository.
+If you have feature requests or questions, please feel free to file an issue or discussion on the `tidy3d` front-end repository.
 
 Happy autogradding!
 
@@ -181,12 +163,13 @@ Autograd has some limitations/quirks, and a good starting point to get familiar 
 
 ## Developer Notes
 
-To convert existing tidy3d front end code to be autograd compatible, will need to be aware of
+To convert existing tidy3d front-end code to be autograd compatible, you will need to be aware of
+
 - `numpy` -> `autograd.numpy`
-- `x.real` -> `np.real(x)``
+- `x.real` -> `np.real(x)`
 - `float()` is not supported as far as I can tell.
 - `isclose()` -> `np.isclose()`
 - `array[i] = something` needs a different approach (happens in mesher a lot)
-- be careful with `+=` in autograd, it can fail silently..
-- whenever we pass things to other modules, like `shapely` especially, we need to be careful that they are untraced.
-- I just made structures static (`obj = obj.to_static()`) before any meshing, as a cutoff point. So if we add a new `make_grid()` call somewhere, eg in a validator, just need to be aware.
+- Be careful with `+=` in autograd, it can fail silently.
+- Whenever we pass things to other modules, like `shapely` especially, we need to be careful that they are untraced.
+- I just made structures static (`obj = obj.to_static()`) before any meshing, as a cutoff point. So if we add a new `make_grid()` call somewhere, e.g., in a validator, just need to be aware.
