@@ -1068,7 +1068,6 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         """Create adjoint custom field sources if this field data has some dimensionality."""
 
         sources = []
-
         source_geo = self.monitor.geometry
         freqs = self.monitor.freqs
 
@@ -2237,8 +2236,10 @@ class AbstractFieldProjectionData(MonitorData):
         ``xarray.DataArray``
             Power at points relative to the local origin.
         """
-        power_theta = 0.5 * np.real(self.Etheta.values * np.conj(self.Hphi.values))
-        power_phi = 0.5 * np.real(-self.Ephi.values * np.conj(self.Htheta.values))
+        conj = np.vectorize(np.conj)
+        real = np.vectorize(np.real)
+        power_theta = 0.5 * real(self.Etheta.values * conj(self.Hphi.values))
+        power_phi = 0.5 * real(-self.Ephi.values * conj(self.Htheta.values))
         power = power_theta + power_phi
 
         return self.make_data_array(data=power)

@@ -26,7 +26,11 @@ __all__ = [
     "AutogradTraced",
     "AutogradFieldMap",
     "get_static",
+    "is_traced",
+    "get_tracer",
     "interpn",
     "split_list",
     "is_tidy_box",
+    "trapz",
+    "add_at",
 ]
