@@ -881,6 +881,8 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     """Emulates a simulation run."""
     from scipy.ndimage.filters import gaussian_filter
 
+    x = kwargs.get("x0", 1.0)
+
     def make_data(
         coords: dict, data_array_type: type, is_complex: bool = False
     ) -> td.components.data.data_array.DataArray:
@@ -891,7 +893,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 
         data = (1 + 0.5j) * data if is_complex else data
         data = gaussian_filter(data, sigma=1.0)  # smooth out the data a little so it isnt random
-        data_array = data_array_type(data, coords=coords)
+        data_array = data_array_type(x * data, coords=coords)
         return data_array
 
     def make_field_data(monitor: td.FieldMonitor) -> td.FieldData:

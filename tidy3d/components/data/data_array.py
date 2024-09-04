@@ -24,6 +24,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
+from ..autograd.constants import AUTOGRAD_KEY
 from ..autograd.functions import interpn
 from ..types import Axis, Bound
 
@@ -56,9 +57,6 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
-# name for the autograd-traced part of the DataArray
-AUTOGRAD_KEY = "AUTOGRAD"
-
 
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
@@ -71,16 +69,46 @@ class DataArray(xr.DataArray):
     _data_attrs: Dict[str, str] = {}
 
     def __init__(self, data, *args, **kwargs):
-        """Initialize ``DataArray``."""
-
-        # initialize with untraced data
-        super().__init__(getval(data), *args, **kwargs)
-        # and put tracers in .attrs
+        super().__init__(data, *args, **kwargs)
         if isbox(data):
             self.attrs[AUTOGRAD_KEY] = data
 
+    def insert_tracers(self, tracers):
+        traced_self = self.copy(deep=False, data=tracers)
+        if isbox(tracers):
+            traced_self.attrs[AUTOGRAD_KEY] = tracers
+        return traced_self
+
     @property
-    def tracers(self) -> Box:
+    def has_tracers(self) -> bool:
+        """Check if the DataArray has tracers."""
+        return self.tracers is not None
+
+    @property
+    def untraced(self) -> DataArray:
+        """
+        Get an untraced version of the DataArray.
+
+        Returns
+        -------
+        DataArray
+            A new DataArray instance with untraced values.
+        """
+        vals = self.values if self.values.size == 0 else np.vectorize(getval)(self.values)
+        static_self = self.copy(deep=False, data=vals)
+        static_self.attrs.pop(AUTOGRAD_KEY, None)
+        return static_self
+
+    @property
+    def tracers(self) -> Box | None:
+        """
+        Get the traced values of the DataArray.
+
+        Returns
+        -------
+        Box | None
+            The traced values as an autograd Box, or None if no tracers are present.
+        """
         if self.data.size == 0:
             return None
         elif AUTOGRAD_KEY not in self.attrs and not isbox(self.data.flat[0]):
@@ -133,9 +161,8 @@ class DataArray(xr.DataArray):
         This does not check every 'DataArray' by default. Instead, when required, this check can be
         called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
         """
-        # skip this validator if currently tracing for autograd because
-        # self.values will be dtype('object') and not interpolatable
-        if self.tracers is not None:
+        # skip this validator if currently tracing for autograd
+        if self.has_tracers:
             return
 
         if field_name is None:
@@ -248,7 +275,7 @@ class DataArray(xr.DataArray):
         """Save an xr.DataArray to the hdf5 file handle with a given path to the group."""
 
         sub_group = f_handle.create_group(group_path)
-        sub_group[DATA_ARRAY_VALUE_NAME] = self.values
+        sub_group[DATA_ARRAY_VALUE_NAME] = self.untraced
         for key, val in self.coords.items():
             if val.dtype == "<U1":
                 sub_group[key] = val.values.tolist()
@@ -321,7 +348,7 @@ class DataArray(xr.DataArray):
         KeyError
             If any of the specified coordinates are not in the DataArray.
         """
-        if self.tracers is not None:  # use custom interp if using traced data
+        if self.has_tracers:  # use custom interp if using traced data
             coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
 
             missing_keys = set(coords) - set(self.coords)
@@ -337,8 +364,9 @@ class DataArray(xr.DataArray):
             vals = interpn(points, obj.tracers, xi, method=method)
 
             da = DataArray(vals, out_coords)  # tracers go into .attrs
-            if isbox(self.values.flat[0]):  # if tracing .values instead of .attrs
+            if isbox(vals):  # if tracing .values instead of .attrs
                 da = da.copy(deep=False, data=vals)  # copy over tracers
+                da.attrs[AUTOGRAD_KEY] = vals
 
             return da
 
@@ -352,15 +380,15 @@ class DataArray(xr.DataArray):
 
     def conj(self, *args: Any, **kwargs: Any):
         """Return the complex conjugate of this DataArray."""
-        if self.tracers is not None:
-            return self.__array_wrap__(anp.conj(self.tracers))
+        if isbox(self.values.flat[0]) or AUTOGRAD_KEY in self.attrs:
+            return self.insert_tracers(anp.conj(anp.array(self.values.tolist())))
         return super().conj(*args, **kwargs)
 
     @property
     def real(self):
         """Return the real part of this DataArray."""
-        if self.tracers is not None:
-            return self.__array_wrap__(anp.real(self.tracers))
+        if isbox(self.values.flat[0]) or AUTOGRAD_KEY in self.attrs:
+            return self.insert_tracers(anp.real(anp.array(self.values.tolist())))
         return super().real
 
 
