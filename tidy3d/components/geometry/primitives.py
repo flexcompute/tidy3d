@@ -235,7 +235,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         num_pts_circumference : int = 51
             Number of points in the circumference of the discretized polyslab.
         **kwargs:
-            Extra keyword arguments passed to ``PolySlab()``, such as ``sidewall_angle``.
+            Extra keyword arguments passed to ``PolySlab()``, such as ``dilation``.
 
         Returns
         -------
@@ -263,6 +263,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             vertices=vertices,
             axis=self.axis,
             slab_bounds=slab_bounds,
+            sidewall_angle=self.sidewall_angle,
+            reference_plane=self.reference_plane,
             **kwargs,
         )
 
@@ -270,7 +272,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB
     ) -> np.ndarray:
         """Set of x and y points for the unit circle when discretizing cylinder as a polyslab."""
-        angles = np.linspace(0, 1, num_pts_circumference + 1)[:-1]
+        angles = np.linspace(0, 2 * np.pi, num_pts_circumference, endpoint=False)
         xs = np.cos(angles)
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)

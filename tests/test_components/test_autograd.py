@@ -79,7 +79,7 @@ DA_SHAPE_X = 1 if IS_3D else 1
 DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
 
 # number of vertices in the polyslab
-NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 30
+NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 110
 
 PNT_DIPOLE = td.PointDipole(
     center=(0, 0, -LZ / 2 + WVL),
@@ -394,15 +394,15 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     custom_pole_res = td.Structure(geometry=box, medium=custom_med_pole_res)
 
     radius = 0.4 * (1 + anp.abs(vector @ params))
-    cyl_center_y = vector @ params
-    cyl_center_z = -vector @ params
+    cyl_center_y = 0  # vector @ params
+    cyl_center_z = 0  # -vector @ params
     cylinder_geo = td.Cylinder(
-        radius=radius,
+        radius=radii,
         center=(0, cyl_center_y, cyl_center_z),
         axis=0,
         length=LX / 2 if IS_3D else td.inf,
     )
-    cylinder = td.Structure(geometry=cylinder_geo, medium=med)
+    cylinder = td.Structure(geometry=cylinder_geo, medium=polyslab.medium)
 
     return dict(
         medium=medium,
@@ -763,6 +763,48 @@ def test_autograd_speed_num_structures(use_emulated_run):
         pr.print_stats(sort="cumtime")
         pr.dump_stats("results.prof")
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
+
+
+@pytest.mark.parametrize("monitor_key", ("mode",))
+def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
+    """Test an objective function through tidy3d autograd."""
+
+    fn_dict_polyslab = get_functions("polyslab", monitor_key)
+    make_sim_polyslab = fn_dict_polyslab["sim"]
+
+    fn_dict_cylinder = get_functions("cylinder", monitor_key)
+    make_sim_cylinder = fn_dict_cylinder["sim"]
+
+    postprocess = fn_dict_cylinder["postprocess"]
+
+    def objective_polyslab(*args):
+        """Objective function."""
+        sim = make_sim_polyslab(*args)
+        if PLOT_SIM:
+            plot_sim(sim, plot_eps=True)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        value = postprocess(data)
+        return value
+
+    val_polyslab, grad_polyslab = ag.value_and_grad(objective_polyslab)(params0)
+    print(val_polyslab, grad_polyslab)
+    assert anp.all(grad_polyslab != 0.0), "some gradients are 0"
+
+    def objective_cylinder(*args):
+        """Objective function."""
+        sim = make_sim_cylinder(*args)
+        if PLOT_SIM:
+            plot_sim(sim, plot_eps=True)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        value = postprocess(data)
+        return value
+
+    val_cylinder, grad_cylinder = ag.value_and_grad(objective_cylinder)(params0)
+    print(val_cylinder, grad_cylinder)
+    assert anp.all(grad_cylinder != 0.0), "some gradients are 0"
+
+    # just make sure they're somewhat close (use different discretizations)
+    assert np.allclose(grad_cylinder, grad_polyslab, rtol=0.3)
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
