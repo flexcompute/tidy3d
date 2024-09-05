@@ -7,6 +7,7 @@ from .penalty import ErosionDilationPenalty
 from .region import TopologyDesignRegion
 from .result import InverseDesignResult
 from .transformation import FilterProject
+from .web import Job
 
 __all__ = (
     "InverseDesign",
@@ -17,4 +18,5 @@ __all__ = (
     "AdamOptimizer",
     "InverseDesignResult",
     "utils",
+    "Job",
 )
