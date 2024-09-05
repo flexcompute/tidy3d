@@ -10,7 +10,61 @@ from .base import InvdesBaseModel
 from .optimizer import AdamOptimizer
 from .result import InverseDesignResult
 
-http = None
+# time between status updates (seconds)
+OPTIMIZATION_MONITOR_REFRESH = 15
+
+url_base = "tidy3d/invdes/"
+
+"""API
+
+POST /tidy3d/invdes/run
+
+    body:
+
+        {
+            optimizer : AdamOptimizer,
+        }
+
+    response:
+
+        {
+            optimizer_id : str,
+        }
+
+GET /tidy3d/invdes/{optimizer_id}/info
+
+    body:
+        {}
+
+    response:
+        {
+            iteration : int,
+            objective : float,
+            gradient_norm : float,
+            result : InverseDesignResult,
+            status : str,
+        }
+
+PUT /tidy3d/invdes/{optimizer_id}/abort
+
+    body:
+        {}
+
+    response:
+        {}
+
+GET /tidy3d/invdes/{optimizer_id}/load
+
+    body:
+        {}
+
+    response:
+        {
+            result : inverseDesignResult,
+        }
+
+
+"""
 
 
 class Job(InvdesBaseModel):
@@ -18,12 +72,6 @@ class Job(InvdesBaseModel):
 
     optimizer: AdamOptimizer = pd.Field(
         ..., title="Optimizer", description="Object defining the optimization to perform."
-    )
-
-    result_path: str = pd.Field(
-        "results.hdf5",
-        title="Result Path",
-        description="File to store the inverse design result.",
     )
 
     verbose: bool = pd.Field(
@@ -47,124 +95,65 @@ class Job(InvdesBaseModel):
 
     def run(self) -> InverseDesignResult:
         """Run optimization all the way through and return result"""
-        self.upload()
-        self.start()
+        self.submit()
         self.monitor()
         return self.load()
 
     @cached_property
     def optimizer_id(self) -> str:
         """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
-        return self._upload()
+        return self._submit()
 
-    def _upload(self) -> str:
+    def _submit(self) -> str:
         """Upload this job and return the task ID for handling."""
-        body = self.json()
-        resp = requests.post(body)
-        optimizer_id = resp["optimizer_id"]
-        return optimizer_id
+        url = url_base + "submit"
+        body = self.json
+        resp = requests.post(url, data=body)
+        return resp["optimizer_id"]
 
-    def upload(self) -> None:
+    def submit(self) -> None:
         """Upload this ``Job``."""
         _ = self.optimizer_id
 
     def get_info(self) -> dict:
         """Return information about a :class:`Job`."""
-        return requests.get(self.optimizer_id)
+        url = url_base + f"{self.optimizer_id}/info"
+        response = requests.get(url)
+        return InverseDesignResult.parse_obj(response)
 
     @property
     def status(self):
         """Return current status of :class:`Job`."""
-        return self.get_info().status
+        info_dict = self.get_info()
+        return info_dict["status"]
 
-    def start(self) -> None:
-        """Start running a :class:`Job`.
-
-        Note
-        ----
-        To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
-        """
-        http.post()
+    @property
+    def is_done(self) -> bool:
+        """Is the run finished?"""
+        return self.status in ("complete",)
 
     def monitor(self) -> None:
-        """Monitor progress of running :class:`Job`.
+        """Monitor progress of running optimization."""
 
-        Note
-        ----
-        To load the output of completed simulation into :class:`.SimulationData` objects,
-        call :meth:`Job.load`.
-        """
         info_dict = {}
-        while self.status != "finished":
+        while not self.is_done:
             info_dict_new = self.get_info()
             if info_dict_new != info_dict:
                 print(info_dict)
                 info_dict = info_dict_new
-            time.sleep(30)
-
-    def download(self) -> None:
-        """Download results of simulation.
-
-        Parameters
-        ----------
-        path : str = "./simulation_data.hdf5"
-            Path to download data as ``.hdf5`` file (including filename).
-
-        Note
-        ----
-        To load the data after download, use :meth:`Job.load`.
-        """
-        http.post(self.result_path)
+            time.sleep(OPTIMIZATION_MONITOR_REFRESH)
 
     def load(self) -> InverseDesignResult:
-        """Download job results and load them into a data object.
+        """Return results of optimization."""
 
-        Parameters
-        ----------
-        path : str = "./simulation_data.hdf5"
-            Path to download data as ``.hdf5`` file (including filename).
+        if not self.is_done:
+            raise ValueError(f"Optimization is not finished, status of '{self.status}'.")
 
-        Returns
-        -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
-            Object containing simulation results.
-        """
+        url = url_base + f"{self.optimizer_id}/load"
+        response = requests.get(url)
+        return InverseDesignResult.parse_obj(response)
 
-    def delete(self) -> None:
-        """Delete server-side data associated with :class:`Job`."""
-        http.post(self.optimizer_id)
-
-    def real_cost(self, verbose: bool = True) -> float:
-        """Get the billed cost for the task associated with this job.
-
-        Parameters
-        ----------
-        verbose : bool = True
-            Whether to log the cost and helpful messages.
-
-        Returns
-        -------
-        float
-            Billed cost of the task in FlexCredits.
-        """
-        return http.post()
-
-    def estimate_cost(self, verbose: bool = True) -> float:
-        """Compute the maximum FlexCredit charge for a given :class:`.Job`.
-
-        Parameters
-        ----------
-        verbose : bool = True
-            Whether to log the cost and helpful messages.
-
-        Returns
-        -------
-        float
-            Estimated cost of the task in FlexCredits.
-
-        Note
-        ----
-        Cost is calculated assuming the simulation runs for
-        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
-        """
-        return http.post()
+    def abort(self) -> None:
+        """Interrupt server-side optimization associated with this :class:`Job`."""
+        url = url_base + f"{self.optimizer_id}/abort"
+        requests.put(url)
