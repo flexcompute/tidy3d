@@ -394,6 +394,7 @@ def _run_primitive(
             sim_original=sim_original,
             local_gradient=local_gradient,
         )
+
         sim_data_combined, _ = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
 
         field_map = postprocess_fwd(
