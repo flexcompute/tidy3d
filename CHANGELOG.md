@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Significant speedup for field projection computations.
 - Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
+- Bug where lumped elements in the `Simulation` were being overwritten by the `TerminalComponentModeler`.
 
 ## [2.7.2] - 2024-08-07
 
