@@ -132,13 +132,13 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         new_mnts = list(self.simulation.monitors) + field_monitors
 
-        lumped_resistors = [
+        new_lumped_elements = list(self.simulation.lumped_elements) + [
             port.to_load(snap_center=snap_centers[port.name]) for port in self._lumped_ports
         ]
 
         update_dict = dict(
             monitors=new_mnts,
-            lumped_elements=lumped_resistors,
+            lumped_elements=new_lumped_elements,
         )
 
         # This is the new default simulation will all shared components added
