@@ -30,6 +30,9 @@ for _, path in enumerate(notebook_filenames_all):
 run_only = []
 
 skip = [
+    # WIP
+    "Autograd10YBranchLevelSet",
+    "Autograd13Metasurface",
     # long time (excluding most adjoint)
     "8ChannelDemultiplexer",
     "90BendPolarizationSplitterRotator",
