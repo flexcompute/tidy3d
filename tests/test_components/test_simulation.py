@@ -2977,3 +2977,35 @@ def test_validate_sources_monitors_in_bounds():
             grid_spec=td.GridSpec(wavelength=1.0),
             monitors=[mode_monitor],
         )
+
+
+def test_2d_projection_monitor_out_sim_domain():
+    # set up a structure interset with far field monitor outside the computational domain
+    cylinder = td.Structure(
+        geometry=td.Cylinder(axis=2, radius=0.5, length=2), medium=td.PECMedium()
+    )
+
+    num_phi = 100
+    theta = np.pi / 2
+    phis = np.linspace(0, np.pi, num_phi)
+    monitor_far = td.FieldProjectionAngleMonitor(
+        size=[2, 2, 0.5],
+        freqs=[1e12],
+        name="far_field",
+        theta=theta,
+        phi=phis,
+    )
+
+    sim2d = td.Simulation(
+        size=(4, 4, 0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.025),
+        sources=[],
+        structures=[cylinder],
+        monitors=[monitor_far],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.periodic(),
+        ),
+    )

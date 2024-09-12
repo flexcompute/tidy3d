@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Stopped raising error when field projection monitor intersecting structures outside of the simulation domain.
+
 ## [2.7.3] - 2024-09-12
 
 ### Added
