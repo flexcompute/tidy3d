@@ -127,7 +127,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
         field_monitors = [
             mon
             for port in self.ports
-            for mon in port.to_field_monitors(self.freqs, snap_center=snap_centers.get(port.name))
+            for mon in port.to_field_monitors(
+                self.freqs, snap_center=snap_centers.get(port.name), grid=sim_wo_source.grid
+            )
         ]
 
         new_mnts = list(self.simulation.monitors) + field_monitors

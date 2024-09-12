@@ -6444,7 +6444,7 @@ class Medium2D(AbstractMedium):
                 eps_inf += weight * (med.pole_residue.eps_inf - 1)
             elif isinstance(med, Medium):
                 pole_res = PoleResidue.from_medium(med)
-                eps_inf += weight * (med.eps_model(np.inf) - 1)
+                eps_inf += weight * (med.permittivity - 1)
             elif isinstance(med, PECMedium):
                 # special treatment for PEC
                 return med

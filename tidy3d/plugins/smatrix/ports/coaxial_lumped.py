@@ -211,7 +211,9 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             name=f"{self.name}_resistor",
         )
 
-    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
+    def to_voltage_monitor(
+        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+    ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         center = list(self.center)
         if snap_center:
@@ -233,7 +235,9 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             colocate=False,
         )
 
-    def to_current_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
+    def to_current_monitor(
+        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+    ) -> FieldMonitor:
         """Field monitor to compute port current."""
         center = list(self.center)
         if snap_center:

@@ -710,7 +710,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         bounds = self.bounds
         for element in self.lumped_elements:
             kwargs = element.plot_params.include_kwargs(alpha=alpha).to_kwargs()
-            ax = element.to_structure.plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
+            ax = element.to_geometry().plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
@@ -1289,7 +1289,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # Convert lumped elements into structures
         lumped_structures = []
         for lumped_element in self.lumped_elements:
-            lumped_structures.append(lumped_element.to_structure)
+            lumped_structures.append(lumped_element.to_structure(self.grid))
 
         # Begin volumetric structures grid
         all_structures = list(self.structures) + lumped_structures
@@ -1494,7 +1494,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             ]
 
         new_lumped_elements = [
-            elem for elem in self.lumped_elements if new_box.intersects(elem.to_structure.geometry)
+            elem for elem in self.lumped_elements if new_box.intersects(elem.to_geometry())
         ]
 
         if sources is None:

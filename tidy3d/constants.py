@@ -169,6 +169,16 @@ OHM = "ohm"
 SI unit of resistance.
 """
 
+FARAD = "farad"
+"""
+SI unit of capacitance.
+"""
+
+HENRY = "henry"
+"""
+SI unit of inductance.
+"""
+
 AMP = "A"
 """
 SI unit of electric current.

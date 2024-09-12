@@ -5,19 +5,12 @@ import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
+import tidy3d.plugins.microwave as mw
 from skrf import Frequency
 from skrf.media import MLine
 from tidy3d import FieldData
 from tidy3d.constants import ETA_0
 from tidy3d.exceptions import DataError
-from tidy3d.plugins.microwave import (
-    CurrentIntegralAxisAligned,
-    CustomCurrentIntegral2D,
-    CustomVoltageIntegral2D,
-    ImpedanceCalculator,
-    VoltageIntegralAxisAligned,
-)
-from tidy3d.plugins.microwave.models import coupled_microstrip, microstrip
 
 from ..utils import get_spatial_coords_dict, run_emulated
 
@@ -174,7 +167,7 @@ def test_voltage_integral_axes(axis):
     size = [0, 0, 0]
     size[axis] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center,
         size=size,
         sign="+",
@@ -190,7 +183,7 @@ def test_current_integral_axes(axis):
     size = [length, length, length]
     size[axis] = 0.0
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAxisAligned(
+    current_integral = mw.CurrentIntegralAxisAligned(
         center=center,
         size=size,
         sign="+",
@@ -204,7 +197,7 @@ def test_voltage_integral_toggles():
     size = [0, 0, 0]
     size[0] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center,
         size=size,
         extrapolate_to_endpoints=True,
@@ -220,7 +213,7 @@ def test_current_integral_toggles():
     size = [length, length, length]
     size[0] = 0.0
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAxisAligned(
+    current_integral = mw.CurrentIntegralAxisAligned(
         center=center,
         size=size,
         extrapolate_to_endpoints=True,
@@ -236,7 +229,7 @@ def test_voltage_missing_fields():
     size = [0, 0, 0]
     size[1] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center,
         size=size,
         sign="+",
@@ -252,7 +245,7 @@ def test_current_missing_fields():
     size = [length, length, length]
     size[0] = 0.0
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAxisAligned(
+    current_integral = mw.CurrentIntegralAxisAligned(
         center=center,
         size=size,
         sign="+",
@@ -261,7 +254,7 @@ def test_current_missing_fields():
     with pytest.raises(DataError):
         _ = current_integral.compute_current(SIM_Z_DATA["ExHx"])
 
-    current_integral = CurrentIntegralAxisAligned(
+    current_integral = mw.CurrentIntegralAxisAligned(
         center=center,
         size=[length, length, 0],
         sign="+",
@@ -277,7 +270,7 @@ def test_time_monitor_voltage_integral():
     size = [0, 0, 0]
     size[1] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center,
         size=size,
         sign="+",
@@ -292,7 +285,7 @@ def test_mode_solver_monitor_voltage_integral():
     size = [0, 0, 0]
     size[1] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center,
         size=size,
         sign="+",
@@ -307,7 +300,7 @@ def test_tiny_voltage_path():
     size = [0, 0, 0]
     size[1] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center, size=size, sign="+", extrapolate_to_endpoints=True
     )
 
@@ -317,7 +310,7 @@ def test_tiny_voltage_path():
 def test_impedance_calculator():
     """Check validation of ImpedanceCalculator when integrals are missing."""
     with pytest.raises(pydantic.ValidationError):
-        _ = ImpedanceCalculator(voltage_integral=None, current_integral=None)
+        _ = mw.ImpedanceCalculator(voltage_integral=None, current_integral=None)
 
 
 def test_impedance_calculator_on_time_data():
@@ -327,21 +320,21 @@ def test_impedance_calculator_on_time_data():
     size = [0, length, 0]
     size[1] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center, size=size, sign="+", extrapolate_to_endpoints=True
     )
 
     size = [length, length, 0]
-    current_integral = CurrentIntegralAxisAligned(center=center, size=size, sign="+")
+    current_integral = mw.CurrentIntegralAxisAligned(center=center, size=size, sign="+")
 
     # Compute impedance using the tool
-    Z_calc = ImpedanceCalculator(
+    Z_calc = mw.ImpedanceCalculator(
         voltage_integral=voltage_integral, current_integral=current_integral
     )
     _ = Z_calc.compute_impedance(SIM_Z_DATA["field_time"])
-    Z_calc = ImpedanceCalculator(voltage_integral=voltage_integral, current_integral=None)
+    Z_calc = mw.ImpedanceCalculator(voltage_integral=voltage_integral, current_integral=None)
     _ = Z_calc.compute_impedance(SIM_Z_DATA["field_time"])
-    Z_calc = ImpedanceCalculator(voltage_integral=None, current_integral=current_integral)
+    Z_calc = mw.ImpedanceCalculator(voltage_integral=None, current_integral=current_integral)
     _ = Z_calc.compute_impedance(SIM_Z_DATA["field_time"])
 
 
@@ -351,13 +344,13 @@ def test_impedance_accuracy():
     # Setup path integrals
     size = [0, STRIP_HEIGHT / 2, 0]
     center = [0, -STRIP_HEIGHT / 4, 0]
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center, size=size, sign="+", extrapolate_to_endpoints=True
     )
 
     size = [STRIP_WIDTH * 1.25, STRIP_HEIGHT / 2, 0]
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAxisAligned(center=center, size=size, sign="+")
+    current_integral = mw.CurrentIntegralAxisAligned(center=center, size=size, sign="+")
 
     def impedance_of_stripline(width, height):
         # Assuming no fringing fields, is the same as a parallel plate
@@ -368,13 +361,13 @@ def test_impedance_accuracy():
     analytic_impedance = impedance_of_stripline(STRIP_WIDTH, STRIP_HEIGHT)
 
     # Compute impedance using the tool
-    Z_calc = ImpedanceCalculator(
+    Z_calc = mw.ImpedanceCalculator(
         voltage_integral=voltage_integral, current_integral=current_integral
     )
     Z1 = Z_calc.compute_impedance(field_data)
-    Z_calc = ImpedanceCalculator(voltage_integral=voltage_integral, current_integral=None)
+    Z_calc = mw.ImpedanceCalculator(voltage_integral=voltage_integral, current_integral=None)
     Z2 = Z_calc.compute_impedance(field_data)
-    Z_calc = ImpedanceCalculator(voltage_integral=None, current_integral=current_integral)
+    Z_calc = mw.ImpedanceCalculator(voltage_integral=None, current_integral=current_integral)
     Z3 = Z_calc.compute_impedance(field_data)
 
     # Computation that uses the flux is less accurate, due to staircasing the field
@@ -391,7 +384,7 @@ def test_microstrip_models():
     eps_r = 4.4
 
     # Check zero thickness parameters
-    Z0, eps_eff = microstrip.compute_line_params(eps_r, width, height, thickness)
+    Z0, eps_eff = mw.models.microstrip.compute_line_params(eps_r, width, height, thickness)
     freqs = Frequency(start=1, stop=1, npoints=1, unit="ghz")
     mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
 
@@ -399,12 +392,12 @@ def test_microstrip_models():
     assert np.isclose(eps_eff, mline.ep_reff[0])
 
     # Check end effect length computation
-    dL = microstrip.compute_end_effect_length(eps_r, eps_eff, width, height)
+    dL = mw.models.microstrip.compute_end_effect_length(eps_r, eps_eff, width, height)
     assert np.isclose(dL, 0.54, rtol=0.01)
 
     # Check finite thickness parameters
     thickness = 0.1
-    Z0, eps_eff = microstrip.compute_line_params(eps_r, width, height, thickness)
+    Z0, eps_eff = mw.models.microstrip.compute_line_params(eps_r, width, height, thickness)
     mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
 
     assert np.isclose(Z0, mline.Z0[0])
@@ -423,7 +416,7 @@ def test_coupled_microstrip_model():
     #               International Journal of Engineering & Technology 2, no. 4 (2013): 266.
     # and notebook "CoupledLineBandpassFilter"
 
-    (Z_even, Z_odd, eps_even, eps_odd) = coupled_microstrip.compute_line_params(
+    (Z_even, Z_odd, eps_even, eps_odd) = mw.models.coupled_microstrip.compute_line_params(
         eps_r, w1, height, g1
     )
     assert np.isclose(Z_even, 101.5, rtol=0.01)
@@ -431,7 +424,7 @@ def test_coupled_microstrip_model():
     assert np.isclose(eps_even, 3.26, rtol=0.01)
     assert np.isclose(eps_odd, 2.71, rtol=0.01)
 
-    (Z_even, Z_odd, eps_even, eps_odd) = coupled_microstrip.compute_line_params(
+    (Z_even, Z_odd, eps_even, eps_odd) = mw.models.coupled_microstrip.compute_line_params(
         eps_r, w2, height, g2
     )
     assert np.isclose(Z_even, 71, rtol=0.01)
@@ -446,7 +439,7 @@ def test_frequency_monitor_custom_voltage_integral():
     size[1] = length
     # Make line
     vertices = [(0, 0), (0, 0.2), (0, 0.4)]
-    voltage_integral = CustomVoltageIntegral2D(axis=2, position=0, vertices=vertices)
+    voltage_integral = mw.CustomVoltageIntegral2D(axis=2, position=0, vertices=vertices)
     voltage_integral.compute_voltage(SIM_Z_DATA["field"])
 
 
@@ -458,12 +451,12 @@ def test_vertices_validator_custom_current_integral():
     vertices = [(0.2, -0.2, 0.5), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
 
     with pytest.raises(pydantic.ValidationError):
-        _ = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+        _ = mw.CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
 
     # Make wrong box shape
     vertices = [(0.2, 0.2, -0.2, -0.2, 0.2), (-0.2, 0.2, 0.2, -0.2, 0.2)]
     with pytest.raises(pydantic.ValidationError):
-        _ = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+        _ = mw.CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
 
 
 def test_fields_missing_custom_current_integral():
@@ -472,7 +465,7 @@ def test_fields_missing_custom_current_integral():
     size[1] = length
     # Make box
     vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
-    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    current_integral = mw.CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
     with pytest.raises(DataError):
         current_integral.compute_current(SIM_Z_DATA["ExHx"])
 
@@ -484,7 +477,7 @@ def test_wrong_monitor_data():
     size[1] = length
     # Make box
     vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
-    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    current_integral = mw.CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
     with pytest.raises(DataError):
         current_integral.compute_current(SIM_Z.sources[0].source_time)
     with pytest.raises(DataError):
@@ -497,7 +490,7 @@ def test_time_monitor_custom_current_integral():
     size[1] = length
     # Make box
     vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
-    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    current_integral = mw.CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
     current_integral.compute_current(SIM_Z_DATA["field_time"])
 
 
@@ -507,12 +500,12 @@ def test_mode_solver_custom_current_integral():
     size[1] = length
     # Make box
     vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
-    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    current_integral = mw.CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
     current_integral.compute_current(SIM_Z_DATA["mode"])
 
 
 def test_custom_current_integral_normal_y():
-    current_integral = CustomCurrentIntegral2D.from_circular_path(
+    current_integral = mw.CustomCurrentIntegral2D.from_circular_path(
         center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=1, clockwise=False
     )
     current_integral.compute_current(SIM_Z_DATA["field"])
@@ -522,13 +515,13 @@ def test_custom_path_integral_accuracy():
     """Test the accuracy of the custom path integral."""
     field_data = make_coax_field_data()
 
-    current_integral = CustomCurrentIntegral2D.from_circular_path(
+    current_integral = mw.CustomCurrentIntegral2D.from_circular_path(
         center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
     )
     current = current_integral.compute_current(field_data)
     assert np.allclose(current.values, 1.0 / ETA_0, rtol=0.01)
 
-    current_integral = CustomCurrentIntegral2D.from_circular_path(
+    current_integral = mw.CustomCurrentIntegral2D.from_circular_path(
         center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=True
     )
     current = current_integral.compute_current(field_data)
@@ -543,10 +536,10 @@ def test_impedance_accuracy_on_coaxial():
     size = [COAX_R2 - COAX_R1, 0, 0]
     center = [mean_radius, 0, 0]
 
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center, size=size, sign="-", extrapolate_to_endpoints=True, snap_path_to_grid=True
     )
-    current_integral = CustomCurrentIntegral2D.from_circular_path(
+    current_integral = mw.CustomCurrentIntegral2D.from_circular_path(
         center=(0, 0, 0), radius=mean_radius, num_points=31, normal_axis=2, clockwise=False
     )
 
@@ -556,7 +549,7 @@ def test_impedance_accuracy_on_coaxial():
     Z_analytic = impedance_of_coaxial_cable(COAX_R1, COAX_R2)
 
     # Compute impedance using the tool
-    Z_calculator = ImpedanceCalculator(
+    Z_calculator = mw.ImpedanceCalculator(
         voltage_integral=voltage_integral, current_integral=current_integral
     )
     Z_calc = Z_calculator.compute_impedance(field_data)
@@ -570,11 +563,11 @@ def test_path_integral_plotting():
     size = [COAX_R2 - COAX_R1, 0, 0]
     center = [mean_radius, 0, 0]
 
-    voltage_integral = VoltageIntegralAxisAligned(
+    voltage_integral = mw.VoltageIntegralAxisAligned(
         center=center, size=size, sign="-", extrapolate_to_endpoints=True, snap_path_to_grid=True
     )
 
-    current_integral = CustomCurrentIntegral2D.from_circular_path(
+    current_integral = mw.CustomCurrentIntegral2D.from_circular_path(
         center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
     )
 
@@ -588,11 +581,11 @@ def test_path_integral_plotting():
     plt.close()
 
     # Plot
-    voltage_integral = CustomVoltageIntegral2D(
+    voltage_integral = mw.CustomVoltageIntegral2D(
         axis=1, position=0, vertices=[(-1, -1), (0, 0), (1, 1)]
     )
 
-    current_integral = CurrentIntegralAxisAligned(
+    current_integral = mw.CurrentIntegralAxisAligned(
         center=(0, 0, 0),
         size=(2, 0, 1),
         sign="-",
@@ -612,6 +605,33 @@ def test_path_integral_plotting():
 
 def test_creation_from_terminal_positions():
     """Test creating an VoltageIntegralAxisAligned using terminal positions."""
-    _ = VoltageIntegralAxisAligned.from_terminal_positions(
+    _ = mw.VoltageIntegralAxisAligned.from_terminal_positions(
         plus_terminal=2, minus_terminal=1, y=2.2, z=1
     )
+
+
+def test_auto_path_integrals_for_lumped_element():
+    """Test the auto creation of path integrals around lumped elements."""
+    Rval = 75
+    Cval = 0.2 * 1e-12
+    fstart = 1e9
+    fstop = 30e9
+    freqs = np.linspace(fstart, fstop, 100)
+
+    RLC = td.RLCNetwork(
+        resistance=Rval,
+        capacitance=Cval,
+        network_topology="series",
+    )
+
+    linear_element = td.LinearLumpedElement(
+        center=[0, 0, 0],
+        size=[0.2, 0, 0.5],
+        voltage_axis=2,
+        network=RLC,
+        name="RLC",
+    )
+
+    SIM_Z_with_element = SIM_Z.updated_copy(lumped_elements=[linear_element])
+
+    _, _ = mw.path_integrals_from_lumped_element(linear_element, SIM_Z_with_element.grid, "+")

@@ -60,7 +60,9 @@ class AbstractTerminalPort(Tidy3dBaseModel, ABC):
         """Create a current source from a terminal-based port."""
 
     @abstractmethod
-    def to_field_monitors(self, freqs: FreqArray, snap_center: float = None) -> list[FieldMonitor]:
+    def to_field_monitors(
+        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+    ) -> list[FieldMonitor]:
         """Field monitors to compute port voltage and current."""
 
     @abstractmethod

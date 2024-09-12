@@ -223,6 +223,16 @@ def test_validate_port_voltage_axis():
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
 
 
+@pytest.mark.parametrize("snap_center", [None, 0.1])
+def test_converting_port_to_simulation_objects(snap_center):
+    """Test that the LumpedPort can be converted into monitors and source without the grid present."""
+    port = LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=2, impedance=50, name="Port1")
+    freqs = np.linspace(1e9, 10e9, 11)
+    source_time = td.GaussianPulse(freq0=5e9, fwidth=9e9)
+    _ = port.to_field_monitors(freqs=freqs, snap_center=snap_center)
+    _ = port.to_source(source_time=source_time, snap_center=snap_center)
+
+
 @pytest.mark.parametrize("port_refinement", [False, True])
 def test_make_coaxial_component_modeler(tmp_path, port_refinement):
     _ = make_coaxial_component_modeler(path_dir=str(tmp_path), port_refinement=port_refinement)

@@ -1,5 +1,6 @@
 """Tests Geometry objects."""
 
+import math
 import warnings
 
 import gdspy
@@ -13,7 +14,14 @@ import tidy3d as td
 import trimesh
 from tidy3d.components.geometry.base import Planar
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
-from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
+from tidy3d.components.geometry.utils import (
+    SnapBehavior,
+    SnapLocation,
+    SnappingSpec,
+    flatten_groups,
+    snap_box_to_grid,
+    traverse_geometries,
+)
 from tidy3d.components.geometry.utils_2d import subdivide
 from tidy3d.constants import LARGE_NUMBER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
@@ -979,3 +987,35 @@ def test_subdivide():
         medium=td.Medium(), geometry=td.Box(size=(1, 1, 1), center=(1 - fp_eps, 0, 0))
     )
     subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure, box_sliver])
+
+
+@pytest.mark.parametrize("snap_location", [SnapLocation.Boundary, SnapLocation.Center])
+@pytest.mark.parametrize(
+    "snap_behavior",
+    [SnapBehavior.Off, SnapBehavior.Closest, SnapBehavior.Expand, SnapBehavior.Contract],
+)
+def test_snap_box_to_grid(snap_location, snap_behavior):
+    """ "Test that all combinations of SnappingSpec correctly modify a test box without error."""
+    snap_spec = SnappingSpec(location=[snap_location] * 3, behavior=[snap_behavior] * 3)
+    box = td.Box(center=(0, 0, 0), size=(0.2, 0.23, 0.1))
+
+    xyz = np.linspace(0, 1, 11)
+    coords = td.Coords(x=xyz, y=xyz, z=xyz)
+    grid = td.Grid(boundaries=coords)
+    new_box = snap_box_to_grid(grid, box, snap_spec)
+    if snap_behavior != SnapBehavior.Off:
+        # The box must have changed location
+        assert not np.allclose(new_box.bounds, box.bounds)
+
+    # Test box that is bigger than the grid.
+    # Also test a corner case, where the box boundary and grid are approximately equal.
+    box = td.Box(center=(0.5, 0.200000001, 0), size=(1.1, 0.2, 0.1))
+    new_box = snap_box_to_grid(grid, box, snap_spec)
+
+    if snap_behavior != SnapBehavior.Off and snap_location == SnapLocation.Boundary:
+        # Check that the box boundary slightly off from 0.1 was correctly snapped to 0.1
+        assert math.isclose(new_box.bounds[0][1], xyz[1])
+        # Check that the box boundary slightly off from 0.3 was correctly snapped to 0.3
+        assert math.isclose(new_box.bounds[1][1], xyz[3])
+        # Check that the box boundary outside the grid was snapped to the smallest grid coordinate
+        assert math.isclose(new_box.bounds[0][2], xyz[0])

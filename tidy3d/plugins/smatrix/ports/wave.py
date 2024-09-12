@@ -10,6 +10,7 @@ from ....components.data.data_array import FreqDataArray, FreqModeDataArray
 from ....components.data.monitor_data import ModeSolverData
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
+from ....components.grid.grid import Grid
 from ....components.monitor import FieldMonitor, ModeSolverMonitor
 from ....components.simulation import Simulation
 from ....components.source import GaussianPulse, ModeSource, ModeSpec
@@ -90,7 +91,9 @@ class WavePort(AbstractTerminalPort, Box):
             name=self.name,
         )
 
-    def to_field_monitors(self, freqs: FreqArray, snap_center: float = None) -> list[FieldMonitor]:
+    def to_field_monitors(
+        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+    ) -> list[FieldMonitor]:
         """Field monitor to compute port voltage and current."""
         center = list(self.center)
         if snap_center:

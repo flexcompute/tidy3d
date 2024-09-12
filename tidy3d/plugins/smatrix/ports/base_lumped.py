@@ -8,7 +8,7 @@ import pydantic.v1 as pd
 from ....components.base import cached_property
 from ....components.geometry.utils_2d import snap_coordinate_to_grid
 from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import AbstractLumpedResistor
+from ....components.lumped_element import LumpedElementType
 from ....components.monitor import FieldMonitor
 from ....components.types import Complex, Coordinate, FreqArray
 from ....constants import OHM
@@ -47,7 +47,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
     def snapped_center(self, grid: Grid) -> Coordinate:
         """Get the exact center of this port after snapping along the injection axis.
         Ports are snapped to the nearest Yee cell boundary to match the exact position
-        of the ``AbstractLumpedResistor".
+        of the load.
         """
         center = list(self.center)
         normal_axis = self.injection_axis
@@ -57,8 +57,8 @@ class AbstractLumpedPort(AbstractTerminalPort):
 
     @cached_property
     @abstractmethod
-    def to_load(self, snap_center: float = None) -> AbstractLumpedResistor:
-        """Create a load resistor from the lumped port."""
+    def to_load(self, snap_center: float = None) -> LumpedElementType:
+        """Create a load from the lumped port."""
 
     @abstractmethod
     def to_voltage_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
@@ -68,11 +68,13 @@ class AbstractLumpedPort(AbstractTerminalPort):
     def to_current_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port current."""
 
-    def to_field_monitors(self, freqs: FreqArray, snap_center: float = None) -> list[FieldMonitor]:
+    def to_field_monitors(
+        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+    ) -> list[FieldMonitor]:
         """Field monitors to compute port voltage and current."""
         return [
-            self.to_voltage_monitor(freqs, snap_center),
-            self.to_current_monitor(freqs, snap_center),
+            self.to_voltage_monitor(freqs, snap_center, grid),
+            self.to_current_monitor(freqs, snap_center, grid),
         ]
 
     @abstractmethod

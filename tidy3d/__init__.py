@@ -152,7 +152,15 @@ from .components.heat_charge.source import HeatFromElectricSource, HeatSource, U
 from .components.heat_charge_spec import ConductorSpec, FluidSpec, InsulatorSpec, SolidSpec
 
 # lumped elements
-from .components.lumped_element import CoaxialLumpedResistor, LumpedResistor
+from .components.lumped_element import (
+    AdmittanceNetwork,
+    CoaxialLumpedResistor,
+    LinearLumpedElement,
+    LumpedElement,
+    LumpedResistor,
+    RectangularLumpedElement,
+    RLCNetwork,
+)
 
 # medium
 # for docs
@@ -463,8 +471,13 @@ __all__ = [
     "config",
     "__version__",
     "Updater",
-    "LumpedResistor",
+    "AdmittanceNetwork",
     "CoaxialLumpedResistor",
+    "LinearLumpedElement",
+    "LumpedElement",
+    "LumpedResistor",
+    "RectangularLumpedElement",
+    "RLCNetwork",
     "Scene",
     "StructureStructureInterface",
     "StructureBoundary",
