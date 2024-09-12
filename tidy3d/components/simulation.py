@@ -709,7 +709,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         bounds = self.bounds
         for element in self.lumped_elements:
             kwargs = element.plot_params.include_kwargs(alpha=alpha).to_kwargs()
-            ax = element.to_structure.plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
+            ax = element.to_geometry.plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
