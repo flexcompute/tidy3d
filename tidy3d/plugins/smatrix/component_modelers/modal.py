@@ -179,7 +179,9 @@ class ComponentModeler(AbstractComponentModeler):
             name=port.name,
         )
 
-    def to_source(self, port: Port, mode_index: int) -> List[ModeSource]:
+    def to_source(
+        self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs
+    ) -> List[ModeSource]:
         """Creates a list of mode sources from a given port."""
         freq0 = np.mean(self.freqs)
         fdiff = max(self.freqs) - min(self.freqs)
@@ -192,6 +194,8 @@ class ComponentModeler(AbstractComponentModeler):
             mode_index=mode_index,
             direction=port.direction,
             name=port.name,
+            num_freqs=num_freqs,
+            **kwargs,
         )
 
     def _shift_value_signed(self, port: Port) -> float:

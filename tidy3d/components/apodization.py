@@ -15,7 +15,13 @@ class ApodizationSpec(Tidy3dBaseModel):
 
     Example
     -------
-    >>> apod_spec = ApodizationSpec(start=1, end=2, width=0.5)
+    >>> apod_spec = ApodizationSpec(start=1, end=2, width=0.2)
+
+
+    .. image:: ../../_static/img/apodization.png
+        :width: 80%
+        :align: center
+
     """
 
     start: pd.NonNegativeFloat = pd.Field(
@@ -35,7 +41,7 @@ class ApodizationSpec(Tidy3dBaseModel):
     width: pd.PositiveFloat = pd.Field(
         None,
         title="Apodization Width",
-        description="Characteristic decay length of the apodization function.",
+        description="Characteristic decay length of the apodization function, i.e., the width of the ramping up of the scaling function from 0 to 1.",
         units=SECOND,
     )
 

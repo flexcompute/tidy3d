@@ -42,6 +42,34 @@ class DerivativeInfo(Tidy3dBaseModel):
         "of this dataset is used when computing adjoint gradients for shifting boundaries.",
     )
 
+    E_fwd: FieldData = pd.Field(
+        ...,
+        title="Forward Electric Fields",
+        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
+        "forward electric fields used for computing gradients for a given structure.",
+    )
+
+    E_adj: FieldData = pd.Field(
+        ...,
+        title="Adjoint Electric Fields",
+        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
+        "adjoint electric fields used for computing gradients for a given structure.",
+    )
+
+    D_fwd: FieldData = pd.Field(
+        ...,
+        title="Forward Displacement Fields",
+        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
+        "forward displacement fields used for computing gradients for a given structure.",
+    )
+
+    D_adj: FieldData = pd.Field(
+        ...,
+        title="Adjoint Displacement Fields",
+        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
+        "adjoint displacement fields used for computing gradients for a given structure.",
+    )
+
     eps_data: PermittivityData = pd.Field(
         ...,
         title="Permittivity Dataset",
@@ -88,6 +116,72 @@ class DerivativeInfo(Tidy3dBaseModel):
     def updated_paths(self, paths: list[PathType]) -> DerivativeInfo:
         """Update this ``DerivativeInfo`` with new set of paths."""
         return self.updated_copy(paths=paths)
+
+    def grad_in_bases(self, spatial_coords: np.ndarray, basis_vectors: dict) -> dict:
+        """Get the ``D_norm``, ``E_edge`` ``E_slab`` components of the gradient contributions."""
+
+        # unpack electric and displacement fields
+        E_fwd = self.E_fwd
+        E_adj = self.E_adj
+        D_fwd = self.D_fwd
+        D_adj = self.D_adj
+
+        # compute the E and D fields at the edge centers
+        E_fwd_at_coords = self.evaluate_flds_at(fld_dataset=E_fwd, spatial_coords=spatial_coords)
+        E_adj_at_coords = self.evaluate_flds_at(fld_dataset=E_adj, spatial_coords=spatial_coords)
+        D_fwd_at_coords = self.evaluate_flds_at(fld_dataset=D_fwd, spatial_coords=spatial_coords)
+        D_adj_at_coords = self.evaluate_flds_at(fld_dataset=D_adj, spatial_coords=spatial_coords)
+
+        # project the relevant field quantities into their respective basis for gradient calculation
+        D_fwd_norm = self.project_in_basis(D_fwd_at_coords, basis_vector=basis_vectors["norm"])
+        D_adj_norm = self.project_in_basis(D_adj_at_coords, basis_vector=basis_vectors["norm"])
+
+        E_fwd_perp1 = self.project_in_basis(E_fwd_at_coords, basis_vector=basis_vectors["perp1"])
+        E_adj_perp1 = self.project_in_basis(E_adj_at_coords, basis_vector=basis_vectors["perp1"])
+
+        E_fwd_perp2 = self.project_in_basis(E_fwd_at_coords, basis_vector=basis_vectors["perp2"])
+        E_adj_perp2 = self.project_in_basis(E_adj_at_coords, basis_vector=basis_vectors["perp2"])
+
+        # multiply forward and adjoint
+        D_der_norm = D_fwd_norm * D_adj_norm
+        E_der_perp1 = E_fwd_perp1 * E_adj_perp1
+        E_der_perp2 = E_fwd_perp2 * E_adj_perp2
+
+        return dict(D_norm=D_der_norm, E_perp1=E_der_perp1, E_perp2=E_der_perp2)
+
+    @staticmethod
+    def evaluate_flds_at(
+        fld_dataset: dict[str, ScalarFieldDataArray],
+        spatial_coords: np.ndarray,  # (N, 3)
+    ) -> dict[str, ScalarFieldDataArray]:
+        """Compute the value of an dict with keys Ex, Ey, Ez at a set of spatial locations."""
+
+        xs, ys, zs = spatial_coords.T
+        edge_index_dim = "edge_index"
+
+        interp_kwargs = {}
+        for dim, locations_dim in zip("xyz", (xs, ys, zs)):
+            # only include dims where the data has more than 1 coord, to avoid warnings and errors
+            if True or all(np.array(fld.coords).size > 1 for fld in fld_dataset.values()):
+                interp_kwargs[dim] = xr.DataArray(locations_dim, dims=edge_index_dim)
+
+        components = {}
+        for fld_name, arr in fld_dataset.items():
+            components[fld_name] = arr.interp(**interp_kwargs).sum("f")
+
+        return components
+
+    @staticmethod
+    def project_in_basis(
+        der_dataset: xr.Dataset,
+        basis_vector: np.ndarray,
+    ) -> xr.DataArray:
+        """Project a derivative dataset along a supplied basis vector."""
+
+        value = 0.0
+        for coeffs, dim in zip(basis_vector.T, "xyz"):
+            value += coeffs * der_dataset[f"E{dim}"]
+        return value
 
 
 # TODO: could we move this into a DataArray method?

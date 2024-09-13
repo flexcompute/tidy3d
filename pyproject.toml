@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.7.2"
+version = "2.7.3"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -23,7 +23,7 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0.0"
 pyroots = ">=0.5.0"
-xarray = ">=0.16.2"
+xarray = ">=2023.08.0"
 importlib-metadata = ">=6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
@@ -65,7 +65,7 @@ tox = { version = "*", optional = true }
 gdspy = { version = "*", optional = true }
 
 # gdstk
-gdstk = { version = ">=0.9.49", optional = true }
+gdstk = { version = ">=0.9.49, <0.9.52", optional = true }
 
 # jax
 jaxlib = { version = "0.4.25", source = "jaxsource", optional = true }
@@ -115,6 +115,7 @@ dev = [
   "coverage",
   'dill',
   'divparams',
+  'flax',
   'gdspy',
   'gdstk',
   'grcwa',
@@ -259,7 +260,7 @@ testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
 
 [tool.bumpversion]
-current_version = "2.7.2"
+current_version = "2.7.3"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.

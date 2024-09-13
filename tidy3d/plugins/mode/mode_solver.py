@@ -936,6 +936,8 @@ class ModeSolver(Tidy3dBaseModel):
         source_time: SourceTime,
         direction: Direction = None,
         mode_index: pydantic.NonNegativeInt = 0,
+        num_freqs: pydantic.PositiveInt = 1,
+        **kwargs,
     ) -> ModeSource:
         """Creates :class:`.ModeSource` from a :class:`ModeSolver` instance plus additional
         specifications.
@@ -967,6 +969,8 @@ class ModeSolver(Tidy3dBaseModel):
             mode_spec=self.mode_spec,
             mode_index=mode_index,
             direction=direction,
+            num_freqs=num_freqs,
+            **kwargs,
         )
 
     def to_monitor(self, freqs: List[float] = None, name: str = None) -> ModeMonitor:

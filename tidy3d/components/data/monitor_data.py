@@ -16,7 +16,6 @@ from ...exceptions import DataError, SetupError, Tidy3dNotImplementedError, Vali
 from ...log import log
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
-from ..geometry.base import Box
 from ..grid.grid import Coords, Grid
 from ..medium import Medium, MediumType
 from ..monitor import (
@@ -1042,6 +1041,9 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
                 forward_amp = self.get_amplitude(field_component.sel(f=freq0))
 
+                if forward_amp == 0.0:
+                    continue
+
                 adj_phase = np.pi + np.angle(forward_amp)
                 adj_amp = scaling_factor * forward_amp
 
@@ -1066,46 +1068,33 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
         sources = []
 
-        # Define source geometry based on coordinates in the data
-        data_mins = []
-        data_maxs = []
+        source_geo = self.monitor.geometry
+        freqs = self.monitor.freqs
 
-        def shift_value(coords) -> float:
-            """How much to shift the geometry by along a dimension (only if > 1D)."""
-            return SHIFT_VALUE_ADJ_FLD_SRC if len(coords) > 1 else 0
-
-        for _, field_component in self.field_components.items():
-            coords = field_component.coords
-            data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
-            data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})
-
-        rmin = []
-        rmax = []
-        for dim in "xyz":
-            rmin.append(max(val[dim] for val in data_mins))
-            rmax.append(min(val[dim] for val in data_maxs))
-
-        source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
-
-        # Define source dataset
-        # Offset coordinates by source center since local coords are assumed in CustomCurrentSource
-
-        for freq0 in tuple(self.field_components.values())[0].coords["f"]:
+        for freq0 in freqs:
             src_field_components = {}
             for name, field_component in self.field_components.items():
+                # get the VJP values at frequency and apply adjoint phase
                 field_component = field_component.sel(f=freq0)
-                forward_amps = field_component.values
-                values = -1j * forward_amps
+                values = -1j * field_component.values
+
+                # make source go backwards
+                if "H" in name:
+                    values *= -1
+
+                # make coords that are shifted relative to geometry (0,0,0) = geometry.center
                 coords = dict(field_component.coords.copy())
                 for dim, key in enumerate("xyz"):
                     coords[key] = np.array(coords[key]) - source_geo.center[dim]
                 coords["f"] = np.array([freq0])
                 values = np.expand_dims(values, axis=-1)
+
+                # ignore zero components
                 if not np.all(values == 0):
                     src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
 
+            # construct custom Current source
             dataset = FieldDataset(**src_field_components)
-
             custom_source = CustomCurrentSource(
                 center=source_geo.center,
                 size=source_geo.size,
@@ -1760,7 +1749,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         for name in dataset_names:
             if name == "amps":
                 adjoint_sources += self.make_adjoint_sources_amps(fwidth=fwidth)
-            else:
+            elif not np.all(self.n_complex.values == 0.0):
                 log.warning(
                     f"Can't create adjoint source for 'ModeData.{type(self)}.{name}'. "
                     f"for monitor '{self.monitor.name}'. "
@@ -1939,6 +1928,24 @@ class FluxData(MonitorData):
     flux: FluxDataArray = pd.Field(
         ..., title="Flux", description="Flux values in the frequency-domain."
     )
+
+    def make_adjoint_sources(
+        self, dataset_names: list[str], fwidth: float
+    ) -> List[Union[CustomCurrentSource, PointDipole]]:
+        """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
+
+        # avoids error in edge case where there are extraneous flux monitors not used in objective
+        if np.all(self.flux.values == 0.0):
+            return []
+
+        raise NotImplementedError(
+            "Could not formulate adjoint source for 'FluxMonitor' output. To compute derivatives "
+            "with respect to flux data, please use a 'FieldMonitor' and call '.flux' on the "
+            "resulting 'FieldData' object. Using 'FluxMonitor' directly is not supported as "
+            "the full field information is required to construct the adjoint source for this "
+            "problem. The 'FluxData' does not contain the information necessary for gradient "
+            "computation."
+        )
 
     def normalize(self, source_spectrum_fn) -> FluxData:
         """Return copy of self after normalization is applied using source spectrum function."""
@@ -2963,7 +2970,7 @@ class DiffractionData(AbstractFieldProjectionData):
         theta_data, phi_data = self.angles
         angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq0))
         angle_theta = float(theta_data.sel(**angle_sel_kwargs))
-        angle_phi = float(phi_data.sel(**angle_sel_kwargs))
+        angle_phi = np.pi + float(phi_data.sel(**angle_sel_kwargs))
 
         # if the angle is nan, this amplitude is set to 0 in the fwd pass, so should skip adj
         if np.isnan(angle_theta):
@@ -2989,7 +2996,7 @@ class DiffractionData(AbstractFieldProjectionData):
             center=self.monitor.center,
             source_time=GaussianPulse(
                 amplitude=abs(src_amp),
-                phase=np.angle(src_amp),
+                phase=np.pi + np.angle(src_amp),
                 freq0=freq0,
                 fwidth=fwidth,
             ),

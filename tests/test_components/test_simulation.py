@@ -108,6 +108,27 @@ def test_sim_init():
     sim.epsilon(m)
 
 
+def test_num_cells():
+    """Test num_cells and num_computational_grid_points."""
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14),
+            )
+        ],
+    )
+    assert sim.num_computational_grid_points > sim.num_cells  # due to extra pixels at boundaries
+
+    sim = sim.updated_copy(symmetry=(1, 0, 0))
+    assert sim.num_computational_grid_points < sim.num_cells  # due to symmetry
+
+
 def test_monitors_data_size():
     """make sure a simulation can be initialized"""
 
@@ -402,6 +423,14 @@ def test_validate_plane_wave_boundaries(log_capture):
         angle_theta=np.pi / 4,
     )
 
+    mnt = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12, 300e12],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
     bspec1 = td.BoundarySpec(
         x=td.Boundary.pml(),
         y=td.Boundary.absorber(),
@@ -459,6 +488,7 @@ def test_validate_plane_wave_boundaries(log_capture):
             run_time=1e-12,
             sources=[src2],
             boundary_spec=bspec3,
+            monitors=[mnt],
         )
 
     # angled incidence plane wave with wrong Bloch vector should warn

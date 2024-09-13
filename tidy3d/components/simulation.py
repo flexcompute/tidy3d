@@ -2323,6 +2323,46 @@ class Simulation(AbstractYeeGridSimulation):
                     )
         return val
 
+    @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["boundary_spec", "medium", "size", "structures", "sources"])
+    def bloch_boundaries_diff_mnt(cls, val, values):
+        """Error if there are diffraction monitors incompatible with boundary conditions."""
+
+        monitors = val
+
+        if not val or not any(isinstance(mnt, DiffractionMonitor) for mnt in monitors):
+            return val
+
+        boundaries = values.get("boundary_spec").to_list
+        sources = values.get("sources")
+        size = values.get("size")
+        sim_medium = values.get("medium")
+        structures = values.get("structures")
+        for source_ind, source in enumerate(sources):
+            if not isinstance(source, PlaneWave):
+                continue
+
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            medium_set = Scene.intersecting_media(source, structures)
+            medium = medium_set.pop() if medium_set else sim_medium
+
+            for tan_dir in tan_dirs:
+                boundary = boundaries[tan_dir]
+
+                # check the Bloch boundary + angled plane wave case
+                num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                if num_bloch > 0:
+                    cls._check_bloch_vec(
+                        source=source,
+                        source_ind=source_ind,
+                        bloch_vec=boundary[0].bloch_vec,
+                        dim=tan_dir,
+                        medium=medium,
+                        domain_size=size[tan_dir],
+                        has_diff_mnt=True,
+                    )
+        return val
+
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["medium", "center", "size", "structures", "sources"])
     def tfsf_boundaries(cls, val, values):
@@ -2410,7 +2450,7 @@ class Simulation(AbstractYeeGridSimulation):
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["size", "symmetry"])
     def boundaries_for_zero_dims(cls, val, values):
-        """Error if absorbing boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
+        """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
         boundaries = val.to_list
         size = values.get("size")
         symmetry = values.get("symmetry")
@@ -2420,12 +2460,21 @@ class Simulation(AbstractYeeGridSimulation):
             if size_dim == 0:
                 axis = axis_names[dim]
                 num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+                num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
 
                 if num_absorbing_bdries > 0:
                     raise SetupError(
                         f"The simulation has zero size along the {axis} axis, so "
                         "using a PML or absorbing boundary along that axis is incorrect. "
                         f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
+                    )
+
+                if num_bloch_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, "
+                        "using a Bloch boundary along such an axis is not supported because of "
+                        "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
+                        "but nonzero size along the dimension instead."
                     )
 
                 if symmetry_dim != 0:
@@ -2879,14 +2928,14 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["size"])
-    def _projection_monitors_2d(cls, val, values):
+    def _projection_mnts_2d(cls, val, values):
         """
         Validate if the field projection monitor is set up for a 2D simulation and
         ensure the observation parameters are configured correctly.
 
-        - For a 2D simulation in the x-y plane, 'theta' should be set to 'pi/2'.
-        - For a 2D simulation in the y-z plane, 'phi' should be set to 'pi/2' or '2*pi/3'.
-        - For a 2D simulation in the x-z plane, 'phi' should be set to '0' or 'pi'.
+        - For a 2D simulation in the x-y plane, ``theta`` should be set to ``pi/2``.
+        - For a 2D simulation in the y-z plane, ``phi`` should be set to ``pi/2`` or ``3*pi/2``.
+        - For a 2D simulation in the x-z plane, ``phi`` should be set to ``0`` or ``pi``.
 
         Note: Exact far field projection is not available yet. Currently, only
         'far_field_approx = True' is supported.
@@ -2918,38 +2967,6 @@ class Simulation(AbstractYeeGridSimulation):
                         f"Monitor '{monitor.name}' is not supported in 1D simulations."
                     )
 
-                if isinstance(monitor, (FieldProjectionKSpaceMonitor)):
-                    raise SetupError(
-                        f"Monitor '{monitor.name}' in 2D simulations is coming soon. "
-                        "Please use 'FieldProjectionAngleMonitor' instead."
-                        "Please use 'FieldProjectionAngleMonitor' or 'FieldProjectionCartesianMonitor' instead."
-                    )
-
-                if isinstance(monitor, (FieldProjectionCartesianMonitor)):
-                    config = {
-                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
-                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
-                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
-                    }[plane]
-
-                    valid_proj_axes = config["valid_proj_axes"]
-                    invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
-
-                    if monitor.proj_axis in invalid_proj_axis:
-                        raise SetupError(
-                            f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
-                            f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
-                        )
-
-                    for idx, axis in enumerate(valid_proj_axes):
-                        coord = getattr(monitor, config["coord"][idx])
-                        if monitor.proj_axis == axis and not all(value in [0] for value in coord):
-                            raise SetupError(
-                                f"For a 2D simulation in the {plane} plane with "
-                                f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
-                                f"'{monitor.name}' should be set to '[0]'."
-                            )
-
                 if isinstance(monitor, FieldProjectionAngleMonitor):
                     config = {
                         "y-z": {"valid_value": [np.pi / 2, 3 * np.pi / 2], "coord": "phi"},
@@ -2973,6 +2990,39 @@ class Simulation(AbstractYeeGridSimulation):
                             f"angle '{config['coord']}' of monitor "
                             f"'{monitor.name}' should be set to "
                             f"'{valid_values_str}'"
+                        )
+
+                    continue
+
+                if isinstance(monitor, (FieldProjectionCartesianMonitor)):
+                    config = {
+                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["x", "x"]},
+                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["x", "y"]},
+                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["y", "y"]},
+                    }[plane]
+                elif isinstance(monitor, (FieldProjectionKSpaceMonitor)):
+                    config = {
+                        "y-z": {"valid_proj_axes": [1, 2], "coord": ["ux", "ux"]},
+                        "x-z": {"valid_proj_axes": [0, 2], "coord": ["ux", "uy"]},
+                        "x-y": {"valid_proj_axes": [0, 1], "coord": ["uy", "uy"]},
+                    }[plane]
+
+                valid_proj_axes = config["valid_proj_axes"]
+                invalid_proj_axis = [i for i in range(3) if i not in valid_proj_axes]
+
+                if monitor.proj_axis in invalid_proj_axis:
+                    raise SetupError(
+                        f"For a 2D simulation in the {plane} plane, the 'proj_axis' of "
+                        f"monitor '{monitor.name}' should be set to one of {valid_proj_axes}."
+                    )
+
+                for idx, axis in enumerate(valid_proj_axes):
+                    coord = getattr(monitor, config["coord"][idx])
+                    if monitor.proj_axis == axis and not all(value in [0] for value in coord):
+                        raise SetupError(
+                            f"For a 2D simulation in the {plane} plane with "
+                            f"'proj_axis = {monitor.proj_axis}', '{config['coord'][idx]}' of monitor "
+                            f"'{monitor.name}' should be set to '[0]'."
                         )
 
         return val
@@ -3161,6 +3211,24 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
         self._validate_nonlinear_specs()
+        self._validate_custom_source_time()
+
+    def _validate_custom_source_time(self):
+        """Warn if all simulation times are outside CustomSourceTime definition range."""
+        run_time = self._run_time
+        for idx, source in enumerate(self.sources):
+            if isinstance(source.source_time, CustomSourceTime):
+                if source.source_time._all_outside_range(run_time=run_time):
+                    data_times = source.source_time.data_times
+                    mint = np.min(data_times)
+                    maxt = np.max(data_times)
+                    log.warning(
+                        f"'CustomSourceTime' at 'sources[{idx}]' is defined over a time range "
+                        f"'({mint}, {maxt})' which does not include any of the 'Simulation' "
+                        f"times '({0, run_time})'. The envelope will be constant extrapolated "
+                        "from the first or last value in the 'CustomSourceTime', which may not "
+                        "be the desired outcome."
+                    )
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
@@ -3172,6 +3240,7 @@ class Simulation(AbstractYeeGridSimulation):
         with log as consolidated_logger:
             for i, structure in enumerate(self.structures):
                 geo_bounds = structure.geometry.bounds
+                warn = False  # will only warn once per structure
                 for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
                     sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
                 ):
@@ -3182,14 +3251,16 @@ class Simulation(AbstractYeeGridSimulation):
                         in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
                         in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
                         if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
-                            consolidated_logger.warning(
-                                f"A bound of Simulation.structures[{i}] was detected as being "
-                                "within the simulation PML. We recommend extending structures to "
-                                "infinity or completely outside of the simulation PML to avoid "
-                                "unexpected effects when the structures are not translationally "
-                                "invariant within the PML.",
-                                custom_loc=["structures", i],
-                            )
+                            warn = True
+                if warn:
+                    consolidated_logger.warning(
+                        f"A bound of Simulation.structures[{i}] was detected as being "
+                        "within the simulation PML. We recommend extending structures to "
+                        "infinity or completely outside of the simulation PML to avoid "
+                        "unexpected effects when the structures are not translationally "
+                        "invariant within the PML.",
+                        custom_loc=["structures", i],
+                    )
 
     def _validate_tfsf_nonuniform_grid(self) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,
@@ -3744,6 +3815,7 @@ class Simulation(AbstractYeeGridSimulation):
         dim: Axis,
         medium: MediumType,
         domain_size: float,
+        has_diff_mnt: bool = False,
     ):
         """Helper to check if a given Bloch vector is consistent with a given source."""
 
@@ -3756,10 +3828,13 @@ class Simulation(AbstractYeeGridSimulation):
         if bloch_vec != expected_bloch_vec:
             test_val = np.real(expected_bloch_vec - bloch_vec)
 
-            if np.isclose(test_val % 1, 0) and not np.isclose(test_val, 0):
+            test_val_is_int = np.isclose(test_val, np.round(test_val))
+            src_name = f" '{source.name}'" if source.name else ""
+
+            if has_diff_mnt and test_val_is_int and not np.isclose(test_val, 0):
                 # the given Bloch vector is offset by an integer
                 log.warning(
-                    f"The wave vector of source '{source.name}' along dimension "
+                    f"The wave vector of source{src_name} along dimension "
                     f"'{dim}' is equal to the Bloch vector of the simulation "
                     "boundaries along that dimension plus an integer reciprocal "
                     "lattice vector. If using a 'DiffractionMonitor', diffraction "
@@ -3767,12 +3842,13 @@ class Simulation(AbstractYeeGridSimulation):
                     "of the source. Consider using 'BlochBoundary.from_source()'.",
                     custom_loc=["boundary_spec", "xyz"[dim]],
                 )
-            elif not np.isclose(test_val % 1, 0):
+
+            if not test_val_is_int:
                 # the given Bloch vector is neither equal to the expected value, nor
                 # off by an integer
                 log.warning(
                     f"The Bloch vector along dimension '{dim}' may be incorrectly "
-                    f"set with respect to the source '{source.name}'. The absolute "
+                    f"set with respect to the source{src_name}. The absolute "
                     "difference between the expected and provided values in "
                     "bandstructure units, up to an integer offset, is greater than "
                     "1e-6. Consider using ``BlochBoundary.from_source()``, or "
@@ -4221,7 +4297,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @cached_property
     def num_cells(self) -> int:
-        """Number of cells in the simulation.
+        """Number of cells in the simulation grid.
 
         Returns
         -------
@@ -4230,6 +4306,36 @@ class Simulation(AbstractYeeGridSimulation):
         """
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
+
+    @property
+    def _num_computational_grid_points_dim(self):
+        """Number of cells in the computational domain for this simulation along each dimension."""
+        num_cells = self.grid.num_cells
+        num_cells_comp_domain = []
+        # symmetry overrides other boundaries so should be checked first
+        for sym, npts, boundary in zip(self.symmetry, num_cells, self.boundary_spec.to_list):
+            if sym != 0:
+                num_cells_comp_domain.append(npts // 2 + 2)
+            elif isinstance(boundary[0], Periodic):
+                num_cells_comp_domain.append(npts)
+            else:
+                num_cells_comp_domain.append(npts + 2)
+        return num_cells_comp_domain
+
+    @property
+    def num_computational_grid_points(self):
+        """Number of cells in the computational domain for this simulation. This is usually
+        different from ``num_cells`` due to the boundary conditions. Specifically, all boundary
+        conditions apart from ``Periodic`` require an extra pixel at the end of the simulation
+        domain. On the other hand, if a symmetry is present along a given dimension, only half of
+        the grid cells along that dimension will be in the computational domain.
+
+        Returns
+        -------
+        int
+            Number of yee cells in the computational domain corresponding to the simulation.
+        """
+        return np.prod(self._num_computational_grid_points_dim, dtype=np.int64)
 
     def get_refractive_indices(self, freq: float) -> list[float]:
         """List of refractive indices in the simulation at a given frequency."""

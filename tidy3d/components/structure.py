@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 from collections import defaultdict
-from typing import Callable, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -15,6 +15,7 @@ from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap
 from .autograd.utils import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
 from .medium import AbstractCustomMedium, Medium2D, MediumType
@@ -203,13 +204,19 @@ class Structure(AbstractStructure):
         box = self.geometry.bounding_box
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
-        size = tuple(get_static(x) for x in box.size)  # TODO: expand slightly?
-        center = tuple(get_static(x) for x in box.center)
+
+        size = [get_static(x) for x in box.size]  # TODO: expand slightly?
+        center = [get_static(x) for x in box.center]
+
+        # polyslab only needs fields at the midpoint along axis
+        if isinstance(self.geometry, PolySlab):
+            size[self.geometry.axis] = 0
 
         mnt_fld = FieldMonitor(
             size=size,
             center=center,
             freqs=freqs,
+            fields=("Ex", "Ey", "Ez"),
             name=self.get_monitor_name(index=index, data_type="fld"),
             colocate=False,
         )
@@ -223,24 +230,6 @@ class Structure(AbstractStructure):
         )
 
         return mnt_fld, mnt_eps
-
-    @property
-    def derivative_function_map(self) -> dict[tuple[str, str], Callable]:
-        """Map path to the right derivative function function."""
-        return {
-            ("medium", "permittivity"): self.derivative_medium_permittivity,
-            ("medium", "conductivity"): self.derivative_medium_conductivity,
-            ("geometry", "size"): self.derivative_geometry_size,
-            ("geometry", "center"): self.derivative_geometry_center,
-        }
-
-    def get_derivative_function(self, path: tuple[str, ...]) -> Callable:
-        """Get the derivative function function."""
-
-        derivative_map = self.derivative_function_map
-        if path not in derivative_map:
-            raise NotImplementedError(f"Can't compute derivative for structure field path: {path}.")
-        return derivative_map[path]
 
     def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields"""

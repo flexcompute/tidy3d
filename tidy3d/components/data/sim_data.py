@@ -46,7 +46,7 @@ RESIDUAL_CUTOFF_ADJOINT = 1e-6
 class AdjointSourceInfo(Tidy3dBaseModel):
     """Stores information about the adjoint sources to pass to autograd pipeline."""
 
-    sources: tuple[SourceType, ...] = pd.Field(
+    sources: Tuple[annotate_type(SourceType), ...] = pd.Field(
         ...,
         title="Adjoint Sources",
         description="Set of processed sources to include in the adjoint simulation.",
@@ -1073,6 +1073,14 @@ class SimulationData(AbstractYeeGridSimulationData):
                 dataset_names=dataset_names, fwidth=self.fwidth_adj
             )
             sources_adj_all[mnt_data.monitor.name] = sources_adj
+
+        if not any(src for _, src in sources_adj_all.items()):
+            raise ValueError(
+                "No adjoint sources created for this simulation. "
+                "This could indicate a bug in your setup, for example the objective function "
+                "output depending on a monitor that is not supported. If you encounter this error, "
+                "please examine your set up or contact customer support if you need more help."
+            )
 
         return sources_adj_all
 

@@ -5,6 +5,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.3] - 2024-09-12
+
+### Added
+- Added value_and_grad function to the autograd plugin, importable via `from tidy3d.plugins.autograd import value_and_grad`. Supports differentiating functions with auxiliary data (`value_and_grad(f, has_aux=True)`).
+- `Simulation.num_computational_grid_points` property to examine the number of grid cells that compose the computational domain corresponding to the simulation. This can differ from `Simulation.num_cells` based on boundary conditions and symmetries.
+- Support for `dilation` argument in `JaxPolySlab`.
+- Support for autograd differentiation with respect to `Cylinder.radius` and `Cylinder.center` (for elements not along axis dimension).
+- `Cylinder.to_polyslab(num_pts_circumference, **kwargs)` to convert a cylinder into a discretized version represented by a `PolySlab`.
+
+### Changed
+- `PolySlab` now raises error when differentiating and dilation causes damage to the polygon.
+- Validator `boundaries_for_zero_dims` to raise error when Bloch boundaries are used along 0-sized dims.
+- `FieldProjectionKSpaceMonitor` support for 2D simulations with `far_field_approx = True`. 
+
+### Fixed
+- `DataArray` interpolation failure due to incorrect ordering of coordinates when interpolating with autograd tracers.
+- Error in `CustomSourceTime` when evaluating at a list of times entirely outside of the range of the envelope definition times.
+- Improved passivity enforcement near high-Q poles in `FastDispersionFitter`. Failed passivity enforcement could lead to simulation divergences.
+- More helpful error and suggestion if users try to differentiate w.r.t. unsupported `FluxMonitor` output.
+- Removed positive warnings in Simulation validators for Bloch boundary conditions.
+- Improve accuracy in `Box` shifting boundary gradients.
+- Improve accuracy in `FieldData` operations involving H fields (like `.flux`).
+- Better error and warning handling in autograd pipeline.
+- Added the option to specify the `num_freqs` argument and `kwargs` to the `.to_source` method for both `ModeSolver` and `ComponentModeler`.
+- Fixes to TFSF source in some 2D simulations, and in some cases when the injection plane is close to the simulation domain boundaries
+
 ## [2.7.2] - 2024-08-07
 
 ### Added
@@ -19,7 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `flux` and `poynting` properties to `FieldProjectionCartesianData`.
 
 ### Changed
-- Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
 - Mode solver now always operates on a reduced simulation copy.
 - Moved `EMESimulation` size limit validators to preupload.
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` or `FieldProjectionCartesianMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
@@ -29,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Error when plotting mode plane PML and the simulation has symmetry.
 - Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
 - Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
+- Gradient monitors for `PolySlab` only store fields at the center location along axis, reducing data usage.
+- Validate the forward simulation on the client side even when using `local_gradient=False` for server-side gradient processing.
+- Gradient inaccuracies in `PolySlab.vertices`, `Medium.conductivity`, and `DiffractionData` s-polarization.
+- Adjoint field monitors no longer store H fields, which aren't needed for gradient calculation.
+- `MeshOverrideStructures` in a `Simulation.GridSpec` are properly handled to remove any derivative tracers.
 
 ## [2.7.1] - 2024-07-10
 
@@ -1267,7 +1297,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.3...develop
+[2.7.3]: https://github.com/flexcompute/tidy3d/compare/v2.7.2...v2.7.3
 [2.7.2]: https://github.com/flexcompute/tidy3d/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/flexcompute/tidy3d/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...v2.7.0

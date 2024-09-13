@@ -19,7 +19,7 @@ from ..asynchronous import run_async as run_async_webapi
 from ..container import Batch, BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
-from .utils import FieldMap, TracerKeys, get_derivative_maps
+from .utils import E_to_D, FieldMap, TracerKeys, get_derivative_maps
 
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
@@ -41,6 +41,10 @@ MAX_NUM_TRACED_STRUCTURES = 500
 
 # default value for whether to do local gradient calculation (True) or server side (False)
 LOCAL_GRADIENT = True
+
+# if True, will plot the adjoint fields on the plane provided. used for debugging only
+_INSPECT_ADJOINT_FIELDS = False
+_INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, td.inf, 0))
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
@@ -388,12 +392,14 @@ def _run_primitive(
 
     td.log.info("running primitive '_run_primitive()'")
 
+    # compute the combined simulation for both local and remote, so we can validate it
+    sim_combined = setup_fwd(
+        sim_fields=sim_fields,
+        sim_original=sim_original,
+        local_gradient=local_gradient,
+    )
+
     if local_gradient:
-        sim_combined = setup_fwd(
-            sim_fields=sim_fields,
-            sim_original=sim_original,
-            local_gradient=local_gradient,
-        )
         sim_data_combined, _ = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
 
         field_map = postprocess_fwd(
@@ -730,9 +736,7 @@ def setup_adj(
     td.log.info("Running custom vjp (adjoint) pipeline.")
 
     # immediately filter out any data_vjps with all 0's in the data
-    data_fields_vjp = {
-        key: get_static(value) for key, value in data_fields_vjp.items() if not np.all(value == 0.0)
-    }
+    data_fields_vjp = {key: get_static(value) for key, value in data_fields_vjp.items()}
 
     # insert the raw VJP data into the .data of the original SimulationData
     sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
@@ -748,6 +752,29 @@ def setup_adj(
     sim_adj, adjoint_source_info = sim_data_vjp.make_adjoint_sim(
         data_vjp_paths=data_vjp_paths, adjoint_monitors=adjoint_monitors
     )
+
+    if _INSPECT_ADJOINT_FIELDS:
+        adj_fld_mnt = td.FieldMonitor(
+            center=_INSPECT_ADJOINT_PLANE.center,
+            size=_INSPECT_ADJOINT_PLANE.size,
+            freqs=adjoint_monitors[0].freqs,
+            name="adjoint_fields",
+        )
+
+        import matplotlib.pylab as plt
+
+        import tidy3d.web as web
+
+        sim_data_new = web.run(
+            sim_adj.updated_copy(monitors=[adj_fld_mnt]),
+            task_name="adjoint_field_viz",
+            verbose=False,
+        )
+        _, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True, figsize=(10, 4))
+        sim_data_new.plot_field("adjoint_fields", "Ex", "re", ax=ax1)
+        sim_data_new.plot_field("adjoint_fields", "Ey", "re", ax=ax2)
+        sim_data_new.plot_field("adjoint_fields", "Ez", "re", ax=ax3)
+        plt.show()
 
     td.log.info(f"Adjoint simulation created with {len(sim_adj.sources)} sources.")
 
@@ -773,25 +800,28 @@ def postprocess_adj(
     sim_fields_vjp = {}
     for structure_index, structure_paths in sim_vjp_map.items():
         # grab the forward and adjoint data
-        fld_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
+        E_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
         eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
-        fld_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
+        E_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
         eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
 
         fwd_flds_normed = {}
-        for key, val in fld_adj.field_components.items():
+        for key, val in E_adj.field_components.items():
             fwd_flds_normed[key] = val * adjoint_source_info.post_norm
 
-        fld_adj = fld_adj.updated_copy(**fwd_flds_normed)
+        E_adj = E_adj.updated_copy(**fwd_flds_normed)
 
         # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
         der_maps = get_derivative_maps(
-            fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj
+            fld_fwd=E_fwd, eps_fwd=eps_fwd, fld_adj=E_adj, eps_adj=eps_adj
         )
         E_der_map = der_maps["E"]
         D_der_map = der_maps["D"]
+
+        D_fwd = E_to_D(E_fwd, eps_fwd)
+        D_adj = E_to_D(E_adj, eps_fwd)
 
         # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
@@ -808,6 +838,10 @@ def postprocess_adj(
             paths=structure_paths,
             E_der_map=E_der_map.field_components,
             D_der_map=D_der_map.field_components,
+            E_fwd=E_fwd.field_components,
+            E_adj=E_adj.field_components,
+            D_fwd=D_fwd.field_components,
+            D_adj=D_adj.field_components,
             eps_data=eps_fwd.field_components,
             eps_in=eps_in,
             eps_out=eps_out,

@@ -28,6 +28,37 @@
             "attrs": {},
             "geometry": {
                 "attrs": {},
+                "type": "Cylinder",
+                "axis": 2,
+                "sidewall_angle": 0.0,
+                "reference_plane": "middle",
+                "radius": 1.0,
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "length": 1.0
+            },
+            "name": "traced_dieletric_cylinder",
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "dieletric",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "Medium",
+                "permittivity": 2.0,
+                "conductivity": 0.0
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -2794,7 +2825,7 @@
         "snapping_points": [],
         "type": "GridSpec"
     },
-    "version": "2.7.2",
+    "version": "2.7.3",
     "lumped_elements": [],
     "subpixel": false,
     "simulation_type": null,

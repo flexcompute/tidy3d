@@ -30,6 +30,9 @@ for _, path in enumerate(notebook_filenames_all):
 run_only = []
 
 skip = [
+    # WIP
+    "Autograd10YBranchLevelSet",
+    "Autograd13Metasurface",
     # long time (excluding most adjoint)
     "8ChannelDemultiplexer",
     "90BendPolarizationSplitterRotator",
@@ -53,7 +56,7 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """
-as of June 08 2024
+as of Sept 04 2024
 '8ChannelDemultiplexer',
 '90BendPolarizationSplitterRotator',
 '90OpticalHybrid',
@@ -78,15 +81,21 @@ as of June 08 2024
 'AnimationTutorial',
 'AntiResonantHollowCoreFiber',
 'AutoGrid',
-'Autograd10YBranchLevelSet',
+'Autograd0Quickstart',
+'Autograd15Antenna',
+'Autograd16BilayerCoupler',
+'Autograd17BandPassFilter',
 'Autograd1Intro',
 'Autograd2GradientChecking',
 'Autograd3InverseDesign',
 'Autograd4MultiObjective',
 'Autograd5BoundaryGradients',
 'Autograd6GratingCoupler',
+'Autograd7Metalens',
 'Autograd8WaveguideBend',
+'Autograd9WDM',
 'Bandstructure',
+'BatchModeSolver',
 'BilayerSiNEdgeCoupler',
 'BilevelPSR',
 'BiosensorGrating',
@@ -98,6 +107,7 @@ as of June 08 2024
 'CMOSRGBSensor',
 'CavityFOM',
 'CharacteristicImpedanceCalculator',
+'CircularlyPolarizedPatchAntenna',
 'CoupledLineBandpassFilter',
 'CreatingGeometryUsingTrimesh',
 'CustomFieldSource',
@@ -129,11 +139,14 @@ as of June 08 2024
 'HeatSolver',
 'HighQGe',
 'HighQSi',
+'IntegratedVivaldiAntenna',
 'InverseDesign',
+'LNOIPolarizationSplitterRotator',
 'MIMResonator',
 'MMI1x4',
 'MachZehnderModulator',
 'MetalHeaterPhaseShifter',
+'MetalOxideSunscreen',
 'Metalens',
 'MicrowaveFrequencySelectiveSurface',
 'MidIRMetalens',
@@ -141,6 +154,8 @@ as of June 08 2024
 'ModalSourcesMonitors',
 'ModeSolver',
 'ModesBentAngled',
+'MultiplexingMMI',
+'NanobeamCavity',
 'NanostructuredBoronNitride',
 'Near2FarSphereRCS',
 'NonHermitianMetagratings',
@@ -173,6 +188,7 @@ as of June 08 2024
 'Symmetry',
 'TFSF',
 'THzDemultiplexerFilter',
+'TaperedWgDispersion',
 'ThermallyTunedRingResonator',
 'ThermoOpticDopedModulator',
 'TimeModulationTutorial',
@@ -180,6 +196,7 @@ as of June 08 2024
 'UnstructuredData',
 'VizData',
 'VizSimulation',
+'VortexMetasurface',
 'WaveguideBendSimulator',
 'WaveguideCrossing',
 'WaveguideGratingAntenna',

@@ -304,6 +304,14 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         stores_jax_for="sidewall_angle",
     )
 
+    dilation_jax: JaxFloat = pd.Field(
+        default=0.0,
+        title="Dilation (Jax)",
+        description="Jax-traced float defining the dilation.",
+        units=MICROMETER,
+        stores_jax_for="dilation",
+    )
+
     @pd.validator("sidewall_angle", always=True)
     def no_sidewall(cls, val):
         """Warn if sidewall angle present."""
@@ -318,13 +326,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
                 "or wait until this feature is supported fully in a later version.",
                 log_once=True,
             )
-        return val
-
-    @pd.validator("dilation", always=True)
-    def no_dilation(cls, val):
-        """Don't allow dilation."""
-        if not np.isclose(val, 0.0):
-            raise AdjointError("'JaxPolySlab' does not support dilation.")
         return val
 
     def _validate_web_adjoint(self) -> None:
@@ -527,6 +528,19 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         return JaxPolySlab._orient(JaxPolySlab._remove_duplicate_vertices(vertices_np))
 
     @staticmethod
+    def _heal_polygon(vertices: jnp.ndarray) -> jnp.ndarray:
+        """heal a self-intersecting polygon."""
+        shapely_poly = PolySlab.make_shapely_polygon(jax.lax.stop_gradient(vertices))
+        if shapely_poly.is_valid:
+            return vertices
+
+        raise NotImplementedError(
+            "The dilation caused damage to the polygon. Automatically healing this is "
+            "currently not supported for 'JaxPolySlab' objects. Try increasing the spacing "
+            "between vertices or reduce the amount of dilation."
+        )
+
+    @staticmethod
     def vertices_to_array(vertices_tuple: ArrayFloat2D) -> jnp.ndarray:
         """Converts a list of tuples (vertices) to a jax array."""
         return jnp.asarray(vertices_tuple)
@@ -543,7 +557,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         vertices = JaxPolySlab._proper_vertices(self.vertices_jax)
         if jnp.isclose(self.dilation, 0):
             return vertices
-        raise NotImplementedError("JaxPolySlab does not support dilation!")
+        offset_vertices = self._shift_vertices(vertices, self.dilation)[0]
+        return self._heal_polygon(offset_vertices)
 
     def edge_contrib(
         self,

@@ -2034,17 +2034,21 @@ def test_to_gds(tmp_path):
         [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0.9), (0, 0.11)],  # notched rectangle
     ],
 )
-@pytest.mark.parametrize("subdivide", [0, 1, 5])
+@pytest.mark.parametrize("subdivide", [0, 1, 3])
 @pytest.mark.parametrize("sidewall_angle_deg", [0, 10])
+@pytest.mark.parametrize("dilation", [-0.02, 0.0, 0.02])
 class TestJaxComplexPolySlab:
     slab_bounds = (-0.25, 0.25)
     EPS = 1e-12
     RTOL = 1e-2
 
     @staticmethod
-    def objfun(vertices, slab_bounds, sidewall_angle):
+    def objfun(vertices, slab_bounds, sidewall_angle, dilation):
         p = JaxComplexPolySlab(
-            vertices=vertices, slab_bounds=slab_bounds, sidewall_angle=sidewall_angle
+            vertices=vertices,
+            slab_bounds=slab_bounds,
+            sidewall_angle=sidewall_angle,
+            dilation=dilation,
         )
         obj = 0.0
         for s in p.sub_polyslabs:
@@ -2072,11 +2076,12 @@ class TestJaxComplexPolySlab:
     def sidewall_angle(self, sidewall_angle_deg):
         return np.deg2rad(sidewall_angle_deg)
 
-    def test_matches_complexpolyslab(self, vertices, sidewall_angle):
+    def test_matches_complexpolyslab(self, vertices, sidewall_angle, dilation):
         kwargs = dict(
             vertices=vertices,
             sidewall_angle=sidewall_angle,
             slab_bounds=self.slab_bounds,
+            dilation=dilation,
             axis=POLYSLAB_AXIS,
         )
         cp = ComplexPolySlab(**kwargs)
@@ -2087,23 +2092,44 @@ class TestJaxComplexPolySlab:
         for cps, jcps in zip(cp.sub_polyslabs, jcp.sub_polyslabs):
             assert_allclose(cps.vertices, jcps.vertices)
 
-    def test_vertices_grads(self, vertices, sidewall_angle):
+    def test_vertices_grads(self, vertices, sidewall_angle, dilation):
         check_grads(
-            lambda x: self.objfun(x, self.slab_bounds, sidewall_angle),
+            lambda x: self.objfun(x, self.slab_bounds, sidewall_angle, dilation),
             (vertices,),
             order=1,
             rtol=self.RTOL,
             eps=self.EPS,
         )
 
-    @pytest.mark.skip(reason="No VJP implemented yet")
-    def test_slab_bounds_grads(self, vertices, sidewall_angle):
+    def test_dilation_grads(self, vertices, sidewall_angle, dilation):
+        if sidewall_angle != 0:
+            pytest.xfail("Dilation gradients only work if no sidewall angle.")
         check_grads(
-            lambda x: self.objfun(vertices, x, sidewall_angle), (self.slab_bounds,), order=1
+            lambda x: self.objfun(vertices, self.slab_bounds, sidewall_angle, x),
+            (dilation,),
+            order=1,
+            rtol=self.RTOL,
+            eps=self.EPS,
         )
 
-    @pytest.mark.skip(reason="No VJP implemented yet")
-    def test_sidewall_angle_grads(self, vertices, sidewall_angle):
+    def test_slab_bounds_grads(self, vertices, sidewall_angle, dilation):
+        if sidewall_angle != 0:
+            pytest.xfail("Slab bound gradients only work if no sidewall angle.")
         check_grads(
-            lambda x: self.objfun(vertices, self.slab_bounds, x), (sidewall_angle,), order=1
+            lambda x: self.objfun(vertices, x, sidewall_angle, dilation),
+            (self.slab_bounds,),
+            order=1,
+            rtol=self.RTOL,
+            eps=self.EPS,
+        )
+
+    def test_sidewall_angle_grads(self, vertices, sidewall_angle, dilation):
+        if sidewall_angle != 0:
+            pytest.xfail("Sidewall gradients only work for small angles.")
+        check_grads(
+            lambda x: self.objfun(vertices, self.slab_bounds, x, dilation),
+            (sidewall_angle,),
+            order=1,
+            rtol=self.RTOL,
+            eps=self.EPS,
         )

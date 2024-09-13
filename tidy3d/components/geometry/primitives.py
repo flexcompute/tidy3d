@@ -5,22 +5,32 @@ from __future__ import annotations
 from math import isclose
 from typing import List
 
+import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 import shapely
 
-from ...constants import LARGE_NUMBER, MICROMETER
+from ...constants import C_0, LARGE_NUMBER, MICROMETER
 from ...exceptions import SetupError, ValidationError
 from ...packaging import verify_packages_import
+from ..autograd import AutogradFieldMap, TracedSize1D
+from ..autograd.derivative_utils import DerivativeInfo
 from ..base import cached_property, skip_if_fields_missing
 from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, Tuple
 from . import base
+from .polyslab import PolySlab
 
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
 
 # for shapely circular shapes discretization in visualization
 _N_SHAPELY_QUAD_SEGS = 200
+
+# Default number of points to discretize polyslab in `Cylinder.to_polyslab()`
+_N_PTS_CYLINDER_POLYSLAB = 51
+
+# Default number of points per wvl in material for discretizing cylinder in autograd derivative
+_PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE = 10
 
 
 class Sphere(base.Centered, base.Circular):
@@ -185,7 +195,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     """
 
     # Provide more explanations on where radius is defined
-    radius: pydantic.NonNegativeFloat = pydantic.Field(
+    radius: TracedSize1D = pydantic.Field(
         ...,
         title="Radius",
         description="Radius of geometry at the ``reference_plane``.",
@@ -214,6 +224,125 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                 "leads to undefined cylinder behaviors near 'center'."
             )
         return val
+
+    def to_polyslab(
+        self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB, **kwargs
+    ) -> PolySlab:
+        """Convert instance of ``Cylinder`` into a discretized version using ``PolySlab``.
+
+        Parameters
+        ----------
+        num_pts_circumference : int = 51
+            Number of points in the circumference of the discretized polyslab.
+        **kwargs:
+            Extra keyword arguments passed to ``PolySlab()``, such as ``dilation``.
+
+        Returns
+        -------
+        PolySlab
+            Extruded polygon representing a discretized version of the cylinder.
+        """
+
+        center_axis = self.center_axis
+        length_axis = self.length_axis
+        slab_bounds = (center_axis - length_axis / 2.0, center_axis + length_axis / 2.0)
+
+        if num_pts_circumference < 3:
+            raise ValueError("'PolySlab' from 'Cylinder' must have 3 or more radius points.")
+
+        _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
+
+        xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
+
+        xs = x0 + self.radius * xs_
+        ys = y0 + self.radius * ys_
+
+        vertices = anp.stack((xs, ys), axis=-1)
+
+        return PolySlab(
+            vertices=vertices,
+            axis=self.axis,
+            slab_bounds=slab_bounds,
+            sidewall_angle=self.sidewall_angle,
+            reference_plane=self.reference_plane,
+            **kwargs,
+        )
+
+    def _points_unit_circle(
+        self, num_pts_circumference: int = _N_PTS_CYLINDER_POLYSLAB
+    ) -> np.ndarray:
+        """Set of x and y points for the unit circle when discretizing cylinder as a polyslab."""
+        angles = np.linspace(0, 2 * np.pi, num_pts_circumference, endpoint=False)
+        xs = np.cos(angles)
+        ys = np.sin(angles)
+        return np.stack((xs, ys), axis=0)
+
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
+
+        # compute number of points in the circumference of the polyslab using resolution info
+        wvl0 = C_0 / derivative_info.frequency
+        wvl_mat = wvl0 / max(1.0, np.sqrt(abs(derivative_info.eps_in)))
+
+        circumference = 2 * np.pi * self.radius
+        wvls_in_circumference = circumference / wvl_mat
+
+        num_pts_circumference = int(
+            np.ceil(_PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE * wvls_in_circumference)
+        )
+        num_pts_circumference = max(3, num_pts_circumference)
+
+        # construct equivalent polyslab and compute the derivatives
+        polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
+
+        derivative_info_polyslab = derivative_info.updated_copy(paths=[("vertices",)])
+        vjps_polyslab = polyslab.compute_derivatives(derivative_info_polyslab)
+
+        vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
+
+        # transform polyslab vertices derivatives into Cylinder parameter derivatives
+        vjps = {}
+        for path in derivative_info.paths:
+            if path == ("radius",):
+                xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
+
+                vjp_xs = np.sum(xs_ * vjps_vertices_xs)
+                vjp_ys = np.sum(ys_ * vjps_vertices_ys)
+
+                vjps[path] = vjp_xs + vjp_ys
+
+            elif "center" in path:
+                _, center_index = path
+                if center_index == self.axis:
+                    raise NotImplementedError(
+                        "Currently cannot differentiate Cylinder with respect to its 'center' along"
+                        " the axis. If you would like this feature added, please feel free to raise"
+                        " an issue on the tidy3d front end repository."
+                    )
+
+                _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
+                if center_index == index_x:
+                    vjps[path] = np.sum(vjp_xs)
+                elif center_index == index_y:
+                    vjps[path] = np.sum(vjp_ys)
+                else:
+                    raise ValueError(
+                        "Something unexpected happened. Was asked to differentiate "
+                        f"with respect to 'Cylinder.center[{center_index}]', but this was not "
+                        "detected as being one of the parallel axis with "
+                        f"'Cylinder.axis' of '{self.axis}'. If you received this error, please raise "
+                        "an issue on the tidy3d front end repository with details about how you "
+                        "defined your 'Cylinder' in the objective function."
+                    )
+
+            else:
+                raise NotImplementedError(
+                    f"Differentiation with respect to 'Cylinder' '{path}' field not supported. "
+                    "If you would like this feature added, please feel free to raise "
+                    "an issue on the tidy3d front end repository."
+                )
+
+        return vjps
 
     @property
     def center_axis(self):
@@ -359,13 +488,15 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
+        static_self = self.to_static()
+
         # radius at z
-        radius_offset = self._radius_z(z)
+        radius_offset = static_self._radius_z(z)
 
         if radius_offset <= 0:
             return []
 
-        _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
+        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis):

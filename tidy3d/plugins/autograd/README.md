@@ -127,37 +127,35 @@ The following components are traceable as inputs to the `td.Simulation`
 - `CustomPoleResidue.eps_inf`
 - `CustomPoleResidue.poles`
 
+- `Cylinder.radius`
+- `Cylinder.center` (along non-axis dimensions)
+
+- `ComplexPolySlab.sub_polyslabs`
+
 The following components are traceable as outputs of the `td.SimulationData`
 
 - `ModeData.amps`
+
 - `DiffractionData.amps`
+
 - `FieldData.field_components`
-
-We currently have the following restrictions:
-
-- All monitors in the `Simulation` must be single frequency only.
-- Only 500 max structures containing tracers can be added to the `Simulation` to cut down on processing time. In the future, `GeometryGroup` support will allow us to relax this restriction.
-- `web.run_async` for simulations with tracers does not return a `BatchData` but rather a `dict` mapping task name to `SimulationData`. There may be high memory usage with many simulations or a lot of data for each.
-- Gradient calculations are done client-side, meaning the field data in the traced structure regions must be downloaded. This can be a large amount of data for large, 3D structures.
-
-### To be supported soon
-
-Next on our roadmap (targeting 2.8 and 2.9, summer 2024) is to support:
-
-- support for multi-frequency monitors in certain situations (single adjoint source).
-- server-side gradient processing.
-
 - `FieldData` operations:
   - `FieldData.flux`
   - `SimulationData.get_intensity`
   - `SimulationData.get_poynting`
 
-- `PoleResidue` and other dispersive models.
-- custom (spatially-dependent) dispersive models, allowing topology optimization with metals.
+Other features
+- support for multi-frequency monitors in certain situations (single adjoint source).
+- server-side gradient processing by passing `local_gradient=False` to the `web` functions. This can dramatically cut down on data storage time, just be careful about using this with multi-frequency monitors and large design regions as it can lead to large data storage on our servers.
 
-- `ComplexPolySlab`
+We currently have the following restrictions:
 
-Later this year (2024), we plan to support:
+- Only 500 max structures containing tracers can be added to the `Simulation` to cut down on processing time. To bypass this restriction, use `GeometryGroup` to group structures with the same medium.
+- `web.run_async` for simulations with tracers does not return a `BatchData` but rather a `dict` mapping task name to `SimulationData`. There may be high memory usage with many simulations or a lot of data for each.
+
+### To be supported soon
+
+Next on our roadmap (targeting 2.8 and 2.9, fall 2024) is to support:
 
 - `TriangleMesh`.
 - `GUI` integration of invdes plugin.

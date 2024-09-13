@@ -717,11 +717,24 @@ class GridSpec(Tidy3dBaseModel):
                 )
 
         grids_1d = [self.grid_x, self.grid_y, self.grid_z]
+        all_structures = list(structures) + [s.to_static() for s in self.override_structures]
+
+        if any(s.strip_traced_fields() for s in self.override_structures):
+            log.warning(
+                "The override structures were detected as having a dependence on the objective "
+                "function parameters. This is not supported by our automatic differentiation "
+                "framework. The derivative will be un-traced through the override structures. "
+                "To make this explicit and remove this warning, use 'y = autograd.tracer.getval(x)'"
+                " to remove any derivative information from values being passed to create "
+                "override structures. Alternatively, 'obj = obj.to_static()' will create a copy of "
+                "an instance without any autograd tracers."
+            )
+
         coords_dict = {}
         for idim, (dim, grid_1d) in enumerate(zip("xyz", grids_1d)):
             coords_dict[dim] = grid_1d.make_coords(
                 axis=idim,
-                structures=list(structures) + list(self.override_structures),
+                structures=all_structures,
                 symmetry=symmetry,
                 periodic=periodic[idim],
                 wavelength=wavelength,
