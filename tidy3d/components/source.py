@@ -1207,10 +1207,11 @@ class TFSF(AngledFieldSource, VolumeSource):
     Notes
     -----
 
-        The TFSF source injects :math:`\\frac{1 W}{\\mu m^2}` of power along the :attr:`injection_axis`. Note that in the
-        case of angled incidence, :math:`\\frac{1 W}{\\mu m^2}` is still injected along the source's :attr:`injection_axis`,
-        and not the propagation direction, unlike a :class:`PlaneWave` source. This allows computing
-        scattering and absorption cross-sections without the need for additional normalization.
+        The TFSF source injects :math:`1 W` of power per :math:`\\mu m^2` of source area along the :attr:`injection_axis`.
+        Hence, the normalization for the incident field is :math:`|E_0|^2 = \\frac{2}{c\\epsilon_0}`, for any source size.
+        Note that in the case of angled incidence, the same power is injected along the source's :attr:`injection_axis`,
+        and not the propagation direction. This allows computing scattering and absorption cross-sections
+        without the need for additional normalization.
 
         The TFSF source allows specifying a box region into which a plane wave is injected. Fields inside this region
         can be interpreted as the superposition of the incident field and the scattered field due to any scatterers
