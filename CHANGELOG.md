@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Users can pass the `shading` argument in the `SimulationData.plot_field` to `Xarray.plot` method. When `shading='gouraud'`, the image is interpolated, producing a smoother visualization.
 - Users can manually specify the background medium for a structure to be used for geometry gradient calculations by supplying `Structure.background_permittivity`. This is useful when there are overlapping structures or structures embedded in other mediums.
 - Autograd functions can now be called directly on `DataArray` (e.g., `np.sum(data_array)`) in objective functions.
 

@@ -140,6 +140,10 @@ def test_plot(phase):
                 "field", field_cmp, val="imag", f=1e14, phase=phase, **xyz_kwargs
             )
             plt.close()
+    for shading in ["gouraud", "nearest", "auto"]:
+        _ = sim_data.plot_field(
+            "field", field_cmp, val="imag", f=1e14, phase=phase, shading=shading, **xyz_kwargs
+        )
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
         _ = sim_data.plot_field("field", "int", f=1e14, phase=phase, **xyz_kwargs)

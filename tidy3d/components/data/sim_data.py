@@ -447,6 +447,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
+        shading: str = "flat",
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -481,6 +482,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        shading: str = 'flat'
+            Shading argument for Xarray plot method ('flat','nearest','goraud')
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -493,7 +496,6 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         # get the DataArray corresponding to the monitor_name and field_name
         # deprecated intensity
         if field_name == "int":
@@ -640,6 +642,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             vmax=vmax,
             cmap_type=cmap_type,
             ax=ax,
+            shading=shading,
+            infer_intervals=True if shading == "flat" else False,
         )
 
     def plot_field(
@@ -654,6 +658,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
+        shading: str = "flat",
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -689,6 +694,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        shading: str = 'flat'
+            Shading argument for Xarray plot method ('flat','nearest','goraud')
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -703,6 +710,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         """
 
         field_monitor_data = self.load_field_monitor(field_monitor_name)
+
         return self.plot_field_monitor_data(
             field_monitor_data=field_monitor_data,
             field_name=field_name,
@@ -714,6 +722,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            shading=shading,
             **sel_kwargs,
         )
 
@@ -731,6 +740,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: float = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
+        **kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
 
@@ -763,6 +773,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             Type of color map to use for plotting.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        **kwargs : Extra arguments to ``DataArray.plot``.
 
         Returns
         -------
@@ -802,6 +813,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             robust=robust,
             center=center,
             cbar_kwargs={"label": field_data.name},
+            **kwargs,
         )
 
         # plot the simulation epsilon
