@@ -447,6 +447,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
+        interpolation: float = 1,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -481,6 +482,9 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        interpolation: float = 1
+            Fraction of the number of data points to interpolate in each direction.
+            If set to 1, no interpolation is performed. Can be negative for downsampling.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -493,7 +497,6 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         # get the DataArray corresponding to the monitor_name and field_name
         # deprecated intensity
         if field_name == "int":
@@ -629,6 +632,27 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         else:
             position = monitor.center[axis]
 
+        # interpolating data
+        if interpolation != 1:
+            points_x = int(interpolation * field_data.shape[0])
+            points_y = int(interpolation * field_data.shape[1])
+
+            # avoiding a dataset that is too big
+            if points_x * points_y > 100000:
+                interpolation = np.sqrt(100000 / (field_data.shape[0] * field_data.shape[1]))
+                log.warning(
+                    f"An interpolation value that is too big can lead to an out-of-memory issue. Setting to: {interpolation}"
+                )
+                points_x = int(interpolation * field_data.shape[0])
+                points_y = int(interpolation * field_data.shape[0])
+
+            field_data = field_data.interp(
+                coords=dict(
+                    x=np.linspace(field_data.x.min(), field_data.x.max(), points_x),
+                    y=np.linspace(field_data.y.min(), field_data.y.max(), points_y),
+                )
+            )
+
         return self.plot_scalar_array(
             field_data=field_data,
             axis=axis,
@@ -654,6 +678,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
+        interpolation: float = 1,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -689,6 +714,9 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        interpolation: float = 1
+            Fraction of the number of data points to interpolate in each direction.
+            If set to 1, no interpolation is performed. Can be negative for downsampling.
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -703,6 +731,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         """
 
         field_monitor_data = self.load_field_monitor(field_monitor_name)
+
         return self.plot_field_monitor_data(
             field_monitor_data=field_monitor_data,
             field_name=field_name,
@@ -714,6 +743,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            interpolation=interpolation,
             **sel_kwargs,
         )
 
