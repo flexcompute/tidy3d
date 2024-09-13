@@ -136,6 +136,12 @@ NUM_STRUCTURES_WARN_EPSILON = 10_000
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = inf
 
+# fraction of structure size to monitor along 0 dim in 2D simulations
+FRACTION = 0.9
+
+# Minimum size of monitor
+MIN_MONITOR_SIZE = 1e-12
+
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     """
@@ -2756,7 +2762,51 @@ class Simulation(AbstractYeeGridSimulation):
         with log as consolidated_logger:
             for monitor_ind, monitor in enumerate(val):
                 if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
-                    mediums = Scene.intersecting_media(monitor, total_structures)
+                    if monitor.volume() != 0.0:
+                        if not (
+                            all(
+                                monitor_min >= sim_min
+                                for monitor_min, sim_min in zip(
+                                    monitor.bounds[0], structure_bg.geometry.bounds[0]
+                                )
+                            )
+                            and all(
+                                monitor_max <= sim_max
+                                for monitor_max, sim_max in zip(
+                                    monitor.bounds[1], structure_bg.geometry.bounds[1]
+                                )
+                            )
+                        ):
+                            exclude_surfaces = []
+                            dimensions = ["x", "y", "z"]
+                            for i, dim in enumerate(dimensions):
+                                if monitor.bounds[0][i] <= structure_bg.geometry.bounds[0][i]:
+                                    exclude_surfaces.append(f"{dim}-")
+                                if monitor.bounds[1][i] >= structure_bg.geometry.bounds[1][i]:
+                                    exclude_surfaces.append(f"{dim}+")
+                            new_min = np.maximum(monitor.bounds[0], structure_bg.geometry.bounds[0])
+                            new_max = np.minimum(monitor.bounds[1], structure_bg.geometry.bounds[1])
+                            new_size = tuple(new_max - new_min)
+                            # Add a minimum value to the monitor along 0-dim in 2D simulations
+                            new_size = tuple(
+                                MIN_MONITOR_SIZE if num == 0 else num for num in new_size
+                            )
+                            new_center = tuple((new_max + new_min) / 2)
+                            monitor_test = monitor.updated_copy(center=new_center, size=new_size)
+                            monitor_dict = monitor_test.dict()
+                            # Append exclude surfaces for 2D simulation to existing ones
+                            existing_exclude_surfaces = monitor_dict.get("exclude_surfaces") or []
+                            updated_exclude_surfaces = list(
+                                set(existing_exclude_surfaces + exclude_surfaces)
+                            )
+                            monitor_dict["exclude_surfaces"] = updated_exclude_surfaces
+                            surfaces = monitor_test.surfaces_with_exclusion(**monitor_dict)
+                            mediums = set()
+                            for surface in surfaces:
+                                _mediums = Scene.intersecting_media(surface, total_structures)
+                                mediums.update(_mediums)
+                    else:
+                        mediums = Scene.intersecting_media(monitor, total_structures)
                     # make sure there is no more than one medium in the returned list
                     if len(mediums) > 1:
                         raise SetupError(
