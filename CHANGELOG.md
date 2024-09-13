@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
 - Bug in `Simulation.subsection` (used in the mode solver) when nonlinear materials rely on information about sources outside of the region.
 
+- Validator `boundaries_for_proj_mnts` to error when projection monitor touches periodic/bloch boundaries in 3D simulations.
 
 ## [2.7.3] - 2024-09-12
 

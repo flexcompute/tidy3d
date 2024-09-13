@@ -2517,6 +2517,34 @@ class Simulation(AbstractYeeGridSimulation):
 
         return val
 
+    @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["size", "boundary_spec"])
+    def boundaries_for_proj_mnts(cls, val, values):
+        """Error if periodic boundaries or bloch boundaries is used with field projection monitors in 3D simulations."""
+
+        if val is None:
+            return val
+
+        sim_size = values.get("size")
+        boundaries = values.get("boundary_spec").to_list
+
+        is_3d_simulation = sim_size.count(0.0) == 0
+        for boundary in range(boundaries):
+            num_periodic_bloch_boundaries = sum(
+                isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary
+            )
+            if num_periodic_bloch_boundaries > 0:
+                for monitor in val:
+                    if isinstance(monitor, AbstractFieldProjectionMonitor) and is_3d_simulation:
+                        raise SetupError(
+                            f"Using 'FieldProjectionMonitor' '{monitor.name}' "
+                            f"with periodic/Bloch boundaries would lead to incorrect results. "
+                            f"Please use 'DiffractionMonitor' for transmission/reflection"
+                            "analysis with periodic/Bloch boundaries."
+                        )
+
+        return val
+
     @pydantic.validator("sources", always=True)
     def _validate_num_sources(cls, val):
         """Error if too many sources present."""
