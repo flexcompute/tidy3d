@@ -20,6 +20,7 @@ from tidy3d.plugins.design.surrogate_model_funcs import (
 
 # Local
 from tidy3d.plugins.design.surrogate_preprocess_funcs import (
+    Dummy_Scaler,
     pytorch_load,
     save_scalers,
     scale_feature,
@@ -86,6 +87,7 @@ class AI_Model:
         valid_percentage,
         batch_size,
         individual_feature_scaling: bool,
+        scale_inputs=True,
         pickle_name=None,
         fn_data_kwargs=(),
     ):
@@ -135,6 +137,7 @@ class AI_Model:
             valid_percentage,
             batch_size,
             individual_feature_scaling,
+            scale_inputs,
         )
 
     def load_data_from_df(
@@ -146,8 +149,16 @@ class AI_Model:
         valid_percentage: float,
         batch_size: int,
         individual_feature_scaling: bool,
+        scale_inputs: bool = True,
+        label_as_array: bool = False,
     ):
-        raw_labels = df.loc[:, label_names].values.reshape(-1, len(label_names))
+        if label_as_array:
+            # For single label being supplied where the label is an array
+            raw_labels = df.loc[:, label_names].values
+            raw_labels = np.vstack(raw_labels[:, 0])
+        else:
+            raw_labels = df.loc[:, label_names].values.reshape(-1, len(label_names))
+
         raw_features = df.loc[:, feature_names].values
 
         self._prep_data(
@@ -157,6 +168,7 @@ class AI_Model:
             valid_percentage,
             batch_size,
             individual_feature_scaling,
+            scale_inputs,
         )
 
     def _prep_data(
@@ -167,6 +179,7 @@ class AI_Model:
         valid_percentage,
         batch_size,
         individual_feature_scaling,
+        scale_inputs,
     ):
         # Randomise labels for sanity check
         # if random_labels:
@@ -184,21 +197,33 @@ class AI_Model:
             shuffle_labels, test_percentage, valid_percentage
         )
 
-        # Scale labels
-        scaled_train_labels, label_scaler = scale_label(train_labels)
-        scaled_test_labels = scale_label(test_labels, label_scaler)
-        scaled_valid_labels = scale_label(valid_labels, label_scaler)
+        if scale_inputs:
+            # Scale labels
+            scaled_train_labels, label_scaler = scale_label(train_labels)
+            scaled_test_labels = scale_label(test_labels, label_scaler)
+            scaled_valid_labels = scale_label(valid_labels, label_scaler)
 
-        # Scale features
-        scaled_train_features, feature_scaler = scale_feature(
-            train_features, individual_feature_scaling
-        )
-        scaled_test_features = scale_feature(
-            test_features, individual_feature_scaling, feature_scaler=feature_scaler
-        )
-        scaled_valid_features = scale_feature(
-            valid_features, individual_feature_scaling, feature_scaler=feature_scaler
-        )
+            # Scale features
+            scaled_train_features, feature_scaler = scale_feature(
+                train_features, individual_feature_scaling
+            )
+            scaled_test_features = scale_feature(
+                test_features, individual_feature_scaling, feature_scaler=feature_scaler
+            )
+            scaled_valid_features = scale_feature(
+                valid_features, individual_feature_scaling, feature_scaler=feature_scaler
+            )
+        else:
+            print("Inputs are not being scaled - this is not recommended")
+
+            scaled_train_labels = train_labels
+            scaled_test_labels = test_labels
+            scaled_valid_labels = valid_labels
+            scaled_train_features = train_features
+            scaled_test_features = test_features
+            scaled_valid_features = valid_features
+            label_scaler = Dummy_Scaler()
+            feature_scaler = Dummy_Scaler()
 
         # Load data into PyTorch DataLoaders
         train_loaded = pytorch_load(scaled_train_features, scaled_train_labels, batch_size)

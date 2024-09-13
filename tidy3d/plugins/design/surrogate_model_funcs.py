@@ -13,7 +13,7 @@ def train_network(
     device,
     output_dir,
     model_name,
-    epochs=10,
+    epochs,
     pbar=None,
     show_plot=False,
     verbose=True,
@@ -26,7 +26,7 @@ def train_network(
     # Prepare loss history
     for idx_epoch in range(epochs):
         net.train()
-        epoch_loss = 0
+        epoch_loss = []
         for x, y in dataloader_train:
             x = x.to(device)
             y = y.to(device)
@@ -37,7 +37,7 @@ def train_network(
 
             # Compute loss
             loss = loss_function(netout, y)
-            epoch_loss += loss
+            epoch_loss.append(loss.detach().cpu())
 
             # Backpropagate loss
             loss.backward()
@@ -47,15 +47,17 @@ def train_network(
 
         test_loss = compute_regression_stats(net, dataloader_test, loss_function, device)
 
+        # Average loss over the epoch - test loss average already calculated
+        ave_epoch_loss = sum(epoch_loss) / len(epoch_loss)
+
         # Store useful values
-        loss_store.append(epoch_loss.detach())
-        test_loss_store.append(test_loss.detach())
+        loss_store.append(ave_epoch_loss)
+        test_loss_store.append(test_loss)
 
         # Update best results
         if test_loss < test_loss_best:
             test_loss_best = test_loss
             best_state_dict = net.state_dict().copy()
-            # torch.save(net.state_dict(), output_dir / model_name)
 
             if verbose:
                 print(f"Best State Updated. Epoch: {idx_epoch}")
@@ -64,17 +66,13 @@ def train_network(
             pbar.update()
 
     if show_plot:
-        cpu_loss_store = [loss_val.cpu() for loss_val in loss_store]
-        cpu_test_loss_store = [loss_val.cpu() for loss_val in test_loss_store]
-        fig, ax = plt.subplots()
-        plt.xticks(np.array(range(epochs)))
-        ax.plot(np.array(range(epochs)), cpu_loss_store, color="blue")
+        _, ax = plt.subplots()
+        epoch_list = list(range(epochs))
+        ax.plot(epoch_list, loss_store, color="blue", label="Train Loss")
+        ax.plot(epoch_list, test_loss_store, color="orange", label="Test Loss")
         ax.set_xlabel("Epoch")
-        ax.set_ylabel("Training Loss", color="blue")
-
-        ax2 = ax.twinx()
-        ax2.plot(np.array(range(epochs)), cpu_test_loss_store, color="orange")
-        ax2.set_ylabel("Test Loss", color="orange")
+        ax.set_ylabel("Loss")
+        plt.legend()
 
         plt.show()
 
@@ -91,8 +89,7 @@ def compute_regression_stats(
     device: torch.device,
 ) -> torch.Tensor:
     net.eval()
-    running_loss = 0
-    loss_count = 0
+    running_loss = []
     with torch.no_grad():
         for x, y in dataloader:
             x = x.to(device)
@@ -100,39 +97,40 @@ def compute_regression_stats(
             netout = net(x)
 
             # Compute loss
-            running_loss += loss_function(netout, y)
+            running_loss.append(loss_function(netout, y).detach().cpu())
 
-        loss_count += running_loss
+    # Average running loss
+    ave_running_loss = sum(running_loss) / len(running_loss)
 
-    return running_loss
+    return ave_running_loss
 
 
-def validate_regression(net, dataloader_val, y_valid, scaler, device):
+def validate_regression(net, dataloader, labels, scaler, device):
     predictions = []
     with torch.no_grad():
-        for x, _ in dataloader_val:
+        for x, _ in dataloader:
             net.eval()
             predictions.append(net(x.to(device)))
 
-    predictionList = []
+    np_predictions = []
     for val in predictions:
-        predictionList.append(val.cpu().numpy())
-    predictionArray = np.concatenate(predictionList, axis=0)
+        np_predictions.append(val.cpu().numpy())
+    prediction_array = np.concatenate(np_predictions, axis=0)
 
-    scaledPredictionArray = scaler.inverse_transform(predictionArray)
-    scaledYValid = scaler.inverse_transform(y_valid)
+    scaled_prediction_array = scaler.inverse_transform(prediction_array)
+    scaled_labels = scaler.inverse_transform(labels)
 
     # RMSE & MAE Calculation
-    RMSE = round(calc_rmse(scaledPredictionArray, scaledYValid), 6)
-    MAE = round(mean_absolute_error(scaledYValid, scaledPredictionArray), 6)
+    RMSE = round(calc_rmse(scaled_prediction_array, scaled_labels), 6)
+    MAE = round(mean_absolute_error(scaled_labels, scaled_prediction_array), 6)
     print(f"RMSE: {RMSE}")
     print(f"MAE: {MAE}")
 
-    return RMSE, MAE, scaledPredictionArray
+    return RMSE, MAE, scaled_prediction_array
 
 
-def calc_rmse(predArray, validArray):
-    return np.sqrt(np.mean((predArray - validArray) ** 2))
+def calc_rmse(pred_array, label_array):
+    return np.sqrt(np.mean((pred_array - label_array) ** 2))
 
 
 def print_label_stats(arr):

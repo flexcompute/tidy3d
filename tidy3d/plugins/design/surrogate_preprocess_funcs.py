@@ -112,8 +112,8 @@ def save_scalers(model_dir, label_scaler, feat_scaler):
     """
     os.chdir(model_dir)
 
-    with open("scalers.pkl", "wb") as outFile:
-        pickle.dump([label_scaler, feat_scaler], outFile)
+    with open("scalers.pkl", "wb") as out_file:
+        pickle.dump([label_scaler, feat_scaler], out_file)
 
 
 def load_scalers():
@@ -121,7 +121,15 @@ def load_scalers():
     Load scalers for labels and features
     """
 
-    with open("scalers.pkl", "rb") as inFile:
-        labelScaler, featScaler = pickle.load(inFile)
+    with open("scalers.pkl", "rb") as in_file:
+        label_scaler, feat_scaler = pickle.load(in_file)
 
-    return labelScaler, featScaler
+    return label_scaler, feat_scaler
+
+
+class Dummy_Scaler:
+    def transform(self, arr):
+        return arr
+
+    def inverse_transform(self, arr):
+        return arr
