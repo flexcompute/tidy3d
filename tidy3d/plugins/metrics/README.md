@@ -72,7 +72,7 @@ loaded_expr = Expression.from_file("metric_expression.hdf5")
 
 ## Examples
 
-### Using `ModeCoefficient` and `ModePower`
+### `ModeCoefficient` and `ModePower`
 
 In this example, we create metrics using only `ModeCoefficient` and `ModePower` and combine them to define an objective function.
 
@@ -105,6 +105,93 @@ result = f.evaluate(data)
 # Display the result
 print(result)
 ```
+
+### Using variables
+
+The `metrics` module provides `Variable` and `Constant` classes to represent placeholders and fixed values in your expressions.
+Variables can be used to parameterize expressions, allowing you to supply values at evaluation time.
+Note that a `Metric` such as `ModeCoefficient` is a subclass of `Variable`, so it can be used in the same way.
+
+#### Unnamed variables (positional arguments)
+
+If you create a `Variable` without a name, it expects its value to be provided as a single positional argument during evaluation.
+
+```python
+from tidy3d.plugins.metrics import Variable
+
+# Create an unnamed variable
+x = Variable()
+
+# Use the variable in an expression
+expr = x**2 + 2 * x + 1
+
+# Evaluate the expression with a positional argument
+result = expr(3)
+
+print(result)  # Outputs: 126
+```
+
+#### Named variables (keyword arguments)
+
+If you create a `Variable` with a name, it expects its value to be provided as a keyword argument during evaluation.
+
+```python
+from tidy3d.plugins.metrics import Variable
+
+# Create named variables
+x = Variable(name="x")
+y = Variable(name="y")
+expr = x**2 + y**2
+
+# Evaluate the expression with keyword arguments
+result = expr(x=3, y=4)
+
+print(result)  # Outputs: 25
+```
+
+#### Mixing Positional and Keyword Arguments
+
+You can mix positional and keyword arguments when evaluating expressions that contain both unnamed and named variables.
+
+```python
+# Create a mix of named and unnamed variables
+x = Variable(name="x")
+y = Variable()
+expr = x**2 + y**2
+
+result = expr(3, y=4)  # x = 3, y = 4
+
+print(result)  # Outputs: 25
+```
+
+#### A `Metric` is a `Variable`
+
+A `Metric` such as `ModeCoefficient` is a subclass of `Variable`, so all the rules for `Variable` apply to `Metric` as well.
+
+from tidy3d.plugins.metrics import ModeCoefficient, ModePower
+
+```python
+# Define two named metrics
+mode_coeff1 = ModeCoefficient(name="mode_coeff1", monitor_name="monitor1", freqs=[1.0])
+mode_power1 = ModePower(name="mode_power1", monitor_name="monitor2", freqs=[1.0])
+
+# Create an expression using the metrics
+expr = mode_coeff1 + mode_power1
+
+# Assume "data1" and "data2" are SimulationData objects obtained from different simulations
+result = expr(mode_coeff1=data1, mode_power1=data2)
+```
+
+#### Important notes on variable evaluation
+
+- **Unnamed Variables**: If you have an unnamed variable (`Variable()`), you must provide exactly one positional argument during evaluation.
+Providing multiple positional arguments will raise a `ValueError`.
+
+- **Named Variables**: For each named variable, you must provide a corresponding keyword argument.
+If a named variable is missing during evaluation, a `ValueError` will be raised.
+
+- **Multiple Unnamed Variables**: If your expression contains multiple unnamed variables, you cannot provide multiple positional arguments.
+You should assign names to the variables and provide their values as keyword arguments instead.
 
 ## Developer notes
 

@@ -1,11 +1,12 @@
 from .base import Expression
-from .constants import Constant
 from .functions import Cos, Exp, Log, Log10, Sin, Tan
 from .metrics import ModeCoefficient, ModePower
+from .variables import Constant, Variable
 
 __all__ = [
     "Expression",
     "Constant",
+    "Variable",
     "ModeCoefficient",
     "ModePower",
     "Sin",
@@ -26,7 +27,7 @@ import inspect
 
 from .types import ExpressionType
 
-_module_names = ["base", "constants", "functions", "metrics", "operators"]
+_module_names = ["base", "variables", "functions", "metrics", "operators"]
 _model_classes = set()
 _local_vars = {"ExpressionType": ExpressionType}
 

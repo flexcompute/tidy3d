@@ -5,7 +5,6 @@ from pydantic.v1 import Field
 from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Complex
 
 if TYPE_CHECKING:
-    from .constants import Constant
     from .functions import Cos, Exp, Log, Log10, Sin, Tan
     from .metrics import ModeCoefficient, ModePower
     from .operators import (
@@ -20,6 +19,7 @@ if TYPE_CHECKING:
         Power,
         Subtract,
     )
+    from .variables import Constant, Variable
 
 NumberType = Union[int, float, Complex, ArrayLike]
 
@@ -54,6 +54,7 @@ FunctionType = Annotated[
 MetricType = Annotated[
     Union[
         "Constant",
+        "Variable",
         "ModeCoefficient",
         "ModePower",
     ],

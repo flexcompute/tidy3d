@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
-from tidy3d.plugins.metrics.constants import Constant
 from tidy3d.plugins.metrics.functions import Cos, Exp, Log, Log10, Sin, Tan
+from tidy3d.plugins.metrics.variables import Constant
 
 FUNCTIONS = [
     (Sin, np.sin),

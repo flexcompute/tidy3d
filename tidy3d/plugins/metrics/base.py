@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -36,6 +36,13 @@ class Expression(Tidy3dBaseModel, ABC):
     class Config:
         smart_union = True
 
+    @abstractmethod
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        pass
+
+    def __call__(self, *args: Any, **kwargs: Any) -> NumberType:
+        return self.evaluate(*args, **kwargs)
+
     def __init_subclass__(cls, **kwargs: dict[str, Any]) -> None:
         super().__init_subclass__(**kwargs)
         type_value = cls.__fields__.get(TYPE_TAG_STR)
@@ -61,12 +68,9 @@ class Expression(Tidy3dBaseModel, ABC):
         elif isinstance(other, dict):
             return Expression.parse_obj(other)
         else:
-            from .constants import Constant
+            from .variables import Constant
 
             return Constant(other)
-
-    def __call__(self, data: NumberType = None) -> NumberType:
-        return self.evaluate(data)
 
     def __neg__(self) -> Negate:
         from .operators import Negate

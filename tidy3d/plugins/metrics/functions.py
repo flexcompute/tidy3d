@@ -1,4 +1,3 @@
-import abc
 from typing import Any
 
 import autograd.numpy as anp
@@ -20,10 +19,6 @@ class Function(Expression):
     def __init__(self, operand: NumberOrExpression, **kwargs: dict[str, Any]) -> None:
         super().__init__(operand=operand, **kwargs)
 
-    @abc.abstractmethod
-    def evaluate(self, x: NumberType) -> NumberType:
-        pass
-
     def __repr__(self):
         return self._format.format(func=self.type, operand=self.operand)
 
@@ -34,25 +29,25 @@ class Sin(Function):
 
 
 class Cos(Function):
-    def evaluate(self, x: NumberType) -> NumberType:
-        return anp.cos(self.operand(x))
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        return anp.cos(self.operand(*args, **kwargs))
 
 
 class Tan(Function):
-    def evaluate(self, x: NumberType) -> NumberType:
-        return anp.tan(self.operand(x))
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        return anp.tan(self.operand(*args, **kwargs))
 
 
 class Exp(Function):
-    def evaluate(self, x: NumberType) -> NumberType:
-        return anp.exp(self.operand(x))
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        return anp.exp(self.operand(*args, **kwargs))
 
 
 class Log(Function):
-    def evaluate(self, x: NumberType) -> NumberType:
-        return anp.log(self.operand(x))
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        return anp.log(self.operand(*args, **kwargs))
 
 
 class Log10(Function):
-    def evaluate(self, x: NumberType) -> NumberType:
-        return anp.log10(self.operand(x))
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        return anp.log10(self.operand(*args, **kwargs))

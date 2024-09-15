@@ -1,28 +1,23 @@
-import abc
+from typing import Any
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
 
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.types import Direction, FreqArray
 from tidy3d.exceptions import ValidationError
 
-from .base import Expression
 from .types import NumberType
+from .variables import Variable
 
 
-class Metric(Expression):
+class Metric(Variable):
     """
     Base class for all metrics.
 
     To subclass Metric, you must implement an evaluate() method that takes a SimulationData
     object and returns a scalar value.
     """
-
-    @abc.abstractmethod
-    def evaluate(self, data: SimulationData) -> NumberType:
-        pass
 
     def __repr__(self) -> str:
         return f'{self.type}("{self.monitor_name}")'
@@ -73,7 +68,8 @@ class ModeCoefficient(Metric):
     def from_mode_monitor(cls, monitor: ModeMonitor):
         return cls(monitor_name=monitor.name, freqs=monitor.freqs, mode_index=0)
 
-    def evaluate(self, data: SimulationData) -> NumberType:
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        data = super().evaluate(*args, **kwargs)
         amps = data[self.monitor_name].amps.sel(
             direction=self.direction, mode_index=self.mode_index, f=self.freqs[0]
         )
@@ -97,6 +93,6 @@ class ModePower(ModeCoefficient):
     >>> result = mode_power.evaluate(data)
     """
 
-    def evaluate(self, data: SimulationData) -> NumberType:
-        amps = super().evaluate(data)
+    def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
+        amps = super().evaluate(*args, **kwargs)
         return abs(amps) ** 2
