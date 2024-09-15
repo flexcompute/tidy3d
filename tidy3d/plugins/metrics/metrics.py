@@ -27,23 +27,16 @@ class ModeCoefficient(Metric):
     """
     Metric for calculating the mode coefficient from a ModeMonitor.
 
-    Attributes
+    Parameters
     ----------
     monitor_name : str
         The name of the mode monitor.
     freqs : FreqArray
         The frequency array.
-    direction : Direction, default "+"
+    direction : Direction = "+"
         The direction of the mode.
-    mode_index : pd.NonNegativeInt, default 0
+    mode_index : pd.NonNegativeInt = 0
         The index of the mode.
-
-    Methods
-    -------
-    from_mode_monitor(monitor: ModeMonitor)
-        Creates a ModeCoefficient instance from a ModeMonitor.
-    evaluate(data: SimulationData) -> NumberType
-        Evaluates the mode coefficient from the simulation data.
 
     Examples
     --------
@@ -79,11 +72,6 @@ class ModeCoefficient(Metric):
 class ModePower(ModeCoefficient):
     """
     Metric for calculating the mode power from a ModeMonitor.
-
-    Methods
-    -------
-    evaluate(data: SimulationData) -> NumberType
-        Evaluates the mode power from the simulation data.
 
     Examples
     --------
