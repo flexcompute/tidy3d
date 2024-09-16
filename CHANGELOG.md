@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `BatchData` is now a mapping and can be accessed and iterated over like a Python dictionary (`.keys()`, `.values()`, `.items()`).
+
 ### Fixed
 - Gradient inaccuracy when a multi-frequency monitor is used but a single frequency is selected.
 - Revert single cell center approximation for custom medium gradient.
