@@ -6,6 +6,7 @@ import concurrent
 import os
 import time
 from abc import ABC
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Optional, Tuple
 
@@ -339,7 +340,7 @@ class Job(WebContainer):
         return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
 
 
-class BatchData(Tidy3dBaseModel):
+class BatchData(Tidy3dBaseModel, Mapping):
     """
     Holds a collection of :class:`.SimulationData` returned by :class:`Batch`.
 
@@ -391,15 +392,17 @@ class BatchData(Tidy3dBaseModel):
             verbose=False,
         )
 
-    def items(self) -> Tuple[TaskName, SimulationDataType]:
-        """Iterate through the simulations for each task_name."""
-
-        for task_name in self.task_paths.keys():
-            yield task_name, self.load_sim_data(task_name)
-
     def __getitem__(self, task_name: TaskName) -> SimulationDataType:
         """Get the simulation data object for a given ``task_name``."""
         return self.load_sim_data(task_name)
+
+    def __iter__(self):
+        """Iterate over the task names."""
+        return iter(self.task_paths)
+
+    def __len__(self):
+        """Return the number of tasks in the batch."""
+        return len(self.task_paths)
 
     @classmethod
     def load(cls, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
