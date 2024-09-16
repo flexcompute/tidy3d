@@ -39,9 +39,11 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     )
 
     def make_objective_fn(
-        self, post_process_fn: typing.Callable
+        self, post_process_fn: typing.Callable, maximize: bool = True
     ) -> typing.Callable[[anp.ndarray], tuple[float, dict]]:
         """construct the objective function for this ``InverseDesignMulti`` object."""
+
+        direction_multiplier = 1 if maximize else -1
 
         def objective_fn(params: anp.ndarray, aux_data: dict = None) -> float:
             """Full objective function."""
@@ -52,7 +54,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
             post_process_val = post_process_fn(data)
 
             penalty_value = self.design_region.penalty_value(params)
-            objective_fn_val = post_process_val - penalty_value
+            objective_fn_val = direction_multiplier * post_process_val - penalty_value
 
             # store things in ``aux_data`` passed by reference
             if aux_data is not None:
