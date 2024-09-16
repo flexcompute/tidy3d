@@ -31,6 +31,12 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         description="Step size for the gradient descent optimizer.",
     )
 
+    maximize: bool = pd.Field(
+        True,
+        title="Direction of Optimization",
+        description="If ``True``, the optimizer will maximize the objective function. If ``False``, the optimizer will minimize the objective function.",
+    )
+
     num_steps: pd.PositiveInt = pd.Field(
         ...,
         title="Number of Steps",
@@ -103,7 +109,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         history = deepcopy(result.history)
 
         # use autograd to take gradient the objective function
-        objective_fn = self.design.make_objective_fn(post_process_fn)
+        objective_fn = self.design.make_objective_fn(post_process_fn, maximize=self.maximize)
         val_and_grad_fn = ag.value_and_grad(objective_fn)
 
         # main optimization loop
