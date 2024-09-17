@@ -91,7 +91,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         return InverseDesignResult(design=self.design, opt_state=[state], params=[params0])
 
     def run(
-        self, post_process_fn: typing.Callable, params0: anp.ndarray = None
+        self, post_process_fn: typing.Callable | None = None, params0: anp.ndarray = None
     ) -> InverseDesignResult:
         """Run this inverse design problem from an optional initial set of parameters."""
         self.design.design_region._check_params(params0)
@@ -99,7 +99,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         return self.continue_run(result=starting_result, post_process_fn=post_process_fn)
 
     def continue_run(
-        self, result: InverseDesignResult, post_process_fn: typing.Callable
+        self,
+        result: InverseDesignResult,
+        post_process_fn: typing.Callable | None = None,
     ) -> InverseDesignResult:
         """Run optimizer for a series of steps with an initialized state."""
 
@@ -164,13 +166,15 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         return InverseDesignResult(design=result.design, **history)
 
     def continue_run_from_file(
-        self, fname: str, post_process_fn: typing.Callable
+        self, fname: str, post_process_fn: typing.Callable | None = None
     ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         result = InverseDesignResult.from_file(fname)
         return self.continue_run(result=result, post_process_fn=post_process_fn)
 
-    def continue_run_from_history(self, post_process_fn: typing.Callable) -> InverseDesignResult:
+    def continue_run_from_history(
+        self, post_process_fn: typing.Callable | None = None
+    ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         return self.continue_run_from_file(
             fname=self.results_cache_fname, post_process_fn=post_process_fn
