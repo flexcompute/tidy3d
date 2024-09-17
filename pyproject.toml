@@ -73,6 +73,11 @@ jax = { version = "0.4.25", extras = [
   "cpu",
 ], source = "jaxsource", optional = true }
 
+# design
+bayesian-optimization = { version = "*", optional = true }
+pygad = { version = "3.3.1", optional = true }
+pyswarms = { version = "*", optional = true }
+
 # scikit-rf
 scikit-rf = { version = "*", optional = true }
 
@@ -104,13 +109,13 @@ signac = { version = "*", optional = true }
 flax = { version = ">=0.8.2", optional = true }
 sax = { version = "^0.11", optional = true }
 vtk = { version = ">=9.2.6", optional = true }
-pyswarms = { version = "*", optional = true }
 sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 
 [tool.poetry.extras]
 dev = [
+  'bayesian-optimization',
   'bump-my-version',
   "coverage",
   'dill',
@@ -133,6 +138,7 @@ dev = [
   'optax',
   'pre-commit',
   'pydata-sphinx-theme',
+  'pygad',
   'pylint',
   'pyswarms',
   'pytest',
