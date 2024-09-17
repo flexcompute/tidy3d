@@ -1,13 +1,13 @@
 from .base import Expression
 from .functions import Cos, Exp, Log, Log10, Sin, Tan
-from .metrics import ModeCoefficient, ModePower
+from .metrics import ModeAmp, ModePower
 from .variables import Constant, Variable
 
 __all__ = [
     "Expression",
     "Constant",
     "Variable",
-    "ModeCoefficient",
+    "ModeAmp",
     "ModePower",
     "Sin",
     "Cos",

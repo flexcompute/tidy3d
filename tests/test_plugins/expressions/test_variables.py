@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from tidy3d.plugins.metrics.variables import Constant, Variable
+from tidy3d.plugins.expressions.variables import Constant, Variable
 
 
 @pytest.fixture(params=[1, 2.5, 1 + 2j, np.array([1, 2, 3])])

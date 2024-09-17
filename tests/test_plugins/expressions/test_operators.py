@@ -2,7 +2,7 @@ import operator
 
 import numpy as np
 import pytest
-from tidy3d.plugins.metrics.operators import (
+from tidy3d.plugins.expressions.operators import (
     Abs,
     Add,
     Divide,

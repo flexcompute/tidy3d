@@ -23,7 +23,7 @@ class Metric(Variable):
         return f'{self.type}("{self.monitor_name}")'
 
 
-class ModeCoefficient(Metric):
+class ModeAmp(Metric):
     """
     Metric for calculating the mode coefficient from a ModeMonitor.
 
@@ -41,7 +41,7 @@ class ModeCoefficient(Metric):
     Examples
     --------
     >>> monitor = ModeMonitor(name="monitor1", freqs=[1.0])
-    >>> mode_coeff = ModeCoefficient.from_mode_monitor(monitor)
+    >>> mode_coeff = ModeAmp.from_mode_monitor(monitor)
     >>> data = SimulationData()  # Assume this is a valid SimulationData object
     >>> result = mode_coeff.evaluate(data)
     """
@@ -69,7 +69,7 @@ class ModeCoefficient(Metric):
         return anp.squeeze(amps.values.tolist())
 
 
-class ModePower(ModeCoefficient):
+class ModePower(ModeAmp):
     """
     Metric for calculating the mode power from a ModeMonitor.
 

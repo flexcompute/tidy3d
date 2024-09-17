@@ -6,7 +6,7 @@ from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Complex
 
 if TYPE_CHECKING:
     from .functions import Cos, Exp, Log, Log10, Sin, Tan
-    from .metrics import ModeCoefficient, ModePower
+    from .metrics import ModeAmp, ModePower
     from .operators import (
         Abs,
         Add,
@@ -55,7 +55,7 @@ MetricType = Annotated[
     Union[
         "Constant",
         "Variable",
-        "ModeCoefficient",
+        "ModeAmp",
         "ModePower",
     ],
     Field(discriminator=TYPE_TAG_STR),
