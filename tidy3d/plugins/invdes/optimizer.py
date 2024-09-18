@@ -13,6 +13,7 @@ import tidy3d as td
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
+from .parameters import ParameterSpecType, UniformParameterSpec
 from .result import InverseDesignResult
 
 
@@ -65,6 +66,12 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         "last computed state of these variables.",
     )
 
+    parameter_spec: typing.Optional[ParameterSpecType] = pd.Field(
+        None,
+        title="Parameter Specification",
+        description="Specification of how to initialize the parameters. If not provided, a default initialization of 0.5 is used.",
+    )
+
     @abc.abstractmethod
     def initial_state(self, parameters: np.ndarray) -> dict:
         """The initial state of the optimizer."""
@@ -81,9 +88,14 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
 
         # initialize optimizer
-        if params0 is None:
-            params0 = self.design.design_region.params_half
-        params0 = anp.array(params0)
+        shape = self.design.design_region.params_shape
+
+        if params0 is None and self.parameter_spec is None:
+            params0 = UniformParameterSpec(value=0.5).create_parameters(shape=shape)
+        elif params0 is None and self.parameter_spec is not None:
+            params0 = self.parameter_spec.create_parameters(shape=shape)
+        else:
+            params0 = anp.array(params0)
 
         state = self.initial_state(params0)
 
@@ -94,6 +106,10 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         self, post_process_fn: typing.Optional[typing.Callable] = None, params0: anp.ndarray = None
     ) -> InverseDesignResult:
         """Run this inverse design problem from an optional initial set of parameters."""
+        if self.parameter_spec is not None and params0 is not None:
+            raise ValueError(
+                "Initial parameters can be provided either through 'parameter_spec' or as 'params0', but not both."
+            )
         self.design.design_region._check_params(params0)
         starting_result = self._initialize_result(params0)
         return self.continue_run(result=starting_result, post_process_fn=post_process_fn)

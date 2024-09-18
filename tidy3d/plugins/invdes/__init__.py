@@ -3,6 +3,7 @@
 from . import utils
 from .design import InverseDesign, InverseDesignMulti
 from .optimizer import AdamOptimizer
+from .parameters import CustomParameterSpec, RandomParameterSpec, UniformParameterSpec
 from .penalty import ErosionDilationPenalty
 from .region import TopologyDesignRegion
 from .result import InverseDesignResult
@@ -16,5 +17,8 @@ __all__ = (
     "TopologyDesignRegion",
     "AdamOptimizer",
     "InverseDesignResult",
+    "RandomParameterSpec",
+    "UniformParameterSpec",
+    "CustomParameterSpec",
     "utils",
 )
