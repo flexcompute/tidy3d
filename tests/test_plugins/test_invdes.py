@@ -2,16 +2,10 @@
 
 import autograd.numpy as anp
 import numpy as np
-import numpy.testing as npt
 import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
 from tidy3d.plugins.expressions import ModePower
-from tidy3d.plugins.invdes.parameters import (
-    CustomParameterSpec,
-    RandomParameterSpec,
-    UniformParameterSpec,
-)
 
 # use single threading pipeline
 from ..test_components.test_autograd import use_emulated_run  # noqa: F401
@@ -390,7 +384,7 @@ def test_result(
 
     val_last1 = result.last["params"]
     val_last2 = result.get_last("params")
-    npt.assert_allclose(val_last1, val_last2)
+    assert np.allclose(val_last1, val_last2)
 
     result.plot_optimization()
     _ = result.sim_data_last(task_name="last")
@@ -508,39 +502,3 @@ def test_invdes_with_metric_objective(use_emulated_run, use_emulated_to_sim_data
 
     params0 = np.random.random(invdes.design_region.params_shape)
     optimizer.run(params0=params0)
-
-
-@pytest.mark.parametrize(
-    "spec_class, spec_kwargs, expected_shape",
-    [
-        (RandomParameterSpec, {"min_value": 0.0, "max_value": 1.0, "shape": (3, 3)}, (3, 3)),
-        (UniformParameterSpec, {"value": 0.5, "shape": (2, 2)}, (2, 2)),
-        (CustomParameterSpec, {"params": np.array([[1, 2], [3, 4]])}, (2, 2)),
-    ],
-)
-def test_parameter_spec(spec_class, spec_kwargs, expected_shape):
-    """Test the creation of parameter arrays from different ParameterSpec classes."""
-    spec = spec_class(**spec_kwargs)
-    params = spec.create_parameters()
-    assert params.shape == expected_shape
-
-
-def test_parameter_spec_with_inverse_design(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
-    """Test ParameterSpec with InverseDesign class."""
-
-    metric = 2 * ModePower(monitor_name=MNT_NAME2, freqs=[FREQ0]) ** 2
-    invdes = tdi.InverseDesign(
-        simulation=simulation,
-        design_region=make_design_region(),
-        task_name="test_metric",
-        metric=metric,
-    )
-
-    optimizer = tdi.AdamOptimizer(
-        design=invdes,
-        learning_rate=0.2,
-        num_steps=1,
-        parameter_spec=RandomParameterSpec(),
-    )
-
-    optimizer.run()
