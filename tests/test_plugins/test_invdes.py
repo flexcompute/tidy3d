@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
-from tidy3d.plugins.metrics import ModePower
+from tidy3d.plugins.expressions import ModePower
 
 # use single threading pipeline
 from ..test_components.test_autograd import use_emulated_run  # noqa: F401
