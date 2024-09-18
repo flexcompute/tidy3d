@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added `tidy3d.plugins.expressions` module for constructing and serializing mathematical expressions and simulation metrics like `ModeAmps` and `ModePower`.
+- Added `tidy3d.plugins.expressions` module for constructing and serializing mathematical expressions and simulation metrics like `ModeAmp` and `ModePower`.
+- Support for serializable expressions in the `invdes` plugin (`InverseDesign(metric=ModePower(...))`).
 
 ## [2.7.3] - 2024-09-12
 

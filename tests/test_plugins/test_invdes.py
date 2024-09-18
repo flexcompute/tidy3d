@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
+from tidy3d.plugins.expressions import ModePower
 
 # use single threading pipeline
 from ..test_components.test_autograd import use_emulated_run  # noqa: F401
@@ -478,3 +479,26 @@ def test_pixel_size_warn_validator(log_capture):
 
     with AssertLogLevel(log_capture, "WARNING", contains_str="pixel_size"):
         invdes_multi = invdes_multi.updated_copy(design_region=region_too_coarse)
+
+
+def test_invdes_with_metric_objective(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
+    """Test using a metric as an objective function in InverseDesign."""
+
+    # Create a metric as the objective function
+    metric = 2 * ModePower(monitor_name=MNT_NAME2, freqs=[FREQ0]) ** 2
+
+    invdes = tdi.InverseDesign(
+        simulation=simulation,
+        design_region=make_design_region(),
+        task_name="test_metric",
+        metric=metric,
+    )
+
+    optimizer = tdi.AdamOptimizer(
+        design=invdes,
+        learning_rate=0.2,
+        num_steps=1,
+    )
+
+    params0 = np.random.random(invdes.design_region.params_shape)
+    optimizer.run(params0=params0)
