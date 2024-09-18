@@ -77,14 +77,16 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def _initialize_result(self, params0: anp.ndarray = None) -> InverseDesignResult:
-        """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
+    def initialize_result(self) -> InverseDesignResult:
+        """
+        Create an initially empty `InverseDesignResult` from the starting parameters.
 
-        # initialize optimizer
-        if params0 is None:
-            params0 = self.design.design_region.params_half
-        params0 = anp.array(params0)
-
+        Returns
+        -------
+        InverseDesignResult
+            An instance of `InverseDesignResult` initialized with the starting parameters and state.
+        """
+        params0 = self.design.design_region.initial_parameters
         state = self.initial_state(params0)
 
         # initialize empty result
@@ -93,9 +95,22 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def run(
         self, post_process_fn: typing.Optional[typing.Callable] = None, params0: anp.ndarray = None
     ) -> InverseDesignResult:
-        """Run this inverse design problem from an optional initial set of parameters."""
-        self.design.design_region._check_params(params0)
-        starting_result = self._initialize_result(params0)
+        """Run this inverse design problem from an optional initial set of parameters.
+
+        Parameters
+        ----------
+        post_process_fn : typing.Optional[typing.Callable] = None
+            Optional post-processing function to apply during optimization.
+        params0 : anp.ndarray = None
+            Deprecated. Initial set of parameters. This will be ignored. Use ``TopologyDesignRegion.intialization_spec`` instead.
+        """
+        if params0 is not None:
+            td.log.warning(
+                "The 'params0' argument is deprecated and will be ignored. "
+                "Please use an 'initialization_spec' in the design region "
+                "to specify the initial parameters instead."
+            )
+        starting_result = self.initialize_result()
         return self.continue_run(result=starting_result, post_process_fn=post_process_fn)
 
     def continue_run(

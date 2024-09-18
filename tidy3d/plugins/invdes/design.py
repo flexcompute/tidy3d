@@ -85,6 +85,12 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
         return objective_fn
 
+    @property
+    def initial_simulation(self) -> td.Simulation:
+        """Return a simulation with the initial design region parameters."""
+        initial_params = self.design_region.initial_parameters
+        return self.to_simulation(initial_params)
+
 
 class InverseDesign(AbstractInverseDesign):
     """Container for an inverse design problem."""
