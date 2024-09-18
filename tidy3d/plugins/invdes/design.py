@@ -48,7 +48,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     )
 
     def make_objective_fn(
-        self, post_process_fn: typing.Callable | None = None, maximize: bool = True
+        self, post_process_fn: typing.Optional[typing.Callable] = None, maximize: bool = True
     ) -> typing.Callable[[anp.ndarray], tuple[float, dict]]:
         """Construct the objective function for this InverseDesign object."""
 
