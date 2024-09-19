@@ -18,6 +18,7 @@ from tidy3d.plugins.autograd.functions import (
     pad,
     rescale,
     threshold,
+    unwrap,
 )
 from tidy3d.plugins.autograd.types import PaddingType
 
@@ -337,3 +338,22 @@ class TestInterpnExceptions:
         points, values, xi = TestInterpn.generate_points_values_xi(rng, 2)
         with pytest.raises(ValueError, match="interpolation method"):
             interpn(points, values, xi, method="invalid_method")
+
+
+@pytest.mark.parametrize(
+    "p", [np.linspace(-4 * np.pi, 4 * np.pi, 100), np.random.uniform(-10, 10, size=(5, 5))]
+)
+@pytest.mark.parametrize("period", [2 * np.pi, np.pi, np.pi / 2])
+@pytest.mark.parametrize("axis", [0, 1, -1])
+@pytest.mark.parametrize("discont", [None, np.pi])
+class TestUnwrap:
+    def test_unwrap_val(self, p, period, axis, discont):
+        if axis >= 1 and p.ndim < 2:
+            pytest.skip("Axis out of bounds")
+
+        # Check the function output against numpy.unwrap
+        result_autograd = unwrap(p, period=period, axis=axis, discont=discont)
+        result_numpy = np.unwrap(
+            p, discont=discont if discont is not None else period / 2, axis=axis
+        )
+        np.testing.assert_allclose(result_autograd, result_numpy)

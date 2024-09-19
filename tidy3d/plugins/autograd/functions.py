@@ -21,6 +21,7 @@ __all__ = [
     "morphological_gradient_external",
     "rescale",
     "threshold",
+    "unwrap",
 ]
 
 
@@ -676,3 +677,48 @@ def threshold(
         )
 
     return np.where(array < level, vmin, vmax)
+
+
+def unwrap(p, period=2 * np.pi, axis=-1, discont=None):
+    p = np.asarray(p)
+    nd = p.ndim
+    dd = np.diff(p, axis=axis)
+    if discont is None:
+        discont = period / 2
+
+    slice1 = [slice(None)] * nd
+    slice1[axis] = slice(1, None)
+    slice1 = tuple(slice1)
+
+    dtype = np.result_type(dd, period)
+    if np.issubdtype(dtype, np.integer):
+        interval_high, rem = divmod(period, 2)
+        boundary_ambiguous = rem == 0
+    else:
+        interval_high = period / 2
+        boundary_ambiguous = True
+
+    interval_low = -interval_high
+
+    ddmod = np.mod(dd - interval_low, period) + interval_low
+
+    if boundary_ambiguous:
+        ddmod = np.where(ddmod == interval_low, interval_high, ddmod)
+
+    ph_correct = ddmod - dd
+
+    mask2 = np.abs(dd) < discont
+    ph_correct = np.where(mask2, 0, ph_correct)
+
+    # Compute cumulative sum of phase corrections
+    ph_cumsum = np.cumsum(ph_correct, axis=axis)
+
+    # Prepare the first element along the specified axis
+    first_slice = [slice(None)] * nd
+    first_slice[axis] = slice(0, 1)
+    first_slice = tuple(first_slice)
+    p_first = p[first_slice]
+    p_rest = p[slice1] + ph_cumsum
+    up = np.concatenate([p_first, p_rest], axis=axis)
+
+    return up
