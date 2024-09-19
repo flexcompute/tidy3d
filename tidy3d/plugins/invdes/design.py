@@ -80,6 +80,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
             if aux_data is not None:
                 aux_data["penalty"] = get_static(penalty_value)
                 aux_data["post_process_val"] = get_static(post_process_val)
+                aux_data["objective_fn_val"] = get_static(objective_fn_val) * direction_multiplier
 
             return objective_fn_val
 
