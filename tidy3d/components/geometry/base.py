@@ -1885,6 +1885,16 @@ class Box(SimplePlaneIntersection, Centered):
         units=MICROMETER,
     )
 
+    @cached_property
+    def normal_axis(self) -> Axis:
+        """Axis normal to the Box. Errors if box is not planar."""
+        if self.size.count(0.0) != 1:
+            raise ValidationError(
+                "Tried to get 'normal_axis' of 'Box' that is not planar. "
+                f"Given 'size={self.size}.'"
+            )
+        return self.size.index(0.0)
+
     @classmethod
     def from_bounds(cls, rmin: Coordinate, rmax: Coordinate, **kwargs):
         """Constructs a :class:`Box` from minimum and maximum coordinate bounds

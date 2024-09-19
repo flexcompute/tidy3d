@@ -17,14 +17,14 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: Dict[str, List[str]] = None,
 ) -> BatchData:
-    """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
+    """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
 
     .. TODO add example and see also reference.
 
     Parameters
     ----------
-    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
+    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`]]
         Mapping of task name to simulation.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
@@ -41,8 +41,8 @@ def run_async(
     Returns
     ------
     :class:`BatchData`
-        Contains the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] for each
-        Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
+        Contains the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModeSimulationData`] for each
+        Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`] in :class:`Batch`.
 
     See Also
     --------

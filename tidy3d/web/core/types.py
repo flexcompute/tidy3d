@@ -52,3 +52,4 @@ class TaskType(str, Enum):
     MODE_SOLVER = "MODE_SOLVER"
     HEAT = "HEAT"
     EME = "EME"
+    MODE = "MODE"

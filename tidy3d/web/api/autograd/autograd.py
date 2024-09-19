@@ -99,7 +99,7 @@ def run(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -128,7 +128,7 @@ def run(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModeSimulationData`]
         Object containing solver results for the supplied simulation.
 
     Notes
@@ -215,14 +215,14 @@ def run_async(
     parent_tasks: dict[str, list[str]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
 ) -> BatchData:
-    """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
+    """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
 
     .. TODO add example and see also reference.
 
     Parameters
     ----------
-    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
+    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`]]
         Mapping of task name to simulation.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
@@ -242,8 +242,8 @@ def run_async(
     Returns
     ------
     :class:`BatchData`
-        Contains the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] for each
-        Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
+        Contains the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModeSimulationData`] for each
+        Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulationData`] in :class:`Batch`.
 
     See Also
     --------

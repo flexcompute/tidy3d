@@ -38,7 +38,7 @@ GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
 BETA_TASK_TYPES = ["HEAT", "EME"]
 
 # map task_type to solver name for display
-SOLVER_NAME = {"FDTD": "FDTD", "HEAT": "Heat", "MODE_SOLVER": "Mode", "EME": "EME"}
+SOLVER_NAME = {"FDTD": "FDTD", "HEAT": "Heat", "MODE_SOLVER": "Mode", "EME": "EME", "MODE": "Mode"}
 
 
 def _get_url(task_id: str) -> str:
@@ -67,7 +67,7 @@ def run(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -93,7 +93,7 @@ def run(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModeSimulationData`]
         Object containing solver results for the supplied simulation.
 
     Notes
@@ -173,7 +173,7 @@ def upload(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -591,7 +591,7 @@ def load_simulation(
 
     Returns
     -------
-    Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
+    Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`, :class:`.ModeSimulation`]
         Simulation loaded from downloaded json file.
     """
 
@@ -667,7 +667,7 @@ def load(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`, :class:`.ModeSimulationData`]
         Object containing simulation data.
     """
     if not os.path.exists(path) or replace_existing:
