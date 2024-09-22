@@ -81,6 +81,8 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
                 aux_data["penalty"] = get_static(penalty_value)
                 aux_data["post_process_val"] = get_static(post_process_val)
                 aux_data["objective_fn_val"] = get_static(objective_fn_val) * direction_multiplier
+                aux_data["sim_data"] = data.to_static()
+                aux_data["params"] = params
 
             return objective_fn_val
 
