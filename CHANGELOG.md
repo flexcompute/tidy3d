@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Convenience method `Structure.from_permittivity_array(geometry, eps_data)`, which creates structure containing `CustomMedium` with `eps_data` array sampled within `geometry.bounds`.
+
 ### Fixed
 - Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
 

@@ -1,3 +1,5 @@
+import autograd as ag
+import autograd.numpy as anp
 import gdstk
 import numpy as np
 import pydantic.v1 as pd
@@ -211,3 +213,26 @@ def test_validation_of_structures_with_2d_materials():
     for geom in not_allowed_geometries:
         with pytest.raises(pd.ValidationError):
             _ = td.Structure(geometry=geom, medium=med2d)
+
+
+def test_from_permittivity_array():
+    nx, ny, nz = 10, 1, 12
+    box = td.Box(size=(2, td.inf, 4), center=(0, 0, 0))
+
+    eps_data = 1.0 + np.random.random((nx, ny, nz))
+
+    structure = td.Structure.from_permittivity_array(geometry=box, eps_data=eps_data, name="test")
+
+    assert structure.name == "test"
+
+    assert np.all(structure.medium.permittivity.values == eps_data)
+
+    def f(x):
+        eps_data = (1 + x) * (1 + np.random.random((nx, ny, nz)))
+        structure = td.Structure.from_permittivity_array(
+            geometry=box, eps_data=eps_data, name="test"
+        )
+        return anp.sum(structure.medium.permittivity.attrs["AUTOGRAD"])
+
+    grad = ag.grad(f)(1.0)
+    assert not np.isclose(grad, 0.0)
