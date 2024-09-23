@@ -91,7 +91,10 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         return InverseDesignResult(design=self.design, opt_state=[state], params=[params0])
 
     def run(
-        self, post_process_fn: typing.Callable, params0: anp.ndarray = None
+        self,
+        post_process_fn: typing.Optional[typing.Callable] = None,
+        callback: typing.Optional[typing.Callable] = None,
+        params0: anp.ndarray = None,
     ) -> InverseDesignResult:
         """Run this inverse design problem from an optional initial set of parameters."""
         self.design.design_region._check_params(params0)
