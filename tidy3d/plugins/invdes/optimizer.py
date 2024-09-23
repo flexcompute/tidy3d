@@ -77,7 +77,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def initialize_result(self) -> InverseDesignResult:
+    def initialize_result(
+        self, params0: typing.Optional[anp.ndarray] = None
+    ) -> InverseDesignResult:
         """
         Create an initially empty `InverseDesignResult` from the starting parameters.
 
@@ -86,7 +88,14 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         InverseDesignResult
             An instance of `InverseDesignResult` initialized with the starting parameters and state.
         """
-        params0 = self.design.design_region.initial_parameters
+        if params0 is not None:
+            td.log.warning(
+                "The 'params0' argument is deprecated and will be removed in the future. "
+                "Please use a 'DesignRegion.initialization_spec' in the design region "
+                "to specify initial parameters instead."
+            )
+        else:
+            params0 = self.design.design_region.initial_parameters
         state = self.initial_state(params0)
 
         # initialize empty result
@@ -112,13 +121,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         params0 : anp.ndarray = None
             Deprecated. Initial set of parameters. This will be ignored. Use ``TopologyDesignRegion.intialization_spec`` instead.
         """
-        if params0 is not None:
-            td.log.warning(
-                "The 'params0' argument is deprecated and will be ignored. "
-                "Please use an 'initialization_spec' in the design region "
-                "to specify the initial parameters instead."
-            )
-        starting_result = self.initialize_result()
+        starting_result = self.initialize_result(params0)
         return self.continue_run(
             result=starting_result,
             num_steps=self.num_steps,
