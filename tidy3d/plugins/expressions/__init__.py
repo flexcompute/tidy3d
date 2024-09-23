@@ -1,10 +1,12 @@
 from .base import Expression
 from .functions import Cos, Exp, Log, Log10, Sin, Tan
 from .metrics import ModeAmp, ModePower
+from .parser import Parser
 from .variables import Constant, Variable
 
 __all__ = [
     "Expression",
+    "Parser",
     "Constant",
     "Variable",
     "ModeAmp",
