@@ -6,19 +6,21 @@ import pathlib
 from collections import defaultdict
 from typing import Optional, Tuple, Union
 
+import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
 from .autograd.derivative_utils import DerivativeInfo
-from .autograd.types import AutogradFieldMap
+from .autograd.types import AutogradFieldMap, Box
 from .autograd.utils import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .data.data_array import ScalarFieldDataArray
 from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
-from .medium import AbstractCustomMedium, Medium2D, MediumType
+from .medium import AbstractCustomMedium, CustomMedium, Medium2D, MediumType
 from .monitor import FieldMonitor, PermittivityMonitor
 from .types import TYPE_TAG_STR, Ax, Axis
 from .validators import validate_name_str
@@ -516,6 +518,66 @@ class Structure(AbstractStructure):
         )
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
+
+    @classmethod
+    def from_permittivity_array(
+        cls, geometry: GeometryType, eps_data: np.ndarray, **kwargs
+    ) -> Structure:
+        """Create ``Structure`` with ``geometry`` and ``CustomMedium`` containing ``eps_data`` for
+        The ``permittivity`` field.   Extra keyword arguments are passed to ``td.Structure()``.
+        """
+
+        rmin, rmax = geometry.bounds
+
+        if not isinstance(eps_data, (np.ndarray, Box, list, tuple)):
+            raise ValueError("Must supply array-like object for 'eps_data'.")
+
+        eps_data = anp.array(eps_data)
+        shape = eps_data.shape
+
+        if len(shape) != 3:
+            raise ValueError(
+                "'Structure.from_permittivity_array' method only accepts 'eps_data' with 3 dimensions, "
+                f"corresponding to (x,y,z). Got array with {len(shape)} dimensions."
+            )
+
+        coords = {}
+        for key, pt_min, pt_max, num_pts in zip("xyz", rmin, rmax, shape):
+            if np.isinf(pt_min) and np.isinf(pt_max):
+                pt_min = 0.0
+                pt_max = 0.0
+
+            coords_2x = np.linspace(pt_min, pt_max, 2 * num_pts + 1)
+            coords_centers = coords_2x[1:-1:2]
+
+            if len(coords_centers) != num_pts:
+                raise ValueError(
+                    "something went wrong, different number of coordinate values and data values. "
+                    "Check your 'geometry', 'eps_data', and file a bug report."
+                )
+
+            # handle infinite size dimension edge case
+            coords_centers = np.nan_to_num(coords_centers, 0.0)
+
+            _, count = np.unique(coords_centers, return_counts=True)
+            if np.any(count > 1):
+                raise ValueError(
+                    "Found duplicates in the coordinates constructed from the supplied "
+                    "'geometry' and 'eps_data'. This is likely due to having a geometry with an "
+                    "infinite size in one dimension and a 'eps_data' with a 'shape' > 1 in that "
+                    "dimension. "
+                )
+
+            coords[key] = coords_centers
+
+        eps_data_array = ScalarFieldDataArray(eps_data, coords=coords)
+        custom_med = CustomMedium(permittivity=eps_data_array)
+
+        return Structure(
+            geometry=geometry,
+            medium=custom_med,
+            **kwargs,
+        )
 
 
 class MeshOverrideStructure(AbstractStructure):
