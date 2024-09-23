@@ -216,7 +216,7 @@ class TopologyDesignRegion(DesignRegion):
         return eps_arr.reshape(params.shape)
 
     def to_structure(self, params: anp.ndarray) -> td.Structure:
-        """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
+        """Convert this ``DesignRegion`` into a custom ``Structure``."""
         self._check_params(params)
 
         coords = self.coords
