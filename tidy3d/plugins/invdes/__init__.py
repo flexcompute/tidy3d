@@ -2,6 +2,11 @@
 
 from . import utils
 from .design import InverseDesign, InverseDesignMulti
+from .initialization import (
+    CustomInitializationSpec,
+    RandomInitializationSpec,
+    UniformInitializationSpec,
+)
 from .optimizer import AdamOptimizer
 from .penalty import ErosionDilationPenalty
 from .region import TopologyDesignRegion
@@ -16,5 +21,8 @@ __all__ = (
     "TopologyDesignRegion",
     "AdamOptimizer",
     "InverseDesignResult",
+    "RandomInitializationSpec",
+    "UniformInitializationSpec",
+    "CustomInitializationSpec",
     "utils",
 )

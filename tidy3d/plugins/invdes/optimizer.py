@@ -77,14 +77,25 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def _initialize_result(self, params0: anp.ndarray = None) -> InverseDesignResult:
-        """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
+    def initialize_result(
+        self, params0: typing.Optional[anp.ndarray] = None
+    ) -> InverseDesignResult:
+        """
+        Create an initially empty `InverseDesignResult` from the starting parameters.
 
-        # initialize optimizer
-        if params0 is None:
-            params0 = self.design.design_region.params_half
-        params0 = anp.array(params0)
-
+        Returns
+        -------
+        InverseDesignResult
+            An instance of `InverseDesignResult` initialized with the starting parameters and state.
+        """
+        if params0 is not None:
+            td.log.warning(
+                "The 'params0' argument is deprecated and will be removed in the future. "
+                "Please use a 'DesignRegion.initialization_spec' in the design region "
+                "to specify initial parameters instead."
+            )
+        else:
+            params0 = self.design.design_region.initial_parameters
         state = self.initial_state(params0)
 
         # initialize empty result
