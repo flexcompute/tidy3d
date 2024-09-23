@@ -776,3 +776,98 @@ def test_custom_medium(log_capture):
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
         n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
         create_mediums(n_dataset=n_dataset2)
+
+
+def test_medium_from_admittance_coeffs(log_capture):
+    """Test that ``from_admittance_coeffs`` produces same PoleResidue model as
+    conversions from Drude and Lorentz models. Also test some special cases."""
+    freqs = np.linspace(0.01, 1, 1001)
+    twopi = 2 * np.pi
+    m_DR = td.Drude(eps_inf=1.0, coeffs=[(1.5, 3)])
+    # test from transfer function using Drude model
+    f1 = m_DR.coeffs[0][0]
+    d1 = m_DR.coeffs[0][1]
+    # admittance function in Laplace domain (a/b) modeling Drude differential equation is:
+    a = np.array([0, td.EPSILON_0 * (twopi * f1) ** 2, 0])
+    b = np.array([0, twopi * d1, 1])
+
+    m_transfer = td.PoleResidue.from_admittance_coeffs(a, b)
+    assert np.allclose(
+        m_transfer.eps_model(freqs),
+        m_DR.eps_model(freqs),
+    )
+
+    # test from transfer function using Lorentz model
+    m_L = td.Lorentz(eps_inf=1.0, coeffs=[(1.5, 3, 5)])
+    deps = m_L.coeffs[0][0]
+    f1 = m_L.coeffs[0][1]
+    d1 = m_L.coeffs[0][2]
+    # admittance function in Laplace domain (a/b) modeling Lorentz differential equation is:
+    a = np.array([0, td.EPSILON_0 * (twopi * f1) ** 2 * deps, 0])
+    b = np.array([(twopi * f1) ** 2, 2 * twopi * d1, 1])
+
+    m_transfer = td.PoleResidue.from_admittance_coeffs(a, b)
+    assert np.allclose(
+        m_transfer.eps_model(freqs),
+        m_L.eps_model(freqs),
+    )
+
+    # Example network Taflove Sec 15.9.6
+    L1 = 1e-9
+    L2 = 1.5e-9
+    C1 = 0.2e-12
+    C2 = 0.2e-12
+    R1 = 10
+    R2 = 250
+    R3 = 50
+    # Admittance transfer function for circuit
+    a = [1, C1 * R1 + C1 * R2 + C2 * R2, C1 * C2 * R1 * R2 + C1 * L2, C1 * C2 * L2 * R2, 0]
+    b = [
+        R1 + R2 + R3,
+        C1 * R1 * R3 + C1 * R2 * R3 + C2 * R1 * R2 + C2 * R2 * R3 + L1 + L2,
+        C1 * C2 * R1 * R2 * R3
+        + C1 * L1 * R1
+        + C1 * L1 * R2
+        + C1 * L2 * R3
+        + C2 * L1 * R2
+        + C2 * L2 * R2,
+        C1 * C2 * L1 * R1 * R2 + C1 * C2 * L2 * R2 * R3 + C1 * L1 * L2,
+        C1 * C2 * L1 * L2 * R2,
+    ]
+    m_transfer = td.PoleResidue.from_admittance_coeffs(np.array(a), np.array(b))
+    # Should be no warnings due to passivity
+    # (atlhough numerically there is a small negative part at high frequencies)
+    assert_log_level(log_capture, None)
+
+    # test corner case of an admittance function representing a pure capacitance
+    C = 1e-12  # 1 pF capacitor
+    a = np.array([0, C])
+    b = np.array([1, 0])
+    m_transfer = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    assert len(m_transfer.poles) == 0
+    assert np.isclose(1 + C / td.EPSILON_0, m_transfer.eps_inf)
+
+    #### Test validation of inputs
+    # Test improper admittance function resulting in a negative direct polynomial part
+    a = np.array([0, -C])
+    b = np.array([1, 0])
+    with pytest.raises(ValidationError):
+        _ = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    # Test improper admittance function with numerator order too large
+    a = np.array([0, 1, 2])
+    b = np.array([1, 0])
+    with pytest.raises(ValidationError):
+        _ = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    # Test transfer function that will result in a higher order pole
+    a = np.array([1])
+    b = np.array([0, 2])
+    with pytest.raises(ValidationError):
+        _ = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    # Test transfer function that will result in a higher order pole, but is not in simplest form
+    a = np.array([0, 1])
+    b = np.array([0, 2])
+    _ = td.PoleResidue.from_admittance_coeffs(a, b)

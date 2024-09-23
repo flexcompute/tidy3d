@@ -15,6 +15,7 @@ import autograd.numpy as np
 import numpy as npo
 import pydantic.v1 as pd
 import xarray as xr
+from scipy import signal
 
 from ..constants import (
     C_0,
@@ -3187,6 +3188,195 @@ class PoleResidue(DispersiveMedium):
                 derivative_map[field_path] = complex(dJ_dpoles[pole_index][a_or_c])
 
         return derivative_map
+
+    @classmethod
+    def _real_partial_fraction_decomposition(
+        cls, a: np.ndarray, b: np.ndarray, tol: pd.PositiveFloat = 1e-2
+    ) -> tuple[list[tuple[Complex, Complex]], np.ndarray]:
+        """Computes the complex conjugate pole residue pairs given a rational expression with
+        real coefficients.
+
+        Parameters
+        ----------
+
+        a : np.ndarray
+            Coefficients of the numerator polynomial in increasing monomial order.
+        b : np.ndarray
+            Coefficients of the denominator polynomial in increasing monomial order.
+        tol : pd.PositiveFloat
+            Tolerance for pole finding. Two poles are considered equal, if their spacing is less
+            than ``tol``.
+
+        Returns
+        -------
+        tuple[list[tuple[Complex, Complex]], np.ndarray]
+            The list of complex conjugate poles and their associated residues. The second element of the
+            ``tuple`` is an array of coefficients representing any direct polynomial term.
+
+        """
+
+        if a.ndim != 1 or np.any(np.iscomplex(a)):
+            raise ValidationError(
+                "Numerator coefficients must be a one-dimensional array of real numbers."
+            )
+        if b.ndim != 1 or np.any(np.iscomplex(b)):
+            raise ValidationError(
+                "Denominator coefficients must be a one-dimensional array of real numbers."
+            )
+
+        # Compute residues and poles using scipy
+        (r, p, k) = signal.residue(np.flip(a), np.flip(b), tol=tol, rtype="avg")
+
+        # Assuming real coefficients for the polynomials, the poles should be real or come as
+        # complex conjugate pairs
+        r_filtered = []
+        p_filtered = []
+        for res, (idx, pole) in zip(list(r), enumerate(list(p))):
+            # Residue equal to zero interpreted as rational expression was not
+            # in simplest form. So skip this pole.
+            if res == 0:
+                continue
+            # Causal and stability check
+            if np.real(pole) > 0:
+                raise ValidationError("Transfer function is invalid. It is non-causal.")
+            # Check for higher order pole, which come in consecutive order
+            if idx > 0 and p[idx - 1] == pole:
+                raise ValidationError(
+                    "Transfer function is invalid. A higher order pole was detected. Try reducing ``tol``, "
+                    "or ensure that the rational expression does not have repeated poles. "
+                )
+            if np.imag(pole) == 0:
+                r_filtered.append(res / 2)
+                p_filtered.append(pole)
+            else:
+                pair_found = len(np.argwhere(np.array(p) == np.conj(pole))) == 1
+                if not pair_found:
+                    raise ValueError(
+                        "Failed to find complex-conjugate of pole in poles computed by SciPy."
+                    )
+                previously_added = len(np.argwhere(np.array(p_filtered) == np.conj(pole))) == 1
+                if not previously_added:
+                    r_filtered.append(res)
+                    p_filtered.append(pole)
+
+        poles_residues = list(zip(p_filtered, r_filtered))
+        k_increasing_order = np.flip(k)
+        return (poles_residues, k_increasing_order)
+
+    @classmethod
+    def from_admittance_coeffs(
+        cls,
+        a: np.ndarray,
+        b: np.ndarray,
+        eps_inf: pd.PositiveFloat = 1,
+        pole_tol: pd.PositiveFloat = 1e-2,
+    ) -> PoleResidue:
+        """Construct a :class:`.PoleResidue` model from an admittance function defining the
+        relationship between the electric field and the polarization current density in the
+        Laplace domain.
+
+        Parameters
+        ----------
+        a : np.ndarray
+            Coefficients of the numerator polynomial in increasing monomial order.
+        b : np.ndarray
+            Coefficients of the denominator polynomial in increasing monomial order.
+        eps_inf: pd.PositiveFloat
+            The relative permittivity at infinite frequency.
+        pole_tol: pd.PositiveFloat
+            Tolerance for the pole finding algorithm in Hertz. Two poles are considered equal, if their
+            spacing is closer than ``pole_tol`.
+        Returns
+        -------
+        :class:`.PoleResidue`
+            The pole residue equivalent.
+
+        Notes
+        -----
+
+            The supplied admittance function relates the electric field to the polarization current density
+            in the Laplace domain and is equivalent to a frequency-dependent complex conductivity
+            :math:`\\sigma(\\omega)`.
+
+            .. math::
+                J_p(s) = Y(s)E(s)
+
+            .. math::
+                Y(s) = \\frac{a_0 + a_1 s + \\dots + a_M s^M}{b_0 + b_1 s + \\dots + b_N s^N}
+
+            An equivalent :class:`.PoleResidue` medium is constructed using an equivalent frequency-dependent
+            complex permittivity defined as
+
+            .. math::
+                \\epsilon(s) = \\epsilon_\\infty - \\frac{1}{\\epsilon_0 s}
+                \\frac{a_0 + a_1 s + \\dots + a_M s^M}{b_0 + b_1 s + \\dots + b_N s^N}.
+        """
+
+        if a.ndim != 1 or np.any(np.logical_or(np.iscomplex(a), a < 0)):
+            raise ValidationError(
+                "Numerator coefficients must be a one-dimensional array of non-negative real numbers."
+            )
+        if b.ndim != 1 or np.any(np.logical_or(np.iscomplex(b), b < 0)):
+            raise ValidationError(
+                "Denominator coefficients must be a one-dimensional array of non-negative real numbers."
+            )
+
+        # Trim any trailing zeros, so that length corresponds with polynomial order
+        a = np.trim_zeros(a, "b")
+        b = np.trim_zeros(b, "b")
+
+        # Validate that transfer function will result in a proper transfer function, once converted to
+        # the complex permittivity version
+        # Let q equal the order of the numerator polynomial, and p equal the order
+        # of the denominator polynomal. Then, q < p is strictly proper rational transfer function (RTF)
+        # q <= p is a proper RTF, and q > p is an improper RTF.
+        q = len(a) - 1
+        p = len(b) - 1
+
+        if q > p + 1:
+            raise ValidationError(
+                "Transfer function is improper, the order of the numerator polynomial must be at most "
+                "one greater than the order of the denominator polynomial."
+            )
+
+        # Modify the transfer function defining a complex conductivity to match the complex
+        # frequency-dependent portion of the pole residue model
+        # Meaning divide by -j*omega*epsilon (s*epsilon)
+        b = np.concatenate(([0], b * EPSILON_0))
+
+        poles_and_residues, k = cls._real_partial_fraction_decomposition(
+            a=a, b=b, tol=pole_tol * 2 * np.pi
+        )
+
+        # A direct polynomial term of zeroth order is interpreted as an additional contribution to eps_inf.
+        # So we only handle that special case.
+        if len(k) == 1:
+            if np.iscomplex(k[0]) or k[0] < 0:
+                raise ValidationError(
+                    "Transfer function is invalid. Direct polynomial term must be real and positive for "
+                    "conversion to an equivalent 'PoleResidue' medium."
+                )
+            else:
+                # A pure capacitance will translate to an increased permittivity at infinite frequency.
+                eps_inf = eps_inf + k[0]
+
+        pole_residue_from_transfer = PoleResidue(eps_inf=eps_inf, poles=poles_and_residues)
+
+        # Check passivity
+        ang_freqs = PoleResidue._imag_ep_extrema_with_samples(pole_residue_from_transfer)
+        freq_list = PoleResidue.angular_freq_to_Hz(ang_freqs)
+        ep = pole_residue_from_transfer.eps_model(freq_list)
+        # filter `NAN` in case some of freq_list are exactly at the pole frequency
+        ep = ep[~np.isnan(ep)]
+
+        if np.any(np.imag(ep) < -fp_eps):
+            log.warning(
+                "Generated 'PoleResidue' medium is not passive. Please raise an issue on the "
+                "Tidy3d frontend with this message and some information about your "
+                "simulation setup and we will investigate."
+            )
+
+        return pole_residue_from_transfer
 
 
 class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):

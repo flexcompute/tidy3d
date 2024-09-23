@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added optimization methods to the Design plugin. The plugin has been expanded to include Bayesian optimization, genetic algorithms and particle swarm optimization. Explanations of these methods are available in new and updated notebooks.
 - Added new support functions for the Design plugin: automated batching of `Simulation` objects, and summary functions with `DesignSpace.estimate_cost` and `DesignSpace.summarize`.
 - Added validation and repair methods for `TriangleMesh` with inward-facing normals.
+- Added `from_admittance_coeffs` to `PoleResidue`, which allows for directly constructing a `PoleResidue` medium from an admittance function in the Laplace domain.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
