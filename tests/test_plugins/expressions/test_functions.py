@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from tidy3d.plugins.expressions.functions import Cos, Exp, Log, Log10, Sin, Tan
+from tidy3d.plugins.expressions.functions import Cos, Exp, Log, Log10, Sin, Sqrt, Tan
 from tidy3d.plugins.expressions.variables import Constant
 
 FUNCTIONS = [
@@ -10,6 +10,7 @@ FUNCTIONS = [
     (Exp, np.exp),
     (Log, np.log),
     (Log10, np.log10),
+    (Sqrt, np.sqrt),
 ]
 
 

@@ -94,6 +94,7 @@ The `expressions` module supports various operators and functions to build compl
 | Function   | `Exp`      | Exponential function                             | `Exp`            |
 | Function   | `Log`      | Natural logarithm function                       | `Log`            |
 | Function   | `Log10`    | Base-10 logarithm function                       | `Log10`          |
+| Function   | `Sqrt`     | Square root function                             | `Sqrt`           |
 
 ### Variables and metrics
 

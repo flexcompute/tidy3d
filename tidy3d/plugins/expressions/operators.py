@@ -52,6 +52,10 @@ class BinaryOperator(Expression):
 
 
 class Add(BinaryOperator):
+    """
+    Represents the addition operation.
+    """
+
     _symbol: str = "+"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -59,6 +63,10 @@ class Add(BinaryOperator):
 
 
 class Subtract(BinaryOperator):
+    """
+    Represents the subtraction operation.
+    """
+
     _symbol: str = "-"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -66,6 +74,10 @@ class Subtract(BinaryOperator):
 
 
 class Multiply(BinaryOperator):
+    """
+    Represents the multiplication operation.
+    """
+
     _symbol: str = "*"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -73,6 +85,10 @@ class Multiply(BinaryOperator):
 
 
 class Negate(UnaryOperator):
+    """
+    Represents the negation operation.
+    """
+
     _symbol: str = "-"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -80,6 +96,10 @@ class Negate(UnaryOperator):
 
 
 class Abs(UnaryOperator):
+    """
+    Represents the absolute value operation.
+    """
+
     _symbol: str = "abs"
     _format = "{symbol}({operand})"
 
@@ -88,6 +108,10 @@ class Abs(UnaryOperator):
 
 
 class Divide(BinaryOperator):
+    """
+    Represents the division operation.
+    """
+
     _symbol: str = "/"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -95,6 +119,10 @@ class Divide(BinaryOperator):
 
 
 class Power(BinaryOperator):
+    """
+    Represents the exponentiation operation.
+    """
+
     _symbol: str = "**"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -102,6 +130,10 @@ class Power(BinaryOperator):
 
 
 class Modulus(BinaryOperator):
+    """
+    Represents the modulus operation.
+    """
+
     _symbol: str = "%"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -109,6 +141,10 @@ class Modulus(BinaryOperator):
 
 
 class FloorDivide(BinaryOperator):
+    """
+    Represents the floor division operation.
+    """
+
     _symbol: str = "//"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
@@ -116,6 +152,10 @@ class FloorDivide(BinaryOperator):
 
 
 class MatMul(BinaryOperator):
+    """
+    Represents the matrix multiplication operation.
+    """
+
     _symbol: str = "@"
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:

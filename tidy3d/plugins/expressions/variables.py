@@ -53,6 +53,25 @@ class Variable(Expression):
 
 
 class Constant(Variable):
+    """
+    Constant class represents a fixed value in an expression.
+
+    Attributes
+    ----------
+    value : NumberType
+        The fixed value of the constant.
+
+    Methods
+    -------
+    evaluate(*args, **kwargs)
+        Returns the value of the constant.
+
+    Examples
+    --------
+    >>> c = Constant(5)
+    >>> c.evaluate()  # Returns 5
+    """
+
     value: NumberType
 
     def __init__(self, value: NumberType, **kwargs: dict[str, Any]) -> None:

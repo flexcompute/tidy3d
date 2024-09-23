@@ -1,5 +1,5 @@
 from .base import Expression
-from .functions import Cos, Exp, Log, Log10, Sin, Tan
+from .functions import Cos, Exp, Log, Log10, Sin, Sqrt, Tan
 from .metrics import ModeAmp, ModePower
 from .variables import Constant, Variable
 
@@ -15,6 +15,7 @@ __all__ = [
     "Exp",
     "Log",
     "Log10",
+    "Sqrt",
 ]
 
 # The following code dynamically collects all classes that are subclasses of Expression
