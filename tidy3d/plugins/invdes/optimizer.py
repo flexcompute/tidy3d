@@ -92,7 +92,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             td.log.warning(
                 "The 'params0' argument is deprecated and will be removed in the future. "
                 "Please use a 'DesignRegion.initialization_spec' in the design region "
-                "to specify initial parameters instead."
+                "to specify initial parameters instead. For now, 'params0' will take precedence "
+                "over 'initialization_spec'."
             )
         else:
             params0 = self.design.design_region.initial_parameters
@@ -107,27 +108,68 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         callback: typing.Optional[typing.Callable] = None,
         params0: anp.ndarray = None,
     ) -> InverseDesignResult:
-        """Run this inverse design problem from an optional initial set of parameters."""
-        self.design.design_region._check_params(params0)
-        starting_result = self._initialize_result(params0)
-        return self.continue_run(result=starting_result, post_process_fn=post_process_fn)
+        """Run this inverse design problem from an optional initial set of parameters.
+
+        Parameters
+        ----------
+        post_process_fn : Optional[Callable] = None
+            Function to apply on the simulation data results to produce the final objective function
+            value. If not provided, then ``Optimizer.design.metric`` must be defined.
+        callback : Optional[Callable] = None
+            Callback function to apply at every iteration step for extra functionality. Does not
+            need to be differentiable. This takes the optimizer ``result`` as a positional argument
+            and the ``step_index`` and ``aux_data`` as optional arguments.
+        params0 : anp.ndarray = None
+            Deprecated. Initial set of parameters. Use ``TopologyDesignRegion.intialization_spec`` instead.
+        """
+        starting_result = self.initialize_result(params0)
+        return self.continue_run(
+            result=starting_result,
+            num_steps=self.num_steps,
+            post_process_fn=post_process_fn,
+            callback=callback,
+        )
 
     def continue_run(
-        self, result: InverseDesignResult, post_process_fn: typing.Callable
+        self,
+        result: InverseDesignResult,
+        num_steps: int = None,
+        post_process_fn: typing.Optional[typing.Callable] = None,
+        callback: typing.Optional[typing.Callable] = None,
     ) -> InverseDesignResult:
-        """Run optimizer for a series of steps with an initialized state."""
+        """Run optimizer for a series of steps with an initialized state.
+
+        Parameters
+        ----------
+        result : InverseDesignResult
+            Optimization result from previous run, or a starting optimization result data structure.
+        num_steps : int = None
+            Number of steps to continue the run for. If not provided, runs for the remainder of the
+            steps up to ``self.num_steps``.
+        post_process_fn : Optional[Callable] = None
+            Function to apply on the simulation data results to produce the final objective function
+            value. If not provided, then ``Optimizer.design.metric`` must be defined.
+        callback : Optional[Callable] = None
+            Callback function to apply at every iteration step for extra functionality. Does not
+            need to be differentiable. This takes the optimizer ``result`` as a positional argument
+            and the ``step_index`` and ``aux_data`` as optional arguments.
+        """
 
         # get the last state of the optimizer and the last parameters
         opt_state = result.get_last("opt_state")
         params = result.get_last("params")
         history = deepcopy(result.history)
+        done_steps = len(history["objective_fn_val"])
 
         # use autograd to take gradient the objective function
         objective_fn = self.design.make_objective_fn(post_process_fn, maximize=self.maximize)
         val_and_grad_fn = ag.value_and_grad(objective_fn)
 
+        if num_steps is None:
+            num_steps = self.num_steps - done_steps
+
         # main optimization loop
-        for step_index in range(self.num_steps):
+        for step_index in range(done_steps, done_steps + num_steps):
             aux_data = {}
             val, grad = val_and_grad_fn(params, aux_data=aux_data)
 
@@ -170,6 +212,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             # display information
             result = InverseDesignResult(design=result.design, **history)
             self.display_fn(result, step_index=step_index)
+            if callback:
+                callback(result, step_index=step_index, aux_data=aux_data)
 
             # save current results to file
             if self.results_cache_fname:
@@ -178,16 +222,33 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         return InverseDesignResult(design=result.design, **history)
 
     def continue_run_from_file(
-        self, fname: str, post_process_fn: typing.Callable
+        self,
+        fname: str,
+        num_steps: int = None,
+        post_process_fn: typing.Optional[typing.Callable] = None,
+        callback: typing.Optional[typing.Callable] = None,
     ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         result = InverseDesignResult.from_file(fname)
-        return self.continue_run(result=result, post_process_fn=post_process_fn)
+        return self.continue_run(
+            result=result,
+            num_steps=num_steps,
+            post_process_fn=post_process_fn,
+            callback=callback,
+        )
 
-    def continue_run_from_history(self, post_process_fn: typing.Callable) -> InverseDesignResult:
+    def continue_run_from_history(
+        self,
+        num_steps: int = None,
+        post_process_fn: typing.Optional[typing.Callable] = None,
+        callback: typing.Optional[typing.Callable] = None,
+    ) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         return self.continue_run_from_file(
-            fname=self.results_cache_fname, post_process_fn=post_process_fn
+            fname=self.results_cache_fname,
+            num_steps=num_steps,
+            post_process_fn=post_process_fn,
+            callback=callback,
         )
 
 
