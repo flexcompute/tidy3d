@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
+- Bug in `Simulation.subsection` (used in the mode solver) when nonlinear materials rely on information about sources outside of the region.
 
 
 ## [2.7.3] - 2024-09-12
