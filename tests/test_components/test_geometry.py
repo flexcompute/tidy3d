@@ -836,9 +836,9 @@ def test_custom_surface_geometry(tmp_path, log_capture):
 
     # test inconsistent winding
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
-    faces = np.array([[2, 1, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    faces = np.array([[2, 3, 1], [0, 2, 3], [0, 3, 1], [0, 1, 2]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel(log_capture, "WARNING", contains_str="face orientations"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
     with AssertLogLevel(log_capture, None):
         geom = geom.fix_winding()
@@ -847,10 +847,19 @@ def test_custom_surface_geometry(tmp_path, log_capture):
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel(log_capture, "WARNING", contains_str="watertight"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
     with AssertLogLevel(log_capture, None):
         geom = geom.fill_holes()
+
+    # test inward normals
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    faces = np.array([[2, 1, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    tetrahedron = trimesh.Trimesh(vertices, faces)
+    with AssertLogLevel(log_capture, "WARNING", contains_str="outward"):
+        geom = td.TriangleMesh.from_trimesh(tetrahedron)
+    with AssertLogLevel(log_capture, None):
+        geom = geom.fix_normals()
 
     # test zero area triangles
     vertices = np.array([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
