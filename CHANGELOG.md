@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.4] - 2024-09-25
+
 ### Added
 - New `tidy3d.plugins.expressions` module for constructing and serializing mathematical expressions and simulation metrics like `ModeAmp` and `ModePower`.
 - Support for serializable expressions in the `invdes` plugin (`InverseDesign(metric=ModePower(...))`).
@@ -14,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - All filter functions in `plugins/autograd` now accept either an absolute size in pixels or a `radius` and `dl` argument.
+- Reverted fix for TFSF close to simulation boundaries that was introduced in 2.7.3 as it could cause different results in some cases with nonuniform mesh along the propagation direction.
 
 ### Fixed
 - Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
@@ -44,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve accuracy in `FieldData` operations involving H fields (like `.flux`).
 - Better error and warning handling in autograd pipeline.
 - Added the option to specify the `num_freqs` argument and `kwargs` to the `.to_source` method for both `ModeSolver` and `ComponentModeler`.
-- Fixes to TFSF source in some 2D simulations, and in some cases when the injection plane is close to the simulation domain boundaries
+- Fixes to TFSF source in some 2D simulations, and in some cases when the injection plane is close to the simulation domain boundaries.
 
 ## [2.7.2] - 2024-08-07
 
