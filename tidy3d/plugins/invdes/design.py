@@ -1,5 +1,7 @@
 # container for everything defining the inverse design
 
+from __future__ import annotations
+
 import abc
 import typing
 
@@ -9,6 +11,7 @@ import pydantic.v1 as pd
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
+from tidy3d.plugins.expressions.types import ExpressionType
 
 from .base import InvdesBaseModel
 from .region import DesignRegionType
@@ -38,30 +41,61 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
         description="If ``True``, will print the regular output from ``web`` functions.",
     )
 
+    metric: typing.Optional[ExpressionType] = pd.Field(
+        None,
+        title="Objective Metric",
+        description="Serializable expression defining the objective function.",
+    )
+
     def make_objective_fn(
-        self, post_process_fn: typing.Callable
+        self, post_process_fn: typing.Optional[typing.Callable] = None, maximize: bool = True
     ) -> typing.Callable[[anp.ndarray], tuple[float, dict]]:
-        """construct the objective function for this ``InverseDesignMulti`` object."""
+        """Construct the objective function for this InverseDesign object."""
+
+        if (post_process_fn is None) and (self.metric is None):
+            raise ValueError("Either 'post_process_fn' or 'metric' must be provided.")
+
+        if (post_process_fn is not None) and (self.metric is not None):
+            raise ValueError("Provide only one of 'post_process_fn' or 'metric', not both.")
+
+        direction_multiplier = 1 if maximize else -1
 
         def objective_fn(params: anp.ndarray, aux_data: dict = None) -> float:
             """Full objective function."""
-
             data = self.to_simulation_data(params=params)
 
-            # construct objective function values
-            post_process_val = post_process_fn(data)
+            if self.metric is None:
+                post_process_val = post_process_fn(data)
+            elif isinstance(data, td.SimulationData):
+                post_process_val = self.metric.evaluate(data)
+            elif isinstance(data, web.BatchData):
+                raise NotImplementedError("Metrics currently do not support 'BatchData'")
+            else:
+                raise ValueError(f"Invalid data type: {type(data)}")
 
             penalty_value = self.design_region.penalty_value(params)
-            objective_fn_val = post_process_val - penalty_value
+            objective_fn_val = direction_multiplier * post_process_val - penalty_value
 
-            # store things in ``aux_data`` passed by reference
+            # Store auxiliary data if provided
             if aux_data is not None:
                 aux_data["penalty"] = get_static(penalty_value)
                 aux_data["post_process_val"] = get_static(post_process_val)
+                aux_data["objective_fn_val"] = get_static(objective_fn_val) * direction_multiplier
+                if isinstance(data, td.SimulationData):
+                    aux_data["sim_data"] = data.to_static()
+                else:
+                    aux_data["sim_data"] = {k: v.to_static() for k, v in data.items()}
+                aux_data["params"] = params
 
             return objective_fn_val
 
         return objective_fn
+
+    @property
+    def initial_simulation(self) -> td.Simulation:
+        """Return a simulation with the initial design region parameters."""
+        initial_params = self.design_region.initial_parameters
+        return self.to_simulation(initial_params)
 
 
 class InverseDesign(AbstractInverseDesign):
@@ -130,8 +164,6 @@ class InverseDesign(AbstractInverseDesign):
         simulation = self.to_simulation(params=params)
         kwargs.setdefault("task_name", self.task_name)
         return web.run(simulation, verbose=self.verbose, **kwargs)
-        # sim_data = job.run()
-        # return sim_data
 
 
 class InverseDesignMulti(AbstractInverseDesign):

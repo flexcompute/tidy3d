@@ -8,7 +8,7 @@ import pydantic.v1 as pd
 
 import tidy3d as td
 from tidy3d.plugins.autograd.functions import threshold
-from tidy3d.plugins.autograd.invdes import get_kernel_size_px, make_filter_and_project
+from tidy3d.plugins.autograd.invdes import make_filter_and_project
 
 from .base import InvdesBaseModel
 
@@ -67,8 +67,9 @@ class FilterProject(InvdesBaseModel):
 
     def evaluate(self, spatial_data: anp.ndarray, design_region_dl: float) -> anp.ndarray:
         """Evaluate this transformation on spatial data, given some grid size in the region."""
-        filter_size = get_kernel_size_px(self.radius, design_region_dl)
-        filt_proj = make_filter_and_project(filter_size, beta=self.beta, eta=self.eta)
+        filt_proj = make_filter_and_project(
+            self.radius, design_region_dl, beta=self.beta, eta=self.eta
+        )
         data_projected = filt_proj(spatial_data)
 
         if self.strict_binarize:

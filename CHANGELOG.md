@@ -5,6 +5,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.4] - 2024-09-25
+
+### Added
+- New `tidy3d.plugins.expressions` module for constructing and serializing mathematical expressions and simulation metrics like `ModeAmp` and `ModePower`.
+- Support for serializable expressions in the `invdes` plugin (`InverseDesign(metric=ModePower(...))`).
+- Added `InitializationSpec` as the default way to initialize design region parameters in the `invdes` plugin (`DesignRegion(initialization_spec=RandomInitializationSpec(...))`).
+- Callback support in `invdes.Optimizer` and support for running the optimizer for a fixed number of steps via the `num_steps` argument in `Optimizer.continue_run()`.
+- Convenience method `Structure.from_permittivity_array(geometry, eps_data)`, which creates structure containing `CustomMedium` with `eps_data` array sampled within `geometry.bounds`.
+
+### Changed
+- All filter functions in `plugins/autograd` now accept either an absolute size in pixels or a `radius` and `dl` argument.
+- Reverted fix for TFSF close to simulation boundaries that was introduced in 2.7.3 as it could cause different results in some cases with nonuniform mesh along the propagation direction.
+
+### Fixed
+- Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
+- Bug in `Simulation.subsection` (used in the mode solver) when nonlinear materials rely on information about sources outside of the region.
+
+
 ## [2.7.3] - 2024-09-12
 
 ### Added
@@ -13,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `dilation` argument in `JaxPolySlab`.
 - Support for autograd differentiation with respect to `Cylinder.radius` and `Cylinder.center` (for elements not along axis dimension).
 - `Cylinder.to_polyslab(num_pts_circumference, **kwargs)` to convert a cylinder into a discretized version represented by a `PolySlab`.
+- `tidy3d.plugins.invdes.Optimizer` now accepts an optional optimization direction via the `maximize` argument (defaults to `maximize=True`).
 
 ### Changed
 - `PolySlab` now raises error when differentiating and dilation causes damage to the polygon.
@@ -29,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve accuracy in `FieldData` operations involving H fields (like `.flux`).
 - Better error and warning handling in autograd pipeline.
 - Added the option to specify the `num_freqs` argument and `kwargs` to the `.to_source` method for both `ModeSolver` and `ComponentModeler`.
-- Fixes to TFSF source in some 2D simulations, and in some cases when the injection plane is close to the simulation domain boundaries
+- Fixes to TFSF source in some 2D simulations, and in some cases when the injection plane is close to the simulation domain boundaries.
 
 ## [2.7.2] - 2024-08-07
 

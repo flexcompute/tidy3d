@@ -16,7 +16,7 @@ from tidy3d.components.data.sim_data import AdjointSourceInfo
 from ...core.s3utils import download_file, upload_file
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
-from ..container import Batch, BatchData, Job
+from ..container import DEFAULT_DATA_PATH, Batch, BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
 from .utils import E_to_D, FieldMap, TracerKeys, get_derivative_maps
@@ -877,7 +877,7 @@ def parse_run_kwargs(**run_kwargs):
 
 def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs
-) -> (td.SimulationData, str):
+) -> tuple[td.SimulationData, str]:
     """Run a simulation without any tracers using regular web.run()."""
     job_init_kwargs = parse_run_kwargs(**run_kwargs)
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
@@ -885,7 +885,8 @@ def _run_tidy3d(
     if job.simulation_type == "autograd_fwd":
         verbose = run_kwargs.get("verbose", False)
         upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
-    data = job.run()
+    path = run_kwargs.get("path", DEFAULT_DATA_PATH)
+    data = job.run(path)
     return data, job.task_id
 
 

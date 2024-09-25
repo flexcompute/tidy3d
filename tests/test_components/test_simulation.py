@@ -2452,7 +2452,10 @@ def test_sim_subsection(unstructured, nz):
     sim_red = SIM_FULL.subsection(region=region, monitors=[])
     assert len(sim_red.monitors) == 0
     sim_red = SIM_FULL.subsection(region=region, remove_outside_structures=False)
-    assert sim_red.structures == SIM_FULL.structures
+    assert len(sim_red.structures) == len(SIM_FULL.structures)
+    for strc_red, strc in zip(sim_red.structures, SIM_FULL.structures):
+        if strc.medium.nonlinear_spec is None:
+            assert strc == strc_red
     sim_red = SIM_FULL.subsection(region=region, remove_outside_custom_mediums=True)
 
     perm = td.SpatialDataArray(

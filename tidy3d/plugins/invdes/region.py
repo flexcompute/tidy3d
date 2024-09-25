@@ -11,6 +11,7 @@ import tidy3d as td
 from tidy3d.components.types import Coordinate, Size
 
 from .base import InvdesBaseModel
+from .initialization import InitializationSpecType, UniformInitializationSpec
 from .penalty import PenaltyType
 from .transformation import TransformationType
 
@@ -58,6 +59,12 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         "inside of the penalties directly through the ``.weight`` field.",
     )
 
+    initialization_spec: InitializationSpecType = pd.Field(
+        UniformInitializationSpec(value=0.5),
+        title="Initialization Specification",
+        description="Specification of how to initialize the parameters in the design region.",
+    )
+
     @property
     def geometry(self) -> td.Box:
         """``Box`` corresponding to this design region."""
@@ -94,6 +101,13 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     @abc.abstractmethod
     def to_structure(self, *args, **kwargs) -> td.Structure:
         """Convert this ``DesignRegion`` into a ``Structure`` with tracers. Implement in subs."""
+
+    @property
+    def initial_parameters(self) -> np.ndarray:
+        """Generate initial parameters based on the initialization specification."""
+        params0 = self.initialization_spec.create_parameters(self.params_shape)
+        self._check_params(params0)
+        return params0
 
 
 class TopologyDesignRegion(DesignRegion):
@@ -160,28 +174,40 @@ class TopologyDesignRegion(DesignRegion):
         num_pixels[np.isinf(num_pixels)] = 1
         return tuple(int(n) for n in num_pixels)
 
+    def _warn_deprecate_params(self):
+        td.log.warning(
+            "Parameter initialization via design region methods is deprecated and will be "
+            "removed in the future. Please specify this through the design region's "
+            "'initialization_spec' instead."
+        )
+
     def params_uniform(self, value: float) -> np.ndarray:
         """Make an array of parameters with all the same value."""
+        self._warn_deprecate_params()
         return value * np.ones(self.params_shape)
 
     @property
     def params_random(self) -> np.ndarray:
         """Convenience for generating random parameters between (0,1) with correct shape."""
+        self._warn_deprecate_params()
         return np.random.random(self.params_shape)
 
     @property
     def params_zeros(self):
         """Convenience for generating random parameters of all 0 values with correct shape."""
+        self._warn_deprecate_params()
         return self.params_uniform(0.0)
 
     @property
     def params_half(self):
         """Convenience for generating random parameters of all 0.5 values with correct shape."""
+        self._warn_deprecate_params()
         return self.params_uniform(0.5)
 
     @property
     def params_ones(self):
         """Convenience for generating random parameters of all 1 values with correct shape."""
+        self._warn_deprecate_params()
         return self.params_uniform(1.0)
 
     @property
@@ -216,7 +242,7 @@ class TopologyDesignRegion(DesignRegion):
         return eps_arr.reshape(params.shape)
 
     def to_structure(self, params: anp.ndarray) -> td.Structure:
-        """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
+        """Convert this ``DesignRegion`` into a custom ``Structure``."""
         self._check_params(params)
 
         coords = self.coords

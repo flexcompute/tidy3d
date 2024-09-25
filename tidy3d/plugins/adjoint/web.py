@@ -331,7 +331,7 @@ def webapi_run_adjoint_fwd(
         jax_info=jax_info,
     )
 
-    sim_data = job.run()
+    sim_data = job.run(path=path)
     return sim_data, job.task_id
 
 

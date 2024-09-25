@@ -341,7 +341,20 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _data_on_yee_grid(self) -> ModeSolverData:
         """Solve for all modes, and construct data with fields on the Yee grid."""
-        solver = self.reduced_simulation_copy
+
+        # we try to do reduced simulation copy for efficiency
+        # it should never fail -- if it does, this is likely due to an oversight
+        # in the Simulation.subsection method. but falling back to non-reduced
+        # simulation prevents unneeded errors in this case
+        try:
+            solver = self.reduced_simulation_copy
+        except Exception as e:
+            solver = self
+            log.warning(
+                "Mode solver reduced_simulation_copy failed. "
+                "Falling back to non-reduced simulation, which may be slower. "
+                f"Exception: {str(e)}"
+            )
 
         _, _solver_coords = solver.plane.pop_axis(
             solver._solver_grid.boundaries.to_list, axis=solver.normal_axis

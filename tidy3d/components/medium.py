@@ -159,6 +159,12 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
         """Any additional validation that depends on the central frequencies of the sources."""
         pass
 
+    def _hardcode_medium_freqs(
+        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+    ) -> NonlinearSpec:
+        """Update the nonlinear model to hardcode information on medium and freqs."""
+        return self
+
     def _get_freq0(self, freq0, freqs: List[pd.PositiveFloat]) -> float:
         """Get a single value for freq0."""
 
@@ -426,6 +432,14 @@ class TwoPhotonAbsorption(NonlinearModel):
                     "gain medium are unstable, and are likely to diverge."
                 )
 
+    def _hardcode_medium_freqs(
+        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+    ) -> TwoPhotonAbsorption:
+        """Update the nonlinear model to hardcode information on medium and freqs."""
+        n0 = self._get_n0(n0=self.n0, medium=medium, freqs=freqs)
+        freq0 = self._get_freq0(freq0=self.freq0, freqs=freqs)
+        return self.updated_copy(n0=n0, freq0=freq0)
+
     def _validate_medium(self, medium: AbstractMedium):
         """Check that the model is compatible with the medium."""
         # if n0 is specified, we can go ahead and validate passivity
@@ -515,6 +529,13 @@ class KerrNonlinearity(NonlinearModel):
                     "gain medium are unstable, and are likely to diverge."
                 )
 
+    def _hardcode_medium_freqs(
+        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+    ) -> KerrNonlinearity:
+        """Update the nonlinear model to hardcode information on medium and freqs."""
+        n0 = self._get_n0(n0=self.n0, medium=medium, freqs=freqs)
+        return self.updated_copy(n0=n0)
+
     def _validate_medium(self, medium: AbstractMedium):
         """Check that the model is compatible with the medium."""
         # if n0 is specified, we can go ahead and validate passivity
@@ -583,6 +604,16 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
                 f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
             )
         return val
+
+    def _hardcode_medium_freqs(
+        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+    ) -> NonlinearSpec:
+        """Update the nonlinear spec to hardcode information on medium and freqs."""
+        new_models = []
+        for model in self.models:
+            new_model = model._hardcode_medium_freqs(medium=medium, freqs=freqs)
+            new_models.append(new_model)
+        return self.updated_copy(models=new_models)
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):

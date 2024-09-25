@@ -1,6 +1,8 @@
 import autograd.numpy as np
 from numpy.typing import NDArray
 
+from ..constants import BETA_DEFAULT, ETA_DEFAULT
+
 
 def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> NDArray:
     """Apply a piecewise linear ramp projection to an array.
@@ -13,16 +15,16 @@ def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> 
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to be projected.
-    width : float, optional
-        The width of the ramp. Default is 0.1.
-    center : float, optional
-        The center of the ramp. Default is 0.5.
+    width : float = 0.1
+        The width of the ramp.
+    center : float 0.5
+        The center of the ramp.
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The array after applying the ramp projection.
     """
     ll = array <= (center - width / 2)
@@ -38,7 +40,9 @@ def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> 
     )
 
 
-def tanh_projection(array: NDArray, beta: float = 1.0, eta: float = 0.5) -> NDArray:
+def tanh_projection(
+    array: NDArray, beta: float = BETA_DEFAULT, eta: float = ETA_DEFAULT
+) -> NDArray:
     """Apply a tanh-based soft-thresholding projection to an array.
 
     This function performs a tanh projection on the input array, which is a common
@@ -47,17 +51,16 @@ def tanh_projection(array: NDArray, beta: float = 1.0, eta: float = 0.5) -> NDAr
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to be projected.
-    beta : float, optional
+    beta : float = BETA_DEFAULT
         The steepness of the projection. Higher values result in a sharper transition.
-        Default is 1.0.
-    eta : float, optional
-        The midpoint of the projection. Default is 0.5.
+    eta : float = ETA_DEFAULT
+        The midpoint of the projection.
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The array after applying the tanh projection.
     """
     if beta == 0:
