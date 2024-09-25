@@ -63,8 +63,10 @@ class ModeAmp(Metric):
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
         data = super().evaluate(*args, **kwargs)
-        amps = data[self.monitor_name].amps.sel(
-            direction=self.direction, mode_index=self.mode_index, f=self.freqs[0]
+        amps = (
+            data[self.monitor_name]
+            .amps.sel(direction=self.direction, mode_index=self.mode_index)
+            .isel(f=0)
         )
         return anp.squeeze(amps.values.tolist())
 
