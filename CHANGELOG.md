@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Some validation fixes for design region.
+
 ## [2.7.4] - 2024-09-25
 
 ### Added

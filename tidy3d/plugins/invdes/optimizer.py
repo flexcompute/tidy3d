@@ -10,6 +10,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
+from tidy3d.components.types import TYPE_TAG_STR
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
@@ -23,6 +24,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         ...,
         title="Inverse Design Specification",
         description="Specification describing the inverse design problem we wish to optimize.",
+        discriminator=TYPE_TAG_STR,
     )
 
     learning_rate: pd.NonNegativeFloat = pd.Field(
