@@ -95,6 +95,18 @@ def test_region_params():
     _ = design_region.params_zeros
 
 
+def test_region_uniform():
+    """Test parameter shape for uniform dimensions"""
+    region = make_design_region()
+    shape = region.params_shape
+
+    test_region = region.updated_copy(uniform=(1, 1, 1))
+    assert test_region.params_shape == (1, 1, 1)
+
+    test_region = region.updated_copy(uniform=(1, 0, 1))
+    assert test_region.params_shape == (1, *shape[1:])
+
+
 def test_region_penalties():
     """Test evaluation of penalties of a ``TopologyDesignRegion``."""
 
