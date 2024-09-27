@@ -396,8 +396,6 @@ class FieldProjector(Tidy3dBaseModel):
             With leading dimension containing ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``
             projected fields for each frequency.
         """
-        pts = [currents[name].values for name in ["x", "y", "z"]]
-
         try:
             currents_f = currents.sel(f=frequency)
         except Exception as e:
@@ -429,53 +427,68 @@ class FieldProjector(Tidy3dBaseModel):
             medium=medium, frequency=frequency
         )
 
-        st = np.sin(theta)
-        ct = np.cos(theta)
-        sp = np.sin(phi)
-        cp = np.cos(phi)
+        sin_theta = np.sin(theta)
+        cos_theta = np.cos(theta)
+        sin_phi = np.sin(phi)
+        cos_phi = np.cos(phi)
+
+        pts = [currents[name].values for name in ["x", "y", "z"]]
+
+        phase_0 = np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[0], sin_theta, cos_phi))
+        phase_1 = np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[1], sin_theta, sin_phi))
+        phase_2 = np.exp(np.einsum("i,j->ij", propagation_factor * pts[2], cos_theta))
+
+        E1 = "E" + cmp_1
+        E2 = "E" + cmp_2
+        H1 = "H" + cmp_1
+        H2 = "H" + cmp_2
 
         expr = oe.contract_expression(
             "xtp,ytp,zt,xyz->xyztp",
-            np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[0], st, cp)),
-            np.exp(np.einsum("i,j,k->ijk", propagation_factor * pts[1], st, sp)),
-            np.exp(np.einsum("i,j->ij", propagation_factor * pts[2], ct)),
-            currents_f[f"E{cmp_1}"].shape,
+            phase_0,
+            phase_1,
+            phase_2,
+            currents_f[E1].shape,
             constants=(0, 1, 2),
             optimize="optimal",
         )
 
         jm = []
-        for eh_key in (f"E{cmp_1}", f"E{cmp_2}", f"H{cmp_1}", f"H{cmp_2}"):
-            vals = currents_f[eh_key].attrs.get(AUTOGRAD_KEY, currents_f[eh_key].values)
-            vals = anp.reshape(vals, currents_f[eh_key].shape)
-            ehp = expr(vals, backend="autograd")
-            single_spatial_dim = tuple(np.argwhere(np.array(ehp.shape[:3]) == 1).ravel())
-            ehp = anp.squeeze(ehp, axis=single_spatial_dim)
+        for field_component in (E1, E2, H1, H2):
+            currents = currents_f[field_component].attrs.get(
+                AUTOGRAD_KEY, currents_f[field_component].values
+            )
+            currents = anp.reshape(currents, currents_f[field_component].shape)
+            currents_phase = expr(currents, backend="autograd")
+            single_spatial_dim_ax = tuple(
+                np.argwhere(np.array(currents_phase.shape[:3]) == 1).ravel()
+            )
+            currents_phase = anp.squeeze(currents_phase, axis=single_spatial_dim_ax)
 
             if self.is_2d_simulation:
-                jm.append(self.integrate_1d(ehp, pts[idx_int_1d]))
+                jm.append(self.integrate_1d(currents_phase, pts[idx_int_1d]))
             else:
-                jm.append(self.integrate_2d(ehp, pts[idx_u], pts[idx_v]))
+                jm.append(self.integrate_2d(currents_phase, pts[idx_u], pts[idx_v]))
 
         order = [idx_u, idx_v, idx_w]
         zeros = np.zeros((len(theta), len(phi)))
         J = anp.array([*jm[:2], zeros])[order]
         M = anp.array([*jm[2:], zeros])[order]
 
-        ct_cp = ct[:, None] * cp[None, :]
-        ct_sp = ct[:, None] * sp[None, :]
+        cos_theta_cos_phi = cos_theta[:, None] * cos_phi[None, :]
+        cos_theta_sin_phi = cos_theta[:, None] * sin_phi[None, :]
 
         # Ntheta (8.33a)
-        Ntheta = J[0] * ct_cp + J[1] * ct_sp - J[2] * st[:, None]
+        Ntheta = J[0] * cos_theta_cos_phi + J[1] * cos_theta_sin_phi - J[2] * sin_theta[:, None]
 
         # Nphi (8.33b)
-        Nphi = -J[0] * sp[None, :] + J[1] * cp[None, :]
+        Nphi = -J[0] * sin_phi[None, :] + J[1] * cos_phi[None, :]
 
         # Ltheta  (8.34a)
-        Ltheta = M[0] * ct_cp + M[1] * ct_sp - M[2] * st[:, None]
+        Ltheta = M[0] * cos_theta_cos_phi + M[1] * cos_theta_sin_phi - M[2] * sin_theta[:, None]
 
         # Lphi  (8.34b)
-        Lphi = -M[0] * sp[None, :] + M[1] * cp[None, :]
+        Lphi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
 
         eta = ETA_0 / np.sqrt(medium.eps_model(frequency))
 
