@@ -3315,7 +3315,7 @@ files = [
 name = "opt-einsum"
 version = "3.3.0"
 description = "Optimizing numpys einsum function"
-optional = false
+optional = true
 python-versions = ">=3.5"
 files = [
     {file = "opt_einsum-3.3.0-py3-none-any.whl", hash = "sha256:2455e59e3947d3c275477df7f5205b30635e266fe6dc300e3d9f9646bfcea147"},
@@ -6007,4 +6007,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0.0"
-content-hash = "eb8b36129a5dbbc86fd6ad53dacb5f1463972f2b70e3e1bb5341d61661088bb8"
+content-hash = "d1e2bc786fd54b77adb7536b3ef62341ed299eab8afb765a23eacb10ebbea707"

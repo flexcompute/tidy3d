@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
 import autograd.numpy as anp
 import numpy as np
-import opt_einsum as oe
 import pydantic.v1 as pydantic
 import xarray as xr
 from rich.progress import track
@@ -353,14 +352,34 @@ class FieldProjector(Tidy3dBaseModel):
         return currents
 
     @staticmethod
-    def integrate_1d(ary: np.ndarray, pts_u: np.ndarray):
-        """Trapezoidal integration in one dimensions."""
-        return trapz(ary, pts_u, axis=0)
+    def trapezoid(
+        ary: np.ndarray,
+        pts: Union[Iterable[np.ndarray], np.ndarray],
+        axes: Union[Iterable[int], int] = 0,
+    ):
+        """Trapezoidal integration in n dimensions.
 
-    @staticmethod
-    def integrate_2d(ary: np.ndarray, pts_u: np.ndarray, pts_v: np.ndarray):
-        """Trapezoidal integration in two dimensions."""
-        return trapz(trapz(ary, pts_u, axis=0), pts_v, axis=0)
+        Parameters
+        ----------
+        ary : np.ndarray
+            Array to integrate.
+        pts : Iterable[np.ndarray]
+            Iterable of points for each dimension.
+        axes : Union[Iterable[int], int]
+            Iterable of axes along which to integrate. If not an iterable, assume 1D integration.
+
+        Returns
+        -------
+        np.ndarray
+            Integrated array.
+        """
+        if not isinstance(axes, Iterable):
+            axes = [axes]
+            pts = [pts]
+
+        for idx, (axis, pt) in enumerate(zip(axes, pts)):
+            ary = trapz(ary, pt, axis=axis - idx)
+        return ary
 
     def _far_fields_for_surface(
         self,
@@ -443,15 +462,8 @@ class FieldProjector(Tidy3dBaseModel):
         H1 = "H" + cmp_1
         H2 = "H" + cmp_2
 
-        expr = oe.contract_expression(
-            "xtp,ytp,zt,xyz->xyztp",
-            phase_0,
-            phase_1,
-            phase_2,
-            currents_f[E1].shape,
-            constants=(0, 1, 2),
-            optimize="optimal",
-        )
+        def contract(currents):
+            return anp.einsum("xtp,ytp,zt,xyz->xyztp", phase_0, phase_1, phase_2, currents)
 
         jm = []
         for field_component in (E1, E2, H1, H2):
@@ -459,19 +471,17 @@ class FieldProjector(Tidy3dBaseModel):
                 AUTOGRAD_KEY, currents_f[field_component].values
             )
             currents = anp.reshape(currents, currents_f[field_component].shape)
-            currents_phase = expr(currents, backend="autograd")
-            single_spatial_dim_ax = tuple(
-                np.argwhere(np.array(currents_phase.shape[:3]) == 1).ravel()
-            )
-            currents_phase = anp.squeeze(currents_phase, axis=single_spatial_dim_ax)
+            currents_phase = contract(currents)
 
             if self.is_2d_simulation:
-                jm.append(self.integrate_1d(currents_phase, pts[idx_int_1d]))
+                jm_i = self.trapezoid(currents_phase, pts[idx_int_1d], idx_int_1d)
             else:
-                jm.append(self.integrate_2d(currents_phase, pts[idx_u], pts[idx_v]))
+                jm_i = self.trapezoid(currents_phase, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+
+            jm.append(anp.reshape(jm_i, (len(theta), len(phi))))
 
         order = [idx_u, idx_v, idx_w]
-        zeros = np.zeros((len(theta), len(phi)))
+        zeros = np.zeros(jm[0].shape)
         J = anp.array([*jm[:2], zeros])[order]
         M = anp.array([*jm[2:], zeros])[order]
 
@@ -865,18 +875,18 @@ class FieldProjector(Tidy3dBaseModel):
 
         # set the surface current density Cartesian components
         order = [idx_u, idx_v, idx_w]
-        zeros = anp.zeros_like(currents[f"E{cmp_1}"].values)
+        zeros = anp.zeros(currents[f"E{cmp_1}"].shape)
         J = anp.array(
             [
-                currents[f"E{cmp_1}"].values,
-                currents[f"E{cmp_2}"].values,
+                anp.array(currents[f"E{cmp_1}"].values.tolist()),
+                anp.array(currents[f"E{cmp_2}"].values.tolist()),
                 zeros,
             ]
         )[order]
         M = anp.array(
             [
-                currents[f"H{cmp_1}"].values,
-                currents[f"H{cmp_2}"].values,
+                anp.array(currents[f"H{cmp_1}"].values.tolist()),
+                anp.array(currents[f"H{cmp_2}"].values.tolist()),
                 zeros,
             ]
         )[order]
@@ -967,12 +977,12 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
         # integrate over the surface
-        e_x = self.integrate_2d(anp.squeeze(e_x_integrand), pts[idx_u], pts[idx_v])
-        e_y = self.integrate_2d(anp.squeeze(e_y_integrand), pts[idx_u], pts[idx_v])
-        e_z = self.integrate_2d(anp.squeeze(e_z_integrand), pts[idx_u], pts[idx_v])
-        h_x = self.integrate_2d(anp.squeeze(h_x_integrand), pts[idx_u], pts[idx_v])
-        h_y = self.integrate_2d(anp.squeeze(h_y_integrand), pts[idx_u], pts[idx_v])
-        h_z = self.integrate_2d(anp.squeeze(h_z_integrand), pts[idx_u], pts[idx_v])
+        e_x = self.trapezoid(e_x_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        e_y = self.trapezoid(e_y_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        e_z = self.trapezoid(e_z_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        h_x = self.trapezoid(h_x_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        h_y = self.trapezoid(h_y_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
+        h_z = self.trapezoid(h_z_integrand, (pts[idx_u], pts[idx_v]), (idx_u, idx_v))
 
         # observation point in the original spherical system
         _, theta_obs, phi_obs = surface.monitor.car_2_sph(x, y, z)

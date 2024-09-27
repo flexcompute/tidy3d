@@ -1004,13 +1004,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
 
 @pytest.mark.parametrize("far_field_approx", [True, False])
 @pytest.mark.parametrize("projection_type", ["angular", "cartesian"])
-@pytest.mark.parametrize(
-    "sim_2d",
-    [
-        True,
-        pytest.param(False, marks=pytest.mark.skip(reason="Very slow, but passes")),
-    ],
-)
+@pytest.mark.parametrize("sim_2d", [True, False])
 class TestFieldProjection:
     @staticmethod
     def setup(far_field_approx, projection_type, sim_2d):
