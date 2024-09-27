@@ -71,6 +71,10 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def initial_state(self, parameters: np.ndarray) -> dict:
         """The initial state of the optimizer."""
 
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized optimizer is ok for upload to our servers."""
+        pass
+
     def display_fn(self, result: InverseDesignResult, step_index: int) -> None:
         """Default display function while optimizing."""
         print(f"step ({step_index + 1}/{self.num_steps})")
