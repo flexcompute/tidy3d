@@ -10,4 +10,5 @@ extend-ignore = [
     "E731", # lambda assignment
     "F841", # unused local variable
     "S101", # asserts allowed in tests
+    "NPY201", # numpy 2.* compatibility check
 ]

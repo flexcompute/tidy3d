@@ -1,8 +1,6 @@
 # Automatic Differentiation in Tidy3D
 
-### Context
-
-As of version 2.7.0, `tidy3d` supports the ability to differentiate functions involving a `web.run` of a `tidy3d` simulation. This allows users to optimize objective functions involving `tidy3d` simulations using gradient-descent. This gradient calculation is done under the hood using the adjoint method, which requires just 1 additional simulation, no matter how many design parameters are involved.
+As of version 2.7.0, `tidy3d` supports the ability to differentiate functions involving a `web.run` of a `tidy3d` simulation. This allows users to optimize objective functions involving `tidy3d` simulations using gradient descent. This gradient calculation is done under the hood using the adjoint method, which requires just one additional simulation, regardless of the number of design parameters involved.
 
 This functionality was previously available using the `adjoint` plugin, which used `jax`. There were a few issues with this approach:
 
@@ -18,27 +16,27 @@ Automatic differentiation in 2.7 is built directly into `tidy3d`. One can perfor
 
 ```py
 def objective(eps: float) -> float:
+    structure = td.Structure(
+        medium=td.Medium(permittivity=eps),
+        geometry=td.Box(...),
+    )
 
-	structure = td.Structure(
-		medium=td.Medium(permittivity=eps),
-		geometry=td.Box(...),
-	)
+    sim = td.Simulation(
+        structures=[structure],
+        ...
+    )
 
-	sim = td.Simulation(
-		structures=[structure],
-		...
-	)
+    data = td.web.run(sim)
 
-	data = td.web.run(sim)
+    amps = data["mode"].amps.sel(mode_index=0).values
 
-	return np.sum(abs(data['mode'].amps.sel(mode_index=0).values))
+    return np.sum(np.abs(amps)**2)
 
 # compute derivative of objective(1.0) with respect to input
 autograd.grad(objective)(1.0)
-
 ```
 
-Instead of using `jax`, we now use the [autograd](https://github.com/HIPS/autograd) package for our "core" automatic differentiation. Many `tidy3d` components now accept and are now compatible with `autograd` arrays. Because `autograd` is far lighter and has very few requirements, it was made a core dependency of `tidy3d`. 
+Instead of using `jax`, we now use the [autograd](https://github.com/HIPS/autograd) package for our "core" automatic differentiation. Many `tidy3d` components now accept and are now compatible with `autograd` arrays. Because `autograd` is far lighter and has very few requirements, it was made a core dependency of `tidy3d`.
 
 While we use `autograd` internally, in the future, we will include wrappers so you can use automatic differentiation frameworks of your choice (e.g. `jax`, `pytorch`) without much of a change to the syntax.
 
@@ -69,6 +67,7 @@ jnp.sum(...)
 ```
 
 becomes
+
 ```py
 import autograd.numpy as anp
 anp.sum(...)
@@ -144,7 +143,12 @@ The following components are traceable as outputs of the `td.SimulationData`
   - `SimulationData.get_intensity`
   - `SimulationData.get_poynting`
 
+- Local field projections using `td.FieldProjector.project_fields()` for:
+  - `td.FieldProjectionAngleMonitor`
+  - `td.FieldProjectionCartesianMonitor`
+
 Other features
+
 - support for multi-frequency monitors in certain situations (single adjoint source).
 - server-side gradient processing by passing `local_gradient=False` to the `web` functions. This can dramatically cut down on data storage time, just be careful about using this with multi-frequency monitors and large design regions as it can lead to large data storage on our servers.
 
@@ -169,6 +173,7 @@ Happy autogradding!
 ## Developer Notes
 
 To convert existing tidy3d front end code to be autograd compatible, will need to be aware of
+
 - `numpy` -> `autograd.numpy`
 - `x.real` -> `np.real(x)``
 - `float()` is not supported as far as I can tell.
