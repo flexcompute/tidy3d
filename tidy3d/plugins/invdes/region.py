@@ -124,6 +124,13 @@ class TopologyDesignRegion(DesignRegion):
         "a value on the same order as the grid size.",
     )
 
+    uniform: tuple[bool, bool, bool] = pd.Field(
+        (False, False, True),
+        title="Uniform",
+        description="Axes along which the design should be uniform. By default, the structure "
+        "is assumed to be uniform, i.e. invariant, in the z direction.",
+    )
+
     transformations: typing.Tuple[TransformationType, ...] = pd.Field(
         (),
         title="Transformations",
@@ -166,12 +173,10 @@ class TopologyDesignRegion(DesignRegion):
     @property
     def params_shape(self) -> typing.Tuple[int, int, int]:
         """Shape of the parameters array in (x, y, z), given the ``pixel_size`` and bounds."""
-        # rmin, rmax = np.array(self.geometry.bounds)
-        # lengths = rmax - rmin
         side_lengths = np.array(self.size)
         num_pixels = np.ceil(side_lengths / self.pixel_size)
         # TODO: if the structure is infinite but the simulation is finite, need reduced bounds
-        num_pixels[np.isinf(num_pixels)] = 1
+        num_pixels[np.logical_or(np.isinf(num_pixels), self.uniform)] = 1
         return tuple(int(n) for n in num_pixels)
 
     def _warn_deprecate_params(self):
