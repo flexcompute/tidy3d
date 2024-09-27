@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Automatic differentiation support for local field projections with `FieldProjectionAngleMonitor` and `FieldProjectionCartesianMonitor` using `FieldProjector.project_fields(far_field_monitor)`.
+
 ### Fixed
 - Some validation fixes for design region.
 
@@ -35,7 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for autograd differentiation with respect to `Cylinder.radius` and `Cylinder.center` (for elements not along axis dimension).
 - `Cylinder.to_polyslab(num_pts_circumference, **kwargs)` to convert a cylinder into a discretized version represented by a `PolySlab`.
 - `tidy3d.plugins.invdes.Optimizer` now accepts an optional optimization direction via the `maximize` argument (defaults to `maximize=True`).
-- Automatic differentiation support for local field projections with `FieldProjectionAngleMonitor` and `FieldProjectionCartesianMonitor` using `FieldProjector.project_fields(far_field_monitor)`.
 
 ### Changed
 - `PolySlab` now raises error when differentiating and dilation causes damage to the polygon.
