@@ -1471,3 +1471,28 @@ def test_error_flux(use_emulated_run, log_capture):
         NotImplementedError, match="Could not formulate adjoint source for 'FluxMonitor' output"
     ):
         g = ag.grad(objective)(params0)
+
+
+def test_extraneous_field(use_emulated_run, log_capture):
+    """Make sure this doesnt fail."""
+
+    def objective(params):
+        structure_traced = make_structures(params)["medium"]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=[
+                SIM_BASE.monitors[0],
+                td.ModeMonitor(
+                    size=(1, 1, 0),
+                    center=(0, 0, 0),
+                    mode_spec=td.ModeSpec(),
+                    freqs=[FREQ0 * 0.9, FREQ0 * 1.1],
+                    name="mode",
+                ),
+            ],
+        )
+        data = run(sim, task_name="extra_field")
+        amp = data["mode"].amps.sel(direction="+", f=FREQ0 * 0.9, mode_index=0).values
+        return abs(anp.squeeze(amp.tolist())) ** 2
+
+    g = ag.grad(objective)(params0)
