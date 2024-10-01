@@ -181,7 +181,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     def get_path_dir(self, path_dir: str) -> None:
         """Check whether the supplied 'path_dir' matches the internal field value."""
 
-        if path_dir != self.path_dir:
+        if path_dir != self.path_dir and path_dir != DEFAULT_DATA_DIR:
             raise ValueError(
                 f"'path_dir' of '{path_dir}' passed, but 'ComponentModeler.path_dir' is "
                 f"{self.path_dir}. Moving forward, only the 'ComponentModeler.path_dir' will be "

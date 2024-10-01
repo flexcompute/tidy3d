@@ -395,3 +395,12 @@ def test_to_from_file_batch(tmp_path, monkeypatch):
     modeler2 = modeler.from_file(fname)
 
     assert modeler2.batch_cached == modeler2.batch == batch
+
+
+def test_non_default_path_dir(monkeypatch):
+    modeler = make_component_modeler(path_dir="not_default")
+    monkeypatch.setattr(ComponentModeler, "_construct_smatrix", lambda self: None)
+    modeler.run()
+    modeler.run(path_dir="not_default")
+    with pytest.raises(ValueError):
+        modeler.run(path_dir="a_new_path")
