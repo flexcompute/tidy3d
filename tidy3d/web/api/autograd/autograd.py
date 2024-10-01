@@ -3,6 +3,7 @@
 import tempfile
 import typing
 from collections import defaultdict
+from os.path import basename, dirname, join
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
@@ -862,6 +863,9 @@ def _run_tidy3d(
         verbose = run_kwargs.get("verbose", False)
         upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
     path = run_kwargs.get("path", DEFAULT_DATA_PATH)
+    if task_name.endswith("_adjoint"):
+        path_parts = basename(path).split(".")
+        path = join(dirname(path), path_parts[0] + "_adjoint." + ".".join(path_parts[1:]))
     data = job.run(path)
     return data, job.task_id
 
