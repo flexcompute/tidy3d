@@ -14,6 +14,7 @@ import trimesh
 from tidy3d.components.geometry.base import Planar
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
+from tidy3d.components.geometry.utils_2d import subdivide
 from tidy3d.constants import LARGE_NUMBER
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 
@@ -956,3 +957,20 @@ def test_update_from_bounds():
     for geom2d in geometries:
         with pytest.raises(NotImplementedError):
             geom_update = geom2d._update_from_bounds(bounds=new_bounds, axis=axis)
+
+
+def test_subdivide():
+    # Test the functionality that subdivides structures with Medium2D into partitions,
+    # where each partition is paired with homogeneous medium above and below
+    box = td.Box(size=(1, 1, 0))
+    overlap_box = td.Box(size=(2, 0.5, 0), center=(0.5, 0, 0))
+    # These overlapping boxes have their left edge coincident, and the second box has a smaller left edge.
+    # This results in an invalid geometry for MultiPolygon which must be fixed by applying a union
+    # operation in ``subdivide``. This should fix other types of invalid geometries as well.
+    overlapping_boxes = td.GeometryGroup(geometries=(box, overlap_box))
+
+    background_structure = td.Structure(medium=td.Medium(), geometry=td.Box(size=(10, 10, 10)))
+    subdivisions = subdivide(
+        geom=overlapping_boxes, axis=2, axis_dl=1e-5, structures=[background_structure]
+    )
+    assert len(subdivisions) == 1

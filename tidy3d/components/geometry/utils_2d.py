@@ -122,15 +122,13 @@ def subdivide(
     plane = {coord: center}
 
     # Convert input geometry into MultiPolygon shapely geometry and track the original structure that references the media properties
-    geom_shapely = Geometry.evaluate_inf_shape(
-        shapely.MultiPolygon(geom.intersections_plane(**plane))
-    )
+    geom_shapely = Geometry.evaluate_inf_shape(shapely.union_all(geom.intersections_plane(**plane)))
 
     plane[coord] = center + check_delta[1]
     above_shapely = [
         (
             Geometry.evaluate_inf_shape(
-                shapely.MultiPolygon(structure.geometry.intersections_plane(**plane))
+                shapely.union_all(structure.geometry.intersections_plane(**plane))
             ),
             structure,
         )
@@ -141,7 +139,7 @@ def subdivide(
     below_shapely = [
         [
             Geometry.evaluate_inf_shape(
-                shapely.MultiPolygon(structure.geometry.intersections_plane(**plane))
+                shapely.union_all(structure.geometry.intersections_plane(**plane))
             ),
             structure,
         ]
