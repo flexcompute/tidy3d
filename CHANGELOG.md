@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
 - Bug where lumped elements in the `Simulation` were being overwritten by the `TerminalComponentModeler`.
 - Bug in `Simulation.subsection` where lumped elements were not being correctly removed.
+- Bug when adding 2D structures to the `Simulation` that are composed of multiple overlapping polygons.
 
 ## [2.7.2] - 2024-08-07
 
