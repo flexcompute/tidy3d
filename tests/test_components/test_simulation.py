@@ -2407,11 +2407,14 @@ def test_to_gds(tmp_path):
 
 @pytest.mark.parametrize("nz", [13, 1])
 @pytest.mark.parametrize("unstructured", [True, False])
-def test_sim_subsection(unstructured, nz):
+def test_sim_subsection(unstructured, nz, log_capture):
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
     region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))
 
     sim_red = SIM_FULL.subsection(region=region)
+    # Ensure that in this first test case the lumped element is safely excluded
+    _ = sim_red.volumetric_structures
+    assert_log_level(log_capture, "WARNING")
     assert sim_red.structures != SIM_FULL.structures
     sim_red = SIM_FULL.subsection(
         region=region,

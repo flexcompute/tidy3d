@@ -1470,11 +1470,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # thus, recreate a box instance
         new_box = Box.from_bounds(*new_bounds)
 
-        # inheritance of structures, sources, monitors, and boundary specs
+        # inheritance of structures, lumped elements, sources, monitors, and boundary specs
         if remove_outside_structures:
             new_structures = [strc for strc in self.structures if new_box.intersects(strc.geometry)]
         else:
             new_structures = self.structures
+
+        new_lumped_elements = [
+            elem for elem in self.lumped_elements if new_box.intersects(elem.to_structure.geometry)
+        ]
 
         if sources is None:
             sources = [src for src in self.sources if new_box.intersects(src)]
@@ -1558,6 +1562,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             sources=sources,
             symmetry=symmetry,
             structures=new_structures,
+            lumped_elements=new_lumped_elements,
             **kwargs,
         )
 

@@ -840,6 +840,11 @@ SIM_FULL = td.Simulation(
             freqs=[1e14, 2e14],
         ),
     ),
+    lumped_elements=[
+        td.LumpedResistor(
+            center=(2, 2, 0), size=(0.2, 0.2, 0), name="Resistor", resistance=42, voltage_axis=0
+        )
+    ],
     symmetry=(0, 0, 0),
     boundary_spec=td.BoundarySpec(
         x=td.Boundary(plus=td.PML(num_layers=20), minus=td.Absorber(num_layers=100)),
