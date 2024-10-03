@@ -115,9 +115,15 @@ class SemiConductorSpec(ConductorSpec):
 
     # validators
     @pd.validator("acceptors", always=True)
-    def check_unsupported_geometries(cls, val):
+    def check_acceptors(cls, val):
         """Test validator"""
         print("Current acceptor: ", val)
+        return val
+
+    @pd.validator("donors", always=True)
+    def check_donors(cls, val):
+        """Test validator"""
+        print("Current donor: ", val)
         return val
 
 
