@@ -16,7 +16,7 @@ from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ...packaging import verify_packages_import
-from ..autograd import AutogradFieldMap, TracedFloat, TracedSize2D, TracedVertices, get_static
+from ..autograd import AutogradFieldMap, TracedFloat, TracedVertices, get_static
 from ..autograd.derivative_utils import DerivativeInfo
 from ..base import cached_property, skip_if_fields_missing
 from ..types import (
@@ -53,7 +53,7 @@ class PolySlab(base.Planar):
     >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     """
 
-    slab_bounds: TracedSize2D = pydantic.Field(
+    slab_bounds: tuple[TracedFloat, TracedFloat] = pydantic.Field(
         ...,
         title="Slab Bounds",
         description="Minimum and maximum positions of the slab along axis dimension.",
@@ -87,6 +87,7 @@ class PolySlab(base.Planar):
     @pydantic.validator("slab_bounds", always=True)
     def slab_bounds_order(cls, val):
         """Maximum position of the slab should be no smaller than its minimal position."""
+        lb, ub = map(get_static, val)
         if val[1] < val[0]:
             raise SetupError(
                 "Polyslab.slab_bounds must be specified in the order of "
@@ -188,6 +189,8 @@ class PolySlab(base.Planar):
         of polygons/holes, and changes in vertices number.
         """
         sidewall_angle = get_static(values["sidewall_angle"])
+        dilation = get_static(values["dilation"])
+        slab_bounds = tuple(map(get_static, values["slab_bounds"]))
 
         # no need to validate anything here
         if isclose(sidewall_angle, 0):
@@ -195,12 +198,12 @@ class PolySlab(base.Planar):
 
         # apply dilation
         poly_ref = PolySlab._proper_vertices(val)
-        if not isclose(values["dilation"], 0):
-            poly_ref = PolySlab._shift_vertices(poly_ref, values["dilation"])[0]
+        if not isclose(dilation, 0):
+            poly_ref = PolySlab._shift_vertices(poly_ref, dilation)[0]
             poly_ref = PolySlab._heal_polygon(poly_ref)
 
         # Fist, check vertex-vertex crossing at any point during extrusion
-        length = values["slab_bounds"][1] - values["slab_bounds"][0]
+        length = slab_bounds[1] - slab_bounds[0]
         dist = [-length * np.tan(sidewall_angle)]
         # reverse the dilation value if it's defined on the top
         if values["reference_plane"] == "top":

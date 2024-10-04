@@ -30,7 +30,6 @@ Box.__deepcopy__ = lambda v, memo: _deepcopy(v, memo)
 TracedFloat = typing.Union[float, Box]
 TracedPositiveFloat = typing.Union[pd.PositiveFloat, Box]
 TracedSize1D = typing.Union[Size1D, Box]
-TracedSize2D = typing.Union[tuple[TracedSize1D, TracedSize1D], Box]
 TracedSize = typing.Union[tuple[TracedSize1D, TracedSize1D, TracedSize1D], Box]
 TracedCoordinate = typing.Union[tuple[TracedFloat, TracedFloat, TracedFloat], Box]
 TracedVertices = typing.Union[ArrayFloat2D, Box]
