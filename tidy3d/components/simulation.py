@@ -2527,9 +2527,11 @@ class Simulation(AbstractYeeGridSimulation):
 
         sim_size = values.get("size")
         boundaries = values.get("boundary_spec").to_list
+        axis_names = "xyz"
 
         is_3d_simulation = sim_size.count(0.0) == 0
-        for boundary in range(boundaries):
+        for dim, boundary in enumerate(boundaries):
+            axis = axis_names[dim]
             num_periodic_bloch_boundaries = sum(
                 isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary
             )
@@ -2538,7 +2540,7 @@ class Simulation(AbstractYeeGridSimulation):
                     if isinstance(monitor, AbstractFieldProjectionMonitor) and is_3d_simulation:
                         raise SetupError(
                             f"Using 'FieldProjectionMonitor' '{monitor.name}' "
-                            f"with periodic/Bloch boundaries would lead to incorrect results. "
+                            f"with periodic/Bloch boundaries along the {axis} axis would lead to incorrect results. "
                             f"Please use 'DiffractionMonitor' for transmission/reflection"
                             "analysis with periodic/Bloch boundaries."
                         )
