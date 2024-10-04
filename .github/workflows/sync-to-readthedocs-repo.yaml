@@ -8,7 +8,7 @@ on:
       - latest
       - develop
       - 'pre/*'
-      - 'demo/test/*'
+      - 'demo/*'
     tags:
       - 'v*'
       - 'demo/*'
