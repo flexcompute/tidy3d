@@ -6,6 +6,7 @@ from .types import (
     TracedFloat,
     TracedSize,
     TracedSize1D,
+    TracedSize2D,
     TracedVertices,
 )
 from .utils import get_static
@@ -13,6 +14,7 @@ from .utils import get_static
 __all__ = [
     "TracedFloat",
     "TracedSize1D",
+    "TracedSize2D",
     "TracedSize",
     "TracedCoordinate",
     "TracedVertices",

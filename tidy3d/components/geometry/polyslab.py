@@ -16,7 +16,7 @@ from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ...packaging import verify_packages_import
-from ..autograd import AutogradFieldMap, TracedVertices, get_static
+from ..autograd import AutogradFieldMap, TracedFloat, TracedSize2D, TracedVertices, get_static
 from ..autograd.derivative_utils import DerivativeInfo
 from ..base import cached_property, skip_if_fields_missing
 from ..types import (
@@ -53,14 +53,14 @@ class PolySlab(base.Planar):
     >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     """
 
-    slab_bounds: Tuple[float, float] = pydantic.Field(
+    slab_bounds: TracedSize2D = pydantic.Field(
         ...,
         title="Slab Bounds",
         description="Minimum and maximum positions of the slab along axis dimension.",
         units=MICROMETER,
     )
 
-    dilation: float = pydantic.Field(
+    dilation: TracedFloat = pydantic.Field(
         0.0,
         title="Dilation",
         description="Dilation of the supplied polygon by shifting each edge along its "
@@ -133,12 +133,12 @@ class PolySlab(base.Planar):
         For 1), we issue an error since it is yet to be supported;
         For 2), we heal the polygon, and warn that the polygon has been cleaned up.
         """
+        dist = get_static(values["dilation"])
         # no need to validate anything here
-        if isclose(values["dilation"], 0):
+        if isclose(dist, 0):
             return val
 
         val_np = PolySlab._proper_vertices(val)
-        dist = values["dilation"]
 
         # 0) fully eroded
         if dist < 0 and dist < -PolySlab._maximal_erosion(val_np):
@@ -187,9 +187,10 @@ class PolySlab(base.Planar):
         To detect this, we sample _N_SAMPLE_POLYGON_INTERSECT cross sections to see if any creation
         of polygons/holes, and changes in vertices number.
         """
+        sidewall_angle = get_static(values["sidewall_angle"])
 
         # no need to validate anything here
-        if isclose(values["sidewall_angle"], 0):
+        if isclose(sidewall_angle, 0):
             return val
 
         # apply dilation
@@ -200,7 +201,7 @@ class PolySlab(base.Planar):
 
         # Fist, check vertex-vertex crossing at any point during extrusion
         length = values["slab_bounds"][1] - values["slab_bounds"][0]
-        dist = [-length * np.tan(values["sidewall_angle"])]
+        dist = [-length * np.tan(sidewall_angle)]
         # reverse the dilation value if it's defined on the top
         if values["reference_plane"] == "top":
             dist = [-dist[0]]
@@ -247,7 +248,7 @@ class PolySlab(base.Planar):
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
-        sidewall_angle: float = 0,
+        sidewall_angle: float = 0.0,
         reference_plane: PlanePosition = "middle",
     ) -> List[PolySlab]:
         """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
