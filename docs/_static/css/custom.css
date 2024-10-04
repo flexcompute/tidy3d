@@ -29,6 +29,14 @@ iframe {width: 100%;border: unset}
 .toctree-wrapper li[class^=toctree-l3]>a {font-size: 0.9em; text-decoration: none}
 .toctree-wrapper li[class^=toctree-l4]>a {font-size: 0.9em; text-decoration: none}
 
+.toctree-wrapper.example-notebook-toc li[class^=toctree-l1] > a::before {
+    content: "📘 ";  /* Emoji before the link */
+}
+
+.toctree-wrapper.example-notebook-toc li[class^=toctree-l1] > a:hover::before {
+    content: "📖 ";  /* Change emoji on hover */
+}
+
 html[data-theme="light"] {
     --pst-color-primary: #b5445b;
     --pst-color-secondary: #4772ae;
