@@ -12,6 +12,7 @@ from rich.progress import track
 from ..constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
 from ..exceptions import SetupError
 from ..log import get_logging_console
+from ..packaging import get_numpy_major_version
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import (
     FieldProjectionAngleDataArray,
@@ -355,7 +356,11 @@ class FieldProjector(Tidy3dBaseModel):
         pts_u: np.ndarray,
     ):
         """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)  # noqa: NPY201
+        if get_numpy_major_version() == "2":
+            integration = np.trapezoid(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)  # noqa: NPY201
+        else:
+            integration = np.trapz(np.squeeze(function) * np.squeeze(phase), pts_u, axis=0)  # noqa: NPY201
+        return integration
 
     def integrate_2d(
         self,
@@ -365,7 +370,17 @@ class FieldProjector(Tidy3dBaseModel):
         pts_v: np.ndarray,
     ):
         """Trapezoidal integration in two dimensions."""
-        return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)  # noqa: NPY201
+        if get_numpy_major_version() == "2":
+            integration = np.trapezoid(
+                np.trapezoid(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0
+            )  # noqa: NPY201
+        else:
+            integration = np.trapz(  # noqa: NPY201
+                np.trapz(np.squeeze(function) * phase, pts_u, axis=0),  # noqa: NPY201
+                pts_v,
+                axis=0,  # noqa: NPY201
+            )  # noqa: NPY201
+        return integration
 
     def _far_fields_for_surface(
         self,
