@@ -16,7 +16,6 @@ import tidy3d as td
 import tidy3d.web as web
 import xarray as xr
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.data.sim_data import AdjointSourceInfo
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.utils import FieldMap
 
@@ -197,15 +196,12 @@ def use_emulated_run(monkeypatch):
             # get the original traced fields
             sim_fields_keys = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS]
 
-            adjoint_source_info = AdjointSourceInfo(sources=[], post_norm=1.0, normalize_sim=True)
-
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
                 sim_data_adj=sim_data_adj,
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_keys=sim_fields_keys,
-                adjoint_source_info=adjoint_source_info,
             )
 
             return traced_fields_vjp
@@ -1475,3 +1471,28 @@ def test_error_flux(use_emulated_run, log_capture):
         NotImplementedError, match="Could not formulate adjoint source for 'FluxMonitor' output"
     ):
         g = ag.grad(objective)(params0)
+
+
+def test_extraneous_field(use_emulated_run, log_capture):
+    """Make sure this doesnt fail."""
+
+    def objective(params):
+        structure_traced = make_structures(params)["medium"]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=[
+                SIM_BASE.monitors[0],
+                td.ModeMonitor(
+                    size=(1, 1, 0),
+                    center=(0, 0, 0),
+                    mode_spec=td.ModeSpec(),
+                    freqs=[FREQ0 * 0.9, FREQ0 * 1.1],
+                    name="mode",
+                ),
+            ],
+        )
+        data = run(sim, task_name="extra_field")
+        amp = data["mode"].amps.sel(direction="+", f=FREQ0 * 0.9, mode_index=0).values
+        return abs(anp.squeeze(amp.tolist())) ** 2
+
+    g = ag.grad(objective)(params0)

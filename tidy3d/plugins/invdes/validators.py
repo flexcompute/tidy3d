@@ -5,6 +5,7 @@ import typing
 import pydantic.v1 as pd
 
 import tidy3d as td
+from tidy3d.components.base import skip_if_fields_missing
 
 # warn if pixel size is > PIXEL_SIZE_WARNING_THRESHOLD * (minimum wavelength in material)
 PIXEL_SIZE_WARNING_THRESHOLD = 0.1
@@ -45,9 +46,9 @@ def check_pixel_size(sim_field_name: str):
             )
 
     @pd.root_validator(allow_reuse=True)
+    @skip_if_fields_missing(["design_region"], root=True)
     def _check_pixel_size(cls, values):
         """Make sure region pixel_size isn't too large compared to sim's wavelength in material."""
-
         sim = values.get(sim_field_name)
         region = values.get("design_region")
         pixel_size = region.pixel_size

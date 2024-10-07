@@ -1093,6 +1093,10 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 if not np.all(values == 0):
                     src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
 
+            # dont include this source if no data
+            if all(fld_cmp is None for fld_cmp in src_field_components.values()):
+                continue
+
             # construct custom Current source
             dataset = FieldDataset(**src_field_components)
             custom_source = CustomCurrentSource(

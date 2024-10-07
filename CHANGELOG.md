@@ -5,6 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `TopologyDesignRegion` is now invariant in `z` by default and supports assigning dimensions along which a design should be uniform via `TopologyDesignRegion(uniform=(bool, bool, bool))`.
+
+### Fixed
+- Some validation fixes for design region.
+- Bug in adjoint source creation that included empty sources for extraneous `FieldMonitor` objects, triggering unnecessary errors.
+
 ## [2.7.4] - 2024-09-25
 
 ### Added

@@ -91,22 +91,28 @@ def _get_valid_extension(fname: str) -> str:
     )
 
 
-def skip_if_fields_missing(fields: List[str]):
+def skip_if_fields_missing(fields: List[str], root=False):
     """Decorate ``validator`` to check that other fields have passed validation."""
 
     def actual_decorator(validator):
         @wraps(validator)
-        def _validator(cls, val, values):
+        def _validator(cls, *args, **kwargs):
             """New validator function."""
+            values = kwargs.get("values")
+            if values is None:
+                values = args[0] if root else args[1]
             for field in fields:
                 if field not in values:
                     log.warning(
                         f"Could not execute validator '{validator.__name__}' because field "
                         f"'{field}' failed validation."
                     )
-                    return val
+                    if root:
+                        return values
+                    else:
+                        return kwargs.get("val") if "val" in kwargs.keys() else args[0]
 
-            return validator(cls, val, values)
+            return validator(cls, *args, **kwargs)
 
         return _validator
 

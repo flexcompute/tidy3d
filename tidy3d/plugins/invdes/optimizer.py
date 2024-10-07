@@ -10,6 +10,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
+from tidy3d.components.types import TYPE_TAG_STR
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
@@ -23,6 +24,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         ...,
         title="Inverse Design Specification",
         description="Specification describing the inverse design problem we wish to optimize.",
+        discriminator=TYPE_TAG_STR,
     )
 
     learning_rate: pd.NonNegativeFloat = pd.Field(
@@ -68,6 +70,10 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     @abc.abstractmethod
     def initial_state(self, parameters: np.ndarray) -> dict:
         """The initial state of the optimizer."""
+
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized optimizer is ok for upload to our servers."""
+        pass
 
     def display_fn(self, result: InverseDesignResult, step_index: int) -> None:
         """Default display function while optimizing."""

@@ -136,8 +136,7 @@ def validate_mode_objects_symmetry(field_name: str):
                         and geometric_object.center[dim] != sim_center[dim]
                     ):
                         raise SetupError(
-                            f"Mode object '{geometric_object}' "
-                            f"(at 'simulation.{field_name}[{position_index}]') "
+                            f"{obj_type} at 'simulation.{field_name}[{position_index}]' "
                             "in presence of symmetries must be in the main quadrant, "
                             "or centered on the symmetry axis."
                         )

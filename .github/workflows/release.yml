@@ -81,7 +81,7 @@ jobs:
       if: contains(github.ref, 'rc') == false
       uses: everlytic/branch-merge@1.1.2
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.GH_PAT }}
         source_ref: ${{ github.ref }}
         target_branch: "latest"
         commit_message_template: ':tada: RELEASE: Merged {source_ref} into target {target_branch}'
@@ -90,7 +90,7 @@ jobs:
       with:
         generate_release_notes: true      
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
   pypi-release:
     runs-on: ubuntu-latest
     steps:
@@ -119,7 +119,7 @@ jobs:
       if: contains(github.ref, 'rc') == false
       uses: everlytic/branch-merge@1.1.2
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.GH_PAT }}
         source_ref: "latest"
         target_branch: "develop"
         commit_message_template: ':tada: RELEASE: Synced latest into develop'
