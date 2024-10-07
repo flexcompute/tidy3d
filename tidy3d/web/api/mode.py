@@ -231,6 +231,10 @@ def run_batch(
 
     if verbose:
         console.log(f"[cyan]Running a batch of [deep_pink4]{num_mode_solvers} mode solvers.\n")
+
+        # Create the common folder before running the parallel computation
+        _ = Folder.create(folder_name=folder_name)
+
         with Progress(console=console) as progress:
             pbar = progress.add_task("Status:", total=num_mode_solvers)
             results = Parallel(n_jobs=max_workers, backend="threading")(
