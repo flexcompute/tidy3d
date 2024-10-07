@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for arbitrary padding sizes for all padding modes in `tidy3d.plugins.autograd.functions.pad`.
 - `Expression.filter(target_type, target_field)` method for extracting object instances and fields from nested expressions.
 - Additional constraints and validation logic to ensure correct setup of optimization problems in `invdes` plugin.
+- `tidy3d.plugins.pytorch` to wrap autograd functions for interoperability with PyTorch via the `to_torch` wrapper.
 
 ### Changed
 - Renamed `Metric.freqs` --> `Metric.f` and made frequency argument optional, in which case all frequencies from the relevant monitor will be extracted.

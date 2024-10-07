@@ -73,6 +73,12 @@ jax = { version = "0.4.25", extras = [
   "cpu",
 ], source = "jaxsource", optional = true }
 
+# pytorch
+torch = [
+    { version = "^2.1.0", source = "PyPI", platform = "darwin", optional = true },
+    { version = "^2.1.0", source = "torch-cpu", platform = "!=darwin", optional = true },
+]
+
 # scikit-rf
 scikit-rf = { version = "*", optional = true }
 
@@ -123,6 +129,7 @@ dev = [
   'ipython',
   'jax',
   'jaxlib',
+  'torch',
   'jinja2',
   'jupyter',
   'myst-parser',
@@ -204,6 +211,11 @@ priority = "primary"
 name = "jaxsource"
 url = "https://storage.googleapis.com/jax-releases/jax_releases.html"
 priority = "supplemental"
+
+[[tool.poetry.source]]
+name = "torch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
