@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `TopologyDesignRegion` is now invariant in `z` by default and supports assigning dimensions along which a design should be uniform via `TopologyDesignRegion(uniform=(bool, bool, bool))`.
 - Support for arbitrary padding sizes for all padding modes in `tidy3d.plugins.autograd.functions.pad`.
+- `Expression.filter(target_type, target_field)` method for extracting object instances and fields from nested expressions.
 
 ### Fixed
 - Some validation fixes for design region.
