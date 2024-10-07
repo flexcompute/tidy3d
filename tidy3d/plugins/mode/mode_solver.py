@@ -579,15 +579,16 @@ class ModeSolver(Tidy3dBaseModel):
         ]
         return np.stack(eps_tensor, axis=0)
 
+    @staticmethod
     def _tensorial_material_profile_modal_plane_tranform(
-        self, mat_data: ArrayComplex4D
+        mat_data: ArrayComplex4D, normal_axis: Axis
     ) -> ArrayComplex4D:
         """For tensorial material response function such as epsilon and mu, pick and tranform it to
         modal plane with normal axis rotated to z.
         """
         # get rid of normal axis
-        mat_tensor = np.take(mat_data, indices=[0], axis=1 + self.normal_axis)
-        mat_tensor = np.squeeze(mat_tensor, axis=1 + self.normal_axis)
+        mat_tensor = np.take(mat_data, indices=[0], axis=1 + normal_axis)
+        mat_tensor = np.squeeze(mat_tensor, axis=1 + normal_axis)
 
         # convert to into 3-by-3 representation for easier axis swap
         flat_shape = np.shape(mat_tensor)  # 9 components flat
@@ -595,11 +596,11 @@ class ModeSolver(Tidy3dBaseModel):
         mat_tensor = mat_tensor.reshape(tensor_shape)
 
         # swap axes to plane coordinates (normal_axis goes to z)
-        if self.normal_axis == 0:
+        if normal_axis == 0:
             # swap x and y
             mat_tensor[[0, 1], :, ...] = mat_tensor[[1, 0], :, ...]
             mat_tensor[:, [0, 1], ...] = mat_tensor[:, [1, 0], ...]
-        if self.normal_axis <= 1:
+        if normal_axis <= 1:
             # swap x (normal_axis==0) or y (normal_axis==1) and z
             mat_tensor[[1, 2], :, ...] = mat_tensor[[2, 1], :, ...]
             mat_tensor[:, [1, 2], ...] = mat_tensor[:, [2, 1], ...]
@@ -610,21 +611,22 @@ class ModeSolver(Tidy3dBaseModel):
         # construct to feed to mode solver
         return mat_tensor
 
+    @staticmethod
     def _diagonal_material_profile_modal_plane_tranform(
-        self, mat_data: ArrayComplex4D
+        mat_data: ArrayComplex4D, normal_axis: Axis
     ) -> ArrayComplex3D:
         """For diagonal material response function such as epsilon and mu, pick and tranform it to
         modal plane with normal axis rotated to z.
         """
         # get rid of normal axis
-        mat_tensor = np.take(mat_data, indices=[0], axis=1 + self.normal_axis)
-        mat_tensor = np.squeeze(mat_tensor, axis=1 + self.normal_axis)
+        mat_tensor = np.take(mat_data, indices=[0], axis=1 + normal_axis)
+        mat_tensor = np.squeeze(mat_tensor, axis=1 + normal_axis)
 
         # swap axes to plane coordinates (normal_axis goes to z)
-        if self.normal_axis == 0:
+        if normal_axis == 0:
             # swap x and y
             mat_tensor[[0, 1], :, ...] = mat_tensor[[1, 0], :, ...]
-        if self.normal_axis <= 1:
+        if normal_axis <= 1:
             # swap x (normal_axis==0) or y (normal_axis==1) and z
             mat_tensor[[1, 2], :, ...] = mat_tensor[[2, 1], :, ...]
 
@@ -637,7 +639,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Get diagonal epsilon components in the plane
         eps_tensor = self._get_epsilon(freq)
         # tranformation
-        return self._tensorial_material_profile_modal_plane_tranform(eps_tensor)
+        return self._tensorial_material_profile_modal_plane_tranform(eps_tensor, self.normal_axis)
 
     def _solve_all_freqs(
         self,
@@ -679,12 +681,15 @@ class ModeSolver(Tidy3dBaseModel):
 
         return n_complex, fields, eps_spec
 
-    def _postprocess_solver_fields(self, solver_fields):
+    @staticmethod
+    def _postprocess_solver_fields(solver_fields, normal_axis, plane, mode_spec):
         """Postprocess `solver_fields` from `compute_modes` to proper coordinate"""
         fields = {key: [] for key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
-        for mode_index in range(self.mode_spec.num_modes):
+        for mode_index in range(mode_spec.num_modes):
             # Get E and H fields at the current mode_index
-            ((Ex, Ey, Ez), (Hx, Hy, Hz)) = self._process_fields(solver_fields, mode_index)
+            ((Ex, Ey, Ez), (Hx, Hy, Hz)) = ModeSolver._process_fields(
+                solver_fields, mode_index, normal_axis, plane
+            )
 
             # Note: back in original coordinates
             fields_mode = {"Ex": Ex, "Ey": Ey, "Ez": Ez, "Hx": Hx, "Hy": Hy, "Hz": Hz}
@@ -718,7 +723,9 @@ class ModeSolver(Tidy3dBaseModel):
             direction=self.direction,
         )
 
-        fields = self._postprocess_solver_fields(solver_fields)
+        fields = self._postprocess_solver_fields(
+            solver_fields, self.normal_axis, self.plane, self.mode_spec
+        )
         return n_complex, fields, eps_spec
 
     def _rotate_field_coords_inverse(self, field: FIELD) -> FIELD:
@@ -770,16 +777,23 @@ class ModeSolver(Tidy3dBaseModel):
             solver_basis_fields=solver_basis_fields,
         )
 
-        fields = self._postprocess_solver_fields(solver_fields)
+        fields = self._postprocess_solver_fields(
+            solver_fields, self.normal_axis, self.plane, self.mode_spec
+        )
         return n_complex, fields, eps_spec
 
-    def _rotate_field_coords(self, field: FIELD) -> FIELD:
+    @staticmethod
+    def _rotate_field_coords(field: FIELD, normal_axis: Axis, plane: MODE_PLANE_TYPE) -> FIELD:
         """Move the propagation axis=z to the proper order in the array."""
-        f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + self.normal_axis)
-        return np.stack(self.plane.unpop_axis(f_z, (f_x, f_y), axis=self.normal_axis), axis=0)
+        f_x, f_y, f_z = np.moveaxis(field, source=3, destination=1 + normal_axis)
+        return np.stack(plane.unpop_axis(f_z, (f_x, f_y), axis=normal_axis), axis=0)
 
+    @staticmethod
     def _process_fields(
-        self, mode_fields: ArrayComplex4D, mode_index: pydantic.NonNegativeInt
+        mode_fields: ArrayComplex4D,
+        mode_index: pydantic.NonNegativeInt,
+        normal_axis: Axis,
+        plane: MODE_PLANE_TYPE,
     ) -> Tuple[FIELD, FIELD]:
         """Transform solver fields to simulation axes and set gauge."""
 
@@ -793,11 +807,11 @@ class ModeSolver(Tidy3dBaseModel):
         H *= np.exp(-1j * phi)
 
         # Rotate back to original coordinates
-        (Ex, Ey, Ez) = self._rotate_field_coords(E)
-        (Hx, Hy, Hz) = self._rotate_field_coords(H)
+        (Ex, Ey, Ez) = ModeSolver._rotate_field_coords(E, normal_axis, plane)
+        (Hx, Hy, Hz) = ModeSolver._rotate_field_coords(H, normal_axis, plane)
 
         # apply -1 to H fields if a reflection was involved in the rotation
-        if self.normal_axis == 1:
+        if normal_axis == 1:
             Hx *= -1
             Hy *= -1
             Hz *= -1
