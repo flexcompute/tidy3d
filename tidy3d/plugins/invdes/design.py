@@ -6,11 +6,14 @@ import abc
 import typing
 
 import autograd.numpy as anp
+import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.components.autograd import get_static
+from tidy3d.exceptions import ValidationError
+from tidy3d.plugins.expressions.metrics import Metric
 from tidy3d.plugins.expressions.types import ExpressionType
 
 from .base import InvdesBaseModel
@@ -118,6 +121,62 @@ class InverseDesign(AbstractInverseDesign):
     )
 
     _check_sim_pixel_size = check_pixel_size("simulation")
+
+    @pd.root_validator(pre=False)
+    def _validate_model(cls, values: dict) -> dict:
+        cls._validate_metric(values)
+        return values
+
+    @staticmethod
+    def _validate_metric(values: dict) -> dict:
+        metric_expr = values.get("metric")
+        if not metric_expr:
+            return values
+        simulation = values.get("simulation")
+        for metric in metric_expr.filter(Metric):
+            InverseDesign._validate_metric_monitor_name(metric, simulation)
+            InverseDesign._validate_metric_mode_index(metric, simulation)
+            InverseDesign._validate_metric_f(metric, simulation)
+        return values
+
+    @staticmethod
+    def _validate_metric_monitor_name(metric: Metric, simulation: td.Simulation) -> None:
+        """Validate that the monitor name of the metric exists in the simulation."""
+        monitor = next((m for m in simulation.monitors if m.name == metric.monitor_name), None)
+        if monitor is None:
+            raise ValidationError(
+                f"Monitor named '{metric.monitor_name}' associated with the metric not found in the simulation monitors."
+            )
+
+    @staticmethod
+    def _validate_metric_mode_index(metric: Metric, simulation: td.Simulation) -> None:
+        """Validate that the mode index of the metric is within the bounds of the monitor's ``ModeSpec.num_modes``."""
+        monitor = next((m for m in simulation.monitors if m.name == metric.monitor_name), None)
+        if metric.mode_index >= monitor.mode_spec.num_modes:
+            raise ValidationError(
+                f"Mode index '{metric.mode_index}' for metric associated with monitor "
+                f"'{metric.monitor_name}' is out of bounds. "
+                f"Maximum allowed mode index is '{monitor.mode_spec.num_modes - 1}'."
+            )
+
+    @staticmethod
+    def _validate_metric_f(metric: Metric, simulation: td.Simulation) -> None:
+        """Validate that the frequencies of the metric are present in the monitor."""
+        monitor = next((m for m in simulation.monitors if m.name == metric.monitor_name), None)
+        if metric.f is not None:
+            if len(metric.f) != 1:
+                raise ValidationError("Only a single frequency is supported for the metric.")
+            for freq in metric.f:
+                if not any(np.isclose(freq, monitor.freqs, atol=1.0)):
+                    raise ValidationError(
+                        f"Frequency '{freq}' for metric associated with monitor "
+                        f"'{metric.monitor_name}' not found in monitor frequencies."
+                    )
+        else:
+            if len(monitor.freqs) != 1:
+                raise ValidationError(
+                    f"Monitor '{metric.monitor_name}' must contain only a single frequency when metric.f is None."
+                )
 
     def is_output_monitor(self, monitor: td.Monitor) -> bool:
         """Whether a monitor is added to the ``JaxSimulation`` as an ``output_monitor``."""

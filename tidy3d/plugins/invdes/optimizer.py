@@ -27,7 +27,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         discriminator=TYPE_TAG_STR,
     )
 
-    learning_rate: pd.NonNegativeFloat = pd.Field(
+    learning_rate: pd.PositiveFloat = pd.Field(
         ...,
         title="Learning Rate",
         description="Step size for the gradient descent optimizer.",
@@ -184,9 +184,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
                     "All elements of the gradient are almost zero. This likely indicates "
                     "a problem with the optimization set up. This can occur if the symmetry of the "
                     "simulation and design region are preventing any data to be recorded in the "
-                    "'output_monitors'. In this case, we recommend creating the initial parameters "
-                    " as 'params0 = DesignRegion.params_random' and passing this to "
-                    "'Optimizer.run()' to break the symmetry in the design region. "
+                    "'output_monitors'. In this case, we recommend initializing with a "
+                    "'RandomInitializationSpec' to break the symmetry in the design region. "
                     "This zero gradient can also occur if the objective function return value does "
                     "not have a contribution from the input arguments. We recommend carefully "
                     "inspecting your objective function to ensure that the variables passed to the "
@@ -263,17 +262,21 @@ class AdamOptimizer(AbstractOptimizer):
 
     beta1: float = pd.Field(
         0.9,
+        ge=0.0,
+        le=1.0,
         title="Beta 1",
         description="Beta 1 parameter in the Adam optimization method.",
     )
 
     beta2: float = pd.Field(
         0.999,
+        ge=0.0,
+        le=1.0,
         title="Beta 2",
         description="Beta 2 parameter in the Adam optimization method.",
     )
 
-    eps: float = pd.Field(
+    eps: pd.PositiveFloat = pd.Field(
         1e-8,
         title="Epsilon",
         description="Epsilon parameter in the Adam optimization method.",
