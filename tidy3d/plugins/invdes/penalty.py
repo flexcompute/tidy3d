@@ -48,7 +48,7 @@ class ErosionDilationPenalty(AbstractPenalty):
 
     """
 
-    length_scale: pd.NonNegativeFloat = pd.Field(
+    length_scale: pd.PositiveFloat = pd.Field(
         ...,
         title="Length Scale",
         description="Length scale of erosion and dilation. "
@@ -58,24 +58,29 @@ class ErosionDilationPenalty(AbstractPenalty):
         units=MICROMETER,
     )
 
-    beta: pd.PositiveFloat = pd.Field(
+    beta: float = pd.Field(
         100.0,
+        ge=1.0,
         title="Projection Beta",
         description="Strength of the ``tanh`` projection. "
         "Corresponds to ``beta`` in the :class:`BinaryProjector. "
         "Higher values correspond to stronger discretization.",
     )
 
-    eta0: pd.PositiveFloat = pd.Field(
+    eta0: float = pd.Field(
         0.5,
+        ge=0.0,
+        le=1.0,
         title="Projection Midpoint",
         description="Value between 0 and 1 that sets the projection midpoint. In other words, "
         "for values of ``eta0``, the projected values are halfway between minimum and maximum. "
         "Corresponds to ``eta`` in the :class:`BinaryProjector`.",
     )
 
-    delta_eta: pd.PositiveFloat = pd.Field(
+    delta_eta: float = pd.Field(
         0.01,
+        ge=0.0,
+        le=1.0,
         title="Delta Eta Cutoff",
         description="The binarization threshold for erosion and dilation operations "
         "The thresholds are ``0 + delta_eta`` on the low end and ``1 - delta_eta`` on the high end. "

@@ -2,13 +2,16 @@
 
 import abc
 import typing
+import warnings
 
 import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pd
+from autograd import elementwise_grad, grad
 
 import tidy3d as td
-from tidy3d.components.types import Coordinate, Size
+from tidy3d.components.types import TYPE_TAG_STR, Coordinate, Size
+from tidy3d.exceptions import ValidationError
 
 from .base import InvdesBaseModel
 from .initialization import InitializationSpecType, UniformInitializationSpec
@@ -37,6 +40,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 
     eps_bounds: typing.Tuple[float, float] = pd.Field(
         ...,
+        ge=1.0,
         title="Relative Permittivity Bounds",
         description="Minimum and maximum relative permittivity expressed to the design region.",
     )
@@ -63,7 +67,21 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         UniformInitializationSpec(value=0.5),
         title="Initialization Specification",
         description="Specification of how to initialize the parameters in the design region.",
+        discriminator=TYPE_TAG_STR,
     )
+
+    def _post_init_validators(self):
+        """Automatically call any `_validate_XXX` method."""
+        for attr_name in dir(self):
+            if attr_name.startswith("_validate") and callable(getattr(self, attr_name)):
+                getattr(self, attr_name)()
+
+    def _validate_eps_bounds(self):
+        if self.eps_bounds[1] < self.eps_bounds[0]:
+            raise ValidationError(
+                f"Maximum relative permittivity ({self.eps_bounds[1]}) must be "
+                f"greater than minimum relative permittivity ({self.eps_bounds[0]})."
+            )
 
     @property
     def geometry(self) -> td.Box:
@@ -159,12 +177,67 @@ class TopologyDesignRegion(DesignRegion):
         "Supplying ``False`` will completely leave out the override structure.",
     )
 
+    def _validate_eps_values(self):
+        """Validate the epsilon values by evaluating the transformations."""
+        try:
+            x = self.initial_parameters
+            self.eps_values(x)
+        except Exception as e:
+            raise ValidationError(f"Could not evaluate transformations: {str(e)}") from e
+
+    def _validate_penalty_value(self):
+        """Validate the penalty values by evaluating the penalties."""
+        try:
+            x = self.initial_parameters
+            self.penalty_value(x)
+        except Exception as e:
+            raise ValidationError(f"Could not evaluate penalties: {str(e)}") from e
+
+    def _validate_gradients(self):
+        """Validate the gradients of the penalties and transformations."""
+        x = self.initial_parameters
+
+        penalty_independent = False
+        if self.penalties:
+            with warnings.catch_warnings(record=True) as w:
+                penalty_grad = grad(self.penalty_value)(x)
+                penalty_independent = any("independent" in str(warn.message).lower() for warn in w)
+            if np.any(np.isnan(penalty_grad) | np.isinf(penalty_grad)):
+                raise ValidationError("Penalty gradients contain 'NaN' or 'Inf' values.")
+
+        eps_independent = False
+        if self.transformations:
+            with warnings.catch_warnings(record=True) as w:
+                eps_grad = elementwise_grad(self.eps_values)(x)
+                eps_independent = any("independent" in str(warn.message).lower() for warn in w)
+            if np.any(np.isnan(eps_grad) | np.isinf(eps_grad)):
+                raise ValidationError("Transformation gradients contain 'NaN' or 'Inf' values.")
+
+        if penalty_independent and eps_independent:
+            raise ValidationError(
+                "Both penalty and transformation gradients appear to be independent of the input parameters. "
+                "This indicates that the optimization will not function correctly. "
+                "Please double-check the definitions of both the penalties and transformations."
+            )
+        elif penalty_independent:
+            td.log.warning(
+                "Penalty gradient seems independent of input, meaning that it "
+                "will not contribute to the objective gradient during optimization. "
+                "This is likely not correct - double-check the penalties."
+            )
+        elif eps_independent:
+            td.log.warning(
+                "Transformation gradient seems independent of input, meaning that it "
+                "will not contribute to the objective gradient during optimization. "
+                "This is likely not correct - double-check the transformations."
+            )
+
     @staticmethod
     def _check_params(params: anp.ndarray = None):
         """Ensure ``params`` are between 0 and 1."""
         if params is None:
             return
-        if np.any(params < 0) or np.any(params > 1):
+        if np.any((params < 0) | (params > 1)):
             raise ValueError(
                 "Parameters in the 'invdes' plugin's topology optimization feature "
                 "are restricted to be between 0 and 1."
