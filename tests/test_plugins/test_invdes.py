@@ -6,7 +6,7 @@ import numpy.testing as npt
 import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
-from tidy3d.plugins.expressions import ModePower
+from tidy3d.plugins.expressions import ModeAmp, ModePower
 from tidy3d.plugins.invdes.initialization import (
     CustomInitializationSpec,
     RandomInitializationSpec,
@@ -605,4 +605,12 @@ def test_validate_invdes_metric():
     monitor = mnt2.updated_copy(freqs=[FREQ0, FREQ0 / 2])
     invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
     with pytest.raises(ValueError, match="single frequency"):
+        invdes.updated_copy(metric=metric)
+
+    metric = ModeAmp(monitor_name=MNT_NAME2, mode_index=0) + ModePower(
+        monitor_name=MNT_NAME2, mode_index=0
+    )
+    monitor = mnt2.updated_copy(freqs=[FREQ0])
+    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
+    with pytest.raises(ValueError, match="must return a real"):
         invdes.updated_copy(metric=metric)
