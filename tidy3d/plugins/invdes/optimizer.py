@@ -203,7 +203,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             params = anp.clip(params, a_min=0.0, a_max=1.0)
 
             # save the history of scalar values
-            history["objective_fn_val"].append(val)
+            history["objective_fn_val"].append(aux_data["objective_fn_val"])
             history["penalty"].append(penalty)
             history["post_process_val"].append(post_process_val)
 
