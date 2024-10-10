@@ -146,6 +146,7 @@ from .components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstru
 from .components.heat_charge.heat.simulation import HeatSimulation
 from .components.heat_charge.monitor import TemperatureMonitor, VoltageMonitor
 from .components.heat_charge.monitor_data import (
+    ChargeSimulationMonitor,
     TemperatureData,
     TemporalTemperatureMonitor,
     TemporalVoltageMonitor,
@@ -502,6 +503,7 @@ __all__ = [
     "HeatFromElectricSource",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",
+    "ChargeSimulationMonitor",
     "TemperatureData",
     "TemperatureMonitor",
     "HeatChargeSimulation",

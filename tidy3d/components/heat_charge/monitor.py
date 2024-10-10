@@ -46,6 +46,13 @@ class VoltageMonitor(HeatChargeMonitor):
     """Electric potential monitor."""
 
 
+class ChargeSimulationMonitor(HeatChargeMonitor):
+    """Charge monitor for Charge simulations."""
+
+    # NOTE: supporting unstructured only for the time being
+    unstructured = True
+
+
 class TemporalTemperatureMonitor(HeatChargeMonitor):
     """Monitor for time-varying temperature field."""
 
@@ -62,5 +69,9 @@ class TemporalVoltageMonitor(HeatChargeMonitor):
 
 # types of monitors that are accepted by heat simulation
 HeatChargeMonitorType = Union[
-    TemperatureMonitor, VoltageMonitor, TemporalTemperatureMonitor, TemporalVoltageMonitor
+    TemperatureMonitor,
+    VoltageMonitor,
+    TemporalTemperatureMonitor,
+    TemporalVoltageMonitor,
+    ChargeSimulationMonitor,
 ]
