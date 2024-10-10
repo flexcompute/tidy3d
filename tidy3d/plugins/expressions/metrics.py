@@ -69,6 +69,7 @@ class ModeAmp(Metric):
         None,
         title="Frequency Array",
         description="The frequency array. If None, all frequencies in the monitor will be used.",
+        alias="freqs",
     )
     direction: Direction = pd.Field(
         "+",
