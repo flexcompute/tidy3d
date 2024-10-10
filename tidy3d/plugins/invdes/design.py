@@ -12,7 +12,7 @@ import pydantic.v1 as pd
 import tidy3d as td
 from tidy3d.components.autograd import get_static
 from tidy3d.exceptions import ValidationError
-from tidy3d.plugins.expressions.metrics import Metric
+from tidy3d.plugins.expressions.metrics import Metric, generate_validation_data
 from tidy3d.plugins.expressions.types import ExpressionType
 
 from .base import InvdesBaseModel
@@ -151,6 +151,7 @@ class InverseDesign(AbstractInverseDesign):
             InverseDesign._validate_metric_monitor_name(metric, simulation)
             InverseDesign._validate_metric_mode_index(metric, simulation)
             InverseDesign._validate_metric_f(metric, simulation)
+        InverseDesign._validate_metric_data(metric_expr, simulation)
         return values
 
     @staticmethod
@@ -191,6 +192,23 @@ class InverseDesign(AbstractInverseDesign):
                 raise ValidationError(
                     f"Monitor '{metric.monitor_name}' must contain only a single frequency when metric.f is None."
                 )
+
+    @staticmethod
+    def _validate_metric_data(expr: ExpressionType, simulation: td.Simulation) -> None:
+        """Validate that expression can be evaluated and returns a real scalar."""
+        data = generate_validation_data(expr)
+        try:
+            result = expr(data)
+        except Exception as e:
+            raise ValidationError(f"Failed to evaluate the metric expression: {str(e)}") from e
+        if len(np.ravel(result)) > 1:
+            raise ValidationError(
+                f"The expression must return a scalar value or an array of length 1 (got {result})."
+            )
+        if not np.all(np.isreal(result)):
+            raise ValidationError(
+                f"The expression must return a real (not complex) value (got {result})."
+            )
 
     def is_output_monitor(self, monitor: td.Monitor) -> bool:
         """Whether a monitor is added to the ``JaxSimulation`` as an ``output_monitor``."""

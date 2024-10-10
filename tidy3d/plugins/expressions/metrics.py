@@ -1,22 +1,48 @@
+from abc import ABC, abstractmethod
 from typing import Any, Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pd
+import xarray as xr
 
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.types import Direction, FreqArray
 
+from .base import Expression
 from .types import NumberType
 from .variables import Variable
 
 
-class Metric(Variable):
+def generate_validation_data(expr: Expression) -> dict[str, xr.Dataset]:
+    """Generate combined dummy simulation data for all metrics in the expression.
+
+    Parameters
+    ----------
+    expr : Expression
+        The expression containing metrics.
+
+    Returns
+    -------
+    dict[str, xr.Dataset]
+        The combined validation data.
+    """
+    metrics = set(expr.filter(target_type=Metric))
+    combined_data = {k: v for metric in metrics for k, v in metric._validation_data.items()}
+    return combined_data
+
+
+class Metric(Variable, ABC):
     """
     Base class for all metrics.
 
     To subclass Metric, you must implement an evaluate() method that takes a SimulationData
     object and returns a scalar value.
     """
+
+    @property
+    @abstractmethod
+    def _validation_data(self) -> Any:
+        """Return dummy data for this metric."""
 
     def __repr__(self) -> str:
         return f'{self.type}("{self.monitor_name}")'
@@ -62,6 +88,21 @@ class ModeAmp(Metric):
         return cls(
             monitor_name=monitor.name, f=monitor.freqs, mode_index=mode_index, direction=direction
         )
+
+    @property
+    def _validation_data(self) -> Any:
+        """Return dummy data for this metric (complex array of mode amplitudes)."""
+        f = list(self.f) if self.f is not None else [1.0]
+        amps_data = np.random.rand(len(f)) + 1j * np.random.rand(len(f))
+        amps = xr.DataArray(
+            amps_data.reshape(1, 1, -1),
+            coords={
+                "direction": [self.direction],
+                "mode_index": [self.mode_index],
+                "f": f,
+            },
+        )
+        return {self.monitor_name: xr.Dataset({"amps": amps})}
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
         data = super().evaluate(*args, **kwargs)
