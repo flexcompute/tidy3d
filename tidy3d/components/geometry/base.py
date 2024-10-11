@@ -3208,6 +3208,49 @@ class GeometryGroup(Geometry):
     def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
+        # TODO: generalize for many PolySlabs
+
+        grad_vjps = {}
+
+        """ handle a set of polyslabs."""
+        if False and all(hasattr(g, "vertices") for g in self.geometries):
+            indices = [0]
+            centers = []
+            bases = dict(norm=[], perp1=[], perp2=[])
+            areas = []
+
+            for field_path in derivative_info.paths:
+                _, index, *geo_path = field_path
+                geo = self.geometries[index]
+                indices.append(indices[-1] + geo.num_surfaces)
+                centers.append(geo.surface_centers)
+                basis_vectors = geo.surface_basis_vectors
+                for key in ("norm", "perp1", "perp2"):
+                    bases[key].append(basis_vectors[key])
+                areas.append(geo.surface_areas)
+
+            bases = {k: np.concatenate(v) for k, v in bases.items()}
+
+            # import pdb; pdb.set_trace()
+
+            grad_bases = derivative_info.grad_in_bases(
+                spatial_coords=np.concatenate(centers), basis_vectors=bases
+            )
+
+            for i, field_path in enumerate(derivative_info.paths):
+                _, index, *geo_path = field_path
+                geo = self.geometries[index]
+                grad_bases_i = dict(
+                    D_norm=grad_bases["D_norm"][indices[i] : indices[i + 1]],
+                    E_perp1=grad_bases["E_perp1"][indices[i] : indices[i + 1]],
+                    E_perp2=grad_bases["E_perp2"][indices[i] : indices[i + 1]],
+                )
+                # import pdb; pdb.set_trace()
+                grad_vertices_i = geo.process_grad_bases(grad_bases_i, derivative_info)
+                grad_vjps[field_path] = grad_vertices_i
+
+            return grad_vjps
+
         grad_vjps = {}
 
         for field_path in derivative_info.paths:

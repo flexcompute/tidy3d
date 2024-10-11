@@ -733,20 +733,26 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
 def test_autograd_speed_num_structures(use_emulated_run):
     """Test an objective function through tidy3d autograd."""
 
-    num_structures_test = 10
+    num_structures_test = 361
 
     import time
 
     fn_dict = get_functions(ALL_KEY, ALL_KEY)
 
     monitor_key = "mode"
-    structure_key = "size_element"
+    structure_key = "polyslab"
     monitor, postprocess = make_monitors()[monitor_key]
 
     def make_sim(*args):
         structure = make_structures(*args)[structure_key]
         structures = num_structures_test * [structure]
-        return SIM_BASE.updated_copy(structures=structures, monitors=[monitor])
+        structures_geo_group = [
+            td.Structure(
+                medium=td.Medium(),
+                geometry=td.GeometryGroup(geometries=[s.geometry for s in structures]),
+            )
+        ]
+        return SIM_BASE.updated_copy(structures=structures_geo_group, monitors=[monitor])
 
     def objective(*args):
         """Objective function."""
@@ -761,7 +767,7 @@ def test_autograd_speed_num_structures(use_emulated_run):
         val, grad = ag.value_and_grad(objective)(params0)
         t2 = time.time() - t
         pr.print_stats(sort="cumtime")
-        pr.dump_stats("results.prof")
+        pr.dump_stats("results_new.prof")
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
 
 

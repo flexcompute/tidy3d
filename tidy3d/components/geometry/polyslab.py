@@ -1379,12 +1379,230 @@ class PolySlab(base.Planar):
     def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
+        # TODO: generalize
+
         if derivative_info.paths != [("vertices",)]:
             raise ValueError("only support derivative wrt 'PolySlab.vertices'.")
 
         vjp_vertices = self.compute_derivative_vertices(derivative_info=derivative_info)
 
         return {("vertices",): vjp_vertices}
+
+    @staticmethod
+    def normalize(x: np.ndarray) -> np.ndarray:
+        """Return normalized version of x (N, 3) along -1 axis."""
+        return x / np.linalg.norm(x, axis=-1)[..., None]
+
+    @property
+    def num_edges(self) -> int:
+        return np.array(self.vertices).shape[0]
+
+    @property
+    def vertices_xyz(self) -> np.ndarray:
+        """(N, 3) Vectors representing the vertices in xyz coordinates."""
+        vertices_plane = np.array(self.vertices)
+        vertices_axis = np.ones(self.num_edges) * self.center_axis
+        return self.unpop_axis_vect(vertices_axis, vertices_plane)
+
+    @property
+    def edges_xyz(self) -> np.ndarray:
+        """(N, 3) vectors defining the direction of each edge."""
+        vertices = self.vertices_xyz
+        vertices_next = np.roll(vertices, axis=0, shift=-1)
+        return vertices_next - vertices
+
+    @property
+    def edges_normed(self) -> np.ndarray:
+        """(N, 3) normalized edge vectors."""
+        return self.normalize(self.edges_xyz)
+
+    @property
+    def edge_centers(self):
+        """(N, 3) The center (midpoint) of each edge in 3D space."""
+        return self.vertices_xyz + self.edges_xyz / 2.0
+
+    @property
+    def edge_areas(self) -> np.ndarray:
+        """(N,) area of each edge in 3D."""
+        if any(np.isinf(x) for x in self.slab_bounds):
+            length_axis = 1.0
+        else:
+            length_axis = self.slab_bounds[1] - self.slab_bounds[0]
+            # TODO: factor in sidewall angle?
+        length_edges = np.linalg.norm(self.edges_xyz, axis=-1)
+        return length_edges * length_axis
+
+    @property
+    def axis_norm_vector(self) -> tuple[int, int, int]:
+        """vector corresponding to the slab axis in (x,y,z) coords."""
+        return self.unpop_axis(1.0, (0.0, 0.0), axis=self.axis)
+
+    @property
+    def edge_normals(self):
+        """(N, 3) vectors pointing in the normal direction of each edge."""
+        normals = np.cross(self.axis_norm_vector, self.edges_xyz)
+        normals = self.normalize(normals)
+        if self.is_ccw:
+            normals *= -1
+        # if self.axis == 1:
+        #     normals *= -1 # double check
+        return normals
+
+    """interface for computing generalized vjp"""
+
+    @property
+    def surface_basis_vectors(self) -> dict[str, np.ndarray]:
+        """Basis vectors used for adjoint stuff."""
+
+        perp1 = self.normalize(self.edges_xyz)
+        perp2 = np.ones_like(perp1) * self.axis_norm_vector
+
+        return dict(
+            norm=self.edge_normals,
+            perp1=perp1,
+            perp2=perp2,
+        )
+
+    @property
+    def surface_centers(self):
+        return self.edge_centers
+
+    @property
+    def surface_areas(self):
+        return self.edge_areas
+
+    @property
+    def num_surfaces(self) -> int:
+        return self.num_edges
+
+    # @property
+    # def edge_normals(self):
+    #     """Compute the outward-pointing normal vector for each edge, adjusted for sidewall angle."""
+    #     N = self.vertices.shape[0]
+
+    #     # Compute 2D normals by rotating edges by 90 degrees (clockwise)
+    #     edges_2d = np.roll(self.vertices, -1, axis=0) - self.vertices  # Shape: (N, 2)
+    #     normals_2d = np.column_stack([-edges_2d[:, 1], edges_2d[:, 0]])  # Perpendicular 2D normal
+
+    #     # Normalize the 2D normals
+    #     normals_2d /= np.linalg.norm(normals_2d, axis=1, keepdims=True)
+
+    #     # Convert to 3D and account for sidewall angle
+    #     normals_3d = self.insert_axis(normals_2d)
+
+    #     # Apply sidewall tilt: normals are tilted by the angle in the extrusion axis direction
+    #     normals_3d[:, self.axis] = np.tan(self.sidewall_angle)  # Tilt along extrusion axis
+
+    #     return normals_3d
+
+    # @property
+    # def base_to_top_vectors(self):
+    #     """Compute the vectors pointing from the base to the top along each edge, accounting for sidewall angle."""
+    #     N = self.vertices.shape[0]
+
+    #     # Compute vectors purely along the extrusion axis (base to top)
+    #     base_to_top = np.zeros((N, 3))
+    #     base_to_top[:, self.axis] = self.thickness
+
+    #     # Tilt the base-to-top vectors based on the sidewall angle
+    #     tilt_factor = np.tan(self.sidewall_angle)
+    #     edge_midpoints_2d = np.roll(self.vertices, -1, axis=0) - self.vertices
+    #     edge_lengths_2d = np.linalg.norm(edge_midpoints_2d, axis=1, keepdims=True)
+
+    #     # Compute tilt vectors along the other axes based on edge lengths
+    #     tilt_vector_2d = edge_midpoints_2d / edge_lengths_2d * self.thickness * tilt_factor
+    #     tilt_vector_3d = self.insert_axis(tilt_vector_2d)
+
+    #     # Combine the base-to-top and tilt adjustments
+    #     base_to_top += tilt_vector_3d
+
+    #     return base_to_top
+
+    # @property
+    # def edge_areas(self):
+    #     """Compute the area of each edge (sidewall) as a trapezoid."""
+    #     # Edge lengths in 2D
+    #     edge_lengths_2d = np.linalg.norm(np.roll(self.vertices, -1, axis=0) - self.vertices, axis=1)
+
+    #     # Compute the top and bottom lengths using the sidewall angle
+    #     bottom_lengths = edge_lengths_2d
+    #     top_lengths = bottom_lengths - 2 * self.thickness * np.tan(self.sidewall_angle)
+
+    #     # Area of each sidewall (trapezoid area)
+    #     areas = 0.5 * (bottom_lengths + top_lengths) * self.thickness
+
+    #     return areas
+
+    # @property
+    # def num_edges(self) -> int:
+    #     """How many edges in the polygon."""
+    #     return np.array(self.vertices)[0]
+
+    # def vertices_xyz(self) -> np.ndarray:
+    #     """(N, 3) array of the vertices including axis dim."""
+    #     vertices_plane = np.array(self.vertices)
+    #     vertices_axis = self.center_axis * np.ones(num_edges)
+    #     return self.unpop_axis_vect(vertices_axis, vertices_plane)
+
+    # @property
+    # def edges(self) -> np.ndarray:
+    #     """(N, 3) vectors defining the direction of each edge."""
+    #     vertices = self.vertices_xyz
+    #     vertices_next = np.roll(vertices, axis=0, shift=-1)
+    #     return vertices_next - vertices
+
+    # @property
+    # def axis_norm_vector(self) -> tuple[int, int, int]:
+    #     """vector corresponding to the slab axis in (x,y,z) coords."""
+    #     return self.unpop_axis(1.0, (0.0, 0.0), axis=self.axis)
+
+    # @property
+    # def axis_norm_vector_sidewall(self) -> tuple[int, int, int]:
+    #     """(N, 3) vector corresponding to the slab axis in (x,y,z) coords with sidewall"""
+    #     edges = self.edges
+    #     normals = self.edge_normals
+    #     norm_normals = np.linalg.norm(normals)
+    #     normals[:, self.axis] += norm_normals * np.sin(self.sidewall_angle)
+
+    # @property
+    # def edge_normals(self) -> np.ndarray:
+    #     """(N, 3) Normalized vectors pointing in the outward normal direction from each face."""
+    #     edges = self.edges
+    #     normals = np.cross(edges, self.axis_normal_vector)
+    #     if self.is_ccw:
+    #         normals *= -1
+    #     return normals / np.linalg.norm(normals)
+
+    # @property
+    # def edge_centers(self) -> np.ndarray:
+    #     """(N, 3) Locations of the center of each edge."""
+    #     return self.vertices_xyz + self.edges / 2.0
+
+    # @property
+    # def edge_areas(self) -> np.ndarray:
+    #     """(N,) the area of each of the edges, if slab bounds are +/- inf, axis dim is ignored."""
+
+    #     axis_norm = self.unpop_axis(1.0, (0.0, 0.0), axis=self.axis)
+
+    #     # Step 2: First orthogonal vector (cross product of each vector with the reference vector)
+    #     orthogonal_1 = np.cross(N_vectors, ref_vectors)
+
+    #     # Normalize orthogonal_1
+    #     orthogonal_1 /= np.linalg.norm(orthogonal_1, axis=1, keepdims=True)
+
+    #     # Step 3: Second orthogonal vector (cross product of original vector and orthogonal_1)
+    #     orthogonal_2 = np.cross(N_vectors, orthogonal_1)
+
+    #     # Normalize orthogonal_2
+    #     orthogonal_2 /= np.linalg.norm(orthogonal_2, axis=1, keepdims=True)
+
+    #     # Step 4: Stack the two orthogonal vectors along a new axis to get shape (2, N, 3)
+    #     A = np.stack([orthogonal_1, orthogonal_2], axis=0)
+
+    # @property
+    # def edge_centers(self) -> np.ndarray:
+    #     """(N, 3) Locations of the center of each edge."""
+    #     return np.array(self.vertices) + self.edges / 2.0
 
     def compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
         # derivative w.r.t each edge
@@ -1412,6 +1630,9 @@ class PolySlab(base.Planar):
             spatial_coords=edge_centers_xyz, basis_vectors=basis_vectors
         )
 
+        return self.process_grad_bases(grad_bases, derivative_info)
+
+    def process_grad_bases(self, grad_bases, derivative_info):
         # unpack gradient contributions from different bases
         D_der_norm = grad_bases["D_norm"]
         E_der_edge = grad_bases["E_perp1"]
@@ -1433,9 +1654,15 @@ class PolySlab(base.Planar):
             contrib_E = E_der * delta_eps
             vjps_edges += contrib_E
 
+        vertices = np.array(self.vertices)
+        vertices_next = np.roll(self.vertices, axis=0, shift=-1)
+        edges = vertices_next - vertices
+        basis_vectors = self.edge_basis_vectors(edges=edges)
+
         # scale by edge area
         edge_lengths = np.linalg.norm(edges, axis=-1)
         edge_areas = edge_lengths
+        num_vertices = len(edge_lengths)
 
         # correction to edge area based on sidewall distance along slab axis
         dim_axis = "xyz"[self.axis]
