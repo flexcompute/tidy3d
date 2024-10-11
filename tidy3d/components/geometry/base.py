@@ -3214,7 +3214,7 @@ class GeometryGroup(Geometry):
             _, index, *geo_path = field_path
             geo = self.geometries[index]
             geo_info = derivative_info.updated_copy(
-                paths=[geo_path], bounds=geo.bounds, eps_approx=True
+                paths=[geo_path], bounds=geo.bounds, eps_approx=True, deep=False
             )
             vjp_dict_geo = geo.compute_derivatives(geo_info)
             grad_vjp_values = list(vjp_dict_geo.values())
