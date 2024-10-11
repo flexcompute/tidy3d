@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added new support functions for the Design plugin: automated batching of `Simulation` objects, and summary functions with `DesignSpace.estimate_cost` and `DesignSpace.summarize`.
 - Added validation and repair methods for `TriangleMesh` with inward-facing normals.
 - Added `from_admittance_coeffs` to `PoleResidue`, which allows for directly constructing a `PoleResidue` medium from an admittance function in the Laplace domain.
+- Added `LinearLumpedElement` as a new supported `LumpedElement` type. This enhancement allows for the modeling of two-terminal passive networks, which can include any configuration of resistors, inductors, and capacitors, within the `Simulation`. Simple RLC networks are described using `RLCNetwork`, while more complex networks can be represented by their admittance transfer function through `AdmittanceNetwork`.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
