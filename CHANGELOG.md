@@ -5,6 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
 ## [2.7.5] - 2024-10-10
 
 ### Added
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix to batch mode solver run that could create multiple copies of the same folder.
 - Fixed ``ModeSolver.plot`` method when the simulation is not at the origin.
 - Gradient calculation is orders of magnitude faster for large datasets and many structures by applying more efficient handling of field interpolation and passing to structures.
+- Bug with infinite coordinates in `ClipOperation` not working with shapely.
 
 ## [2.7.4] - 2024-09-25
 
