@@ -2857,12 +2857,10 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        geom_a = Geometry.evaluate_inf_shape(
-            shapely.unary_union(self.geometry_a.intersections_tilted_plane(normal, origin, to_2D))
-        )
-        geom_b = Geometry.evaluate_inf_shape(
-            shapely.unary_union(self.geometry_b.intersections_tilted_plane(normal, origin, to_2D))
-        )
+        a = self.geometry_a.intersections_tilted_plane(normal, origin, to_2D)
+        b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D)
+        geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
+        geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
 
     def intersections_plane(
@@ -2886,12 +2884,10 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        geom_a = Geometry.evaluate_inf_shape(
-            shapely.unary_union(self.geometry_a.intersections_plane(x, y, z))
-        )
-        geom_b = Geometry.evaluate_inf_shape(
-            shapely.unary_union(self.geometry_b.intersections_plane(x, y, z))
-        )
+        a = self.geometry_a.intersections_plane(x, y, z)
+        b = self.geometry_b.intersections_plane(x, y, z)
+        geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
+        geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
 
     @cached_property
