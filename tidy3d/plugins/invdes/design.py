@@ -179,9 +179,10 @@ class InverseDesign(AbstractInverseDesign):
         """Validate that the frequencies of the metric are present in the monitor."""
         monitor = next((m for m in simulation.monitors if m.name == metric.monitor_name), None)
         if metric.f is not None:
-            if len(metric.f) != 1:
+            metric_f_list = [metric.f] if isinstance(metric.f, float) else metric.f
+            if len(metric_f_list) != 1:
                 raise ValidationError("Only a single frequency is supported for the metric.")
-            for freq in metric.f:
+            for freq in metric_f_list:
                 if not any(np.isclose(freq, monitor.freqs, atol=1.0)):
                     raise ValidationError(
                         f"Frequency '{freq}' for metric associated with monitor "
