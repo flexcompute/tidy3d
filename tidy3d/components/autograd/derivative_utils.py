@@ -188,11 +188,8 @@ class DerivativeInfo(Tidy3dBaseModel):
 def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -> xr.DataArray:
     """integrate a data array within bounds, assumes bounds are [2, N] for N dims."""
 
-    _arr = arr.copy()
-
     # order bounds with dimension first (N, 2)
-    bounds = np.array(bounds).T
-
+    bounds = np.asarray(bounds).T
     all_coords = {}
 
     # loop over all dimensions
@@ -200,15 +197,14 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
         bmin = get_static(bmin)
         bmax = get_static(bmax)
 
-        coord_values = _arr.coords[dim].values
+        coord_values = np.copy(arr.coords[dim].data)
 
         # reset all coordinates outside of bounds to the bounds, so that dL = 0 in integral
-        coord_values[coord_values < bmin] = bmin
-        coord_values[coord_values > bmax] = bmax
+        np.clip(coord_values, bmin, bmax, out=coord_values)
 
         all_coords[dim] = coord_values
 
-    _arr = _arr.assign_coords(**all_coords)
+    _arr = arr.assign_coords(**all_coords)
 
     # uses trapezoidal rule
     # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html

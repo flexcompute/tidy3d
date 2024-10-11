@@ -5,6 +5,7 @@ from typing import List, Tuple
 import numpy as np
 import pytest
 import tidy3d as td
+import xarray.testing as xrt
 from tidy3d.exceptions import DataError
 
 np.random.seed(4)
@@ -404,3 +405,17 @@ def test_uniform_check():
         coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
     )
     assert not arr.is_uniform
+
+
+@pytest.mark.parametrize("method", ["nearest", "linear"])
+@pytest.mark.parametrize("scalar_index", [True, False])
+def test_interp(method, scalar_index):
+    data = make_scalar_field_data_array("Ex")
+
+    f = 1.5e14
+    if not scalar_index:
+        f = [f]
+
+    xr_interp = data.interp(f=f)
+    ag_interp = data._ag_interp(f=f)
+    xrt.assert_allclose(xr_interp, ag_interp)

@@ -16,7 +16,13 @@ def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typin
     return x[:index], x[index:]
 
 
+def is_tidy_box(x: typing.Any) -> bool:
+    """Check if a value is a tidy box."""
+    return getattr(x, "_tidy", False)
+
+
 __all__ = [
     "get_static",
     "split_list",
+    "is_tidy_box",
 ]

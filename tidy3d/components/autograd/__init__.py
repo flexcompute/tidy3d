@@ -1,3 +1,7 @@
+import autograd.numpy as anp
+from autograd.extend import VJPNode, register_notrace
+
+from .boxes import TidyArrayBox
 from .functions import interpn
 from .types import (
     AutogradFieldMap,
@@ -8,9 +12,12 @@ from .types import (
     TracedSize1D,
     TracedVertices,
 )
-from .utils import get_static
+from .utils import get_static, is_tidy_box, split_list
+
+register_notrace(VJPNode, anp.full_like)
 
 __all__ = [
+    "TidyArrayBox",
     "TracedFloat",
     "TracedSize1D",
     "TracedSize",
@@ -20,4 +27,6 @@ __all__ = [
     "AutogradFieldMap",
     "get_static",
     "interpn",
+    "split_list",
+    "is_tidy_box",
 ]

@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Minor gradient direction and normalization fixes for polyslab, field monitors, and diffraction monitors in autograd.
 - Resolved an issue where temporary files for adjoint simulations were not being deleted properly.
+- Autograd functions can now be called directly on `DataArray` (e.g., `np.sum(data_array)`) in objective functions.
+
+### Changed
+- Improved autograd tracer handling in `DataArray`, resulting in significant speedups for differentiation involving large monitors.
+
+### Fixed
+- Resolve several edge cases where autograd boxes were incorrectly converted to numpy arrays.
+
 
 ## [2.7.5] - 2024-10-16
 
