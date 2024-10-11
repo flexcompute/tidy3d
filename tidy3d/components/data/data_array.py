@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from abc import ABC
 from typing import Any, Dict, List, Mapping, Union
 
@@ -11,9 +12,13 @@ import h5py
 import numpy as np
 import pandas
 import xarray as xr
-from autograd.tracer import Box, getval, isbox
-from xarray.core.types import InterpOptions
-from xarray.core.utils import either_dict_or_kwargs
+from autograd.tracer import isbox
+from xarray.core import alignment, missing
+from xarray.core.indexes import PandasIndex
+from xarray.core.indexing import _outer_to_numpy_indexer
+from xarray.core.types import InterpOptions, Self
+from xarray.core.utils import OrderedSet, either_dict_or_kwargs
+from xarray.core.variable import as_variable
 
 from ...constants import (
     HERTZ,
@@ -24,7 +29,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
-from ..autograd.functions import interpn
+from ..autograd import TidyArrayBox, get_static, interpn, is_tidy_box
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -56,9 +61,6 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
-# name for the autograd-traced part of the DataArray
-AUTOGRAD_KEY = "AUTOGRAD"
-
 
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
@@ -71,25 +73,17 @@ class DataArray(xr.DataArray):
     _data_attrs: Dict[str, str] = {}
 
     def __init__(self, data, *args, **kwargs):
-        """Initialize ``DataArray``."""
-
-        # initialize with untraced data
-        super().__init__(getval(data), *args, **kwargs)
-        # and put tracers in .attrs
-        if isbox(data):
-            self.attrs[AUTOGRAD_KEY] = data
-
-    @property
-    def tracers(self) -> Box:
-        if self.data.size == 0:
-            return None
-        elif AUTOGRAD_KEY not in self.attrs and not isbox(self.data.flat[0]):
-            # no tracers
-            return None
-        elif isbox(self.data.flat[0]):  # traced values take precedence over traced attrs
-            return anp.array(self.values.tolist())
-        else:
-            return self.attrs[AUTOGRAD_KEY]
+        # if data is a vanilla autograd box, convert to our box
+        if isbox(data) and not is_tidy_box(data):
+            data = TidyArrayBox.from_arraybox(data)
+        # do the same for xr.Variable or xr.DataArray type
+        elif (
+            isinstance(data, (xr.Variable, xr.DataArray))
+            and isbox(data.data)
+            and not is_tidy_box(data.data)
+        ):
+            data.data = TidyArrayBox.from_arraybox(data.data)
+        super().__init__(data, *args, **kwargs)
 
     @classmethod
     def __get_validators__(cls):
@@ -133,11 +127,6 @@ class DataArray(xr.DataArray):
         This does not check every 'DataArray' by default. Instead, when required, this check can be
         called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
         """
-        # skip this validator if currently tracing for autograd because
-        # self.values will be dtype('object') and not interpolatable
-        if self.tracers is not None:
-            return
-
         if field_name is None:
             field_name = "DataArray"
 
@@ -222,6 +211,30 @@ class DataArray(xr.DataArray):
         return True
 
     @property
+    def values(self):
+        """
+        The array's data converted to a numpy.ndarray.
+
+        Returns
+        -------
+        np.ndarray
+            The values of the DataArray.
+        """
+        if isbox(self.data):
+            warnings.warn(
+                "'DataArray.values' for automatic differentiation is deprecated, "
+                "please use 'DataArray.data' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return self.data
+        return super().values
+
+    @values.setter
+    def values(self, value: Any) -> None:
+        self.variable.values = value
+
+    @property
     def abs(self):
         """Absolute value of data array."""
         return abs(self)
@@ -248,7 +261,7 @@ class DataArray(xr.DataArray):
         """Save an xr.DataArray to the hdf5 file handle with a given path to the group."""
 
         sub_group = f_handle.create_group(group_path)
-        sub_group[DATA_ARRAY_VALUE_NAME] = self.values
+        sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
         for key, val in self.coords.items():
             if val.dtype == "<U1":
                 sub_group[key] = val.values.tolist()
@@ -256,7 +269,7 @@ class DataArray(xr.DataArray):
                 sub_group[key] = val
 
     @classmethod
-    def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
+    def from_hdf5(cls, fname: str, group_path: str) -> Self:
         """Load an DataArray from an hdf5 file with a given path to the group."""
         with h5py.File(fname, "r") as f:
             sub_group = f[group_path]
@@ -268,7 +281,7 @@ class DataArray(xr.DataArray):
             return cls(values, coords=coords, dims=cls._dims)
 
     @classmethod
-    def from_file(cls, fname: str, group_path: str) -> DataArray:
+    def from_file(cls, fname: str, group_path: str) -> Self:
         """Load an DataArray from an hdf5 file with a given path to the group."""
         if ".hdf5" not in fname:
             raise FileError(
@@ -282,20 +295,32 @@ class DataArray(xr.DataArray):
         token_str = dask.base.tokenize(self)
         return hash(token_str)
 
-    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> DataArray:
-        """Multiply self by value at indices into ."""
+    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> Self:
+        """Multiply self by value at indices."""
+        if isbox(self.data) or isbox(value):
+            return self._ag_multiply_at(value, coord_name, indices)
+
         self_mult = self.copy()
         self_mult[{coord_name: indices}] *= value
         return self_mult
 
+    def _ag_multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> Self:
+        """Autograd multiply_at override when tracing."""
+        key = {coord_name: indices}
+        _, index_tuple, _ = self.variable._broadcast_indexes(key)
+        idx = _outer_to_numpy_indexer(index_tuple, self.data.shape)
+        mask = np.zeros(self.data.shape, dtype="?")
+        mask[idx] = True
+        return self.copy(deep=False, data=anp.where(mask, self.data * value, self.data))
+
     def interp(
         self,
-        coords: Union[Mapping[Any, Any], None] = None,
+        coords: Mapping[Any, Any] | None = None,
         method: InterpOptions = "linear",
         assume_sorted: bool = False,
-        kwargs: Union[Mapping[str, Any], None] = None,
+        kwargs: Mapping[str, Any] | None = None,
         **coords_kwargs: Any,
-    ):
+    ) -> Self:
         """Interpolate this DataArray to new coordinate values.
 
         Parameters
@@ -321,47 +346,181 @@ class DataArray(xr.DataArray):
         KeyError
             If any of the specified coordinates are not in the DataArray.
         """
-        if self.tracers is not None:  # use custom interp if using traced data
-            coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
+        if isbox(self.data):
+            return self._ag_interp(coords, method, assume_sorted, kwargs, **coords_kwargs)
 
-            missing_keys = set(coords) - set(self.coords)
-            if missing_keys:
-                raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
+        return super().interp(coords, method, assume_sorted, kwargs, **coords_kwargs)
 
-            obj = self if assume_sorted else self.sortby(list(coords.keys()))
+    def _ag_interp(
+        self,
+        coords: Union[Mapping[Any, Any], None] = None,
+        method: InterpOptions = "linear",
+        assume_sorted: bool = False,
+        kwargs: Union[Mapping[str, Any], None] = None,
+        **coords_kwargs: Any,
+    ) -> Self:
+        """Autograd interp override when tracing over self.data.
 
-            out_coords = {k: coords.get(k, obj.coords[k]) for k in obj.dims}
-            points = tuple(obj.coords[k] for k in obj.dims)
-            xi = tuple(out_coords.values())
+        This implementation closely follows the interp implementation of xarray
+        to match its behavior as closely as possible while supporting autograd.
 
-            vals = interpn(points, obj.tracers, xi, method=method)
+        See:
+        - https://docs.xarray.dev/en/latest/generated/xarray.DataArray.interp.html
+        - https://docs.xarray.dev/en/latest/generated/xarray.Dataset.interp.html
+        """
+        if kwargs is None:
+            kwargs = {}
 
-            da = DataArray(vals, out_coords)  # tracers go into .attrs
-            if isbox(self.values.flat[0]):  # if tracing .values instead of .attrs
-                da = da.copy(deep=False, data=vals)  # copy over tracers
+        ds = self._to_temp_dataset()
 
-            return da
+        coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
+        indexers = dict(ds._validate_interp_indexers(coords))
 
-        return super().interp(
-            coords=coords,
-            method=method,
-            assume_sorted=assume_sorted,
-            kwargs=kwargs,
-            **coords_kwargs,
-        )
+        if coords:
+            # Find shared dimensions between the dataset and the indexers
+            sdims = (
+                set(ds.dims)
+                .intersection(*[set(nx.dims) for nx in indexers.values()])
+                .difference(coords.keys())
+            )
+            indexers.update({d: ds.variables[d] for d in sdims})
 
-    def conj(self, *args: Any, **kwargs: Any):
-        """Return the complex conjugate of this DataArray."""
-        if self.tracers is not None:
-            return self.__array_wrap__(anp.conj(self.tracers))
-        return super().conj(*args, **kwargs)
+        obj = ds if assume_sorted else ds.sortby(list(coords))
 
-    @property
-    def real(self):
-        """Return the real part of this DataArray."""
-        if self.tracers is not None:
-            return self.__array_wrap__(anp.real(self.tracers))
-        return super().real
+        # workaround to get a variable for a dimension without a coordinate
+        validated_indexers = {
+            k: (obj._variables.get(k, as_variable((k, range(obj.sizes[k])))), v)
+            for k, v in indexers.items()
+        }
+
+        for k, v in validated_indexers.items():
+            obj, newidx = missing._localize(obj, {k: v})
+            validated_indexers[k] = newidx[k]
+
+        variables = {}
+        reindex = False
+        for name, var in obj._variables.items():
+            if name in indexers:
+                continue
+            dtype_kind = var.dtype.kind
+            if dtype_kind in "uifc":
+                # Interpolation for numeric types
+                var_indexers = {k: v for k, v in validated_indexers.items() if k in var.dims}
+                variables[name] = self._ag_interp_func(var, var_indexers, method, **kwargs)
+            elif dtype_kind in "ObU" and (validated_indexers.keys() & var.dims):
+                # Stepwise interpolation for non-numeric types
+                reindex = True
+            elif all(d not in indexers for d in var.dims):
+                # Keep variables not dependent on interpolated coords
+                variables[name] = var
+
+        if reindex:
+            # Reindex for non-numeric types
+            reindex_indexers = {k: v for k, (_, v) in validated_indexers.items() if v.dims == (k,)}
+            reindexed = alignment.reindex(
+                obj,
+                indexers=reindex_indexers,
+                method="nearest",
+                exclude_vars=variables.keys(),
+            )
+            indexes = dict(reindexed._indexes)
+            variables.update(reindexed.variables)
+        else:
+            # Get the indexes that are not being interpolated along
+            indexes = {k: v for k, v in obj._indexes.items() if k not in indexers}
+
+        # Get the coords that also exist in the variables
+        coord_names = obj._coord_names & variables.keys()
+        selected = ds._replace_with_new_dims(variables.copy(), coord_names, indexes=indexes)
+
+        # Attach indexer as coordinate
+        for k, v in indexers.items():
+            if v.dims == (k,):
+                index = PandasIndex(v, k, coord_dtype=v.dtype)
+                index_vars = index.create_variables({k: v})
+                indexes[k] = index
+                variables.update(index_vars)
+            else:
+                variables[k] = v
+
+        # Extract coordinates from indexers
+        coord_vars, new_indexes = selected._get_indexers_coords_and_indexes(coords)
+        variables.update(coord_vars)
+        indexes.update(new_indexes)
+
+        coord_names = obj._coord_names & variables.keys() | coord_vars.keys()
+        ds = ds._replace_with_new_dims(variables, coord_names, indexes=indexes)
+        return self._from_temp_dataset(ds)
+
+    @staticmethod
+    def _ag_interp_func(var, indexes_coords, method, **kwargs):
+        """
+        Interpolate the variable `var` along the coordinates specified in `indexes_coords` using the given `method`.
+
+        The implementation follows xarray's interp implementation in xarray.core.missing,
+        but replaces some of the pre-processing as well as the actual interpolation
+        function with an autograd-compatible approach.
+
+
+        Parameters
+        ----------
+        var : xr.Variable
+            The variable to be interpolated.
+        indexes_coords : dict
+            A dictionary mapping dimension names to coordinate values for interpolation.
+        method : str
+            The interpolation method to use.
+        **kwargs : dict
+            Additional keyword arguments to pass to the interpolation function.
+
+        Returns
+        -------
+        xr.Variable
+            The interpolated variable.
+        """
+        if not indexes_coords:
+            return var.copy()
+        result = var
+        for indep_indexes_coords in missing.decompose_interp(indexes_coords):
+            var = result
+
+            # target dimensions
+            dims = list(indep_indexes_coords)
+            x, new_x = zip(*[indep_indexes_coords[d] for d in dims])
+            destination = missing.broadcast_variables(*new_x)
+
+            broadcast_dims = [d for d in var.dims if d not in dims]
+            original_dims = broadcast_dims + dims
+            new_dims = broadcast_dims + list(destination[0].dims)
+
+            x, new_x = missing._floatize_x(x, new_x)
+
+            permutation = [var.dims.index(dim) for dim in original_dims]
+            combined_permutation = permutation[-len(x) :] + permutation[: -len(x)]
+            data = anp.transpose(var.data, combined_permutation)
+            xi = anp.stack([anp.ravel(new_xi.data) for new_xi in new_x], axis=-1)
+
+            result = interpn(
+                [xn.data for xn in x],
+                data,
+                xi,
+                method=method,
+            )
+
+            result = anp.moveaxis(result, 0, -1)
+            result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
+
+            result = xr.Variable(new_dims, result, attrs=var.attrs, fastpath=True)
+
+            out_dims: OrderedSet = OrderedSet()
+            for d in var.dims:
+                if d in dims:
+                    out_dims.update(indep_indexes_coords[d][1].dims)
+                else:
+                    out_dims.add(d)
+            if len(out_dims) > 1:
+                result = result.transpose(*out_dims)
+        return result
 
 
 class FreqDataArray(DataArray):

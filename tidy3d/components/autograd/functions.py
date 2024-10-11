@@ -132,7 +132,6 @@ def interpn(
         raise ValueError(f"Unsupported interpolation method: {method}")
 
     itrp = RegularGridInterpolator(points, values, method=method)
-    grid = anp.meshgrid(*xi, indexing="ij")
 
     # Prepare the grid for interpolation
     # This step reshapes the grid, checks for NaNs and out-of-bounds values
@@ -142,12 +141,12 @@ def interpn(
     #   - number of dimensions
     #   - boolean array indicating NaN positions
     #   - (discarded) boolean array for out-of-bounds values
-    grid, shape, ndim, nans, _ = itrp._prepare_xi(tuple(grid))
+    xi, shape, ndim, nans, _ = itrp._prepare_xi(xi)
 
     # Find the indices of the grid cells containing the interpolation points
     # and calculate the normalized distances (ranging from 0 at lower grid point to 1
     # at upper grid point) within these cells
-    indices, norm_distances = itrp._find_indices(grid.T)
+    indices, norm_distances = itrp._find_indices(xi.T)
 
     result = interp_fn(indices, norm_distances, values)
     nans = anp.reshape(nans, (-1,) + (1,) * (result.ndim - 1))

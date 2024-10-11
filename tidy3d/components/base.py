@@ -26,7 +26,7 @@ from ..exceptions import FileError
 from ..log import log
 from .autograd.types import AutogradFieldMap, Box
 from .autograd.utils import get_static
-from .data.data_array import AUTOGRAD_KEY, DATA_ARRAY_MAP, DataArray
+from .data.data_array import DATA_ARRAY_MAP, DataArray
 from .file_util import compress_file_to_gzip, extract_gzip_file
 from .types import TYPE_TAG_STR, ComplexNumber, Literal
 
@@ -965,27 +965,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             if isbox(x):
                 field_mapping[path] = x
 
-            # for data arrays, need to be more careful as their tracers are stored in attrs
-            elif isinstance(x, DataArray):
-                # try to grab the traced values from the `attrs` (if traced)
-                if AUTOGRAD_KEY in x.attrs:
-                    field_mapping[path] = x.attrs[AUTOGRAD_KEY]
-
-                # or just grab the static value out of the values
-                elif include_untraced_data_arrays:
-                    field_mapping[path] = get_static(x.values)
+            # for data arrays, need to be more careful as their tracers are stored in .data
+            elif isinstance(x, xr.DataArray) and (isbox(x.data) or include_untraced_data_arrays):
+                field_mapping[path] = x.data
 
             # for sequences, add (i,) to the path and handle each value individually
             elif isinstance(x, (list, tuple)):
                 for i, val in enumerate(x):
-                    sub_paths = path + (i,)
-                    handle_value(val, path=sub_paths)
+                    handle_value(val, path=path + (i,))
 
             # for dictionaries, add the (key,) to the path and handle each value individually
             elif isinstance(x, dict):
                 for key, val in x.items():
-                    sub_paths = path + (key,)
-                    handle_value(val, path=sub_paths)
+                    handle_value(val, path=path + (key,))
 
         # recursively parse the dictionary of this object
         self_dict = self.dict()
@@ -1018,13 +1010,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 current_dict[final_key] = list(current_dict[final_key])
 
             sub_element = current_dict[final_key]
-            if isinstance(sub_element, DataArray):
+            if isinstance(sub_element, xr.DataArray):
                 current_dict[final_key] = sub_element.copy(deep=False, data=x)
-                if isbox(x):
-                    current_dict[final_key].attrs[AUTOGRAD_KEY] = x
-
-                elif AUTOGRAD_KEY in current_dict[final_key].attrs:
-                    current_dict[final_key].attrs.pop(AUTOGRAD_KEY)
 
             else:
                 current_dict[final_key] = x

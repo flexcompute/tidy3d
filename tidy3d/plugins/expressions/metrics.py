@@ -112,7 +112,7 @@ class ModeAmp(Metric):
         )
         if self.f is not None:
             amps = amps.sel(f=list(self.f), method="nearest")
-        return np.squeeze(amps.values.tolist())
+        return np.squeeze(amps.data)
 
 
 class ModePower(ModeAmp):

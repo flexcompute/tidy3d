@@ -11,15 +11,19 @@ import autograd as ag
 import autograd.numpy as anp
 import matplotlib.pylab as plt
 import numpy as np
+import numpy.testing as npt
 import pytest
 import tidy3d as td
 import tidy3d.web as web
 import xarray as xr
+from autograd.test_util import check_grads
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.utils import is_tidy_box
+from tidy3d.components.data.data_array import DataArray
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.utils import FieldMap
 
-from ..utils import SIM_FULL, AssertLogLevel, run_emulated
+from ..utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
 
 """ Test configuration """
 
@@ -990,7 +994,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
         data = run(sim, task_name="autograd_test", verbose=False)
 
         if objtype == "flux":
-            return anp.sum(data[monitor.name].flux.values)
+            return data[monitor.name].flux.item()
         elif objtype == "intensity":
             return anp.sum(data.get_intensity(monitor.name).values)
 
@@ -1494,6 +1498,53 @@ def test_extraneous_field(use_emulated_run, log_capture):
         )
         data = run(sim, task_name="extra_field")
         amp = data["mode"].amps.sel(direction="+", f=FREQ0 * 0.9, mode_index=0).values
-        return abs(anp.squeeze(amp.tolist())) ** 2
+        return abs(amp.item()) ** 2
 
     g = ag.grad(objective)(params0)
+
+
+class TestTidyArrayBox:
+    def test_is_tidy_box(self):
+        da = DataArray(tracer_arr, dims=map(str, range(tracer_arr.ndim)))
+        assert is_tidy_box(da.data)
+
+    def test_real(self):
+        npt.assert_allclose(tracer_arr.real._value, tracer_arr._value.real)
+
+    def test_imag(self):
+        npt.assert_allclose(tracer_arr.imag._value, tracer_arr._value.imag)
+
+    def test_conj(self):
+        npt.assert_allclose(tracer_arr.conj()._value, tracer_arr._value.conj())
+
+    def test_item(self):
+        assert tracer_arr.item() == tracer_arr._value.item()
+
+
+class TestDataArrayGrads:
+    @pytest.mark.parametrize("attr", ["real", "imag", "conj"])
+    def test_custom_methods_grads(self, attr):
+        """Test grads of TidyArrayBox methods implemented in autograd/boxes.py"""
+
+        def objective(x, attr):
+            da = DataArray(x, dims=map(str, range(x.ndim)))
+            attr_value = getattr(da, attr)
+            val = attr_value() if callable(attr_value) else attr_value
+            return val.item()
+
+        x = np.array([1.0])
+        check_grads(objective, modes=["fwd", "rev"], order=2)(x, attr)
+
+    def test_multiply_at_grads(self, rng):
+        """Test grads of DataArray.multiply_at method"""
+
+        def objective(a, b):
+            coords = {str(i): np.arange(a.shape[i]) for i in range(a.ndim)}
+            da = DataArray(a, coords=coords, dims=map(str, range(a.ndim)))
+            da_mult = da.multiply_at(b, "0", [0, 1]) ** 2
+            return np.sum(da_mult).item()
+
+        a = rng.uniform(-1, 1, (3, 3))
+        b = 1.0
+        check_grads(lambda x: objective(x, b), modes=["fwd", "rev"], order=1)(a)
+        check_grads(lambda x: objective(a, x), modes=["fwd", "rev"], order=1)(b)
