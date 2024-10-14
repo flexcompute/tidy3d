@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import warnings
 from abc import ABC
 from typing import Any, Dict, List, Mapping, Union
 
-import autograd.numpy as anp
 import dask
 import h5py
 import numpy as np
 import pandas
 import xarray as xr
-from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.tracer import isbox
 from xarray.core.types import InterpOptions
 from xarray.core.utils import either_dict_or_kwargs
@@ -25,7 +24,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
-from ..autograd.functions import interpn
+from ..autograd import TidyArrayBox, interpn
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -72,46 +71,28 @@ class DataArray(xr.DataArray):
     _data_attrs: Dict[str, str] = {}
 
     def __new__(cls, data, *args, **kwargs):
-        if isbox(data):
-            cls.__array_ufunc__ = cls._ag_array_ufunc
-            cls.__array_function__ = cls._ag_array_function
+        if isbox(getattr(data, "data", data)):
+
+            def values(self):
+                warnings.warn(
+                    "'DataArray.values' is deprecated, please use 'DataArray.data' instead.",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                return self.data
+
+            cls.values = property(values)
             cls.interp = cls._ag_interp
+
         return super().__new__(cls)
 
     def __init__(self, data, *args, **kwargs):
         if isbox(data):
-            ArrayBox.__array_namespace__ = lambda self, *, api_version=None: anp
-            data = ArrayBox(data._value, data._trace, data._node)
+            data = TidyArrayBox(data._value, data._trace, data._node)
+        elif hasattr(data, "data") and isbox(data.data):
+            box = TidyArrayBox(data.data._value, data.data._trace, data.data._node)
+            data = data.copy(deep=False, data=box)
         super().__init__(data, *args, **kwargs)
-
-    @staticmethod
-    def _ag_data(args, kwargs):
-        args = (arg.data if isinstance(arg, xr.DataArray) else arg for arg in args)
-        kwargs = {
-            k: (arg.data if isinstance(arg, xr.DataArray) else arg) for k, arg in kwargs.items()
-        }
-        return args, kwargs
-
-    @staticmethod
-    def _ag_function(name):
-        modules = (anp.linalg, anp.fft, anp)
-        for module in modules:
-            func = getattr(module, name, None)
-            if func is not None:
-                return func
-        raise NotImplementedError(f"The function '{name}' is not implemented in autograd.numpy")
-
-    def _ag_array_ufunc(self, ufunc, method, *inputs, **kwargs):
-        if method != "__call__":
-            raise NotImplementedError(f"ufunc method {method} is not implemented")
-        args, kwargs = self._ag_data(inputs, kwargs)
-        f = self._ag_function(ufunc.__name__)
-        return f(*args, **kwargs)
-
-    def _ag_array_function(self, func, types, args, kwargs):
-        args, kwargs = self._ag_data(args, kwargs)
-        f = self._ag_function(func.__name__)
-        return f(*args, **kwargs)
 
     @classmethod
     def __get_validators__(cls):
@@ -155,6 +136,8 @@ class DataArray(xr.DataArray):
         This does not check every 'DataArray' by default. Instead, when required, this check can be
         called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
         """
+        if isbox(self.data):
+            return
         if field_name is None:
             field_name = "DataArray"
 
@@ -338,6 +321,7 @@ class DataArray(xr.DataArray):
         KeyError
             If any of the specified coordinates are not in the DataArray.
         """
+
         coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
 
         missing_keys = set(coords) - set(self.coords)
