@@ -41,6 +41,7 @@ from ...components.types import (
     ArrayComplex3D,
     ArrayComplex4D,
     ArrayFloat1D,
+    ArrayFloat2D,
     Ax,
     Axis,
     Axis2D,
@@ -1150,13 +1151,15 @@ class ModeSolver(Tidy3dBaseModel):
         return n_complex, fields, eps_spec
 
     @staticmethod
-    def _postprocess_solver_fields(solver_fields, normal_axis, plane, mode_spec):
+    def _postprocess_solver_fields(solver_fields, normal_axis, plane, mode_spec, coords):
         """Postprocess `solver_fields` from `compute_modes` to proper coordinate"""
         fields = {key: [] for key in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
+        diff_coords = (np.diff(coords[0]), np.diff(coords[1]))
+
         for mode_index in range(mode_spec.num_modes):
             # Get E and H fields at the current mode_index
             ((Ex, Ey, Ez), (Hx, Hy, Hz)) = ModeSolver._process_fields(
-                solver_fields, mode_index, normal_axis, plane
+                solver_fields, mode_index, normal_axis, plane, diff_coords
             )
 
             # Note: back in original coordinates
@@ -1194,7 +1197,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         fields = self._postprocess_solver_fields(
-            solver_fields, self.normal_axis, self.plane, self.mode_spec
+            solver_fields, self.normal_axis, self.plane, self.mode_spec, coords
         )
         return n_complex, fields, eps_spec
 
@@ -1250,7 +1253,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         fields = self._postprocess_solver_fields(
-            solver_fields, self.normal_axis, self.plane, self.mode_spec
+            solver_fields, self.normal_axis, self.plane, self.mode_spec, coords
         )
         return n_complex, fields, eps_spec
 
@@ -1261,11 +1264,53 @@ class ModeSolver(Tidy3dBaseModel):
         return np.stack(plane.unpop_axis(f_z, (f_x, f_y), axis=normal_axis), axis=0)
 
     @staticmethod
+    def _weighted_coord_max(
+        array: ArrayFloat2D, u: ArrayFloat1D, v: ArrayFloat1D
+    ) -> Tuple[int, int]:
+        """2D argmax for an array weighted in both directions."""
+        m = array * u.reshape(-1, 1)
+        i = np.arange(array.shape[0])
+        i = int(0.5 + (m * i.reshape(-1, 1)).sum() / m.sum())
+        m = array * v
+        j = np.arange(array.shape[1])
+        j = int(0.5 + (m * j).sum() / m.sum())
+        return i, j
+
+    @staticmethod
+    def _inverted_gauge(e_field: FIELD, diff_coords: Tuple[ArrayFloat1D, ArrayFloat1D]) -> bool:
+        """Check if the lower xy region of the mode has a negative sign."""
+        dx, dy = diff_coords
+        e_x, e_y = e_field[:2, :, :, 0]
+        e_x = e_x.real
+        e_y = e_y.real
+        e = e_x if np.abs(e_x).max() > np.abs(e_y).max() else e_y
+        abs_e = np.abs(e)
+        e_2 = abs_e**2
+        i, j = e.shape
+        while i > 0 and j > 0:
+            if (e[:i, :j] > 0).all():
+                return False
+            elif (e[:i, :j] < 0).all():
+                return True
+            else:
+                threshold = abs_e[:i, :j].max() * 0.5
+                i, j = ModeSolver._weighted_coord_max(e_2[:i, :j], dx[:i], dy[:j])
+                if abs(e[i, j]) >= threshold:
+                    return e[i, j] < 0
+                # Do not close the window for 1D mode solvers
+                if e.shape[0] == 1:
+                    i = 1
+                elif e.shape[1] == 1:
+                    j = 1
+        return False
+
+    @staticmethod
     def _process_fields(
         mode_fields: ArrayComplex4D,
         mode_index: pydantic.NonNegativeInt,
         normal_axis: Axis,
         plane: MODE_PLANE_TYPE,
+        diff_coords: Tuple[ArrayFloat1D, ArrayFloat1D],
     ) -> Tuple[FIELD, FIELD]:
         """Transform solver fields to simulation axes and set gauge."""
 
@@ -1277,6 +1322,13 @@ class ModeSolver(Tidy3dBaseModel):
         phi = np.angle(E[:2].ravel()[ind_max])
         E *= np.exp(-1j * phi)
         H *= np.exp(-1j * phi)
+
+        # High-order modes with opposite-sign lobes will show inconsistent sign, heavily dependent
+        # on the exact local grid to choose the previous gauge. This method flips the gauge sign
+        # when necessary to make it more consistent.
+        if ModeSolver._inverted_gauge(E, diff_coords):
+            E *= -1
+            H *= -1
 
         # Rotate back to original coordinates
         (Ex, Ey, Ez) = ModeSolver._rotate_field_coords(E, normal_axis, plane)

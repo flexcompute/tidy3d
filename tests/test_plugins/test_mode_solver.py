@@ -1098,3 +1098,63 @@ def test_mode_small_bend_radius_fail():
             freqs=np.linspace(1e14, 2e14, 100),
             mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=0),
         )
+
+
+def make_high_order_mode_solver(sign, dim=3):
+    waveguide = td.Structure(
+        geometry=td.Box(size=(td.inf, 0.6, 0.2)),
+        medium=td.Medium(permittivity=3.47**2),
+    )
+
+    refine_box = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, sign * 0.3, 0), size=(td.inf, 0.1, 0.3)),
+        dl=[None, 0.02, 0.02],
+    )
+
+    pml = td.Boundary(plus=td.PML(), minus=td.PML())
+    periodic = td.Boundary(plus=td.Periodic(), minus=td.Periodic())
+
+    sim = td.Simulation(
+        size=(10, 2.5, 1.5 if dim == 3 else 0),
+        grid_spec=td.GridSpec.auto(
+            min_steps_per_wvl=20, wavelength=1.55, override_structures=[refine_box]
+        ),
+        structures=[waveguide],
+        medium=td.Medium(permittivity=1.44**2),
+        boundary_spec=td.BoundarySpec(x=pml, y=pml, z=pml if dim == 3 else periodic),
+        run_time=1e-12,
+    )
+
+    plane = td.Box(center=(0, 0, 0), size=(0, 2.5, 1.5))
+    freq0 = td.C_0 / 1.55
+    num_modes = 3
+
+    mode_spec = td.ModeSpec(
+        num_modes=num_modes,
+        target_neff=3.47,
+        group_index_step=False,
+    )
+
+    return ModeSolver(
+        simulation=sim,
+        plane=plane,
+        mode_spec=mode_spec,
+        freqs=[freq0],
+    )
+
+
+def test_high_order_mode_normalization():
+    # 3D simulation
+    ms1 = make_high_order_mode_solver(1)
+    ms2 = make_high_order_mode_solver(-1)
+    overlap = ms1.data.outer_dot(ms2.data).isel(mode_index_0=2, mode_index_1=2).values.item()
+    assert abs(1 - overlap) < 1e-3
+
+    # 2D simulation
+    ms1 = make_high_order_mode_solver(1, 2)
+    values = ms1.data.Ez.isel(mode_index=2).values.squeeze().real
+    assert (values[: values.size // 3] > 0).all()
+
+    ms2 = make_high_order_mode_solver(-1, 2)
+    values = ms2.data.Ez.isel(mode_index=2).values.squeeze().real
+    assert (values[: values.size // 3] > 0).all()
