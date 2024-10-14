@@ -2540,19 +2540,20 @@ class Simulation(AbstractYeeGridSimulation):
         if val is None:
             return val
 
-        for i, structure in enumerate(val):
-            if isinstance(structure.medium, Medium2D):
-                continue
-            for geom in flatten_groups(structure.geometry):
-                zero_dims = geom.zero_dims
-                if len(zero_dims) > 0:
-                    log.warning(
-                        f"Structure at 'structures[{i}]' has geometry with zero size along "
-                        f"dimensions {zero_dims}, and with a medium that is not a 'Medium2D'. "
-                        "This is probably not correct, since the resulting simulation will "
-                        "depend on the details of the numerical grid. Consider either "
-                        "giving the geometry a nonzero thickness or using a 'Medium2D'."
-                    )
+        with log as consolidated_logger:
+            for i, structure in enumerate(val):
+                if isinstance(structure.medium, Medium2D):
+                    continue
+                for geom in flatten_groups(structure.geometry):
+                    zero_dims = geom.zero_dims
+                    if len(zero_dims) > 0:
+                        consolidated_logger.warning(
+                            f"Structure at 'structures[{i}]' has geometry with zero size along "
+                            f"dimensions {zero_dims}, and with a medium that is not a 'Medium2D'. "
+                            "This is probably not correct, since the resulting simulation will "
+                            "depend on the details of the numerical grid. Consider either "
+                            "giving the geometry a nonzero thickness or using a 'Medium2D'."
+                        )
 
         return val
 
