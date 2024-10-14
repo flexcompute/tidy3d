@@ -11,7 +11,8 @@ import h5py
 import numpy as np
 import pandas
 import xarray as xr
-from autograd.tracer import Box, getval, isbox
+from autograd.numpy.numpy_boxes import ArrayBox
+from autograd.tracer import isbox
 from xarray.core.types import InterpOptions
 from xarray.core.utils import either_dict_or_kwargs
 
@@ -70,26 +71,47 @@ class DataArray(xr.DataArray):
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
 
-    def __init__(self, data, *args, **kwargs):
-        """Initialize ``DataArray``."""
-
-        # initialize with untraced data
-        super().__init__(getval(data), *args, **kwargs)
-        # and put tracers in .attrs
+    def __new__(cls, data, *args, **kwargs):
         if isbox(data):
-            self.attrs[AUTOGRAD_KEY] = data
+            cls.__array_ufunc__ = cls._ag_array_ufunc
+            cls.__array_function__ = cls._ag_array_function
+            cls.interp = cls._ag_interp
+        return super().__new__(cls)
 
-    @property
-    def tracers(self) -> Box:
-        if self.data.size == 0:
-            return None
-        elif AUTOGRAD_KEY not in self.attrs and not isbox(self.data.flat[0]):
-            # no tracers
-            return None
-        elif isbox(self.data.flat[0]):  # traced values take precedence over traced attrs
-            return anp.array(self.values.tolist())
-        else:
-            return self.attrs[AUTOGRAD_KEY]
+    def __init__(self, data, *args, **kwargs):
+        if isbox(data):
+            ArrayBox.__array_namespace__ = lambda self, *, api_version=None: anp
+            data = ArrayBox(data._value, data._trace, data._node)
+        super().__init__(data, *args, **kwargs)
+
+    @staticmethod
+    def _ag_data(args, kwargs):
+        args = (arg.data if isinstance(arg, xr.DataArray) else arg for arg in args)
+        kwargs = {
+            k: (arg.data if isinstance(arg, xr.DataArray) else arg) for k, arg in kwargs.items()
+        }
+        return args, kwargs
+
+    @staticmethod
+    def _ag_function(name):
+        modules = (anp.linalg, anp.fft, anp)
+        for module in modules:
+            func = getattr(module, name, None)
+            if func is not None:
+                return func
+        raise NotImplementedError(f"The function '{name}' is not implemented in autograd.numpy")
+
+    def _ag_array_ufunc(self, ufunc, method, *inputs, **kwargs):
+        if method != "__call__":
+            raise NotImplementedError(f"ufunc method {method} is not implemented")
+        args, kwargs = self._ag_data(inputs, kwargs)
+        f = self._ag_function(ufunc.__name__)
+        return f(*args, **kwargs)
+
+    def _ag_array_function(self, func, types, args, kwargs):
+        args, kwargs = self._ag_data(args, kwargs)
+        f = self._ag_function(func.__name__)
+        return f(*args, **kwargs)
 
     @classmethod
     def __get_validators__(cls):
@@ -133,11 +155,6 @@ class DataArray(xr.DataArray):
         This does not check every 'DataArray' by default. Instead, when required, this check can be
         called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
         """
-        # skip this validator if currently tracing for autograd because
-        # self.values will be dtype('object') and not interpolatable
-        if self.tracers is not None:
-            return
-
         if field_name is None:
             field_name = "DataArray"
 
@@ -288,7 +305,7 @@ class DataArray(xr.DataArray):
         self_mult[{coord_name: indices}] *= value
         return self_mult
 
-    def interp(
+    def _ag_interp(
         self,
         coords: Union[Mapping[Any, Any], None] = None,
         method: InterpOptions = "linear",
@@ -321,47 +338,21 @@ class DataArray(xr.DataArray):
         KeyError
             If any of the specified coordinates are not in the DataArray.
         """
-        if self.tracers is not None:  # use custom interp if using traced data
-            coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
+        coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
 
-            missing_keys = set(coords) - set(self.coords)
-            if missing_keys:
-                raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
+        missing_keys = set(coords) - set(self.coords)
+        if missing_keys:
+            raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
 
-            obj = self if assume_sorted else self.sortby(list(coords.keys()))
+        obj = self if assume_sorted else self.sortby(list(coords.keys()))
 
-            out_coords = {k: coords.get(k, obj.coords[k]) for k in obj.dims}
-            points = tuple(obj.coords[k] for k in obj.dims)
-            xi = tuple(out_coords.values())
+        out_coords = {k: coords.get(k, obj.coords[k]) for k in obj.dims}
+        points = tuple(obj.coords[k] for k in obj.dims)
+        xi = tuple(out_coords.values())
 
-            vals = interpn(points, obj.tracers, xi, method=method)
+        vals = interpn(points, obj.data, xi, method=method)
 
-            da = DataArray(vals, out_coords)  # tracers go into .attrs
-            if isbox(self.values.flat[0]):  # if tracing .values instead of .attrs
-                da = da.copy(deep=False, data=vals)  # copy over tracers
-
-            return da
-
-        return super().interp(
-            coords=coords,
-            method=method,
-            assume_sorted=assume_sorted,
-            kwargs=kwargs,
-            **coords_kwargs,
-        )
-
-    def conj(self, *args: Any, **kwargs: Any):
-        """Return the complex conjugate of this DataArray."""
-        if self.tracers is not None:
-            return self.__array_wrap__(anp.conj(self.tracers))
-        return super().conj(*args, **kwargs)
-
-    @property
-    def real(self):
-        """Return the real part of this DataArray."""
-        if self.tracers is not None:
-            return self.__array_wrap__(anp.real(self.tracers))
-        return super().real
+        return DataArray(vals, out_coords)
 
 
 class FreqDataArray(DataArray):

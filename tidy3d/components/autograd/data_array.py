@@ -1,21 +1,10 @@
-#!/usr/bin/env -S poetry run python
-# ruff: noqa: F401
-
-from time import perf_counter
-
-import autograd
 import autograd.numpy as anp
-import numpy as np
 import xarray as xr
-from autograd import value_and_grad
 from autograd.numpy.numpy_boxes import ArrayBox
-from autograd.test_util import check_grads
-from autograd.tracer import getval, isbox
+from autograd.tracer import isbox
 
 
-class DataArray(xr.DataArray):
-    __slots__ = ()
-
+class DataArrayAutogradMixin:
     def __new__(cls, data, *args, **kwargs):
         if isbox(data):
             cls.__array_ufunc__ = cls._array_ufunc
@@ -56,31 +45,3 @@ class DataArray(xr.DataArray):
         args, kwargs = self._extract_data(args, kwargs)
         f = self._get_anp_function(func.__name__)
         return f(*args, **kwargs)
-
-
-def f_data(x):
-    da = DataArray(x, dims=range(x.ndim))
-    return anp.mean(anp.real(abs(da)))
-    # return anp.mean(anp.multiply(da, da))
-
-
-def main():
-    rng = np.random.default_rng(1232523)
-    x = rng.uniform(-10, 10, (100, 100))
-    # x = np.arange(5).astype(float)
-
-    # t0 = perf_counter()
-    # for _ in range(10):
-    #     f_data(x)
-    # print(f"fwd:  {perf_counter() - t0:.3e}s")
-
-    t0 = perf_counter()
-    for _ in range(10):
-        autograd.grad(f_data)(x)
-    print(f"bwd:  {perf_counter() - t0:.3e}s")
-
-    check_grads(f_data, modes=["fwd", "rev"], order=2)(x)
-
-
-if __name__ == "__main__":
-    main()
