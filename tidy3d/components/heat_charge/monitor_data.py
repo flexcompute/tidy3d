@@ -13,7 +13,7 @@ from ...constants import KELVIN, VOLT
 from ...log import log
 from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
-from ..data.data_array import SpatialDataArray
+from ..data.data_array import CapacitanceCurveDataArray, SpatialDataArray
 from ..data.dataset import IndexedDataArray, TetrahedralGridDataset, TriangularGridDataset
 from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
@@ -292,6 +292,12 @@ class ChargeSimulationData(HeatChargeMonitorData):
 
     data_series: Optional[HeatChargeDataset] = pd.Field(
         None, title="Data series", description="Contains the data."
+    )
+
+    capacitance_curve: Optional[Dict[str, CapacitanceCurveDataArray]] = pd.Field(
+        None,
+        title="Capacitance curve",
+        description="Small signal capacitance associated to the monitor.",
     )
 
     @pd.validator("data_series", always=True)
