@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MethodRandom` and `MethodRandomCustom` have been removed from the Design plugin, and `DesignSpace.run_batch` has been superseded by `.run`.
 - Design plugin has been significantly reworked to improve ease of use and allow for new optimization methods.
 - Behavior of `FieldProjector` now matches the server-side computation, which does not truncate the integration surface when it extends into PML regions.
+- Mode solver fields are more consistently normalized with respect to grid-dependent sign inversions in high order modes.
 
 ### Fixed
 - Significant speedup for field projection computations.
