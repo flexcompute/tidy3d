@@ -5,7 +5,7 @@ from typing import List, Tuple
 import numpy as np
 import shapely
 
-from ...constants import inf
+from ...constants import fp_eps, inf
 from ..geometry.base import Box, ClipOperation, Geometry
 from ..geometry.polyslab import PolySlab
 from ..grid.grid import Grid
@@ -207,6 +207,7 @@ def subdivide(
     polyslab_result = [
         (shapely_to_polyslab(element[0], axis, center), element[1], element[2])
         for element in final_polygons
+        if element[0].area > fp_eps
     ]
 
     return polyslab_result

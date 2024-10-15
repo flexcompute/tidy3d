@@ -8,6 +8,7 @@ from typing import Annotated, Literal, Optional, Union
 import numpy as np
 import pydantic.v1 as pydantic
 
+from ..components.grid.grid import Grid
 from ..components.medium import (
     Debye,
     Drude,
@@ -23,7 +24,8 @@ from ..exceptions import ValidationError
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .geometry.base import Box, ClipOperation, Geometry
 from .geometry.primitives import Cylinder
-from .types import TYPE_TAG_STR, Axis, Coordinate
+from .geometry.utils import SnapBehavior, SnapLocation, SnappingSpec, snap_box_to_grid
+from .types import TYPE_TAG_STR, Axis, Axis2D, Coordinate
 from .viz import PlotParams, plot_params_lumped_element
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 3
@@ -82,6 +84,14 @@ class RectangularLumpedElement(LumpedElement, Box):
         "associated voltage drop will occur. Must be in the plane of the element.",
     )
 
+    snap_perimeter_to_grid: bool = pydantic.Field(
+        True,
+        title="Snap Perimeter to Grid",
+        description="When enabled, the perimeter of the lumped element is snapped to the simulation grid, "
+        "which improves accuracy when the number of grid cells is low within the element. Lumped elements "
+        "are always snapped to the grid along their normal axis.",
+    )
+
     @cached_property
     def normal_axis(self):
         """Normal axis of the lumped element, which is the axis where the element has zero size."""
@@ -93,12 +103,21 @@ class RectangularLumpedElement(LumpedElement, Box):
         return 3 - self.voltage_axis - self.normal_axis
 
     @cached_property
-    def _voltage_axis_2d(self) -> Axis:
+    def _voltage_axis_2d(self) -> Axis2D:
         """Returns the voltage axis using the in-plane dimensions used by :class:`Medium2D`."""
         if self.normal_axis > self.voltage_axis:
             return self.voltage_axis
         else:
             return self.voltage_axis - 1
+
+    @cached_property
+    def _snapping_spec(self) -> SnappingSpec:
+        """Returns the snapping behavior for each dimension of the lumped element."""
+        snap_location = [SnapLocation.Boundary] * 3
+        snap_behavior = [SnapBehavior.Closest] * 3
+        snap_location[self.lateral_axis] = SnapLocation.Center
+        snap_behavior[self.lateral_axis] = SnapBehavior.Expand
+        return SnappingSpec(location=snap_location, behavior=snap_behavior)
 
     _plane_validator = assert_plane()
 
@@ -147,19 +166,28 @@ class RectangularLumpedElement(LumpedElement, Box):
             )
         return mesh_overrides
 
-    @cached_property
-    def to_geometry(self) -> Box:
-        """Converts the :class:`RectangularElement` object to a :class:`Geometry`."""
-        return Box(size=self.size, center=self.center)
+    def to_geometry(self, grid: Grid = None) -> Box:
+        """Converts the :class:`RectangularLumpedElement` object to a :class:`Box`."""
+        box = Box(size=self.size, center=self.center)
+        if grid and self.snap_perimeter_to_grid:
+            snap_location = [SnapLocation.Boundary] * 3
+            snap_behavior = [SnapBehavior.Closest] * 3
+            snap_location[self.lateral_axis] = SnapLocation.Center
+            snap_behavior[self.lateral_axis] = SnapBehavior.Expand
+            snap_spec = SnappingSpec(location=snap_location, behavior=snap_behavior)
+            return snap_box_to_grid(grid, box, snap_spec)
+        return box
 
-    @cached_property
-    def _admittance_transfer_function_scaling(self):
+    def _admittance_transfer_function_scaling(self, box: Box = None) -> float:
         """The admittance transfer function of the network needs to be scaled depending on the dimensions of the lumped element.
         The scaling emulates adding networks with equal admittances in series and parallel, and is needed when distributing the
         network over a finite volume.
         """
-        size_voltage = self.size[self.voltage_axis]
-        size_lateral = self.size[self.lateral_axis]
+        size = self.size
+        if box:
+            size = box.size
+        size_voltage = size[self.voltage_axis]
+        size_lateral = size[self.lateral_axis]
         # The final scaling along the normal axis is applied when the resulting 2D medium is averaged with the background media.
         return size_voltage / size_lateral
 
@@ -189,18 +217,20 @@ class LumpedResistor(RectangularLumpedElement):
         unit=OHM,
     )
 
-    @cached_property
-    def _sheet_conductance(self):
+    def _sheet_conductance(self, box: Box = None):
         """Effective sheet conductance."""
-        size_voltage = self.size[self.voltage_axis]
-        size_lateral = self.size[self.lateral_axis]
+        size = self.size
+        if box:
+            size = box.size
+        size_voltage = size[self.voltage_axis]
+        size_lateral = size[self.lateral_axis]
         return size_voltage / size_lateral / self.resistance
 
-    @cached_property
-    def to_structure(self) -> Structure:
+    def to_structure(self, grid: Grid = None) -> Structure:
         """Converts the :class:`LumpedResistor` object to a :class:`Structure`
         ready to be added to the :class:`Simulation`"""
-        conductivity = self._sheet_conductance
+        box = self.to_geometry(grid=grid)
+        conductivity = self._sheet_conductance(box)
         components_2d = ["ss", "tt"]
         voltage_component = components_2d.pop(self._voltage_axis_2d)
         other_component = components_2d[0]
@@ -209,7 +239,7 @@ class LumpedResistor(RectangularLumpedElement):
             other_component: Medium(permittivity=1),
         }
         return Structure(
-            geometry=self.to_geometry,
+            geometry=box,
             medium=Medium2D(**medium_dict),
         )
 
@@ -403,8 +433,9 @@ class NetworkConversions(Tidy3dBaseModel):
             K_tan = -1j * (2 / dt) * np.tan(2 * np.pi * freqs * dt / 2)
         numer = 0
         denom = 0
-        for a_m, b_m, m in zip(a, b, range(len(a))):
+        for a_m, m in zip(a, range(len(a))):
             numer += a_m * K_tan ** (m)
+        for b_m, m in zip(b, range(len(b))):
             denom += b_m * K_tan ** (m)
         # We do not include the scaling factor associated with the cell size, since we will
         # distribute the network over more than one cell.
@@ -767,19 +798,21 @@ class LinearLumpedElement(RectangularLumpedElement):
         "voltage-current relationship described by the ``network`` field.",
     )
 
-    @cached_property
-    def to_structure(self) -> Structure:
+    def to_structure(self, grid: Grid = None) -> Structure:
         """Converts the :class:`LinearLumpedElement` object to a :class:`Structure`
         ready to be added to the :class:`Simulation`"""
+        box = self.to_geometry(grid=grid)
+        medium_scaling_factor = self._admittance_transfer_function_scaling(box)
+        medium = self.network._to_medium(medium_scaling_factor)
         components_2d = ["ss", "tt"]
         voltage_component = components_2d.pop(self._voltage_axis_2d)
         other_component = components_2d[0]
         medium_dict = {
-            voltage_component: self.network._to_medium(self._admittance_transfer_function_scaling),
+            voltage_component: medium,
             other_component: Medium(permittivity=1),
         }
         return Structure(
-            geometry=self.to_geometry,
+            geometry=box,
             medium=Medium2D(**medium_dict),
         )
 

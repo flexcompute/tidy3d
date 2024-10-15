@@ -7,6 +7,12 @@ from ....components.base import cached_property
 from ....components.data.data_array import FreqDataArray
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
+from ....components.geometry.utils import (
+    SnapBehavior,
+    SnapLocation,
+    SnappingSpec,
+    snap_box_to_grid,
+)
 from ....components.geometry.utils_2d import increment_float
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import LumpedResistor
@@ -40,6 +46,14 @@ class LumpedPort(AbstractLumpedPort, Box):
         "computing the port voltage. The integration axis must lie in the plane of the port.",
     )
 
+    snap_perimeter_to_grid: bool = pd.Field(
+        True,
+        title="Snap Perimeter to Grid",
+        description="When enabled, the perimeter of the port is snapped to the simulation grid, "
+        "which improves accuracy when the number of grid cells is low within the element. A :class:`LumpedPort` "
+        "is always snapped to the grid along its injection axis.",
+    )
+
     _plane_validator = assert_plane()
 
     @cached_property
@@ -66,13 +80,22 @@ class LumpedPort(AbstractLumpedPort, Box):
         """Create a current source from the lumped port."""
         # Discretized source amps are manually zeroed out later if they
         # fall on Yee grid locations outside the analytical source region.
-        component = "xyz"[self.voltage_axis]
         center = list(self.center)
         if snap_center:
             center[self.injection_axis] = snap_center
+        size = self.size
+
+        if grid:
+            load = self.to_load()
+            # This will included any snapping behavior the load undergoes
+            load_box = load.to_geometry(grid=grid)
+            center = load_box.center
+            size = load_box.size
+
+        component = "xyz"[self.voltage_axis]
         return UniformCurrentSource(
             center=center,
-            size=self.size,
+            size=size,
             source_time=source_time,
             polarization=f"E{component}",
             name=self.name,
@@ -94,6 +117,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             resistance=np.real(self.impedance),
             name=f"{self.name}_resistor",
             voltage_axis=self.voltage_axis,
+            snap_perimeter_to_grid=self.snap_perimeter_to_grid,
         )
 
     def to_voltage_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
@@ -143,11 +167,14 @@ class LumpedPort(AbstractLumpedPort, Box):
 
     def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute voltage across the port."""
+        load = self.to_load()
+        # This will included any snapping behavior the load undergoes
+        load_box = load.to_geometry(grid=sim_data.simulation.grid)
         field_data = sim_data[self._voltage_monitor_name]
-        size = list(self.size)
+        size = list(load_box.size)
         size[self.current_axis] = 0
         voltage_integral = VoltageIntegralAxisAligned(
-            center=self.center,
+            center=load_box.center,
             size=size,
             extrapolate_to_endpoints=True,
             snap_path_to_grid=True,
@@ -170,72 +197,28 @@ class LumpedPort(AbstractLumpedPort, Box):
         #                  |                   h1_field ->             |
 
         field_data = sim_data[self._current_monitor_name]
-        # Get h field tangent to resistive sheet
-        h_component = "xyz"[self.current_axis]
-        inject_component = "xyz"[self.injection_axis]
-        # monitor_data = sim_data[f"{port.name}_H{h_component}"]
-        field_components = field_data.field_components
-        h_field = field_components[f"H{h_component}"]
-        # Coordinates as numpy array for h_field along curren and injection axis
-        h_coords_along_current = h_field.coords[h_component].values
-        h_coords_along_injection = h_field.coords[inject_component].values
-        # h_cap represents the very short section (single cell) of the H contour that
-        # is in the injection_axis direction. It is needed to fully enclose the sheet.
-        h_cap_field = field_components[f"H{inject_component}"]
-        # Coordinates of h_cap field as numpy arrays
-        h_cap_coords_along_current = h_cap_field.coords[h_component].values
-        h_cap_coords_along_injection = h_cap_field.coords[inject_component].values
 
-        # Use the coordinates of h_cap since it lies on the same grid that the
-        # lumped resistor is snapped to
-        orth_index = np.argmin(
-            np.abs(h_cap_coords_along_injection - self.center[self.injection_axis])
-        )
-        inject_center = h_cap_coords_along_injection[orth_index]
-        # Some sanity checks, tangent H field coordinates should be directly above
-        # and below the coordinates of the resistive sheet
-        error_message = (
-            "Unexpected error encountered when setting up the current computation for a 'LumpedPort'. "
-            "If you encounter this error, please create an issue in the Tidy3D github repository."
-        )
-        if orth_index <= 0:
-            raise AssertionError(error_message)
-        if inject_center >= h_coords_along_injection[orth_index]:
-            raise AssertionError(error_message)
-        if h_coords_along_injection[orth_index - 1] >= inject_center:
-            raise AssertionError(error_message)
-        # Distance between the h1_field and h2_field, a single cell size
-        dcap = h_coords_along_injection[orth_index] - h_coords_along_injection[orth_index - 1]
+        load = self.to_load()
+        # This will included any snapping behavior the load undergoes
+        load_box = load.to_geometry(grid=sim_data.simulation.grid)
 
-        # Next find the size in the current_axis direction
-        # Find exact bounds of port taking into consideration the Yee grid
-        # Select bounds carefully and allow for h_cap very close to the port bounds
-        port_min = self.bounds[0][self.current_axis]
-        port_max = self.bounds[1][self.current_axis]
-
-        (idx_min, idx_max) = LumpedPort._select_within_bounds(
-            h_coords_along_current, port_min, port_max
-        )
-        # Use these indices to select the exact positions of the h_cap field
-        h_min_bound = h_cap_coords_along_current[idx_min - 1]
-        h_max_bound = h_cap_coords_along_current[idx_max]
-
-        # Setup axis aligned contour integral, which is defined by a plane
-        # The path integral is snapped to the grid, so center and size will
-        # be slightly modified when compared to the original port.
-        center = list(self.center)
-        center[self.injection_axis] = inject_center
-        center[self.current_axis] = (h_max_bound + h_min_bound) / 2
-        size = [0, 0, 0]
-        size[self.current_axis] = h_max_bound - h_min_bound
-        size[self.injection_axis] = dcap
+        size = list(load_box.size)
+        size[self.voltage_axis] = 0
+        current_box = Box(center=load_box.center, size=size)
+        # Snap the current contour integral to the nearest magnetic field positions
+        # that enclose the load box/sheet resistance
+        snap_location = [SnapLocation.Center] * 3
+        snap_behavior = [SnapBehavior.Expand] * 3
+        snap_behavior[self.voltage_axis] = SnapBehavior.Off
+        snap_spec = SnappingSpec(location=snap_location, behavior=snap_behavior)
+        current_box = snap_box_to_grid(sim_data.simulation.grid, current_box, snap_spec)
 
         # H field is continuous at integral bounds, so extrapolation is turned off
         I_integral = CurrentIntegralAxisAligned(
-            center=center,
-            size=size,
+            center=current_box.center,
+            size=current_box.size,
             sign="+",
-            extrapolate_to_endpoints=False,
+            extrapolate_to_endpoints=True,
             snap_contour_to_grid=True,
         )
         return I_integral.compute_current(field_data)

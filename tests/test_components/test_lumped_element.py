@@ -178,7 +178,7 @@ def test_RLC_and_lumped_network_agreement(Rval, Lval, Cval, topology):
     _ = linear_element.to_geometry
     _ = linear_element.to_structure
 
-    sf = linear_element._admittance_transfer_function_scaling
+    sf = linear_element._admittance_transfer_function_scaling()
     med_RLC = RLC._to_medium(sf)
     (a, b) = RLC._to_admittance_function
 

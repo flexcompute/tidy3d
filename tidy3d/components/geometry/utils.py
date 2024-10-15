@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from math import isclose
 from typing import Tuple, Union
 
 import numpy as np
+import pydantic as pydantic
 
+from ...constants import fp_eps
 from ...exceptions import Tidy3dError
+from ..base import Tidy3dBaseModel
+from ..geometry.base import Box
+from ..grid.grid import Grid
 from ..types import ArrayFloat2D, Axis, MatrixReal4x4, PlanePosition, Shapely
 from . import base, mesh, polyslab, primitives
 
@@ -206,3 +212,128 @@ def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixR
     elif isinstance(geometry, base.ClipOperation):
         validate_no_transformed_polyslabs(geometry.geometry_a, transform)
         validate_no_transformed_polyslabs(geometry.geometry_b, transform)
+
+
+class SnapLocation(Enum):
+    """Describes different methods for defining the snapping locations."""
+
+    Boundary = 1
+    """
+    Choose the boundaries of Yee cells.
+    """
+    Center = 2
+    """
+    Choose the center of Yee cells.
+    """
+
+
+class SnapBehavior(Enum):
+    """Describes different methods for snapping intervals, which are defined by two endpoints."""
+
+    Closest = 1
+    """
+    Snaps the interval's endpoints to the closest grid point.
+    """
+    Expand = 2
+    """
+    Snaps the interval's endpoints to the closest grid points,
+    while guaranteeing that the snapping location will never move endpoints inwards.
+    """
+    Contract = 3
+    """
+    Snaps the interval's endpoints to the closest grid points,
+    while guaranteeing that the snapping location will never move endpoints outwards.
+    """
+    Off = 4
+    """
+    Do not use snapping.
+    """
+
+
+class SnappingSpec(Tidy3dBaseModel):
+    """Specifies how to apply grid snapping along each dimension."""
+
+    location: tuple[SnapLocation, SnapLocation, SnapLocation] = pydantic.Field(
+        ...,
+        title="Location",
+        description="Describes which positions in the grid will be considered for snapping.",
+    )
+
+    behavior: tuple[SnapBehavior, SnapBehavior, SnapBehavior] = pydantic.Field(
+        ...,
+        title="Behavior",
+        description="Describes how snapping positions will be chosen.",
+    )
+
+
+def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps) -> Box:
+    """Snaps a :class:`.Box` to the grid, so that the boundaries of the box are aligned with grid centers or boundaries.
+    The way in which each dimension of the `box` is snapped to the grid is controlled by ``snap_spec``.
+    """
+
+    def closest_value(test: float, first: float, second: float) -> float:
+        """Helper to choose the closest value to a given test value."""
+        dfirst = np.abs(test - first)
+        dsecond = np.abs(test - second)
+        return first if dfirst < dsecond else second
+
+    def find_snapping_locations(
+        min: float, max: float, coords: np.ndarray, snap_type: SnapBehavior
+    ) -> tuple[float, float]:
+        """Helper that snaps a supplied interval [min, max] to a sorted array representing
+        coordinate values.
+        """
+        # Locate the interval that includes the min and max
+        min_left_idx = np.searchsorted(coords, min, side="left")
+        max_left_idx = np.searchsorted(coords, max, side="left")
+        if snap_type == SnapBehavior.Closest:
+            if min_left_idx > 0:
+                min_snap = closest_value(min, coords[min_left_idx - 1], coords[min_left_idx])
+            else:
+                min_snap = coords[min_left_idx]
+            if max_left_idx > 0:
+                max_snap = closest_value(max, coords[max_left_idx - 1], coords[max_left_idx])
+            else:
+                max_snap = coords[max_left_idx]
+        elif snap_type == SnapBehavior.Expand:
+            if min_left_idx == 0 or np.isclose(coords[min_left_idx], min, rtol=rtol):
+                min_snap = coords[min_left_idx]
+            else:
+                min_snap = coords[min_left_idx - 1]
+            if max_left_idx > 0 and np.isclose(coords[max_left_idx - 1], max, rtol=rtol):
+                max_snap = coords[max_left_idx - 1]
+            else:
+                max_snap = coords[max_left_idx]
+        else:  # SnapType.Contract
+            if min_left_idx > 0 and np.isclose(coords[min_left_idx - 1], min, rtol=rtol):
+                min_snap = coords[min_left_idx - 1]
+            else:
+                min_snap = coords[min_left_idx]
+            if max_left_idx == 0 or np.isclose(coords[max_left_idx], max, rtol=rtol):
+                max_snap = coords[max_left_idx]
+            else:
+                max_snap = coords[max_left_idx - 1]
+        return (min_snap, max_snap)
+
+    # Iterate over each axis and apply the specified snapping behavior.
+    min_b = list(box.bounds[0])
+    max_b = list(box.bounds[1])
+    grid_bounds = grid.boundaries.to_list
+    grid_centers = grid.centers.to_list
+    for axis in range(3):
+        snap_location = snap_spec.location[axis]
+        snap_type = snap_spec.behavior[axis]
+        if snap_type == SnapBehavior.Off:
+            continue
+        if snap_location == SnapLocation.Boundary:
+            snap_coords = np.array(grid_bounds[axis])
+        elif snap_location == SnapLocation.Center:
+            snap_coords = np.array(grid_centers[axis])
+
+        box_min = min_b[axis]
+        box_max = max_b[axis]
+
+        (new_min, new_max) = find_snapping_locations(box_min, box_max, snap_coords, snap_type)
+        min_b[axis] = new_min
+        max_b[axis] = new_max
+    return Box.from_bounds(min_b, max_b)
