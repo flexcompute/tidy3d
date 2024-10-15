@@ -1058,7 +1058,7 @@ def test_proj_monitor_distance(log_capture):
         sources=[src],
         run_time=1e-12,
         monitors=[monitor_n2f_far],
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
     )
     assert_log_level(log_capture, "WARNING")
 
@@ -1069,7 +1069,7 @@ def test_proj_monitor_distance(log_capture):
         sources=[src],
         run_time=1e-12,
         monitors=[monitor_n2f],
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
     )
 
     # proj_distance large but using approximations - don't warn
@@ -1079,7 +1079,7 @@ def test_proj_monitor_distance(log_capture):
         sources=[src],
         run_time=1e-12,
         monitors=[monitor_n2f_approx],
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
     )
 
 
@@ -1781,6 +1781,38 @@ def test_tfsf_structures_grid(log_capture):
     )
     with pytest.raises(SetupError):
         sim.validate_pre_upload()
+
+
+def test_error_bloch_proj_mnts():
+    """Test if Bloch/periodic boundaries touching projection monitors raise an error in 3D simulations."""
+
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(2, 2, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[0],
+        phi=[0],
+        proj_distance=1e5,
+    )
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
+            size=(2.2, 2.2, 2),
+            structures=[],
+            sources=[
+                td.PointDipole(
+                    center=(0, 0, 0),
+                    polarization="Ex",
+                    source_time=td.GaussianPulse(
+                        freq0=1e14,
+                        fwidth=1e12,
+                    ),
+                )
+            ],
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            monitors=[monitor_n2f],
+        )
 
 
 @pytest.mark.parametrize(
