@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
-## [2.7.5] - 2024-10-10
+## [2.7.5] - 2024-10-16
 
 ### Added
 - `TopologyDesignRegion` is now invariant in `z` by default and supports assigning dimensions along which a design should be uniform via `TopologyDesignRegion(uniform=(bool, bool, bool))`.
