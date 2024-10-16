@@ -56,9 +56,6 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
-# name for the autograd-traced part of the DataArray
-AUTOGRAD_KEY = "AUTOGRAD"
-
 
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
@@ -75,7 +72,8 @@ class DataArray(xr.DataArray):
 
             def values(self):
                 warnings.warn(
-                    "'DataArray.values' is deprecated, please use 'DataArray.data' instead.",
+                    "'DataArray.values' for automatic differentiation is deprecated, "
+                    "please use 'DataArray.data' instead.",
                     DeprecationWarning,
                     stacklevel=2,
                 )
@@ -89,9 +87,9 @@ class DataArray(xr.DataArray):
     def __init__(self, data, *args, **kwargs):
         if isbox(data):
             data = TidyArrayBox(data._value, data._trace, data._node)
-        elif hasattr(data, "data") and isbox(data.data):
-            box = TidyArrayBox(data.data._value, data.data._trace, data.data._node)
-            data = data.copy(deep=False, data=box)
+        elif isinstance(data, (xr.Variable, xr.DataArray)) and isbox(data.data):
+            box = data.data
+            data.data = TidyArrayBox(box._value, box._trace, box._node)
         super().__init__(data, *args, **kwargs)
 
     @classmethod
@@ -336,7 +334,7 @@ class DataArray(xr.DataArray):
 
         vals = interpn(points, obj.data, xi, method=method)
 
-        return DataArray(vals, out_coords)
+        return type(self)(vals, out_coords)
 
 
 class FreqDataArray(DataArray):

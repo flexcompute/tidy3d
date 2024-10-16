@@ -29,7 +29,7 @@ def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
 
 def item(self):
     if self.size != 1:
-        raise ValueError("Can only convert an array of size 1 to a Python scalar")
+        raise ValueError("Can only convert an array of size 1 to a scalar")
     return anp.ravel(self)[0]
 
 
