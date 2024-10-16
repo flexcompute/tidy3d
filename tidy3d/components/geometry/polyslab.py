@@ -1425,7 +1425,7 @@ class PolySlab(base.Planar):
         vjps_edges = 0.0
 
         # perform D-normal integral
-        contrib_D = delta_eps_inv * D_der_norm
+        contrib_D = -delta_eps_inv * D_der_norm
         vjps_edges += contrib_D
 
         # perform E-perpendicular integrals
@@ -1438,12 +1438,9 @@ class PolySlab(base.Planar):
         edge_areas = edge_lengths
 
         # correction to edge area based on sidewall distance along slab axis
-        dim_axis = "xyz"[self.axis]
-        field_coords_axis = derivative_info.E_der_map[f"E{dim_axis}"].coords[dim_axis]
-        if len(field_coords_axis) > 1:
-            slab_height = abs(float(np.squeeze(np.diff(self.slab_bounds))))
-            if not np.isinf(slab_height):
-                edge_areas *= slab_height
+        slab_height = abs(float(np.squeeze(np.diff(self.slab_bounds))))
+        if not np.isinf(slab_height):
+            edge_areas *= slab_height
 
         vjps_edges *= edge_areas
 
@@ -1452,6 +1449,7 @@ class PolySlab(base.Planar):
         vjps_edges_in_plane = vjps_edges.values.reshape((num_vertices, 1)) * normal_vectors_in_plane
 
         vjps_vertices = vjps_edges_in_plane + np.roll(vjps_edges_in_plane, axis=0, shift=-1)
+        vjps_vertices /= 2.0  # each vertex is effected only 1/2 by each edge
 
         # sign change if counter clockwise, because normal direction is flipped
         if self.is_ccw:

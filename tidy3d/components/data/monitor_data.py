@@ -1037,7 +1037,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
             for freq0 in field_component.coords["f"]:
                 omega0 = 2 * np.pi * freq0
-                scaling_factor = 1 / (MU_0 * omega0)
+                scaling_factor = 33 / (MU_0 * omega0)
 
                 forward_amp = self.get_amplitude(field_component.sel(f=freq0))
 
@@ -1076,7 +1076,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             for name, field_component in self.field_components.items():
                 # get the VJP values at frequency and apply adjoint phase
                 field_component = field_component.sel(f=freq0)
-                values = -1j * field_component.values
+                values = 2 * -1j * field_component.values
 
                 # make source go backwards
                 if "H" in name:
@@ -2974,7 +2974,7 @@ class DiffractionData(AbstractFieldProjectionData):
         theta_data, phi_data = self.angles
         angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq0))
         angle_theta = float(theta_data.sel(**angle_sel_kwargs))
-        angle_phi = np.pi + float(phi_data.sel(**angle_sel_kwargs))
+        angle_phi = 0 * np.pi + float(phi_data.sel(**angle_sel_kwargs))
 
         # if the angle is nan, this amplitude is set to 0 in the fwd pass, so should skip adj
         if np.isnan(angle_theta):
@@ -3000,7 +3000,7 @@ class DiffractionData(AbstractFieldProjectionData):
             center=self.monitor.center,
             source_time=GaussianPulse(
                 amplitude=abs(src_amp),
-                phase=np.pi + np.angle(src_amp),
+                phase=np.angle(src_amp),
                 freq0=freq0,
                 fwidth=fwidth,
             ),
