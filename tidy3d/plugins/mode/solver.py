@@ -24,6 +24,9 @@ TOL_TENSORIAL = 1e-6
 TARGET_SHIFT = 10 * fp_eps
 # Preconditioner: "Jacobi" or "Material" based
 PRECONDITIONER = "Material"
+# PEC permittivity cut-off value. Let it be as large as possible so long as not causing overflow in
+# double precision. This value is very heuristic.
+PEC_CUT_OFF = 1e70
 
 
 class EigSolver(Tidy3dBaseModel):
@@ -325,11 +328,18 @@ class EigSolver(Tidy3dBaseModel):
             Permittivity characterization on the mode solver's plane.
         """
 
+        # In the matrices P and Q below, they contain terms ``epsilon_parallel`` or
+        # ``mu_parallel``, and also a term proportional to 1/(k0 * dl)**2. To make sure
+        # that permittivity of PEC is visible in low-frequency/high resolution, pec_val should be
+        # scaled by a factor max(1, max(1/k0 dl) **2).
+        pec_scaling = max(1, max([np.max(abs(f)) for f in der_mats]) ** 2)
+        pec_scaled_val = min(PEC_CUT_OFF, pec_scaling * abs(pec_val))
+
         # use a high-conductivity model for locations associated with a PEC
         def conductivity_model_for_pec(eps, threshold=0.9 * pec_val):
             """PEC entries associated with 'eps' are converted to a high-conductivity model."""
             eps = eps.astype(complex)
-            eps[eps <= threshold] = 1 + 1j * np.abs(pec_val)
+            eps[np.abs(eps) >= abs(threshold)] = 1 + 1j * pec_scaled_val
             return eps
 
         eps_tensor = conductivity_model_for_pec(eps_tensor)
@@ -479,18 +489,31 @@ class EigSolver(Tidy3dBaseModel):
             dnz = sp.block_diag((dnz_xx, dnz_yy), format="csr")
             inv_eps_zz = (dnz_zz.T) * dnz_zz * inv_eps_zz * (dnz_zz.T) * dnz_zz
 
-        p11 = -dxf.dot(inv_eps_zz).dot(dyb)
-        p12 = dxf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(mu_yy, [0], N, N)
-        p21 = -dyf.dot(inv_eps_zz).dot(dyb) - sp.spdiags(mu_xx, [0], N, N)
-        p22 = dyf.dot(inv_eps_zz).dot(dxb)
-        q11 = -dxb.dot(inv_mu_zz).dot(dyf)
-        q12 = dxb.dot(inv_mu_zz).dot(dxf) + sp.spdiags(eps_yy, [0], N, N)
-        q21 = -dyb.dot(inv_mu_zz).dot(dyf) - sp.spdiags(eps_xx, [0], N, N)
-        q22 = dyb.dot(inv_mu_zz).dot(dxf)
+        # P = p_mu + p_partial
+        # Q = q_ep + q_partial
+        # Note that p_partial @ q_partial = 0, so that PQ = p_mu @ Q + p_partial @ q_ep
+        p_mu = sp.bmat(
+            [[None, sp.spdiags(mu_yy, [0], N, N)], [sp.spdiags(-mu_xx, [0], N, N), None]]
+        )
+        p_partial = sp.bmat(
+            [
+                [-dxf.dot(inv_eps_zz).dot(dyb), dxf.dot(inv_eps_zz).dot(dxb)],
+                [-dyf.dot(inv_eps_zz).dot(dyb), dyf.dot(inv_eps_zz).dot(dxb)],
+            ]
+        )
+        q_ep = sp.bmat(
+            [[None, sp.spdiags(eps_yy, [0], N, N)], [sp.spdiags(-eps_xx, [0], N, N), None]]
+        )
+        q_partial = sp.bmat(
+            [
+                [-dxb.dot(inv_mu_zz).dot(dyf), dxb.dot(inv_mu_zz).dot(dxf)],
+                [-dyb.dot(inv_mu_zz).dot(dyf), dyb.dot(inv_mu_zz).dot(dxf)],
+            ]
+        )
 
-        pmat = sp.bmat([[p11, p12], [p21, p22]])
-        qmat = sp.bmat([[q11, q12], [q21, q22]])
-        mat = pmat.dot(qmat)
+        # pmat = p_mu + p_partial  # no need to assemble pmat, as it is not used anywhere
+        qmat = q_ep + q_partial
+        mat = p_mu @ qmat + p_partial @ q_ep
 
         # Cast matrix to target data type
         mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=False)

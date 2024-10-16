@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Design plugin has been significantly reworked to improve ease of use and allow for new optimization methods.
 - Behavior of `FieldProjector` now matches the server-side computation, which does not truncate the integration surface when it extends into PML regions.
 - Enabled the user to set the `ModeMonitor.colocate` field and changed to `True` by default (fields were actually already returned colocated even though this field was `False` previously).
+- More robust mode solver at radio frequencies.
 
 ### Fixed
 - Significant speedup for field projection computations.
