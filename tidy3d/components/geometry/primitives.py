@@ -295,7 +295,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # construct equivalent polyslab and compute the derivatives
         polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
 
-        derivative_info_polyslab = derivative_info.updated_copy(paths=[("vertices",)])
+        derivative_info_polyslab = derivative_info.updated_copy(paths=[("vertices",)], deep=False)
         vjps_polyslab = polyslab.compute_derivatives(derivative_info_polyslab)
 
         vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T

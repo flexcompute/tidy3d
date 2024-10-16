@@ -24,156 +24,87 @@ __all__ = [
 ]
 
 
-def _make_slices(rule: Union[int, slice], ndim: int, axis: int) -> Tuple[slice, ...]:
-    """Create a tuple of slices for indexing an array.
+def _pad_indices(n: int, pad_width: Tuple[int, int], mode: PaddingType) -> NDArray:
+    """Compute the indices to pad an array along a single axis based on the padding mode.
 
     Parameters
     ----------
-    rule : Union[int, slice]
-        The rule to apply on the specified axis.
-    ndim : int
-        The number of dimensions of the array.
-    axis : int
-        The axis to which the rule should be applied.
+    n : int
+        The size of the axis to pad.
+    pad_width : Tuple[int, int]
+        The number of values padded to the edges of the axis.
+    mode : PaddingType
+        The padding mode to use.
 
     Returns
     -------
-    Tuple[slice, ...]
-        A tuple of slices for indexing.
+    NDArray
+        The indices for padding along the axis.
     """
-    return tuple(slice(None) if d != axis else rule for d in range(ndim))
+    total_pad = pad_width[0] + pad_width[1]
+    if n == 0:
+        # If the axis length is zero, return zeros for indices
+        return np.zeros(total_pad, dtype=int)
+
+    idx = np.arange(-pad_width[0], n + pad_width[1])
+    if mode == "constant":
+        # For constant mode, indices outside the array bounds are ignored
+        pass
+    elif mode == "edge":
+        idx = np.clip(idx, 0, n - 1)
+    elif mode == "reflect":
+        period = 2 * n - 2 if n > 1 else 1
+        idx = np.mod(idx, period)
+        idx = np.where(idx >= n, period - idx, idx)
+    elif mode == "symmetric":
+        period = 2 * n if n > 1 else 1
+        idx = np.mod(idx, period)
+        idx = np.where(idx >= n, period - idx - 1, idx)
+    elif mode == "wrap":
+        idx = np.mod(idx, n)
+    else:
+        raise ValueError(f"Unsupported padding mode: {mode}")
+    return idx
 
 
-def _constant_pad(
-    array: NDArray, pad_width: Tuple[int, int], axis: int, *, constant_value: float = 0.0
+def _pad(
+    array: NDArray,
+    pad_width: Tuple[int, int],
+    axis: int,
+    *,
+    mode: PaddingType = "constant",
+    constant_value: float = 0.0,
 ) -> NDArray:
-    """Pad an array with a constant value along a specified axis.
+    """Pad an array along a specified axis with a given mode and pad width.
 
     Parameters
     ----------
     array : NDArray
         The input array to pad.
     pad_width : Tuple[int, int]
-        The number of values padded to the edges of each axis.
+        The number of values padded to the edges of the axis.
     axis : int
         The axis along which to pad.
+    mode : PaddingType = "constant"
+        The padding mode to use.
     constant_value : float = 0.0
-        The constant value to pad with.
+        The constant value to pad with when mode is 'constant'.
 
     Returns
     -------
     NDArray
         The padded array.
     """
-    p = [(pad_width[0], pad_width[1]) if ax == axis else (0, 0) for ax in range(array.ndim)]
-    return np.pad(array, p, mode="constant", constant_values=constant_value)
-
-
-def _edge_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
-    """Pad an array using the `edge` mode along a specified axis.
-
-    Parameters
-    ----------
-    array : NDArray
-        The input array to pad.
-    pad_width : Tuple[int, int]
-        The number of values padded to the edges of each axis.
-    axis : int
-        The axis along which to pad.
-
-    Returns
-    -------
-    NDArray
-        The padded array.
-    """
-    left, right = (_make_slices(rule, array.ndim, axis) for rule in (0, -1))
-
-    cat_arys = []
-    if pad_width[0] > 0:
-        cat_arys.append(np.stack(pad_width[0] * [array[left]], axis=axis))
-    cat_arys.append(array)
-    if pad_width[1] > 0:
-        cat_arys.append(np.stack(pad_width[1] * [array[right]], axis=axis))
-
-    return np.concatenate(cat_arys, axis=axis)
-
-
-def _reflect_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
-    """Pad an array using the `reflect` mode along a specified axis.
-
-    Parameters
-    ----------
-    array : NDArray
-        The input array to pad.
-    pad_width : Tuple[int, int]
-        The number of values padded to the edges of each axis.
-    axis : int
-        The axis along which to pad.
-
-    Returns
-    -------
-    NDArray
-        The padded array.
-    """
-    left, right = (
-        _make_slices(rule, array.ndim, axis)
-        for rule in (slice(pad_width[0], 0, -1), slice(-2, -pad_width[1] - 2, -1))
-    )
-    return np.concatenate([array[left], array, array[right]], axis=axis)
-
-
-def _symmetric_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
-    """Pad an array using the `symmetric` mode along a specified axis.
-
-    Parameters
-    ----------
-    array : NDArray
-        The input array to pad.
-    pad_width : Tuple[int, int]
-        The number of values padded to the edges of each axis.
-    axis : int
-        The axis along which to pad.
-
-    Returns
-    -------
-    NDArray
-        The padded array.
-    """
-    left, right = (
-        _make_slices(rule, array.ndim, axis)
-        for rule in (
-            slice(pad_width[0] - 1, None, -1) if pad_width[0] > 0 else slice(0, 0),
-            slice(-1, -pad_width[1] - 1, -1),
-        )
-    )
-    return np.concatenate([array[left], array, array[right]], axis=axis)
-
-
-def _wrap_pad(array: NDArray, pad_width: Tuple[int, int], axis: int) -> NDArray:
-    """Pad an array using the `wrap` mode along a specified axis.
-
-    Parameters
-    ----------
-    array : NDArray
-        The input array to pad.
-    pad_width : Tuple[int, int]
-        The number of values padded to the edges of each axis.
-    axis : int
-        The axis along which to pad.
-
-    Returns
-    -------
-    NDArray
-        The padded array.
-    """
-    left, right = (
-        _make_slices(rule, array.ndim, axis)
-        for rule in (
-            slice(-pad_width[0], None) if pad_width[0] > 0 else slice(0, 0),
-            slice(0, pad_width[1]) if pad_width[1] > 0 else slice(0, 0),
-        )
-    )
-    return np.concatenate([array[left], array, array[right]], axis=axis)
+    n = array.shape[axis]
+    if mode == "constant":
+        p = [(0, 0)] * array.ndim
+        p[axis] = pad_width
+        return np.pad(array, p, mode="constant", constant_values=constant_value)
+    else:
+        idx = _pad_indices(n, pad_width, mode)
+        indexer = [slice(None)] * array.ndim
+        indexer[axis] = idx
+        return array[tuple(indexer)]
 
 
 def pad(
@@ -184,7 +115,7 @@ def pad(
     axis: Union[int, Iterable[int], None] = None,
     constant_value: float = 0.0,
 ) -> NDArray:
-    """Pad an array along a specified axis with a given mode and padding width.
+    """Pad an array along specified axes with a given mode and padding width.
 
     Parameters
     ----------
@@ -210,67 +141,40 @@ def pad(
     ------
     ValueError
         If the padding width has more than two elements or if padding is negative.
-    NotImplementedError
-        If padding larger than the input size is requested.
-    KeyError
-        If an unsupported padding mode is specified.
     IndexError
         If an axis is out of range for the array dimensions.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from tidy3d.plugins.autograd.functions import pad
-    >>> array = np.array([[1, 2], [3, 4]])
-    >>> pad(array, (1, 1), mode="constant", constant_value=0)
-    array([[0, 0, 0, 0],
-           [0, 1, 2, 0],
-           [0, 3, 4, 0],
-           [0, 0, 0, 0]])
-    >>> pad(array, 1, mode="reflect")
-    array([[4, 3, 4, 3],
-           [2, 1, 2, 1],
-           [4, 3, 4, 3],
-           [2, 1, 2, 1]])
     """
     pad_width = np.atleast_1d(pad_width)
-
     if pad_width.size == 1:
-        pad_width = np.array([pad_width[0], pad_width[0]])
-    elif pad_width.size != 2:
-        raise ValueError("Padding width must have one or two elements, got {pad_width.size}.")
+        pad_width = (pad_width[0], pad_width[0])
+    elif pad_width.size == 2:
+        pad_width = tuple(pad_width)
+    else:
+        raise ValueError(f"Padding width must have one or two elements, got {pad_width.size}.")
 
-    if any(any(p >= s for p in pad_width) for s in array.shape):
-        raise NotImplementedError("Padding larger than the input size is not supported.")
     if any(p < 0 for p in pad_width):
-        raise ValueError("Padding must be positive.")
+        raise ValueError("Padding must be non-negative.")
     if all(p == 0 for p in pad_width):
         return array
 
     if axis is None:
-        axis = range(array.ndim)
+        axes = range(array.ndim)
+    else:
+        axes = [axis] if isinstance(axis, int) else axis
 
-    _mode_map = {
-        "constant": _constant_pad,
-        "edge": _edge_pad,
-        "reflect": _reflect_pad,
-        "symmetric": _symmetric_pad,
-        "wrap": _wrap_pad,
-    }
-
-    try:
-        pad_fun = _mode_map[mode]
-    except KeyError as e:
-        raise KeyError(f"Unsupported padding mode: {mode}.") from e
-
-    for ax in np.atleast_1d(axis):
+    for ax in axes:
         if ax < 0:
             ax += array.ndim
         if ax < 0 or ax >= array.ndim:
-            raise IndexError(f"Axis out of range for array with {array.ndim} dimensions.")
+            raise IndexError(f"Axis {ax} out of range for array with {array.ndim} dimensions.")
 
-        array = pad_fun(array, pad_width, axis=ax)
-
+        array = _pad(
+            array,
+            pad_width,
+            axis=ax,
+            mode=mode,
+            constant_value=constant_value,
+        )
     return array
 
 

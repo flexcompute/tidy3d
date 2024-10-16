@@ -62,7 +62,7 @@ python -c "import tidy3d; tidy3d.web.test()"
 
 It should pass without any errors if the API key is set up correctly.
 
-To get started, our documentation has a lot of [examples](https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/index.html) for inspiration.
+To get started, our documentation has a lot of [examples](https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/docs/index.html) for inspiration.
 
 ## Common Documentation References
 

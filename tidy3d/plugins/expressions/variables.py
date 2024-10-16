@@ -1,5 +1,7 @@
 from typing import Any, Optional
 
+import pydantic.v1 as pd
+
 from .base import Expression
 from .types import NumberType
 
@@ -34,7 +36,11 @@ class Variable(Expression):
     >>> expr(5, 3)    # Raises ValueError
     """
 
-    name: Optional[str] = None
+    name: Optional[str] = pd.Field(
+        None,
+        title="Name",
+        description="The name of the variable used for lookup during evaluation.",
+    )
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:
         if self.name:
@@ -72,7 +78,11 @@ class Constant(Variable):
     >>> c.evaluate()  # Returns 5
     """
 
-    value: NumberType
+    value: NumberType = pd.Field(
+        ...,
+        title="Value",
+        description="The fixed value of the constant.",
+    )
 
     def __init__(self, value: NumberType, **kwargs: dict[str, Any]) -> None:
         super().__init__(value=value, **kwargs)

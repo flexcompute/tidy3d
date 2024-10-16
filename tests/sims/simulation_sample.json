@@ -2825,10 +2825,11 @@
         "snapping_points": [],
         "type": "GridSpec"
     },
-    "version": "2.7.4",
+    "version": "2.7.5",
     "lumped_elements": [],
     "subpixel": false,
     "simulation_type": null,
+    "post_norm": 1.0,
     "courant": 0.8,
     "normalize_index": 0,
     "shutoff": 0.0001,

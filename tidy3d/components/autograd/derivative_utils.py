@@ -167,7 +167,7 @@ class DerivativeInfo(Tidy3dBaseModel):
 
         components = {}
         for fld_name, arr in fld_dataset.items():
-            components[fld_name] = arr.interp(**interp_kwargs).sum("f")
+            components[fld_name] = arr.interp(**interp_kwargs, assume_sorted=True).sum("f")
 
         return components
 

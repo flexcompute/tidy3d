@@ -47,7 +47,7 @@ from ...components.types import (
     Symmetry,
 )
 from ...components.validators import validate_freqs_min, validate_freqs_not_empty
-from ...components.viz import plot_params_pml
+from ...components.viz import make_ax, plot_params_pml
 from ...constants import C_0
 from ...exceptions import SetupError, ValidationError
 from ...log import log
@@ -1232,7 +1232,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Get the mode plane normal axis, center, and limits.
         a_center, h_lim, v_lim, _ = self._center_and_lims()
 
-        return self.simulation.plot(
+        ax = self.simulation.plot(
             x=a_center[0],
             y=a_center[1],
             z=a_center[2],
@@ -1244,6 +1244,8 @@ class ModeSolver(Tidy3dBaseModel):
             ax=ax,
             **patch_kwargs,
         )
+
+        return self.plot_pml(ax=ax)
 
     def plot_eps(
         self,
@@ -1404,18 +1406,11 @@ class ModeSolver(Tidy3dBaseModel):
         # Get the mode plane normal axis, center, and limits.
         a_center, h_lim, v_lim, t_axes = self._center_and_lims()
 
-        # Plot the mode plane is ax=None.
+        # Create ax if ax=None.
         if not ax:
-            ax = self.simulation.plot(
-                x=a_center[0],
-                y=a_center[1],
-                z=a_center[2],
-                hlim=h_lim,
-                vlim=v_lim,
-                source_alpha=0,
-                monitor_alpha=0,
-                ax=ax,
-            )
+            ax = make_ax()
+            ax.set_xlim(h_lim)
+            ax.set_ylim(v_lim)
 
         # Mode plane grid.
         plane_grid = self.grid_snapped.centers.to_list
@@ -1485,10 +1480,10 @@ class ModeSolver(Tidy3dBaseModel):
         _, (h_min_s, v_min_s) = Box.pop_axis(self.simulation.bounds[0], axis=n_axis)
         _, (h_max_s, v_max_s) = Box.pop_axis(self.simulation.bounds[1], axis=n_axis)
 
-        h_min = a_center[n_axis] - self.plane.size[t_axes[0]] / 2
-        h_max = a_center[n_axis] + self.plane.size[t_axes[0]] / 2
-        v_min = a_center[n_axis] - self.plane.size[t_axes[1]] / 2
-        v_max = a_center[n_axis] + self.plane.size[t_axes[1]] / 2
+        h_min = self.plane.center[t_axes[0]] - self.plane.size[t_axes[0]] / 2
+        h_max = self.plane.center[t_axes[0]] + self.plane.size[t_axes[0]] / 2
+        v_min = self.plane.center[t_axes[1]] - self.plane.size[t_axes[1]] / 2
+        v_max = self.plane.center[t_axes[1]] + self.plane.size[t_axes[1]] / 2
 
         h_lim = [
             h_min if abs(h_min) < abs(h_min_s) else h_min_s,

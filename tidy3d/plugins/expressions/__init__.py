@@ -1,6 +1,6 @@
 from .base import Expression
 from .functions import Cos, Exp, Log, Log10, Sin, Sqrt, Tan
-from .metrics import ModeAmp, ModePower
+from .metrics import ModeAmp, ModePower, generate_validation_data
 from .variables import Constant, Variable
 
 __all__ = [
@@ -9,6 +9,7 @@ __all__ = [
     "Variable",
     "ModeAmp",
     "ModePower",
+    "generate_validation_data",
     "Sin",
     "Cos",
     "Tan",

@@ -34,7 +34,7 @@ class FilterProject(InvdesBaseModel):
 
     """
 
-    radius: float = pd.Field(
+    radius: pd.PositiveFloat = pd.Field(
         ...,
         title="Filter Radius",
         description="Radius of the filter to convolve with supplied spatial data. "
@@ -50,13 +50,16 @@ class FilterProject(InvdesBaseModel):
 
     beta: float = pd.Field(
         1.0,
+        ge=1.0,
         title="Beta",
         description="Steepness of the binarization, "
         "higher means more sharp transition "
         "at the expense of gradient accuracy and ease of optimization. ",
     )
 
-    eta: float = pd.Field(0.5, title="Eta", description="Halfway point in projection function.")
+    eta: float = pd.Field(
+        0.5, ge=0.0, le=1.0, title="Eta", description="Halfway point in projection function."
+    )
 
     strict_binarize: bool = pd.Field(
         False,

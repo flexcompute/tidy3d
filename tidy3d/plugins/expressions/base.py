@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Generator, Optional, Type
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import TYPE_TAG_STR
@@ -60,6 +60,48 @@ class Expression(Tidy3dBaseModel, ABC):
         if subclass is None:
             raise ValueError(f"Unknown type: {type_value}")
         return subclass(**obj)
+
+    def filter(
+        self, target_type: Type[Expression], target_field: Optional[str] = None
+    ) -> Generator[Expression, None, None]:
+        """
+        Find all instances of a given type or field in the expression.
+
+        Parameters
+        ----------
+        target_type : Type[Expression]
+            The type of instances to find.
+        target_field : Optional[str] = None
+            The field to aggregate instead of the type.
+
+        Yields
+        ------
+        Expression
+            Instances of the specified type or field found in the expression.
+        """
+
+        def _find_instances(expr: Expression):
+            if isinstance(expr, target_type):
+                if target_field:
+                    value = getattr(expr, target_field, None)
+                    if value is not None:
+                        yield value
+                else:
+                    yield expr
+            for field in expr.__fields__.values():
+                value = getattr(expr, field.name)
+                if isinstance(value, Expression):
+                    yield from _find_instances(value)
+                elif isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, Expression):
+                            yield from _find_instances(item)
+                elif isinstance(value, dict):
+                    for item in value.values():
+                        if isinstance(item, Expression):
+                            yield from _find_instances(item)
+
+        yield from _find_instances(self)
 
     @staticmethod
     def _to_expression(other: NumberOrExpression | dict[str, Any]) -> ExpressionType:

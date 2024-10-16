@@ -16,7 +16,11 @@ class UnaryOperator(Expression):
     Subclasses should implement the evaluate method to define the specific operation.
     """
 
-    operand: NumberOrExpression
+    operand: NumberOrExpression = pd.Field(
+        ...,
+        title="Operand",
+        description="The operand for the unary operator.",
+    )
 
     _symbol: str
     _format: str = "({symbol}{operand})"
@@ -37,8 +41,16 @@ class BinaryOperator(Expression):
     Subclasses should implement the evaluate method to define the specific operation.
     """
 
-    left: NumberOrExpression
-    right: NumberOrExpression
+    left: NumberOrExpression = pd.Field(
+        ...,
+        title="Left",
+        description="The left operand for the binary operator.",
+    )
+    right: NumberOrExpression = pd.Field(
+        ...,
+        title="Right",
+        description="The right operand for the binary operator.",
+    )
 
     _symbol: str
     _format: str = "({left} {symbol} {right})"

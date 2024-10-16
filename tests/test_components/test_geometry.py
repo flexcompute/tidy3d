@@ -189,6 +189,17 @@ def test_intersections_plane(component):
     assert len(component.intersections_plane(x=10000)) == 0
 
 
+def test_intersections_plane_inf():
+    a = (
+        td.Cylinder(radius=3.2, center=(0.45, 9, 0), length=td.inf)
+        + td.Box(center=(0, 0, 0), size=(0.9, 24, td.inf))
+        + td.Box(center=(0, 0, 0), size=(7.3, 18, td.inf))
+    )
+    b = td.Cylinder(radius=2.9, center=(-0.45, 9, 0), length=td.inf)
+    c = a - b
+    assert len(c.intersections_plane(y=0)) == 1
+
+
 def test_bounds_base():
     assert all(a == b for a, b in zip(Planar.bounds.fget(POLYSLAB), POLYSLAB.bounds))
 

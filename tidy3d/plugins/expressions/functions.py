@@ -12,7 +12,11 @@ class Function(Expression):
     Base class for mathematical functions in expressions.
     """
 
-    operand: NumberOrExpression
+    operand: NumberOrExpression = pd.Field(
+        ...,
+        title="Operand",
+        description="The operand for the function.",
+    )
 
     _format: str = "{func}({operand})"
 

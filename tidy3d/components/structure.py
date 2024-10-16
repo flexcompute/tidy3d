@@ -256,7 +256,7 @@ class Structure(AbstractStructure):
         for med_or_geo, field_paths in structure_fields_map.items():
             # grab derivative values {field_name -> vjp_value}
             med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
-            info = derivative_info.updated_copy(paths=field_paths)
+            info = derivative_info.updated_copy(paths=field_paths, deep=False)
             derivative_values_map = med_or_geo_field.compute_derivatives(derivative_info=info)
 
             # construct map of {field path -> derivative value}

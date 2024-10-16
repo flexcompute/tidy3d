@@ -177,17 +177,18 @@ def assert_objects_in_sim_bounds(
         # Do a strict check, unless simulation is 0D along a dimension
         strict_ineq = [size != 0 and strict_inequality for size in sim_size]
 
-        for position_index, geometric_object in enumerate(val):
-            if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
-                message = (
-                    f"'simulation.{field_name}[{position_index}]' "
-                    "is outside of the simulation domain."
-                )
-                custom_loc = [field_name, position_index]
+        with log as consolidated_logger:
+            for position_index, geometric_object in enumerate(val):
+                if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
+                    message = (
+                        f"'simulation.{field_name}[{position_index}]' "
+                        "is outside of the simulation domain."
+                    )
+                    custom_loc = [field_name, position_index]
 
-                if error:
-                    raise SetupError(message)
-                log.warning(message, custom_loc=custom_loc)
+                    if error:
+                        raise SetupError(message)
+                    consolidated_logger.warning(message, custom_loc=custom_loc)
 
         return val
 

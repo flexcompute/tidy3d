@@ -1745,7 +1745,7 @@ class ComplexPolySlabBase(PolySlab):
         return [
             shapely.unary_union(
                 [
-                    shape
+                    base.Geometry.evaluate_inf_shape(shape)
                     for polyslab in self.sub_polyslabs
                     for shape in polyslab.intersections_tilted_plane(normal, origin, to_2D)
                 ]

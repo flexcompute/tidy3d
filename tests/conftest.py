@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 import tidy3d as td
 
@@ -21,3 +22,9 @@ def log_capture(monkeypatch):
     log_capture = CaptureHandler()
     monkeypatch.setitem(td.log.handlers, "pytest_capture", log_capture)
     return log_capture.records
+
+
+@pytest.fixture
+def rng():
+    seed = 36523525
+    return np.random.default_rng(seed)

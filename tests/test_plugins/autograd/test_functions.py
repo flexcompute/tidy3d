@@ -32,7 +32,7 @@ _mode_to_scipy = {
 
 @pytest.mark.parametrize("mode", PaddingType.__args__)
 @pytest.mark.parametrize("size", [3, 4, (3, 3), (4, 4), (3, 4), (3, 3, 3), (4, 4, 4), (3, 4, 5)])
-@pytest.mark.parametrize("pad_width", [0, 1, 2, (0, 0), (0, 1), (1, 0), (1, 2)])
+@pytest.mark.parametrize("pad_width", [0, 1, 2, 4, 5, (0, 0), (0, 1), (1, 0), (1, 2)])
 @pytest.mark.parametrize("axis", [None, 0, -1])
 class TestPad:
     def test_pad_val(self, rng, mode, size, pad_width, axis):
@@ -64,31 +64,24 @@ class TestPadExceptions:
         with pytest.raises(ValueError, match="Padding width must have one or two elements"):
             pad(self.array, (1, 2, 3))
 
-    def test_padding_larger_than_input_size(self):
-        """Test that an exception is raised when padding is larger than the input size."""
-        with pytest.raises(
-            NotImplementedError, match="Padding larger than the input size is not supported"
-        ):
-            pad(self.array, (3, 3))
-
     def test_negative_padding(self):
         """Test that an exception is raised when padding is negative."""
-        with pytest.raises(ValueError, match="Padding must be positive"):
+        with pytest.raises(ValueError, match="Padding must be non-negative"):
             pad(self.array, (-1, 1))
 
     def test_unsupported_padding_mode(self):
         """Test that an exception is raised when an unsupported padding mode is used."""
-        with pytest.raises(KeyError, match="Unsupported padding mode"):
+        with pytest.raises(ValueError, match="Unsupported padding mode"):
             pad(self.array, (1, 1), mode="unsupported_mode")
 
     def test_axis_out_of_range(self):
         """Test that an exception is raised when the axis is out of range."""
-        with pytest.raises(IndexError, match="Axis out of range"):
+        with pytest.raises(IndexError, match="out of range"):
             pad(self.array, (1, 1), axis=2)
 
     def test_negative_axis_out_of_range(self):
         """Test that an exception is raised when a negative axis is out of range."""
-        with pytest.raises(IndexError, match="Axis out of range"):
+        with pytest.raises(IndexError, match="out of range"):
             pad(self.array, (1, 1), axis=-3)
 
 

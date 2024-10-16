@@ -5,12 +5,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [2.7.5] - 2024-10-16
+
 ### Added
 - `TopologyDesignRegion` is now invariant in `z` by default and supports assigning dimensions along which a design should be uniform via `TopologyDesignRegion(uniform=(bool, bool, bool))`.
+- Support for arbitrary padding sizes for all padding modes in `tidy3d.plugins.autograd.functions.pad`.
+- `Expression.filter(target_type, target_field)` method for extracting object instances and fields from nested expressions.
+- Additional constraints and validation logic to ensure correct setup of optimization problems in `invdes` plugin.
+- `tidy3d.plugins.pytorch` to wrap autograd functions for interoperability with PyTorch via the `to_torch` wrapper.
+
+### Changed
+- Renamed `Metric.freqs` --> `Metric.f` and made frequency argument optional, in which case all frequencies from the relevant monitor will be extracted. Metrics can still be initialized with both `f` or `freqs`.
 
 ### Fixed
 - Some validation fixes for design region.
 - Bug in adjoint source creation that included empty sources for extraneous `FieldMonitor` objects, triggering unnecessary errors.
+- Correct sign in objective function history depending on `Optimizer.maximize`.
+- Fix to batch mode solver run that could create multiple copies of the same folder.
+- Fixed ``ModeSolver.plot`` method when the simulation is not at the origin.
+- Gradient calculation is orders of magnitude faster for large datasets and many structures by applying more efficient handling of field interpolation and passing to structures.
+- Bug with infinite coordinates in `ClipOperation` not working with shapely.
 
 ## [2.7.4] - 2024-09-25
 
@@ -1323,7 +1338,9 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.5...develop
+[2.7.5]: https://github.com/flexcompute/tidy3d/compare/v2.7.4...v2.7.5
+[2.7.4]: https://github.com/flexcompute/tidy3d/compare/v2.7.3...v2.7.4
 [2.7.3]: https://github.com/flexcompute/tidy3d/compare/v2.7.2...v2.7.3
 [2.7.2]: https://github.com/flexcompute/tidy3d/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/flexcompute/tidy3d/compare/v2.7.0...v2.7.1

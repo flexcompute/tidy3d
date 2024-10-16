@@ -6,7 +6,7 @@ import numpy.testing as npt
 import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
-from tidy3d.plugins.expressions import ModePower
+from tidy3d.plugins.expressions import ModeAmp, ModePower
 from tidy3d.plugins.invdes.initialization import (
     CustomInitializationSpec,
     RandomInitializationSpec,
@@ -506,7 +506,7 @@ def test_invdes_with_metric_objective(use_emulated_run, use_emulated_to_sim_data
     """Test using a metric as an objective function in InverseDesign."""
 
     # Create a metric as the objective function
-    metric = 2 * ModePower(monitor_name=MNT_NAME2, freqs=[FREQ0]) ** 2
+    metric = 2 * ModePower(monitor_name=MNT_NAME2, f=[FREQ0]) ** 2
 
     invdes = tdi.InverseDesign(
         simulation=simulation,
@@ -529,7 +529,7 @@ def test_invdes_with_metric_objective(use_emulated_run, use_emulated_to_sim_data
     [
         (RandomInitializationSpec, {"min_value": 0.0, "max_value": 1.0}, (3, 3)),
         (UniformInitializationSpec, {"value": 0.5}, (2, 2)),
-        (CustomInitializationSpec, {"params": np.array([[1, 2], [3, 4]])}, (2, 2)),
+        (CustomInitializationSpec, {"params": np.zeros((3, 3, 3))}, (3, 3, 3)),
     ],
 )
 def test_parameter_spec(spec_class, spec_kwargs, expected_shape):
@@ -542,7 +542,7 @@ def test_parameter_spec(spec_class, spec_kwargs, expected_shape):
 def test_parameter_spec_with_inverse_design(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
     """Test InitializationSpec with InverseDesign class."""
 
-    metric = 2 * ModePower(monitor_name=MNT_NAME2, freqs=[FREQ0]) ** 2
+    metric = 2 * ModePower(monitor_name=MNT_NAME2, f=[FREQ0]) ** 2
 
     initialization_spec = RandomInitializationSpec()
     design_region = make_design_region()
@@ -584,3 +584,33 @@ def test_initial_simulation_multi():
         assert sim.structures[-1] == invdes_multi.design_region.to_structure(
             invdes_multi.design_region.initial_parameters
         )
+
+
+def test_validate_invdes_metric():
+    """Test the _validate_metric_monitor_name validator."""
+    invdes = make_invdes()
+    metric = ModePower(monitor_name="invalid_monitor", f=[FREQ0])
+    with pytest.raises(ValueError, match="monitors"):
+        invdes.updated_copy(metric=metric)
+
+    metric = ModePower(monitor_name=MNT_NAME2, mode_index=10, f=[FREQ0])
+    with pytest.raises(ValueError, match="mode index"):
+        invdes.updated_copy(metric=metric)
+
+    metric = ModePower(monitor_name=MNT_NAME2, mode_index=0, f=[FREQ0 / 2])
+    with pytest.raises(ValueError, match="frequencies"):
+        invdes.updated_copy(metric=metric)
+
+    metric = ModePower(monitor_name=MNT_NAME2, mode_index=0)
+    monitor = mnt2.updated_copy(freqs=[FREQ0, FREQ0 / 2])
+    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
+    with pytest.raises(ValueError, match="single frequency"):
+        invdes.updated_copy(metric=metric)
+
+    metric = ModeAmp(monitor_name=MNT_NAME2, mode_index=0) + ModePower(
+        monitor_name=MNT_NAME2, mode_index=0
+    )
+    monitor = mnt2.updated_copy(freqs=[FREQ0])
+    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
+    with pytest.raises(ValueError, match="must return a real"):
+        invdes.updated_copy(metric=metric)

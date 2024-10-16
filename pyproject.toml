@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.7.4"
+version = "2.7.5"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -73,6 +73,12 @@ jax = { version = "0.4.25", extras = [
   "cpu",
 ], source = "jaxsource", optional = true }
 
+# pytorch
+torch = [
+    { version = "^2.1.0", source = "PyPI", platform = "darwin", optional = true },
+    { version = "^2.1.0", source = "torch-cpu", platform = "!=darwin", optional = true },
+]
+
 # scikit-rf
 scikit-rf = { version = "*", optional = true }
 
@@ -123,6 +129,7 @@ dev = [
   'ipython',
   'jax',
   'jaxlib',
+  'torch',
   'jinja2',
   'jupyter',
   'myst-parser',
@@ -205,6 +212,11 @@ name = "jaxsource"
 url = "https://storage.googleapis.com/jax-releases/jax_releases.html"
 priority = "supplemental"
 
+[[tool.poetry.source]]
+name = "torch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
@@ -260,7 +272,7 @@ testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
 
 [tool.bumpversion]
-current_version = "2.7.4"
+current_version = "2.7.5"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.
