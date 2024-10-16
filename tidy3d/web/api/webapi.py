@@ -3,7 +3,8 @@
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List
+from pathlib import Path
+from typing import Callable, Dict, List, Union
 
 import pytz
 from requests import HTTPError
@@ -45,6 +46,31 @@ def _get_url(task_id: str) -> str:
     return f"{Env.current.website_endpoint}/workbench?taskId={task_id}"
 
 
+def _get_local_cache(simulation: SimulationType, path: str) -> Union[SimulationDataType, None]:
+    """
+    Check for and load a local copy of the simulation results if available.
+
+    Parameters
+    ----------
+    simulation : SimulationType
+        The simulation object to compare with the local cache.
+    path : str
+        The path to the local cache file.
+
+    Returns
+    -------
+    Union[SimulationDataType, None]
+        The local simulation data if the cache is valid, otherwise None.
+    """
+    try:
+        local_data = load(task_id=None, path=path, replace_existing=False)
+        if local_data.simulation.sha256 == simulation.sha256:
+            log.info(f"Loading local copy of task found at '{path}'.")
+            return local_data
+    except Exception:
+        log.warning("Failed loading from local cache, running without cache.")
+
+
 @wait_for_connection
 def run(
     simulation: SimulationType,
@@ -59,6 +85,7 @@ def run(
     worker_group: str = None,
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
+    use_local_cache: bool = True,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -89,6 +116,8 @@ def run(
         target solver version.
     worker_group: str = None
         worker group
+    use_local_cache : bool = True
+        If ``True``, checks for and loads a local copy of the simulation results if available.
 
     Returns
     -------
@@ -134,6 +163,13 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
+    if (
+        use_local_cache
+        and Path(path).is_file()
+        and (local_data := _get_local_cache(simulation, path)) is not None
+    ):
+        return local_data
+
     task_id = upload(
         simulation=simulation,
         task_name=task_name,

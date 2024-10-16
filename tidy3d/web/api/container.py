@@ -7,6 +7,7 @@ import os
 import time
 from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import pydantic.v1 as pd
@@ -160,6 +161,12 @@ class Job(WebContainer):
         "fields that were not used to create the task will cause errors.",
     )
 
+    use_local_cache: bool = pd.Field(
+        True,
+        title="Use Local Cache",
+        description="If ``True``, checks for and loads a local copy of the simulation results if available.",
+    )
+
     _upload_fields = (
         "simulation",
         "task_name",
@@ -200,7 +207,12 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-
+        if (
+            self.use_local_cache
+            and Path(path).is_file()
+            and (local_data := web._get_local_cache(self.simulation, path)) is not None
+        ):
+            return local_data
         self.upload()
         self.start()
         self.monitor()

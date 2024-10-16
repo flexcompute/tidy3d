@@ -297,6 +297,7 @@ def test_run(mock_webapi, monkeypatch, tmp_path):
         task_name=TASK_NAME,
         folder_name=PROJECT_NAME,
         path=str(tmp_path / "web_test_tmp.json"),
+        use_local_cache=False,
     )
 
 

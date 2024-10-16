@@ -134,11 +134,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         except TypeError:
             return hash(self.json())
 
-    def _hash_self(self) -> str:
+    @cached_property  # cached because model is immutable
+    def sha256(self) -> str:
         """Hash this component with ``hashlib`` in a way that is the same every session."""
         bf = io.BytesIO()
         self.to_hdf5(bf)
         return hashlib.sha256(bf.getvalue()).hexdigest()
+
+    def _hash_self(self) -> str:
+        """Deprecated method. Use the `sha256` property instead."""
+        log.warning("The '_hash_self' method is deprecated. Use the 'sha256' property instead.")
+        return self.sha256
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
