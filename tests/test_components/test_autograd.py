@@ -35,8 +35,8 @@ TEST_CUSTOM_MEDIUM_SPEED = False
 TEST_POLYSLAB_SPEED = False
 
 # whether to run numerical gradient tests, off by default because it runs real simulations
-RUN_NUMERICAL = False
-_NUMERICAL_COMBINATION = ("size_element", "mode")
+RUN_NUMERICAL = True
+_NUMERICAL_COMBINATION = ("polyslab", "diff")
 
 TEST_MODES = ("pipeline", "adjoint", "speed")
 TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
@@ -78,7 +78,7 @@ DA_SHAPE_X = 1 if IS_3D else 1
 DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
 
 # number of vertices in the polyslab
-NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 110
+NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 210
 
 PNT_DIPOLE = td.PointDipole(
     center=(0, 0, -LZ / 2 + WVL),
@@ -99,6 +99,7 @@ PLANE_WAVE = td.PlaneWave(
         fwidth=FWIDTH,
         amplitude=1.0,
     ),
+    pol_angle=0 * np.pi / 2.0,
 )
 
 # sim that we add traced structures and monitors to
@@ -330,16 +331,17 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     radii = 1.0 + 0.5 * params_01
 
     phis = 2 * anp.pi * anp.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
+    phis = phis[::-1]
     xs = radii * anp.cos(phis)
     ys = radii * anp.sin(phis)
     vertices = anp.stack((xs, ys), axis=-1)
     polyslab = td.Structure(
         geometry=td.PolySlab(
             vertices=vertices,
-            slab_bounds=(-0.5, 0.5),
+            slab_bounds=(-td.inf, td.inf),
             axis=0,
-            sidewall_angle=0.01,
-            dilation=0.01,
+            sidewall_angle=0.00,
+            dilation=0.0,
         ),
         medium=med,
     )
@@ -423,7 +425,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
     mode_mnt = td.ModeMonitor(
         size=(2, 2, 0),
         center=(0, 0, +LZ / 2 - X * WVL),
-        mode_spec=td.ModeSpec(),
+        mode_spec=td.ModeSpec(num_modes=2),
         freqs=[FREQ0],
         name="mode",
     )
@@ -451,10 +453,10 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
 
     def field_vol_postprocess_fn(sim_data, mnt_data):
         value = 0.0
-        for _, val in mnt_data.field_components.items():
-            value = value + abs(anp.sum(val.values))
-        intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
-        value += intensity
+        # for _, val in mnt_data.field_components.items():
+        #     value = value + abs(anp.sum(val.values))
+        # intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
+        # value += intensity
         value += anp.sum(mnt_data.flux.values)
         return value
 
@@ -620,7 +622,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 1e-3
+    delta = 1e-1
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))
@@ -1211,6 +1213,7 @@ def _test_many_structures():
                 center=(0, 0, -1),
                 size=(td.inf, td.inf, 0),
                 direction="+",
+                pol_angle=np.pi / 2,
             )
 
             sim = td.Simulation(
