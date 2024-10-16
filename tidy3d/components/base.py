@@ -210,13 +210,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "by calling ``obj.json()``.",
     )
 
-    def copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
-        """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
+    def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
+        """Copy a Tidy3dBaseModel.  With ``deep=True`` and ``validate=True`` as default."""
         kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
-        return self.validate(new_copy.dict())
+        if validate:
+            return self.validate(new_copy.dict())
+        return new_copy
 
-    def updated_copy(self, path: str = None, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def updated_copy(
+        self, path: str = None, deep: bool = True, validate: bool = True, **kwargs
+    ) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
         Note
@@ -231,7 +235,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         if not path:
-            return self._updated_copy(**kwargs, deep=deep)
+            return self._updated_copy(**kwargs, deep=deep, validate=validate)
 
         path_components = path.split("/")
 
@@ -263,18 +267,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             sub_path = "/".join(path_components[2:])
 
             sub_component_list[index] = sub_component.updated_copy(
-                path=sub_path, deep=deep, **kwargs
+                path=sub_path, deep=deep, validate=validate, **kwargs
             )
             new_component = tuple(sub_component_list)
         else:
             sub_path = "/".join(path_components[1:])
-            new_component = sub_component.updated_copy(path=sub_path, deep=deep, **kwargs)
+            new_component = sub_component.updated_copy(
+                path=sub_path, deep=deep, validate=validate, **kwargs
+            )
 
-        return self._updated_copy(deep=deep, **{field_name: new_component})
+        return self._updated_copy(deep=deep, validate=validate, **{field_name: new_component})
 
-    def _updated_copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
-        return self.copy(update=kwargs, deep=deep)
+        return self.copy(update=kwargs, deep=deep, validate=validate)
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.

@@ -1564,9 +1564,21 @@ class ModeSolver(Tidy3dBaseModel):
             remove_outside_custom_mediums=True,
             remove_outside_structures=True,
             include_pml_cells=True,
+            validate_geometries=False,
+            deep_copy=False,
         )
-
-        return self.updated_copy(simulation=new_sim)
+        # Let's only validate mode solver where geometry validation is skipped: geometry replaced by its bounding
+        # box
+        structures = [
+            strc.updated_copy(geometry=strc.geometry.bounding_box, deep=False)
+            for strc in new_sim.structures
+        ]
+        # skip validation as it's validated already in subsection
+        aux_new_sim = new_sim.updated_copy(structures=structures, deep=False, validate=False)
+        # validate mode solver here where geometry is replaced by its bounding box
+        new_mode = self.updated_copy(simulation=aux_new_sim, deep=False)
+        # return full mode solver and skip validation
+        return new_mode.updated_copy(simulation=new_sim, deep=False, validate=False)
 
     def to_fdtd_mode_solver(self) -> ModeSolver:
         """Construct a new :class:`.ModeSolver` by converting ``simulation``
