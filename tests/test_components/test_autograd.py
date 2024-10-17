@@ -989,7 +989,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
         data = run(sim, task_name="autograd_test", verbose=False)
 
         if objtype == "flux":
-            return anp.sum(data[monitor.name].flux.values)
+            return data[monitor.name].flux.item()
         elif objtype == "intensity":
             return anp.sum(data.get_intensity(monitor.name).values)
 
