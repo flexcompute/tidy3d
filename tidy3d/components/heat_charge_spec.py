@@ -6,10 +6,10 @@ from abc import ABC
 from typing import Optional
 
 import pydantic.v1 as pd
-import xarray as xr
 
 from ..constants import CONDUCTIVITY, PERMITTIVITY, SPECIFIC_HEAT_CAPACITY, THERMAL_CONDUCTIVITY
 from .base import Tidy3dBaseModel
+from .data.data_array import SpatialDataArray
 from .types import Union
 
 
@@ -99,14 +99,14 @@ class SemiConductorSpec(ConductorSpec):
         Both acceptors and donors can be either None, a positive number or an 'xarray.DataArray'.
     """
 
-    acceptors: Optional[Union[pd.NonNegativeFloat, xr.DataArray]] = pd.Field(
+    acceptors: Optional[Union[pd.NonNegativeFloat, SpatialDataArray]] = pd.Field(
         None,
         title="Doping: Acceptor concentration",
         description="Units of 1/cm^3",
         units="1/cm^3",
     )
 
-    donors: Optional[Union[pd.NonNegativeFloat, xr.DataArray]] = pd.Field(
+    donors: Optional[Union[pd.NonNegativeFloat, SpatialDataArray]] = pd.Field(
         None,
         title="Doping: Donor concentration",
         description="Units of 1/cm^3",
@@ -117,13 +117,13 @@ class SemiConductorSpec(ConductorSpec):
     @pd.validator("acceptors", always=True)
     def check_acceptors(cls, val):
         """Test validator"""
-        print("Current acceptor: ", val)
+        # print("Current acceptor: ", val)
         return val
 
     @pd.validator("donors", always=True)
     def check_donors(cls, val):
         """Test validator"""
-        print("Current donor: ", val)
+        # print("Current donor: ", val)
         return val
 
 
