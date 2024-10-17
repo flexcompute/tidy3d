@@ -60,9 +60,15 @@ class Monitor(AbstractMonitor):
         True,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
-        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
-        "and is hard-coded for other monitors depending on their specific function.",
+        "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
+        "monitors depending on their specific function.",
     )
+
+    @property
+    def _to_solver_monitor(self):
+        """Monitor definition that will be used to define the field recording during the time
+        stepping."""
+        return self
 
     @abstractmethod
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -288,6 +294,13 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         None,
         title="Store Fields",
         description="Propagation direction for the mode field profiles stored from mode solving.",
+    )
+
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate Fields",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
+        "primal grid nodes).",
     )
 
     def plot(
@@ -666,13 +679,11 @@ class ModeMonitor(AbstractModeMonitor):
         * `ModalSourcesMonitors <../../notebooks/ModalSourcesMonitors.html>`_
     """
 
-    colocate: Literal[False] = pydantic.Field(
-        False,
-        title="Colocate Fields",
-        description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
-        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
-        "and is hard-coded for other monitors depending on their specific function.",
-    )
+    @property
+    def _to_solver_monitor(self):
+        """Monitor definition that will be used to define the field recording during the time
+        stepping."""
+        return self.updated_copy(colocate=False)
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
@@ -705,13 +716,6 @@ class ModeSolverMonitor(AbstractModeMonitor):
         title="Propagation Direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
-    )
-
-    colocate: bool = pydantic.Field(
-        True,
-        title="Colocate Fields",
-        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
-        "primal grid nodes).",
     )
 
     @pydantic.root_validator(skip_on_failure=True)
@@ -1413,8 +1417,8 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         False,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
-        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
-        "and is hard-coded for other monitors depending on their specific function.",
+        "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
+        "monitors depending on their specific function.",
     )
 
     @pydantic.validator("size", always=True)
