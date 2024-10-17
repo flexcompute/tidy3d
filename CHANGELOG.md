@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MethodRandom` and `MethodRandomCustom` have been removed from the Design plugin, and `DesignSpace.run_batch` has been superseded by `.run`.
 - Design plugin has been significantly reworked to improve ease of use and allow for new optimization methods.
 - Behavior of `FieldProjector` now matches the server-side computation, which does not truncate the integration surface when it extends into PML regions.
+- Enabled the user to set the `ModeMonitor.colocate` field and changed to `True` by default (fields were actually already returned colocated even though this field was `False` previously).
 
 ### Fixed
 - Significant speedup for field projection computations.
@@ -39,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug where lumped elements in the `Simulation` were being overwritten by the `TerminalComponentModeler`.
 - Bug in `Simulation.subsection` where lumped elements were not being correctly removed.
 - Bug when adding 2D structures to the `Simulation` that are composed of multiple overlapping polygons.
+- Fields stored in `ModeMonitor` objects were computed colocated to the grid boundaries, but the built-in `ModeMonitor.colocate=False` was resulting in wrong results in some cases, most notably if symmetries are also involved.
 
 ## [2.7.2] - 2024-08-07
 
