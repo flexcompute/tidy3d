@@ -6,14 +6,18 @@ import warnings
 from abc import ABC
 from typing import Any, Dict, List, Mapping, Union
 
+import autograd.numpy as anp
 import dask
 import h5py
 import numpy as np
 import pandas
 import xarray as xr
 from autograd.tracer import isbox
+from xarray.core import alignment, missing
+from xarray.core.indexes import PandasIndex
 from xarray.core.types import InterpOptions
-from xarray.core.utils import either_dict_or_kwargs
+from xarray.core.utils import OrderedSet, either_dict_or_kwargs
+from xarray.core.variable import as_variable
 
 from ...constants import (
     HERTZ,
@@ -85,9 +89,13 @@ class DataArray(xr.DataArray):
         return super().__new__(cls)
 
     def __init__(self, data, *args, **kwargs):
-        if isbox(data):
+        if isbox(data) and not hasattr(data, "_tidy"):
             data = TidyArrayBox(data._value, data._trace, data._node)
-        elif isinstance(data, (xr.Variable, xr.DataArray)) and isbox(data.data):
+        elif (
+            isinstance(data, (xr.Variable, xr.DataArray))
+            and isbox(data.data)
+            and not hasattr(data.data, "_tidy")
+        ):
             box = data.data
             data.data = TidyArrayBox(box._value, box._trace, box._node)
         super().__init__(data, *args, **kwargs)
@@ -319,22 +327,142 @@ class DataArray(xr.DataArray):
         KeyError
             If any of the specified coordinates are not in the DataArray.
         """
+        if kwargs is None:
+            kwargs = {}
+
+        ds = self._to_temp_dataset()
 
         coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
+        indexers = dict(ds._validate_interp_indexers(coords))
 
-        missing_keys = set(coords) - set(self.coords)
-        if missing_keys:
-            raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
+        if coords:
+            sdims = (
+                set(ds.dims)
+                .intersection(*[set(nx.dims) for nx in indexers.values()])
+                .difference(coords.keys())
+            )
+            indexers.update({d: ds.variables[d] for d in sdims})
 
-        obj = self if assume_sorted else self.sortby(list(coords.keys()))
+        obj = ds if assume_sorted else ds.sortby(list(coords))
 
-        out_coords = {k: coords.get(k, obj.coords[k]) for k in obj.dims}
-        points = tuple(obj.coords[k] for k in obj.dims)
-        xi = tuple(out_coords.values())
+        def maybe_variable(obj, k):
+            try:
+                return obj._variables[k]
+            except KeyError:
+                return as_variable((k, range(obj.sizes[k])))
 
-        vals = interpn(points, obj.data, xi, method=method)
+        validated_indexers = {k: (maybe_variable(obj, k), v) for k, v in indexers.items()}
 
-        return type(self)(vals, out_coords)
+        for k, v in validated_indexers.items():
+            obj, newidx = missing._localize(obj, {k: v})
+            validated_indexers[k] = newidx[k]
+
+        def _interp(var, indexes_coords, method, **kwargs):
+            if not indexes_coords:
+                return var.copy()
+            result = var
+            for indep_indexes_coords in missing.decompose_interp(indexes_coords):
+                var = result
+
+                # target dimensions
+                dims = list(indep_indexes_coords)
+                x, new_x = zip(*[indep_indexes_coords[d] for d in dims], strict=True)
+                destination = missing.broadcast_variables(*new_x)
+
+                # transpose to make the interpolated axis to the last position
+                broadcast_dims = [d for d in var.dims if d not in dims]
+                original_dims = broadcast_dims + dims
+                new_dims = broadcast_dims + list(destination[0].dims)
+
+                x, new_x = missing._floatize_x(x, new_x)
+
+                permutation = [var.dims.index(dim) for dim in original_dims]
+                combined_permutation = permutation[-len(x) :] + permutation[: -len(x)]
+                data = anp.transpose(var.data, combined_permutation)
+
+                result = interpn(
+                    [xi.data for xi in x],
+                    data,
+                    [anp.ravel(new_xi.data) for new_xi in new_x],
+                    method=method,
+                )
+
+                result = anp.moveaxis(result, 0, -1)
+                result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
+
+                result = xr.Variable(new_dims, result, attrs=var.attrs, fastpath=True)
+
+                # dimension of the output array
+                out_dims: OrderedSet = OrderedSet()
+                for d in var.dims:
+                    if d in dims:
+                        out_dims.update(indep_indexes_coords[d][1].dims)
+                    else:
+                        out_dims.add(d)
+                if len(out_dims) > 1:
+                    result = result.transpose(*out_dims)
+            return result
+
+        variables = {}
+        reindex = False
+        for name, var in obj._variables.items():
+            if name in indexers:
+                continue
+            dtype_kind = var.dtype.kind
+            if dtype_kind in "uifc":
+                # For normal number types do the interpolation:
+                var_indexers = {k: v for k, v in validated_indexers.items() if k in var.dims}
+                variables[name] = _interp(var, var_indexers, method, **kwargs)
+            elif dtype_kind in "ObU" and (validated_indexers.keys() & var.dims):
+                # For types that we do not understand do stepwise
+                # interpolation to avoid modifying the elements.
+                # reindex the variable instead because it supports
+                # booleans and objects and retains the dtype but inside
+                # this loop there might be some duplicate code that slows it
+                # down, therefore collect these signals and run it later:
+                reindex = True
+            elif all(d not in indexers for d in var.dims):
+                # For anything else we can only keep variables if they
+                # are not dependent on any coords that are being
+                # interpolated along:
+                variables[name] = var
+
+        if reindex:
+            reindex_indexers = {k: v for k, (_, v) in validated_indexers.items() if v.dims == (k,)}
+            reindexed = alignment.reindex(
+                obj,
+                indexers=reindex_indexers,
+                method="nearest",
+                exclude_vars=variables.keys(),
+            )
+            indexes = dict(reindexed._indexes)
+            variables.update(reindexed.variables)
+        else:
+            # Get the indexes that are not being interpolated along
+            indexes = {k: v for k, v in obj._indexes.items() if k not in indexers}
+
+        # Get the coords that also exist in the variables:
+        coord_names = obj._coord_names & variables.keys()
+        selected = ds._replace_with_new_dims(variables.copy(), coord_names, indexes=indexes)
+
+        # Attach indexer as coordinate
+        for k, v in indexers.items():
+            if v.dims == (k,):
+                index = PandasIndex(v, k, coord_dtype=v.dtype)
+                index_vars = index.create_variables({k: v})
+                indexes[k] = index
+                variables.update(index_vars)
+            else:
+                variables[k] = v
+
+        # Extract coordinates from indexers
+        coord_vars, new_indexes = selected._get_indexers_coords_and_indexes(coords)
+        variables.update(coord_vars)
+        indexes.update(new_indexes)
+
+        coord_names = obj._coord_names & variables.keys() | coord_vars.keys()
+        ds = ds._replace_with_new_dims(variables, coord_names, indexes=indexes)
+        return self._from_temp_dataset(ds)
 
 
 class FreqDataArray(DataArray):

@@ -41,3 +41,4 @@ TidyArrayBox.real = property(anp.real)
 TidyArrayBox.imag = property(anp.imag)
 TidyArrayBox.conj = anp.conj
 TidyArrayBox.item = item
+TidyArrayBox._tidy = None
