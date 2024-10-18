@@ -989,7 +989,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
         data = run(sim, task_name="autograd_test", verbose=False)
 
         if objtype == "flux":
-            return anp.sum(data[monitor.name].flux.values)
+            return data[monitor.name].flux.item()
         elif objtype == "intensity":
             return anp.sum(data.get_intensity(monitor.name).values)
 
@@ -1493,6 +1493,6 @@ def test_extraneous_field(use_emulated_run, log_capture):
         )
         data = run(sim, task_name="extra_field")
         amp = data["mode"].amps.sel(direction="+", f=FREQ0 * 0.9, mode_index=0).values
-        return abs(anp.squeeze(amp.tolist())) ** 2
+        return abs(amp.item()) ** 2
 
     g = ag.grad(objective)(params0)

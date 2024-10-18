@@ -1,3 +1,8 @@
+import autograd.numpy as np
+from autograd.extend import VJPNode
+from autograd.numpy.numpy_vjps import register_notrace
+
+from .boxes import TidyArrayBox
 from .functions import interpn
 from .types import (
     AutogradFieldMap,
@@ -10,7 +15,9 @@ from .types import (
 )
 from .utils import get_static
 
+register_notrace(VJPNode, np.full_like)
 __all__ = [
+    "TidyArrayBox",
     "TracedFloat",
     "TracedSize1D",
     "TracedSize",
