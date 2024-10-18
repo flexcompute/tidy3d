@@ -58,10 +58,6 @@ def make_sim(param: float) -> float:
 def obj_fun(param: float) -> float:
     sim = make_sim(param)
 
-    # sim.plot(z=0)
-    # plt.show()
-    # exit()
-
     sim_data = run(sim, task_name="dataarray_dbg", verbose=False)
     flux = sim_data[monitor.name].flux
     return flux.item()

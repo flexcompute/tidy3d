@@ -416,7 +416,7 @@ class DataArray(xr.DataArray):
             if dtype_kind in "uifc":
                 # For normal number types do the interpolation:
                 var_indexers = {k: v for k, v in validated_indexers.items() if k in var.dims}
-                variables[name] = self._interp(var, var_indexers, method, **kwargs)
+                variables[name] = _interp(var, var_indexers, method, **kwargs)
             elif dtype_kind in "ObU" and (validated_indexers.keys() & var.dims):
                 # For types that we do not understand do stepwise
                 # interpolation to avoid modifying the elements.
