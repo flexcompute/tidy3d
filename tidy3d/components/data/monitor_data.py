@@ -532,9 +532,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             if bounds.size > 1:
                 interp_dict[dim] = bounds
 
-        # for _, v in field_components.items():
-        #     # print(v)
-        #     exit()
         colocated_fields = {key: val.interp(**interp_dict) for key, val in field_components.items()}
         return colocated_fields
 
