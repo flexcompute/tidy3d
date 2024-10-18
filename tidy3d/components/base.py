@@ -278,7 +278,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return self._updated_copy(deep=deep, validate=validate, **{field_name: new_component})
 
-    def _updated_copy(self, deep: bool = True, validate=True, **kwargs) -> Tidy3dBaseModel:
+    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
         return self.copy(update=kwargs, deep=deep, validate=validate)
 
