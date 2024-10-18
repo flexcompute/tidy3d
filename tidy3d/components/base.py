@@ -210,7 +210,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "by calling ``obj.json()``.",
     )
 
-    def copy(self, deep: bool = True, validate=True, **kwargs) -> Tidy3dBaseModel:
+    def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` and ``validate=True`` as default."""
         kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)

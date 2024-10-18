@@ -1564,7 +1564,7 @@ class ModeSolver(Tidy3dBaseModel):
             remove_outside_custom_mediums=True,
             remove_outside_structures=True,
             include_pml_cells=True,
-            skip_geometry_validation=True,
+            validate_geometries=False,
             deep_copy=False,
         )
         # Let's only validate mode solver where geometry validation is skipped: geometry replaced by its bounding

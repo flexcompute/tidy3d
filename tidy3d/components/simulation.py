@@ -1368,7 +1368,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         remove_outside_structures: bool = True,
         remove_outside_custom_mediums: bool = False,
         include_pml_cells: bool = False,
-        skip_geometry_validation: bool = False,
+        validate_geometries: bool = True,
         deep_copy: bool = True,
         **kwargs,
     ) -> AbstractYeeGridSimulation:
@@ -1403,10 +1403,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         include_pml_cells : bool = False
             Keep PML cells in simulation boundaries. Note that retained PML cells will be converted
             to regular cells, and the simulation domain boundary will be moved accordingly.
-        skip_geometry_validation: bool = False
-            Skip geometry validation in generating new simulation object, since geometry is not modified
-            in this process. Other validators remain, and assuming that they at most interact with
-            the bounding box of the geometry.
+        validate_geometries: bool = True
+            If ``False``, skip validation for the geometries in the resulting simulation object.
+            Simulation validators remain but only use the bounding box of the existing geometries.
+            Used internally.
         deep_copy: bool = True
             Recursively copy all nested objects in the generated simulation object.
         **kwargs
@@ -1485,10 +1485,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         else:
             new_structures = self.structures
 
-        # If ``skip_geometry_validation=True``, use aux structures whose geometry is replaced by its bounding box
+        # If ``validate_geometries=False``, use aux structures whose geometry is replaced by its bounding box
         # so that other validations are still performed.
         aux_new_structures = new_structures
-        if skip_geometry_validation:
+        if not validate_geometries:
             aux_new_structures = [
                 strc.updated_copy(geometry=strc.geometry.bounding_box, deep=deep_copy)
                 for strc in new_structures
@@ -1563,10 +1563,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                     new_medium = medium.sel_inside(bounds=new_structure_bounds)
                     # if skip geometry validation, structure validation is performed in aux structure below
                     new_structure = structure.updated_copy(
-                        medium=new_medium, deep=deep_copy, validate=not skip_geometry_validation
+                        medium=new_medium, deep=deep_copy, validate=validate_geometries
                     )
                     new_structures_reduced_data.append(new_structure)
-                    if skip_geometry_validation:
+                    if not validate_geometries:
                         aux_new_structure = new_structure.updated_copy(
                             geometry=new_structure.geometry.bounding_box,
                             deep=deep_copy,
@@ -1575,7 +1575,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                         aux_new_structures_reduced_data.append(aux_new_structure)
                 else:
                     new_structures_reduced_data.append(structure)
-                    if skip_geometry_validation:
+                    if not validate_geometries:
                         aux_new_structures_reduced_data.append(
                             structure.updated_copy(
                                 geometry=structure.geometry.bounding_box, deep=deep_copy
@@ -1584,7 +1584,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
             new_structures = new_structures_reduced_data
             aux_new_structures = new_structures_reduced_data
-            if skip_geometry_validation:
+            if not validate_geometries:
                 aux_new_structures = aux_new_structures_reduced_data
 
             if isinstance(self.medium, AbstractCustomMedium):
@@ -1605,12 +1605,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             **kwargs,
         )
 
-        if skip_geometry_validation:
-            # 1) Perform validators not directly related to geometries
-            new_sim = self.updated_copy(**new_sim_dict, deep=deep_copy, validate=True)
-            # 2) Assemble the full simulation without validation
-            return new_sim.updated_copy(structures=new_structures, deep=deep_copy, validate=False)
-        return self.updated_copy(**new_sim_dict, deep=deep_copy)
+        if validate_geometries:
+            return self.updated_copy(**new_sim_dict, deep=deep_copy)
+        # 1) Perform validators not directly related to geometries
+        new_sim = self.updated_copy(**new_sim_dict, deep=deep_copy, validate=True)
+        # 2) Assemble the full simulation without validation
+        return new_sim.updated_copy(structures=new_structures, deep=deep_copy, validate=False)
 
 
 class Simulation(AbstractYeeGridSimulation):
