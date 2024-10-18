@@ -24,9 +24,11 @@ TOL_TENSORIAL = 1e-6
 TARGET_SHIFT = 10 * fp_eps
 # Preconditioner: "Jacobi" or "Material" based
 PRECONDITIONER = "Material"
-# PEC permittivity cut-off value. Let it be as large as possible so long as not causing overflow in
+# Good conductor permittivity cut-off value. Let it be as large as possible so long as not causing overflow in
 # double precision. This value is very heuristic.
-PEC_CUT_OFF = 1e70
+GOOD_CONDUCTOR_CUT_OFF = 1e70
+# Consider a material to be good conductor if |ep| (or |mu|) > GOOD_CONDUCTOR_THRESHOLD * |pec_val|
+GOOD_CONDUCTOR_THRESHOLD = 0.9
 
 
 class EigSolver(Tidy3dBaseModel):
@@ -307,7 +309,7 @@ class EigSolver(Tidy3dBaseModel):
             Number of modes to solve for.
         neff_guess : float
             Initial guess for the effective index.
-        mat_precision : Union['single', 'double']
+        mat_precision : Union['auto', 'single', 'double']
             Single or double-point precision in eigensolver.
         direction : Union["+", "-"]
             Direction of mode propagation.
@@ -330,20 +332,22 @@ class EigSolver(Tidy3dBaseModel):
 
         # In the matrices P and Q below, they contain terms ``epsilon_parallel`` or
         # ``mu_parallel``, and also a term proportional to 1/(k0 * dl)**2. To make sure
-        # that permittivity of PEC is visible in low-frequency/high resolution, pec_val should be
+        # that permittivity of good conductor is visible in low-frequency/high resolution, pec_val should be
         # scaled by a factor max(1, max(1/k0 dl) **2).
         pec_scaling = max(1, max([np.max(abs(f)) for f in der_mats]) ** 2)
-        pec_scaled_val = min(PEC_CUT_OFF, pec_scaling * abs(pec_val))
+        pec_scaled_val = min(GOOD_CONDUCTOR_CUT_OFF, pec_scaling * abs(pec_val))
 
-        # use a high-conductivity model for locations associated with a PEC
-        def conductivity_model_for_pec(eps, threshold=0.9 * pec_val):
-            """PEC entries associated with 'eps' are converted to a high-conductivity model."""
+        # use a high-conductivity model for locations associated with a good conductor
+        def conductivity_model_for_good_conductor(
+            eps, threshold=GOOD_CONDUCTOR_THRESHOLD * pec_val
+        ):
+            """Entries associated with 'eps' are converted to a high-conductivity model."""
             eps = eps.astype(complex)
             eps[np.abs(eps) >= abs(threshold)] = 1 + 1j * pec_scaled_val
             return eps
 
-        eps_tensor = conductivity_model_for_pec(eps_tensor)
-        mu_tensor = conductivity_model_for_pec(mu_tensor)
+        eps_tensor = conductivity_model_for_good_conductor(eps_tensor)
+        mu_tensor = conductivity_model_for_good_conductor(mu_tensor)
 
         # Determine if ``eps`` and ``mu`` are diagonal or tensorial
         off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
@@ -362,7 +366,9 @@ class EigSolver(Tidy3dBaseModel):
             "num_modes": num_modes,
             "neff_guess": neff_guess,
             "vec_init": vec_init,
-            "mat_precision": mat_precision,
+            "mat_precision": EigSolver.solver_precision_selection(
+                mat_precision, eps_tensor, mu_tensor
+            ),
         }
 
         is_eps_complex = cls.isinstance_complex(eps_tensor)
@@ -473,11 +479,10 @@ class EigSolver(Tidy3dBaseModel):
         mu_zz = mu[2, 2, :]
         dxf, dxb, dyf, dyb = der_mats
 
-        def any_pec(eps_vec, threshold=0.9 * np.abs(pec_val)):
-            """Check if there are any PEC values in the given permittivity array."""
-            return np.any(np.abs(eps_vec) >= threshold)
-
-        if any(any_pec(i) for i in [eps_xx, eps_yy, eps_zz, mu_xx, mu_yy, mu_zz]):
+        if any(
+            cls.mode_plane_contain_good_conductor(i)
+            for i in [eps_xx, eps_yy, eps_zz, mu_xx, mu_yy, mu_zz]
+        ):
             enable_preconditioner = True
 
         # Compute the matrix for diagonalization
@@ -1010,6 +1015,26 @@ class EigSolver(Tidy3dBaseModel):
     def split_curl_field_postprocess_inverse(split_curl, E):
         """E has the shape (3, N, num_modes)"""
         raise RuntimeError("Split curl not yet implemented for relative mode solver.")
+
+    @staticmethod
+    def mode_plane_contain_good_conductor(material_response) -> bool:
+        """Find out if epsilon on the modal plane contain good conductors whose permittivity
+        or permeability value is very large.
+        """
+        if material_response is None:
+            return False
+        return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
+
+    @staticmethod
+    def solver_precision_selection(mat_spec_precision: bool, eps_cross, mu_cross) -> bool:
+        """Select "single" or "double" precision based on mat_spec and material properties."""
+        if mat_spec_precision == "auto":
+            if EigSolver.mode_plane_contain_good_conductor(
+                eps_cross
+            ) or EigSolver.mode_plane_contain_good_conductor(mu_cross):
+                return "double"
+            return "single"
+        return mat_spec_precision
 
 
 def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:
