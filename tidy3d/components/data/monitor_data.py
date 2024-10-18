@@ -1037,7 +1037,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
             for freq0 in field_component.coords["f"]:
                 omega0 = 2 * np.pi * freq0
-                scaling_factor = 1 / (MU_0 * omega0)
+                scaling_factor = 33 / (MU_0 * omega0)
 
                 forward_amp = self.get_amplitude(field_component.sel(f=freq0))
 
@@ -1076,7 +1076,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             for name, field_component in self.field_components.items():
                 # get the VJP values at frequency and apply adjoint phase
                 field_component = field_component.sel(f=freq0)
-                values = -1j * field_component.values
+                values = 2 * -1j * field_component.values
 
                 # make source go backwards
                 if "H" in name:
