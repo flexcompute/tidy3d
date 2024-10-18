@@ -61,6 +61,56 @@ DIM_ATTRS = {
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
 
+def _interp(var, indexes_coords, method, **kwargs):
+    if not indexes_coords:
+        return var.copy()
+    result = var
+    for indep_indexes_coords in missing.decompose_interp(indexes_coords):
+        var = result
+
+        # target dimensions
+        dims = list(indep_indexes_coords)
+        x, new_x = zip(*[indep_indexes_coords[d] for d in dims], strict=True)
+        destination = missing.broadcast_variables(*new_x)
+
+        # transpose to make the interpolated axis to the last position
+        broadcast_dims = [d for d in var.dims if d not in dims]
+        original_dims = broadcast_dims + dims
+        new_dims = broadcast_dims + list(destination[0].dims)
+
+        # interp_func
+        x, new_x = missing._floatize_x(x, new_x)
+
+        permutation = [var.dims.index(dim) for dim in original_dims]
+        combined_permutation = permutation[-len(x) :] + permutation[: -len(x)]
+        data = anp.transpose(var.data, combined_permutation)
+
+        xi = anp.stack([anp.ravel(new_xi.data) for new_xi in new_x], axis=-1)
+
+        result = interpn(
+            [xi.data for xi in x],
+            data,
+            xi,
+            method=method,
+        )
+
+        result = anp.moveaxis(result, 0, -1)
+        result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
+
+        result = xr.Variable(new_dims, result, attrs=var.attrs, fastpath=True)
+
+        # dimension of the output array
+        out_dims: OrderedSet = OrderedSet()
+        for d in var.dims:
+            if d in dims:
+                out_dims.update(indep_indexes_coords[d][1].dims)
+            else:
+                out_dims.add(d)
+        if len(out_dims) > 1:
+            result = result.transpose(*out_dims)
+    return result
+
+
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
 
@@ -357,52 +407,6 @@ class DataArray(xr.DataArray):
             obj, newidx = missing._localize(obj, {k: v})
             validated_indexers[k] = newidx[k]
 
-        def _interp(var, indexes_coords, method, **kwargs):
-            if not indexes_coords:
-                return var.copy()
-            result = var
-            for indep_indexes_coords in missing.decompose_interp(indexes_coords):
-                var = result
-
-                # target dimensions
-                dims = list(indep_indexes_coords)
-                x, new_x = zip(*[indep_indexes_coords[d] for d in dims], strict=True)
-                destination = missing.broadcast_variables(*new_x)
-
-                # transpose to make the interpolated axis to the last position
-                broadcast_dims = [d for d in var.dims if d not in dims]
-                original_dims = broadcast_dims + dims
-                new_dims = broadcast_dims + list(destination[0].dims)
-
-                x, new_x = missing._floatize_x(x, new_x)
-
-                permutation = [var.dims.index(dim) for dim in original_dims]
-                combined_permutation = permutation[-len(x) :] + permutation[: -len(x)]
-                data = anp.transpose(var.data, combined_permutation)
-
-                result = interpn(
-                    [xi.data for xi in x],
-                    data,
-                    [anp.ravel(new_xi.data) for new_xi in new_x],
-                    method=method,
-                )
-
-                result = anp.moveaxis(result, 0, -1)
-                result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
-
-                result = xr.Variable(new_dims, result, attrs=var.attrs, fastpath=True)
-
-                # dimension of the output array
-                out_dims: OrderedSet = OrderedSet()
-                for d in var.dims:
-                    if d in dims:
-                        out_dims.update(indep_indexes_coords[d][1].dims)
-                    else:
-                        out_dims.add(d)
-                if len(out_dims) > 1:
-                    result = result.transpose(*out_dims)
-            return result
-
         variables = {}
         reindex = False
         for name, var in obj._variables.items():
@@ -412,7 +416,7 @@ class DataArray(xr.DataArray):
             if dtype_kind in "uifc":
                 # For normal number types do the interpolation:
                 var_indexers = {k: v for k, v in validated_indexers.items() if k in var.dims}
-                variables[name] = _interp(var, var_indexers, method, **kwargs)
+                variables[name] = self._interp(var, var_indexers, method, **kwargs)
             elif dtype_kind in "ObU" and (validated_indexers.keys() & var.dims):
                 # For types that we do not understand do stepwise
                 # interpolation to avoid modifying the elements.
