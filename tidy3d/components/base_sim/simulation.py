@@ -150,6 +150,7 @@ class AbstractSimulation(Box, ABC):
                             "use td.inf as a size variable instead to make this explicit.",
                             custom_loc=["structures", istruct],
                         )
+                        continue
 
         return val
 
