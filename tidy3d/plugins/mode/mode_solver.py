@@ -27,11 +27,12 @@ from ...components.eme.data.sim_data import EMESimulationData
 from ...components.eme.simulation import EMESimulation
 from ...components.geometry.base import Box
 from ...components.grid.grid import Grid
-from ...components.medium import FullyAnisotropicMedium
+from ...components.medium import FullyAnisotropicMedium, LossyMetalMedium
 from ...components.mode import ModeSpec
 from ...components.monitor import ModeMonitor, ModeSolverMonitor
 from ...components.simulation import Simulation
 from ...components.source import ModeSource, SourceTime
+from ...components.subpixel_spec import SurfaceImpedance
 from ...components.types import (
     TYPE_TAG_STR,
     ArrayComplex3D,
@@ -721,6 +722,7 @@ class ModeSolver(Tidy3dBaseModel):
             mode_spec=self.mode_spec,
             symmetry=symmetry,
             direction=self.direction,
+            precision=self._precision,
         )
 
         fields = self._postprocess_solver_fields(
@@ -775,6 +777,7 @@ class ModeSolver(Tidy3dBaseModel):
             symmetry=symmetry,
             direction=self.direction,
             solver_basis_fields=solver_basis_fields,
+            precision=self._precision,
         )
 
         fields = self._postprocess_solver_fields(
@@ -944,6 +947,30 @@ class ModeSolver(Tidy3dBaseModel):
                 if not isclose(max_imag_eps, 0):
                     return False
         return True
+
+    @cached_property
+    def _contain_good_conductor(self) -> bool:
+        """Whether modal plane might contain structures made of good conductors with large permittivity
+        or permeability values.
+        """
+        sim = self.reduced_simulation_copy.simulation
+        apply_sibc = isinstance(sim._subpixel.lossy_metal, SurfaceImpedance)
+        for medium in sim.scene.mediums:
+            if medium.is_pec:
+                return True
+            if apply_sibc and isinstance(medium, LossyMetalMedium):
+                return True
+        return False
+
+    @cached_property
+    def _precision(self) -> Literal["single", "double"]:
+        """single or double precision applied in mode solver."""
+        precision = self.mode_spec.precision
+        if precision == "auto":
+            if self._contain_good_conductor:
+                return "double"
+            return "single"
+        return precision
 
     def to_source(
         self,
