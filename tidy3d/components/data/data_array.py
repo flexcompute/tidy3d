@@ -138,6 +138,12 @@ class DataArray(xr.DataArray):
 
         return super().__new__(cls)
 
+    def __getnewargs__(self):
+        """Required for pickling object instances that define __new__
+        https://docs.python.org/3/library/pickle.html#object.__getnewargs__
+        """
+        return (self.data,)
+
     def __init__(self, data, *args, **kwargs):
         if isbox(data) and not hasattr(data, "_tidy"):
             data = TidyArrayBox(data._value, data._trace, data._node)
