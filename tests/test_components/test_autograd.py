@@ -1493,6 +1493,6 @@ def test_extraneous_field(use_emulated_run, log_capture):
         )
         data = run(sim, task_name="extra_field")
         amp = data["mode"].amps.sel(direction="+", f=FREQ0 * 0.9, mode_index=0).values
-        return abs(anp.squeeze(amp.tolist())) ** 2
+        return abs(amp.item()) ** 2
 
     g = ag.grad(objective)(params0)
