@@ -28,7 +28,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
-from ..autograd import TidyArrayBox, interpn
+from ..autograd import TidyArrayBox, get_static, interpn
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -304,7 +304,7 @@ class DataArray(xr.DataArray):
         """Save an xr.DataArray to the hdf5 file handle with a given path to the group."""
 
         sub_group = f_handle.create_group(group_path)
-        sub_group[DATA_ARRAY_VALUE_NAME] = self.values
+        sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.values)
         for key, val in self.coords.items():
             if val.dtype == "<U1":
                 sub_group[key] = val.values.tolist()
