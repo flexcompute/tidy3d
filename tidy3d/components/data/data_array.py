@@ -70,7 +70,7 @@ def _interp(var, indexes_coords, method, **kwargs):
 
         # target dimensions
         dims = list(indep_indexes_coords)
-        x, new_x = zip(*[indep_indexes_coords[d] for d in dims], strict=True)
+        x, new_x = zip(*[indep_indexes_coords[d] for d in dims])
         destination = missing.broadcast_variables(*new_x)
 
         # transpose to make the interpolated axis to the last position
