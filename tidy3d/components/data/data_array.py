@@ -81,11 +81,21 @@ def _interp(var, indexes_coords, method, **kwargs):
         # interp_func
         x, new_x = missing._floatize_x(x, new_x)
 
+        # var.transpose(*original_dims).data
+
         permutation = [var.dims.index(dim) for dim in original_dims]
         combined_permutation = permutation[-len(x) :] + permutation[: -len(x)]
         data = anp.transpose(var.data, combined_permutation)
-
         xi = anp.stack([anp.ravel(new_xi.data) for new_xi in new_x], axis=-1)
+
+        if len(x) == 1:
+            shape_1d = data.shape
+            data = anp.reshape(data, (shape_1d[0], -1))
+            xi = anp.ravel(xi)
+
+        print([xx.shape for xx in x])
+        print(data.shape)
+        print(xi.shape)
 
         result = interpn(
             [xi.data for xi in x],
@@ -93,6 +103,9 @@ def _interp(var, indexes_coords, method, **kwargs):
             xi,
             method=method,
         )
+
+        if len(x) == 1:
+            result = anp.reshape(result, (xi.shape[0], *shape_1d[1:]))
 
         result = anp.moveaxis(result, 0, -1)
         result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
