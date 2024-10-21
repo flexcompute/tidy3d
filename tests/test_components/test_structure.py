@@ -232,7 +232,7 @@ def test_from_permittivity_array():
         structure = td.Structure.from_permittivity_array(
             geometry=box, eps_data=eps_data, name="test"
         )
-        return anp.sum(structure.medium.permittivity.attrs["AUTOGRAD"])
+        return anp.sum(structure.medium.permittivity).item()
 
     grad = ag.grad(f)(1.0)
     assert not np.isclose(grad, 0.0)

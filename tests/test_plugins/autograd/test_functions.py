@@ -311,7 +311,7 @@ class TestInterpn:
         points, values, xi = self.generate_points_values_xi(rng, dim)
         xi_grid = np.meshgrid(*xi, indexing="ij")
 
-        result_custom = interpn(points, values, xi, method=method)
+        result_custom = interpn(points, values, tuple(xi_grid), method=method)
         result_scipy = scipy.interpolate.interpn(points, values, tuple(xi_grid), method=method)
         npt.assert_allclose(result_custom, result_scipy)
 
