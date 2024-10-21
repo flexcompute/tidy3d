@@ -270,6 +270,10 @@ class DataArray(xr.DataArray):
             return self.data
         return super().values
 
+    @values.setter
+    def values(self, value: Any) -> None:
+        self.variable.values = value
+
     @property
     def abs(self):
         """Absolute value of data array."""
