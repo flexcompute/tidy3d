@@ -13,7 +13,7 @@ from .types import (
     TracedSize1D,
     TracedVertices,
 )
-from .utils import get_static
+from .utils import get_static, is_tidy_box, split_list
 
 register_notrace(VJPNode, np.full_like)
 __all__ = [
@@ -27,4 +27,6 @@ __all__ = [
     "AutogradFieldMap",
     "get_static",
     "interpn",
+    "split_list",
+    "is_tidy_box",
 ]

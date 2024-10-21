@@ -15,7 +15,7 @@ import xarray as xr
 from autograd.tracer import isbox
 from xarray.core import alignment, missing
 from xarray.core.indexes import PandasIndex
-from xarray.core.types import InterpOptions
+from xarray.core.types import InterpOptions, Self
 from xarray.core.utils import OrderedSet, either_dict_or_kwargs
 from xarray.core.variable import as_variable
 
@@ -28,7 +28,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
-from ..autograd import TidyArrayBox, get_static, interpn
+from ..autograd import TidyArrayBox, get_static, interpn, is_tidy_box
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -81,31 +81,17 @@ def _interp(var, indexes_coords, method, **kwargs):
         # interp_func
         x, new_x = missing._floatize_x(x, new_x)
 
-        # var.transpose(*original_dims).data
-
         permutation = [var.dims.index(dim) for dim in original_dims]
         combined_permutation = permutation[-len(x) :] + permutation[: -len(x)]
         data = anp.transpose(var.data, combined_permutation)
         xi = anp.stack([anp.ravel(new_xi.data) for new_xi in new_x], axis=-1)
 
-        if len(x) == 1:
-            shape_1d = data.shape
-            data = anp.reshape(data, (shape_1d[0], -1))
-            xi = anp.ravel(xi)
-
-        print([xx.shape for xx in x])
-        print(data.shape)
-        print(xi.shape)
-
         result = interpn(
-            [xi.data for xi in x],
+            [xn.data for xn in x],
             data,
             xi,
             method=method,
         )
-
-        if len(x) == 1:
-            result = anp.reshape(result, (xi.shape[0], *shape_1d[1:]))
 
         result = anp.moveaxis(result, 0, -1)
         result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
@@ -134,39 +120,17 @@ class DataArray(xr.DataArray):
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
 
-    def __new__(cls, data, *args, **kwargs):
-        if isbox(getattr(data, "data", data)):
-
-            def values(self):
-                warnings.warn(
-                    "'DataArray.values' for automatic differentiation is deprecated, "
-                    "please use 'DataArray.data' instead.",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                return self.data
-
-            cls.values = property(values)
-            cls.interp = cls._ag_interp
-
-        return super().__new__(cls)
-
-    def __getnewargs__(self):
-        """Required for pickling object instances that define __new__
-        https://docs.python.org/3/library/pickle.html#object.__getnewargs__
-        """
-        return (self.data,)
-
     def __init__(self, data, *args, **kwargs):
-        if isbox(data) and not hasattr(data, "_tidy"):
-            data = TidyArrayBox(data._value, data._trace, data._node)
+        # if data is a vanilla autograd box, convert to our box
+        if isbox(data) and not is_tidy_box(data):
+            data = TidyArrayBox.from_arraybox(data)
+        # do the same for xr.Variable or xr.DataArray type
         elif (
             isinstance(data, (xr.Variable, xr.DataArray))
             and isbox(data.data)
-            and not hasattr(data.data, "_tidy")
+            and not is_tidy_box(data.data)
         ):
-            box = data.data
-            data.data = TidyArrayBox(box._value, box._trace, box._node)
+            data.data = TidyArrayBox.from_arraybox(data.data)
         super().__init__(data, *args, **kwargs)
 
     @classmethod
@@ -211,8 +175,6 @@ class DataArray(xr.DataArray):
         This does not check every 'DataArray' by default. Instead, when required, this check can be
         called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
         """
-        if isbox(self.data):
-            return
         if field_name is None:
             field_name = "DataArray"
 
@@ -297,6 +259,18 @@ class DataArray(xr.DataArray):
         return True
 
     @property
+    def values(self):
+        if isbox(self.data):
+            warnings.warn(
+                "'DataArray.values' for automatic differentiation is deprecated, "
+                "please use 'DataArray.data' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return self.data
+        return super().values
+
+    @property
     def abs(self):
         """Absolute value of data array."""
         return abs(self)
@@ -362,6 +336,19 @@ class DataArray(xr.DataArray):
         self_mult = self.copy()
         self_mult[{coord_name: indices}] *= value
         return self_mult
+
+    def interp(
+        self,
+        coords: Mapping[Any, Any] | None = None,
+        method: InterpOptions = "linear",
+        assume_sorted: bool = False,
+        kwargs: Mapping[str, Any] | None = None,
+        **coords_kwargs: Any,
+    ) -> Self:
+        if isbox(self.data):
+            return self._ag_interp(coords, method, assume_sorted, kwargs, **coords_kwargs)
+
+        return super().interp(coords, method, assume_sorted, kwargs, **coords_kwargs)
 
     def _ag_interp(
         self,

@@ -1,7 +1,15 @@
+# Adds some functionality to the autograd arraybox
+# NOTE: this is not a subclass of ArrayBox since that would break autograd's internal checks
+
 import autograd.numpy as anp
 from autograd.numpy.numpy_boxes import ArrayBox
 
-TidyArrayBox = ArrayBox  # alias for clarity, technically not necessary
+TidyArrayBox = ArrayBox  # NOT a subclass
+
+
+def from_arraybox(box: ArrayBox) -> TidyArrayBox:
+    """Convert an autograd arraybox to a tidy arraybox."""
+    return TidyArrayBox(box._value, box._trace, box._node)
 
 
 def __array_function__(self, func, types, args, kwargs):
@@ -33,6 +41,8 @@ def item(self):
     return anp.ravel(self)[0]
 
 
+TidyArrayBox._tidy = True
+TidyArrayBox.from_arraybox = from_arraybox
 TidyArrayBox.__array_namespace__ = lambda self, *, api_version=None: anp
 TidyArrayBox.__array_ufunc__ = __array_ufunc__
 TidyArrayBox.__array_function__ = __array_function__
@@ -41,4 +51,3 @@ TidyArrayBox.real = property(anp.real)
 TidyArrayBox.imag = property(anp.imag)
 TidyArrayBox.conj = anp.conj
 TidyArrayBox.item = item
-TidyArrayBox._tidy = None
