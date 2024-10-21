@@ -11,15 +11,19 @@ import autograd as ag
 import autograd.numpy as anp
 import matplotlib.pylab as plt
 import numpy as np
+import numpy.testing as npt
 import pytest
 import tidy3d as td
 import tidy3d.web as web
 import xarray as xr
+from autograd.test_util import check_grads
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.utils import is_tidy_box
+from tidy3d.components.data.data_array import DataArray
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.utils import FieldMap
 
-from ..utils import SIM_FULL, AssertLogLevel, run_emulated
+from ..utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
 
 """ Test configuration """
 
@@ -1496,3 +1500,36 @@ def test_extraneous_field(use_emulated_run, log_capture):
         return abs(amp.item()) ** 2
 
     g = ag.grad(objective)(params0)
+
+
+class TestTidyArrayBox:
+    def test_is_tidy_box(self):
+        da = DataArray(tracer_arr, dims=map(str, range(tracer_arr.ndim)))
+        assert is_tidy_box(da.data)
+
+    def test_real(self):
+        npt.assert_allclose(tracer_arr.real._value, tracer_arr._value.real)
+
+    def test_imag(self):
+        npt.assert_allclose(tracer_arr.imag._value, tracer_arr._value.imag)
+
+    def test_conj(self):
+        npt.assert_allclose(tracer_arr.conj()._value, tracer_arr._value.conj())
+
+    def test_item(self):
+        assert tracer_arr.item() == tracer_arr._value.item()
+
+
+class TestDataArrayGrads:
+    @pytest.mark.parametrize("attr", ["real", "imag", "conj"])
+    def test_custom_methods_grads(self, attr):
+        """Test grads of TidyArrayBox methods implemented in autograd/boxes.py"""
+
+        def objective(x, attr):
+            da = DataArray(x, dims=map(str, range(x.ndim)))
+            attr_value = getattr(da, attr)
+            val = attr_value() if callable(attr_value) else attr_value
+            return val.item()
+
+        x = np.array([1.0])
+        check_grads(objective, modes=["rev"], order=1)(x, attr)
