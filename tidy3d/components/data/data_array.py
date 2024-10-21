@@ -297,7 +297,7 @@ class DataArray(xr.DataArray):
         """Save an xr.DataArray to the hdf5 file handle with a given path to the group."""
 
         sub_group = f_handle.create_group(group_path)
-        sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.values)
+        sub_group[DATA_ARRAY_VALUE_NAME] = get_static(self.data)
         for key, val in self.coords.items():
             if val.dtype == "<U1":
                 sub_group[key] = val.values.tolist()
@@ -305,7 +305,7 @@ class DataArray(xr.DataArray):
                 sub_group[key] = val
 
     @classmethod
-    def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
+    def from_hdf5(cls, fname: str, group_path: str) -> Self:
         """Load an DataArray from an hdf5 file with a given path to the group."""
         with h5py.File(fname, "r") as f:
             sub_group = f[group_path]
@@ -317,7 +317,7 @@ class DataArray(xr.DataArray):
             return cls(values, coords=coords, dims=cls._dims)
 
     @classmethod
-    def from_file(cls, fname: str, group_path: str) -> DataArray:
+    def from_file(cls, fname: str, group_path: str) -> Self:
         """Load an DataArray from an hdf5 file with a given path to the group."""
         if ".hdf5" not in fname:
             raise FileError(
@@ -331,7 +331,7 @@ class DataArray(xr.DataArray):
         token_str = dask.base.tokenize(self)
         return hash(token_str)
 
-    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> DataArray:
+    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> Self:
         """Multiply self by value at indices into ."""
         self_mult = self.copy()
         self_mult[{coord_name: indices}] *= value
@@ -357,7 +357,7 @@ class DataArray(xr.DataArray):
         assume_sorted: bool = False,
         kwargs: Union[Mapping[str, Any], None] = None,
         **coords_kwargs: Any,
-    ):
+    ) -> Self:
         """Interpolate this DataArray to new coordinate values.
 
         Parameters
