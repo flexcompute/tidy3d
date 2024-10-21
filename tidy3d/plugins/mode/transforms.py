@@ -11,7 +11,7 @@ Currently, the half-step offset in w is ignored, which should be a pretty good a
 import numpy as np
 
 
-def radial_transform(coords, radius, bend_axis):
+def radial_transform(coords, radius, bend_axis, plane_center):
     """Compute the new coordinates and the Jacobian of a polar coordinate transformation. After
     offsetting the plane such that its center is a distance of ``radius`` away from the center of
     curvature, we have, e.g. for ``bend_axis=='y'``:
@@ -45,8 +45,8 @@ def radial_transform(coords, radius, bend_axis):
     norm_axis = 0 if bend_axis == 1 else 1
 
     # Center the new coordinates such that the radius is at the center of the plane
-    u = coords[0] + (norm_axis == 0) * (radius - coords[0][Nx // 2])
-    v = coords[1] + (norm_axis == 1) * (radius - coords[1][Ny // 2])
+    u = coords[0] + (norm_axis == 0) * (radius - plane_center[0])
+    v = coords[1] + (norm_axis == 1) * (radius - plane_center[1])
     new_coords = (u, v)
 
     """The only nontrivial derivative is dwdz and it only depends on the coordinate in the

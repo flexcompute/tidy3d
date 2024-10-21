@@ -49,6 +49,7 @@ class EigSolver(Tidy3dBaseModel):
         symmetry=(0, 0),
         direction="+",
         solver_basis_fields=None,
+        plane_center: tuple[float, float] = None,
     ) -> Tuple[Numpy, Numpy, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
@@ -84,6 +85,10 @@ class EigSolver(Tidy3dBaseModel):
             Direction of mode propagation.
         solver_basis_fields
             If provided, solve for modes in this basis.
+        plane_center
+            The center of the mode plane along the tangential axes of the global simulation. Used
+            in case of bend modes to offset the coordinates correctly w.r.t. the bend radius, which
+            is assumed to refer to the distance from the bend center to the mode plane center.
 
         Returns
         -------
@@ -153,7 +158,14 @@ class EigSolver(Tidy3dBaseModel):
             new_coords, jac_e, jac_h = angled_transform(new_coords, angle_theta, angle_phi)
 
         if bend_radius is not None:
-            new_coords, jac_e_tmp, jac_h_tmp = radial_transform(new_coords, bend_radius, bend_axis)
+            if plane_center is None:
+                raise ValueError(
+                    "When using a nonzero 'bend_radius', the 'plane_center' must also "
+                    "be provided to correctly offset the coordinates."
+                )
+            new_coords, jac_e_tmp, jac_h_tmp = radial_transform(
+                new_coords, bend_radius, bend_axis, plane_center
+            )
             jac_e = np.einsum("ij...,jp...->ip...", jac_e_tmp, jac_e)
             jac_h = np.einsum("ij...,jp...->ip...", jac_h_tmp, jac_h)
 

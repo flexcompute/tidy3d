@@ -646,6 +646,58 @@ def test_mode_solver_angle_bend():
     _ = ms.to_monitor(freqs=np.array([1.0, 2.0]) * 1e12, name="mode_mnt")
 
 
+def test_mode_bend_radius():
+    """Test that the bend radius is correctly applied to the center of the mode plane in the case
+    of an auto-grid that is not symmetric w.r.t. that center, and that nominally identical
+    waveguides produce the same modes when the bend center if shifted away from the mode plane
+    center, after a post-processing transformation to correct for that."""
+
+    simulation = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        # grid_spec=td.GridSpec.uniform(dl=0.04),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+    )
+    mode_spec1 = td.ModeSpec(
+        num_modes=3,
+        bend_radius=5,
+        bend_axis=1,
+    )
+
+    # plane centered on the waveguide center
+    plane1 = td.Box(center=(0, 0, 0), size=(3, 0, 2))
+
+    # plane centered away from the waveguide center
+    plane2 = td.Box(center=(0.5, 0, 0), size=(4, 0, 2))
+    # mode spec with a radius such that the radius w.r.t. the waveguide center should be the same
+    mode_spec2 = mode_spec1.updated_copy(bend_radius=5.5)
+
+    ms1 = ModeSolver(
+        simulation=simulation,
+        plane=plane1,
+        mode_spec=mode_spec1,
+        freqs=[td.C_0 / 1.0],
+    )
+    ms2 = ms1.updated_copy(plane=plane2, mode_spec=mode_spec2)
+    data1 = ms1.solve()
+    data2 = ms2.solve()
+
+    print(data1.n_complex)
+    print(data2.n_complex * 5 / 5.5)
+
+    # Plot fields
+    # _, ax = plt.subplots(3, 2)
+    # for mode_index in range(3):
+    #     ms1.plot_field("Ex", ax=ax[mode_index, 0], mode_index=mode_index)
+    #     ms2.plot_field("Ex", ax=ax[mode_index, 1], mode_index=mode_index)
+    # plt.show()
+
+    # The mode field dependence is E0 * exp(1j * n * R * k0 * phi) so to switch from one radius
+    # to another we have n' * R' = n * R -> n' = n * R / R'
+    assert np.allclose(data1.n_complex, data2.n_complex * 5.5 / 5.0)
+
+
 def test_mode_solver_2D():
     """Run mode solver in 2D simulations."""
     mode_spec = td.ModeSpec(
