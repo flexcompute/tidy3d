@@ -32,6 +32,7 @@ from .data_array import (
     PointDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
+    ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     SpatialDataArray,
     TimeDataArray,
@@ -149,6 +150,7 @@ EMScalarFieldType = Union[
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,
+    ScalarModeFieldCylindricalDataArray,
     EMEScalarModeFieldDataArray,
     EMEScalarFieldDataArray,
 ]
