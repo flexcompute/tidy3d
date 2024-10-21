@@ -709,6 +709,7 @@ class ModeSolver(Tidy3dBaseModel):
         if not LOCAL_SOLVER_IMPORTED:
             raise ImportError(IMPORT_ERROR_MSG)
 
+        _, plane_center = self.plane.pop_axis(self.plane.center, self.normal_axis)
         solver_fields, n_complex, eps_spec = compute_modes(
             eps_cross=self._solver_eps(freq),
             coords=coords,
@@ -716,6 +717,7 @@ class ModeSolver(Tidy3dBaseModel):
             mode_spec=self.mode_spec,
             symmetry=symmetry,
             direction=self.direction,
+            plane_center=plane_center,
         )
 
         fields = self._postprocess_solver_fields(solver_fields)
@@ -759,6 +761,7 @@ class ModeSolver(Tidy3dBaseModel):
             raise ImportError(IMPORT_ERROR_MSG)
 
         solver_basis_fields = self._postprocess_solver_fields_inverse(basis_fields)
+        _, plane_center = self.plane.pop_axis(self.plane.center, self.normal_axis)
 
         solver_fields, n_complex, eps_spec = compute_modes(
             eps_cross=self._solver_eps(freq),
@@ -768,6 +771,7 @@ class ModeSolver(Tidy3dBaseModel):
             symmetry=symmetry,
             direction=self.direction,
             solver_basis_fields=solver_basis_fields,
+            plane_center=plane_center,
         )
 
         fields = self._postprocess_solver_fields(solver_fields)
