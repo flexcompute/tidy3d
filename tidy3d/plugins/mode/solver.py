@@ -43,6 +43,7 @@ class EigSolver(Tidy3dBaseModel):
         symmetry=(0, 0),
         direction="+",
         solver_basis_fields=None,
+        plane_center=None,
     ) -> Tuple[Numpy, Numpy, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
@@ -145,7 +146,11 @@ class EigSolver(Tidy3dBaseModel):
             new_coords, jac_e, jac_h = angled_transform(new_coords, angle_theta, angle_phi)
 
         if bend_radius is not None:
-            new_coords, jac_e_tmp, jac_h_tmp = radial_transform(new_coords, bend_radius, bend_axis)
+            if plane_center is None:
+                plane_center = [coords[0][Nx // 2], coords[1][Ny // 2]]
+            new_coords, jac_e_tmp, jac_h_tmp = radial_transform(
+                new_coords, bend_radius, bend_axis, plane_center
+            )
             jac_e = np.einsum("ij...,jp...->ip...", jac_e_tmp, jac_e)
             jac_h = np.einsum("ij...,jp...->ip...", jac_h_tmp, jac_h)
 
@@ -155,13 +160,15 @@ class EigSolver(Tidy3dBaseModel):
         waveguide, there is strictly speaking no k-vector in the original coordinates as the system
         is not translationally invariant there. However, if we define kz = R k_phi, then the
         effective index approaches that for a straight-waveguide in the limit of infinite radius.
-        Since we use w = R phi in the radial_transform, there is nothing else needed in the k transform.
+        Since we use w = phi in the radial_transform, there is nothing else needed in the k transform.
         For the angled_transform, the transformation between k-vectors follows from writing the field as
         E' exp(i k_p w) in transformed coordinates, and identifying this with
         E exp(i k_x x + i k_y y + i k_z z) in the original ones."""
         kxy = np.cos(angle_theta) ** 2
         kz = np.cos(angle_theta) * np.sin(angle_theta)
         kp_to_k = np.array([kxy * np.sin(angle_phi), kxy * np.cos(angle_phi), kz])
+        if np.abs(mode_spec.bend_radius) > 0:
+            kp_to_k /= mode_spec.bend_radius
 
         # Transform epsilon and mu
         jac_e_det = np.linalg.det(np.moveaxis(jac_e, [0, 1], [-2, -1]))
@@ -172,6 +179,18 @@ class EigSolver(Tidy3dBaseModel):
         mu_tensor = np.einsum("ij...,jp...->ip...", jac_h, mu_tensor)
         mu_tensor = np.einsum("ij...,pj...->ip...", mu_tensor, jac_h)
         mu_tensor /= jac_h_det
+
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(3)
+        im0 = ax[0].imshow(np.abs(eps_tensor[0, 0, :].reshape(Nx, Ny)).T, origin="lower")
+        im1 = ax[1].imshow(np.abs(eps_tensor[1, 1, :].reshape(Nx, Ny)).T, origin="lower")
+        im2 = ax[2].imshow(np.abs(eps_tensor[2, 2, :].reshape(Nx, Ny)).T, origin="lower")
+        fig.colorbar(im0)
+        fig.colorbar(im1)
+        fig.colorbar(im2)
+
+        plt.show()
 
         # # Uncomment block to force eps and mu to be translationally invariant into the PML.
         # # This may be important for bends as the jacobian transformation breaks the invariance, but
