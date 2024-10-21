@@ -77,9 +77,10 @@ def train_network(
         plt.show()
 
     # Save state_dict
-    torch.save(best_state_dict, output_dir / model_name)
+    if output_dir is not None:
+        torch.save(best_state_dict, output_dir / model_name)
 
-    return test_loss_best
+    return test_loss_best, best_state_dict
 
 
 def compute_regression_stats(

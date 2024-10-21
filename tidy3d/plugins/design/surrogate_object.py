@@ -1,6 +1,8 @@
 import copy
+import math
 import os
 import pickle
+import statistics
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -11,6 +13,7 @@ import pandas as pd
 # PyTorch
 import torch
 from optuna.trial import TrialState
+from sklearn.model_selection import KFold
 from tqdm import tqdm
 
 from tidy3d.plugins.design.surrogate_model_funcs import (
@@ -244,6 +247,10 @@ class AI_Model:
         self.scaled_test_labels = scaled_test_labels
         self.scaled_valid_labels = scaled_valid_labels
 
+        # Kept for k-fold training
+        self.raw_features = raw_features
+        self.raw_labels = raw_labels
+
     def train_model(
         self,
         model_name,
@@ -271,7 +278,7 @@ class AI_Model:
         trained_network = copy.deepcopy(network_model)
 
         with tqdm(total=epochs) as pbar:
-            loss = train_network(
+            loss, _ = train_network(
                 network_model,
                 optimizer,
                 self.train_loaded,
@@ -292,6 +299,81 @@ class AI_Model:
         )
 
         return trained_network
+
+    def k_fold_training(
+        self,
+        num_folds,
+        network_model,
+        optimizer,
+        loss_function,
+        epochs,
+        individual_feature_scaling,
+        batch_size,
+    ):
+        """
+        Iterate through `num_folds` splits of the data and calculate the RMSE.
+        Not using scikit learn for the cross-validation tools as need to handle scaling
+        """
+        network_model.to(self.device)
+        k_fold_splitter = KFold(n_splits=num_folds, shuffle=True, random_state=self.seed)
+        rmse_store = []
+        for fold, (train_index, test_index) in enumerate(k_fold_splitter.split(self.raw_features)):
+            print(f"Fold: {fold}")
+
+            # Subsetting and scaling
+            scaled_train_labels, label_scaler = scale_label(self.raw_labels[train_index])
+            scaled_test_labels = scale_label(self.raw_labels[test_index], label_scaler)
+
+            scaled_train_features, feature_scaler = scale_feature(
+                self.raw_features[train_index], individual_feature_scaling
+            )
+
+            scaled_test_features = scale_feature(
+                self.raw_features[test_index],
+                individual_feature_scaling,
+                feature_scaler=feature_scaler,
+            )
+
+            train_loaded = pytorch_load(scaled_train_features, scaled_train_labels, batch_size)
+            test_loaded = pytorch_load(scaled_test_features, scaled_test_labels, batch_size)
+
+            # Train network and evaluate
+            with tqdm(total=epochs) as pbar:
+                loss, best_state_dict = train_network(
+                    network_model,
+                    optimizer,
+                    train_loaded,
+                    test_loaded,
+                    loss_function,
+                    self.device,
+                    output_dir=None,
+                    model_name=f"Fold_{fold}",
+                    epochs=epochs,
+                    pbar=pbar,
+                    show_plot=False,
+                    verbose=False,
+                )
+                print(f" Best Test Loss: {loss}")
+
+            trained_network = copy.deepcopy(network_model)
+            trained_network.load_state_dict(best_state_dict)
+
+            rmse, _, _ = self.validate_model(
+                trained_network, data=test_loaded, labels=scaled_test_labels
+            )
+            rmse_store.append(rmse)
+
+        print(rmse_store)
+        mean_rmse = sum(rmse_store) / len(rmse_store)
+
+        # Calculating mean at 95% confidence interval
+        z = 1.96
+        stderror = statistics.stdev(rmse_store) / math.sqrt(len(rmse_store))
+        margin_error = z * stderror
+
+        print(f"Mean RMSE: {mean_rmse:.3f} +/- {margin_error:.3f}")
+
+        return [mean_rmse, margin_error]
 
     def optimize_network(
         self, trial_count, direction, network_dict, optimizer_dict, loss_function, epochs
@@ -433,16 +515,17 @@ class AI_Model:
             percent_error = round(rmse / mean * 100, 1)
             print(f"% RMSE: {percent_error}%")
 
-    def validate_model(self, trained_network, data_source):
+    def validate_model(self, trained_network, data_source=None, data=None, labels=None):
         trained_network.to(self.device)
 
-        if data_source == "test":
-            data = self.test_loaded
-            labels = self.scaled_test_labels
+        if data is None and labels is None:
+            if data_source == "test":
+                data = self.test_loaded
+                labels = self.scaled_test_labels
 
-        elif data_source == "valid":
-            data = self.valid_loaded
-            labels = self.scaled_valid_labels
+            elif data_source == "valid":
+                data = self.valid_loaded
+                labels = self.scaled_valid_labels
 
         rmse, mae, predictions = validate_regression(
             trained_network, data, labels, self.label_scaler, self.device
