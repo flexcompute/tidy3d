@@ -50,7 +50,7 @@ class AbstractStructure(Tidy3dBaseModel):
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
 
-    autograd_background_permittivity: float = pydantic.Field(
+    background_permittivity: float = pydantic.Field(
         None,
         ge=1.0,
         title="Background Permittivity",
