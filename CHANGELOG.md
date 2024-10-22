@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug where lumped elements in the `Simulation` were being overwritten by the `TerminalComponentModeler`.
 - Bug in `Simulation.subsection` where lumped elements were not being correctly removed.
 - Bug when adding 2D structures to the `Simulation` that are composed of multiple overlapping polygons.
+- Issue where small polygons were created when subdividing 2D structures.
 
 ## [2.7.2] - 2024-08-07
 

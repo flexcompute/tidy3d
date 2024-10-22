@@ -44,6 +44,8 @@ _COMPLEX_POLYSLAB_DIVISIONS_WARN = 100
 # Warn before triangulating large polyslabs due to inefficiency
 _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION = 500
 
+_MIN_POLYGON_AREA = fp_eps
+
 
 class PolySlab(base.Planar):
     """Polygon extruded with optional sidewall angle along axis direction.
@@ -110,7 +112,7 @@ class PolySlab(base.Planar):
 
         # make sure no polygon splitting, islands, 0 area
         poly_heal = shapely.make_valid(cls.make_shapely_polygon(val))
-        if poly_heal.area < fp_eps:
+        if poly_heal.area < _MIN_POLYGON_AREA:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
         if not poly_heal.geom_type == "Polygon" or len(poly_heal.interiors) > 0:
