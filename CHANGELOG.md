@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Support for differentiation with respect to `ComplexPolySlab.vertices`.
 - Introduce RF material library. Users can now import `rf_material_library` from `tidy3d.plugins.microwave`.
-- Users can specify the background medium for a structure in automatic differentiation by supplying `Structure.autograd_background_permittivity`.
+- Users can specify the background medium for a structure in automatic differentiation by supplying `Structure.background_permittivity`.
 - `DirectivityMonitor` to compute antenna directivity.
 - Added `plot_length_units` to `Simulation` and `Scene` to allow for specifying units, which improves axis labels and scaling when plotting.
 - Added the helper function `compute_power_delivered_by_port`  to `TerminalComponentModeler` which computes power delivered to a microwave network from a port.
