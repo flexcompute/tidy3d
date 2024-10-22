@@ -7,7 +7,7 @@ import shapely
 
 from ...constants import inf
 from ..geometry.base import Box, ClipOperation, Geometry
-from ..geometry.polyslab import PolySlab
+from ..geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
 from ..grid.grid import Grid
 from ..scene import Scene
 from ..structure import Structure
@@ -203,10 +203,12 @@ def subdivide(
         for polygon in element[0].geoms:
             final_polygons.append((polygon, element[1], element[2]))
 
-    # Create polyslab from subdivided geometry
+    # Create polyslab from subdivided geometry, while filtering out any
+    # polygons with very small areas
     polyslab_result = [
         (shapely_to_polyslab(element[0], axis, center), element[1], element[2])
         for element in final_polygons
+        if element[0].area >= _MIN_POLYGON_AREA
     ]
 
     return polyslab_result
