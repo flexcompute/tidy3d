@@ -874,9 +874,6 @@ def _run_tidy3d(
     return data, job.task_id
 
 
-defvjp(_run_tidy3d, _run_bwd, argnums=[0])
-
-
 def _run_tidy3d_bwd(simulation: td.Simulation, task_name: str, **run_kwargs) -> AutogradFieldMap:
     """Run a simulation without any tracers using regular web.run()."""
     job_init_kwargs = parse_run_kwargs(**run_kwargs)
