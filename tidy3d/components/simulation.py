@@ -1316,14 +1316,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             geometry = structure.geometry
 
             # subdivide
-            avg_axis_dl = get_dls(geometry, axis, 1)[0]
-            subdivided_geometries = subdivide(geometry, axis, avg_axis_dl, background_structures)
+            subdivided_geometries = subdivide(geometry, background_structures)
             # Create and add volumetric equivalents
             for subdivided_geometry in subdivided_geometries:
                 # Snap to the grid and create volumetric equivalent
                 snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
                 snapped_center = get_bounds(snapped_geometry, axis)[0]
-                dls = get_dls(get_thickened_geom(snapped_geometry, axis, avg_axis_dl), axis, 2)
+                dls = get_dls(get_thickened_geom(snapped_geometry, axis), axis, 2)
                 adjacent_media = [subdivided_geometry[1].medium, subdivided_geometry[2].medium]
 
                 # Create the new volumetric medium

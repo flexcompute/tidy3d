@@ -15,7 +15,7 @@ from tidy3d.components.geometry.base import Planar
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
 from tidy3d.components.geometry.utils_2d import subdivide
-from tidy3d.constants import LARGE_NUMBER
+from tidy3d.constants import LARGE_NUMBER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 
 from ..utils import AssertLogLevel
@@ -970,7 +970,12 @@ def test_subdivide():
     overlapping_boxes = td.GeometryGroup(geometries=(box, overlap_box))
 
     background_structure = td.Structure(medium=td.Medium(), geometry=td.Box(size=(10, 10, 10)))
-    subdivisions = subdivide(
-        geom=overlapping_boxes, axis=2, axis_dl=1e-5, structures=[background_structure]
-    )
+    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure])
     assert len(subdivisions) == 1
+
+    # Test that when a small sliver is created during subdivide
+    # it gets correctly removed before creating the Polyslab
+    box_sliver = td.Structure(
+        medium=td.Medium(), geometry=td.Box(size=(1, 1, 1), center=(1 - fp_eps, 0, 0))
+    )
+    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure, box_sliver])

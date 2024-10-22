@@ -7,7 +7,7 @@ import shapely
 
 from ...constants import inf
 from ..geometry.base import Box, ClipOperation, Geometry
-from ..geometry.polyslab import PolySlab
+from ..geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
 from ..grid.grid import Grid
 from ..scene import Scene
 from ..structure import Structure
@@ -50,7 +50,7 @@ def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
     return (geom.bounds[0][axis], geom.bounds[1][axis])
 
 
-def get_thickened_geom(geom: Geometry, axis: Axis, axis_dl: float):
+def get_thickened_geom(geom: Geometry, axis: Axis):
     """Helper to return a slightly thickened version of a planar geometry."""
     center = get_bounds(geom, axis)[0]
     neg_thickness = increment_float(center, -1.0)
@@ -61,7 +61,6 @@ def get_thickened_geom(geom: Geometry, axis: Axis, axis_dl: float):
 def get_neighbors(
     geom: Geometry,
     axis: Axis,
-    axis_dl: float,
     structures: List[Structure],
 ):
     """Find the neighboring structures and return the tested positions above and below."""
@@ -98,10 +97,26 @@ def get_neighbors(
 
 
 def subdivide(
-    geom: Geometry, axis: Axis, axis_dl: float, structures: List[Structure]
+    geom: Geometry, structures: List[Structure]
 ) -> List[Tuple[Geometry, Structure, Structure]]:
-    """Subdivide Medium2D into pieces with homogeneous substrate / superstrate."""
-    """Use the provided average grid size along the axis to search for neighbors."""
+    """Subdivide geometry associated with a :class:`.Medium2D` into partitions
+    that each have a homogeneous substrate / superstrate. Partitions are computed
+    using ``shapely`` boolean operations on polygons.
+
+    Parameters
+    ----------
+    geom : Geometry
+        A 2D geometry associated with the :class:`.Medium2D`.
+    structures : List[Structure]
+        List of structures that are checked for intersection with ``geom``.
+
+    Returns
+    -------
+    List[Tuple[Geometry, Structure, Structure]]
+        List of the created partitions. Each element of the list represents a partition of the 2D geometry,
+        which includes the newly created structures below and above.
+
+    """
 
     def shapely_to_polyslab(polygon: shapely.Polygon, axis: Axis, center: float) -> PolySlab:
         xx, yy = polygon.exterior.coords.xy
@@ -111,9 +126,10 @@ def subdivide(
     def to_multipolygon(shapely_geometry) -> shapely.MultiPolygon:
         return shapely.MultiPolygon(ClipOperation.to_polygon_list(shapely_geometry))
 
+    axis = geom._normal_2dmaterial
     # Find neighbors and the small offset they were found at
     neighbors_below, neighbors_above, check_delta = get_neighbors(
-        geom=geom, axis=axis, axis_dl=axis_dl, structures=structures
+        geom=geom, axis=axis, structures=structures
     )
 
     # Compute the plane of intersection
@@ -203,10 +219,12 @@ def subdivide(
         for polygon in element[0].geoms:
             final_polygons.append((polygon, element[1], element[2]))
 
-    # Create polyslab from subdivided geometry
+    # Create polyslab from subdivided geometry, while filtering out any
+    # polygons with very small areas
     polyslab_result = [
         (shapely_to_polyslab(element[0], axis, center), element[1], element[2])
         for element in final_polygons
+        if element[0].area >= _MIN_POLYGON_AREA
     ]
 
     return polyslab_result
