@@ -2974,7 +2974,7 @@ class DiffractionData(AbstractFieldProjectionData):
         theta_data, phi_data = self.angles
         angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq0))
         angle_theta = float(theta_data.sel(**angle_sel_kwargs))
-        angle_phi = 0 * np.pi + float(phi_data.sel(**angle_sel_kwargs))
+        angle_phi = float(phi_data.sel(**angle_sel_kwargs))
 
         # if the angle is nan, this amplitude is set to 0 in the fwd pass, so should skip adj
         if np.isnan(angle_theta):
