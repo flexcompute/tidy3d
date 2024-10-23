@@ -53,6 +53,14 @@ class AbstractStructure(Tidy3dBaseModel):
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
 
+    background_permittivity: float = pydantic.Field(
+        None,
+        ge=1.0,
+        title="Background Permittivity",
+        description="Relative permittivity used for the background of this structure "
+        "when performing shape optimization with autograd.",
+    )
+
     _name_validator = validate_name_str()
 
     @pydantic.validator("geometry")

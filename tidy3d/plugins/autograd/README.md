@@ -147,6 +147,7 @@ The following components are traceable as outputs of the `td.SimulationData`
 Other features
 - support for multi-frequency monitors in certain situations (single adjoint source).
 - server-side gradient processing by passing `local_gradient=False` to the `web` functions. This can dramatically cut down on data storage time, just be careful about using this with multi-frequency monitors and large design regions as it can lead to large data storage on our servers.
+- To manually set the background permittivity of a structure for purposes of shape optimization, one can set `Structure.background_permittivity`. This is useful when there is a substrate or multiple overlapping structures as some geometries, such as `PolySlab`, do not automatically detect background permittivity and instead use the `Simulation.medium` by default.
 
 We currently have the following restrictions:
 
