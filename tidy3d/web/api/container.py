@@ -18,6 +18,7 @@ from ...components.types import annotate_type
 from ...exceptions import DataError
 from ...log import get_logging_console, log
 from ..api import webapi as web
+from ..api.webapi import get_system_config
 from ..core.constants import TaskId, TaskName
 from ..core.task_info import RunInfo, TaskInfo
 from .tidy3d_stub import SimulationDataType, SimulationType
@@ -695,7 +696,7 @@ class Batch(WebContainer):
 
             return description
 
-        run_statuses = [
+        run_statuses = (
             "draft",
             "queued",
             "preprocess",
@@ -704,8 +705,28 @@ class Batch(WebContainer):
             "postprocess",
             "visualize",
             "success",
-        ]
-        end_statuses = ("success", "error", "errored", "diverged", "diverge", "deleted", "draft")
+        )
+
+        end_statuses = (
+            "success",
+            "error",
+            "errored",
+            "diverged",
+            "diverge",
+            "deleted",
+            "draft",
+            "abort",
+            "aborted",
+        )
+
+        config = get_system_config()
+        if config is not None:
+            config_end_statuses = config.end_statuses
+            config_run_statuses = config.run_statuses
+            if config_end_statuses is not None:
+                end_statuses = config_end_statuses
+            if config_run_statuses is not None:
+                run_statuses = config_run_statuses
 
         if self.verbose:
             console = get_logging_console()

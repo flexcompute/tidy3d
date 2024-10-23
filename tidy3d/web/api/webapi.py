@@ -15,6 +15,7 @@ from ...log import get_logging_console, log
 from ..core.account import Account
 from ..core.constants import SIM_FILE_HDF5, TaskId
 from ..core.environment import Env
+from ..core.system_config import SystemConfig
 from ..core.task_core import Folder, SimulationTask
 from ..core.task_info import ChargeType, TaskInfo
 from .connect_util import (
@@ -359,16 +360,17 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     ----
     To load results when finished, may call :meth:`load`.
     """
+    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort", "aborted")
 
     console = get_logging_console() if verbose else None
-
     task_info = get_info(task_id)
-
     task_name = task_info.taskName
-
     task_type = task_info.taskType
-
-    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort", "aborted")
+    config = get_system_config()
+    if config is not None:
+        config_end_statuses = config.end_statuses
+        if config_end_statuses is not None:
+            break_statuses = config_end_statuses
 
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
@@ -972,6 +974,21 @@ def account(verbose=True) -> Account:
         console.log(message)
 
     return account_info
+
+
+@wait_for_connection
+def get_system_config() -> SystemConfig:
+    """Return system config.
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    :class:`SystemConfig`
+        Object containing information about system configuration.
+    """
+    return SystemConfig.get()
 
 
 @wait_for_connection
