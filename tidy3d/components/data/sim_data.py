@@ -447,7 +447,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
-        interpolation: float = 1,
+        shading: str = "flat",
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -482,9 +482,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
-        interpolation: float = 1
-            Fraction of the number of data points to interpolate in each direction.
-            If set to 1, no interpolation is performed. Can be negative for downsampling.
+        shading: str = 'flat'
+            Shading argument for Xarray plot method ('flat','nearest','goraud')
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -632,27 +631,6 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         else:
             position = monitor.center[axis]
 
-        # interpolating data
-        if interpolation != 1:
-            points_x = int(interpolation * field_data.shape[0])
-            points_y = int(interpolation * field_data.shape[1])
-
-            # avoiding a dataset that is too big
-            if points_x * points_y > 100000:
-                interpolation = np.sqrt(100000 / (field_data.shape[0] * field_data.shape[1]))
-                log.warning(
-                    f"An interpolation value that is too big can lead to an out-of-memory issue. Setting to: {interpolation}"
-                )
-                points_x = int(interpolation * field_data.shape[0])
-                points_y = int(interpolation * field_data.shape[0])
-
-            field_data = field_data.interp(
-                coords=dict(
-                    x=np.linspace(field_data.x.min(), field_data.x.max(), points_x),
-                    y=np.linspace(field_data.y.min(), field_data.y.max(), points_y),
-                )
-            )
-
         return self.plot_scalar_array(
             field_data=field_data,
             axis=axis,
@@ -664,6 +642,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             vmax=vmax,
             cmap_type=cmap_type,
             ax=ax,
+            shading=shading,
+            infer_intervals=True if shading == "flat" else False,
         )
 
     def plot_field(
@@ -678,7 +658,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
-        interpolation: float = 1,
+        shading: str = "flat",
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -714,9 +694,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
-        interpolation: float = 1
-            Fraction of the number of data points to interpolate in each direction.
-            If set to 1, no interpolation is performed. Can be negative for downsampling.
+        shading: str = 'flat'
+            Shading argument for Xarray plot method ('flat','nearest','goraud')
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -743,7 +722,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
-            interpolation=interpolation,
+            shading=shading,
             **sel_kwargs,
         )
 
@@ -761,6 +740,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: float = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
+        **kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
 
@@ -793,6 +773,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             Type of color map to use for plotting.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        **kwargs : Extra arguments to ``DataArray.plot``.
 
         Returns
         -------
@@ -832,6 +813,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             robust=robust,
             center=center,
             cbar_kwargs={"label": field_data.name},
+            **kwargs,
         )
 
         # plot the simulation epsilon
@@ -849,7 +831,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         y_coord_values = field_data.coords[y_coord_label]
         ax.set_xlim(min(x_coord_values), max(x_coord_values))
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
-
+        self.__dict__["field_data_"] = field_data
         return ax
 
 
