@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Users can manually specify the background medium for a structure to be used for geometry gradient calculations by supplying `Structure.background_permittivity`. This is useful when there are overlapping structures or structures embedded in other mediums.
 
+### Changed
+- Triangulation of `PolySlab` polygons now supports polygons with collinear vertices.
+
 ### Fixed
 - Minor gradient direction and normalization fixes for polyslab, field monitors, and diffraction monitors in autograd.
 
