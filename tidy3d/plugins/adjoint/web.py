@@ -1,5 +1,6 @@
 """Adjoint-specific webapi."""
 
+import os
 import tempfile
 from functools import partial
 from typing import Dict, List, Tuple
@@ -8,6 +9,7 @@ import pydantic.v1 as pd
 from jax import custom_vjp
 from jax.tree_util import register_pytree_node_class
 
+import tidy3d as td
 from tidy3d.web.api.asynchronous import run_async as web_run_async
 from tidy3d.web.api.webapi import run as web_run
 from tidy3d.web.api.webapi import wait_for_connection
@@ -219,26 +221,36 @@ def run_bwd(
 @wait_for_connection
 def upload_jax_info(jax_info: JaxInfo, task_id: str, verbose: bool) -> None:
     """Upload jax_info for a task with a given task_id."""
-
-    data_file = tempfile.NamedTemporaryFile(suffix=".json")
-    data_file.close()
-    jax_info.to_file(data_file.name)
-    upload_file(
-        task_id,
-        data_file.name,
-        JAX_INFO_FILE,
-        verbose=verbose,
-    )
+    handle, fname = tempfile.mkstemp(suffix=".json")
+    os.close(handle)
+    try:
+        jax_info.to_file(fname)
+        upload_file(
+            task_id,
+            fname,
+            JAX_INFO_FILE,
+            verbose=verbose,
+        )
+    except Exception as e:
+        td.log.error(f"Error occurred while uploading 'jax_info': {e}")
+        raise e
+    finally:
+        os.unlink(fname)
 
 
 @wait_for_connection
 def download_sim_vjp(task_id: str, verbose: bool) -> JaxSimulation:
     """Download the vjp loaded simulation from the server to return to jax."""
-
-    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
-    data_file.close()
-    download_file(task_id, SIM_VJP_FILE, to_file=data_file.name, verbose=verbose)
-    return JaxSimulation.from_file(data_file.name)
+    handle, fname = tempfile.mkstemp(suffix=".hdf5")
+    os.close(handle)
+    try:
+        download_file(task_id, SIM_VJP_FILE, to_file=fname, verbose=verbose)
+        return JaxSimulation.from_file(fname)
+    except Exception as e:
+        td.log.error(f"Error occurred while downloading 'sim_vjp': {e}")
+        raise e
+    finally:
+        os.unlink(fname)
 
 
 AdjointSimulationType = Literal["tidy3d", "adjoint_fwd", "adjoint_bwd"]

@@ -1,5 +1,6 @@
 # autograd wrapper for web functions
 
+import os
 import tempfile
 import typing
 from collections import defaultdict
@@ -529,15 +530,21 @@ def postprocess_fwd(
 
 def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: bool = False):
     """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
-    data_file.close()
-    TracerKeys(keys=sim_fields_keys).to_file(data_file.name)
-    upload_file(
-        task_id,
-        data_file.name,
-        SIM_FIELDS_KEYS_FILE,
-        verbose=verbose,
-    )
+    handle, fname = tempfile.mkstemp(suffix=".hdf5")
+    os.close(handle)
+    try:
+        TracerKeys(keys=sim_fields_keys).to_file(fname)
+        upload_file(
+            task_id,
+            fname,
+            SIM_FIELDS_KEYS_FILE,
+            verbose=verbose,
+        )
+    except Exception as e:
+        td.log.error(f"Error occurred while uploading simulation fields keys: {e}")
+        raise e
+    finally:
+        os.unlink(fname)
 
 
 """ VJP maker for ADJ pass."""
@@ -545,10 +552,16 @@ def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: 
 
 def get_vjp_traced_fields(task_id_adj: str, verbose: bool) -> AutogradFieldMap:
     """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
-    data_file.close()
-    download_file(task_id_adj, SIM_VJP_FILE, to_file=data_file.name, verbose=verbose)
-    field_map = FieldMap.from_file(data_file.name)
+    handle, fname = tempfile.mkstemp(suffix=".hdf5")
+    os.close(handle)
+    try:
+        download_file(task_id_adj, SIM_VJP_FILE, to_file=fname, verbose=verbose)
+        field_map = FieldMap.from_file(fname)
+    except Exception as e:
+        td.log.error(f"Error occurred while getting VJP traced fields: {e}")
+        raise e
+    finally:
+        os.unlink(fname)
     return field_map.to_autograd_field_map
 
 
