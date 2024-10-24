@@ -104,7 +104,7 @@ class ModeSpec(Tidy3dBaseModel):
 
     precision: Literal["auto", "single", "double"] = pd.Field(
         "auto",
-        title="single or double precision in mode solver",
+        title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision. "
         "With the default ``'auto'``, apply double precision if the simulation contains a good "

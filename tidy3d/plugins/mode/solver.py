@@ -43,6 +43,7 @@ class EigSolver(Tidy3dBaseModel):
         coords,
         freq,
         mode_spec,
+        precision,
         mu_cross=None,
         split_curl_scaling=None,
         symmetry=(0, 0),
@@ -66,6 +67,8 @@ class EigSolver(Tidy3dBaseModel):
             (Hertz) Frequency at which the eigenmodes are computed.
         mode_spec : ModeSpec
             ``ModeSpec`` object containing specifications of the mode solver.
+        precision : Literual["single", "double"]
+            Apply "single" or "double" precision in mode solver.
         mu_cross : array_like or tuple of array_like
             Either a single 2D array defining the relative permeability in the cross-section,
             or nine 2D arrays defining the permeability at the Hx, Hy, and Hz locations
@@ -251,7 +254,7 @@ class EigSolver(Tidy3dBaseModel):
             der_mats,
             num_modes,
             target_neff_p,
-            mode_spec.precision,
+            precision,
             direction,
             enable_incidence_matrices,
             basis_E=basis_E,
@@ -309,7 +312,7 @@ class EigSolver(Tidy3dBaseModel):
             Number of modes to solve for.
         neff_guess : float
             Initial guess for the effective index.
-        mat_precision : Union['auto', 'single', 'double']
+        mat_precision : Union['single', 'double']
             Single or double-point precision in eigensolver.
         direction : Union["+", "-"]
             Direction of mode propagation.
@@ -366,9 +369,7 @@ class EigSolver(Tidy3dBaseModel):
             "num_modes": num_modes,
             "neff_guess": neff_guess,
             "vec_init": vec_init,
-            "mat_precision": EigSolver.solver_precision_selection(
-                mat_precision, eps_tensor, mu_tensor
-            ),
+            "mat_precision": mat_precision,
         }
 
         is_eps_complex = cls.isinstance_complex(eps_tensor)
@@ -1024,17 +1025,6 @@ class EigSolver(Tidy3dBaseModel):
         if material_response is None:
             return False
         return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
-
-    @staticmethod
-    def solver_precision_selection(mat_spec_precision: bool, eps_cross, mu_cross) -> bool:
-        """Select "single" or "double" precision based on mat_spec and material properties."""
-        if mat_spec_precision == "auto":
-            if EigSolver.mode_plane_contain_good_conductor(
-                eps_cross
-            ) or EigSolver.mode_plane_contain_good_conductor(mu_cross):
-                return "double"
-            return "single"
-        return mat_spec_precision
 
 
 def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:
