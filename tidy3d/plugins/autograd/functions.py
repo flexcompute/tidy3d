@@ -4,12 +4,14 @@ import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag
 from numpy.typing import NDArray
 
-from tidy3d.components.autograd.functions import interpn
+from tidy3d.components.autograd.functions import add_at, interpn, trapz
 
 from .types import PaddingType
 
 __all__ = [
     "interpn",
+    "trapz",
+    "add_at",
     "pad",
     "convolve",
     "grey_dilation",

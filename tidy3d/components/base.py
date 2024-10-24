@@ -19,7 +19,6 @@ import rich
 import xarray as xr
 import yaml
 from autograd.builtins import dict as dict_ag
-from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
 
 from ..exceptions import FileError
@@ -962,8 +961,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             """recursively update ``field_mapping`` with path to the autograd data."""
 
             # this is a leaf node that we want to trace, add this path and data to the mapping
-            if isbox(x):
-                field_mapping[path] = x
+            if is_traced(x):
+                field_mapping[path] = get_tracer(x)
 
             # for data arrays, need to be more careful as their tracers are stored in .data
             elif isinstance(x, xr.DataArray) and (isbox(x.data) or include_untraced_data_arrays):

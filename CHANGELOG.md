@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Users can manually specify the background medium for a structure to be used for geometry gradient calculations by supplying `Structure.background_permittivity`. This is useful when there are overlapping structures or structures embedded in other mediums.
 - Autograd functions can now be called directly on `DataArray` (e.g., `np.sum(data_array)`) in objective functions.
+- Automatic differentiation support for local field projections with `FieldProjectionAngleMonitor` and `FieldProjectionCartesianMonitor` using `FieldProjector.project_fields(far_field_monitor)`.
 
 ### Changed
 - Improved autograd tracer handling in `DataArray`, resulting in significant speedups for differentiation involving large monitors.
