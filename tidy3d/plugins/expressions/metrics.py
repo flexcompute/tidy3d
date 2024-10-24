@@ -93,7 +93,7 @@ class ModeAmp(Metric):
     @property
     def _validation_data(self) -> Any:
         """Return dummy data for this metric (complex array of mode amplitudes)."""
-        f = list(self.f) if self.f is not None else [1.0]
+        f = np.atleast_1d(self.f).tolist() if self.f is not None else [1.0]
         amps_data = np.random.rand(len(f)) + 1j * np.random.rand(len(f))
         amps = xr.DataArray(
             amps_data.reshape(1, 1, -1),
@@ -111,7 +111,8 @@ class ModeAmp(Metric):
             direction=self.direction, mode_index=self.mode_index
         )
         if self.f is not None:
-            amps = amps.sel(f=list(self.f), method="nearest")
+            f = list(self.f) if isinstance(self.f, tuple) else self.f
+            amps = amps.sel(f=f, method="nearest")
         return np.squeeze(amps.data)
 
 

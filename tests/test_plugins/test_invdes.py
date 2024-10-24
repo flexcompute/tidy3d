@@ -586,6 +586,16 @@ def test_initial_simulation_multi():
         )
 
 
+def test_metric_scalar_freq():
+    invdes = make_invdes()
+    metric = ModePower(monitor_name=MNT_NAME2, mode_index=0, f=FREQ0)
+    monitor = mnt2.updated_copy(freqs=[FREQ0, FREQ0 / 2])
+    invdes = invdes.updated_copy(
+        metric=metric,
+        simulation=simulation.updated_copy(monitors=[monitor]),
+    )
+
+
 def test_validate_invdes_metric():
     """Test the _validate_metric_monitor_name validator."""
     invdes = make_invdes()
