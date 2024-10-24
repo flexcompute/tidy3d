@@ -106,12 +106,14 @@ from .components.eme.monitor import (
 )
 
 # EME
-# EME
 from .components.eme.simulation import EMESimulation
 from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep
 
 # field projection
 from .components.field_projection import FieldProjector
+
+# frequency conversion utilities
+from .components.frequencies import frequencies, wavelengths
 
 # geometry
 from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
@@ -424,6 +426,8 @@ __all__ = [
     "Q_e",
     "K_B",
     "inf",
+    "frequencies",
+    "wavelengths",
     "material_library",
     "Graphene",
     "AbstractMedium",
