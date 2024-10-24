@@ -178,6 +178,12 @@ class ModeSolver(Tidy3dBaseModel):
         """Axis normal to the mode plane."""
         return self.plane.size.index(0.0)
 
+    @staticmethod
+    def plane_center_tangential(plane) -> tuple[float, float]:
+        """Mode lane center in the tangential axes."""
+        _, plane_center = plane.pop_axis(plane.center, plane.size.index(0.0))
+        return plane_center
+
     @cached_property
     def solver_symmetry(self) -> Tuple[Symmetry, Symmetry]:
         """Get symmetry for solver for propagation along self.normal axis."""
@@ -721,6 +727,7 @@ class ModeSolver(Tidy3dBaseModel):
             mode_spec=self.mode_spec,
             symmetry=symmetry,
             direction=self.direction,
+            plane_center=self.plane_center_tangential(self.plane),
         )
 
         fields = self._postprocess_solver_fields(
@@ -775,6 +782,7 @@ class ModeSolver(Tidy3dBaseModel):
             symmetry=symmetry,
             direction=self.direction,
             solver_basis_fields=solver_basis_fields,
+            plane_center=self.plane_center_tangential(self.plane),
         )
 
         fields = self._postprocess_solver_fields(
