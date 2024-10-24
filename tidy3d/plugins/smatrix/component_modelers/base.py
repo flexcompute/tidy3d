@@ -121,19 +121,19 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @cached_property
     def sim_dict(self) -> Dict[str, Simulation]:
-        """Generate all the :class:`Simulation` objects for the S matrix calculation."""
+        """Generate all the :class:`.Simulation` objects for the S matrix calculation."""
 
     def to_file(self, fname: str) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
+        """Exports :class:`AbstractComponentModeler` instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
         fname : str
-            Full path to the .yaml or .json file to save the :class:`Tidy3dBaseModel` to.
+            Full path to the .yaml or .json file to save the :class:`AbstractComponentModeler` to.
 
         Example
         -------
-        >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
+        >>> modeler.to_file(fname='folder/sim.json') # doctest: +SKIP
         """
 
         batch_cached = self._cached_properties.get("batch")
@@ -149,7 +149,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @cached_property
     def batch(self) -> Batch:
-        """Batch associated with this component modeler."""
+        """:class:`.Batch` associated with this component modeler."""
 
         if self.batch_cached is not None:
             return self.batch_cached
@@ -175,7 +175,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @cached_property
     def batch_data(self) -> BatchData:
-        """The ``BatchData`` associated with the simulations run for this component modeler."""
+        """The :class:`.BatchData` associated with the simulations run for this component modeler."""
         return self.batch.run(path_dir=self.path_dir)
 
     def get_path_dir(self, path_dir: str) -> None:
@@ -193,11 +193,11 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @cached_property
     def _batch_path(self) -> str:
-        """Where we store the batch for this ComponentModeler instance after the run."""
+        """Where we store the batch for this :class:`AbstractComponentModeler` instance after the run."""
         return os.path.join(self.path_dir, "batch" + str(hash(self)) + ".hdf5")
 
     def _run_sims(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
-        """Run :class:`Simulations` for each port and return the batch after saving."""
+        """Run :class:`.Simulation` for each port and return the batch after saving."""
         _ = self.get_path_dir(path_dir)
         self.batch.to_file(self._batch_path)
         batch_data = self.batch_data
@@ -212,7 +212,11 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
     @abstractmethod
     def _construct_smatrix(self, batch_data: BatchData) -> DataArray:
-        """Post process :class:`BatchData` to generate scattering matrix."""
+        """Post process :class:`.BatchData` to generate scattering matrix."""
+
+    @abstractmethod
+    def _internal_construct_smatrix(self, batch_data: BatchData) -> DataArray:
+        """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> DataArray:
         """Solves for the scattering matrix of the system."""
@@ -220,7 +224,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         return self._construct_smatrix()
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> DataArray:
-        """Load a scattering matrix from saved :class:`BatchData` object."""
+        """Load a scattering matrix from saved :class:`.BatchData` object."""
         return self.run(path_dir=path_dir)
 
     @staticmethod

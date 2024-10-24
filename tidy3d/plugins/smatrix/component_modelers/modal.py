@@ -17,6 +17,7 @@ from ....components.source import GaussianPulse, ModeSource
 from ....components.types import Ax, Complex
 from ....components.viz import add_ax_if_none, equal_aspect
 from ....exceptions import SetupError
+from ....web.api.container import BatchData
 from ..ports.modal import ModalPortDataArray, Port
 from .base import FWIDTH_FRAC, AbstractComponentModeler
 
@@ -92,7 +93,7 @@ class ComponentModeler(AbstractComponentModeler):
 
     @cached_property
     def sim_dict(self) -> Dict[str, Simulation]:
-        """Generate all the :class:`Simulation` objects for the S matrix calculation."""
+        """Generate all the :class:`.Simulation` objects for the S matrix calculation."""
 
         sim_dict = {}
         mode_monitors = [self.to_monitor(port=port) for port in self.ports]
@@ -205,7 +206,7 @@ class ComponentModeler(AbstractComponentModeler):
     @equal_aspect
     @add_ax_if_none
     def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
-        """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
+        """Plot a :class:`.Simulation` with all sources added for each port, for troubleshooting."""
 
         plot_sources = []
         for port_source in self.ports:
@@ -219,7 +220,7 @@ class ComponentModeler(AbstractComponentModeler):
     def plot_sim_eps(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plot permittivity of the :class:`Simulation` with all sources added for each port."""
+        """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
 
         plot_sources = []
         for port_source in self.ports:
@@ -256,7 +257,11 @@ class ComponentModeler(AbstractComponentModeler):
         return max_mode_index_out, max_mode_index_in
 
     def _construct_smatrix(self) -> ModalPortDataArray:
-        """Post process `BatchData` to generate scattering matrix."""
+        """Post process :class:`.BatchData` to generate scattering matrix."""
+        return self._internal_construct_smatrix(batch_data=self.batch_data)
+
+    def _internal_construct_smatrix(self, batch_data: BatchData) -> ModalPortDataArray:
+        """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
         batch_data = self.batch_data
 

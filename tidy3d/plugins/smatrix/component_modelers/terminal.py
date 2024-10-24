@@ -183,9 +183,11 @@ class TerminalComponentModeler(AbstractComponentModeler):
         )
 
     def _construct_smatrix(self) -> TerminalPortDataArray:
-        """Post process ``BatchData`` to generate scattering matrix."""
+        """Post process :class:`.BatchData` to generate scattering matrix."""
+        return self._internal_construct_smatrix(batch_data=self.batch_data)
 
-        batch_data = self.batch_data
+    def _internal_construct_smatrix(self, batch_data: BatchData) -> TerminalPortDataArray:
+        """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
         port_names = [port.name for port in self.ports]
 
