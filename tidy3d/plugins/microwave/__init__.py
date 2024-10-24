@@ -1,6 +1,7 @@
 """Imports from microwave plugin."""
 
 from . import models
+from .auto_path_integrals import path_integrals_from_lumped_element
 from .custom_path_integrals import (
     CustomCurrentIntegral2D,
     CustomPathIntegral2D,
@@ -25,5 +26,6 @@ __all__ = [
     "CurrentIntegralTypes",
     "ImpedanceCalculator",
     "models",
+    "path_integrals_from_lumped_element",
     "rf_material_library",
 ]

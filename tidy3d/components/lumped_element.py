@@ -17,6 +17,7 @@ from ..components.medium import (
     Medium2D,
     PoleResidue,
 )
+from ..components.monitor import FieldMonitor
 from ..components.structure import MeshOverrideStructure, Structure
 from ..components.validators import assert_plane, validate_name_str
 from ..constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM
@@ -25,7 +26,8 @@ from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .geometry.base import Box, ClipOperation, Geometry
 from .geometry.primitives import Cylinder
 from .geometry.utils import SnapBehavior, SnapLocation, SnappingSpec, snap_box_to_grid
-from .types import TYPE_TAG_STR, Axis, Axis2D, Coordinate
+from .geometry.utils_2d import increment_float
+from .types import TYPE_TAG_STR, Axis, Axis2D, Coordinate, FreqArray
 from .viz import PlotParams, plot_params_lumped_element
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 3
@@ -190,6 +192,36 @@ class RectangularLumpedElement(LumpedElement, Box):
         size_lateral = size[self.lateral_axis]
         # The final scaling along the normal axis is applied when the resulting 2D medium is averaged with the background media.
         return size_voltage / size_lateral
+
+    def to_monitor(self, freqs: FreqArray) -> FieldMonitor:
+        """Creates a field monitor that can be added to the simulation, which records field data
+        that can be used to later compute voltage and current flowing through the element.
+        """
+
+        center = list(self.center)
+        # Size of monitor needs to be nonzero along the normal axis so that the magnetic field on
+        # both sides of the sheet will be available
+        mon_size = list(self.size)
+        mon_size[self.normal_axis] = 2 * (
+            increment_float(center[self.normal_axis], 1.0) - center[self.normal_axis]
+        )
+
+        e_component = "xyz"[self.voltage_axis]
+        h1_component = "xyz"[self.lateral_axis]
+        h2_component = "xyz"[self.normal_axis]
+        # Create a voltage monitor
+        return FieldMonitor(
+            center=center,
+            size=mon_size,
+            freqs=freqs,
+            fields=[f"E{e_component}", f"H{h1_component}", f"H{h2_component}"],
+            name=self.monitor_name,
+            colocate=False,
+        )
+
+    @cached_property
+    def monitor_name(self):
+        return f"{self.name}_monitor"
 
     @pydantic.validator("voltage_axis", always=True)
     @skip_if_fields_missing(["name", "size"])
