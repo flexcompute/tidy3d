@@ -23,7 +23,7 @@ from ...exceptions import (
 )
 from ...log import log
 from ...packaging import check_import, verify_packages_import
-from ..autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
+from ..autograd import AutogradFieldMap, TracedCoordinate, TracedFloat, TracedSize, get_static
 from ..autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from ..base import Tidy3dBaseModel, cached_property
 from ..transformation import RotationAroundAxis
@@ -1603,7 +1603,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
 
-    sidewall_angle: float = pydantic.Field(
+    sidewall_angle: TracedFloat = pydantic.Field(
         0.0,
         title="Sidewall angle",
         description="Angle of the sidewall. "
