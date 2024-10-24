@@ -258,6 +258,7 @@ from .config import config
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
 from .constants import C_0, EPSILON_0, ETA_0, HBAR, K_B, MU_0, Q_e, inf
+from .frequencies import frequencies, wavelengths
 from .log import log, set_logging_console, set_logging_file
 
 # material library dict imported as `from tidy3d import material_library`
@@ -424,6 +425,8 @@ __all__ = [
     "Q_e",
     "K_B",
     "inf",
+    "frequencies",
+    "wavelengths",
     "material_library",
     "Graphene",
     "AbstractMedium",
