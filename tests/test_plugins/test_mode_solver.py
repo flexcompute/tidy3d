@@ -178,6 +178,7 @@ def test_compute_modes():
         freq=td.C_0 / 1.0,
         mode_spec=mode_spec,
         direction="-",
+        precision="single",
     )
 
 
