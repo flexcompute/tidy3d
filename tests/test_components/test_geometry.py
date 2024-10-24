@@ -957,3 +957,9 @@ def test_update_from_bounds():
     for geom2d in geometries:
         with pytest.raises(NotImplementedError):
             geom_update = geom2d._update_from_bounds(bounds=new_bounds, axis=axis)
+
+
+def test_triangulation_with_collinear_vertices():
+    xr = np.linspace(0, 1, 6)
+    a = np.array([[x, -0.5] for x in xr] + [[x, 0.5] for x in xr[::-1]])
+    assert len(td.components.geometry.triangulation.triangulate(a)) == 10

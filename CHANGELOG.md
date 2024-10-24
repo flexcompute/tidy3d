@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Improved autograd tracer handling in `DataArray`, resulting in significant speedups for differentiation involving large monitors.
 
+### Changed
+- Triangulation of `PolySlab` polygons now supports polygons with collinear vertices.
+
 ### Fixed
 - Minor gradient direction and normalization fixes for polyslab, field monitors, and diffraction monitors in autograd.
 - Resolved an issue where temporary files for adjoint simulations were not being deleted properly.
