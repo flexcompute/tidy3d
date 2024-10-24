@@ -102,11 +102,13 @@ class ModeSpec(Tidy3dBaseModel):
         units=RADIAN,
     )
 
-    precision: Literal["single", "double"] = pd.Field(
-        "single",
-        title="single or double precision in mode solver",
+    precision: Literal["auto", "single", "double"] = pd.Field(
+        "auto",
+        title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
-        "single precision, but more accurate under double precision.",
+        "single precision, but more accurate under double precision. "
+        "With the default ``'auto'``, apply double precision if the simulation contains a good "
+        "conductor, single precision otherwise.",
     )
 
     bend_radius: float = pd.Field(
@@ -198,7 +200,7 @@ class ModeSpec(Tidy3dBaseModel):
                 )
 
             # multiply by 5 to be safe
-            if values["group_index_step"] < 5 * fp_eps and values["precision"] == "single":
+            if values["group_index_step"] < 5 * fp_eps and values["precision"] != "double":
                 log.warning(
                     "Group index step is too small! "
                     "The results might be fully corrupted by numerical errors. "
