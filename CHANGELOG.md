@@ -9,18 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Users can manually specify the background medium for a structure to be used for geometry gradient calculations by supplying `Structure.background_permittivity`. This is useful when there are overlapping structures or structures embedded in other mediums.
-
-### Fixed
-- Minor gradient direction and normalization fixes for polyslab, field monitors, and diffraction monitors in autograd.
-- Resolved an issue where temporary files for adjoint simulations were not being deleted properly.
 - Autograd functions can now be called directly on `DataArray` (e.g., `np.sum(data_array)`) in objective functions.
 
 ### Changed
 - Improved autograd tracer handling in `DataArray`, resulting in significant speedups for differentiation involving large monitors.
 
 ### Fixed
+- Minor gradient direction and normalization fixes for polyslab, field monitors, and diffraction monitors in autograd.
+- Resolved an issue where temporary files for adjoint simulations were not being deleted properly.
 - Resolve several edge cases where autograd boxes were incorrectly converted to numpy arrays.
-
+- Resolve issue where scalar frequencies in metric definitions (`ModeAmp(f=freq)` instead of `ModeAmp(f=[freq])`) would erroneously fail validation.
 
 ## [2.7.5] - 2024-10-16
 
