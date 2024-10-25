@@ -1527,7 +1527,7 @@ class TestDataArrayGrads:
         """Test grads of TidyArrayBox methods implemented in autograd/boxes.py"""
 
         def objective(x, attr):
-            da = DataArray(x, dims=map(str, range(x.ndim)))
+            da = DataArray(x)
             attr_value = getattr(da, attr)
             val = attr_value() if callable(attr_value) else attr_value
             return val.item()
@@ -1540,11 +1540,11 @@ class TestDataArrayGrads:
 
         def objective(a, b):
             coords = {str(i): np.arange(a.shape[i]) for i in range(a.ndim)}
-            da = DataArray(a, coords=coords, dims=map(str, range(a.ndim)))
+            da = DataArray(a, coords=coords)
             da_mult = da.multiply_at(b, "0", [0, 1]) ** 2
             return np.sum(da_mult).item()
 
         a = rng.uniform(-1, 1, (3, 3))
         b = 1.0
-        check_grads(lambda x: objective(x, b), modes=["fwd", "rev"], order=1)(a)
-        check_grads(lambda x: objective(a, x), modes=["fwd", "rev"], order=1)(b)
+        check_grads(lambda x: objective(x, b), modes=["fwd", "rev"], order=2)(a)
+        check_grads(lambda x: objective(a, x), modes=["fwd", "rev"], order=2)(b)

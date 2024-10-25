@@ -5,11 +5,20 @@ import importlib
 from typing import Any, Callable, Dict, List, Tuple
 
 import autograd.numpy as anp
+from autograd.extend import defjvp
 from autograd.numpy.numpy_boxes import ArrayBox
+from autograd.numpy.numpy_wrapper import _astype
 
 TidyArrayBox = ArrayBox  # NOT a subclass
 
 _autograd_module_cache = {}  # cache for imported autograd modules
+
+defjvp(
+    _astype,
+    lambda g, ans, A, dtype, order="K", casting="unsafe", subok=True, copy=True: _astype(g, dtype),
+)
+
+anp.astype = _astype
 
 
 @classmethod
