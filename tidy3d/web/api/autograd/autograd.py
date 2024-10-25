@@ -410,6 +410,7 @@ def _run_primitive(
         )
 
     else:
+        sim_combined.validate_pre_upload()
         sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
         run_kwargs["simulation_type"] = "autograd_fwd"
         run_kwargs["sim_fields_keys"] = list(sim_fields.keys())

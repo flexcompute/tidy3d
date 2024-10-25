@@ -73,7 +73,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized optimizer is ok for upload to our servers."""
-        pass
+        self.design.simulation.validate_pre_upload()
 
     def display_fn(self, result: InverseDesignResult, step_index: int) -> None:
         """Default display function while optimizing."""

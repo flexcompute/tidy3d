@@ -297,6 +297,7 @@ def make_result(use_emulated_run):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
+    optimizer.validate_pre_upload()
 
     return optimizer.run(post_process_fn=post_process_fn)
 
