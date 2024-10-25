@@ -28,9 +28,9 @@ class Vertex:
 
     index: int
 
-    convexity: float = 0.0
+    convexity: float
 
-    is_ear: bool = False
+    is_ear: bool
 
 
 def update_convexity(vertices: List[Vertex], i: int) -> int:
@@ -46,7 +46,16 @@ def update_convexity(vertices: List[Vertex], i: int) -> int:
     Returns
     -------
     int
-        -1 if vertex was collinear, +1 if it became collinear, 0 otherwise.
+        Value indicating vertex convexity change w.r.t. 0. See note below.
+
+    Note
+    ----
+    Besides updating the vertex, this function returns a value indicating whether the updated vertex
+    convexity changed to or from 0 (0 convexity means the vertex is collinear with its neighbors).
+    If the convexity changes from zero to non-zero, return -1. If it changes from non-zero to zero,
+    return +1. Return 0 in any other case. This allows the main triangulation loop to keep track of
+    the total number of collinear vertices in the polygon.
+
     """
     result = -1 if vertices[i].convexity == 0.0 else 0
     j = (i + 1) % len(vertices)
@@ -117,15 +126,16 @@ def triangulate(vertices: ArrayFloat2D) -> List[Tuple[int, int, int]]:
        List of indices of the vertices of the triangles.
     """
     is_ccw = shapely.LinearRing(vertices).is_ccw
-    vertices = [Vertex(v, i) for i, v in enumerate(vertices)]
+
+    # Initialize vertices as non-collinear because we will update the actual value below and count
+    # the number of collinear vertices.
+    vertices = [Vertex(v, i, -1.0, False) for i, v in enumerate(vertices)]
     if not is_ccw:
         vertices.reverse()
 
     collinears = 0
     for i in range(len(vertices)):
-        update_convexity(vertices, i)
-        if vertices[i].convexity == 0.0:
-            collinears += 1
+        collinears += update_convexity(vertices, i)
 
     for i in range(len(vertices)):
         update_ear_flag(vertices, i)
