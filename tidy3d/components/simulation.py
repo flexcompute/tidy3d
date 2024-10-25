@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import pathlib
 from abc import ABC, abstractmethod
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 import autograd.numpy as np
 import matplotlib as mpl
@@ -204,11 +204,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ", or ``False`` to apply staircasing.",
     )
 
-    simulation_type: Literal["autograd_fwd", "autograd_bwd", None] = pydantic.Field(
-        None,
-        title="Simulation Type",
-        description="Tag used internally to distinguish types of simulations for "
-        "``autograd`` gradient processing.",
+    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = (
+        pydantic.Field(
+            "tidy3d",
+            title="Simulation Type",
+            description="Tag used internally to distinguish types of simulations for "
+            "``autograd`` gradient processing.",
+        )
     )
 
     post_norm: Union[float, FreqDataArray] = pydantic.Field(
@@ -261,6 +263,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
         *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
     """
+
+    @pydantic.validator("simulation_type", always=True)
+    def _validate_simulation_type_tidy3d(cls, val):
+        """Enforce the simulation_type is 'tidy3d' if passed as None for bkwrds compatibility."""
+        if val is None:
+            return "tidy3d"
+        return val
 
     @pydantic.validator("lumped_elements", always=True)
     @skip_if_fields_missing(["structures"])

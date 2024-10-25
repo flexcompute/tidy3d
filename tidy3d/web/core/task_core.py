@@ -225,6 +225,11 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             :class:`SimulationTask` object containing info about status, size,
             credits of task and others.
         """
+
+        # handle backwards compatibility, "tidy3d" is the default simulation_type
+        if simulation_type is None:
+            simulation_type = "tidy3d"
+
         folder = Folder.get(folder_name, create=True)
         resp = http.post(
             f"tidy3d/projects/{folder.folder_id}/tasks",

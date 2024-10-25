@@ -260,7 +260,7 @@ class AdjointJob(Job):
     """Job that uploads a jax_info object and also includes new fields for adjoint tasks."""
 
     simulation_type: AdjointSimulationType = pd.Field(
-        None,
+        "tidy3d",
         title="Simulation Type",
         description="Type of simulation, used internally only.",
     )
