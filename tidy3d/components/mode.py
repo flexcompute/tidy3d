@@ -127,6 +127,18 @@ class ModeSpec(Tidy3dBaseModel):
         "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
     )
 
+    bend_angle_rotation: bool = pd.Field(
+        False,
+        title="Use fields rotation when both bend and angle are defined",
+        description="Defines how modes are computed when both a bend and an angle are defined. "
+        " If `False`, the two coordinate transformations are directly composed. If `True`, the "
+        "structures in the simulation are first rotated, to compute a mode solution at a reference"
+        "plane normal to the bend's azimuthal direction. Then, the fields are rotated to align with"
+        "the mode plane, using the `n_eff` calculated at the reference plane. The second option can"
+        "produce more accurate results, but more care must be taken for example in ensuring that the"
+        "original mode plane intersects the right geometries in the simulation with rotated structures.",
+    )
+
     track_freq: Union[TrackFreq, None] = pd.Field(
         "central",
         title="Mode Tracking Frequency",
@@ -158,6 +170,17 @@ class ModeSpec(Tidy3dBaseModel):
         """Check that ``bend_raidus`` magnitude is not close to zero.`"""
         if val is not None and isclose(val, 0):
             raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
+        return val
+
+    @pd.validator("bend_angle_rotation", always=True)
+    @skip_if_fields_missing(["bend_radius", "bend_axis"])
+    def validate_bend_correction_requirements(cls, val, values):
+        """Ensure that both ``bend_axis`` and ``bend_radius`` are provided if ``bend_correction`` is enabled."""
+        if val is True:
+            if values.get("bend_axis") is None or values.get("bend_radius") is None:
+                raise SetupError(
+                    "'bend_correction' can only be enabled when both 'bend_axis' and 'bend_radius' are provided."
+                )
         return val
 
     @pd.validator("angle_theta", allow_reuse=True, always=True)

@@ -822,6 +822,24 @@ class ScalarModeFieldDataArray(AbstractSpatialDataArray):
     _dims = ("x", "y", "z", "f", "mode_index")
 
 
+class ScalarModeFieldCylindricalDataArray(AbstractSpatialDataArray):
+    """Spatial distribution of a mode in frequency-domain as a function of mode index.
+
+    Example
+    -------
+    >>> rho = [1,2]
+    >>> theta = [2,3,4]
+    >>> axial = [3,4,5,6]
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> coords = dict(rho=rho, theta=theta, axial=axial, f=f, mode_index=mode_index)
+    >>> fd = ScalarModeFieldCylindricalDataArray((1+1j) * np.random.random((2,3,4,2,5)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("rho", "theta", "axial", "f", "mode_index")
+
+
 class FluxDataArray(DataArray):
     """Flux through a surface in the frequency-domain.
 
