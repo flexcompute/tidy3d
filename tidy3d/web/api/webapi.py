@@ -328,7 +328,7 @@ def get_status(task_id) -> str:
         return "success"
     if status == "error":
         raise WebError(
-            f"Error running task {task_id}! Use 'web.download_log(task_id)' to "
+            f"Error running task {task_id}! Use 'web.download_log('{task_id}')' to "
             "download and examine the solver log, and/or contact customer support for help."
         )
     return status
