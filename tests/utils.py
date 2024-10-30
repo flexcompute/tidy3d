@@ -96,7 +96,7 @@ def cartesian_to_unstructured(
 
     shape = np.shape(XYZ[0])
 
-    XYZp = XYZ.copy()
+    XYZp = np.array(XYZ).copy()
     rng = np.random.default_rng(seed=seed)
 
     x_pert = (1 - 2 * rng.random(shape)) * pert

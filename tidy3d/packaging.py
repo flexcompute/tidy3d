@@ -150,3 +150,26 @@ def requires_vtk(fn):
         return fn(*args, **kwargs)
 
     return _fn
+
+
+def get_numpy_major_version(module=np):
+    """
+    Extracts the major version of the installed numpy accordingly.
+
+    Parameters
+    ----------
+    module : module
+        The module to extract the version from. Default is numpy.
+
+    Returns
+    -------
+    int
+        The major version of the module.
+    """
+    # Get the version of the module
+    module_version = module.__version__
+
+    # Extract the major version number
+    major_version = int(module_version.split(".")[0])
+
+    return major_version
