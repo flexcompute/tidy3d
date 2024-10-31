@@ -301,14 +301,13 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
 
         # transform polyslab vertices derivatives into Cylinder parameter derivatives
+        xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
+        vjp_xs = np.sum(xs_ * vjps_vertices_xs)
+        vjp_ys = np.sum(ys_ * vjps_vertices_ys)
+
         vjps = {}
         for path in derivative_info.paths:
             if path == ("radius",):
-                xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
-
-                vjp_xs = np.sum(xs_ * vjps_vertices_xs)
-                vjp_ys = np.sum(ys_ * vjps_vertices_ys)
-
                 vjps[path] = vjp_xs + vjp_ys
 
             elif "center" in path:
@@ -322,9 +321,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
                 _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
                 if center_index == index_x:
-                    vjps[path] = np.sum(vjp_xs)
+                    vjps[path] = np.sum(vjps_vertices_xs)
                 elif center_index == index_y:
-                    vjps[path] = np.sum(vjp_ys)
+                    vjps[path] = np.sum(vjps_vertices_ys)
                 else:
                     raise ValueError(
                         "Something unexpected happened. Was asked to differentiate "
