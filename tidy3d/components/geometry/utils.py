@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 
@@ -24,17 +24,25 @@ GeometryType = Union[
 ]
 
 
-def flatten_groups(*geometries: GeometryType, flatten_nonunion_type: bool = False) -> GeometryType:
+def flatten_groups(
+    *geometries: GeometryType,
+    flatten_nonunion_type: bool = False,
+    flatten_transformed: bool = False,
+    transform: Optional[MatrixReal4x4] = None,
+) -> GeometryType:
     """Iterates over all geometries, flattening groups and unions.
 
     Parameters
     ----------
     *geometries : GeometryType
         Geometries to flatten.
-
     flatten_nonunion_type : bool = False
         If ``False``, only flatten geometry unions (and ``GeometryGroup``). If ``True``, flatten
         all clip operations.
+    flatten_transformed : bool = False
+        If ``True``, ``Transformed`` groups are flattened into individual transformed geometries.
+    transform : Optional[MatrixReal4x4]
+        Accumulated transform from parents. Only used when ``flatten_transformed`` is ``True``.
 
     Yields
     ------
@@ -44,7 +52,10 @@ def flatten_groups(*geometries: GeometryType, flatten_nonunion_type: bool = Fals
     for geometry in geometries:
         if isinstance(geometry, base.GeometryGroup):
             yield from flatten_groups(
-                *geometry.geometries, flatten_nonunion_type=flatten_nonunion_type
+                *geometry.geometries,
+                flatten_nonunion_type=flatten_nonunion_type,
+                flatten_transformed=flatten_transformed,
+                transform=transform,
             )
         elif isinstance(geometry, base.ClipOperation) and (
             flatten_nonunion_type or geometry.operation == "union"
@@ -53,7 +64,21 @@ def flatten_groups(*geometries: GeometryType, flatten_nonunion_type: bool = Fals
                 geometry.geometry_a,
                 geometry.geometry_b,
                 flatten_nonunion_type=flatten_nonunion_type,
+                flatten_transformed=flatten_transformed,
+                transform=transform,
             )
+        elif flatten_transformed and isinstance(geometry, base.Transformed):
+            new_transform = geometry.transform
+            if transform is not None:
+                new_transform = np.matmul(transform, new_transform)
+            yield from flatten_groups(
+                geometry.geometry,
+                flatten_nonunion_type=flatten_nonunion_type,
+                flatten_transformed=flatten_transformed,
+                transform=new_transform,
+            )
+        elif flatten_transformed and transform is not None:
+            yield base.Transformed(geometry=geometry, transform=transform)
         else:
             yield geometry
 

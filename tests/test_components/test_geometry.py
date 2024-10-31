@@ -524,6 +524,33 @@ def test_flattening():
         for g in flat
     )
 
+    t0 = np.array([[2, 0, 0, 0], [3, 2, 0, 0], [1, 0, 2, 0], [0, 0, 0, 1.0]])
+    g0 = td.Sphere(radius=1)
+    t1 = np.array([[2, 0, 5, 0], [0, 1, 0, 0], [-1, 0, 1, 0], [0, 0, 0, 1.0]])
+    g1 = td.Box(size=(1, 2, 3))
+    flat = list(
+        flatten_groups(
+            td.Transformed(
+                transform=t0,
+                geometry=td.ClipOperation(
+                    operation="union",
+                    geometry_a=g0,
+                    geometry_b=td.Transformed(transform=t1, geometry=g1),
+                ),
+            ),
+            flatten_transformed=True,
+        )
+    )
+    assert len(flat) == 2
+
+    assert isinstance(flat[0], td.Transformed)
+    assert flat[0].geometry == g0
+    assert np.allclose(flat[0].transform, t0)
+
+    assert isinstance(flat[1], td.Transformed)
+    assert flat[1].geometry == g1
+    assert np.allclose(flat[1].transform, t0 @ t1)
+
 
 def test_geometry_traversal():
     geometries = list(traverse_geometries(td.Box(size=(1, 1, 1))))

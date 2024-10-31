@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Autograd support for local field projections using `FieldProjectionKSpaceMonitor`.
+- Function `components.geometry.utils.flatten_groups` now also flattens transformed groups when requested.
 
 ### Fixed
 - Regression in local field projection leading to incorrect results for `far_field_approx=True`.

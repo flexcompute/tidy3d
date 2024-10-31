@@ -116,7 +116,7 @@ class Scene(Tidy3dBaseModel):
             return val
 
         for i, structure in enumerate(val):
-            for geometry in flatten_groups(structure.geometry):
+            for geometry in flatten_groups(structure.geometry, flatten_transformed=True):
                 count = sum(
                     1
                     for g in traverse_geometries(geometry)
