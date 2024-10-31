@@ -1003,7 +1003,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
 
 
 @pytest.mark.parametrize("far_field_approx", [True, False])
-@pytest.mark.parametrize("projection_type", ["angular", "cartesian"])
+@pytest.mark.parametrize("projection_type", ["angular", "cartesian", "kspace"])
 @pytest.mark.parametrize("sim_2d", [True, False])
 class TestFieldProjection:
     @staticmethod
@@ -1042,6 +1042,20 @@ class TestFieldProjection:
                 freqs=monitor.freqs,
                 x=x_proj,
                 y=y_proj,
+                proj_axis=1,
+                proj_distance=r_proj,
+                far_field_approx=far_field_approx,
+                name="far_field",
+            )
+        elif projection_type == "kspace":
+            ux = np.linspace(-0.7, 0.7, 2)
+            uy = np.linspace(-0.7, 0.7, 3)
+            monitor_far = td.FieldProjectionKSpaceMonitor(
+                center=monitor.center,
+                size=monitor.size,
+                freqs=monitor.freqs,
+                ux=ux,
+                uy=uy,
                 proj_axis=1,
                 proj_distance=r_proj,
                 far_field_approx=far_field_approx,

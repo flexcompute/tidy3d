@@ -759,7 +759,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         # compute projected fields for the dataset associated with each monitor
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
-        fields = [np.zeros((len(ux), len(uy), 1, len(freqs)), dtype=complex) for _ in field_names]
+        fields = np.zeros((len(field_names), len(ux), len(uy), 1, len(freqs)), dtype=complex)
 
         medium = monitor.medium if monitor.medium else self.medium
         k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
@@ -793,16 +793,17 @@ class FieldProjector(Tidy3dBaseModel):
                             currents=currents,
                             medium=medium,
                         )
-                        for field, _field in zip(fields, _fields):
-                            field = add_at(field, [i, j, 0, idx_f], _field * phase[idx_f])
-
+                        where = (slice(None), i, j, 0, idx_f)
+                        _fields = anp.reshape(_fields, fields[where].shape)
+                        fields = add_at(fields, where, _fields * phase[idx_f])
                 else:
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, theta, phi)
                     _fields = self._fields_for_surface_exact(
                         x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
                     )
-                    for field, _field in zip(fields, _fields):
-                        field = add_at(field, [i, j, 0], _field)
+                    where = (slice(None), i, j, 0)
+                    _fields = anp.reshape(_fields, fields[where].shape)
+                    fields = add_at(fields, where, _fields)
 
         coords = {
             "ux": np.array(monitor.ux),

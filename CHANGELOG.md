@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Autograd support for local field projections using `FieldProjectionKSpaceMonitor`.
+
 ### Fixed
 - Regression in local field projection leading to incorrect results for `far_field_approx=True`.
 
