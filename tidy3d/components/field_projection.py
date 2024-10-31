@@ -482,8 +482,11 @@ class FieldProjector(Tidy3dBaseModel):
 
         order = [idx_u, idx_v, idx_w]
         zeros = np.zeros(jm[0].shape)
-        J = anp.array([*jm[:2], zeros])[order]
-        M = anp.array([*jm[2:], zeros])[order]
+
+        # for each index (0, 1, 2), if it’s in the first two elements of order,
+        # select the corresponding jm element for J or the offset element (+2) for M
+        J = anp.array([jm[order.index(i)] if i in order[:2] else zeros for i in range(3)])
+        M = anp.array([jm[order.index(i) + 2] if i in order[:2] else zeros for i in range(3)])
 
         cos_theta_cos_phi = cos_theta[:, None] * cos_phi[None, :]
         cos_theta_sin_phi = cos_theta[:, None] * sin_phi[None, :]

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Regression in local field projection leading to incorrect results for `far_field_approx=True`.
+
 ## [2.7.6] - 2024-10-30
 
 ### Added
