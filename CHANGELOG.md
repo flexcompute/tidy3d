@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Autograd support for local field projections using `FieldProjectionKSpaceMonitor`.
 - Function `components.geometry.utils.flatten_groups` now also flattens transformed groups when requested.
 
+### Changed
+- `CustomMedium` design regions require far less data when performing inverse design by reducing adjoint field monitor size for dims with one pixel.
+
 ### Fixed
 - Regression in local field projection leading to incorrect results for `far_field_approx=True`.
 - Bug when differentiating with respect to `Cylinder.center`.

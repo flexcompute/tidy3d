@@ -222,6 +222,20 @@ class Structure(AbstractStructure):
         if isinstance(self.geometry, PolySlab):
             size[self.geometry.axis] = 0
 
+        # custom medium only needs fields at center locations of unit cells.
+        if isinstance(self.medium, CustomMedium):
+            for axis, dim in enumerate("xyz"):
+                if self.medium.permittivity is not None:
+                    if len(self.medium.permittivity.coords[dim]) == 1:
+                        size[axis] = 0
+                if self.medium.eps_dataset is not None:
+                    zero_size = True
+                    for _, fld in self.medium.eps_dataset.field_components.items():
+                        if len(fld.coords[dim]) != 1:
+                            zero_size = False
+                    if zero_size:
+                        size[axis] = 0
+
         mnt_fld = FieldMonitor(
             size=size,
             center=center,
