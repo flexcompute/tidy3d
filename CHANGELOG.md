@@ -74,6 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Autograd support for simulations without adjoint sources in `run` as well as `run_async`, which will not attempt to run the simulation but instead return zero gradients. This can sometimes occur if the objective function gradient does not depend on some simulations, for example when using `min` or `max` in the objective.
 - `bend_angle_rotation` in `ModeSpec` to improve accuracy in some cases when both `bend_radius` and `angle_theta` are defined. This option is disabled by default but it can be tried when very high accuracy is required in `ModeSource` and `ModeMonitor` objects that are placed in bend and angled waveguides.
 
+- Support for differentiation with respect to `PolySlab.slab_bounds` and `PolySlab.dilation`.
+
 ### Changed
 - `CustomMedium` design regions require far less data when performing inverse design by reducing adjoint field monitor size for dims with one pixel.
 - Calling `.values` on `DataArray` no longer raises a `DeprecationWarning` during automatic differentiation.

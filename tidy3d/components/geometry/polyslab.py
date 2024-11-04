@@ -17,7 +17,7 @@ from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ...packaging import verify_packages_import
 from ..autograd import AutogradFieldMap, TracedVertices, get_static
-from ..autograd.derivative_utils import DerivativeInfo
+from ..autograd.derivative_utils import DerivativeInfo, DerivativeSurfaceMesh
 from ..base import cached_property, skip_if_fields_missing
 from ..transformation import RotationAroundAxis
 from ..types import (
@@ -1382,12 +1382,24 @@ class PolySlab(base.Planar):
     def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
-        if derivative_info.paths != [("vertices",)]:
-            raise ValueError("only support derivative wrt 'PolySlab.vertices'.")
+        vjps = {}
 
-        vjp_vertices = self.compute_derivative_vertices(derivative_info=derivative_info)
+        for key in derivative_info.paths:
+            if key == ("vertices",):
+                vjp = self.compute_derivative_vertices(derivative_info=derivative_info)
+                vjps[key] = vjp
 
-        return {("vertices",): vjp_vertices}
+            elif key == ("slab_bounds",):
+                vjp = self.compute_derivative_slab_bounds(derivative_info=derivative_info)
+                vjps[key] = vjp
+
+            else:
+                raise ValueError(f"No derivative defined with respect to 'PolySlab' field '{key}'.")
+
+        return vjps
+
+    def compute_derivative_slab_bounds(self, derivative_info: DerivativeInfo) -> TracedVertices:
+        """Derivative with respect to slab_bounds."""
 
     def compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
         # derivative w.r.t each edge
@@ -1411,46 +1423,6 @@ class PolySlab(base.Planar):
         # get basis vectors for every edge segment
         basis_vectors = self.edge_basis_vectors(edges=edges)
 
-        grad_bases = derivative_info.grad_in_bases(
-            spatial_coords=edge_centers_xyz, basis_vectors=basis_vectors
-        )
-
-        # unpack gradient contributions from different bases
-        D_der_norm = grad_bases["D_norm"]
-        E_der_edge = grad_bases["E_perp1"]
-        E_der_slab = grad_bases["E_perp2"]
-
-        # determine background medium
-        if derivative_info.eps_background is not None:
-            eps_out = derivative_info.eps_background
-        else:
-            if derivative_info.eps_no_structure is not None:
-                eps_out = derivative_info.evaluate_eps(edge_centers_xyz, is_inside=False)
-            else:
-                eps_out = derivative_info.eps_out
-
-        # determine inside medium
-        if derivative_info.eps_inf_structure is not None:
-            eps_in = derivative_info.evaluate_eps(edge_centers_xyz, is_inside=True)
-        else:
-            eps_in = derivative_info.eps_in
-
-        # approximate permittivity in and out
-        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
-        delta_eps = eps_in - eps_out
-
-        # put together VJP using D_normal and E_perp integration
-        vjps_edges = 0.0
-
-        # perform D-normal integral
-        contrib_D = -delta_eps_inv * D_der_norm
-        vjps_edges += contrib_D
-
-        # perform E-perpendicular integrals
-        for E_der in (E_der_edge, E_der_slab):
-            contrib_E = E_der * delta_eps
-            vjps_edges += contrib_E
-
         # scale by edge area
         edge_lengths = np.linalg.norm(edges, axis=-1)
         edge_areas = edge_lengths
@@ -1460,7 +1432,15 @@ class PolySlab(base.Planar):
         if not np.isinf(slab_height):
             edge_areas *= slab_height
 
-        vjps_edges *= edge_areas
+        surface_mesh = DerivativeSurfaceMesh(
+            centers=edge_centers_xyz,
+            areas=edge_areas,
+            normals=basis_vectors["norm"],
+            perps1=basis_vectors["perp1"],
+            perps2=basis_vectors["perp2"],
+        )
+
+        vjps_edges = derivative_info.grad_surfaces(surface_mesh=surface_mesh)
 
         _, normal_vectors_in_plane = self.pop_axis_vect(basis_vectors["norm"])
 

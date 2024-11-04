@@ -558,7 +558,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("size_element", "mode")]
+args = [("polyslab", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:

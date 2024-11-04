@@ -7,13 +7,47 @@ import xarray as xr
 
 from ..base import Tidy3dBaseModel
 from ..data.data_array import ScalarFieldDataArray, SpatialDataArray
-from ..types import Bound, tidycomplex
+from ..types import ArrayLike, Bound, tidycomplex
 from .types import PathType
 from .utils import get_static
 
 # we do this because importing these creates circular imports
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
+
+
+class DerivativeSurfaceMesh(Tidy3dBaseModel):
+    """Stores information about the surfaces of an object to be used for derivative calculation."""
+
+    centers: ArrayLike = pd.Field(
+        ...,
+        title="Centers",
+        description="(N, 3) array storing the centers of each surface element.",
+    )
+
+    areas: ArrayLike = pd.Field(
+        ...,
+        title="Area Elements",
+        description="(N,) array storing the first perpendicular vectors of each surface element.",
+    )
+
+    normals: ArrayLike = pd.Field(
+        ...,
+        title="Normals",
+        description="(N, 3) array storing the normal vectors of each surface element.",
+    )
+
+    perps1: ArrayLike = pd.Field(
+        ...,
+        title="Perpendiculars 1",
+        description="(N, 3) array storing the first perpendicular vectors of each surface element.",
+    )
+
+    perps2: ArrayLike = pd.Field(
+        ...,
+        title="Perpendiculars 1",
+        description="(N, 3) array storing the first perpendicular vectors of each surface element.",
+    )
 
 
 class DerivativeInfo(Tidy3dBaseModel):
@@ -140,8 +174,43 @@ class DerivativeInfo(Tidy3dBaseModel):
         """Update this ``DerivativeInfo`` with new set of paths."""
         return self.updated_copy(paths=paths)
 
-    def grad_in_bases(self, spatial_coords: np.ndarray, basis_vectors: dict) -> dict:
-        """Get the ``D_norm``, ``E_edge`` ``E_slab`` components of the gradient contributions."""
+    def _eps_in(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
+        """permittivity inside, used internally."""
+        # determine inside medium
+        if self.eps_inf_structure is not None:
+            return self.evaluate_eps(spatial_coords, is_inside=True)
+
+        return self.eps_in
+
+    def _eps_out(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
+        """permittivity outside, used internally."""
+
+        # determine background medium
+        if self.eps_background is not None:
+            return self.eps_background
+
+        if self.eps_no_structure is not None:
+            return self.evaluate_eps(spatial_coords, is_inside=False)
+    
+        return self.eps_out
+
+
+    @property
+    def delta_eps(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
+        return self._eps_in(spatial_coords) - self._eps_out(spatial_coords)
+
+    @property
+    def delta_eps_inv(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
+        return 1.0 / self._eps_in(spatial_coords) - 1.0 / self._eps_out(spatial_coords)
+
+    def grad_surfaces(self, surface_mesh: DerivativeSurfaceMesh) -> dict:
+        """Derivative with respect to the surface mesh elements, given the derivative fields."""
+
+        # strip out relevant info from `surface_mesh`
+        spatial_coords = surface_mesh.centers
+        normals = surface_mesh.normals
+        perps1 = surface_mesh.perps1
+        perps2 = surface_mesh.perps2
 
         # unpack electric and displacement fields
         E_fwd = self.E_fwd
@@ -156,21 +225,37 @@ class DerivativeInfo(Tidy3dBaseModel):
         D_adj_at_coords = self.evaluate_flds_at(fld_dataset=D_adj, spatial_coords=spatial_coords)
 
         # project the relevant field quantities into their respective basis for gradient calculation
-        D_fwd_norm = self.project_in_basis(D_fwd_at_coords, basis_vector=basis_vectors["norm"])
-        D_adj_norm = self.project_in_basis(D_adj_at_coords, basis_vector=basis_vectors["norm"])
+        D_fwd_norm = self.project_in_basis(D_fwd_at_coords, basis_vector=normals)
+        D_adj_norm = self.project_in_basis(D_adj_at_coords, basis_vector=normals)
 
-        E_fwd_perp1 = self.project_in_basis(E_fwd_at_coords, basis_vector=basis_vectors["perp1"])
-        E_adj_perp1 = self.project_in_basis(E_adj_at_coords, basis_vector=basis_vectors["perp1"])
+        E_fwd_perp1 = self.project_in_basis(E_fwd_at_coords, basis_vector=perps1)
+        E_adj_perp1 = self.project_in_basis(E_adj_at_coords, basis_vector=perps1)
 
-        E_fwd_perp2 = self.project_in_basis(E_fwd_at_coords, basis_vector=basis_vectors["perp2"])
-        E_adj_perp2 = self.project_in_basis(E_adj_at_coords, basis_vector=basis_vectors["perp2"])
+        E_fwd_perp2 = self.project_in_basis(E_fwd_at_coords, basis_vector=perps2)
+        E_adj_perp2 = self.project_in_basis(E_adj_at_coords, basis_vector=perps2)
 
         # multiply forward and adjoint
         D_der_norm = D_fwd_norm * D_adj_norm
         E_der_perp1 = E_fwd_perp1 * E_adj_perp1
         E_der_perp2 = E_fwd_perp2 * E_adj_perp2
 
-        return dict(D_norm=D_der_norm, E_perp1=E_der_perp1, E_perp2=E_der_perp2)
+        # approximate permittivity in and out
+        delta_eps_inv = self.delta_eps_inv
+        delta_eps = self.delta_eps
+
+        # put together VJP using D_normal and E_perp integration
+        vjps = 0.0
+
+        # perform D-normal integral
+        contrib_D = -delta_eps_inv * D_der_norm
+        vjps += contrib_D
+
+        # perform E-perpendicular integrals
+        for E_der in (E_der_perp1, E_der_perp2):
+            contrib_E = E_der * delta_eps
+            vjps += contrib_E
+
+        return surface_mesh.areas * vjps
 
     def evaluate_eps(
         self,
