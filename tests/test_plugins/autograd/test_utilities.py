@@ -1,7 +1,15 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
-from tidy3d.plugins.autograd.utilities import chain, get_kernel_size_px, make_kernel
+import xarray as xr
+from tidy3d.exceptions import Tidy3dError
+from tidy3d.plugins.autograd import (
+    chain,
+    get_kernel_size_px,
+    make_kernel,
+    scalar_objective,
+    value_and_grad,
+)
 
 
 @pytest.mark.parametrize("size", [(3, 3), (4, 4), (5, 5)])
@@ -104,3 +112,55 @@ class TestChain:
         funcs = [add_one, "not_a_function"]
         with pytest.raises(TypeError, match="All elements in funcs must be callable"):
             chain(funcs)
+
+
+class TestScalarObjective:
+    def test_scalar_objective_no_aux(self):
+        """Test scalar_objective decorator without auxiliary data."""
+
+        @scalar_objective
+        def objective(x):
+            da = xr.DataArray(x)
+            return da.sum()
+
+        x = np.array([1.0, 2.0, 3.0])
+        result, grad = value_and_grad(objective)(x)
+        assert np.allclose(grad, np.ones_like(grad))
+        assert np.isclose(result, 6.0)
+
+    def test_scalar_objective_with_aux(self):
+        """Test scalar_objective decorator with auxiliary data."""
+
+        @scalar_objective(has_aux=True)
+        def objective(x):
+            da = xr.DataArray(x)
+            return da.sum(), "auxiliary_data"
+
+        x = np.array([1.0, 2.0, 3.0])
+        (result, grad), aux_data = value_and_grad(objective, has_aux=True)(x)
+        assert np.allclose(grad, np.ones_like(grad))
+        assert np.isclose(result, 6.0)
+        assert aux_data == "auxiliary_data"
+
+    def test_scalar_objective_invalid_return(self):
+        """Test scalar_objective decorator with invalid return value."""
+
+        @scalar_objective
+        def objective(x):
+            da = xr.DataArray(x)
+            return da  # Returning the array directly, not a scalar
+
+        x = np.array([1, 2, 3])
+        with pytest.raises(Tidy3dError, match="must be a scalar"):
+            objective(x)
+
+    def test_scalar_objective_float(self):
+        """Test scalar_objective decorator with a Python float return value."""
+
+        @scalar_objective
+        def objective(x):
+            return x**2
+
+        result, grad = value_and_grad(objective)(3.0)
+        assert np.isclose(grad, 6.0)
+        assert np.isclose(result, 9.0)

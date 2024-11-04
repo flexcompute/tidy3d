@@ -1,16 +1,22 @@
-from .differential_operators import value_and_grad
+from .differential_operators import grad, value_and_grad
 from .functions import (
+    add_at,
     convolve,
     grey_closing,
     grey_dilation,
     grey_erosion,
     grey_opening,
+    interpn,
+    least_squares,
     morphological_gradient,
     morphological_gradient_external,
     morphological_gradient_internal,
     pad,
     rescale,
+    smooth_max,
+    smooth_min,
     threshold,
+    trapz,
 )
 from .invdes import (
     CircularFilter,
@@ -28,7 +34,7 @@ from .invdes import (
     tanh_projection,
 )
 from .primitives import gaussian_filter
-from .utilities import chain, get_kernel_size_px, make_kernel
+from .utilities import chain, get_kernel_size_px, make_kernel, scalar_objective
 
 __all__ = [
     "CircularFilter",
@@ -60,4 +66,12 @@ __all__ = [
     "rescale",
     "threshold",
     "value_and_grad",
+    "smooth_min",
+    "smooth_max",
+    "add_at",
+    "interpn",
+    "least_squares",
+    "grad",
+    "scalar_objective",
+    "trapz",
 ]

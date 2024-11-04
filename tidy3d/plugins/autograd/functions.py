@@ -670,7 +670,7 @@ def least_squares(
     >>> initial_guess = (0.0, 0.0)
     >>> params = least_squares(linear_model, x_data, y_data, initial_guess)
     >>> print(params)
-    array([2.0, -3.0])
+    [ 2. -3.]
     """
     params = np.array(initial_guess, dtype="f8")
     jac = jacobian(lambda params: func(x, *params))

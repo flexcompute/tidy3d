@@ -1,8 +1,12 @@
-from functools import reduce
-from typing import Callable, Iterable, List, Union
+from functools import reduce, wraps
+from typing import Any, Callable, Iterable, List, Union
 
+import autograd.numpy as anp
 import numpy as np
+import xarray as xr
 from numpy.typing import NDArray
+
+from tidy3d.exceptions import Tidy3dError
 
 from .types import KernelType
 
@@ -158,3 +162,80 @@ def chain(*funcs: Union[Callable, Iterable[Callable]]):
         return reduce(lambda x, y: y(x), funcs, array)
 
     return chained
+
+
+def scalar_objective(func: Callable = None, *, has_aux: bool = False) -> Callable:
+    """Decorator to ensure the objective function returns a real scalar value.
+
+    This decorator wraps an objective function to ensure that its return value is a real scalar.
+    If the function returns auxiliary data, it expects the return value to be a tuple of the form
+    (result, aux_data).
+
+    Parameters
+    ----------
+    func : Callable, optional
+        The objective function to be decorated. If not provided, the decorator should be used with
+        arguments.
+    has_aux : bool = False
+        If True, expects the function to return a tuple (result, aux_data).
+
+    Returns
+    -------
+    Callable
+        The wrapped function that ensures a real scalar return value. If `has_aux` is True, the
+        wrapped function returns a tuple (result, aux_data).
+
+    Raises
+    ------
+    Tidy3dError
+        If the return value is not a real scalar, or if `has_aux` is True and the function does not return a tuple of length 2.
+    """
+    if func is None:
+        return lambda f: scalar_objective(f, has_aux=has_aux)
+
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        result = func(*args, **kwargs)
+        aux_data = None
+
+        # Unpack auxiliary data if present
+        if has_aux:
+            if not isinstance(result, tuple) or len(result) != 2:
+                raise Tidy3dError(
+                    "If 'has_aux' is True, the objective function must return "
+                    "a tuple of length 2."
+                )
+            result, aux_data = result
+
+        # Extract data from xarray.DataArray
+        if isinstance(result, xr.DataArray):
+            result = result.data
+
+        # Squeeze to remove singleton dimensions
+        result = anp.squeeze(result)
+
+        # Attempt to extract scalar value
+        try:
+            result = result.item()
+        except AttributeError:
+            # If result is already a scalar, pass
+            if not isinstance(result, (float, int)):
+                raise Tidy3dError(
+                    "An objective function's return value must be a scalar, "
+                    "a Python float/int, or an array containing a single element."
+                )
+        except ValueError as e:
+            # Result contains more than one element
+            raise Tidy3dError(
+                "An objective function's return value must be a scalar "
+                "but got an array with shape "
+                f"{getattr(result, 'shape', 'N/A')}."
+            ) from e
+
+        # Ensure the result is real
+        if not anp.isreal(result):
+            raise Tidy3dError("An objective function's return value must be real.")
+
+        return (result, aux_data) if aux_data is not None else result
+
+    return wrapper

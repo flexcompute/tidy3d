@@ -1,65 +1,72 @@
-from typing import Any, Callable
+from typing import Callable
 
-from autograd import value_and_grad as value_and_grad_ag
 from autograd.builtins import tuple as atuple
 from autograd.core import make_vjp
 from autograd.extend import vspace
 from autograd.wrap_util import unary_to_nary
 from numpy.typing import ArrayLike
 
+from .utilities import scalar_objective
+
 __all__ = [
     "value_and_grad",
+    "grad",
 ]
 
 
 @unary_to_nary
-def value_and_grad(
-    fun: Callable, x: ArrayLike, *, has_aux: bool = False
-) -> tuple[tuple[float, ArrayLike], Any]:
-    """Returns a function that returns both value and gradient.
-
-    This function wraps and extends autograd's 'value_and_grad' function by adding
-    support for auxiliary data.
+def grad(fun: Callable, x: ArrayLike, *, has_aux: bool = False) -> Callable:
+    """Returns a function that computes the gradient of `fun` with respect to `x`.
 
     Parameters
     ----------
     fun : Callable
-        The function to differentiate. Should take a single argument and return
-        a scalar value, or a tuple where the first element is a scalar value if has_aux is True.
+        The function to differentiate. Should return a scalar value, or a tuple of
+        (scalar_value, auxiliary_data) if `has_aux` is True.
     x : ArrayLike
-        The point at which to evaluate the function and its gradient.
+        The point at which to evaluate the gradient.
     has_aux : bool = False
-        If True, the function returns auxiliary data as the second element of a tuple.
+        If True, `fun` returns auxiliary data as the second element of a tuple.
 
     Returns
     -------
-    tuple[tuple[float, ArrayLike], Any]
-        A tuple containing:
-        - A tuple with the function value (float) and its gradient (ArrayLike)
-        - The auxiliary data returned by the function (if has_aux is True)
-
-    Raises
-    ------
-    TypeError
-        If the function does not return a scalar value.
-
-    Notes
-    -----
-    This function uses autograd for automatic differentiation. If the function
-    does not return auxiliary data (has_aux is False), it delegates to autograd's
-    value_and_grad function. The main extension is the support for auxiliary data
-    when has_aux is True.
+    Callable
+        A function that takes the same arguments as `fun` and returns its gradient at `x`.
     """
-    if not has_aux:
-        return value_and_grad_ag(fun)(x)
+    wrapped_fun = scalar_objective(fun, has_aux=has_aux)
+    vjp, result = make_vjp(lambda x: atuple(wrapped_fun(x)) if has_aux else wrapped_fun(x), x)
 
-    vjp, (ans, aux) = make_vjp(lambda x: atuple(fun(x)), x)
+    if has_aux:
+        ans, aux = result
+        return vjp((vspace(ans).ones(), None)), aux
+    ans = result
+    return vjp(vspace(ans).ones())
 
-    if not vspace(ans).size == 1:
-        raise TypeError(
-            "value_and_grad only applies to real scalar-output "
-            "functions. Try jacobian, elementwise_grad or "
-            "holomorphic_grad."
-        )
 
-    return (ans, vjp((vspace(ans).ones(), None))), aux
+@unary_to_nary
+def value_and_grad(fun: Callable, x: ArrayLike, *, has_aux: bool = False) -> Callable:
+    """Returns a function that computes both the value and gradient of `fun` with respect to `x`.
+
+    Parameters
+    ----------
+    fun : Callable
+        The function to differentiate. Should return a scalar value, or a tuple of
+        (scalar_value, auxiliary_data) if `has_aux` is True.
+    x : ArrayLike
+        The point at which to evaluate the function and its gradient.
+    has_aux : bool = False
+        If True, `fun` returns auxiliary data as the second element of a tuple.
+
+    Returns
+    -------
+    Callable
+        A function that takes the same arguments as `fun` and returns its value and gradient at `x`.
+    """
+    wrapped_fun = scalar_objective(fun, has_aux=has_aux)
+    vjp, result = make_vjp(lambda x: atuple(wrapped_fun(x)) if has_aux else wrapped_fun(x), x)
+
+    if has_aux:
+        ans, aux = result
+        return (ans, vjp((vspace(ans).ones(), None))), aux
+    ans = result
+    return ans, vjp(vspace(ans).ones())
