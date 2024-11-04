@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `CustomMedium` design regions require far less data when performing inverse design by reducing adjoint field monitor size for dims with one pixel.
+- Calling `.values` on `DataArray` no longer raises a `DeprecationWarning` during automatic differentiation
 
 ### Fixed
 - Regression in local field projection leading to incorrect results for `far_field_approx=True`.

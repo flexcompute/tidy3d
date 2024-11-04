@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from abc import ABC
 from typing import Any, Dict, List, Mapping, Union
 
@@ -220,15 +219,7 @@ class DataArray(xr.DataArray):
         np.ndarray
             The values of the DataArray.
         """
-        if isbox(self.data):
-            warnings.warn(
-                "'DataArray.values' for automatic differentiation is deprecated, "
-                "please use 'DataArray.data' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            return self.data
-        return super().values
+        return self.data if isbox(self.data) else super().values
 
     @values.setter
     def values(self, value: Any) -> None:
