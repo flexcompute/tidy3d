@@ -85,7 +85,11 @@ from .source import (
 from .structure import MeshOverrideStructure, Structure
 from .subpixel_spec import SubpixelSpec
 from .types import TYPE_TAG_STR, Ax, Axis, FreqBound, InterpMethod, Literal, Symmetry, annotate_type
-from .validators import assert_objects_in_sim_bounds, validate_mode_objects_symmetry
+from .validators import (
+    assert_objects_in_sim_bounds,
+    validate_mode_objects_symmetry,
+    validate_mode_plane_radius,
+)
 from .viz import (
     PlotParams,
     add_ax_if_none,
@@ -3245,6 +3249,24 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_tfsf_nonuniform_grid()
         self._validate_nonlinear_specs()
         self._validate_custom_source_time()
+        self._validate_mode_object_bends()
+
+    def _validate_mode_object_bends(self) -> None:
+        """Error if any mode sources or monitors with bends have a radius that is too small."""
+        for imnt, monitor in enumerate(self.monitors):
+            if isinstance(monitor, AbstractModeMonitor):
+                validate_mode_plane_radius(
+                    mode_spec=monitor.mode_spec,
+                    plane=monitor.geometry,
+                    msg_prefix=f"Monitor at 'monitors[{imnt}]' ",
+                )
+        for isrc, source in enumerate(self.sources):
+            if isinstance(source, ModeSource):
+                validate_mode_plane_radius(
+                    mode_spec=source.mode_spec,
+                    plane=source.geometry,
+                    msg_prefix=f"Source at 'sources[{isrc}]' ",
+                )
 
     def _validate_custom_source_time(self):
         """Warn if all simulation times are outside CustomSourceTime definition range."""

@@ -8,6 +8,7 @@ from ..log import log
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .data.dataset import Dataset, FieldDataset
 from .geometry.base import Box
+from .mode import ModeSpec
 from .types import Tuple
 
 """ Explanation of pydantic validators:
@@ -396,3 +397,21 @@ def validate_freqs_not_empty():
         return val
 
     return freqs_not_empty
+
+
+def validate_mode_plane_radius(mode_spec: ModeSpec, plane: Box, msg_prefix: str = ""):
+    """Validate that the radius of a mode spec with a bend is not smaller than half the size of
+    the plane along the radial direction."""
+
+    if not mode_spec.bend_radius:
+        return
+
+    # radial axis is the plane axis that is not the bend axis
+    _, plane_axs = plane.pop_axis([0, 1, 2], plane.size.index(0.0))
+    radial_ax = plane_axs[(mode_spec.bend_axis + 1) % 2]
+
+    if np.abs(mode_spec.bend_radius) < plane.size[radial_ax] / 2:
+        raise ValueError(
+            f"{msg_prefix} bend radius is smaller than half the mode plane size "
+            "along the radial axis, which can produce wrong results."
+        )

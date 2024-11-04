@@ -46,7 +46,11 @@ from ...components.types import (
     PlotScale,
     Symmetry,
 )
-from ...components.validators import validate_freqs_min, validate_freqs_not_empty
+from ...components.validators import (
+    validate_freqs_min,
+    validate_freqs_not_empty,
+    validate_mode_plane_radius,
+)
 from ...components.viz import make_ax, plot_params_pml
 from ...constants import C_0
 from ...exceptions import SetupError, ValidationError
@@ -172,6 +176,11 @@ class ModeSolver(Tidy3dBaseModel):
         if not sim_box.intersects(val):
             raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
         return val
+
+    def _post_init_validators(self) -> None:
+        validate_mode_plane_radius(
+            mode_spec=self.mode_spec, plane=self.plane, msg_prefix="Mode solver"
+        )
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -1511,6 +1520,7 @@ class ModeSolver(Tidy3dBaseModel):
             )
 
     def validate_pre_upload(self, source_required: bool = True):
+        """Validate the fully initialized mode solver is ok for upload to our servers."""
         self._validate_modes_size()
 
     @cached_property

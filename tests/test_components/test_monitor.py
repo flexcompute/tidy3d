@@ -296,6 +296,24 @@ def test_monitor_num_modes(log_capture, num_modes, log_level):
     assert_log_level(log_capture, log_level)
 
 
+def test_mode_bend_radius():
+    """Test that small bend radius fails."""
+
+    with pytest.raises(ValueError):
+        mnt = td.ModeMonitor(
+            size=(5, 0, 1),
+            freqs=np.linspace(1e14, 2e14, 100),
+            name="test",
+            mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=1),
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            monitors=[mnt],
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+        )
+
+
 def test_diffraction_validators():
     # ensure error if boundaries are not periodic
     boundary_spec = td.BoundarySpec(

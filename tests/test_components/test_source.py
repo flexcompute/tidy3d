@@ -46,6 +46,22 @@ def test_dir_vector():
     assert DirectionalSource._dir_vector.fget(S) is None
 
 
+def test_mode_bend_radius():
+    """Test that small bend radius fails."""
+
+    with pytest.raises(ValueError):
+        src = td.ModeSource(
+            size=(1, 0, 5),
+            source_time=ST,
+            mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=0),
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            sources=[src],
+        )
+
+
 def test_UniformCurrentSource():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
