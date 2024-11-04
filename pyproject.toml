@@ -57,7 +57,7 @@ ipython = { version = "*", optional = true }
 memory_profiler = { version = "*", optional = true }
 pre-commit = { version = "*", optional = true }
 pylint = { version = "*", optional = true }
-pytest = { version = "*", optional = true }
+pytest = { version = ">=8.1", optional = true }
 pytest-timeout = { version = "*", optional = true }
 tox = { version = "*", optional = true }
 

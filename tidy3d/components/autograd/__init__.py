@@ -1,6 +1,3 @@
-import autograd.numpy as anp
-from autograd.extend import VJPNode, register_notrace
-
 from .boxes import TidyArrayBox
 from .functions import interpn
 from .types import (
@@ -13,8 +10,6 @@ from .types import (
     TracedVertices,
 )
 from .utils import get_static, is_tidy_box, split_list
-
-register_notrace(VJPNode, anp.full_like)
 
 __all__ = [
     "TidyArrayBox",

@@ -1,11 +1,11 @@
-# Adds some functionality to the autograd arraybox
-# NOTE: this is not a subclass of ArrayBox since that would break autograd's internal checks
+# Adds some functionality to the autograd arraybox and related autograd patches
+# NOTE: we do not subclass ArrayBox since that would break autograd's internal checks
 
 import importlib
 from typing import Any, Callable, Dict, List, Tuple
 
 import autograd.numpy as anp
-from autograd.extend import defjvp
+from autograd.extend import VJPNode, defjvp, register_notrace
 from autograd.numpy.numpy_boxes import ArrayBox
 from autograd.numpy.numpy_wrapper import _astype
 
@@ -13,12 +13,15 @@ TidyArrayBox = ArrayBox  # NOT a subclass
 
 _autograd_module_cache = {}  # cache for imported autograd modules
 
+register_notrace(VJPNode, anp.full_like)
+
 defjvp(
     _astype,
     lambda g, ans, A, dtype, order="K", casting="unsafe", subok=True, copy=True: _astype(g, dtype),
 )
 
 anp.astype = _astype
+anp.permute_dims = anp.transpose
 
 
 @classmethod
