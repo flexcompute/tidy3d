@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Autograd support for local field projections using `FieldProjectionKSpaceMonitor`.
 - Function `components.geometry.utils.flatten_groups` now also flattens transformed groups when requested.
+- Differentiable `smooth_min`, `smooth_max`, and `least_squares` functions in `tidy3d.plugins.autograd`.
 
 ### Changed
 - `CustomMedium` design regions require far less data when performing inverse design by reducing adjoint field monitor size for dims with one pixel.

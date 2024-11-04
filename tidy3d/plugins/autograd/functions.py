@@ -1,7 +1,9 @@
-from typing import Iterable, List, Literal, Tuple, Union
+from typing import Callable, Iterable, List, Literal, Tuple, Union
 
 import autograd.numpy as np
+from autograd import jacobian
 from autograd.scipy.signal import convolve as convolve_ag
+from autograd.scipy.special import logsumexp
 from numpy.typing import NDArray
 
 from tidy3d.components.autograd.functions import add_at, interpn, trapz
@@ -23,10 +25,12 @@ __all__ = [
     "morphological_gradient_external",
     "rescale",
     "threshold",
+    "smooth_min",
+    "smooth_max",
 ]
 
 
-def _pad_indices(n: int, pad_width: Tuple[int, int], mode: PaddingType) -> NDArray:
+def _pad_indices(n: int, pad_width: Tuple[int, int], *, mode: PaddingType) -> NDArray:
     """Compute the indices to pad an array along a single axis based on the padding mode.
 
     Parameters
@@ -40,36 +44,39 @@ def _pad_indices(n: int, pad_width: Tuple[int, int], mode: PaddingType) -> NDArr
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The indices for padding along the axis.
     """
-    total_pad = pad_width[0] + pad_width[1]
+    total_pad = sum(pad_width)
     if n == 0:
-        # If the axis length is zero, return zeros for indices
         return np.zeros(total_pad, dtype=int)
 
     idx = np.arange(-pad_width[0], n + pad_width[1])
+
+    # Handle each padding mode
     if mode == "constant":
-        # For constant mode, indices outside the array bounds are ignored
-        pass
-    elif mode == "edge":
-        idx = np.clip(idx, 0, n - 1)
-    elif mode == "reflect":
+        return idx
+
+    if mode == "edge":
+        return np.clip(idx, 0, n - 1)
+
+    if mode == "reflect":
         period = 2 * n - 2 if n > 1 else 1
         idx = np.mod(idx, period)
-        idx = np.where(idx >= n, period - idx, idx)
-    elif mode == "symmetric":
+        return np.where(idx >= n, period - idx, idx)
+
+    if mode == "symmetric":
         period = 2 * n if n > 1 else 1
         idx = np.mod(idx, period)
-        idx = np.where(idx >= n, period - idx - 1, idx)
-    elif mode == "wrap":
-        idx = np.mod(idx, n)
-    else:
-        raise ValueError(f"Unsupported padding mode: {mode}")
-    return idx
+        return np.where(idx >= n, period - idx - 1, idx)
+
+    if mode == "wrap":
+        return np.mod(idx, n)
+
+    raise ValueError(f"Unsupported padding mode: {mode}")
 
 
-def _pad(
+def _pad_axis(
     array: NDArray,
     pad_width: Tuple[int, int],
     axis: int,
@@ -77,11 +84,11 @@ def _pad(
     mode: PaddingType = "constant",
     constant_value: float = 0.0,
 ) -> NDArray:
-    """Pad an array along a specified axis with a given mode and pad width.
+    """Pad an array along a specified axis.
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to pad.
     pad_width : Tuple[int, int]
         The number of values padded to the edges of the axis.
@@ -94,19 +101,18 @@ def _pad(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The padded array.
     """
-    n = array.shape[axis]
     if mode == "constant":
-        p = [(0, 0)] * array.ndim
-        p[axis] = pad_width
-        return np.pad(array, p, mode="constant", constant_values=constant_value)
-    else:
-        idx = _pad_indices(n, pad_width, mode)
-        indexer = [slice(None)] * array.ndim
-        indexer[axis] = idx
-        return array[tuple(indexer)]
+        padding = [(0, 0)] * array.ndim
+        padding[axis] = pad_width
+        return np.pad(array, padding, mode="constant", constant_values=constant_value)
+
+    idx = _pad_indices(array.shape[axis], pad_width, mode=mode)
+    indexer = [slice(None)] * array.ndim
+    indexer[axis] = idx
+    return array[tuple(indexer)]
 
 
 def pad(
@@ -121,7 +127,7 @@ def pad(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to pad.
     pad_width : Union[int, Tuple[int, int]]
         The number of values padded to the edges of each axis. If an integer is provided,
@@ -136,7 +142,7 @@ def pad(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The padded array.
 
     Raises
@@ -146,38 +152,35 @@ def pad(
     IndexError
         If an axis is out of range for the array dimensions.
     """
+    # Normalize pad_width to a tuple of two elements
     pad_width = np.atleast_1d(pad_width)
-    if pad_width.size == 1:
-        pad_width = (pad_width[0], pad_width[0])
-    elif pad_width.size == 2:
-        pad_width = tuple(pad_width)
-    else:
+    if pad_width.size > 2:
         raise ValueError(f"Padding width must have one or two elements, got {pad_width.size}.")
+    pad_tuple = (pad_width[0], pad_width[0]) if pad_width.size == 1 else tuple(pad_width)
 
-    if any(p < 0 for p in pad_width):
+    # Validate padding values
+    if any(p < 0 for p in pad_tuple):
         raise ValueError("Padding must be non-negative.")
-    if all(p == 0 for p in pad_width):
+    if all(p == 0 for p in pad_tuple):
         return array
 
-    if axis is None:
-        axes = range(array.ndim)
-    else:
-        axes = [axis] if isinstance(axis, int) else axis
+    # Normalize and validate axes
+    axes = range(array.ndim) if axis is None else [axis] if isinstance(axis, int) else axis
+    axes = [ax + array.ndim if ax < 0 else ax for ax in axes]
+    if any(ax < 0 or ax >= array.ndim for ax in axes):
+        raise IndexError(f"Axis out of range for array with {array.ndim} dimensions.")
 
+    # Apply padding to each axis
+    result = array
     for ax in axes:
-        if ax < 0:
-            ax += array.ndim
-        if ax < 0 or ax >= array.ndim:
-            raise IndexError(f"Axis {ax} out of range for array with {array.ndim} dimensions.")
-
-        array = _pad(
-            array,
-            pad_width,
+        result = _pad_axis(
+            result,
+            pad_tuple,
             axis=ax,
             mode=mode,
             constant_value=constant_value,
         )
-    return array
+    return result
 
 
 def convolve(
@@ -192,9 +195,9 @@ def convolve(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to be convolved.
-    kernel : NDArray
+    kernel : np.ndarray
         The kernel to convolve with the input array. All dimensions of the kernel must be odd.
     padding : PaddingType = "constant"
         The padding mode to use.
@@ -205,7 +208,7 @@ def convolve(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The result of the convolution.
 
     Raises
@@ -244,11 +247,11 @@ def grey_dilation(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to perform grey dilation on.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-    structure : Union[NDArray, None] = None
+    structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
     mode : PaddingType = "reflect"
         The padding mode to use.
@@ -257,7 +260,7 @@ def grey_dilation(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The result of the grey dilation operation.
 
     Raises
@@ -298,11 +301,11 @@ def grey_erosion(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to perform grey dilation on.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-    structure : Union[NDArray, None] = None
+    structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
     mode : PaddingType = "reflect"
         The padding mode to use.
@@ -311,7 +314,7 @@ def grey_erosion(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The result of the grey dilation operation.
 
     Raises
@@ -352,11 +355,11 @@ def grey_opening(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to perform grey opening on.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-    structure : Union[NDArray, None] = None
+    structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
     mode : PaddingType = "reflect"
         The padding mode to use.
@@ -365,7 +368,7 @@ def grey_opening(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The result of the grey opening operation.
     """
     array = grey_erosion(array, size, structure, mode=mode, maxval=maxval)
@@ -385,11 +388,11 @@ def grey_closing(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to perform grey closing on.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-    structure : Union[NDArray, None] = None
+    structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
     mode : PaddingType = "reflect"
         The padding mode to use.
@@ -398,7 +401,7 @@ def grey_closing(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The result of the grey closing operation.
     """
     array = grey_dilation(array, size, structure, mode=mode, maxval=maxval)
@@ -418,11 +421,11 @@ def morphological_gradient(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to compute the morphological gradient of.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-    structure : Union[NDArray, None] = None
+    structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
     mode : PaddingType = "reflect"
         The padding mode to use.
@@ -431,7 +434,7 @@ def morphological_gradient(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The morphological gradient of the input array.
     """
     return grey_dilation(array, size, structure, mode=mode, maxval=maxval) - grey_erosion(
@@ -451,11 +454,11 @@ def morphological_gradient_internal(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to compute the internal morphological gradient of.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-    structure : Union[NDArray, None] = None
+    structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
     mode : PaddingType = "reflect"
         The padding mode to use.
@@ -464,7 +467,7 @@ def morphological_gradient_internal(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The internal morphological gradient of the input array.
     """
     return array - grey_erosion(array, size, structure, mode=mode, maxval=maxval)
@@ -482,11 +485,11 @@ def morphological_gradient_external(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to compute the external morphological gradient of.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-    structure : Union[NDArray, None] = None
+    structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
     mode : PaddingType = "reflect"
         The padding mode to use.
@@ -495,7 +498,7 @@ def morphological_gradient_external(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The external morphological gradient of the input array.
     """
     return grey_dilation(array, size, structure, mode=mode, maxval=maxval) - array
@@ -509,7 +512,7 @@ def rescale(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to be rescaled.
     out_min : float
         The minimum value of the output range.
@@ -522,7 +525,7 @@ def rescale(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The rescaled array.
     """
 
@@ -547,7 +550,7 @@ def threshold(
 
     Parameters
     ----------
-    array : NDArray
+    array : np.ndarray
         The input array to be thresholded.
     vmin : float = 0.0
         The value to assign to elements below the threshold.
@@ -558,7 +561,7 @@ def threshold(
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The thresholded array.
     """
     if vmin >= vmax:
@@ -575,3 +578,110 @@ def threshold(
         )
 
     return np.where(array < level, vmin, vmax)
+
+
+def smooth_max(
+    x: NDArray, tau: float = 1.0, axis: Union[int, Tuple[int, ...], None] = None
+) -> float:
+    """Compute the smooth maximum of an array using temperature parameter tau.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input array.
+    tau : float = 1.0
+        Temperature parameter controlling smoothness. Larger values make the maximum smoother.
+    axis : Union[int, Tuple[int, ...], None] = None
+        Axis or axes over which the smooth maximum is computed. By default, the smooth maximum is computed over the entire array.
+
+    Returns
+    -------
+    np.ndarray
+        The smooth maximum of the input array.
+    """
+    return tau * logsumexp(x / tau, axis=axis)
+
+
+def smooth_min(
+    x: NDArray, tau: float = 1.0, axis: Union[int, Tuple[int, ...], None] = None
+) -> float:
+    """Compute the smooth minimum of an array using temperature parameter tau.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        Input array.
+    tau : float = 1.0
+        Temperature parameter controlling smoothness. Larger values make the minimum smoother.
+    axis : Union[int, Tuple[int, ...], None] = None
+        Axis or axes over which the smooth minimum is computed. By default, the smooth minimum is computed over the entire array.
+
+    Returns
+    -------
+    np.ndarray
+        The smooth minimum of the input array.
+    """
+    return -smooth_max(-x, tau, axis=axis)
+
+
+def least_squares(
+    func: Callable[[NDArray, float], NDArray],
+    x: NDArray,
+    y: NDArray,
+    initial_guess: Tuple[float, ...],
+    max_iterations: int = 100,
+    tol: float = 1e-6,
+) -> NDArray:
+    """Perform least squares fitting to find the best-fit parameters for a model function.
+
+    Parameters
+    ----------
+    func : Callable[[np.ndarray, float], np.ndarray]
+        The model function to fit. It should accept the independent variable `x` and a tuple of parameters,
+        and return the predicted dependent variable values.
+    x : np.ndarray
+        Independent variable data.
+    y : np.ndarray
+        Dependent variable data.
+    initial_guess : Tuple[float, ...]
+        Initial guess for the parameters to be optimized.
+    max_iterations : int = 100
+        Maximum number of iterations for the optimization process.
+    tol : float = 1e-6
+        Tolerance for convergence. The optimization stops when the change in parameters is below this threshold.
+
+    Returns
+    -------
+    np.ndarray
+        The optimized parameters that best fit the model to the data.
+
+    Raises
+    ------
+    np.linalg.LinAlgError
+        If the optimization does not converge within the specified number of iterations.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> def linear_model(x, a, b):
+    ...     return a * x + b
+    >>> x_data = np.linspace(0, 10, 50)
+    >>> y_data = 2.0 * x_data - 3.0
+    >>> initial_guess = (0.0, 0.0)
+    >>> params = least_squares(linear_model, x_data, y_data, initial_guess)
+    >>> print(params)
+    array([2.0, -3.0])
+    """
+    params = np.array(initial_guess, dtype="f8")
+    jac = jacobian(lambda params: func(x, *params))
+
+    for _ in range(max_iterations):
+        residuals = y - func(x, *params)
+        jacvec = jac(params)
+        pseudo_inv = np.linalg.pinv(jacvec)
+        delta = np.dot(pseudo_inv, residuals)
+        params = params + delta
+        if np.linalg.norm(delta) < tol:
+            break
+
+    return params

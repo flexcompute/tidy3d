@@ -5,7 +5,7 @@ import scipy.interpolate
 import scipy.ndimage
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
-from tidy3d.plugins.autograd.functions import (
+from tidy3d.plugins.autograd import (
     add_at,
     convolve,
     grey_closing,
@@ -13,11 +13,14 @@ from tidy3d.plugins.autograd.functions import (
     grey_erosion,
     grey_opening,
     interpn,
+    least_squares,
     morphological_gradient,
     morphological_gradient_external,
     morphological_gradient_internal,
     pad,
     rescale,
+    smooth_max,
+    smooth_min,
     threshold,
     trapz,
 )
@@ -55,7 +58,7 @@ class TestPad:
     def test_pad_grad(self, rng, mode, size, pad_width, axis):
         """Test gradients of padding function for various modes, sizes, pad widths, and axes."""
         x = rng.random(size)
-        check_grads(pad, modes=["fwd", "rev"], order=1)(x, pad_width, mode=mode, axis=axis)
+        check_grads(pad, modes=["fwd", "rev"], order=2)(x, pad_width, mode=mode, axis=axis)
 
 
 class TestPadExceptions:
@@ -136,7 +139,7 @@ class TestConvolve:
             )
 
         x, k = self._ary_and_kernel(rng, ary_size, kernel_size, square_kernel)
-        check_grads(convolve, modes=["rev"], order=1)(x, k, padding=padding, mode=mode)
+        check_grads(convolve, modes=["rev"], order=2)(x, k, padding=padding, mode=mode)
 
 
 class TestConvolveExceptions:
@@ -194,7 +197,7 @@ class TestMorphology:
     def test_morphology_val_grad(self, rng, op, sp_op, mode, ary_size, kernel_size):
         """Test gradients of morphological operations for various modes, array sizes, and kernel sizes."""
         x = rng.random(ary_size)
-        check_grads(op, modes=["rev"], order=1)(x, size=kernel_size, mode=mode)
+        check_grads(op, modes=["rev"], order=2)(x, size=kernel_size, mode=mode)
 
     @pytest.mark.parametrize(
         "full",
@@ -238,7 +241,7 @@ class TestMorphology:
         ):
             """Test gradients of morphological operations for various kernel structures."""
             x, k = self._ary_and_kernel(rng, ary_size, kernel_size, full, square, flat)
-            check_grads(op, modes=["rev"], order=1)(x, size=kernel_size, mode=mode)
+            check_grads(op, modes=["rev"], order=2)(x, size=kernel_size, mode=mode)
 
 
 @pytest.mark.parametrize(
@@ -317,11 +320,9 @@ class TestInterpn:
         result_scipy = scipy.interpolate.interpn(points, values, tuple(xi_grid), method=method)
         npt.assert_allclose(result_custom, result_scipy)
 
-    @pytest.mark.parametrize("order", [1, 2])
-    @pytest.mark.parametrize("mode", ["fwd", "rev"])
-    def test_interpn_values_grad(self, rng, dim, method, order, mode):
+    def test_interpn_values_grad(self, rng, dim, method):
         points, values, xi = self.generate_points_values_xi(rng, dim)
-        check_grads(lambda v: interpn(points, v, xi, method=method), modes=[mode], order=order)(
+        check_grads(lambda v: interpn(points, v, xi, method=method), modes=["fwd", "rev"], order=2)(
             values
         )
 
@@ -356,12 +357,10 @@ class TestTrapz:
         result_numpy = np.trapz(y, x=x, dx=dx, axis=axis)
         npt.assert_allclose(result_custom, result_numpy)
 
-    @pytest.mark.parametrize("order", [1, 2])
-    @pytest.mark.parametrize("mode", ["fwd", "rev"])
-    def test_trapz_grad(self, rng, shape, axis, use_x, order, mode):
+    def test_trapz_grad(self, rng, shape, axis, use_x):
         """Test gradients of trapz function for different array dimensions and integration axes."""
         y, x, dx = self.generate_y_x_dx(rng, shape, use_x)
-        check_grads(lambda y: trapz(y, x=x, dx=dx, axis=axis), modes=[mode], order=order)(y)
+        check_grads(lambda y: trapz(y, x=x, dx=dx, axis=axis), modes=["fwd", "rev"], order=2)(y)
 
 
 @pytest.mark.parametrize("shape", [(10,), (10, 10)])
@@ -381,10 +380,137 @@ class TestAddAt:
         result_numpy[indices] += y
         npt.assert_allclose(result_custom, result_numpy)
 
-    @pytest.mark.parametrize("order", [1, 2])
-    @pytest.mark.parametrize("mode", ["fwd", "rev"])
-    def test_add_at_grad(self, rng, shape, indices, order, mode):
+    def test_add_at_grad(self, rng, shape, indices):
         """Test gradients of add_at function for different array dimensions and indices."""
         x, y = self.generate_x_y(rng, shape, indices)
-        check_grads(lambda x: add_at(x, indices, y), modes=[mode], order=order)(x)
-        check_grads(lambda y: add_at(x, indices, y), modes=[mode], order=order)(y)
+        check_grads(lambda x: add_at(x, indices, y), modes=["fwd", "rev"], order=2)(x)
+        check_grads(lambda y: add_at(x, indices, y), modes=["fwd", "rev"], order=2)(y)
+
+
+@pytest.mark.parametrize("shape", [(5,), (5, 5), (5, 5, 5)])
+@pytest.mark.parametrize("tau", [1e-3, 1.0])
+@pytest.mark.parametrize("axis", [None, 0, 1, -1])
+class TestSmoothMax:
+    def test_smooth_max_values(self, rng, shape, tau, axis):
+        """Test `smooth_max` values for various shapes, tau, and axes."""
+
+        if axis == 1 and len(shape) == 1:
+            pytest.skip()
+
+        x = rng.uniform(-10, 10, size=shape)
+        result = smooth_max(x, tau=tau, axis=axis)
+
+        expected = np.max(x, axis=axis)
+        npt.assert_allclose(result, expected, atol=10 * tau)
+
+    def test_smooth_max_grad(self, rng, shape, tau, axis):
+        """Test gradients of `smooth_max` for various parameters."""
+
+        if axis == 1 and len(shape) == 1:
+            pytest.skip()
+
+        x = rng.uniform(-1, 1, size=shape)
+        func = lambda x: smooth_max(x, tau=tau, axis=axis)
+        check_grads(func, modes=["fwd", "rev"], order=2)(x)
+
+
+@pytest.mark.parametrize("shape", [(5,), (5, 5), (5, 5, 5)])
+@pytest.mark.parametrize("tau", [1e-3, 1.0])
+@pytest.mark.parametrize("axis", [None, 0, 1, -1])
+class TestSmoothMin:
+    def test_smooth_min_values(self, rng, shape, tau, axis):
+        """Test `smooth_min` values for various shapes, tau, and axes."""
+
+        if axis == 1 and len(shape) == 1:
+            pytest.skip()
+
+        x = rng.uniform(-10, 10, size=shape)
+        result = smooth_min(x, tau=tau, axis=axis)
+
+        expected = np.min(x, axis=axis)
+        npt.assert_allclose(result, expected, atol=10 * tau)
+
+    def test_smooth_min_grad(self, rng, shape, tau, axis):
+        """Test gradients of `smooth_min` for various parameters."""
+
+        if axis == 1 and len(shape) == 1:
+            pytest.skip()
+
+        x = rng.uniform(-1, 1, size=shape)
+        func = lambda x: smooth_min(x, tau=tau, axis=axis)
+        check_grads(func, modes=["fwd", "rev"], order=2)(x)
+
+
+class TestLeastSquares:
+    @pytest.mark.parametrize(
+        "model, params_true, initial_guess, x, y",
+        [
+            (
+                lambda x, a, b: a * x + b,
+                np.array([2.0, -3.0]),
+                (0.0, 0.0),
+                np.linspace(0, 10, 50),
+                2.0 * np.linspace(0, 10, 50) - 3.0,
+            ),
+            (
+                lambda x, a, b, c: a * x**2 + b * x + c,
+                np.array([1.0, -2.0, 1.0]),
+                (0.0, 0.0, 0.0),
+                np.linspace(-5, 5, 100),
+                1.0 * np.linspace(-5, 5, 100) ** 2 - 2.0 * np.linspace(-5, 5, 100) + 1.0,
+            ),
+            (
+                lambda x, a, b: a * np.exp(b * x),
+                np.array([1.5, 0.5]),
+                (1.0, 0.0),
+                np.linspace(0, 2, 50),
+                1.5 * np.exp(0.5 * np.linspace(0, 2, 50)),
+            ),
+        ],
+    )
+    def test_least_squares(self, model, params_true, initial_guess, x, y):
+        """Test least_squares function with different models."""
+        params_estimated = least_squares(model, x, y, initial_guess)
+        npt.assert_allclose(params_estimated, params_true, rtol=1e-5)
+
+    def test_least_squares_with_noise(self, rng):
+        """Test least_squares function with noisy data."""
+
+        model = lambda x, a, b: a * x + b
+        a_true, b_true = -1.0, 4.0
+        params_true = np.array([a_true, b_true])
+        x = np.linspace(0, 10, 100)
+        noise = rng.normal(scale=0.1, size=x.shape)
+        y = a_true * x + b_true + noise
+        initial_guess = (0.0, 0.0)
+
+        params_estimated = least_squares(model, x, y, initial_guess)
+
+        npt.assert_allclose(params_estimated, params_true, rtol=1e-1)
+
+    def test_least_squares_no_convergence(self):
+        """Test that least_squares function raises an error when not converging."""
+
+        def constant_model(x, a):
+            return a
+
+        x = np.linspace(0, 10, 50)
+        y = 2.0 * x - 3.0  # Linear data
+        initial_guess = (0.0,)
+
+        with pytest.raises(np.linalg.LinAlgError):
+            least_squares(constant_model, x, y, initial_guess, max_iterations=10, tol=1e-12)
+
+    def test_least_squares_gradient(self):
+        """Test gradients of least_squares function with respect to parameters."""
+
+        def linear_model(x, a, b):
+            return a * x + b
+
+        x = np.linspace(0, 10, 50)
+        y = 2.0 * x - 3.0
+        initial_guess = (1.0, 0.0)
+
+        check_grads(
+            lambda params: least_squares(linear_model, x, y, params), modes=["fwd", "rev"], order=2
+        )(initial_guess)
