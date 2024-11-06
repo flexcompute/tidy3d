@@ -673,6 +673,29 @@ def test_autograd_numerical(structure_key, monitor_key):
     print(f"avg(diff(objectives)) = {diff_objectives_num:.4f}")
 
 
+def test_run_zero_grad(use_emulated_run, log_capture):
+    """Test warning if no adjoint sim is run (no adjoint sources).
+
+    This checks the case where a simulation is still part of the computational
+    graph (i.e. the output technically depends on the simulation),
+    but no adjoint sources are placed because their amplitudes are zero and thus
+    no adjoint simulation is run.
+    """
+
+    # only needs to be checked for one monitor
+    fn_dict = get_functions(args[0][0], args[0][1])
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(*args):
+        sim = make_sim(*args)
+        sim_data = run(sim, task_name="adjoint_test", verbose=False)
+        return 0 * postprocess(sim_data)
+
+    with AssertLogLevel(log_capture, "WARNING", contains_str="no sources"):
+        grad = ag.grad(objective)(params0)
+
+
 @pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
@@ -717,8 +740,6 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     task_names = {"1", "2", "3", "4"}
 
     def objective(*args):
-        """Objective function."""
-
         sims = {task_name: make_sim(*args) for task_name in task_names}
         batch_data = run_async(sims, verbose=False)
         value = 0.0
@@ -729,6 +750,51 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     val, grad = ag.value_and_grad(objective)(params0)
     print(val, grad)
     assert anp.all(grad != 0.0), "some gradients are 0"
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", args)
+def test_autograd_async_some_zero_grad(use_emulated_run, log_capture, structure_key, monitor_key):
+    """Test objective where only some simulations in batch have adjoint sources."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = {"1", "2", "3", "4"}
+
+    def objective(*args):
+        sims = {task_name: make_sim(*args) for task_name in task_names}
+        batch_data = run_async(sims, verbose=False)
+        values = []
+        for _, sim_data in batch_data.items():
+            values.append(postprocess(sim_data))
+        return min(values)
+
+    # with AssertLogLevel(log_capture, "DEBUG", contains_str="no sources"):
+    val, grad = ag.value_and_grad(objective)(params0)
+
+    assert anp.all(grad != 0.0), "some gradients are 0"
+
+
+def test_autograd_async_all_zero_grad(use_emulated_run, log_capture):
+    """Test objective where no simulation in batch has adjoint sources."""
+
+    fn_dict = get_functions(args[0][0], args[0][1])
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = {"1", "2", "3", "4"}
+
+    def objective(*args):
+        sims = {task_name: make_sim(*args) for task_name in task_names}
+        batch_data = run_async(sims, verbose=False)
+        values = []
+        for _, sim_data in batch_data.items():
+            values.append(postprocess(sim_data))
+        return 0 * sum(values)
+
+    with AssertLogLevel(log_capture, "WARNING", contains_str="contains adjoint sources"):
+        grad = ag.grad(objective)(params0)
 
 
 def test_autograd_speed_num_structures(use_emulated_run):

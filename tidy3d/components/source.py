@@ -101,7 +101,7 @@ class SourceTime(AbstractTimeDependence):
         """Frequency range within plus/minus ``num_fwidth * fwidth`` of the central frequency."""
 
     @abstractmethod
-    def end_time(self) -> float | None:
+    def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
 
@@ -192,7 +192,7 @@ class GaussianPulse(Pulse):
 
         return pulse_amp
 
-    def end_time(self) -> float | None:
+    def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
         # TODO: decide if we should continue to return an end_time if the DC component remains
@@ -251,7 +251,7 @@ class ContinuousWave(Pulse):
 
         return const * offset * oscillation * amp
 
-    def end_time(self) -> float | None:
+    def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""
         return None
 
@@ -420,7 +420,7 @@ class CustomSourceTime(Pulse):
 
         return offset * oscillation * amp * envelope
 
-    def end_time(self) -> float | None:
+    def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""
 
         if self.source_time_dataset is None:
