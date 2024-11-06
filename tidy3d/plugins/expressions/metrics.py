@@ -54,10 +54,12 @@ class ModeAmp(Metric):
 
     Examples
     --------
-    >>> monitor = ModeMonitor(name="monitor1", f=[1.0])
+    >>> import tidy3d as td
+    >>> monitor = td.ModeMonitor(size=(1, 1, 0), freqs=[2e14], mode_spec=td.ModeSpec(), name="monitor1")
     >>> mode_coeff = ModeAmp.from_mode_monitor(monitor)
-    >>> data = SimulationData()  # Assume this is a valid SimulationData object
-    >>> result = mode_coeff.evaluate(data)
+    >>> expr = abs(mode_coeff) ** 2
+    >>> print(expr)
+    (abs(ModeAmp("monitor1")) ** 2)
     """
 
     monitor_name: str = pd.Field(
@@ -122,10 +124,9 @@ class ModePower(ModeAmp):
 
     Examples
     --------
-    >>> monitor = ModeMonitor(name="monitor1", f=[1.0])
+    >>> import tidy3d as td
+    >>> monitor = td.ModeMonitor(size=(1, 1, 0), freqs=[2e14], mode_spec=td.ModeSpec(), name="monitor1")
     >>> mode_power = ModePower.from_mode_monitor(monitor)
-    >>> data = SimulationData()  # Assume this is a valid SimulationData object
-    >>> result = mode_power.evaluate(data)
     """
 
     def evaluate(self, *args: Any, **kwargs: Any) -> NumberType:

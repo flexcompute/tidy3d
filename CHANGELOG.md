@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regression in local field projection leading to incorrect results for `far_field_approx=True`.
 - Bug when differentiating with respect to `Cylinder.center`.
 - `xarray` 2024.10.0 compatibility for autograd.
+- Some failing examples in the expressions plugin documentation.
 
 
 ## [2.7.6] - 2024-10-30

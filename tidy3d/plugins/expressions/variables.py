@@ -29,11 +29,12 @@ class Variable(Expression):
 
     Examples
     --------
-    >>> x = Variable()
+    >>> x = Variable()  # unnamed
     >>> y = Variable(name='y')
-    >>> expr = x + y
-    >>> expr(5, y=3)  # Returns 8
-    >>> expr(5, 3)    # Raises ValueError
+    >>> z = Variable(name='z')
+    >>> expr = x + y + z
+    >>> expr(5, y=3, z=2)
+    10
     """
 
     name: Optional[str] = pd.Field(
@@ -75,7 +76,8 @@ class Constant(Variable):
     Examples
     --------
     >>> c = Constant(5)
-    >>> c.evaluate()  # Returns 5
+    >>> c.evaluate()
+    5
     """
 
     value: NumberType = pd.Field(
