@@ -13,7 +13,7 @@ from autograd.extend import defvjp, primitive
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.data.sim_data import AdjointSourceInfo
+from tidy3d.exceptions import AdjointError
 
 from ...core.s3utils import download_file, upload_file
 from ..asynchronous import DEFAULT_DATA_DIR
@@ -97,6 +97,7 @@ def run(
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
     local_gradient: bool = LOCAL_GRADIENT,
+    allow_zero_gradient: bool = False,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -191,6 +192,7 @@ def run(
             simulation_type="tidy3d_autograd",
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
+            allow_zero_gradient=allow_zero_gradient,
         )
 
     return run_webapi(
@@ -219,6 +221,7 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: dict[str, list[str]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
+    allow_zero_gradient: bool = True,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -271,6 +274,7 @@ def run_async(
             simulation_type="tidy3d_autograd_async",
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
+            allow_zero_gradient=allow_zero_gradient,
         )
 
     return run_async_webapi(
@@ -289,7 +293,11 @@ def run_async(
 
 
 def _run(
-    simulation: td.Simulation, task_name: str, local_gradient: bool = LOCAL_GRADIENT, **run_kwargs
+    simulation: td.Simulation,
+    task_name: str,
+    local_gradient: bool = LOCAL_GRADIENT,
+    allow_zero_gradient: bool = False,
+    **run_kwargs,
 ) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
 
@@ -316,6 +324,7 @@ def _run(
         task_name=task_name,
         aux_data=aux_data,
         local_gradient=local_gradient,
+        allow_zero_gradient=allow_zero_gradient,
         **run_kwargs,
     )
 
@@ -323,7 +332,10 @@ def _run(
 
 
 def _run_async(
-    simulations: dict[str, td.Simulation], local_gradient: bool = LOCAL_GRADIENT, **run_async_kwargs
+    simulations: dict[str, td.Simulation],
+    local_gradient: bool = LOCAL_GRADIENT,
+    allow_zero_gradient: bool = True,
+    **run_async_kwargs,
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
 
@@ -345,6 +357,7 @@ def _run_async(
         sims_original=sims_original,
         aux_data_dict=aux_data_dict,
         local_gradient=local_gradient,
+        allow_zero_gradient=allow_zero_gradient,
         **run_async_kwargs,
     )
 
@@ -387,6 +400,7 @@ def _run_primitive(
     task_name: str,
     aux_data: dict,
     local_gradient: bool,
+    allow_zero_gradient: bool,
     **run_kwargs,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
@@ -437,6 +451,7 @@ def _run_async_primitive(
     sims_original: dict[str, td.Simulation],
     aux_data_dict: dict[dict[str, typing.Any]],
     local_gradient: bool,
+    allow_zero_gradient: bool,
     **run_async_kwargs,
 ) -> dict[str, AutogradFieldMap]:
     task_names = sim_fields_dict.keys()
@@ -573,6 +588,7 @@ def _run_bwd(
     task_name: str,
     aux_data: dict,
     local_gradient: bool,
+    allow_zero_gradient: bool,
     **run_kwargs,
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
@@ -594,7 +610,17 @@ def _run_bwd(
             data_fields_vjp=data_fields_vjp,
             sim_data_orig=sim_data_orig,
             sim_fields_keys=sim_fields_keys,
+            allow_zero_gradient=allow_zero_gradient,
         )
+
+        if sim_adj is None:
+            td.log.warning(
+                f"Adjoint simulation for task {task_name} contains no sources. "
+                "This can occur if the objective function depends on an unsupported monitor "
+                "or uses a function like `min` or `max`. If this is unexpected, please review "
+                "your setup or contact customer support for assistance."
+            )
+            return {k: 0 * v for k, v in sim_fields_original.items()}
 
         # run adjoint simulation
         task_name_adj = str(task_name) + "_adjoint"
@@ -632,6 +658,7 @@ def _run_async_bwd(
     sims_original: dict[str, td.Simulation],
     aux_data_dict: dict[str, dict[str, typing.Any]],
     local_gradient: bool,
+    allow_zero_gradient: bool,
     **run_async_kwargs,
 ) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
@@ -659,6 +686,7 @@ def _run_async_bwd(
         task_names_adj = {task_name + "_adjoint" for task_name in task_names}
 
         sims_adj = {}
+        sim_fields_vjp_dict = {}
         for task_name, task_name_adj in zip(task_names, task_names_adj):
             data_fields_vjp = data_fields_dict_vjp[task_name]
             sim_data_orig = sim_data_orig_dict[task_name]
@@ -668,20 +696,39 @@ def _run_async_bwd(
                 data_fields_vjp=data_fields_vjp,
                 sim_data_orig=sim_data_orig,
                 sim_fields_keys=sim_fields_keys,
+                allow_zero_gradient=allow_zero_gradient,
             )
+
+            if sim_adj is None:
+                td.log.warning(
+                    f"Adjoint simulation for task {task_name} contains no sources. "
+                    "This can occur if the objective function depends on an unsupported monitor "
+                    "or uses a function like `min` or `max`. If this is unexpected, please review "
+                    "your setup or contact customer support for assistance."
+                )
+                sim_fields_vjp_dict[task_name] = {
+                    k: 0 * v for k, v in sim_fields_original_dict[task_name].items()
+                }
+
             sims_adj[task_name_adj] = sim_adj
-            # TODO: handle case where no adjoint sources?
+
+        sims_to_run = {k: v for k, v in sims_adj.items() if v is not None}
+        task_names_adj = set(sims_to_run.keys())
+        task_names_fwd = {task_name.replace("_adjoint", "") for task_name in task_names_adj}
+
+        if not sims_to_run:
+            return sim_fields_vjp_dict
 
         if local_gradient:
             # run adjoint simulation
-            batch_data_adj, _ = _run_async_tidy3d(sims_adj, **run_async_kwargs)
+            batch_data_adj, _ = _run_async_tidy3d(sims_to_run, **run_async_kwargs)
 
-            sim_fields_vjp_dict = {}
-            for task_name, task_name_adj in zip(task_names, task_names_adj):
-                sim_data_adj = batch_data_adj[task_name_adj]
+            for task_name, task_name_adj in zip(task_names_fwd, task_names_adj):
                 sim_data_orig = sim_data_orig_dict[task_name]
                 sim_data_fwd = sim_data_fwd_dict[task_name]
                 sim_fields_keys = sim_fields_keys_dict[task_name]
+
+                sim_data_adj = batch_data_adj.get(task_name_adj)
 
                 sim_fields_vjp = postprocess_adj(
                     sim_data_adj=sim_data_adj,
@@ -689,28 +736,27 @@ def _run_async_bwd(
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
                 )
-                sim_fields_vjp_dict[task_name] = sim_fields_vjp
 
+                sim_fields_vjp_dict[task_name] = sim_fields_vjp
         else:
             parent_tasks = {}
-            for task_name_fwd, task_name_adj in zip(task_names, task_names_adj):
+            for task_name_fwd, task_name_adj in zip(task_names_fwd, task_names_adj):
                 task_id_fwd = aux_data_dict[task_name_fwd][AUX_KEY_FWD_TASK_ID]
                 parent_tasks[task_name_adj] = [task_id_fwd]
 
             run_async_kwargs["parent_tasks"] = parent_tasks
             run_async_kwargs["simulation_type"] = "autograd_bwd"
-            sims_adj = {
+            sims_to_run = {
                 task_name: sim.updated_copy(simulation_type="autograd_bwd", deep=False)
-                for task_name, sim in sims_adj.items()
+                for task_name, sim in sims_to_run.items()
             }
             sim_fields_vjp_dict_adj_keys = _run_async_tidy3d_bwd(
-                simulations=sims_adj,
+                simulations=sims_to_run,
                 **run_async_kwargs,
             )
 
             # swap adjoint task_names for original task_names
-            sim_fields_vjp_dict = {}
-            for task_name_fwd, task_name_adj in zip(task_names, task_names_adj):
+            for task_name_fwd, task_name_adj in zip(task_names_fwd, task_names_adj):
                 sim_fields_vjp_dict[task_name_fwd] = sim_fields_vjp_dict_adj_keys[task_name_adj]
 
         return sim_fields_vjp_dict
@@ -722,7 +768,8 @@ def setup_adj(
     data_fields_vjp: AutogradFieldMap,
     sim_data_orig: td.SimulationData,
     sim_fields_keys: list[tuple],
-) -> tuple[td.Simulation, AdjointSourceInfo]:
+    allow_zero_gradient: bool,
+) -> td.Simulation | None:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
     td.log.info("Running custom vjp (adjoint) pipeline.")
@@ -742,8 +789,17 @@ def setup_adj(
     ]
 
     sim_adj = sim_data_vjp.make_adjoint_sim(
-        data_vjp_paths=data_vjp_paths, adjoint_monitors=adjoint_monitors
+        data_vjp_paths=data_vjp_paths,
+        adjoint_monitors=adjoint_monitors,
     )
+    if sim_adj is None:
+        if allow_zero_gradient:
+            return sim_adj
+        raise AdjointError(
+            "Adjoint simulation creation failed and `allow_zero_gradient` is set to False. "
+            "Ensure that your objective function is correctly set up and that all necessary monitors are supported. "
+            "If this issue persists, please review your setup or contact customer support for assistance."
+        )
 
     if _INSPECT_ADJOINT_FIELDS:
         adj_fld_mnt = td.FieldMonitor(

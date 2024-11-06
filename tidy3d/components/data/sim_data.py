@@ -1033,8 +1033,10 @@ class SimulationData(AbstractYeeGridSimulationData):
         return sim_data_original, sim_data_fwd
 
     def make_adjoint_sim(
-        self, data_vjp_paths: set[tuple], adjoint_monitors: list[Monitor]
-    ) -> Simulation:
+        self,
+        data_vjp_paths: set[tuple],
+        adjoint_monitors: list[Monitor],
+    ) -> Simulation | None:
         """Make the adjoint simulation from the original simulation and the VJP-containing data."""
 
         sim_original = self.simulation
@@ -1044,6 +1046,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         adj_srcs = []
         for src_list in sources_adj_dict.values():
             adj_srcs += list(src_list)
+
+        if not any(adj_srcs):
+            return None
 
         adjoint_source_info = self.process_adjoint_sources(adj_srcs=adj_srcs)
 
@@ -1086,14 +1091,6 @@ class SimulationData(AbstractYeeGridSimulationData):
                 dataset_names=dataset_names, fwidth=self.fwidth_adj
             )
             sources_adj_all[mnt_data.monitor.name] = sources_adj
-
-        if not any(src for _, src in sources_adj_all.items()):
-            raise ValueError(
-                "No adjoint sources created for this simulation. "
-                "This could indicate a bug in your setup, for example the objective function "
-                "output depending on a monitor that is not supported. If you encounter this error, "
-                "please examine your set up or contact customer support if you need more help."
-            )
 
         return sources_adj_all
 

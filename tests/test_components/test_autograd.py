@@ -731,6 +731,32 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
 
+# @pytest.mark.parametrize("structure_key, monitor_key", args)
+# @pytest.mark.parametrize("structure_key, monitor_key", [args[3]])  # array
+@pytest.mark.parametrize("structure_key, monitor_key", [args[0]])
+def test_autograd_async_zero_grad(use_emulated_run, structure_key, monitor_key):
+    """Test an objective function that 'ignores' some simulations."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = {"1", "2", "3", "4"}
+
+    def objective(*args):
+        """Objective function."""
+
+        sims = {task_name: make_sim(*args) for task_name in task_names}
+        batch_data = run_async(sims, verbose=False)
+        values = []
+        for _, sim_data in batch_data.items():
+            values.append(postprocess(sim_data))
+        return min(values)
+
+    val, grad = ag.value_and_grad(objective)(params0)
+    assert anp.all(grad != 0.0), "some gradients are 0"
+
+
 def test_autograd_speed_num_structures(use_emulated_run):
     """Test an objective function through tidy3d autograd."""
 
