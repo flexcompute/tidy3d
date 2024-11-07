@@ -181,7 +181,6 @@ def test_RLC_and_lumped_network_agreement(Rval, Lval, Cval, topology):
     )
     # Check conversion to geometry and to structure
     _ = linear_element.to_geometry()
-    _ = linear_element.to_structure()
 
     sf = linear_element._admittance_transfer_function_scaling()
     med_RLC = RLC._to_medium(sf)
@@ -207,7 +206,6 @@ def test_RLC_and_lumped_network_agreement(Rval, Lval, Cval, topology):
         network=network,
     )
     _ = linear_element.to_geometry()
-    _ = linear_element.to_structure()
     assert np.allclose(med_RLC.eps_model(freqs), med_network.eps_model(freqs), rtol=rtol)
 
 
@@ -262,3 +260,50 @@ def test_impedance_admittance_calculation():
 
     Y_calc = linear_element.admittance(freqs)
     assert np.allclose(Y_expected, Y_calc)
+
+
+@pytest.mark.parametrize("dist_type", ["off", "laterally_only", "on"])
+@pytest.mark.parametrize("width", [0, 5])
+def test_distribution_variants(dist_type, width):
+    mm = 1e3
+    RLC = td.RLCNetwork(
+        resistance=50,
+    )
+
+    linear_element = td.LinearLumpedElement(
+        center=[0.5 * mm, 0, 0],
+        size=[1 * mm, 0, width * mm],
+        voltage_axis=0,
+        network=RLC,
+        name="RLC",
+        dist_type=dist_type,
+    )
+    x = np.linspace(0, 10 * mm, 25)
+    y = np.linspace(-50 * mm, 50 * mm, 200)
+    z = np.linspace(-20 * mm, 20 * mm, 100)
+    coords = td.Coords(x=x, y=y, z=z)
+    grid = td.Grid(boundaries=coords)
+
+    # Grid is coarse enough that there is only one connection made along x
+    geometry = linear_element.to_geometry(grid)
+    structure = linear_element.to_PEC_connection(grid)
+    if dist_type != "on":
+        assert len(structure.geometry.geometries) == 1
+    else:
+        assert structure is None
+    network = linear_element.to_structure(grid)
+    L, C = linear_element.estimate_parasitic_elements(grid)
+    assert C >= 0
+
+    # Grid is fine enough that there are two connections made along x
+    x = np.linspace(0, 10 * mm, 100)
+    grid = grid.updated_copy(path="boundaries", x=x)
+    geometry = linear_element.to_geometry(grid)
+    structure = linear_element.to_PEC_connection(grid)
+    if dist_type != "on":
+        assert len(structure.geometry.geometries) == 2
+    else:
+        assert structure is None
+    network = linear_element.to_structure(grid)
+    L, C = linear_element.estimate_parasitic_elements(grid)
+    assert C >= 0

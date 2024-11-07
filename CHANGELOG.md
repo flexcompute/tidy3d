@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandgap narrowing models for `SemiconductorMedium`: `SlotboomBandGapNarrowing`
 - Generation-recombination models for `SemiconductorMedium`: `ShockleyReedHallRecombination`, `RadiativeRecombination`, `AugerRecombination`
 - Accessors and length functions implemented for `Result` class in design plugin.
+- Advanced option `dist_type` that allows `LinearLumpedElement` to be distributed across grid cells in different ways. For example, restricting the network portion to a single cell and using PEC wires to connect to the desired location of the terminals. 
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.

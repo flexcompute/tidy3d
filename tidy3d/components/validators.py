@@ -73,6 +73,21 @@ def assert_plane():
     return is_plane
 
 
+def assert_line_or_plane():
+    """makes sure a field's ``size`` attribute has either 1 or 2 zeros"""
+
+    @pydantic.validator("size", allow_reuse=True, always=True)
+    def is_line_or_plane(cls, val):
+        """Raise validation error if not a line or plane."""
+        if val.count(0.0) == 0 or val.count(0.0) == 3:
+            raise ValidationError(
+                f"'{cls.__name__}' object must be a line or a plane, given size={val}. "
+            )
+        return val
+
+    return is_line_or_plane
+
+
 def assert_volumetric():
     """makes sure a field's ``size`` attribute has no zero entry"""
 

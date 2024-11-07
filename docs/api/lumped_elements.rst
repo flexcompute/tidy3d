@@ -1,6 +1,6 @@
 .. currentmodule:: tidy3d
 
-Lumped elements
+Lumped Elements
 ===============
 
 Passive elements

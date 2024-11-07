@@ -1,11 +1,12 @@
 """Utilities for 2D geometry manipulation."""
 
+from math import isclose
 from typing import List, Tuple
 
 import numpy as np
 import shapely
 
-from ...constants import inf
+from ...constants import fp_eps, inf
 from ..geometry.base import Box, ClipOperation, Geometry
 from ..geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
 from ..grid.grid import Grid
@@ -83,8 +84,10 @@ def get_neighbors(
         bounds = [list(i) for i in geom_shifted.bounds]
         _, tan_dirs = Geometry.pop_axis([0, 1, 2], axis=axis)
         for dim in tan_dirs:
-            bounds[0][dim] = increment_float(bounds[0][dim], 1.0)
-            bounds[1][dim] = increment_float(bounds[1][dim], -1.0)
+            # Don't shrink if the width is already close to 0
+            if not isclose(bounds[0][dim], bounds[1][dim], rel_tol=2 * fp_eps):
+                bounds[0][dim] = increment_float(bounds[0][dim], 1.0)
+                bounds[1][dim] = increment_float(bounds[1][dim], -1.0)
 
         structures_side = Scene.intersecting_structures(Box.from_bounds(*bounds), structures)
 

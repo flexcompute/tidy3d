@@ -40,7 +40,7 @@ def path_integrals_from_lumped_element(
     I_axis = lumped_element.lateral_axis
 
     # The exact position of the lumped element after any possible snapping
-    lumped_element_box = lumped_element.to_geometry(grid=grid)
+    lumped_element_box = lumped_element._create_box_for_network(grid=grid)
 
     V_size = [0, 0, 0]
     V_size[V_axis] = lumped_element_box.size[V_axis]

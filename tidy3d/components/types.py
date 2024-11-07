@@ -242,3 +242,7 @@ EpsSpecType = Literal["diagonal", "tensorial_real", "tensorial_complex"]
 """ mode tracking """
 
 TrackFreq = Literal["central", "lowest", "highest"]
+
+""" lumped elements"""
+
+LumpDistType = Literal["off", "laterally_only", "on"]

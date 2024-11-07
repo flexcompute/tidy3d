@@ -14,7 +14,7 @@ from ...exceptions import Tidy3dError
 from ..base import Tidy3dBaseModel
 from ..geometry.base import Box
 from ..grid.grid import Grid
-from ..types import ArrayFloat2D, Axis, MatrixReal4x4, PlanePosition, Shapely
+from ..types import ArrayFloat2D, Axis, Coordinate, MatrixReal4x4, PlanePosition, Shapely
 from . import base, mesh, polyslab, primitives
 
 GeometryType = Union[
@@ -291,27 +291,28 @@ class SnappingSpec(Tidy3dBaseModel):
     )
 
 
+def get_closest_value(test: float, coords: np.ArrayLike, upper_bound_idx: int) -> float:
+    """Helper to choose the closest value in an array to a given test value,
+    using the index of the upper bound. The ``upper_bound_idx`` corresponds to the first value in
+    the ``coords`` array which is greater than or equal to the test value.
+    """
+    # Handle corner cases first
+    if upper_bound_idx == 0:
+        return coords[upper_bound_idx]
+    if upper_bound_idx == len(coords):
+        return coords[upper_bound_idx - 1]
+    # General case
+    lower_bound = coords[upper_bound_idx - 1]
+    upper_bound = coords[upper_bound_idx]
+    dlower = abs(test - lower_bound)
+    dupper = abs(test - upper_bound)
+    return lower_bound if dlower < dupper else upper_bound
+
+
 def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps) -> Box:
     """Snaps a :class:`.Box` to the grid, so that the boundaries of the box are aligned with grid centers or boundaries.
     The way in which each dimension of the `box` is snapped to the grid is controlled by ``snap_spec``.
     """
-
-    def get_closest_value(test: float, coords: np.ArrayLike, upper_bound_idx: int) -> float:
-        """Helper to choose the closest value in an array to a given test value,
-        using the index of the upper bound. The ``upper_bound_idx`` corresponds to the first value in
-        the ``coords`` array which is greater than or equal to the test value.
-        """
-        # Handle corner cases first
-        if upper_bound_idx == 0:
-            return coords[upper_bound_idx]
-        if upper_bound_idx == len(coords):
-            return coords[upper_bound_idx - 1]
-        # General case
-        lower_bound = coords[upper_bound_idx - 1]
-        upper_bound = coords[upper_bound_idx]
-        dlower = abs(test - lower_bound)
-        dupper = abs(test - upper_bound)
-        return lower_bound if dlower < dupper else upper_bound
 
     def get_lower_bound(
         test: float, coords: np.ArrayLike, upper_bound_idx: int, rel_tol: float
@@ -380,3 +381,25 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps)
         min_b[axis] = new_min
         max_b[axis] = new_max
     return Box.from_bounds(min_b, max_b)
+
+
+def snap_point_to_grid(
+    grid: Grid, point: Coordinate, snap_location: tuple[SnapLocation, SnapLocation, SnapLocation]
+) -> Coordinate:
+    """Snaps a :class:`.Coordinate` to the grid, so that it is coincident with grid centers or boundaries.
+    The way in which each dimension of the ``point`` is snapped to the grid is controlled by ``snap_location``.
+    """
+    grid_bounds = grid.boundaries.to_list
+    grid_centers = grid.centers.to_list
+    snapped_point = 3 * [0]
+    for axis in range(3):
+        if snap_location[axis] == SnapLocation.Boundary:
+            snap_coords = np.array(grid_bounds[axis])
+        elif snap_location[axis] == SnapLocation.Center:
+            snap_coords = np.array(grid_centers[axis])
+
+        # Locate the interval that includes the test point
+        min_upper_bound_idx = np.searchsorted(snap_coords, point[axis], side="left")
+        snapped_point[axis] = get_closest_value(point[axis], snap_coords, min_upper_bound_idx)
+
+    return tuple(snapped_point)

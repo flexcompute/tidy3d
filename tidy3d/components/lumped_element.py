@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from math import isclose
 from typing import Annotated, Literal, Optional, Union
 
 import numpy as np
@@ -10,6 +11,7 @@ import pydantic.v1 as pd
 
 from ..components.grid.grid import Grid
 from ..components.medium import (
+    PEC2D,
     Debye,
     Drude,
     Lorentz,
@@ -19,15 +21,27 @@ from ..components.medium import (
 )
 from ..components.monitor import FieldMonitor
 from ..components.structure import MeshOverrideStructure, Structure
-from ..components.validators import assert_plane, validate_name_str
-from ..constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM
+from ..components.validators import assert_line_or_plane, assert_plane, validate_name_str
+from ..constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
 from ..exceptions import ValidationError
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .geometry.base import Box, ClipOperation, Geometry
+from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from .geometry.primitives import Cylinder
-from .geometry.utils import SnapBehavior, SnapLocation, SnappingSpec, snap_box_to_grid
+from .geometry.utils import (
+    SnapBehavior,
+    SnapLocation,
+    SnappingSpec,
+    snap_box_to_grid,
+    snap_point_to_grid,
+)
 from .geometry.utils_2d import increment_float
-from .types import TYPE_TAG_STR, Axis, Axis2D, Coordinate, FreqArray
+from .microwave.formulas.circuit_parameters import (
+    capacitance_colinear_cylindrical_wire_segments,
+    capacitance_rectangular_sheets,
+    inductance_straight_rectangular_wire,
+    total_inductance_colinear_rectangular_wire_segments,
+)
+from .types import TYPE_TAG_STR, Axis, Axis2D, Coordinate, FreqArray, LumpDistType
 from .viz import PlotParams, plot_params_lumped_element
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 3
@@ -70,8 +84,13 @@ class LumpedElement(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def to_structure(self) -> Structure:
-        """Converts the :class:`.LumpedElement` object to a :class:`.Structure`
-        ready to be added to the :class:`.Simulation`"""
+        """Converts the network portion of the :class:`.LumpedElement` object to a
+        :class:`.Structure`."""
+
+    def to_structures(self, grid: Grid = None) -> list[Structure]:
+        """Converts the :class:`.LumpedElement` object to a list of :class:`.Structure`
+        which are ready to be added to the :class:`.Simulation`"""
+        return [self.to_structure]
 
 
 class RectangularLumpedElement(LumpedElement, Box):
@@ -95,6 +114,8 @@ class RectangularLumpedElement(LumpedElement, Box):
         "``voltage_axis`` are snapped to grid centers. Lumped elements are always snapped to the nearest grid "
         "boundary along their ``normal_axis``, regardless of this option.",
     )
+
+    _line_plane_validator = assert_line_or_plane()
 
     @cached_property
     def normal_axis(self):
@@ -136,8 +157,6 @@ class RectangularLumpedElement(LumpedElement, Box):
         snap_location[self.lateral_axis] = SnapLocation.Center
         snap_behavior[self.lateral_axis] = SnapBehavior.Expand
         return SnappingSpec(location=snap_location, behavior=snap_behavior)
-
-    _plane_validator = assert_plane()
 
     def to_mesh_overrides(self) -> list[MeshOverrideStructure]:
         """Creates a suggested :class:`.MeshOverrideStructure` list that could be added to the
@@ -292,6 +311,8 @@ class LumpedResistor(RectangularLumpedElement):
             geometry=box,
             medium=Medium2D(**medium_dict),
         )
+
+    _plane_validator = assert_plane()
 
 
 class CoaxialLumpedResistor(LumpedElement):
@@ -843,6 +864,8 @@ class AdmittanceNetwork(Tidy3dBaseModel):
 class LinearLumpedElement(RectangularLumpedElement):
     """Lumped element representing a network consisting of resistors, capacitors, and inductors.
 
+
+
     Notes
     -----
 
@@ -872,8 +895,7 @@ class LinearLumpedElement(RectangularLumpedElement):
     --------
 
     **Notebooks:**
-
-    * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
+        * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
     network: Union[RLCNetwork, AdmittanceNetwork] = pd.Field(
@@ -884,11 +906,102 @@ class LinearLumpedElement(RectangularLumpedElement):
         discriminator=TYPE_TAG_STR,
     )
 
-    def to_structure(self, grid: Grid = None) -> Structure:
-        """Converts the :class:`LinearLumpedElement` object to a :class:`Structure`
-        ready to be added to the :class:`Simulation`"""
-        box = self.to_geometry(grid=grid)
-        medium_scaling_factor = self._admittance_transfer_function_scaling(box)
+    dist_type: LumpDistType = pd.Field(
+        "on",
+        title="Distribute Type",
+        description="Switches between the different methods for distributing the lumped element over "
+        "the grid.",
+    )
+    """
+    An advanced feature for :class:`LinearLumpedElement` is the ability to choose different methods
+    for distributing the network portion over the the Yee grid. When set to ``on``, the network
+    portion of the lumped element is distributed across the entirety of the lumped element's bounding
+    box. When set to ``off``, the network portion of the lumped element is restricted to one cell and
+    PEC connections are used to connect the network cell to the edges of the lumped element. A third
+    option exists ``laterally_only``, where the network portion is only distributed along the lateral
+    axis of the lumped element.
+
+    When using a :attr:`dist_type` other than ``on`` additional parasitic network elements are
+    introduced, see below. Thin connections lead to a higher inductance, while wide connections
+    lead to a higher parasitic capacitance. Follow the link to the associated notebook for an example
+    of using this field.
+
+    .. image:: ../../_static/img/lumped_dist_type.png
+        :width: 50%
+
+    See Also
+    --------
+    **Notebooks:**
+        * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
+    """
+
+    def _create_box_for_network(self, grid: Grid) -> Box:
+        """Creates a box for the network portion of the lumped element, where the equivalent
+        pole residue medium will be added.
+        """
+        # Snap center to closest electric field position
+        snap_location = 3 * [SnapLocation.Boundary]
+        snap_location[self.voltage_axis] = SnapLocation.Center
+        cell_center = list(snap_point_to_grid(grid, self.center, snap_location))
+        size = [0, 0, 0]
+
+        if self.dist_type != "off" and self.size[self.lateral_axis] != 0:
+            cell_center[self.lateral_axis] = self.center[self.lateral_axis]
+            size[self.lateral_axis] = self.size[self.lateral_axis]
+        if self.dist_type == "on":
+            cell_center[self.voltage_axis] = self.center[self.voltage_axis]
+            size[self.voltage_axis] = self.size[self.voltage_axis]
+
+        cell_box = Box(center=cell_center, size=size)
+
+        snap_spec = self._snapping_spec
+        # Expand from zero size along the voltage and lateral axes
+        if size[self.voltage_axis] == 0:
+            behavior = list(snap_spec.behavior)
+            behavior[self.voltage_axis] = SnapBehavior.Expand
+            snap_spec = snap_spec.updated_copy(behavior=behavior)
+
+        return snap_box_to_grid(grid, cell_box, snap_spec=snap_spec)
+
+    def _create_connection_boxes(
+        self, cell_box: Box, grid: Grid
+    ) -> tuple[Optional[Box], Optional[Box]]:
+        """Creates PEC structures that connect the network portion of the lumped element to the
+        boundaries of the lumped element.
+        """
+        element_box = self.to_geometry(grid)
+        element_min, element_max = map(list, element_box.bounds)
+        cell_min, cell_max = cell_box.bounds
+
+        top_min = list(element_min)
+        top_min[self.voltage_axis] = cell_max[self.voltage_axis]
+        bottom_max = list(element_max)
+        bottom_max[self.voltage_axis] = cell_min[self.voltage_axis]
+
+        # Create "wires" if the size is 0 along the lateral axis
+        if isclose(self.size[self.lateral_axis], 0, rel_tol=fp_eps, abs_tol=fp_eps):
+            lateral_center = cell_box.center[self.lateral_axis]
+            width = max(fp_eps, fp_eps * abs(lateral_center))
+            top_min[self.lateral_axis] = lateral_center - width
+            element_max[self.lateral_axis] = lateral_center + width
+            element_min[self.lateral_axis] = lateral_center - width
+            bottom_max[self.lateral_axis] = lateral_center + width
+
+        top_box = Box.from_bounds(top_min, element_max)
+        bottom_box = Box.from_bounds(element_min, bottom_max)
+
+        if top_box.size[self.voltage_axis] == 0:
+            top_box = None
+        if bottom_box.size[self.voltage_axis] == 0:
+            bottom_box = None
+        return (bottom_box, top_box)
+
+    def to_structure(self, grid) -> Structure:
+        """Converts the :class:`LinearLumpedElement` object to a :class:`Structure`,
+        which enforces the desired voltage-current relationship across one or more grid cells."""
+
+        cell_box = self._create_box_for_network(grid)
+        medium_scaling_factor = self._admittance_transfer_function_scaling(cell_box)
         medium = self.network._to_medium(medium_scaling_factor)
         components_2d = ["ss", "tt"]
         voltage_component = components_2d.pop(self._voltage_axis_2d)
@@ -898,9 +1011,119 @@ class LinearLumpedElement(RectangularLumpedElement):
             other_component: Medium(permittivity=1),
         }
         return Structure(
-            geometry=box,
+            geometry=cell_box,
             medium=Medium2D(**medium_dict),
         )
+
+    def to_PEC_connection(self, grid) -> Optional[Structure]:
+        """Converts the :class:`LinearLumpedElement` object to a :class:`Structure`,
+        representing any PEC connections.
+        """
+
+        if self.dist_type != "on":
+            cell_box = self._create_box_for_network(grid)
+            connections = self._create_connection_boxes(cell_box, grid)
+            connections_filtered = [
+                connection for connection in connections if connection is not None
+            ]
+            if connections_filtered:
+                connection_group = GeometryGroup(geometries=connections_filtered)
+                structures = Structure(
+                    geometry=connection_group,
+                    medium=PEC2D,
+                )
+
+                return structures
+
+        return None
+
+    def to_structures(self, grid: Grid) -> list[Structure]:
+        """Converts the :class:`.LinearLumpedElement` object to a list of :class:`.Structure`
+        which are ready to be added to the :class:`.Simulation`"""
+        PEC_connection = self.to_PEC_connection(grid)
+        structures = []
+        if PEC_connection is not None:
+            structures.append(PEC_connection)
+        structures.append(self.to_structure(grid))
+        return structures
+
+    def estimate_parasitic_elements(self, grid: Grid) -> tuple[float, float]:
+        """Provides an estimate for the parasitic inductance and capacitance associated with the
+        connections. These wire or sheet connections are used when the lumped element is not
+        distributed over the voltage axis.
+
+        Notes
+        -----
+        These estimates for parasitic inductance and capacitance are approximate and may be inaccurate
+        in some cases. However, the formulas used should be accurate in the important regime where
+        the true values for inductance and capacitance are large. For example, the estimate for capacitance
+        will be more accurate for wide elements discretized with a high resolution grid.
+
+        Returns
+        -------
+        tuple[float, float]
+            A tuple containing the parasitic series inductance and parasitic shunt capacitance, respectively.
+        """
+
+        if self.dist_type == "on":
+            # When connections are not used there is no associated parasitic inductance or capacitance.
+            # Note that there is still a small parasitic inductance due to the finite length of the
+            # lumped element itself.
+            return (0, 0)
+
+        cell_box = self._create_box_for_network(grid)
+        connections = self._create_connection_boxes(cell_box, grid)
+
+        # Check if at least one of the connections exists
+        valid_connection = connections[0] if connections[0] else connections[1]
+        if valid_connection is None:
+            return (0, 0)
+
+        # Convenience variables
+        v_axis = self.voltage_axis
+        l_axis = self.lateral_axis
+        n_axis = self.normal_axis
+        cell_size = cell_box.size
+
+        # Get common properties of the connections
+        grid_centers = grid.centers.to_list[self.normal_axis]
+        ub = np.searchsorted(grid_centers, cell_box.center[self.normal_axis])
+        thickness_eff = grid_centers[ub] - grid_centers[ub - 1]
+        width_eff = valid_connection.size[l_axis]
+        # After discretization a wire has an effective width equal to the grid cell size
+        if self.size[l_axis] == 0:
+            width_eff = cell_size[l_axis]
+        # If there are two connections, they will share the same thickness and width
+        # only their lengths along the voltage axis might be different
+        common_size = list(valid_connection.size)
+        common_size[n_axis] = thickness_eff
+        common_size[l_axis] = width_eff
+
+        if connections[0] and connections[1]:
+            # Typical case of connections above and below network portion
+            d_sep = cell_size[v_axis]
+            wire_1_size = list(common_size)
+            wire_2_size = list(common_size)
+            wire_1_size[v_axis] = connections[0].size[v_axis]
+            wire_2_size[v_axis] = connections[1].size[v_axis]
+            L = total_inductance_colinear_rectangular_wire_segments(
+                wire_1_size, wire_2_size, d_sep, v_axis
+            )
+            # Average length of the two connections
+            l_eff = 0.5 * (wire_1_size[v_axis] + wire_2_size[v_axis])
+            # Rough equivalent radius based on perimeter
+            r_eff = 2 * (width_eff + thickness_eff) / (2 * np.pi)
+            approximate_as_wires = width_eff < 4 * thickness_eff and r_eff < l_eff / 4
+            if approximate_as_wires:
+                C = capacitance_colinear_cylindrical_wire_segments(r_eff, l_eff, d_sep)
+            else:
+                C = capacitance_rectangular_sheets(width_eff, l_eff, d_sep)
+            return (L, C)
+        elif connections[0] or connections[1]:
+            # Possible to only have a single connection, where the capacitance will be 0
+            # but there will be a contribution to inductance from the single connection
+            L = inductance_straight_rectangular_wire(common_size, v_axis)
+            return (L, 0)
 
     def admittance(self, freqs: np.ndarray) -> np.ndarray:
         """Returns the admittance of this lumped element at the frequencies specified by ``freqs``.

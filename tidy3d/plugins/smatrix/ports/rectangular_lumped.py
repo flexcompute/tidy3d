@@ -15,14 +15,21 @@ from ....components.geometry.utils import (
 )
 from ....components.geometry.utils_2d import increment_float
 from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import LumpedResistor
+from ....components.lumped_element import (
+    LinearLumpedElement,
+    LumpedResistor,
+    RLCNetwork,
+)
 from ....components.monitor import FieldMonitor
 from ....components.source.current import UniformCurrentSource
 from ....components.source.time import GaussianPulse
-from ....components.types import Axis, FreqArray
-from ....components.validators import assert_plane
+from ....components.types import Axis, FreqArray, LumpDistType
+from ....components.validators import assert_line_or_plane
 from ....exceptions import SetupError, ValidationError
-from ...microwave import CurrentIntegralAxisAligned, VoltageIntegralAxisAligned
+from ...microwave import (
+    CurrentIntegralAxisAligned,
+    VoltageIntegralAxisAligned,
+)
 from .base_lumped import AbstractLumpedPort
 
 
@@ -37,6 +44,11 @@ class LumpedPort(AbstractLumpedPort, Box):
     ...             name="port_1",
     ...             impedance=50
     ...         )
+
+    See Also
+    --------
+    :class:`.LinearLumpedElement`
+        The lumped element representing the load of the port.
     """
 
     voltage_axis: Axis = pd.Field(
@@ -54,7 +66,19 @@ class LumpedPort(AbstractLumpedPort, Box):
         "is always snapped to the grid along its injection axis.",
     )
 
-    _plane_validator = assert_plane()
+    dist_type: LumpDistType = pd.Field(
+        "on",
+        title="Distribute Type",
+        description="Optional field that is passed directly to the :class:`.LinearLumpedElement` used to model the port's load. "
+        "When set to ``on``, the network portion of the lumped port, including the source, is distributed"
+        "across the entirety of the lumped element's bounding box. When set to ``off``, the network "
+        "portion of the lumped port is restricted to one cell and PEC connections are used to "
+        "connect the network cell to the edges of the lumped element. A third option exists "
+        "``laterally_only``, where the network portion is only distributed along the lateral axis of "
+        "the lumped port.",
+    )
+
+    _line_plane_validator = assert_line_or_plane()
 
     @cached_property
     def injection_axis(self):
@@ -109,14 +133,17 @@ class LumpedPort(AbstractLumpedPort, Box):
         center = list(self.center)
         if snap_center:
             center[self.injection_axis] = snap_center
-        return LumpedResistor(
+
+        network = RLCNetwork(resistance=np.real(self.impedance))
+        return LinearLumpedElement(
             center=center,
             size=self.size,
             num_grid_cells=self.num_grid_cells,
-            resistance=np.real(self.impedance),
+            network=network,
             name=f"{self.name}_resistor",
             voltage_axis=self.voltage_axis,
             snap_perimeter_to_grid=self.snap_perimeter_to_grid,
+            dist_type=self.dist_type,
         )
 
     def to_voltage_monitor(
@@ -241,7 +268,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         after it is snapped to the grid."""
         load = self.to_load()
         # This will included any snapping behavior the load undergoes
-        load_box = load.to_geometry(grid=grid)
+        load_box = load._create_box_for_network(grid=grid)
         return load_box
 
     def _to_voltage_box(self, grid: Grid) -> Box:
@@ -250,6 +277,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         load_box = self._to_load_box(grid=grid)
         size = list(load_box.size)
         size[self.current_axis] = 0
+        size[self.injection_axis] = 0
         voltage_box = Box(center=load_box.center, size=size)
         return voltage_box
 

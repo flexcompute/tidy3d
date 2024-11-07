@@ -1340,7 +1340,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # Convert lumped elements into structures
         lumped_structures = []
         for lumped_element in self.lumped_elements:
-            lumped_structures.append(lumped_element.to_structure(self.grid))
+            lumped_structures += lumped_element.to_structures(self.grid)
 
         # Begin volumetric structures grid
         all_structures = list(self.static_structures) + lumped_structures
@@ -1910,8 +1910,7 @@ class Simulation(AbstractYeeGridSimulation):
     lumped_elements: Tuple[LumpedElementType, ...] = pydantic.Field(
         (),
         title="Lumped Elements",
-        description="Tuple of lumped elements in the simulation. "
-        "Note: only :class:`tidy3d.LumpedResistor` is supported currently.",
+        description="Tuple of lumped elements in the simulation. ",
     )
     """
     Tuple of lumped elements in the simulation.
@@ -1939,8 +1938,11 @@ class Simulation(AbstractYeeGridSimulation):
     See Also
     --------
 
-    `Index <../lumped_elements.html>`_:
+    `Lumped Elements <../lumped_elements.html>`_:
         Available lumped element types.
+
+    **Notebooks:**
+        * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
     grid_spec: GridSpec = pydantic.Field(
