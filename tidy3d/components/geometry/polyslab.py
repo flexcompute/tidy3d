@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import copy
 from math import isclose
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
@@ -19,6 +19,7 @@ from ...packaging import verify_packages_import
 from ..autograd import AutogradFieldMap, TracedVertices, get_static
 from ..autograd.derivative_utils import DerivativeInfo
 from ..base import cached_property, skip_if_fields_missing
+from ..transformation import RotationAroundAxis
 from ..types import (
     ArrayFloat2D,
     ArrayLike,
@@ -1519,6 +1520,80 @@ class PolySlab(base.Planar):
         norm = np.linalg.norm(arr, axis=-1, keepdims=True)
         norm = np.where(norm == 0, 1, norm)
         return arr / norm
+
+    def translated(self, x: float, y: float, z: float) -> PolySlab:
+        """Return a translated copy of this geometry.
+
+        Parameters
+        ----------
+        x : float
+            Translation along x.
+        y : float
+            Translation along y.
+        z : float
+            Translation along z.
+
+        Returns
+        -------
+        :class:`PolySlab`
+            Translated copy of this ``PolySlab``.
+        """
+
+        t_normal, t_plane = self.pop_axis((x, y, z), axis=self.axis)
+        translated_vertices = np.array(self.vertices) + np.array(t_plane)[None, :]
+        translated_slab_bounds = (self.slab_bounds[0] + t_normal, self.slab_bounds[1] + t_normal)
+        return self.updated_copy(vertices=translated_vertices, slab_bounds=translated_slab_bounds)
+
+    def scaled(self, x: float = 1.0, y: float = 1.0, z: float = 1.0) -> PolySlab:
+        """Return a scaled copy of this geometry.
+
+        Parameters
+        ----------
+        x : float = 1.0
+            Scaling factor along x.
+        y : float = 1.0
+            Scaling factor along y.
+        z : float = 1.0
+            Scaling factor along z.
+
+        Returns
+        -------
+        :class:`Geometry`
+            Scaled copy of this geometry.
+        """
+        scale_normal, scale_in_plane = self.pop_axis((x, y, z), axis=self.axis)
+        scaled_vertices = self.vertices * np.array(scale_in_plane)
+        scaled_slab_bounds = tuple(scale_normal * bound for bound in self.slab_bounds)
+        return self.updated_copy(vertices=scaled_vertices, slab_bounds=scaled_slab_bounds)
+
+    def rotated(self, angle: float, axis: Union[Axis, Coordinate]) -> PolySlab:
+        """Return a rotated copy of this geometry.
+
+        Parameters
+        ----------
+        angle : float
+            Rotation angle (in radians).
+        axis : Union[int, Tuple[float, float, float]]
+            Axis of rotation: 0, 1, or 2 for x, y, and z, respectively, or a 3D vector.
+
+        Returns
+        -------
+        :class:`PolySlab`
+            Rotated copy of this ``PolySlab``.
+        """
+        _, plane_axs = self.pop_axis([0, 1, 2], self.axis)
+        if (isinstance(axis, int) and axis == self.axis) or (
+            isinstance(axis, tuple) and all(axis[ax] == 0 for ax in plane_axs)
+        ):
+            verts_3d = np.zeros((3, self.vertices.shape[0]))
+            verts_3d[plane_axs[0], :] = self.vertices[:, 0]
+            verts_3d[plane_axs[1], :] = self.vertices[:, 1]
+            rotation = RotationAroundAxis(angle=angle, axis=axis)
+            rotated_vertices = rotation.rotate_vector(verts_3d)
+            rotated_vertices = np.take(rotated_vertices, plane_axs, axis=0).T
+            return self.updated_copy(vertices=rotated_vertices)
+
+        return super().rotated(angle=angle, axis=axis)
 
 
 class ComplexPolySlabBase(PolySlab):

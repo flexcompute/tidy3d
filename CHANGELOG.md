@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enabled the user to set the `ModeMonitor.colocate` field and changed to `True` by default (fields were actually already returned colocated even though this field was `False` previously).
 - More robust mode solver at radio frequencies.
 - Disallow very small polygons when subdividing 2D structures.
+- For efficiency, `translated`, `scaled`, and `rotated` `PolySlab`-s now return updated `PolySlab` objects rather than a `Transformed` object, except when the rotation axis is not the same as the slab axis, in which case `Transformed` is still returned.
 
 ### Fixed
 - Significant speedup for field projection computations.

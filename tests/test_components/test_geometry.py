@@ -472,16 +472,44 @@ def test_transforms():
     assert (geo.inside(*xyz) == (False, True, False, True, False)).all()
     assert len(geo.intersections_plane(x=0)) == 2
     assert len(geo.intersections_plane(z=0)) == 1
-    geo = geo.translated(-2, 0, 0).rotated(-np.pi * 0.4, 1)
+    geo = geo.translated(-2, 0, 0).rotated(-np.pi * 0.4, 1).scaled(0.99)
     assert (geo.inside(*xyz) == (True, False, True, False, True)).all()
     assert len(geo.intersections_plane(x=0)) == 1
     assert len(geo.intersections_plane(z=0)) == 3
 
 
+def test_polyslab_transforms():
+    # More tests on PolySlab tranforms matching direct Transformed
+    xyz = np.meshgrid(np.linspace(-3, 3, 10), np.linspace(-3, 3, 10), np.linspace(-3, 3, 10))
+    xyz = [c.flatten() for c in xyz]
+    geo = geo = td.PolySlab(
+        vertices=[(2, -1), (-1, 1), (4, 1), (-1, 2), (4, 2), (1, 3), (5, 3), (5, -1)],
+        slab_bounds=(-1, 1),
+        axis=1,
+    )
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.translation(-0.4, 0.5, 0.1))
+    geo = geo.translated(-0.4, 0.5, 0.1)
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.scaling(0.7, 0.6, 1.5))
+    geo = geo.scaled(0.7, 0.6, 1.5)
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.rotation(0.3, (0, -0.2, 0)))
+    geo = geo.rotated(0.3, (0, -0.2, 0))
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+
+
 def test_general_rotation():
+    # Magnitude of axis direction does not matter
     assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(0.1, [2, 0, 0]))
     assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(0.2, [0, 3, 0]))
     assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(0.3, [0, 0, 4]))
+    # Negative axis direction means negative angle
+    assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(-0.1, [-2, 0, 0]))
+    assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(-0.2, [0, -3, 0]))
+    assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(-0.3, [0, 0, -4]))
 
 
 def test_flattening():
