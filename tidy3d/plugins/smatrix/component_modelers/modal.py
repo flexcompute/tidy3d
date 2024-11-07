@@ -263,8 +263,6 @@ class ComponentModeler(AbstractComponentModeler):
     def _internal_construct_smatrix(self, batch_data: BatchData) -> ModalPortDataArray:
         """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
-        batch_data = self.batch_data
-
         max_mode_index_out, max_mode_index_in = self.max_mode_index
         num_modes_out = max_mode_index_out + 1
         num_modes_in = max_mode_index_in + 1
