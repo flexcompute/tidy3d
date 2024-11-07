@@ -248,34 +248,25 @@ class Structure(AbstractStructure):
         return monitor_name_map[data_type]
 
     def make_adjoint_monitors(
-        self, freqs: list[float], index: int
+        self, freqs: list[float], index: int, field_keys: list[str]
     ) -> (FieldMonitor, PermittivityMonitor):
         """Generate the field and permittivity monitor for this structure."""
 
-        box = self.geometry.bounding_box
+        geo = self.geometry
+        box = geo.bounding_box
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
 
-        size = [get_static(x) for x in box.size]  # TODO: expand slightly?
+        size = [get_static(x) for x in box.size]
         center = [get_static(x) for x in box.center]
 
         # polyslab only needs fields at the midpoint along axis
-        if isinstance(self.geometry, (PolySlab, Cylinder)):
-            size[self.geometry.axis] = 0
-
-        # custom medium only needs fields at center locations of unit cells.
-        if isinstance(self.medium, CustomMedium):
-            for axis, dim in enumerate("xyz"):
-                if self.medium.permittivity is not None:
-                    if len(self.medium.permittivity.coords[dim]) == 1:
-                        size[axis] = 0
-                if self.medium.eps_dataset is not None:
-                    zero_size = True
-                    for _, fld in self.medium.eps_dataset.field_components.items():
-                        if len(fld.coords[dim]) != 1:
-                            zero_size = False
-                    if zero_size:
-                        size[axis] = 0
+        if (
+            isinstance(geo, (PolySlab, Cylinder))
+            and not isinstance(self.medium, AbstractCustomMedium)
+            and field_keys == [("vertices",)]
+        ):
+            size[geo.axis] = 0
 
         mnt_fld = FieldMonitor(
             size=size,

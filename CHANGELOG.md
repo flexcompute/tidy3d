@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Option for the `ModeSolver` and `ModeSolverMonitor` to store only a subset of field components.
 - Added an option to simulate plane wave propagation at fixed angles by setting parameter `angular_spec=FixedAngleSpec()` when defining a `PlaneWave` source.
 - The universal `tidy3d.web` can now also be used to handle `ModeSolver` simulations.
+- Support for differentiation with respect to `PolySlab.slab_bounds`.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
@@ -48,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `MeshOverrideStructure` accepts `Box` as geometry. Other geometry types will raise a warning and convert to bounding box.
 - Double precision mode solver is now supported in EME.
 - `estimate_cost` is now called at the end of every `web.upload` call.
+- Internal refactor of adjoint shape gradients using `GradientSurfaceMesh`.
 
 ### Fixed
 - Significant speedup for field projection computations.
@@ -73,8 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@scalar_objective` decorator in `tidy3d.plugins.autograd` that wraps objective functions to ensure they return a scalar value and performs additional checks to ensure compatibility of objective functions with autograd. Used by default in `tidy3d.plugins.autograd.value_and_grad` as well as `tidy3d.plugins.autograd.grad`.
 - Autograd support for simulations without adjoint sources in `run` as well as `run_async`, which will not attempt to run the simulation but instead return zero gradients. This can sometimes occur if the objective function gradient does not depend on some simulations, for example when using `min` or `max` in the objective.
 - `bend_angle_rotation` in `ModeSpec` to improve accuracy in some cases when both `bend_radius` and `angle_theta` are defined. This option is disabled by default but it can be tried when very high accuracy is required in `ModeSource` and `ModeMonitor` objects that are placed in bend and angled waveguides.
-
-- Support for differentiation with respect to `PolySlab.slab_bounds` and `PolySlab.dilation`.
 
 ### Changed
 - `CustomMedium` design regions require far less data when performing inverse design by reducing adjoint field monitor size for dims with one pixel.

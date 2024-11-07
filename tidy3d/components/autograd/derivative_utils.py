@@ -5,6 +5,7 @@ import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
+from ...constants import LARGE_NUMBER
 from ..base import Tidy3dBaseModel
 from ..data.data_array import ScalarFieldDataArray, SpatialDataArray
 from ..types import ArrayLike, Bound, tidycomplex
@@ -17,7 +18,30 @@ PermittivityData = dict[str, ScalarFieldDataArray]
 
 
 class DerivativeSurfaceMesh(Tidy3dBaseModel):
-    """Stores information about the surfaces of an object to be used for derivative calculation."""
+    """Stores information about the surfaces of an object to be used for derivative calculation.
+
+    User guide: this class is used to construct derivatives with respect to surface elements
+    given some forward and adjoint fields stored in a ``DerivativeInfo`` class. To use it,
+    you must specify the central locations of all the surface elements in ``centers``,
+    along with the area of each element in ``areas``. Then you need to specify three orthogonal
+    vectors (``normals``, ``perps1`` and ``perps2``). The derivative will be computed with
+    respect to a change in material along the ``normals`` direction. It is important to note
+    that the sign of these basis vectors is irrelevant since we end up multiplying the forward
+    and adjoint fields together in these bases.
+
+    The gradient is with respect to a change from the surface element permittivity from the
+    ``eps_in`` to ``eps_out`` field. So in principle it is always computing gradients with
+    respect to an infinitesimal outward shift in the normal direction. For example, for
+    ``PolySlab.vertices``, this means shifting each edge to the background.
+    For ``PolySlab.slab_bounds``, this means shifting the bound in either + or - direction if it
+    is index ``[1]`` or ``[0]`` respectively. This renders the sign of the normal vector
+    irrelevant.
+
+    After this ``DerivativeSurfaceMesh`` is constructed, given some ``DerivativeInfo`` in the
+    gradient calculation, a call to ``DerivativeInfo.grad_surfaces(x: DerivativeSurfaceMesh)``
+    will return the gradient with respect to a change in all of the provided surfaces.
+
+    """
 
     centers: ArrayLike = pd.Field(
         ...,
@@ -139,6 +163,13 @@ class DerivativeInfo(Tidy3dBaseModel):
         description="Bounds corresponding to the structure, used in ``Medium`` calculations.",
     )
 
+    bounds_intersect: Bound = pd.Field(
+        ...,
+        title="Geometry and Simulation Intersections Bounds",
+        description="Bounds corresponding to the minimum intersection between the "
+        "structure and the simulation it is contained in.",
+    )
+
     frequency: float = pd.Field(
         ...,
         title="Frequency of adjoint simulation",
@@ -191,16 +222,15 @@ class DerivativeInfo(Tidy3dBaseModel):
 
         if self.eps_no_structure is not None:
             return self.evaluate_eps(spatial_coords, is_inside=False)
-    
+
         return self.eps_out
 
-
-    @property
     def delta_eps(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
+        """Change in the permittivity across interface (for E field grads)."""
         return self._eps_in(spatial_coords) - self._eps_out(spatial_coords)
 
-    @property
     def delta_eps_inv(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
+        """Change in 1 / permittivity across interface (for D field grads)."""
         return 1.0 / self._eps_in(spatial_coords) - 1.0 / self._eps_out(spatial_coords)
 
     def grad_surfaces(self, surface_mesh: DerivativeSurfaceMesh) -> dict:
@@ -240,8 +270,8 @@ class DerivativeInfo(Tidy3dBaseModel):
         E_der_perp2 = E_fwd_perp2 * E_adj_perp2
 
         # approximate permittivity in and out
-        delta_eps_inv = self.delta_eps_inv
-        delta_eps = self.delta_eps
+        delta_eps_inv = self.delta_eps_inv(spatial_coords=spatial_coords)
+        delta_eps = self.delta_eps(spatial_coords=spatial_coords)
 
         # put together VJP using D_normal and E_perp integration
         vjps = 0.0
@@ -288,19 +318,20 @@ class DerivativeInfo(Tidy3dBaseModel):
 
         interp_kwargs = {}
         for dim, locations_dim in zip("xyz", (xs, ys, zs)):
-            # only include dims where the data has more than 1 coord, to avoid warnings and errors
-            if True or all(np.array(fld.coords).size > 1 for fld in fld_dataset.values()):
-                interp_kwargs[dim] = xr.DataArray(locations_dim, dims=edge_index_dim)
+            # filter out any infinity values to use LARGE_NUMBER and get 0 in the interp()
+            locations_dim = np.nan_to_num(locations_dim, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
+            interp_kwargs[dim] = xr.DataArray(locations_dim, dims=edge_index_dim)
 
         components = {}
         for fld_name, arr in fld_dataset.items():
             arr_interp = arr.interp(
                 **interp_kwargs,
                 assume_sorted=True,
-                kwargs={"bounds_error": False, "fill_value": None},
+                kwargs=dict(fill_value=None, bounds_error=False),
             )
             if "f" in arr_interp.coords:
                 arr_interp = arr_interp.sum("f")
+
             components[fld_name] = arr_interp
 
         return components

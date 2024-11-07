@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import pathlib
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import autograd.numpy as np
@@ -3812,15 +3813,17 @@ class Simulation(AbstractYeeGridSimulation):
     def with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
-        # set of indices in the structures needing adjoint monitors
-        structure_indices = {index for (_, index, *_) in sim_fields_keys}
-
-        mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
+        mnts_fld, mnts_eps = self.make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
         return self.copy(update=dict(monitors=monitors))
 
-    def make_adjoint_monitors(self, structure_indices: set[int]) -> tuple[list, list]:
+    def make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
+
+        index_to_keys = defaultdict(list)
+
+        for _, index, *fields in sim_fields_keys:
+            index_to_keys[index].append(fields)
 
         freqs = self.freqs_adjoint
 
@@ -3828,10 +3831,12 @@ class Simulation(AbstractYeeGridSimulation):
         adjoint_monitors_eps = []
 
         # make a field and permittivity monitor for every structure needing one
-        for i in structure_indices:
+        for i, field_keys in index_to_keys.items():
             structure = self.structures[i]
 
-            mnt_fld, mnt_eps = structure.make_adjoint_monitors(freqs=freqs, index=i)
+            mnt_fld, mnt_eps = structure.make_adjoint_monitors(
+                freqs=freqs, index=i, field_keys=field_keys
+            )
 
             adjoint_monitors_fld.append(mnt_fld)
             adjoint_monitors_eps.append(mnt_eps)

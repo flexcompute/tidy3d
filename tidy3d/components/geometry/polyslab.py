@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from copy import copy
-from math import isclose
 from typing import List, Tuple, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
-from autograd.tracer import isbox
+from autograd.tracer import getval, isbox
 from matplotlib import path
 
 from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
@@ -18,6 +18,7 @@ from ...log import log
 from ...packaging import verify_packages_import
 from ..autograd import AutogradFieldMap, TracedVertices, get_static
 from ..autograd.derivative_utils import DerivativeInfo, DerivativeSurfaceMesh
+from ..autograd.types import TracedFloat
 from ..base import cached_property, skip_if_fields_missing
 from ..transformation import RotationAroundAxis
 from ..types import (
@@ -46,6 +47,9 @@ _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION = 500
 
 _MIN_POLYGON_AREA = fp_eps
 
+# number of points per dimension when discretizing polyslab faces for slab bounds gradients
+_NUM_PTS_DIM_SLAB_BOUNDS = 30
+
 
 class PolySlab(base.Planar):
     """Polygon extruded with optional sidewall angle along axis direction.
@@ -56,7 +60,7 @@ class PolySlab(base.Planar):
     >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     """
 
-    slab_bounds: Tuple[float, float] = pydantic.Field(
+    slab_bounds: Tuple[TracedFloat, TracedFloat] = pydantic.Field(
         ...,
         title="Slab Bounds",
         description="Minimum and maximum positions of the slab along axis dimension.",
@@ -137,7 +141,7 @@ class PolySlab(base.Planar):
         For 2), we heal the polygon, and warn that the polygon has been cleaned up.
         """
         # no need to validate anything here
-        if isclose(values["dilation"], 0):
+        if math.isclose(values["dilation"], 0):
             return val
 
         val_np = PolySlab._proper_vertices(val)
@@ -192,17 +196,20 @@ class PolySlab(base.Planar):
         """
 
         # no need to validate anything here
-        if isclose(values["sidewall_angle"], 0):
+        if math.isclose(values["sidewall_angle"], 0):
             return val
 
         # apply dilation
         poly_ref = PolySlab._proper_vertices(val)
-        if not isclose(values["dilation"], 0):
+        if not math.isclose(values["dilation"], 0):
             poly_ref = PolySlab._shift_vertices(poly_ref, values["dilation"])[0]
             poly_ref = PolySlab._heal_polygon(poly_ref)
 
+        slab_min, slab_max = values["slab_bounds"]
+        slab_bounds = [getval(slab_min), getval(slab_max)]
+
         # Fist, check vertex-vertex crossing at any point during extrusion
-        length = values["slab_bounds"][1] - values["slab_bounds"][0]
+        length = slab_bounds[1] - slab_bounds[0]
         dist = [-length * np.tan(values["sidewall_angle"])]
         # reverse the dilation value if it's defined on the top
         if values["reference_plane"] == "top":
@@ -391,7 +398,7 @@ class PolySlab(base.Planar):
             The vertices of the polygon at the reference plane.
         """
         vertices = self._proper_vertices(self.vertices)
-        if isclose(self.dilation, 0):
+        if math.isclose(self.dilation, 0):
             return vertices
         offset_vertices = self._shift_vertices(vertices, self.dilation)[0]
         return self._heal_polygon(offset_vertices)
@@ -515,7 +522,7 @@ class PolySlab(base.Planar):
             ys_slab = y[inside_height]
 
             # vertical sidewall
-            if isclose(self.sidewall_angle, 0):
+            if math.isclose(self.sidewall_angle, 0):
                 # face_polygon = self.make_shapely_polygon(self.reference_polygon)
                 # fun_contain = contains_pointwise(face_polygon)
                 # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
@@ -592,7 +599,7 @@ class PolySlab(base.Planar):
         base_triangles = triangulation.triangulate(self.base_polygon)
         top_triangles = (
             base_triangles
-            if isclose(self.sidewall_angle, 0)
+            if math.isclose(self.sidewall_angle, 0)
             else triangulation.triangulate(self.top_polygon)
         )
 
@@ -631,7 +638,7 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        if isclose(self.sidewall_angle, 0):
+        if math.isclose(self.sidewall_angle, 0):
             return [self.make_shapely_polygon(self.reference_polygon)]
 
         z0 = self.center_axis
@@ -694,7 +701,7 @@ class PolySlab(base.Planar):
             z_max = np.inf if np.isposinf(h_top) else z_base + h_top
 
             # for vertical sidewall, no need for complications
-            if isclose(self.sidewall_angle, 0):
+            if math.isclose(self.sidewall_angle, 0):
                 ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(
                     self.reference_polygon, position, axis_ordered
                 )
@@ -713,7 +720,7 @@ class PolySlab(base.Planar):
                 minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis)
                 maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis)
 
-                if isclose(self.sidewall_angle, 0):
+                if math.isclose(self.sidewall_angle, 0):
                     polys.append(self.make_shapely_box(minx, miny, maxx, maxy))
                 else:
                     angle_min = ints_angle[2 * y_index]
@@ -763,7 +770,7 @@ class PolySlab(base.Planar):
         np.ndarray
             Height (relative to the base) where the plane will intersect with vertices.
         """
-        if isclose(self.sidewall_angle, 0):
+        if math.isclose(self.sidewall_angle, 0):
             return np.array([])
 
         # shift rate
@@ -984,7 +991,7 @@ class PolySlab(base.Planar):
 
         # check for the maximum possible contribution from dilation/slant on each side
         max_offset = self.dilation
-        if not isclose(self.sidewall_angle, 0):
+        if not math.isclose(self.sidewall_angle, 0):
             if self.reference_plane == "bottom":
                 max_offset += max(0, -self._tanq * self.finite_length_axis)
             elif self.reference_plane == "top":
@@ -1014,7 +1021,7 @@ class PolySlab(base.Planar):
 
     def _extrusion_length_to_offset_distance(self, extrusion: float) -> float:
         """Convert extrusion length to offset distance."""
-        if isclose(self.sidewall_angle, 0):
+        if math.isclose(self.sidewall_angle, 0):
             return 0
         return -extrusion * self._tanq
 
@@ -1235,7 +1242,7 @@ class PolySlab(base.Planar):
             Shift along x and y direction.
         """
 
-        if isclose(dist, 0):
+        if math.isclose(dist, 0):
             return vertices, np.zeros(vertices.shape[0], dtype=float), None
 
         def rot90(v):
@@ -1389,17 +1396,127 @@ class PolySlab(base.Planar):
                 vjp = self.compute_derivative_vertices(derivative_info=derivative_info)
                 vjps[key] = vjp
 
-            elif key == ("slab_bounds",):
-                vjp = self.compute_derivative_slab_bounds(derivative_info=derivative_info)
-                vjps[key] = vjp
+            elif key[0] == "slab_bounds":
+                min_max_index = key[1]
+                vjp_face = self.compute_derivative_slab_face(
+                    derivative_info=derivative_info, min_max_index=min_max_index
+                )
+
+                # for ``slab_bounds[0]``, the ``VJP_face`` gives VJP for shifting face out.
+                # corresponds to a decrease ``slab_bounds[0]``. So we need -1 sign.
+                if min_max_index == 0:
+                    vjp_face *= -1
+
+                vjps[key] = vjp_face
 
             else:
                 raise ValueError(f"No derivative defined with respect to 'PolySlab' field '{key}'.")
 
         return vjps
 
-    def compute_derivative_slab_bounds(self, derivative_info: DerivativeInfo) -> TracedVertices:
+    def compute_derivative_slab_face(
+        self, derivative_info: DerivativeInfo, min_max_index: int
+    ) -> TracedVertices:
         """Derivative with respect to slab_bounds."""
+
+        rmin, rmax = derivative_info.bounds
+        ax_min, (r1_min, r2_min) = self.pop_axis(rmin, axis=self.axis)
+        ax_max, (r1_max, r2_max) = self.pop_axis(rmax, axis=self.axis)
+
+        num_1 = 1 if r1_min == r1_max else _NUM_PTS_DIM_SLAB_BOUNDS
+        num_2 = 1 if r2_min == r2_max else _NUM_PTS_DIM_SLAB_BOUNDS
+
+        num_cells = num_1 * num_2
+        ones = np.ones(num_cells)
+        zeros = np.zeros(num_cells)
+
+        def meshgrid_flatten_stack(*args) -> np.ndarray:
+            """Take set of `d` coords, meshgrid them, flatten, and assemble in `(N, d)` array."""
+            coords = np.meshgrid(*args, indexing="ij")
+            coords = [c.flatten() for c in coords]
+            return np.stack(coords, axis=-1)
+
+        # get center points and areas
+        r1_centers = np.linspace(r1_min, r1_max, 2 * num_1 + 1)[1::2]
+        r2_centers = np.linspace(r2_min, r2_max, 2 * num_2 + 1)[1::2]
+        planar_centers = meshgrid_flatten_stack(r1_centers, r2_centers)
+
+        area = 1.0
+        for rmin, rmax in zip((r1_min, r2_min), (r1_max, r2_max)):
+            if rmin != rmax:
+                area *= rmax - rmin
+
+        areas = area * np.ones(num_cells) / num_cells
+
+        def get_grad(min_max_index: int) -> float:
+            """Compute gradient for either min or max dimension."""
+
+            # select the normal sign and the axis value
+            if min_max_index == 0:
+                ax_val = ax_min
+            else:
+                ax_val = ax_max
+
+            edge_centers_xyz = self.unpop_axis_vect(ones * ax_val, planar_centers)
+
+            # construct basis functions
+            normals = self.unpop_axis_vect(ones, np.stack((zeros, zeros), axis=-1))
+            perps1 = self.unpop_axis_vect(zeros, np.stack((ones, zeros), axis=-1))
+            perps2 = self.unpop_axis_vect(zeros, np.stack((zeros, ones), axis=-1))
+
+            rr1, rr2, axx_val = meshgrid_flatten_stack(r1_centers, r2_centers, ax_val).T
+
+            xx, yy, zz = self.unpop_axis_vect(axx_val, np.stack((rr1, rr2), axis=-1)).T
+
+            inside = self.inside(xx, yy, zz).squeeze().flatten()
+
+            areas_masked = areas * inside
+
+            # compute DerivativeSurfaceMesh for each top and bottom.
+            surface_mesh = DerivativeSurfaceMesh(
+                centers=edge_centers_xyz,
+                areas=areas_masked,
+                normals=normals,
+                perps1=perps1,
+                perps2=perps2,
+            )
+
+            grads = derivative_info.grad_surfaces(surface_mesh=surface_mesh)
+            vjp = np.real(np.sum(grads).item())
+
+            return vjp
+
+        return get_grad(min_max_index)
+
+    def compute_derivative_slab_face_single_pt(
+        self, derivative_info: DerivativeInfo, min_max_index: int
+    ) -> TracedVertices:
+        """Derivative with respect to slab faces (single point approximation)."""
+
+        self_static = self.to_static()
+
+        center_r1, center_r2 = np.mean(self_static.vertices, axis=0)
+        center_axis = self_static.slab_bounds[min_max_index]
+        center_xyz = self.unpop_axis(center_axis, (center_r1, center_r2), axis=self.axis)
+
+        area = self_static._area(self_static.vertices)
+
+        norm = self.unpop_axis(1, (0, 0), axis=self.axis)
+        perp1 = self.unpop_axis(0, (0, 1), axis=self.axis)
+        perp2 = self.unpop_axis(0, (1, 0), axis=self.axis)
+
+        surface_mesh = DerivativeSurfaceMesh(
+            centers=[center_xyz],
+            areas=[area],
+            normals=[norm],
+            perps1=[perp1],
+            perps2=[perp2],
+        )
+
+        grads = derivative_info.grad_surfaces(surface_mesh=surface_mesh)
+        vjp = np.real(np.sum(grads).item())
+
+        return vjp
 
     def compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
         # derivative w.r.t each edge
@@ -1696,7 +1813,7 @@ class ComplexPolySlabBase(PolySlab):
         num_division_count = 0
         # initialize sub-polyslab parameters
         sub_polyslab_dict = self.dict(exclude={"type"}).copy()
-        if isclose(self.sidewall_angle, 0):
+        if math.isclose(self.sidewall_angle, 0):
             return [PolySlab.parse_obj(sub_polyslab_dict)]
 
         sub_polyslab_dict.update({"dilation": 0})  # dilation accounted in setup
@@ -1708,7 +1825,7 @@ class ComplexPolySlabBase(PolySlab):
             vertices_now = self.reference_polygon
 
             # constructing sub-polyslabs until reaching the base/top
-            while not isclose(dist_now, dist_val):
+            while not math.isclose(dist_now, dist_val):
                 # bounds for sub-polyslabs assuming no self-intersection
                 slab_bounds = [
                     self._dilation_value_at_reference_to_coord(dist_now),

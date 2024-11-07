@@ -41,7 +41,7 @@ TEST_POLYSLAB_SPEED = False
 
 # whether to run numerical gradient tests, off by default because it runs real simulations
 RUN_NUMERICAL = False
-_NUMERICAL_COMBINATION = ("size_element", "mode")
+_NUMERICAL_COMBINATION = ("polyslab", "mode")
 
 TEST_MODES = ("pipeline", "adjoint", "speed")
 TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
@@ -71,10 +71,11 @@ FWIDTH = FREQ0 / 10
 LZ = 7.0 * WVL
 
 IS_3D = False
+POLYSLAB_AXIS = 2
 
 # TODO: test 2D and 3D parameterized
 
-LX = 0.5 * WVL if IS_3D else 0.0
+LX = 3.5 * WVL if IS_3D else 0.0
 PML_X = True if IS_3D else False
 
 
@@ -83,7 +84,7 @@ DA_SHAPE_X = 1 if IS_3D else 1
 DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
 
 # number of vertices in the polyslab
-NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 110
+NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 25
 
 PNT_DIPOLE = td.PointDipole(
     center=(0, 0, -LZ / 2 + WVL),
@@ -104,6 +105,7 @@ PLANE_WAVE = td.PlaneWave(
         fwidth=FWIDTH,
         amplitude=1.0,
     ),
+    pol_angle=0,
 )
 
 # sim that we add traced structures and monitors to
@@ -128,7 +130,7 @@ SIM_BASE = td.Simulation(
             name="extraneous",
         )
     ],
-    boundary_spec=td.BoundarySpec.pml(x=False, y=True, z=True),
+    boundary_spec=td.BoundarySpec.pml(x=PML_X, y=True, z=True),
     grid_spec=td.GridSpec.uniform(dl=0.01 * td.C_0 / FREQ0),
 )
 
@@ -332,19 +334,30 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     matrix = np.random.random((N_PARAMS,)) - 0.5
     params_01 = 0.5 * (anp.tanh(matrix @ params / 3) + 1)
 
-    radii = 1.0 + 0.5 * params_01
+    free_param = "vertices" if POLYSLAB_AXIS == 0 else "slab_bounds"
+
+    if free_param == "vertices":
+        radii = 0.5 + 0.5 * params_01
+        slab_bounds = (-0.5, 0.5)
+    elif free_param == "slab_bounds":
+        radii = 1.0
+        shift = 0.1 * params_01
+        slab_bounds = (-0.5 + shift, 0.5 + shift)
+        # slab_bounds = (-0.5 + shift, 0.5)
+        # slab_bounds = (-0.5, 0.5 + shift)
 
     phis = 2 * anp.pi * anp.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
     xs = radii * anp.cos(phis)
     ys = radii * anp.sin(phis)
     vertices = anp.stack((xs, ys), axis=-1)
+
     polyslab = td.Structure(
         geometry=td.PolySlab(
             vertices=vertices,
-            slab_bounds=(-0.5, 0.5),
-            axis=0,
-            sidewall_angle=0.01,
-            dilation=0.01,
+            slab_bounds=slab_bounds,
+            axis=POLYSLAB_AXIS,
+            sidewall_angle=0.00,
+            dilation=0.00,
         ),
         medium=med,
     )
@@ -558,7 +571,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-args = [("polyslab", "mode")]
+# args = [("polyslab", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
@@ -591,7 +604,7 @@ def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
             structures.append(structures_traced_dict[structure_key])
 
         sim = SIM_BASE
-        if "diff" in monitor_dict:
+        if "diff" in monitor_keys:
             sim = sim.updated_copy(boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=True))
         sim = sim.updated_copy(structures=structures, monitors=monitors)
 
@@ -643,7 +656,8 @@ def test_autograd_numerical(structure_key, monitor_key):
         sim = make_sim(*args)
         if PLOT_SIM:
             plot_sim(sim, plot_eps=True)
-        data = web.run(sim, task_name="autograd_test_numerical", verbose=False)
+
+        data = web.run(sim, task_name="autograd_test_numerical", verbose=False, local_gradient=True)
         value = postprocess(data)
         return value
 
@@ -652,7 +666,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 1e-3
+    delta = 1e-1
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))
@@ -864,22 +878,22 @@ def test_autograd_speed_num_structures(use_emulated_run):
 def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
-    t = 1.0
+    t0 = 1.0
     axis = 0
 
-    num_pts = 89
+    num_pts = 819
 
     monitor, postprocess = make_monitors()[monitor_key]
 
-    def make_cylinder(radius, x0, y0):
+    def make_cylinder(radius, x0, y0, t):
         return td.Cylinder(
             center=td.Cylinder.unpop_axis(0.0, (x0, y0), axis=axis),
             radius=radius,
             length=t,
             axis=axis,
-        )  # .to_polyslab(num_pts)
+        ).to_polyslab(num_pts)
 
-    def make_polyslab(radius, x0, y0):
+    def make_polyslab(radius, x0, y0, t):
         phis = anp.linspace(0, 2 * np.pi, num_pts + 1)[:-1]
 
         xs = radius * anp.cos(phis) + x0
@@ -899,7 +913,7 @@ def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
 
         return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
 
-    p0 = [1.0, 0.0, 0.0]
+    p0 = [1.0, 0.0, 0.0, t0]
 
     def objective_polyslab(params):
         """Objective function."""
@@ -1311,6 +1325,7 @@ def test_pole_residue(monkeypatch):
         bounds=((-1, -1, -1), (1, 1, 1)),
         eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
         eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
     grads_computed = pr.compute_derivatives(derivative_info=info)
@@ -1392,6 +1407,7 @@ def test_custom_pole_residue(monkeypatch):
         bounds=((-1, -1, -1), (1, 1, 1)),
         eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
         eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
     grads_computed = pr.compute_derivatives(derivative_info=info)

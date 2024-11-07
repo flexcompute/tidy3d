@@ -189,7 +189,7 @@ The following components are traceable as inputs to the `td.Simulation`
 | Component Type                                                    | Traceable Attributes                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------- |
 | rectangular prisms                                                | `Box.center`, `Box.size`                                |
-| polyslab (including those with dilation or slanted sidewalls)     | `PolySlab.vertices`                                     |
+| polyslab (including those with dilation or slanted sidewalls)     | `PolySlab.vertices`, `PolySlab.slab_bounds`                          |
 | regular mediums                                                   | `Medium.permittivity`, `Medium.conductivity`            |
 | spatially varying mediums (for topology optimization mainly)      | `CustomMedium.permittivity`, `CustomMedium.eps_dataset` |
 | groups of geometries with the same medium (for faster processing) | `GeometryGroup.geometries`                              |

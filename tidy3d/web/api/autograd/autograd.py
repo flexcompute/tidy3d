@@ -886,6 +886,13 @@ def postprocess_adj(
         else:
             eps_no_structure = eps_inf_structure = None
 
+        # get minimum intersection of bounds with structure and sim
+        struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
+        rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
+        rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
+        rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
+        bounds_intersect = (rmin_intersect, rmax_intersect)
+
         derivative_info = DerivativeInfo(
             paths=structure_paths,
             E_der_map=E_der_map.field_components,
@@ -899,9 +906,10 @@ def postprocess_adj(
             eps_out=eps_out,
             eps_background=eps_background,
             frequency=freq_adj,
-            bounds=structure.geometry.bounds,  # TODO: pass intersecting bounds with sim?
             eps_no_structure=eps_no_structure,
             eps_inf_structure=eps_inf_structure,
+            bounds=struct_bounds,
+            bounds_intersect=bounds_intersect,
         )
 
         vjp_value_map = structure.compute_derivatives(derivative_info)
