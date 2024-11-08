@@ -1448,7 +1448,7 @@ class PolySlab(base.Planar):
 
         vjps_edges_in_plane = vjps_edges.values.reshape((num_vertices, 1)) * normal_vectors_in_plane
 
-        vjps_vertices = vjps_edges_in_plane + np.roll(vjps_edges_in_plane, axis=0, shift=-1)
+        vjps_vertices = vjps_edges_in_plane + np.roll(vjps_edges_in_plane, axis=0, shift=1)
         vjps_vertices /= 2.0  # each vertex is effected only 1/2 by each edge
 
         # sign change if counter clockwise, because normal direction is flipped

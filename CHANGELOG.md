@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug when differentiating with respect to `Cylinder.center`.
 - `xarray` 2024.10.0 compatibility for autograd.
 - Some failing examples in the expressions plugin documentation.
-
+- Inaccuracy in transforming gradients from edge to `PolySlab.vertices`.
 
 ## [2.7.6] - 2024-10-30
 
