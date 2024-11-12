@@ -15,10 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@scalar_objective` decorator in `tidy3d.plugins.autograd` that wraps objective functions to ensure they return a scalar value and performs additional checks to ensure compatibility of objective functions with autograd. Used by default in `tidy3d.plugins.autograd.value_and_grad` as well as `tidy3d.plugins.autograd.grad`.
 - Autograd support for simulations without adjoint sources in `run` as well as `run_async`, which will not attempt to run the simulation but instead return zero gradients. This can sometimes occur if the objective function gradient does not depend on some simulations, for example when using `min` or `max` in the objective.
 
-
 ### Changed
 - `CustomMedium` design regions require far less data when performing inverse design by reducing adjoint field monitor size for dims with one pixel.
-- Calling `.values` on `DataArray` no longer raises a `DeprecationWarning` during automatic differentiation
+- Calling `.values` on `DataArray` no longer raises a `DeprecationWarning` during automatic differentiation.
+- Minimum number of PML layers set to 6.
 
 ### Fixed
 - Regression in local field projection leading to incorrect results for `far_field_approx=True`.

@@ -16,6 +16,8 @@ from .medium import Medium
 from .source import TFSF, GaussianBeam, ModeSource, PlaneWave
 from .types import TYPE_TAG_STR, Axis, Complex
 
+MIN_NUM_PML_LAYERS = 6
+
 
 class BoundaryEdge(ABC, Tidy3dBaseModel):
     """Electromagnetic boundary condition at a domain edge."""
@@ -260,10 +262,11 @@ DefaultStablePMLParameters = PMLParams(
 class AbsorberSpec(BoundaryEdge):
     """Specifies the generic absorber properties along a single dimension."""
 
-    num_layers: pd.NonNegativeInt = pd.Field(
+    num_layers: int = pd.Field(
         ...,
         title="Number of Layers",
         description="Number of layers of standard PML.",
+        ge=MIN_NUM_PML_LAYERS,
     )
     parameters: AbsorberParams = pd.Field(
         ...,
@@ -376,10 +379,11 @@ class PML(AbsorberSpec):
 
     """
 
-    num_layers: pd.NonNegativeInt = pd.Field(
+    num_layers: int = pd.Field(
         12,
         title="Number of Layers",
         description="Number of layers of standard PML.",
+        ge=MIN_NUM_PML_LAYERS,
     )
 
     parameters: PMLParams = pd.Field(
@@ -413,8 +417,11 @@ class StablePML(AbsorberSpec):
         * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
     """
 
-    num_layers: pd.NonNegativeInt = pd.Field(
-        40, title="Number of Layers", description="Number of layers of 'stable' PML."
+    num_layers: int = pd.Field(
+        40,
+        title="Number of Layers",
+        description="Number of layers of 'stable' PML.",
+        ge=MIN_NUM_PML_LAYERS,
     )
 
     parameters: PMLParams = pd.Field(
@@ -463,10 +470,11 @@ class Absorber(AbsorberSpec):
         * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
     """
 
-    num_layers: pd.NonNegativeInt = pd.Field(
+    num_layers: int = pd.Field(
         40,
         title="Number of Layers",
         description="Number of layers of absorber to add to + and - boundaries.",
+        ge=MIN_NUM_PML_LAYERS,
     )
 
     parameters: AbsorberParams = pd.Field(

@@ -56,7 +56,7 @@ def test_2d_boundary_plot():
 
     # Simulation details
     per_boundary = td.Boundary.periodic()
-    pml_boundary = td.Boundary.pml(num_layers=2)
+    pml_boundary = td.Boundary.pml(num_layers=6)
 
     sim = td.Simulation(
         size=(0, 1, 1),
