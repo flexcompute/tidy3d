@@ -516,6 +516,38 @@ def test_fully_anisotropic_media():
     assert all(np.isin(np.round(perm_d), np.round(np.diag(perm_diag))))
     assert all(np.isin(np.round(cond_d), np.round(np.diag(cond_diag))))
 
+    with pytest.raises(ValidationError):
+        _ = td.FullyAnisotropicMedium.from_diagonal(
+            xx=td.Medium(
+                permittivity=2,
+                nonlinear_spec=td.NonlinearSpec(
+                    models=[
+                        td.NonlinearSusceptibility(chi3=2),
+                        td.TwoPhotonAbsorption(beta=1.3),
+                        td.KerrNonlinearity(n2=1.3),
+                    ]
+                ),
+            ),
+            yy=td.Medium(permittivity=4),
+            zz=td.Medium(permittivity=1),
+            rotation=td.RotationAroundAxis(axis=2, angle=np.pi / 4),
+        )
+
+    with pytest.raises(ValidationError):
+        _ = td.FullyAnisotropicMedium.from_diagonal(
+            xx=td.Medium(permittivity=2),
+            yy=td.Medium(
+                permittivity=4,
+                modulation_spec=td.ModulationSpec(
+                    permittivity=td.SpaceTimeModulation(
+                        time_modulation=td.ContinuousWaveTimeModulation(freq0=1e12, amplitude=0.02)
+                    )
+                ),
+            ),
+            zz=td.Medium(permittivity=1),
+            rotation=td.RotationAroundAxis(axis=2, angle=np.pi / 4),
+        )
+
 
 def test_nonlinear_medium(log_capture):
     med = td.Medium(

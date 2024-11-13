@@ -5191,6 +5191,18 @@ class FullyAnisotropicMedium(AbstractMedium):
             Resulting fully anisotropic medium.
         """
 
+        if any(comp.nonlinear_spec is not None for comp in [xx, yy, zz]):
+            raise ValidationError(
+                "Nonlinearities are not currently supported for the components "
+                "of a fully anisotropic medium."
+            )
+
+        if any(comp.modulation_spec is not None for comp in [xx, yy, zz]):
+            raise ValidationError(
+                "Modulation is not currently supported for the components "
+                "of a fully anisotropic medium."
+            )
+
         permittivity_diag = np.diag([comp.permittivity for comp in [xx, yy, zz]]).tolist()
         conductivity_diag = np.diag([comp.conductivity for comp in [xx, yy, zz]]).tolist()
 
