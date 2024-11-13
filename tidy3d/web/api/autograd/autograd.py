@@ -859,8 +859,8 @@ def postprocess_adj(
         eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(freq_adj))
 
         # manually override simulation medium as the background structure
-        if structure.background_permittivity is not None:
-            eps_out = structure.background_permittivity
+        if structure.background_medium is not None:
+            eps_out = structure.background_medium.eps_model(freq_adj)
 
         derivative_info = DerivativeInfo(
             paths=structure_paths,

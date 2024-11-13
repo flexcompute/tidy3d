@@ -41,7 +41,7 @@
                 "length": 1.0
             },
             "name": "traced_dieletric_cylinder",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -73,7 +73,7 @@
                 ]
             },
             "name": "traced_dieletric_box",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -117,7 +117,7 @@
                 ]
             },
             "name": "traced custom polyslab",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -152,7 +152,7 @@
                 ]
             },
             "name": "dieletric_box",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -184,7 +184,7 @@
                 ]
             },
             "name": "lossy_box",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -212,7 +212,7 @@
                 ]
             },
             "name": "sellmeier_sphere",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -252,7 +252,7 @@
                 ]
             },
             "name": "lorentz_box",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -290,7 +290,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -322,7 +322,7 @@
                 }
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -359,7 +359,7 @@
                 ]
             },
             "name": "drude_box",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -396,7 +396,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -472,7 +472,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -522,7 +522,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -592,7 +592,7 @@
                 ]
             },
             "name": "pec_group",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -622,7 +622,7 @@
                 "length": 2.0
             },
             "name": "anisotopic_cylinder",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -700,7 +700,7 @@
                 ]
             },
             "name": "pole_slab",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -743,7 +743,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -778,7 +778,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -817,7 +817,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -857,7 +857,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -896,7 +896,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -935,7 +935,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -973,7 +973,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1014,7 +1014,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1071,7 +1071,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1135,7 +1135,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1192,7 +1192,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1249,7 +1249,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1299,7 +1299,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1336,7 +1336,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1414,7 +1414,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1452,7 +1452,7 @@
                 }
             },
             "name": "dieletric_mesh",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1494,7 +1494,7 @@
                 ]
             },
             "name": null,
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1545,7 +1545,7 @@
                 }
             },
             "name": "clip_operation",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1607,7 +1607,7 @@
                 ]
             },
             "name": "transformed_box",
-            "background_permittivity": null,
+            "background_medium": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -2842,7 +2842,7 @@
                     ]
                 },
                 "name": null,
-                "background_permittivity": null,
+                "background_medium": null,
                 "type": "Structure",
                 "medium": {
                     "attrs": {},

@@ -281,7 +281,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     size_element = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(1, size_y, 1)),
         medium=med,
-        background_permittivity=5.0,
+        background_medium=td.Medium(permittivity=5.0),
     )
 
     # custom medium with variable permittivity data
@@ -1708,6 +1708,55 @@ def test_extraneous_field(use_emulated_run, log_capture):
         return abs(amp.item()) ** 2
 
     g = ag.grad(objective)(params0)
+
+
+def test_background_medium(log_capture):
+    geo = td.Box(size=(1, 1, 1), center=(0, 0, 0))
+    med = td.Medium(permittivity=2.0)
+
+    background_permittivity = 5.0
+    background_medium = td.Medium(permittivity=background_permittivity)
+
+    # nothing
+    s = td.Structure(
+        geometry=geo,
+        medium=med,
+    )
+
+    # both supplied, consistent
+    td.Structure(
+        geometry=geo,
+        medium=med,
+        background_permittivity=background_permittivity,
+        background_medium=background_medium,
+    )
+
+    # both supplied, inconsistent
+    with pytest.raises(ValueError):
+        td.Structure(
+            geometry=geo,
+            medium=med,
+            background_permittivity=background_permittivity + 1,
+            background_medium=background_medium,
+        )
+
+    # background medium (preferred)
+    s = td.Structure(
+        geometry=geo,
+        medium=med,
+        background_medium=background_medium,
+    )
+
+    # background permittivity (deprecated)
+    with AssertLogLevel(log_capture, "WARNING", contains_str="deprecated"):
+        s_warn = td.Structure(
+            geometry=geo,
+            medium=med,
+            background_permittivity=background_permittivity,
+        )
+
+        assert s_warn.background_medium is not None
+        assert s_warn.background_medium.permittivity == background_permittivity
 
 
 class TestTidyArrayBox:

@@ -12,6 +12,7 @@ import pydantic.v1 as pydantic
 
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
+from ..log import log
 from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap, Box
 from .autograd.utils import get_static
@@ -20,7 +21,7 @@ from .data.data_array import ScalarFieldDataArray
 from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
-from .medium import AbstractCustomMedium, CustomMedium, Medium2D, MediumType
+from .medium import AbstractCustomMedium, CustomMedium, Medium, Medium2D, MediumType
 from .monitor import FieldMonitor, PermittivityMonitor
 from .types import TYPE_TAG_STR, Ax, Axis
 from .validators import validate_name_str
@@ -57,9 +58,46 @@ class AbstractStructure(Tidy3dBaseModel):
         None,
         ge=1.0,
         title="Background Permittivity",
-        description="Relative permittivity used for the background of this structure "
+        description="DEPRECATED: Use ``Structure.background_medium``. "
+        "Relative permittivity used for the background of this structure "
         "when performing shape optimization with autograd.",
     )
+
+    background_medium: MediumType = pydantic.Field(
+        None,
+        title="Background Medium",
+        description="Medium used for the background of this structure "
+        "when performing shape optimization with autograd. This is required when the "
+        "structure is embedded in another structure as autograd will use the permittivity of the "
+        "``Simulation`` by default to compute the shape derivatives.",
+    )
+
+    @pydantic.root_validator(skip_on_failure=True)
+    def _handle_background_mediums(cls, values):
+        """Handle background medium combinations, including deprecation."""
+
+        background_permittivity = values.get("background_permittivity")
+        background_medium = values.get("background_medium")
+
+        # old case, only permittivity supplied, warn and set the Medium automatically
+        if background_medium is None and background_permittivity is not None:
+            log.warning(
+                "'Structure.background_permittivity' is deprecated, "
+                "set the 'Structure.background_medium' directly using a 'Medium'. "
+                "Handling automatically using the supplied relative permittivity."
+            )
+            values["background_medium"] = Medium(permittivity=background_permittivity)
+
+        # both present, just make sure they are consistent, error if not
+        if background_medium is not None and background_permittivity is not None:
+            is_medium = isinstance(background_medium, Medium)
+            if not (is_medium and background_medium.permittivity == background_permittivity):
+                raise ValueError(
+                    "Inconsistent 'background_permittivity' and 'background_medium'. "
+                    "Use 'background_medium' only as 'background_permittivity' is deprecated."
+                )
+
+        return values
 
     _name_validator = validate_name_str()
 
