@@ -562,15 +562,15 @@ def test_nonlinear_medium(log_capture):
     )
 
     # complex parameters
-    med = td.Medium(
-        nonlinear_spec=td.NonlinearSpec(
-            models=[
-                td.KerrNonlinearity(n2=-1 + 1j, n0=1),
-            ],
-            num_iters=20,
+    with AssertLogLevel(log_capture, "WARNING", contains_str="preferred"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[
+                    td.KerrNonlinearity(n2=-1 + 1j, n0=1),
+                ],
+                num_iters=20,
+            )
         )
-    )
-    assert_log_level(log_capture, None)
 
     # warn about deprecated api
     med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
@@ -621,10 +621,11 @@ def test_nonlinear_medium(log_capture):
     with pytest.raises(ValidationError):
         med = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=-1j, n0=1)]))
 
-    med = td.Medium(
-        nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
-        allow_gain=True,
-    )
+    with AssertLogLevel(log_capture, "WARNING", contains_str="phenomenological"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
+            allow_gain=True,
+        )
 
     # automatic detection of n0 and freq0
     n0 = 2

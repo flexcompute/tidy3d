@@ -1858,7 +1858,7 @@ def test_nonlinear_warn(log_capture):
     )
 
     # make the nonlinear objects to add to the JaxSimulation one by one
-    nl_model = td.KerrNonlinearity(n2=1)
+    nl_model = td.NonlinearSusceptibility(chi3=1)
     nl_medium = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[nl_model]))
     struct_static_nl = struct_static.updated_copy(medium=nl_medium)
     input_struct_nl = JaxStructureStaticMedium(geometry=struct.geometry, medium=nl_medium)

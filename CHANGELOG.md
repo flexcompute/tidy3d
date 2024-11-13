@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Inaccuracy in transforming gradients from edge to `PolySlab.vertices`.
 - Bug in `run_async` where an adjoint simulation would sometimes be assigned to the wrong forward simulation.
 - Validate against nonlinearity or modulation in `FullyAnisotropicMedium.from_diagonal`.
+- Add warning to complex-field nonlinearities, which may require more careful physical interpretation.
 
 
 ## [2.7.6] - 2024-10-30
