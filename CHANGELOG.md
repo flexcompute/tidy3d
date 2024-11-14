@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Structure.background_permittivity : float` for specifying background medium for shape differentiation deprecated in favor of `Structure.background_medium : Medium` for more generality.
 
 ### Fixed
-- Regression in local field projection leading to incorrect results for `far_field_approx=True`.
+- Regression in local field projection leading to incorrect projection results.
 - Bug when differentiating with respect to `Cylinder.center`.
 - `xarray` 2024.10.0 compatibility for autograd.
 - Some failing examples in the expressions plugin documentation.

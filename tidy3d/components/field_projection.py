@@ -878,22 +878,14 @@ class FieldProjector(Tidy3dBaseModel):
         cmp_1, cmp_2 = source_names
 
         # set the surface current density Cartesian components
-        order = [idx_u, idx_v, idx_w]
-        zeros = anp.zeros(currents[f"E{cmp_1}"].shape)
-        J = anp.array(
-            [
-                currents[f"E{cmp_1}"].data,
-                currents[f"E{cmp_2}"].data,
-                zeros,
-            ]
-        )[order]
-        M = anp.array(
-            [
-                currents[f"H{cmp_1}"].data,
-                currents[f"H{cmp_2}"].data,
-                zeros,
-            ]
-        )[order]
+        J = [None] * 3
+        M = [None] * 3
+        J[idx_u] = currents[f"E{cmp_1}"].data
+        J[idx_v] = currents[f"E{cmp_2}"].data
+        J[idx_w] = anp.zeros(J[idx_u].shape)
+        M[idx_u] = currents[f"H{cmp_1}"].data
+        M[idx_v] = currents[f"H{cmp_2}"].data
+        M[idx_w] = anp.zeros(M[idx_u].shape)
 
         # observation point in the new spherical system
         r, theta_obs, phi_obs = surface.monitor.car_2_sph(
