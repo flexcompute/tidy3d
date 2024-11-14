@@ -637,7 +637,7 @@ class Scene(Tidy3dBaseModel):
                 if _shape.is_empty or not shape.intersects(_shape):
                     continue
 
-                diff_shape = _shape - shape
+                diff_shape = (_shape - shape).buffer(0)
 
                 # different prop, remove intersection from background shape
                 if prop != _prop and len(diff_shape.bounds) > 0:
