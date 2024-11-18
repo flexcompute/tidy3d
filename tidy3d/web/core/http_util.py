@@ -25,6 +25,7 @@ from .constants import (
 )
 from .environment import Env
 from .exceptions import WebError
+from .log import get_logging_console
 
 REINITIALIZED = False
 
@@ -139,6 +140,11 @@ def http_interceptor(func):
         if not resp.text:
             return None
         result = resp.json()
+        warning = result.get("warning")
+        if warning:
+            console = get_logging_console()
+            console.log(f"Warning: {warning}")
+
         return result.get("data") if "data" in result else result
 
     return wrapper
