@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Gradient inaccuracy when a multi-frequency monitor is used but a single frequency is selected.
+
 ## [2.7.7] - 2024-11-15
 
 ### Added

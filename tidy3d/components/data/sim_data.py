@@ -1115,11 +1115,21 @@ class SimulationData(AbstractYeeGridSimulationData):
             hashes_to_src_times[tmp_src_hash].append(src.source_time)
 
         num_ports = len(hashes_to_src_times)
-        num_unique_freqs = len({src.source_time.freq0 for src in adj_srcs})
+        unique_freqs = {src.source_time.freq0 for src in adj_srcs}
+        num_unique_freqs = len(unique_freqs)
 
         # next, figure out which treatment / normalization to apply
         if num_unique_freqs == 1:
             log.info("Adjoint source creation: one unique frequency, no normalization.")
+            freqs_adj = self.simulation.freqs_adjoint
+
+            # if many adjoint freqs, but only 1 unique, need to mask out the non-contributors
+            if len(freqs_adj) > 1:
+                coords = dict(f=freqs_adj)
+                data = [1 if f == tuple(unique_freqs)[0] else 0 for f in freqs_adj]
+                post_norm = xr.DataArray(data, coords=coords)
+                return AdjointSourceInfo(sources=adj_srcs, post_norm=post_norm, normalize_sim=True)
+
             return AdjointSourceInfo(sources=adj_srcs, post_norm=1.0, normalize_sim=True)
 
         if num_ports == 1 and len(adj_srcs) == num_unique_freqs:
