@@ -857,10 +857,34 @@ def postprocess_adj(
 
         eps_in = np.mean(structure.medium.eps_model(freq_adj))
         eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(freq_adj))
+        if structure.background_medium:
+            eps_background = structure.background_medium.eps_model(freq_adj)
+        else:
+            eps_background = None
 
         # manually override simulation medium as the background structure
-        if structure.background_medium is not None:
-            eps_out = structure.background_medium.eps_model(freq_adj)
+        if not isinstance(structure.geometry, td.Box):
+            # auto permittivity detection
+            sim_orig = sim_data_orig.simulation
+            plane_eps = eps_fwd.monitor.geometry
+
+            # get permittivity without this structure
+            structs_no_struct = list(sim_orig.structures)
+            structs_no_struct.pop(structure_index)
+            sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
+            eps_no_structure = sim_no_structure.epsilon(box=plane_eps, coord_key="centers")
+
+            # get permittivity with structures on top of an infinite version of this structure
+            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+            sim_inf_structure = sim_orig.updated_copy(
+                structures=structs_inf_struct,
+                medium=structure.medium,
+                monitors=[],
+            )
+            eps_inf_structure = sim_inf_structure.epsilon(box=plane_eps, coord_key="centers")
+
+        else:
+            eps_no_structure = eps_inf_structure = None
 
         derivative_info = DerivativeInfo(
             paths=structure_paths,
@@ -873,8 +897,11 @@ def postprocess_adj(
             eps_data=eps_fwd.field_components,
             eps_in=eps_in,
             eps_out=eps_out,
+            eps_background=eps_background,
             frequency=freq_adj,
             bounds=structure.geometry.bounds,  # TODO: pass intersecting bounds with sim?
+            eps_no_structure=eps_no_structure,
+            eps_inf_structure=eps_inf_structure,
         )
 
         vjp_value_map = structure.compute_derivatives(derivative_info)

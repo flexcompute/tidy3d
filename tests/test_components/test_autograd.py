@@ -1309,6 +1309,8 @@ def test_pole_residue(monkeypatch):
         eps_out=1.0,
         frequency=freq,
         bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
     )
 
     grads_computed = pr.compute_derivatives(derivative_info=info)
@@ -1388,6 +1390,8 @@ def test_custom_pole_residue(monkeypatch):
         eps_out=1.0,
         frequency=freq,
         bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
     )
 
     grads_computed = pr.compute_derivatives(derivative_info=info)

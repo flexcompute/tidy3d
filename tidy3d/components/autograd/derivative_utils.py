@@ -6,7 +6,7 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from ..base import Tidy3dBaseModel
-from ..data.data_array import ScalarFieldDataArray
+from ..data.data_array import ScalarFieldDataArray, SpatialDataArray
 from ..types import Bound, tidycomplex
 from .types import PathType
 from .utils import get_static
@@ -92,6 +92,13 @@ class DerivativeInfo(Tidy3dBaseModel):
         "Used when it can not be computed from ``eps_data`` or when ``eps_approx==True``.",
     )
 
+    eps_background: tidycomplex = pd.Field(
+        None,
+        title="Permittivity in Background",
+        description="Permittivity outside of the ``Structure`` as manually specified by. "
+        "``Structure.background_medium``. ",
+    )
+
     bounds: Bound = pd.Field(
         ...,
         title="Geometry Bounds",
@@ -102,6 +109,22 @@ class DerivativeInfo(Tidy3dBaseModel):
         ...,
         title="Frequency of adjoint simulation",
         description="Frequency at which the adjoint gradient is computed.",
+    )
+
+    eps_no_structure: SpatialDataArray = pd.Field(
+        None,
+        title="Permittivity Without Structure",
+        description="The permittivity of the original simulation without the structure that is "
+        "being differentiated with respect to. Used to approximate permittivity outside of the "
+        "structure for shape optimization.",
+    )
+
+    eps_inf_structure: SpatialDataArray = pd.Field(
+        None,
+        title="Permittivity With Infinite Structure",
+        description="The permittivity of the original simulation where the structure being "
+        " differentiated with respect to is inifinitely large. Used to approximate permittivity "
+        "inside of the structure for shape optimization.",
     )
 
     eps_approx: bool = pd.Field(
@@ -149,6 +172,25 @@ class DerivativeInfo(Tidy3dBaseModel):
 
         return dict(D_norm=D_der_norm, E_perp1=E_der_perp1, E_perp2=E_der_perp2)
 
+    def evaluate_eps(
+        self,
+        spatial_coords: np.ndarray,  # (N, 3)
+        is_inside: bool,
+    ) -> SpatialDataArray:
+        """Evaluate permittivity without the structure at a set of points."""
+
+        permittivity_array = self.eps_inf_structure if is_inside else self.eps_no_structure
+
+        if permittivity_array is None:
+            raise ValueError("Can't evaluate eps because the permittivity array is missing.")
+
+        key = "key"
+        eps_out = self.evaluate_flds_at(
+            fld_dataset={key: permittivity_array},
+            spatial_coords=spatial_coords,
+        )[key]
+        return eps_out.values
+
     @staticmethod
     def evaluate_flds_at(
         fld_dataset: dict[str, ScalarFieldDataArray],
@@ -167,7 +209,14 @@ class DerivativeInfo(Tidy3dBaseModel):
 
         components = {}
         for fld_name, arr in fld_dataset.items():
-            components[fld_name] = arr.interp(**interp_kwargs, assume_sorted=True).sum("f")
+            arr_interp = arr.interp(
+                **interp_kwargs,
+                assume_sorted=True,
+                kwargs={"bounds_error": False, "fill_value": None},
+            )
+            if "f" in arr_interp.coords:
+                arr_interp = arr_interp.sum("f")
+            components[fld_name] = arr_interp
 
         return components
 

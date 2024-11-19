@@ -1420,9 +1420,24 @@ class PolySlab(base.Planar):
         E_der_edge = grad_bases["E_perp1"]
         E_der_slab = grad_bases["E_perp2"]
 
+        # determine background medium
+        if derivative_info.eps_background is not None:
+            eps_out = derivative_info.eps_background
+        else:
+            if derivative_info.eps_no_structure is not None:
+                eps_out = derivative_info.evaluate_eps(edge_centers_xyz, is_inside=False)
+            else:
+                eps_out = derivative_info.eps_out
+
+        # determine inside medium
+        if derivative_info.eps_inf_structure is not None:
+            eps_in = derivative_info.evaluate_eps(edge_centers_xyz, is_inside=True)
+        else:
+            eps_in = derivative_info.eps_in
+
         # approximate permittivity in and out
-        delta_eps_inv = 1.0 / derivative_info.eps_in - 1.0 / derivative_info.eps_out
-        delta_eps = derivative_info.eps_in - derivative_info.eps_out
+        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+        delta_eps = eps_in - eps_out
 
         # put together VJP using D_normal and E_perp integration
         vjps_edges = 0.0
