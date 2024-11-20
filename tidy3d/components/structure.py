@@ -249,7 +249,8 @@ class Structure(AbstractStructure):
     ) -> (FieldMonitor, PermittivityMonitor):
         """Generate the field and permittivity monitor for this structure."""
 
-        box = self.geometry.bounding_box
+        geometry = self.geometry
+        box = geometry.bounding_box
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
 
@@ -257,8 +258,8 @@ class Structure(AbstractStructure):
         center = [get_static(x) for x in box.center]
 
         # polyslab only needs fields at the midpoint along axis
-        if isinstance(self.geometry, PolySlab):
-            size[self.geometry.axis] = 0
+        if isinstance(geometry, PolySlab) and not isinstance(self.medium, AbstractCustomMedium):
+            size[geometry.axis] = 0
 
         mnt_fld = FieldMonitor(
             size=size,
