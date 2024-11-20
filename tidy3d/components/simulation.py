@@ -3664,6 +3664,7 @@ class Simulation(AbstractYeeGridSimulation):
         # contribution from the time of of the source pulses
         if not self.sources:
             source_time = 0.0
+            max_ref_ind = 1
         else:
             source_times = [src.source_time.end_time() for src in self.sources]
             source_times = [x for x in source_times if x is not None]
@@ -3676,15 +3677,16 @@ class Simulation(AbstractYeeGridSimulation):
             source_time_max = np.max(source_times)
             source_time = run_time_spec.source_factor * source_time_max
 
+            # get the maximum refractive index evaluated over each of all the source central frequencies
+            all_ref_inds = [
+                self.get_refractive_indices(src.source_time.freq0) for src in self.sources
+            ]
+            avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
+            max_ref_ind = np.max(avg_ref_inds, initial=1)
+
         # contribution from field decay out of the simulation
         propagation_lengths = np.array(self.bounds[1]) - np.array(self.bounds[0])
         max_propagation_length = np.max(propagation_lengths)
-
-        # get the maximum refractive index evaluated over each of all the source central frequencies
-        all_ref_inds = [self.get_refractive_indices(src.source_time.freq0) for src in self.sources]
-        avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
-        max_ref_ind = np.max(avg_ref_inds)
-
         propagation_time = run_time_spec.quality_factor * max_ref_ind * max_propagation_length / C_0
 
         return source_time + propagation_time
