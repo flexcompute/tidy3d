@@ -220,12 +220,23 @@ def use_emulated_run(monkeypatch):
                 batch_data_orig[task_name] = sim_data_orig
                 task_ids_fwd[task_name] = task_id_fwd
 
-            return batch_data_orig, task_ids_fwd
+            class EmulatedBatchData(web.BatchData):
+                def load_sim_data(self, task_name):
+                    return batch_data_orig[task_name]
+
+            task_paths = {task_name: "" for task_name in simulations.keys()}
+
+            batch_data = EmulatedBatchData(
+                task_paths=task_paths,
+                task_ids=task_ids_fwd,
+                verbose=False,
+            )
+
+            return batch_data, task_ids_fwd
 
         def emulated_run_async_bwd(simulations, **run_kwargs) -> td.SimulationData:
             vjp_dict = {}
             for task_name, simulation in simulations.items():
-                task_id_fwd = task_name[:-8]
                 vjp_dict[task_name] = emulated_run_bwd(simulation, task_name, **run_kwargs)
             return vjp_dict
 

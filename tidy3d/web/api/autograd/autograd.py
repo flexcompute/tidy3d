@@ -712,7 +712,7 @@ def _run_async_bwd(
                 sim_data_fwd = sim_data_fwd_dict[task_name]
                 sim_fields_keys = sim_fields_keys_dict[task_name]
 
-                sim_data_adj = batch_data_adj.get(task_name_adj)
+                sim_data_adj = batch_data_adj[task_name_adj]
 
                 sim_fields_vjp = postprocess_adj(
                     sim_data_adj=sim_data_adj,
