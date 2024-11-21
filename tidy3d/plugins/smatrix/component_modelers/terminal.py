@@ -23,7 +23,7 @@ from ..ports.base_terminal import AbstractTerminalPort, TerminalPortDataArray
 from ..ports.coaxial_lumped import CoaxialLumpedPort
 from ..ports.rectangular_lumped import LumpedPort
 from ..ports.wave import WavePort
-from .base import FWIDTH_FRAC, AbstractComponentModeler, TerminalPortType
+from .base import AbstractComponentModeler, TerminalPortType
 
 
 class PortDataArray(DataArray):
@@ -177,9 +177,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
     @cached_property
     def _source_time(self):
         """Helper to create a time domain pulse for the frequency range of interest."""
-        freq0 = np.mean(self.freqs)
-        fdiff = max(self.freqs) - min(self.freqs)
-        fwidth = max(fdiff, freq0 * FWIDTH_FRAC)
+        freq0 = (min(self.freqs) + max(self.freqs)) / 2
+        # This ensures the amplitude at the maximum frequency is around 0.1 of the amplitude at the central frequency
+        fwidth = freq0 * np.sqrt(2) / np.pi
         return GaussianPulse(
             freq0=freq0, fwidth=fwidth, remove_dc_component=self.remove_dc_component
         )
