@@ -442,14 +442,6 @@ class TwoPhotonAbsorption(NonlinearModel):
 
     def _validate_medium(self, medium: AbstractMedium):
         """Check that the model is compatible with the medium."""
-        log.warning(
-            "Found a medium with a 'TwoPhotonAbsorption' nonlinearity. "
-            "This uses a phenomenological model based on complex fields, "
-            "so care should be taken in interpreting the results. For more "
-            "information on the model, see the documentation at "
-            "'https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.TwoPhotonAbsorption.html' or the following reference: "
-            "'N. Suzuki, \"FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si High-Index-Contrast Waveguides,\" J. Light. Technol. 25, 9 (2007).'."
-        )
         # if n0 is specified, we can go ahead and validate passivity
         if self.n0 is not None:
             self._validate_medium_freqs(medium, [])
@@ -458,19 +450,6 @@ class TwoPhotonAbsorption(NonlinearModel):
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
         return True
-
-    @pd.validator("beta", always=True)
-    def _warn_for_complex_beta(cls, val):
-        if val is None:
-            return val
-        if np.iscomplex(val):
-            log.warning(
-                "Complex values of 'beta' in 'TwoPhotonAbsorption' are deprecated "
-                "and may be removed in a future version. The implementation with "
-                "complex 'beta' is as described in the 'TwoPhotonAbsorption' docstring, "
-                "but the physical interpretation of 'beta' may not be correct if it is complex."
-            )
-        return val
 
 
 class KerrNonlinearity(NonlinearModel):
@@ -546,13 +525,6 @@ class KerrNonlinearity(NonlinearModel):
 
     def _validate_medium(self, medium: AbstractMedium):
         """Check that the model is compatible with the medium."""
-        log.warning(
-            "Found a medium with a 'KerrNonlinearity'. Usually, "
-            "'NonlinearSusceptibility' is preferred, as it captures "
-            "additional physical effects by acting on the underlying real fields. "
-            "The relation between the parameters is "
-            "'chi3 = (4/3) * eps_0 * c_0 * n0 * Re(n0) * n2'."
-        )
         # if n0 is specified, we can go ahead and validate passivity
         if self.n0 is not None:
             self._validate_medium_freqs(medium, [])

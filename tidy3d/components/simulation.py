@@ -45,10 +45,12 @@ from .medium import (
     AbstractPerturbationMedium,
     AnisotropicMedium,
     FullyAnisotropicMedium,
+    KerrNonlinearity,
     Medium,
     Medium2D,
     MediumType,
     MediumType3D,
+    TwoPhotonAbsorption,
 )
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -3360,12 +3362,38 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_nonlinear_specs(self) -> None:
         """Run :class:`.NonlinearSpec` validators that depend on knowing the central
-        frequencies of the sources."""
+        frequencies of the sources. Also print some warnings only once per unique medium."""
         freqs = np.array([source.source_time.freq0 for source in self.sources])
         for medium in self.scene.mediums:
             if medium.nonlinear_spec is not None:
                 for model in medium._nonlinear_models:
                     model._validate_medium_freqs(medium, freqs)
+
+                    if isinstance(model, TwoPhotonAbsorption):
+                        if np.iscomplex(model.beta):
+                            log.warning(
+                                "Complex values of 'beta' in 'TwoPhotonAbsorption' are deprecated "
+                                "and may be removed in a future version. The implementation with "
+                                "complex 'beta' is as described in the 'TwoPhotonAbsorption' docstring, "
+                                "but the physical interpretation of 'beta' may not be correct if it is complex."
+                            )
+                        log.warning(
+                            "Found a medium with a 'TwoPhotonAbsorption' nonlinearity. "
+                            "This uses a phenomenological model based on complex fields, "
+                            "so care should be taken in interpreting the results. For more "
+                            "information on the model, see the documentation at "
+                            "'https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.TwoPhotonAbsorption.html' or the following reference: "
+                            "'N. Suzuki, \"FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si High-Index-Contrast Waveguides,\" J. Light. Technol. 25, 9 (2007).'."
+                        )
+
+                    if isinstance(model, KerrNonlinearity):
+                        log.warning(
+                            "Found a medium with a 'KerrNonlinearity'. Usually, "
+                            "'NonlinearSusceptibility' is preferred, as it captures "
+                            "additional physical effects by acting on the underlying real fields. "
+                            "The relation between the parameters is "
+                            "'chi3 = (4/3) * eps_0 * c_0 * n0 * Re(n0) * n2'."
+                        )
 
     """ Pre submit validation (before web.upload()) """
 

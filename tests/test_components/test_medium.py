@@ -561,17 +561,6 @@ def test_nonlinear_medium(log_capture):
         )
     )
 
-    # complex parameters
-    with AssertLogLevel(log_capture, "WARNING", contains_str="preferred"):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(
-                models=[
-                    td.KerrNonlinearity(n2=-1 + 1j, n0=1),
-                ],
-                num_iters=20,
-            )
-        )
-
     # warn about deprecated api
     med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
     assert_log_level(log_capture, "WARNING")
@@ -621,12 +610,6 @@ def test_nonlinear_medium(log_capture):
     with pytest.raises(ValidationError):
         med = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=-1j, n0=1)]))
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="phenomenological"):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
-            allow_gain=True,
-        )
-
     # automatic detection of n0 and freq0
     n0 = 2
     freq0 = td.C_0 / 1
@@ -648,6 +631,26 @@ def test_nonlinear_medium(log_capture):
     )
     assert n0 == nonlinear_spec.models[0]._get_n0(n0=None, medium=medium, freqs=[freq0])
     assert freq0 == nonlinear_spec.models[0]._get_freq0(freq0=None, freqs=[freq0])
+
+    # two photon absorption is phenomenological
+    with AssertLogLevel(log_capture, "WARNING", contains_str="phenomenological"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
+            allow_gain=True,
+        )
+        sim.updated_copy(medium=med, path="structures/0")
+
+    # complex parameters
+    with AssertLogLevel(log_capture, "WARNING", contains_str="preferred"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[
+                    td.KerrNonlinearity(n2=-1 + 1j, n0=1),
+                ],
+                num_iters=20,
+            )
+        )
+        sim.updated_copy(medium=med, path="structures/0")
 
     # subsection with nonlinear materials needs to hardcode source info
     sim2 = sim.updated_copy(center=(-4, -4, -4), path="sources/0")
