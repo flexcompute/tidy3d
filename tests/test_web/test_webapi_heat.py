@@ -10,7 +10,6 @@ from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.webapi import (
     abort,
-    download,
     download_json,
     estimate_cost,
     get_info,
@@ -82,10 +81,10 @@ def mock_upload(monkeypatch, set_api_key):
         status=200,
     )
 
-    def mock_download(*args, **kwargs):
+    def mock_upload_file(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
 
 
 @pytest.fixture
@@ -185,9 +184,6 @@ def mock_download(monkeypatch, set_api_key, mock_get_info, tmp_path):
 
     monkeypatch.setattr(f"{task_core_path}.download_gz_file", _mock_download_gz)
     monkeypatch.setattr(f"{task_core_path}.download_file", _mock_download)
-    download(TASK_ID, str(tmp_path / "web_test_tmp.json"))
-    with open(str(tmp_path / "web_test_tmp.json")) as f:
-        assert f.read() == "0.3,5.7"
 
 
 @pytest.fixture

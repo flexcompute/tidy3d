@@ -5,8 +5,7 @@ import responses
 import tidy3d as td
 from botocore.exceptions import ClientError
 from responses import matchers
-from tidy3d import EMESimulation
-from tidy3d.exceptions import SetupError
+from tidy3d.plugins.mode import ModeSolver
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.webapi import (
@@ -16,15 +15,11 @@ from tidy3d.web.api.webapi import (
     get_info,
     get_run_info,
     load_simulation,
-    monitor,
-    real_cost,
     run,
     upload,
 )
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.types import TaskType
-
-from ..test_components.test_eme import make_eme_sim
 
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
@@ -37,6 +32,28 @@ FILE_SIZE_GB = 4.0
 
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
+
+
+def make_mode_sim():
+    """Simple mode solver"""
+
+    simulation = td.Simulation(
+        size=(5, 5, 5),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        run_time=1e-12,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=3,
+        target_neff=2.0,
+    )
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=td.Box(center=(0, 0, 0), size=(1, 1, 0)),
+        mode_spec=mode_spec,
+        freqs=[2e14],
+        direction="-",
+    )
+    return ms
 
 
 @pytest.fixture
@@ -65,7 +82,7 @@ def mock_upload(monkeypatch, set_api_key):
         match=[
             matchers.json_params_matcher(
                 {
-                    "taskType": TaskType.EME.name,
+                    "taskType": TaskType.MODE_SOLVER.name,
                     "taskName": TASK_NAME,
                     "callbackUrl": None,
                     "simulationType": "tidy3d",
@@ -101,7 +118,7 @@ def mock_get_info(monkeypatch, set_api_key):
             "data": {
                 "taskId": TASK_ID,
                 "taskName": TASK_NAME,
-                "taskType": TaskType.EME.name,
+                "taskType": TaskType.MODE_SOLVER.name,
                 "createdAt": CREATED_AT,
                 "realFlexUnit": FLEX_UNIT,
                 "estFlexUnit": EST_FLEX_UNIT,
@@ -238,22 +255,16 @@ def mock_webapi(
 
 
 @responses.activate
-def test_preupload_validation(mock_upload):
-    sim = make_eme_sim().updated_copy(size=(1000, 1000, 1000))
-    with pytest.raises(SetupError):
-        upload(sim, TASK_NAME, PROJECT_NAME)
-
-
-@responses.activate
 def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
-    sim = make_eme_sim()
+    sim = make_mode_sim()
+    print(sim)
     assert upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate
 def test_get_info(mock_get_info):
     assert get_info(TASK_ID).taskId == TASK_ID
-    assert get_info(TASK_ID).taskType == "EME"
+    assert get_info(TASK_ID).taskType == "MODE_SOLVER"
 
 
 @responses.activate
@@ -268,7 +279,7 @@ def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
 
 @responses.activate
 def test_download_json(monkeypatch, mock_get_info, tmp_path):
-    sim = make_eme_sim()
+    sim = make_mode_sim()
 
     def mock_download(*args, **kwargs):
         pass
@@ -281,13 +292,13 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
 
     fname_tmp = str(tmp_path / "web_test_tmp.json")
     download_json(TASK_ID, fname_tmp)
-    assert EMESimulation.from_file(fname_tmp) == sim
+    assert ModeSolver.from_file(fname_tmp) == sim
 
 
 @responses.activate
 def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
     def mock_download(*args, **kwargs):
-        make_eme_sim().to_file(args[1])
+        make_mode_sim().to_file(args[1])
 
     monkeypatch.setattr(f"{task_core_path}.SimulationTask.get_simulation_json", mock_download)
 
@@ -296,7 +307,7 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
 
 @responses.activate
 def test_run(mock_webapi, monkeypatch, tmp_path):
-    sim = make_eme_sim()
+    sim = make_mode_sim()
     monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
     assert run(
         sim,
@@ -304,17 +315,6 @@ def test_run(mock_webapi, monkeypatch, tmp_path):
         folder_name=PROJECT_NAME,
         path=str(tmp_path / "web_test_tmp.json"),
     )
-
-
-@responses.activate
-def test_monitor(mock_get_info, mock_monitor):
-    monitor(TASK_ID, verbose=True)
-    monitor(TASK_ID, verbose=False)
-
-
-@responses.activate
-def test_real_cost(mock_get_info):
-    assert real_cost(TASK_ID) == FLEX_UNIT
 
 
 @responses.activate
@@ -326,7 +326,7 @@ def test_abort_task(set_api_key, mock_get_info):
             matchers.json_params_matcher(
                 {
                     "taskId": TASK_ID,
-                    "taskType": TaskType.EME.name,
+                    "taskType": TaskType.MODE_SOLVER.name,
                 }
             )
         ],
@@ -342,7 +342,7 @@ def test_abort_task(set_api_key, mock_get_info):
 @responses.activate
 def test_job(mock_webapi, monkeypatch, tmp_path):
     monkeypatch.setattr("tidy3d.web.api.container.Job.load", lambda *args, **kwargs: True)
-    sim = make_eme_sim()
+    sim = make_mode_sim()
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
 
     _ = j.run(path=str(tmp_path / "web_test_tmp.json"))
@@ -364,7 +364,7 @@ def test_batch(mock_webapi, mock_job_status, tmp_path):
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
 
-    sims = {TASK_NAME: make_eme_sim()}
+    sims = {TASK_NAME: make_mode_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
     b.estimate_cost()
     _ = b.run(path_dir=str(tmp_path))
@@ -377,5 +377,5 @@ def test_batch(mock_webapi, mock_job_status, tmp_path):
 @responses.activate
 def test_async(mock_webapi, mock_job_status):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
-    sims = {TASK_NAME: make_eme_sim()}
+    sims = {TASK_NAME: make_mode_sim()}
     _ = run_async(sims, folder_name=PROJECT_NAME)

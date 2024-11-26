@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `LinearLumpedElement` as a new supported `LumpedElement` type. This enhancement allows for the modeling of two-terminal passive networks, which can include any configuration of resistors, inductors, and capacitors, within the `Simulation`. Simple RLC networks are described using `RLCNetwork`, while more complex networks can be represented by their admittance transfer function through `AdmittanceNetwork`.
 - Option for the `ModeSolver` and `ModeSolverMonitor` to store only a subset of field components.
 - Added an option to simulate plane wave propagation at fixed angles by setting parameter `angular_spec=FixedAngleSpec()` when defining a `PlaneWave` source.
+- The universal `tidy3d.web` can now also be used to handle `ModeSolver` simulations.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.

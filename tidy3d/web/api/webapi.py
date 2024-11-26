@@ -13,7 +13,14 @@ from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import get_logging_console, log
 from ..core.account import Account
-from ..core.constants import SIM_FILE_HDF5, TaskId
+from ..core.constants import (
+    MODE_DATA_HDF5_GZ,
+    MODE_FILE_HDF5_GZ,
+    SIM_FILE_HDF5,
+    SIM_FILE_HDF5_GZ,
+    SIMULATION_DATA_HDF5_GZ,
+    TaskId,
+)
 from ..core.environment import Env
 from ..core.task_core import Folder, SimulationTask
 from ..core.task_info import ChargeType, TaskInfo
@@ -235,7 +242,16 @@ def upload(
             url = _get_url(task.task_id)
             console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
 
-    task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
+    remote_sim_file = SIM_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_sim_file = MODE_FILE_HDF5_GZ
+
+    task.upload_simulation(
+        stub=stub,
+        verbose=verbose,
+        progress_callback=progress_callback,
+        remote_sim_file=remote_sim_file,
+    )
     estimate_cost(task_id=task.task_id, verbose=verbose)
 
     # log the url for the task in the web UI
@@ -330,7 +346,7 @@ def get_status(task_id) -> str:
         return "success"
     if status == "error":
         raise WebError(
-            f"Error running task {task_id}! Use 'web.download_log('{task_id}')' to "
+            f"Error running task {task_id}! Use 'web.download_log(task_id)' to "
             "download and examine the solver log, and/or contact customer support for help."
         )
     return status
@@ -522,8 +538,21 @@ def download(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
+
+    task_info = get_info(task_id)
+    task_type = task_info.taskType
+
+    remote_data_file = SIMULATION_DATA_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_data_file = MODE_DATA_HDF5_GZ
+
     task = SimulationTask(taskId=task_id)
-    task.get_sim_data_hdf5(path, verbose=verbose, progress_callback=progress_callback)
+    task.get_sim_data_hdf5(
+        path,
+        verbose=verbose,
+        progress_callback=progress_callback,
+        remote_data_file=remote_data_file,
+    )
 
 
 @wait_for_connection
@@ -566,8 +595,17 @@ def download_hdf5(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
+    task_info = get_info(task_id)
+    task_type = task_info.taskType
+
+    remote_sim_file = SIM_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_sim_file = MODE_FILE_HDF5_GZ
+
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
+    task.get_simulation_hdf5(
+        path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
+    )
 
 
 @wait_for_connection

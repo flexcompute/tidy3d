@@ -297,7 +297,7 @@ class ModeSolver(Tidy3dBaseModel):
         """
         log.warning(
             "Use the remote mode solver with subpixel averaging for better accuracy through "
-            "'tidy3d.plugins.mode.web.run(...)'.",
+            "'tidy3d.web.run(...)' or the deprecated 'tidy3d.plugins.mode.web.run(...)'.",
             log_once=True,
         )
         return self.data

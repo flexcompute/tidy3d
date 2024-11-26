@@ -27,9 +27,9 @@ from ..core.file_util import (
 from ..core.stub import TaskStub, TaskStubData
 from ..core.types import TaskType
 
-SimulationType = Union[Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation]
+SimulationType = Union[Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation, ModeSolver]
 SimulationDataType = Union[
-    SimulationData, HeatChargeSimulationData, HeatSimulationData, EMESimulationData
+    SimulationData, HeatChargeSimulationData, HeatSimulationData, EMESimulationData, ModeSolverData
 ]
 
 
@@ -238,7 +238,11 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                     "simulation again with a larger 'run_time' duration for more accurate results."
                 )
 
-        if "WARNING" in stub_data.log and not warned_about_warnings:
+        if (
+            not isinstance(stub_data, ModeSolverData)
+            and "WARNING" in stub_data.log
+            and not warned_about_warnings
+        ):
             log.warning("Warning messages were found in the solver log. " + check_log_msg)
 
         return stub_data
