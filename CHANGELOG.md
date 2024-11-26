@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - More robust mode solver at radio frequencies.
 - Disallow very small polygons when subdividing 2D structures.
 - For efficiency, `translated`, `scaled`, and `rotated` `PolySlab`-s now return updated `PolySlab` objects rather than a `Transformed` object, except when the rotation axis is not the same as the slab axis, in which case `Transformed` is still returned.
+- Default choice of frequency in `Simulation.plot_eps` and `Simulation.plot_structures_eps` is now the central frequency of all sources in the simulation. If the central frequencies differ, the permittivity is evaluated at infinite frequency, and a warning is emitted. 
 
 ### Fixed
 - Significant speedup for field projection computations.

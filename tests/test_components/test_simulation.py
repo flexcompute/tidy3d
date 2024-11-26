@@ -696,6 +696,45 @@ def test_structure_alpha():
     plt.close()
 
 
+def test_plot_eps_with_default_frequency(log_capture):
+    """Make sure that when possible the permittivity is plotted using
+    central frequency of the first source added to the simulation.
+    """
+    freq0 = 2e14
+    src = td.PointDipole(polarization="Ex", source_time=td.GaussianPulse(freq0=freq0, fwidth=1e11))
+    chromium = td.material_library["Cr"]["RakicLorentzDrude1998"]
+    box = td.Structure(medium=chromium, geometry=td.Box(size=(0.2, 0.2, 0.2), center=(0, 0, 0)))
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        structures=[box],
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PECBoundary()),
+        grid_spec=td.GridSpec.uniform(dl=0.01),
+    )
+    # Source frequency is in range, so no warning
+    log_capture.clear()
+    _ = sim.plot_structures_eps(x=0)
+    assert_log_level(log_capture, None)
+    plt.close()
+
+    freq0 = 20e14
+    sim = sim.updated_copy(path="sources/0/source_time", freq0=freq0)
+    # Source frequency is out of range, so give warning
+    log_capture.clear()
+    _ = sim.plot_structures_eps(x=0)
+    assert_log_level(log_capture, "WARNING")
+    plt.close()
+
+    src2 = td.PointDipole(polarization="Ex", source_time=td.GaussianPulse(freq0=3e14, fwidth=1e11))
+    sim = sim.updated_copy(sources=(src, src2))
+    # Source frequencies do not agree, so give warning about evaluating at infinite frequency is out of range.
+    log_capture.clear()
+    _ = sim.plot_structures_eps(x=0)
+    assert_log_level(log_capture, "WARNING")
+    plt.close()
+
+
 def test_plot_symmetries():
     S2 = SIM.copy(update=dict(symmetry=(1, 0, -1)))
     S2.plot_symmetries(x=0)

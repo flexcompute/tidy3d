@@ -439,7 +439,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
+            If not specified, the central frequency of sources in the simulation will be used.
+            If sources have different central frequencies, the relative permittivity will be evaluated
+            at infinite frequency.
         alpha : float = None
             Opacity of the structures being plotted.
             Defaults to the structure default alpha.
@@ -524,7 +526,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
+            If not specified, the central frequency of sources in the simulation will be used.
+            If sources have different central frequencies, the relative permittivity will be evaluated
+            at infinite frequency.
         reverse : bool = False
             If ``False``, the highest permittivity is plotted in black.
             If ``True``, it is plotteed in white (suitable for black backgrounds).
@@ -549,7 +553,18 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim, vlim = Scene._get_plot_lims(
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
-
+        if freq is None:
+            freq0s = [source.source_time.freq0 for source in self.sources]
+            if freq0s and all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
+                freq = freq0s[0]
+            else:
+                freq = np.inf
+                log.warning(
+                    "An appropriate frequency could not be determined when plotting the permittivity. "
+                    "The permittivity will be evaluated at infinite frequency. Please supply a value "
+                    "for `freq` to plot at a finite frequency. ",
+                    capture=False,
+                )
         return self.scene.plot_structures_eps(
             freq=freq,
             cbar=cbar,
