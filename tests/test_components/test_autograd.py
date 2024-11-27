@@ -71,11 +71,15 @@ LZ = 7.0 * WVL
 
 IS_3D = False
 
-# TODO: test 2D and 3D parameterized
+# angle of the measurement waveguide
+ROT_ANGLE_WG = 0 * np.pi / 4
+
+# position of output mode monitor
+MODE_FIELD_SPC = 0.75
+MODE_FLD_MNT_SPC = MODE_FIELD_SPC * WVL
 
 LX = 0.5 * WVL if IS_3D else 0.0
 PML_X = True if IS_3D else False
-
 
 # shape of the custom medium
 DA_SHAPE_X = 1 if IS_3D else 1
@@ -114,8 +118,10 @@ SIM_BASE = td.Simulation(
         td.Structure(
             geometry=td.Box(
                 size=(0.5, 0.5, LZ / 2),
-                center=(0, 0, LZ / 2),
-            ),
+                center=(0, 0, 0),
+            )
+            .rotated(ROT_ANGLE_WG, axis=0)
+            .translated(x=0, y=-np.tan(ROT_ANGLE_WG) * MODE_FIELD_SPC, z=LZ / 2),
             medium=td.Medium(permittivity=2.0),
         )
     ],
@@ -433,12 +439,13 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
 def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.SimulationData], float]]]:
     """Make a dictionary of all the possible monitors in the simulation."""
 
-    X = 0.75
-
     mode_mnt = td.ModeMonitor(
         size=(2, 2, 0),
-        center=(0, 0, +LZ / 2 - X * WVL),
-        mode_spec=td.ModeSpec(),
+        center=(0, 0, +LZ / 2 - MODE_FIELD_SPC),
+        mode_spec=td.ModeSpec(
+            angle_theta=ROT_ANGLE_WG,
+            angle_phi=3 * np.pi / 2,
+        ),
         freqs=[FREQ0],
         name="mode",
     )
@@ -459,7 +466,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
 
     field_vol = td.FieldMonitor(
         size=(1, 1, 0),
-        center=(0, 0, +LZ / 2 - X * WVL),
+        center=(0, 0, +LZ / 2 - MODE_FIELD_SPC),
         freqs=[FREQ0],
         name="field_vol",
     )

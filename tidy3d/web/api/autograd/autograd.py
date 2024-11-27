@@ -31,12 +31,6 @@ AUX_KEY_SIM_ORIGINAL = "sim_original"
 SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
 SIM_FIELDS_KEYS_FILE = "autograd_sim_fields_keys.hdf5"
 
-ISSUE_URL = (
-    "https://github.com/flexcompute/tidy3d/issues/new?"
-    "assignees=tylerflex&labels=adjoint&projects=&template=autograd_bug.md"
-)
-URL_LINK = f"[blue underline][link={ISSUE_URL}]'{ISSUE_URL}'[/link][/blue underline]"
-
 MAX_NUM_TRACED_STRUCTURES = 500
 
 # default value for whether to do local gradient calculation (True) or server side (False)
