@@ -15,8 +15,8 @@ from ..log import log
 from .base import cached_property, skip_if_fields_missing
 from .base_sim.source import AbstractSource
 from .data.data_array import TimeDataArray
-from .data.dataset import FieldDataset, ScalarFieldDataArray, TimeDataset
-from .data.validators import validate_no_nans
+from .data.dataset import FieldDataset, TimeDataset
+from .data.validators import validate_can_interpolate, validate_no_nans
 from .geometry.base import Box
 from .mode import ModeSpec
 from .time import AbstractTimeDependence
@@ -680,6 +680,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     _no_nans_dataset = validate_no_nans("current_dataset")
     _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
     _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
+    _can_interpolate = validate_can_interpolate("current_dataset")
 
 
 class FieldSource(Source, ABC):
@@ -881,6 +882,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
     _no_nans_dataset = validate_no_nans("field_dataset")
     _field_dataset_none_warning = warn_if_dataset_none("field_dataset")
     _field_dataset_single_freq = assert_single_freq_in_range("field_dataset")
+    _can_interpolate = validate_can_interpolate("field_dataset")
 
     @pydantic.validator("field_dataset", always=True)
     @skip_if_fields_missing(["size"])
@@ -897,15 +899,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 if tangential_field in val.field_components:
                     return val
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
-
-    @pydantic.validator("field_dataset", always=True)
-    def _check_fields_interpolate(cls, val: FieldDataset) -> FieldDataset:
-        """Checks whether the filds in 'field_dataset' can be interpolated."""
-        if isinstance(val, FieldDataset):
-            for name, data in val.field_components.items():
-                if isinstance(data, ScalarFieldDataArray):
-                    data._interp_validator(name)
-        return val
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
