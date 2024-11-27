@@ -223,7 +223,7 @@ class UniformGrid(GridSpec1d):
         Specification for non-uniform grid along a given dimension.
 
     **Notebooks:**
-        * `Photonic crystal waveguide polarization filter <../../../notebooks/PhotonicCrystalWaveguidePolarizationFilter.html>`_
+        * `Photonic crystal waveguide polarization filter <../../notebooks/PhotonicCrystalWaveguidePolarizationFilter.html>`_
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
     """
 
