@@ -1208,3 +1208,39 @@ def test_warn_diffraction_monitor_intersection(log_capture):
     )
     sim.updated_copy(structures=[box])
     assert_log_level(log_capture, "WARNING")
+
+
+@pytest.mark.parametrize(
+    "custom_class, data_key",
+    [
+        (CustomMedium, "permittivity"),
+        (td.CustomFieldSource, "field_dataset"),
+        (td.CustomCurrentSource, "current_dataset"),
+    ],
+)
+def test_custom_medium_duplicate_coords(custom_class, data_key):
+    """Test that creating components with duplicate coordinates raises validation error."""
+    coords = {
+        "x": np.array([0.0, 1.0, 1.0, 2.0]),  # Duplicate at x=1.0
+        "y": np.array([0.0, 1.0]),
+        "z": np.array([0.0, 1.0]),
+    }
+
+    if custom_class != CustomMedium:
+        coords["f"] = np.array([2e14])
+
+    shape = tuple(len(c) for c in coords.values())
+    data = np.random.random(shape) + 1
+    spatial_data = td.SpatialDataArray(data, coords=coords)
+
+    if custom_class == CustomMedium:
+        with pytest.raises(pydantic.ValidationError, match="duplicate coordinates"):
+            _ = custom_class(permittivity=spatial_data)
+    else:
+        field_components = {
+            f"{field}{component}": spatial_data.copy() for field in "EH" for component in "xyz"
+        }
+        field_dataset = td.FieldDataset(**field_components)
+
+        with pytest.raises(pydantic.ValidationError, match="duplicate coordinates"):
+            _ = custom_class(size=SIZE, source_time=ST, **{data_key: field_dataset})

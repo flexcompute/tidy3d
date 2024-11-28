@@ -9,7 +9,6 @@ import autograd.numpy as anp
 import dask
 import h5py
 import numpy as np
-import pandas
 import xarray as xr
 from autograd.tracer import isbox
 from xarray.core import alignment, missing
@@ -119,7 +118,7 @@ class DataArray(xr.DataArray):
         return val
 
     def _interp_validator(self, field_name: str = None) -> None:
-        """Make sure we can interp()/sel() the data.
+        """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
 
         NOTE
         ----
@@ -129,39 +128,13 @@ class DataArray(xr.DataArray):
         if field_name is None:
             field_name = "DataArray"
 
-        dims = self.coords.dims
-
-        for dim in dims:
-            # in case we encounter some /0 or /NaN we'll ignore the warnings here
-            with np.errstate(divide="ignore", invalid="ignore"):
-                # check that we can interpolate
-                try:
-                    x0 = np.array(self.coords[dim][0])
-                    self.interp({dim: x0}, method="linear")
-                    self.interp({dim: x0}, method="nearest")
-                    # self.interp_like(self.isel({self.dim: 0}))
-                except pandas.errors.InvalidIndexError as e:
-                    raise DataError(
-                        f"'{field_name}.interp()' fails to interpolate along {dim} which is used by the solver. "
-                        "This may be caused, for instance, by duplicated data "
-                        f"in this dimension (you can verify this by running "
-                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
-                        f"and interpolate with the new '{field_name}'). "
-                        "Plase make sure data can be interpolated."
-                    ) from e
-                # in case it can interpolate, try also to sel
-                try:
-                    x0 = np.array(self.coords[dim][0])
-                    self.sel({dim: x0}, method="nearest")
-                except pandas.errors.InvalidIndexError as e:
-                    raise DataError(
-                        f"'{field_name}.sel()' fails to select along {dim} which is used by the solver. "
-                        "This may be caused, for instance, by duplicated data "
-                        f"in this dimension (you can verify this by running "
-                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
-                        f"and run 'sel()' with the new '{field_name}'). "
-                        "Plase make sure 'sel()' can be used on the 'DataArray'."
-                    ) from e
+        for dim, coord in self.coords.items():
+            if coord.to_index().duplicated().any():
+                raise DataError(
+                    f"Field '{field_name}' contains duplicate coordinates in dimension '{dim}'. "
+                    "Duplicates can be removed by running "
+                    f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")'."
+                )
 
     @classmethod
     def assign_coord_attrs(cls, val):
