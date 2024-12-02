@@ -652,18 +652,19 @@ class Scene(Tidy3dBaseModel):
                     continue
 
                 # look more closely to see if intersected.
-                if _shape.is_empty or not shape.intersects(_shape):
+                if shape.disjoint(_shape):
                     continue
 
-                diff_shape = (_shape - shape).buffer(0)
-
                 # different prop, remove intersection from background shape
-                if prop != _prop and len(diff_shape.bounds) > 0:
+                if prop != _prop:
+                    diff_shape = (_shape - shape).buffer(0).normalize()
+                    # mark background shape for removal if nothing left
+                    if diff_shape.is_empty or len(diff_shape.bounds) == 0:
+                        background_shapes[index] = None
                     background_shapes[index] = (_prop, diff_shape, diff_shape.bounds)
-
-                # same prop, add diff shape to this shape and mark background shape for removal
+                # same prop, unionize shapes and mark background shape for removal
                 else:
-                    shape = shape | diff_shape
+                    shape = (shape | _shape).buffer(0).normalize()
                     background_shapes[index] = None
 
             # after doing this with all background shapes, add this shape to the background
