@@ -796,16 +796,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis)
-        segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
-        line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
-        segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
-        line_segments_y = mpl.collections.LineCollection(segs_y, **kwargs)
 
-        # Plot grid
-        ax.add_collection(line_segments_x)
-        ax.add_collection(line_segments_y)
+        if self.size[axis_x] > 0:
+            for b in boundaries_x:
+                ax.axvline(x=b, linewidth=kwargs["linewidth"], color=kwargs["colors"])
+
+        if self.size[axis_y] > 0:
+            for b in boundaries_y:
+                ax.axhline(y=b, linewidth=kwargs["linewidth"], color=kwargs["colors"])
 
         # Plot bounding boxes of override structures
         plot_params = plot_params_override_structures.include_kwargs(
