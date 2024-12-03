@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Silence warning in graphene from checking fit quality at large frequencies.
 - `CustomCurrentSource` now correctly validates its current dataset.
 - Better plotting of grids, respecting 2D and 1D simulation edge cases.
+- Bug when `td.inf` are in `attrs` and files saved and loaded to .json twice.
 
 ## [2.7.7] - 2024-11-15
 
