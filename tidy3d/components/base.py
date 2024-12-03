@@ -935,7 +935,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
             json_string = json_string.replace("-Infinity", tmp_string)
+            json_string = json_string.replace('""-Infinity""', tmp_string)
             json_string = json_string.replace("Infinity", '"Infinity"')
+            json_string = json_string.replace('""Infinity""', '"Infinity"')
             return json_string.replace(tmp_string, '"-Infinity"')
 
         json_string = self.json(indent=indent, exclude_unset=exclude_unset, **kwargs)
