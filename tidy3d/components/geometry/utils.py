@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from enum import Enum
 from math import isclose
-from typing import Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pydantic as pydantic
 
 from ...constants import fp_eps
-from ...exceptions import Tidy3dError
+from ...exceptions import SetupError, Tidy3dError
 from ..base import Tidy3dBaseModel
 from ..geometry.base import Box
 from ..grid.grid import Grid
@@ -28,6 +28,81 @@ GeometryType = Union[
     polyslab.ComplexPolySlabBase,
     mesh.TriangleMesh,
 ]
+
+
+def merging_geometries_on_plane(
+    geometries: List[GeometryType],
+    plane: Box,
+    property_list: List[Any],
+) -> List[Tuple[Any, Shapely]]:
+    """Compute list of shapes on plane. Overlaps are removed or merged depending on
+    provided property_list.
+
+    Parameters
+    ----------
+    geometries : List[GeometryType]
+        List of structures to filter on the plane.
+    plane : Box
+        Plane specification.
+    property_list : List = None
+        Property value for each structure.
+
+    Returns
+    -------
+    List[Tuple[Any, shapely]]
+        List of shapes and their property value on the plane after merging.
+    """
+
+    if len(geometries) != len(property_list):
+        raise SetupError(
+            "Number of provided property values is not equal to the number of geometries."
+        )
+
+    shapes = []
+    for geo, prop in zip(geometries, property_list):
+        # get list of Shapely shapes that intersect at the plane
+        shapes_plane = plane.intersections_with(geo)
+
+        # Append each of them and their property information to the list of shapes
+        for shape in shapes_plane:
+            shapes.append((prop, shape, shape.bounds))
+
+    background_shapes = []
+    for prop, shape, bounds in shapes:
+        minx, miny, maxx, maxy = bounds
+
+        # loop through background_shapes (note: all background are non-intersecting or merged)
+        for index, (_prop, _shape, _bounds) in enumerate(background_shapes):
+            _minx, _miny, _maxx, _maxy = _bounds
+
+            # do a bounding box check to see if any intersection to do anything about
+            if minx > _maxx or _minx > maxx or miny > _maxy or _miny > maxy:
+                continue
+
+            # look more closely to see if intersected.
+            if shape.disjoint(_shape):
+                continue
+
+            # different prop, remove intersection from background shape
+            if prop != _prop:
+                diff_shape = (_shape - shape).buffer(0).normalize()
+                # mark background shape for removal if nothing left
+                if diff_shape.is_empty or len(diff_shape.bounds) == 0:
+                    background_shapes[index] = None
+                background_shapes[index] = (_prop, diff_shape, diff_shape.bounds)
+            # same prop, unionize shapes and mark background shape for removal
+            else:
+                shape = (shape | _shape).buffer(0).normalize()
+                background_shapes[index] = None
+
+        # after doing this with all background shapes, add this shape to the background
+        background_shapes.append((prop, shape, shape.bounds))
+
+        # remove any existing background shapes that have been marked as 'None'
+        background_shapes = [b for b in background_shapes if b is not None]
+
+    # filter out any remaining None or empty shapes (shapes with area completely removed)
+    return [(prop, shape) for (prop, shape, _) in background_shapes if shape]
 
 
 def flatten_groups(

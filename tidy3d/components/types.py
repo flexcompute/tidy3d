@@ -2,6 +2,7 @@
 
 from typing import (
     Literal,  # We support py3.9+, so direct typing import is fine.
+    Optional,
     Tuple,
     Union,
 )
@@ -188,6 +189,7 @@ ScalarSymmetry = Literal[0, 1]
 Size1D = pydantic.NonNegativeFloat
 Size = Tuple[Size1D, Size1D, Size1D]
 Coordinate = Tuple[float, float, float]
+CoordinateOptional = Tuple[Optional[float], Optional[float], Optional[float]]
 Coordinate2D = Tuple[float, float]
 Bound = Tuple[Coordinate, Coordinate]
 GridSize = Union[pydantic.PositiveFloat, Tuple[pydantic.PositiveFloat, ...]]

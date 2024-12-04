@@ -38,7 +38,7 @@ from .data.utils import (
     _get_numpy_array,
 )
 from .geometry.base import Box, ClipOperation, GeometryGroup
-from .geometry.utils import flatten_groups, traverse_geometries
+from .geometry.utils import flatten_groups, merging_geometries_on_plane, traverse_geometries
 from .grid.grid import Coords, Grid
 from .material.multi_physics import MultiPhysicsMedium
 from .medium import (
@@ -251,6 +251,11 @@ class Scene(Tidy3dBaseModel):
         """Returns structure representing the background of the :class:`.Scene`."""
         geometry = Box(size=(inf, inf, inf))
         return Structure(geometry=geometry, medium=self.medium)
+
+    @cached_property
+    def all_structures(self) -> List[Structure]:
+        """List of all structures in the simulation including the background."""
+        return [self.background_structure] + list(self.structures)
 
     @staticmethod
     def intersecting_media(
@@ -660,57 +665,9 @@ class Scene(Tidy3dBaseModel):
         List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and their property value on the plane after merging.
         """
-
-        if len(structures) != len(property_list):
-            raise SetupError(
-                "Number of provided property values is not equal to the number of structures."
-            )
-
-        shapes = []
-        for structure, prop in zip(structures, property_list):
-            # get list of Shapely shapes that intersect at the plane
-            shapes_plane = plane.intersections_with(structure.geometry)
-
-            # Append each of them and their property information to the list of shapes
-            for shape in shapes_plane:
-                shapes.append((prop, shape, shape.bounds))
-
-        background_shapes = []
-        for prop, shape, bounds in shapes:
-            minx, miny, maxx, maxy = bounds
-
-            # loop through background_shapes (note: all background are non-intersecting or merged)
-            for index, (_prop, _shape, _bounds) in enumerate(background_shapes):
-                _minx, _miny, _maxx, _maxy = _bounds
-
-                # do a bounding box check to see if any intersection to do anything about
-                if minx > _maxx or _minx > maxx or miny > _maxy or _miny > maxy:
-                    continue
-
-                # look more closely to see if intersected.
-                if shape.disjoint(_shape):
-                    continue
-
-                # different prop, remove intersection from background shape
-                if prop != _prop:
-                    diff_shape = (_shape - shape).buffer(0).normalize()
-                    # mark background shape for removal if nothing left
-                    if diff_shape.is_empty or len(diff_shape.bounds) == 0:
-                        background_shapes[index] = None
-                    background_shapes[index] = (_prop, diff_shape, diff_shape.bounds)
-                # same prop, unionize shapes and mark background shape for removal
-                else:
-                    shape = (shape | _shape).buffer(0).normalize()
-                    background_shapes[index] = None
-
-            # after doing this with all background shapes, add this shape to the background
-            background_shapes.append((prop, shape, shape.bounds))
-
-            # remove any existing background shapes that have been marked as 'None'
-            background_shapes = [b for b in background_shapes if b is not None]
-
-        # filter out any remaining None or empty shapes (shapes with area completely removed)
-        return [(prop, shape) for (prop, shape, _) in background_shapes if shape]
+        return merging_geometries_on_plane(
+            [structure.geometry for structure in structures], plane, property_list
+        )
 
     """ Plotting Optical """
 

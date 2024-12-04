@@ -375,6 +375,15 @@ class Geometry(Tidy3dBaseModel, ABC):
         rmax = tuple(min(v1, v2) for v1, v2 in zip(rmax1, rmax2))
         return (rmin, rmax)
 
+    @staticmethod
+    def bounds_union(bounds1: Bound, bounds2: Bound) -> Bound:
+        """Return the bounds that are the union of two bounds."""
+        rmin1, rmax1 = bounds1
+        rmin2, rmax2 = bounds2
+        rmin = tuple(min(v1, v2) for v1, v2 in zip(rmin1, rmin2))
+        rmax = tuple(max(v1, v2) for v1, v2 in zip(rmax1, rmax2))
+        return (rmin, rmax)
+
     @cached_property
     def bounding_box(self):
         """Returns :class:`Box` representation of the bounding box of a :class:`Geometry`.

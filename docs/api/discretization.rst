@@ -17,3 +17,6 @@ Discretization
    tidy3d.FieldGrid
    tidy3d.YeeGrid
    tidy3d.Grid
+   tidy3d.LayerRefinementSpec
+   tidy3d.GridRefinement
+   tidy3d.CornerFinderSpec

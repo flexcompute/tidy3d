@@ -188,12 +188,15 @@ from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGrou
 from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
 from .components.geometry.primitives import Cylinder, Sphere
+from .components.grid.corner_finder import CornerFinderSpec
 from .components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
 from .components.grid.grid_spec import (
     AutoGrid,
     CustomGrid,
     CustomGridBoundaries,
+    GridRefinement,
     GridSpec,
+    LayerRefinementSpec,
     QuasiUniformGrid,
     UniformGrid,
 )
@@ -374,6 +377,9 @@ __all__ = [
     "CustomGrid",
     "AutoGrid",
     "CustomGridBoundaries",
+    "LayerRefinementSpec",
+    "GridRefinement",
+    "CornerFinderSpec",
     "Box",
     "Sphere",
     "Cylinder",

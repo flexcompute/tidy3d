@@ -779,6 +779,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        override_structures_alpha: float = 1,
+        snapping_points_alpha: float = 1,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -795,6 +797,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        override_structures_alpha : float = 1
+            Opacity of the override structures.
+        snapping_points_alpha : float = 1
+            Opacity of the snapping points.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
@@ -809,6 +815,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """
         kwargs.setdefault("linewidth", 0.2)
         kwargs.setdefault("colors", "black")
+        kwargs.setdefault("colors_internal", "darkmagenta")
+        kwargs.setdefault("dashes", (10, 10))
+        kwargs.setdefault("override_linestyle", ":")
+        kwargs.setdefault("snapping_linestyle", "--")
         cell_boundaries = self.grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
@@ -824,26 +834,75 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 ax.axhline(y=b, linewidth=kwargs["linewidth"], color=kwargs["colors"])
 
         # Plot bounding boxes of override structures
-        plot_params = plot_params_override_structures.include_kwargs(
-            linewidth=2 * kwargs["linewidth"], edgecolor=kwargs["colors"]
-        )
-        for structure in self.grid_spec.override_structures:
-            bounds = list(zip(*structure.geometry.bounds))
-            _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
-            xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
-            rect = mpl.patches.Rectangle(
-                xy=(xmin, ymin),
-                width=(xmax - xmin),
-                height=(ymax - ymin),
-                **plot_params.to_kwargs(),
+        plot_params = [
+            plot_params_override_structures.include_kwargs(
+                linewidth=4 * kwargs["linewidth"],
+                edgecolor=kwargs["colors"],
+                alpha=override_structures_alpha,
+            ),
+        ] * 2
+        plot_params[0] = plot_params[0].include_kwargs(edgecolor=kwargs["colors_internal"])
+
+        if self.grid_spec.auto_grid_used:
+            wavelength = self.grid_spec.get_wavelength(self.sources)
+            internal_override_structures = self.grid_spec.internal_override_structures(
+                self.scene.all_structures, wavelength, self.geometry.size
             )
-            ax.add_patch(rect)
+            all_override_structures = [
+                internal_override_structures,
+                self.grid_spec.external_override_structures,
+            ]
+            for structures, plot_param in zip(all_override_structures, plot_params):
+                for structure in structures:
+                    bounds = list(zip(*structure.geometry.bounds))
+                    _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
+                    xmin, xmax, ymin, ymax = (
+                        self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax)
+                    )
+                    rect = mpl.patches.Rectangle(
+                        xy=(xmin, ymin),
+                        width=(xmax - xmin),
+                        height=(ymax - ymin),
+                        linestyle=kwargs["override_linestyle"],
+                        **plot_param.to_kwargs(),
+                    )
+                    ax.add_patch(rect)
 
         # Plot snapping points
-        for point in self.grid_spec.snapping_points:
-            _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
-            x_point, y_point = (self._evaluate_inf(v) for v in (x_point, y_point))
-            ax.scatter(x_point, y_point, color=plot_params.edgecolor)
+        internal_snapping_points = self.grid_spec.internal_snapping_points(
+            self.scene.all_structures
+        )
+        for points, plot_param in zip(
+            [internal_snapping_points, self.grid_spec.snapping_points], plot_params
+        ):
+            for point in points:
+                _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
+                if x_point is None and y_point is None:
+                    continue
+                if x_point is None:
+                    ax.axhline(
+                        y=self._evaluate_inf(y_point),
+                        linewidth=4 * kwargs["linewidth"],
+                        color=plot_param.edgecolor,
+                        alpha=snapping_points_alpha,
+                        linestyle=kwargs["snapping_linestyle"],
+                        dashes=kwargs["dashes"],
+                    )
+                    continue
+                if y_point is None:
+                    ax.axvline(
+                        x=self._evaluate_inf(x_point),
+                        linewidth=4 * kwargs["linewidth"],
+                        color=plot_param.edgecolor,
+                        alpha=snapping_points_alpha,
+                        linestyle=kwargs["snapping_linestyle"],
+                        dashes=kwargs["dashes"],
+                    )
+                    continue
+                x_point, y_point = (self._evaluate_inf(v) for v in (x_point, y_point))
+                ax.scatter(
+                    x_point, y_point, color=plot_param.edgecolor, alpha=snapping_points_alpha
+                )
 
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
@@ -3489,7 +3548,7 @@ class Simulation(AbstractYeeGridSimulation):
         inside the TFSF box.
         """
         # if the grid is uniform in all directions, there's no need to proceed
-        if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
+        if not (self.grid_spec.snapped_grid_used or self.grid_spec.custom_grid_used):
             return
 
         with log as consolidated_logger:
@@ -4488,13 +4547,12 @@ class Simulation(AbstractYeeGridSimulation):
     @cached_property
     def self_structure(self) -> Structure:
         """The simulation background as a ``Structure``."""
-        geometry = Box(size=(inf, inf, inf), center=self.center)
-        return Structure(geometry=geometry, medium=self.medium)
+        return self.scene.background_structure
 
     @cached_property
     def all_structures(self) -> List[Structure]:
         """List of all structures in the simulation (including the ``Simulation.medium``)."""
-        return [self.self_structure] + list(self.structures)
+        return self.scene.all_structures
 
     def _grid_corrections_2dmaterials(self, grid: Grid) -> Grid:
         """Correct the grid if 2d materials are present, using their volumetric equivalents."""

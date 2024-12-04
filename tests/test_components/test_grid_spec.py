@@ -349,6 +349,11 @@ def test_zerosize_dimensions():
 def test_custom_grid_boundaries():
     custom = td.CustomGridBoundaries(coords=np.linspace(-1, 1, 11))
     grid_spec = td.GridSpec(grid_x=custom, grid_y=custom, grid_z=custom)
+
+    # estimated minimal step size
+    estimated_dl = grid_spec.grid_x.estimated_min_dl(wavelength=1, structure_list=[], sim_size=[])
+    assert np.isclose(estimated_dl, 0.2)
+
     source = td.PointDipole(
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
     )
@@ -400,6 +405,30 @@ def test_small_sim_with_min_steps_per_sim_size():
     assert sim.num_cells > 500
 
 
+def test_autogrid_estimated_dl():
+    """Test that estimiated minimal step size in AutoGrid works as expected."""
+    box = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(0, 0, 1)), medium=td.Medium(permittivity=4)
+    )
+    sim_size = [10, 10, 10]
+    wavelength = 1.0
+    grid_spec = td.AutoGrid(min_steps_per_wvl=10)
+
+    # decided by medium
+    estimated = grid_spec.estimated_min_dl(wavelength, [box], sim_size)
+    assert np.isclose(estimated, wavelength / 10 / 2)
+
+    # overridden by dl_min
+    grid_spec_min = td.AutoGrid(min_steps_per_wvl=10, dl_min=0.1)
+    estimated = grid_spec_min.estimated_min_dl(wavelength, [box], sim_size)
+    assert np.isclose(estimated, 0.1)
+
+    # decided by sim_size
+    sim_size = [0.1, 0.1, 0.1]
+    estimated = grid_spec.estimated_min_dl(wavelength, [box], sim_size)
+    assert np.isclose(estimated, 0.1 / 10)
+
+
 def test_quasiuniform_grid():
     """Test grid is quasi-uniform that adjusts to structure boundaries."""
     box = td.Structure(
@@ -420,10 +449,32 @@ def test_quasiuniform_grid():
     # add snapping points
     pos = 0.281
     snapping_points = [(pos, pos, pos)]
-    sim = sim.updated_copy(
+    sim2 = sim.updated_copy(
         grid_spec=td.GridSpec.quasiuniform(dl=0.1, snapping_points=snapping_points)
     )
-    assert any(np.isclose(sim.grid.boundaries.x, pos))
+    assert any(np.isclose(sim2.grid.boundaries.x, pos))
+
+    # override structures of dl=None takes no effect
+    sim3 = sim.updated_copy(
+        grid_spec=td.GridSpec.quasiuniform(
+            dl=0.1,
+            override_structures=[
+                td.MeshOverrideStructure(
+                    geometry=td.Box(size=(0.2, 0.2, 0.2)), dl=[None, None, None]
+                ),
+            ],
+        )
+    )
+    np.allclose(sim.grid.boundaries.x, sim3.grid.boundaries.x)
+
+    # a larger dl_min can override step size
+    grid_1d = td.QuasiUniformGrid(dl=0.1, dl_min=0.2)
+    sim4 = sim.updated_copy(grid_spec=td.GridSpec(grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d))
+    assert np.all(sim4.grid.sizes.x > 0.11)
+
+    # 2d simulation
+    sim5 = sim.updated_copy(size=(0, 1, 1))
+    assert np.isclose(sim5.grid.sizes.x, 0.1)
 
 
 def test_domain_mismatch():

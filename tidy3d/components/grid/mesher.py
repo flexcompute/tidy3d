@@ -17,9 +17,9 @@ from ...constants import C_0, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import Tidy3dBaseModel
-from ..medium import AnisotropicMedium, LossyMetalMedium, Medium2D, PECMedium
+from ..medium import LossyMetalMedium, Medium2D
 from ..structure import MeshOverrideStructure, Structure, StructureType
-from ..types import ArrayFloat1D, Axis, Bound, Coordinate
+from ..types import ArrayFloat1D, Axis, Bound, CoordinateOptional
 
 _ROOTS_TOL = 1e-10
 
@@ -51,7 +51,7 @@ class Mesher(Tidy3dBaseModel, ABC):
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
-        snapping_points: List[Coordinate],
+        snapping_points: List[CoordinateOptional],
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Insert snapping_points to the intervals."""
 
@@ -64,6 +64,26 @@ class Mesher(Tidy3dBaseModel, ABC):
         is_periodic: bool,
     ) -> List[ArrayFloat1D]:
         """Create grid steps in multiple connecting intervals."""
+
+    @staticmethod
+    def structure_step(
+        structure: Structure,
+        wavelength: float,
+        min_steps_per_wvl: float,
+    ) -> ArrayFloat1D:
+        """Get the minimum mesh required in a :class:`.Structure`. Special media are set to index of 1,
+        which would usually make the medium ignored in the meshing, while the structure geometry
+        would still be used to place grid boundaries.
+
+        Parameters
+        ----------
+        structure : :class:`.Structure`
+            A regular structure
+        wavelength : float
+            Wavelength to use for the step size and for dispersive media epsilon.
+        min_steps_per_wvl : float
+            Minimum requested steps per wavelength.
+        """
 
     @staticmethod
     def make_shapely_box(bbox: Bound) -> shapely_box:
@@ -81,7 +101,7 @@ class GradedMesher(Mesher):
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
-        snapping_points: List[Coordinate],
+        snapping_points: List[CoordinateOptional],
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Insert snapping_points to the intervals.
 
@@ -95,7 +115,7 @@ class GradedMesher(Mesher):
             Coordinate of interval boundaries.
         max_dl_list : ArrayFloat1D
             Maximal allowed step size of each interval generated from `parse_structures`.
-        snapping_points : List[Coordinate]
+        snapping_points : List[CoordinateOptional]
             A set of points that enforce grid boundaries to pass through them.
 
         Returns
@@ -124,6 +144,8 @@ class GradedMesher(Mesher):
 
         for point in snapping_points:
             new_coord = point[axis]
+            if new_coord is None:
+                continue
             # Skip if the point is outside the domain
             if new_coord >= interval_coords[-1] or new_coord <= interval_coords[0]:
                 continue
@@ -512,6 +534,40 @@ class GradedMesher(Mesher):
         return structures_filtered
 
     @staticmethod
+    def structure_step(
+        structure: Structure,
+        wavelength: float,
+        min_steps_per_wvl: float,
+    ) -> ArrayFloat1D:
+        """Get the minimum mesh required in a :class:`.Structure`. Special media are set to index of 1,
+        which would usually make the medium ignored in the meshing, while the structure geometry
+        would still be used to place grid boundaries.
+
+        Parameters
+        ----------
+        structure : :class:`.Structure`
+            A regular structure
+        wavelength : float
+            Wavelength to use for the step size and for dispersive media epsilon.
+        min_steps_per_wvl : float
+            Minimum requested steps per wavelength.
+        """
+
+        # for 2d medium, will always ignore even if not PEC;
+        # later, this will be handled by _grid_corrections_2dmaterials
+        # in simulation.py
+        if isinstance(structure.medium, (Medium2D, LossyMetalMedium)) or structure.medium.is_pec:
+            return wavelength / min_steps_per_wvl
+
+        eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
+        n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
+        # take max among all directions because perpendicular eps defines wavelength
+        max_n_abs = np.max(np.abs(n))
+        max_k_abs = np.max(np.abs(k))
+        index = np.max([max_n_abs, max_k_abs])
+        return wavelength / index / min_steps_per_wvl
+
+    @staticmethod
     def structure_steps(
         structures: List[StructureType],
         wavelength: float,
@@ -542,27 +598,14 @@ class GradedMesher(Mesher):
         min_steps = []
         for structure in structures:
             if isinstance(structure, Structure):
-                if isinstance(structure.medium, (PECMedium, Medium2D, LossyMetalMedium)) or (
-                    isinstance(structure.medium, AnisotropicMedium)
-                    and structure.medium.is_comp_pec(axis)
-                ):
-                    # for 2d medium, will always ignore even if not PEC;
-                    # later, this will be handled by _grid_corrections_2dmaterials
-                    # in simulation.py
-                    index = 1.0
-                else:
-                    eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
-                    n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
-
-                    # take max among all directions because perpendicular eps defines wavelength
-                    max_n_abs = np.max(np.abs(n))
-                    max_k_abs = np.max(np.abs(k))
-                    index = np.max([max_n_abs, max_k_abs])
-
-                min_steps.append(max(dl_min, min(dl_max, wavelength / index / min_steps_per_wvl)))
+                min_steps.append(
+                    GradedMesher.structure_step(structure, wavelength, min_steps_per_wvl)
+                )
             elif isinstance(structure, MeshOverrideStructure):
-                min_steps.append(max(dl_min, min(dl_max, structure.dl[axis])))
-        return np.array(min_steps)
+                min_steps.append(structure.dl[axis])
+        min_steps = np.array(min_steps)
+        min_steps = np.where(min_steps > dl_max, dl_max, min_steps)
+        return np.where(min_steps < dl_min, dl_min, min_steps)
 
     @staticmethod
     def rotate_structure_bounds(structures: List[StructureType], axis: Axis) -> List[ArrayFloat1D]:
