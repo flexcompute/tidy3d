@@ -112,6 +112,13 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         "surface when computing distance values.",
     )
 
+    uniform_grid_mediums: Tuple[str, ...] = pd.Field(
+        (),
+        title="Mediums With Uniform Refinement",
+        description="List of mediums for which ``dl_interface`` will be enforced everywhere "
+        "in the volume.",
+    )
+
     non_refined_structures: Tuple[str, ...] = pd.Field(
         (),
         title="Structures Without Refinement",
