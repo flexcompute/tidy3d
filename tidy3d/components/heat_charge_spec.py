@@ -26,6 +26,7 @@ from .heat_charge.charge_settings import (
     SlotboomNarrowingModel,
     SRHRecombination,
 )
+from .heat_charge.doping import DopingBoxType
 from .types import Union
 
 
@@ -160,14 +161,14 @@ class SemiConductorSpec(ConductorSpec):
         description="Bandgap narrowing model.",
     )
 
-    acceptors: Union[pd.NonNegativeFloat, SpatialDataArray] = pd.Field(
+    acceptors: Union[pd.NonNegativeFloat, SpatialDataArray, Tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Acceptor concentration",
         description="Units of 1/cm^3",
         units="1/cm^3",
     )
 
-    donors: Union[pd.NonNegativeFloat, SpatialDataArray] = pd.Field(
+    donors: Union[pd.NonNegativeFloat, SpatialDataArray, Tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Donor concentration",
         description="Units of 1/cm^3",
