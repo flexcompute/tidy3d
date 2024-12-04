@@ -381,3 +381,46 @@ def test_custom_grid_boundaries():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML(num_layers=num_layers))
     )
     assert np.allclose(sim_pml.grid.boundaries.x, np.linspace(-3, 3, 31))
+
+
+def test_small_sim_with_min_steps_per_sim_size():
+    """Test if `min_steps_per_sim_size` takes effect for a small simulation domain."""
+
+    # only single grid because simulation domain too small
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1e4, min_steps_per_sim_size=1),
+        boundary_spec=td.BoundarySpec.pml(),
+    )
+    assert sim.num_cells == 1
+
+    # apply default min_steps_per_sim_size
+    sim = sim.updated_copy(grid_spec=td.GridSpec.auto(wavelength=1e4, min_steps_per_sim_size=10))
+    assert sim.num_cells > 500
+
+
+def test_quasiuniform_grid():
+    """Test grid is quasi-uniform that adjusts to structure boundaries."""
+    box = td.Structure(
+        geometry=td.Box(size=(0.5, 0.5, 0.5)),
+        medium=td.Medium(permittivity=25),
+    )
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.quasiuniform(dl=0.1),
+        boundary_spec=td.BoundarySpec.pml(),
+        structures=[box],
+        run_time=1e-12,
+    )
+
+    # snapped to the boundary 0.25 because of box
+    assert any(np.isclose(sim.grid.boundaries.x, 0.25))
+
+    # add snapping points
+    pos = 0.281
+    snapping_points = [(pos, pos, pos)]
+    sim = sim.updated_copy(
+        grid_spec=td.GridSpec.quasiuniform(dl=0.1, snapping_points=snapping_points)
+    )
+    assert any(np.isclose(sim.grid.boundaries.x, pos))

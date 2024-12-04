@@ -128,6 +128,7 @@ from .components.grid.grid_spec import (
     CustomGrid,
     CustomGridBoundaries,
     GridSpec,
+    QuasiUniformGrid,
     UniformGrid,
 )
 from .components.heat_charge.boundary import (
@@ -324,6 +325,7 @@ __all__ = [
     "Coords",
     "GridSpec",
     "UniformGrid",
+    "QuasiUniformGrid",
     "CustomGrid",
     "AutoGrid",
     "CustomGridBoundaries",

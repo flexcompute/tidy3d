@@ -705,6 +705,7 @@ def test_shapely_strtree_warnings():
             wavelength=1.0,
             min_steps_per_wvl=6,
             dl_min=1.0,
+            dl_max=td.inf,
         )
 
 

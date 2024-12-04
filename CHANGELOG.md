@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - NumPy 2.1 compatibility issue where `numpy.float64` values passed to xarray interpolation would raise TypeError.
+- Support for quasi-uniform grid specifications via `QuasiUniformGrid` that subclasses from `GridSpec1d`. The grids are almost uniform, but can adjust locally to the edge of structure bounding boxes, and snapping points.
+- New field `min_steps_per_sim_size` in `AutoGrid` that sets minimal number of grid steps per longest edge length of simulation domain.
 
 ## [2.8.0rc1] - 2024-12-17
 

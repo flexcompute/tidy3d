@@ -40,6 +40,7 @@ class Mesher(Tidy3dBaseModel, ABC):
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
         dl_min: pd.NonNegativeFloat,
+        dl_max: pd.NonNegativeFloat,
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
@@ -162,6 +163,7 @@ class GradedMesher(Mesher):
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
         dl_min: pd.NonNegativeFloat,
+        dl_max: pd.NonNegativeFloat,
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
@@ -180,6 +182,8 @@ class GradedMesher(Mesher):
             Minimum requested steps per wavelength.
         dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
+        dl_max: pd.NonNegativeFloat
+            Upper bound of grid size.
 
         Returns
         -------
@@ -222,7 +226,7 @@ class GradedMesher(Mesher):
 
         # Required maximum steps in every structure
         structure_steps = self.structure_steps(
-            structures_ordered, wavelength, min_steps_per_wvl, dl_min, axis
+            structures_ordered, wavelength, min_steps_per_wvl, dl_min, dl_max, axis
         )
         # Smallest of the maximum steps
         min_step = MIN_STEP_SCALE * np.amin(structure_steps)
@@ -500,6 +504,7 @@ class GradedMesher(Mesher):
         wavelength: float,
         min_steps_per_wvl: float,
         dl_min: pd.NonNegativeFloat,
+        dl_max: pd.NonNegativeFloat,
         axis: Axis,
     ) -> ArrayFloat1D:
         """Get the minimum mesh required in each structure. Special media are set to index of 1,
@@ -516,6 +521,8 @@ class GradedMesher(Mesher):
             Minimum requested steps per wavelength.
         dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
+        dl_max: pd.NonNegativeFloat
+            Upper bound of grid size.
         axis : Axis
             Axis index along which to operate.
         """
@@ -539,9 +546,9 @@ class GradedMesher(Mesher):
                     max_k_abs = np.max(np.abs(k))
                     index = np.max([max_n_abs, max_k_abs])
 
-                min_steps.append(max(dl_min, wavelength / index / min_steps_per_wvl))
+                min_steps.append(max(dl_min, min(dl_max, wavelength / index / min_steps_per_wvl)))
             elif isinstance(structure, MeshOverrideStructure):
-                min_steps.append(max(dl_min, structure.dl[axis]))
+                min_steps.append(max(dl_min, min(dl_max, structure.dl[axis])))
         return np.array(min_steps)
 
     @staticmethod

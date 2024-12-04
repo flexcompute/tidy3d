@@ -14,7 +14,7 @@ from ...log import log
 from ..base import Tidy3dBaseModel
 from ..geometry.base import Box
 from ..source.utils import SourceType
-from ..structure import Structure, StructureType
+from ..structure import MeshOverrideStructure, Structure, StructureType
 from ..types import TYPE_TAG_STR, Axis, Coordinate, Symmetry, annotate_type
 from .grid import Coords, Coords1D, Grid
 from .mesher import GradedMesher, MesherType
@@ -219,6 +219,9 @@ class UniformGrid(GridSpec1d):
     See Also
     --------
 
+    :class:`QuasiUniformGrid`
+        Specification for quasi-uniform grid along a given dimension.
+
     :class:`AutoGrid`
         Specification for non-uniform grid along a given dimension.
 
@@ -383,36 +386,8 @@ class CustomGrid(GridSpec1d):
         )
 
 
-class AutoGrid(GridSpec1d):
-    """Specification for non-uniform grid along a given dimension.
-
-    Example
-    -------
-    >>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)
-
-    See Also
-    --------
-
-    :class:`UniformGrid`
-        Uniform 1D grid.
-
-    :class:`GridSpec`
-        Collective grid specification for all three dimensions.
-
-    **Notebooks:**
-        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
-
-    **Lectures:**
-        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
-        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
-    """
-
-    min_steps_per_wvl: float = pd.Field(
-        10.0,
-        title="Minimal number of steps per wavelength",
-        description="Minimal number of steps per wavelength in each medium.",
-        ge=6.0,
-    )
+class AbstractAutoGrid(GridSpec1d):
+    """Specification for non-uniform or quasi-uniform grid along a given dimension."""
 
     max_scale: float = pd.Field(
         1.4,
@@ -422,21 +397,49 @@ class AutoGrid(GridSpec1d):
         lt=2.0,
     )
 
-    dl_min: pd.NonNegativeFloat = pd.Field(
-        0,
-        title="Lower bound of grid size",
-        description="Lower bound of the grid size along this dimension regardless of "
-        "structures present in the simulation, including override structures "
-        "with ``enforced=True``. It is a soft bound, meaning that the actual minimal "
-        "grid size might be slightly smaller.",
-        units=MICROMETER,
-    )
-
     mesher: MesherType = pd.Field(
         GradedMesher(),
         title="Grid Construction Tool",
         description="The type of mesher to use to generate the grid automatically.",
     )
+
+    dl_min: pd.NonNegativeFloat = pd.Field(
+        None,
+        title="Lower Bound of Grid Size",
+        description="Lower bound of the grid size along this dimension regardless of "
+        "structures present in the simulation, including override structures "
+        "with ``enforced=True``. It is a soft bound, meaning that the actual minimal "
+        "grid size might be slightly smaller. If ``None`` or 0, a heuristic lower bound "
+        "value will be applied.",
+        units=MICROMETER,
+    )
+
+    @abstractmethod
+    def _preprocessed_structures(self, structures: List[StructureType]) -> List[StructureType]:
+        """Preprocess structure list before passing to ``mesher``."""
+
+    @abstractmethod
+    def _dl_collapsed_axis(self, wavelength: float) -> float:
+        """The grid step size if just a single grid along an axis in the simulation domain."""
+
+    @property
+    @abstractmethod
+    def _dl_min(self) -> float:
+        """Lower bound of grid size applied internally."""
+
+    @property
+    @abstractmethod
+    def _min_steps_per_wvl(self) -> float:
+        """Minimal steps per wavelength applied internally."""
+
+    @abstractmethod
+    def _dl_max(self, sim_size: Tuple[float, 3]) -> float:
+        """Upper bound of grid size applied internally."""
+
+    @property
+    def _undefined_dl_min(self) -> bool:
+        """Whether `dl_min` has been specified or not."""
+        return self.dl_min is None or self.dl_min == 0
 
     def _make_coords_initial(
         self,
@@ -479,6 +482,9 @@ class AutoGrid(GridSpec1d):
                 sim_size[dim] /= 2
         symmetry_domain = Box(center=sim_cent, size=sim_size)
 
+        # upper bound of grid step size
+        dl_max = self._dl_max(sim_size)
+
         # New list of structures with symmetry applied
         struct_list = [Structure(geometry=symmetry_domain, medium=structures[0].medium)]
         for structure in structures[1:]:
@@ -488,19 +494,20 @@ class AutoGrid(GridSpec1d):
         # parse structures
         interval_coords, max_dl_list = self.mesher.parse_structures(
             axis,
-            struct_list,
+            self._preprocessed_structures(struct_list),
             wavelength,
-            self.min_steps_per_wvl,
-            self.dl_min,
+            self._min_steps_per_wvl,
+            self._dl_min,
+            dl_max,
         )
         # insert snapping_points
         interval_coords, max_dl_list = self.mesher.insert_snapping_points(
-            self.dl_min, axis, interval_coords, max_dl_list, snapping_points
+            self._dl_min, axis, interval_coords, max_dl_list, snapping_points
         )
 
         # Put just a single pixel if 2D-like simulation
         if interval_coords.size == 1:
-            dl = wavelength / self.min_steps_per_wvl
+            dl = self._dl_collapsed_axis(wavelength)
             return np.array([sim_cent[axis] - dl / 2, sim_cent[axis] + dl / 2])
 
         # generate mesh steps
@@ -529,7 +536,140 @@ class AutoGrid(GridSpec1d):
         return np.array(bound_coords)
 
 
-GridType = Union[UniformGrid, CustomGrid, AutoGrid, CustomGridBoundaries]
+class QuasiUniformGrid(AbstractAutoGrid):
+    """Similar to :class:`UniformGrid` that generates uniform 1D grid, but grid positions
+    are locally fine tuned to be snaped to snapping points and the edges of structure bounding boxes.
+    Internally, it is using the same meshing method as :class:`AutoGrid`, but it ignores material information in
+    favor for a user-defined grid size.
+
+    Example
+    -------
+    >>> grid_1d = QuasiUniformGrid(dl=0.1)
+
+    See Also
+    --------
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+    """
+
+    dl: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Grid Size",
+        description="Grid size for quasi-uniform grid generation. Grid size at some locations can be "
+        "slightly smaller.",
+        units=MICROMETER,
+    )
+
+    def _preprocessed_structures(self, structures: List[StructureType]) -> List[StructureType]:
+        """Processing structure list before passing to ``mesher``. Adjust all structures to drop their
+        material properties so that they all have step size ``dl``.
+        """
+        processed_structures = []
+        for structure in structures:
+            dl = [self.dl, self.dl, self.dl]
+            # skip override structures containing dl = None along axes
+            if isinstance(structure, MeshOverrideStructure):
+                for ind, dl_axis in enumerate(structure.dl):
+                    if dl_axis is None:
+                        dl[ind] = None
+            processed_structures.append(MeshOverrideStructure(geometry=structure.geometry, dl=dl))
+        return processed_structures
+
+    @property
+    def _dl_min(self) -> float:
+        """Lower bound of grid size."""
+        if self._undefined_dl_min:
+            return 0.5 * self.dl
+        return self.dl_min
+
+    @property
+    def _min_steps_per_wvl(self) -> float:
+        """Minimal steps per wavelength."""
+        # irrelevant in this class, just supply an arbitrary number
+        return 1
+
+    def _dl_max(self, sim_size: Tuple[float, 3]) -> float:
+        """Upper bound of grid size."""
+        return self.dl
+
+    def _dl_collapsed_axis(self, wavelength: float) -> float:
+        """The grid step size if just a single grid along an axis."""
+        return self.dl
+
+
+class AutoGrid(AbstractAutoGrid):
+    """Specification for non-uniform grid along a given dimension.
+
+    Example
+    -------
+    >>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)
+
+    See Also
+    --------
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`GridSpec`
+        Collective grid specification for all three dimensions.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
+    """
+
+    min_steps_per_wvl: float = pd.Field(
+        10.0,
+        title="Minimal Number of Steps Per Wavelength",
+        description="Minimal number of steps per wavelength in each medium.",
+        ge=6.0,
+    )
+
+    min_steps_per_sim_size: float = pd.Field(
+        10.0,
+        title="Minimal Number of Steps Per Simulation Domain Size",
+        description="Minimal number of steps per longest edge length of simulation domain "
+        "bounding box. This is useful when the simulation domain size is subwavelength.",
+        ge=1.0,
+    )
+
+    def _dl_max(self, sim_size: Tuple[float, 3]) -> float:
+        """Upper bound of grid size, constrained by `min_steps_per_sim_size`."""
+        return max(sim_size) / self.min_steps_per_sim_size
+
+    @property
+    def _dl_min(self) -> float:
+        """Lower bound of grid size."""
+        # set dl_min = 0 if unset, to be handled by mesher
+        if self._undefined_dl_min:
+            return 0
+        return self.dl_min
+
+    @property
+    def _min_steps_per_wvl(self) -> float:
+        """Minimal steps per wavelength."""
+        return self.min_steps_per_wvl
+
+    def _preprocessed_structures(self, structures: List[StructureType]) -> List[StructureType]:
+        """Processing structure list before passing to ``mesher``."""
+        return structures
+
+    def _dl_collapsed_axis(self, wavelength: float) -> float:
+        """The grid step size if just a single grid along an axis."""
+        return wavelength / self.min_steps_per_wvl
+
+
+GridType = Union[UniformGrid, CustomGrid, AutoGrid, CustomGridBoundaries, QuasiUniformGrid]
 
 
 class GridSpec(Tidy3dBaseModel):
@@ -598,7 +738,7 @@ class GridSpec(Tidy3dBaseModel):
         "the process of generating the grid. This can be used to refine the grid or make it "
         "coarser depending than the expected need for higher/lower resolution regions. "
         "Note: it only takes effect when at least one of the three dimensions "
-        "uses :class:`.AutoGrid`.",
+        "uses :class:`.AutoGrid` or :class:`.QuasiUniformGrid`.",
     )
 
     snapping_points: Tuple[Coordinate, ...] = pd.Field(
@@ -606,8 +746,10 @@ class GridSpec(Tidy3dBaseModel):
         title="Grid specification snapping_points",
         description="A set of points that enforce grid boundaries to pass through them. "
         "However, some points might be skipped if they are too close. "
+        "When points are very close to `override_structures`, `snapping_points` have "
+        "higher prioirty so that the structures might be skipped. "
         "Note: it only takes effect when at least one of the three dimensions "
-        "uses :class:`.AutoGrid`.",
+        "uses :class:`.AutoGrid` or :class:`.QuasiUniformGrid`.",
     )
 
     @property
@@ -708,7 +850,7 @@ class GridSpec(Tidy3dBaseModel):
         for axis_ind, override_used_axis, grid_axis in zip(
             ["x", "y", "z"], self.override_structures_used, [self.grid_x, self.grid_y, self.grid_z]
         ):
-            if override_used_axis and not isinstance(grid_axis, AutoGrid):
+            if override_used_axis and not isinstance(grid_axis, (AutoGrid, QuasiUniformGrid)):
                 log.warning(
                     f"Override structures take no effect along {axis_ind}-axis. "
                     "If intending to apply override structures to this axis, "
@@ -758,6 +900,7 @@ class GridSpec(Tidy3dBaseModel):
         cls,
         wavelength: pd.PositiveFloat = None,
         min_steps_per_wvl: pd.PositiveFloat = 10.0,
+        min_steps_per_sim_size: pd.PositiveFloat = 10.0,
         max_scale: pd.PositiveFloat = 1.4,
         override_structures: List[StructureType] = (),
         snapping_points: Tuple[Coordinate, ...] = (),
@@ -795,6 +938,7 @@ class GridSpec(Tidy3dBaseModel):
 
         grid_1d = AutoGrid(
             min_steps_per_wvl=min_steps_per_wvl,
+            min_steps_per_sim_size=min_steps_per_sim_size,
             max_scale=max_scale,
             dl_min=dl_min,
             mesher=mesher,
@@ -825,3 +969,44 @@ class GridSpec(Tidy3dBaseModel):
 
         grid_1d = UniformGrid(dl=dl)
         return cls(grid_x=grid_1d, grid_y=grid_1d, grid_z=grid_1d)
+
+    @classmethod
+    def quasiuniform(
+        cls,
+        dl: float,
+        max_scale: pd.PositiveFloat = 1.4,
+        override_structures: List[StructureType] = (),
+        snapping_points: Tuple[Coordinate, ...] = (),
+        mesher: MesherType = GradedMesher(),
+    ) -> GridSpec:
+        """Use the same :class:`QuasiUniformGrid` along each of the three directions.
+
+        Parameters
+        ----------
+        dl : float
+            Grid size for quasi-uniform grid generation.
+        max_scale : pd.PositiveFloat, optional
+            Sets the maximum ratio between any two consecutive grid steps.
+        override_structures : List[StructureType]
+            A list of structures that is added on top of the simulation structures in
+            the process of generating the grid. This can be used to snap grid points to
+            the bounding box boundary.
+        snapping_points : Tuple[Coordinate, ...]
+            A set of points that enforce grid boundaries to pass through them.
+        mesher : MesherType = GradedMesher()
+            The type of mesher to use to generate the grid automatically.
+
+        Returns
+        -------
+        GridSpec
+            :class:`GridSpec` with the same uniform grid size in each direction.
+        """
+
+        grid_1d = QuasiUniformGrid(dl=dl, max_scale=max_scale, mesher=mesher)
+        return cls(
+            grid_x=grid_1d,
+            grid_y=grid_1d,
+            grid_z=grid_1d,
+            override_structures=override_structures,
+            snapping_points=snapping_points,
+        )
