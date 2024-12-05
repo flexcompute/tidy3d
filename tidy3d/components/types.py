@@ -9,7 +9,11 @@ except ImportError:
     from typing_extensions import Literal
 import autograd.numpy as np
 import pydantic.v1 as pydantic
-from matplotlib.axes import Axes
+
+try:
+    from matplotlib.axes import Axes
+except ImportError:
+    pass
 from shapely.geometry.base import BaseGeometry
 from typing_extensions import Annotated
 

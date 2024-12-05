@@ -5,10 +5,14 @@ from __future__ import annotations
 from typing import Dict, List, Set, Tuple, Union
 
 import autograd.numpy as np
-import matplotlib as mpl
-import matplotlib.pylab as plt
+
+try:
+    import matplotlib as mpl
+    import matplotlib.pylab as plt
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+except ImportError:
+    pass
 import pydantic.v1 as pd
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ..constants import THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError

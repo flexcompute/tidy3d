@@ -6,10 +6,14 @@ from functools import wraps
 from html import escape
 from typing import Any
 
-import matplotlib.pyplot as plt
 import pydantic.v1 as pd
-from matplotlib.patches import ArrowStyle, PathPatch
-from matplotlib.path import Path
+
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import ArrowStyle, PathPatch
+    from matplotlib.path import Path
+except ImportError:
+    pass
 from numpy import array, concatenate, inf, ones
 
 from ..exceptions import SetupError

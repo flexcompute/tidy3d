@@ -6,7 +6,11 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import pydantic.v1 as pd
-from matplotlib import colormaps
+
+try:
+    from matplotlib import colormaps
+except ImportError:
+    pass
 
 from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError

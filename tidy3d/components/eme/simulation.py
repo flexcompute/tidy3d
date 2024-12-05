@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Literal, Optional, Tuple, Union
 
-import matplotlib as mpl
+try:
+    import matplotlib as mpl
+except ImportError:
+    pass
 import numpy as np
 import pydantic.v1 as pd
 
