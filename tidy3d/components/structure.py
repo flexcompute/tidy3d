@@ -14,10 +14,12 @@ from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
 from ..log import log
 from .autograd.derivative_utils import DerivativeInfo
-from .autograd.types import AutogradFieldMap, Box
+from .autograd.types import AutogradFieldMap
+from .autograd.types import Box as AutogradBox
 from .autograd.utils import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .data.data_array import ScalarFieldDataArray
+from .geometry.base import Box, Geometry
 from .geometry.polyslab import PolySlab
 from .geometry.primitives import Cylinder
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
@@ -590,7 +592,7 @@ class Structure(AbstractStructure):
 
         rmin, rmax = geometry.bounds
 
-        if not isinstance(eps_data, (np.ndarray, Box, list, tuple)):
+        if not isinstance(eps_data, (np.ndarray, AutogradBox, list, tuple)):
             raise ValueError("Must supply array-like object for 'eps_data'.")
 
         eps_data = anp.array(eps_data)
@@ -677,6 +679,18 @@ class MeshOverrideStructure(AbstractStructure):
         "region of multiple structures of ``enforce=True``, grid size is decided by "
         "the last added structure of ``enforce=True``.",
     )
+
+    @pydantic.validator("geometry")
+    def _box_only(cls, val):
+        """Ensure this is a box."""
+        if isinstance(val, Geometry):
+            if not isinstance(val, Box):
+                log.warning(
+                    "Override structures should be 'Box' as of 'tidy3d' version 2.8. "
+                    f"Given type of '{type(val)}, using '{type(val)}.bounding_box' instead."
+                )
+                return val.bounding_box
+        return val
 
 
 StructureType = Union[Structure, MeshOverrideStructure]

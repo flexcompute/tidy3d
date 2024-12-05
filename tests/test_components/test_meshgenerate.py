@@ -8,7 +8,7 @@ import tidy3d as td
 from tidy3d.components.grid.mesher import GradedMesher
 from tidy3d.constants import fp_eps
 
-from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import AssertLogLevel, assert_log_level, cartesian_to_unstructured
 
 np.random.seed(4)
 
@@ -799,3 +799,21 @@ def test_anisotropic_material_meshing(unstructured, z):
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_diag.grid.sizes.to_list[dim])
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_diag_custom.grid.sizes.to_list[dim])
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_full.grid.sizes.to_list[dim])
+
+
+def test_override_are_box(log_capture):
+    with AssertLogLevel(log_capture, None):
+        override_fine = td.MeshOverrideStructure(
+            geometry=td.Box(size=(1, 1, 1)),
+            dl=[1, 2, 3],
+        )
+
+    with AssertLogLevel(log_capture, "WARNING", contains_str="Box"):
+        override_not_box = td.MeshOverrideStructure(
+            geometry=td.Sphere(center=(0, 0, 0), radius=0.5),
+            dl=[1, 2, 3],
+        )
+
+    assert isinstance(
+        override_not_box.geometry, td.Box
+    ), "Sphere override structure was not converted to Box"
