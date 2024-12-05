@@ -6,13 +6,14 @@ import numpy as np
 import pydantic.v1 as pd
 
 from ..base import Tidy3dBaseModel, cached_property
-from ..types import Tuple, Union
+from ..types import Bound, Union
 
 
 class AbstractDopingBox(ABC, Tidy3dBaseModel):
     """"""
 
-    coords = Tuple[Tuple[float, float, float], Tuple[float, float, float]] = pd.Field(
+    coords: Bound = pd.Field(
+        ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
         title="Coordinates of box vertices.",
         description="Tuple containing the minimum coordinates and the maximum "
         "coordinates of the vertices composing the doping box. The format is "
@@ -20,7 +21,7 @@ class AbstractDopingBox(ABC, Tidy3dBaseModel):
     )
 
     @pd.validator("coords", always=True)
-    def check_coords(self, val):
+    def check_coords(cls, val):
         """Check that the minimum coordinates are indeed smaller than the maximum.
         The case where both min and max are equal is also considered.
         """
@@ -47,29 +48,18 @@ class ConstantDoping(AbstractDopingBox):
     ...     [-1, -1, -1],
     ...     [1, 1, 1]
     ... ]
-    >>> constant_box = td.ConstantDoping(coords=box_coords, acceptors=1e18, donors=0)
+    >>> constant_box = td.ConstantDoping(coords=box_coords, concentration=1e18)
     """
 
-    acceptors: pd.PositiveFloat = pd.Field(
+    concentration: pd.NonNegativeFloat = pd.Field(
         default=0,
-        title="Acceptors density.",
-        description="Acceptors density in #/cm^3.",
-    )
-
-    donors: pd.PositiveFloat = pd.Field(
-        default=0,
-        title="Donors density.",
-        description="Donors density in #/cm^3.",
+        title="Doping concentration density.",
+        description="Doping concentration density in #/cm^3.",
     )
 
 
 class GaussianDoping(AbstractDopingBox):
     """This class sets a gaussian doping in the specified box."""
-
-    doping_type: str = pd.Field(
-        title="Doping type",
-        description="Type of doping. It accepts one these two values: ['acceptors', 'donors']",
-    )
 
     ref_con: pd.PositiveFloat = pd.Field(
         1e15,
@@ -94,19 +84,6 @@ class GaussianDoping(AbstractDopingBox):
     def sigma(self):
         """The sigma parameter of the pseudo-gaussian"""
         return np.sqrt(-self.width * self.width / 2 / np.log(self.ref_con / self.concentration))
-
-    @pd.validator("doping_type", always=True)
-    def check_doping_type(cls, val):
-        """Check that appropriate doping type has been provided."""
-
-        acceptable_values = ["acceptors", "donors"]
-
-        if val not in acceptable_values:
-            raise pd.ValidationError(
-                f"The value provided for 'doping_type' is {val} but "
-                f"acceptable values are {acceptable_values}.",
-            )
-        return val
 
 
 DopingBoxType = Union[ConstantDoping, GaussianDoping]

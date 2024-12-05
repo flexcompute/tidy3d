@@ -892,3 +892,6 @@ class TestCharge:
 
         with pytest.raises(pd.ValidationError):
             _ = sim.updated_copy(structures=new_structures)
+
+    def test_doping_distributions(self):
+        """Test doping distributions"""

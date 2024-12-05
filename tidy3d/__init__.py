@@ -153,6 +153,7 @@ from .components.heat_charge.charge_settings import (
     SlotboomNarrowingModel,
     SRHRecombination,
 )
+from .components.heat_charge.doping import ConstantDoping, GaussianDoping
 from .components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
 from .components.heat_charge.heat.simulation import HeatSimulation
 from .components.heat_charge.monitor import (
@@ -557,6 +558,8 @@ __all__ = [
     "SRHRecombination",
     "AugerRecombination",
     "RadiativeRecombination",
+    "ConstantDoping",
+    "GaussianDoping",
     "VoltageData",
     "HeatChargeBoundarySpec",
     "VoltageMonitor",
