@@ -10,7 +10,6 @@ import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 from autograd.tracer import isbox
-from matplotlib import path
 
 from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
 from ...exceptions import SetupError, ValidationError
@@ -468,6 +467,11 @@ class PolySlab(base.Planar):
         with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
         volume of the :class:`Geometry`, and ``False`` otherwise.
 
+        Note
+        ----
+        For slanted sidewalls, this function only works if x, y, and z are arrays produced by a
+        ``meshgrid call``, i.e. 3D arrays and each is constant along one axis.
+
         Parameters
         ----------
         x : np.ndarray[float]
@@ -513,13 +517,9 @@ class PolySlab(base.Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                # face_polygon = self.make_shapely_polygon(self.reference_polygon)
-                # fun_contain = contains_pointwise(face_polygon)
-                # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
-                poly_path = path.Path(self.reference_polygon)
-                contains_vectorized = poly_path.contains_points
-                points_stacked = np.stack((xs_slab, ys_slab), axis=1)
-                inside_polygon_slab = contains_vectorized(points_stacked)
+                face_polygon = shapely.Polygon(self.reference_polygon)
+                shapely.prepare(face_polygon)
+                inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs_slab, y=ys_slab)
                 inside_polygon[inside_height] = inside_polygon_slab
             # slanted sidewall, offsetting vertices at each z
             else:
@@ -540,15 +540,11 @@ class PolySlab(base.Planar):
                     vertices_z = self._shift_vertices(
                         self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
-                    # face_polygon = self.make_shapely_polygon(vertices_z)
-                    # fun_contain = contains_pointwise(face_polygon)
-                    # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
-                    poly_path = path.Path(vertices_z)
-                    contains_vectorized = poly_path.contains_points
-                    points_stacked = np.stack(
-                        (x_axis[:, :, 0].flatten(), y_axis[:, :, 0].flatten()), axis=1
-                    )
-                    inside_polygon_slab = contains_vectorized(points_stacked)
+                    face_polygon = shapely.Polygon(vertices_z)
+                    shapely.prepare(face_polygon)
+                    xs = x_axis[:, :, 0].flatten()
+                    ys = y_axis[:, :, 0].flatten()
+                    inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs, y=ys)
                     inside_polygon_axis[:, :, z_i] = inside_polygon_slab.reshape(x_axis.shape[:2])
                 inside_polygon = _move_axis_reverse(inside_polygon_axis)
         else:
