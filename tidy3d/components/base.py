@@ -222,6 +222,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         if validate:
             return self.validate(new_copy.dict())
+        # cached property is cleared automatically when validation is on, but it
+        # needs to be manually cleared when validation is off
+        new_copy._cached_properties = {}
         return new_copy
 
     def updated_copy(

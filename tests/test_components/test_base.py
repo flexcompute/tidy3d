@@ -115,6 +115,14 @@ def test_updated_copy():
     assert s3 == s2
 
 
+def test_cached_property_unvalidated_copy():
+    """Make sure cached property is cleared when copied without validation."""
+    b = td.Box(size=(1, 1, 1))
+    _ = b.bounds
+    c = b.updated_copy(size=(2, 2, 2), validate=False)
+    assert c.bounds[0][0] == -1
+
+
 def test_updated_copy_path():
     """Make sure updated copying shortcut works as expected with defaults."""
     b = td.Box(size=(1, 1, 1))
