@@ -45,6 +45,7 @@ from ...components.types import (
     Axis,
     Axis2D,
     Direction,
+    EMField,
     EpsSpecType,
     FreqArray,
     Literal,
@@ -158,6 +159,14 @@ class ModeSolver(Tidy3dBaseModel):
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default is ``True``.",
+    )
+
+    fields: Tuple[EMField, ...] = pydantic.Field(
+        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        title="Field Components",
+        description="Collection of field components to store in the monitor. Note that some "
+        "methods like ``flux``, ``dot`` require all tangential field components, while others "
+        "like ``mode_area`` require all E-field components.",
     )
 
     @pydantic.validator("plane", always=True)
@@ -371,6 +380,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         self._field_decay_warning(mode_solver_data.symmetry_expanded)
 
+        mode_solver_data = self._filter_components(mode_solver_data)
         return mode_solver_data
 
     @cached_property
@@ -383,6 +393,10 @@ class ModeSolver(Tidy3dBaseModel):
     def rotated_mode_solver_data(self) -> ModeSolverData:
         # Create a mode solver with rotated geometries for a reference solution with 0-degree angle
         solver_ref = self.rotated_structures_copy
+        # Need to store all fields for the rotation
+        solver_ref = solver_ref.updated_copy(
+            fields=["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"], validate=False
+        )
         solver_ref_data = solver_ref.data_raw
 
         # The reference data should always be colocated to convert to cylindrical coordinates
@@ -439,6 +453,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         self._normalize_modes(mode_solver_data=rotated_mode_data)
+        rotated_mode_data = self._filter_components(rotated_mode_data)
 
         return rotated_mode_data
 
@@ -974,6 +989,14 @@ class ModeSolver(Tidy3dBaseModel):
         scaling = np.sqrt(np.abs(mode_solver_data.flux))
         for field in mode_solver_data.field_components.values():
             field /= scaling
+
+    def _filter_components(self, mode_solver_data: ModeSolverData):
+        skip_components = {
+            comp: None
+            for comp in mode_solver_data.field_components.keys()
+            if comp not in self.fields
+        }
+        return mode_solver_data.updated_copy(**skip_components, validate=False)
 
     def _filter_polarization(self, mode_solver_data: ModeSolverData):
         """Filter polarization. Note: this modifies ``mode_solver_data`` in-place."""

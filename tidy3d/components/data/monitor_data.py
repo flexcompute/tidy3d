@@ -49,6 +49,7 @@ from ..types import (
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,
+    EMField,
     EpsSpecType,
     Literal,
     Numpy,
@@ -573,6 +574,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
+        self._check_fields_stored(["Ex", "Ey", "Ez"])
+
         normal_dim = "xyz"[self.monitor.size.index(0)]
         fields = self._colocated_fields
         components = ("Ex", "Ey", "Ez")
@@ -1642,12 +1645,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         by popping the normal axis from the list of ``x, y, z``, so e.g. ``x`` and ``z`` for
         propagation in the ``y`` direction.
         """
-        if len(self.field_components) == 0:
-            raise DataError(
-                "Field data not included in this ModeData onbject. Set "
-                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
-                "include the mode field profiles in the corresponding 'ModeData'."
-            )
+        self._check_fields_stored(["Ex", "Ey", "Ez"])
 
         tan_dims = self._tangential_dims
         e_field = self._colocated_propagation_axes_field("E")
@@ -1679,12 +1677,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             are completely transverse (zero electric and magnetic field in the propagation
             direction) have TE fraction and TM fraction both equal to one.
         """
-        if len(self.field_components) == 0:
-            raise DataError(
-                "Field data not included in this ModeData onbject. Set "
-                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
-                "include the mode field profiles in the corresponding 'ModeData'."
-            )
+        self._check_fields_stored(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"])
 
         tan_dims = self._tangential_dims
         e_field = self._colocated_propagation_axes_field("E")
@@ -1751,6 +1744,17 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             drop.append("loss (dB/cm)")
 
         return dataset.drop_vars(drop).to_dataframe()
+
+    def _check_fields_stored(self, components: list[EMField]):
+        """Check that all requested field components are stored in the data."""
+
+        # ModeData can either have all field components or none
+        if len(self.field_components) == 0:
+            raise DataError(
+                "Field data not included in this ModeData object. Set "
+                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
+                "include the mode field profiles in the corresponding 'ModeData'."
+            )
 
     def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitorData``."""
@@ -1899,6 +1903,16 @@ class ModeSolverData(ModeData):
         new_dir = "+" if mnt.store_fields_direction == "-" else "-"
         new_data["monitor"] = mnt.updated_copy(direction=new_dir, store_fields_direction=new_dir)
         return self.copy(update=new_data)
+
+    def _check_fields_stored(self, components: list[str]):
+        """Check that all requested field components are stored in the data."""
+        missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
+        if len(missing_comps) > 0:
+            raise DataError(
+                f"Field components {missing_comps} not included in this ModeSolverData object. Use "
+                "the 'fields' argument of a `ModeSolver` or a `ModeSolverMonitor` to select which "
+                "components are stored."
+            )
 
 
 class FluxData(MonitorData):

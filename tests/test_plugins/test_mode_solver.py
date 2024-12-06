@@ -7,7 +7,7 @@ import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import DataError, SetupError
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
@@ -317,6 +317,39 @@ def test_mode_solver_group_index_warning(group_index_step, log_level, log_captur
         direction="+",
     )
     assert_log_level(log_capture, log_level)
+
+
+def test_mode_solver_fields():
+    """Test that fields can be excluded and that errors are raised in methods that need them."""
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        run_time=1e-12,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=1,
+    )
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[1e12],
+        direction="+",
+        fields=["Ex", "Hz"],
+    )
+    mode_data = ms.solve()
+    components = mode_data.field_components.keys()
+    for comp in ["Ex", "Hz"]:
+        assert comp in components
+    for comp in ["Ey", "Ez", "Hx", "Hy"]:
+        assert comp not in components
+
+    with pytest.raises(DataError):
+        mode_data.dot(mode_data)
+    with pytest.raises(DataError):
+        mode_data.mode_area
+    with pytest.raises(DataError):
+        mode_data.pol_fraction
 
 
 @pytest.mark.parametrize("local", [True, False])

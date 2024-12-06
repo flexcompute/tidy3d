@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added material type `LossyMetalMedium` that has high DC-conductivity. Its boundaries can be modeled by a surface impedance boundary condition (SIBC). This is treated as a subpixel method, which can be switched by setting `SubpixelSpec(lossy_metal=method)` where `method` can be `Staircasing()`, `VolumetricAveraging()`, or `SurfaceImpedance()`.
 - Added mode solver option `precision='auto'` to automatically select single or double precision for optimizing performance and accuracy.
 - Added `LinearLumpedElement` as a new supported `LumpedElement` type. This enhancement allows for the modeling of two-terminal passive networks, which can include any configuration of resistors, inductors, and capacitors, within the `Simulation`. Simple RLC networks are described using `RLCNetwork`, while more complex networks can be represented by their admittance transfer function through `AdmittanceNetwork`.
+- Option for the `ModeSolver` and `ModeSolverMonitor` to store only a subset of field components.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.

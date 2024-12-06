@@ -718,6 +718,14 @@ class ModeSolverMonitor(AbstractModeMonitor):
         "dimension.",
     )
 
+    fields: Tuple[EMField, ...] = pydantic.Field(
+        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        title="Field Components",
+        description="Collection of field components to store in the monitor. Note that some "
+        "methods like ``flux``, ``dot`` require all tangential field components, while others "
+        "like ``mode_area`` require all E-field components.",
+    )
+
     @pydantic.root_validator(skip_on_failure=True)
     def set_store_fields(cls, values):
         """Ensure 'store_fields_direction' is compatible with 'direction'."""
