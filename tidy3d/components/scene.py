@@ -1619,8 +1619,7 @@ class Scene(Tidy3dBaseModel):
 
         semiconductor_structs = []
         bounds_structs = []
-        acceptors_per_struct = []
-        donors_per_struct = []
+        doping_per_struct = {name: [] for name in ["acceptors", "donors"]}
         scene_bounds = [[5e50, 5e50, 5e50], [-5e50, -5e50, -5e50]]
 
         dims = [1, 1, 1]
@@ -1647,8 +1646,8 @@ class Scene(Tidy3dBaseModel):
                         scene_bounds[1][dim] = max
 
                 # list of doping boces
-                acceptors_per_struct.append(struct.medium.electric_spec.acceptors)
-                donors_per_struct.append(struct.medium.electric_spec.donors)
+                doping_per_struct["acceptors"].append(struct.medium.electric_spec.acceptors)
+                doping_per_struct["donors"].append(struct.medium.electric_spec.donors)
 
         # create coordinates for scene
         coords_dict = {d: [] for d in "xyz"}
@@ -1663,245 +1662,181 @@ class Scene(Tidy3dBaseModel):
         # gen coordinate matrices
         X, Y, Z = np.meshgrid(coords_dict["x"], coords_dict["y"], coords_dict["z"])
 
-        acceptors = np.zeros(tuple(size))
-        donors = np.zeros(tuple(size))
+        doping_arrays = {name: np.zeros(tuple(size)) for name in doping_per_struct.keys()}
 
-        for n in range(len(acceptors_per_struct)):
-            indices_in_struct = np.logical_and(
-                X >= bounds_structs[n][0][0], X <= bounds_structs[n][1][0]
-            )
-            indices_in_struct = np.logical_and(indices_in_struct, Y >= bounds_structs[n][0][1])
-            indices_in_struct = np.logical_and(indices_in_struct, Y <= bounds_structs[n][1][1])
-            indices_in_struct = np.logical_and(indices_in_struct, Z >= bounds_structs[n][0][2])
-            indices_in_struct = np.logical_and(indices_in_struct, Z <= bounds_structs[n][1][2])
-
-            # for each struct reset the doping so that we don't duplicate dopings
-            acceptors[indices_in_struct] = 0
-            donors[indices_in_struct] = 0
-
-            # distinguish between different type of dopings
-            if isinstance(acceptors_per_struct[n], float):
-                # constant doping
-                acceptors[indices_in_struct] = (
-                    acceptors[indices_in_struct] + acceptors_per_struct[n]
+        for doping_type in ["acceptors", "donors"]:
+            for n in range(len(doping_per_struct[doping_type])):
+                indices_in_struct = np.logical_and(
+                    X >= bounds_structs[n][0][0], X <= bounds_structs[n][1][0]
                 )
+                indices_in_struct = np.logical_and(indices_in_struct, Y >= bounds_structs[n][0][1])
+                indices_in_struct = np.logical_and(indices_in_struct, Y <= bounds_structs[n][1][1])
+                indices_in_struct = np.logical_and(indices_in_struct, Z >= bounds_structs[n][0][2])
+                indices_in_struct = np.logical_and(indices_in_struct, Z <= bounds_structs[n][1][2])
 
-            elif isinstance(acceptors_per_struct[n], SpatialDataArray):
-                # is that 2D
-                data_is_2d = any(
-                    dim_size <= 1 for _, dim_size in acceptors_per_struct[n].sizes.items()
-                )
-                interp_coords = coords_dict
-                if data_is_2d:
-                    # data is likely 2D so get the 2D coordinates
-                    interp_coords = {
-                        name: vals
-                        for name, vals in coords_dict.items()
-                        if acceptors_per_struct[n].sizes[name] > 1
-                    }
-                    # store the 3rd dimension
-                    third_dict = {
-                        name: vals
-                        for name, vals in coords_dict.items()
-                        if acceptors_per_struct[n].sizes[name] <= 1
-                    }
+                # for each struct reset the doping so that we don't duplicate dopings
+                doping_arrays[doping_type][indices_in_struct] = 0
 
-                interpolated_data = acceptors_per_struct[n].interp(
-                    **interp_coords, method="nearest"
-                )
-
-                if data_is_2d:
-                    # first check if third dimension existed already in DataArray
-                    if list(third_dict.keys())[0] in acceptors_per_struct[n].sizes.keys():
-                        interpolated_data = interpolated_data.squeeze(list(third_dict.keys())[0])
-                        interpolated_data = interpolated_data.expand_dims(**third_dict)
-                    else:
-                        interpolated_data = interpolated_data.expand_dims(**third_dict, axis=-1)
-
-                interpolated_data = interpolated_data.transpose("x", "y", "z")
-
-                acceptors[indices_in_struct] = (
-                    acceptors[indices_in_struct] + interpolated_data.data[indices_in_struct]
-                )
-
-            if isinstance(donors_per_struct[n], float):
-                # constant doping
-                donors[indices_in_struct] = donors[indices_in_struct] + donors_per_struct[n]
-
-            elif isinstance(donors_per_struct[n], SpatialDataArray):
-                # is that 2D
-                data_is_2d = any(
-                    dim_size <= 1 for _, dim_size in donors_per_struct[n].sizes.items()
-                )
-                interp_coords = coords_dict
-                if data_is_2d:
-                    # data is likely 2D so get the 2D coordinates
-                    interp_coords = {
-                        name: vals
-                        for name, vals in coords_dict.items()
-                        if donors_per_struct[n].sizes[name] > 1
-                    }
-                    # store the 3rd dimension
-                    third_dict = {
-                        name: vals
-                        for name, vals in coords_dict.items()
-                        if donors_per_struct[n].sizes[name] <= 1
-                    }
-
-                interpolated_data = donors_per_struct[n].interp(**interp_coords, method="nearest")
-
-                if data_is_2d:
-                    # first check if third dimension existed already in DataArray
-                    if list(third_dict.keys())[0] in donors_per_struct[n].sizes.keys():
-                        interpolated_data = interpolated_data.squeeze(list(third_dict.keys())[0])
-                        interpolated_data = interpolated_data.expand_dims(**third_dict)
-                    else:
-                        interpolated_data = interpolated_data.expand_dims(**third_dict, axis=-1)
-
-                interpolated_data = interpolated_data.transpose("x", "y", "z")
-
-                donors[indices_in_struct] = (
-                    donors[indices_in_struct] + interpolated_data.data[indices_in_struct]
-                )
-
-            # handle doping boxes
-            def get_gaussian_contrib(
-                indices_in_box_in_struct, box_coords, source, X, Y, Z, width, s
-            ):
-                x_contrib = np.zeros(tuple(size))
-                x_contrib[indices_in_box_in_struct] = 1
-                # lower x face
-                if source != "xmin":
-                    x0 = box_coords[0][0]
-                    indices = np.logical_and(X >= x0, X <= x0 + width)
-                    indices = np.logical_and(indices, indices_in_box_in_struct)
-                    x_contrib[indices] = np.exp(
-                        -(X[indices] - x0 - width) * (X[indices] - x0 - width) / 2 / s / s
-                    )
-                # higher x face
-                if source != "xmax":
-                    x1 = box_coords[1][0]
-                    indices = np.logical_and(X >= x1 - width, X <= x1)
-                    indices = np.logical_and(indices, indices_in_box_in_struct)
-                    x_contrib[indices] = np.exp(
-                        -(X[indices] - x1 + width) * (X[indices] - x1 + width) / 2 / s / s
+                # distinguish between different type of dopings
+                if isinstance(doping_per_struct[doping_type][n], float):
+                    # constant doping
+                    doping_arrays[doping_type][indices_in_struct] = (
+                        doping_arrays[doping_type][indices_in_struct]
+                        + doping_per_struct[doping_type][n]
                     )
 
-                y_contrib = np.zeros(tuple(size))
-                y_contrib[indices_in_box_in_struct] = 1
-                # lower y face
-                if source != "ymin":
-                    y0 = box_coords[0][1]
-                    indices = np.logical_and(Y >= y0, Y <= y0 + width)
-                    indices = np.logical_and(indices, indices_in_box_in_struct)
-                    y_contrib[indices] = np.exp(
-                        -(Y[indices] - y0 - width) * (Y[indices] - y0 - width) / 2 / s / s
+                elif isinstance(doping_per_struct[doping_type][n], SpatialDataArray):
+                    # is that 2D
+                    data_is_2d = any(
+                        dim_size <= 1
+                        for _, dim_size in doping_per_struct[doping_type][n].sizes.items()
                     )
-                # higher y face
-                if source != "ymax":
-                    y1 = box_coords[1][1]
-                    indices = np.logical_and(Y >= y1 - width, Y <= y1)
-                    indices = np.logical_and(indices, indices_in_box_in_struct)
-                    y_contrib[indices] = np.exp(
-                        -(Y[indices] - y1 + width) * (Y[indices] - y1 + width) / 2 / s / s
-                    )
+                    interp_coords = coords_dict
+                    if data_is_2d:
+                        # data is likely 2D so get the 2D coordinates
+                        interp_coords = {
+                            name: vals
+                            for name, vals in coords_dict.items()
+                            if doping_per_struct[doping_type][n].sizes[name] > 1
+                        }
+                        # store the 3rd dimension
+                        third_dict = {
+                            name: vals
+                            for name, vals in coords_dict.items()
+                            if doping_per_struct[doping_type][n].sizes[name] <= 1
+                        }
 
-                z_contrib = np.zeros(tuple(size))
-                z_contrib[indices_in_box_in_struct] = 1
-                # lower z face
-                if source != "zmin":
-                    z0 = box_coords[0][2]
-                    indices = np.logical_and(Z >= z0, Z <= z0 + width)
-                    indices = np.logical_and(indices, indices_in_box_in_struct)
-                    z_contrib[indices] = np.exp(
-                        -(Z[indices] - z0 - width) * (Z[indices] - z0 - width) / 2 / s / s
-                    )
-                # higher z face
-                if source != "zmax":
-                    z1 = box_coords[1][2]
-                    indices = np.logical_and(Z >= z1 - width, Z <= z1)
-                    indices = np.logical_and(indices, indices_in_box_in_struct)
-                    z_contrib[indices] = np.exp(
-                        -(Z[indices] - z1 + width) * (Z[indices] - z1 + width) / 2 / s / s
+                    interpolated_data = doping_per_struct[doping_type][n].interp(
+                        **interp_coords, method="nearest"
                     )
 
-                return x_contrib, y_contrib, z_contrib
+                    if data_is_2d:
+                        # first check if third dimension existed already in DataArray
+                        if (
+                            list(third_dict.keys())[0]
+                            in doping_per_struct[doping_type][n].sizes.keys()
+                        ):
+                            interpolated_data = interpolated_data.squeeze(
+                                list(third_dict.keys())[0]
+                            )
+                            interpolated_data = interpolated_data.expand_dims(**third_dict)
+                        else:
+                            interpolated_data = interpolated_data.expand_dims(**third_dict, axis=-1)
 
-            if isinstance(acceptors_per_struct[n], tuple):
-                for doping_box in acceptors_per_struct[n]:
-                    # if the box has 0-size dimensions but the structures don't, extrude
-                    # in the zero-size dimension
-                    new_coords = [list(doping_box.coords[0]), list(doping_box.coords[1])]
+                    interpolated_data = interpolated_data.transpose(
+                        "x", "y", "z", transpose_coords=False
+                    )
 
-                    for d in range(len(dims)):
-                        if dims[d] != 0:
-                            if new_coords[1][d] == new_coords[0][d]:
-                                new_coords[0][d] = np.min(coords_dict["xyz"[d]]) - 1
-                                new_coords[1][d] = np.max(coords_dict["xyz"[d]]) + 1
+                    doping_arrays[doping_type][indices_in_struct] = (
+                        doping_arrays[doping_type][indices_in_struct]
+                        + interpolated_data.data[indices_in_struct]
+                    )
 
-                    indices_in_box = np.logical_and(X >= new_coords[0][0], X <= new_coords[1][0])
-                    indices_in_box = np.logical_and(indices_in_box, Y >= new_coords[0][1])
-                    indices_in_box = np.logical_and(indices_in_box, Y <= new_coords[1][1])
-                    indices_in_box = np.logical_and(indices_in_box, Z >= new_coords[0][2])
-                    indices_in_box = np.logical_and(indices_in_box, Z <= new_coords[1][2])
-
-                    indices_in_box_in_struct = np.logical_and(indices_in_box, indices_in_struct)
-
-                    if isinstance(doping_box, GaussianDoping):
-                        width = doping_box.width
-                        s = doping_box.sigma
-                        source = doping_box.source
-
-                        x_contrib, y_contrib, z_contrib = get_gaussian_contrib(
-                            indices_in_box_in_struct, new_coords, source, X, Y, Z, width, s
+                # handle doping boxes
+                def get_gaussian_contrib(
+                    indices_in_box_in_struct, box_coords, source, X, Y, Z, width, s
+                ):
+                    x_contrib = np.zeros(tuple(size))
+                    x_contrib[indices_in_box_in_struct] = 1
+                    # lower x face
+                    if source != "xmin":
+                        x0 = box_coords[0][0]
+                        indices = np.logical_and(X >= x0, X <= x0 + width)
+                        indices = np.logical_and(indices, indices_in_box_in_struct)
+                        x_contrib[indices] = np.exp(
+                            -(X[indices] - x0 - width) * (X[indices] - x0 - width) / 2 / s / s
                         )
-                        # add contributions
-                        acceptors = (
-                            acceptors + doping_box.concentration * x_contrib * y_contrib * z_contrib
+                    # higher x face
+                    if source != "xmax":
+                        x1 = box_coords[1][0]
+                        indices = np.logical_and(X >= x1 - width, X <= x1)
+                        indices = np.logical_and(indices, indices_in_box_in_struct)
+                        x_contrib[indices] = np.exp(
+                            -(X[indices] - x1 + width) * (X[indices] - x1 + width) / 2 / s / s
                         )
-                    elif isinstance(doping_box, ConstantDoping):
-                        contribution = np.zeros(tuple(size))
-                        contribution[indices_in_box_in_struct] = doping_box.concentration
-                        acceptors = acceptors + contribution
 
-            if isinstance(donors_per_struct[n], tuple):
-                for doping_box in donors_per_struct[n]:
-                    # if the box has 0-size dimensions but the structures don't, extrude
-                    # in the zero-size dimension
-                    new_coords = [list(doping_box.coords[0]), list(doping_box.coords[1])]
-                    for d in range(len(dims)):
-                        if dims[d] != 0:
-                            if new_coords[1][d] == new_coords[0][d]:
-                                new_coords[0][d] = np.min(coords_dict["xyz"[d]]) - 1
-                                new_coords[1][d] = np.max(coords_dict["xyz"[d]]) + 1
-
-                    indices_in_box = np.logical_and(X >= new_coords[0][0], X <= new_coords[1][0])
-                    indices_in_box = np.logical_and(indices_in_box, Y >= new_coords[0][1])
-                    indices_in_box = np.logical_and(indices_in_box, Y <= new_coords[1][1])
-                    indices_in_box = np.logical_and(indices_in_box, Z >= new_coords[0][2])
-                    indices_in_box = np.logical_and(indices_in_box, Z <= new_coords[1][2])
-
-                    indices_in_box_in_struct = np.logical_and(indices_in_box, indices_in_struct)
-
-                    if isinstance(doping_box, GaussianDoping):
-                        width = doping_box.width
-                        s = doping_box.sigma
-                        source = doping_box.source
-
-                        x_contrib, y_contrib, z_contrib = get_gaussian_contrib(
-                            indices_in_box_in_struct, new_coords, source, X, Y, Z, width, s
+                    y_contrib = np.zeros(tuple(size))
+                    y_contrib[indices_in_box_in_struct] = 1
+                    # lower y face
+                    if source != "ymin":
+                        y0 = box_coords[0][1]
+                        indices = np.logical_and(Y >= y0, Y <= y0 + width)
+                        indices = np.logical_and(indices, indices_in_box_in_struct)
+                        y_contrib[indices] = np.exp(
+                            -(Y[indices] - y0 - width) * (Y[indices] - y0 - width) / 2 / s / s
                         )
-                        # add contributions
-                        donors = (
-                            donors + doping_box.concentration * x_contrib * y_contrib * z_contrib
+                    # higher y face
+                    if source != "ymax":
+                        y1 = box_coords[1][1]
+                        indices = np.logical_and(Y >= y1 - width, Y <= y1)
+                        indices = np.logical_and(indices, indices_in_box_in_struct)
+                        y_contrib[indices] = np.exp(
+                            -(Y[indices] - y1 + width) * (Y[indices] - y1 + width) / 2 / s / s
                         )
-                    elif isinstance(doping_box, ConstantDoping):
-                        contribution = np.zeros(tuple(size))
-                        contribution[indices_in_box_in_struct] = doping_box.concentration
-                        donors = donors + contribution
 
-        acceptors = SpatialDataArray(data=acceptors, coords=coords_dict)
-        donors = SpatialDataArray(data=donors, coords=coords_dict)
+                    z_contrib = np.zeros(tuple(size))
+                    z_contrib[indices_in_box_in_struct] = 1
+                    # lower z face
+                    if source != "zmin":
+                        z0 = box_coords[0][2]
+                        indices = np.logical_and(Z >= z0, Z <= z0 + width)
+                        indices = np.logical_and(indices, indices_in_box_in_struct)
+                        z_contrib[indices] = np.exp(
+                            -(Z[indices] - z0 - width) * (Z[indices] - z0 - width) / 2 / s / s
+                        )
+                    # higher z face
+                    if source != "zmax":
+                        z1 = box_coords[1][2]
+                        indices = np.logical_and(Z >= z1 - width, Z <= z1)
+                        indices = np.logical_and(indices, indices_in_box_in_struct)
+                        z_contrib[indices] = np.exp(
+                            -(Z[indices] - z1 + width) * (Z[indices] - z1 + width) / 2 / s / s
+                        )
+
+                    return x_contrib, y_contrib, z_contrib
+
+                if isinstance(doping_per_struct[doping_type][n], tuple):
+                    for doping_box in doping_per_struct[doping_type][n]:
+                        # if the box has 0-size dimensions but the structures don't, extrude
+                        # in the zero-size dimension
+                        new_coords = [list(doping_box.coords[0]), list(doping_box.coords[1])]
+
+                        for d in range(len(dims)):
+                            if dims[d] != 0:
+                                if new_coords[1][d] == new_coords[0][d]:
+                                    new_coords[0][d] = np.min(coords_dict["xyz"[d]]) - 1
+                                    new_coords[1][d] = np.max(coords_dict["xyz"[d]]) + 1
+
+                        indices_in_box = np.logical_and(
+                            X >= new_coords[0][0], X <= new_coords[1][0]
+                        )
+                        indices_in_box = np.logical_and(indices_in_box, Y >= new_coords[0][1])
+                        indices_in_box = np.logical_and(indices_in_box, Y <= new_coords[1][1])
+                        indices_in_box = np.logical_and(indices_in_box, Z >= new_coords[0][2])
+                        indices_in_box = np.logical_and(indices_in_box, Z <= new_coords[1][2])
+
+                        indices_in_box_in_struct = np.logical_and(indices_in_box, indices_in_struct)
+
+                        if isinstance(doping_box, GaussianDoping):
+                            width = doping_box.width
+                            s = doping_box.sigma
+                            source = doping_box.source
+
+                            x_contrib, y_contrib, z_contrib = get_gaussian_contrib(
+                                indices_in_box_in_struct, new_coords, source, X, Y, Z, width, s
+                            )
+                            # add contributions
+                            doping_arrays[doping_type] = (
+                                doping_arrays[doping_type]
+                                + doping_box.concentration * x_contrib * y_contrib * z_contrib
+                            )
+                        elif isinstance(doping_box, ConstantDoping):
+                            contribution = np.zeros(tuple(size))
+                            contribution[indices_in_box_in_struct] = doping_box.concentration
+                            doping_arrays[doping_type] = doping_arrays[doping_type] + contribution
+
+        acceptors = SpatialDataArray(data=doping_arrays["acceptors"], coords=coords_dict)
+        donors = SpatialDataArray(data=doping_arrays["donors"], coords=coords_dict)
 
         # now it is time to plot
         if ax is None:
