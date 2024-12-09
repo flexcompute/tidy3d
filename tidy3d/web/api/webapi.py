@@ -236,6 +236,7 @@ def upload(
             console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
 
     task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
+    estimate_cost(task_id=task.task_id, verbose=verbose)
 
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
@@ -388,11 +389,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             )
         else:
             est_flex_unit = task_info.estFlexUnit
-            if est_flex_unit is not None and est_flex_unit > 0:
-                console.log(
-                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)'"
-                    f" to get the billed FlexCredit cost after a simulation run."
-                )
         return est_flex_unit
 
     def monitor_preprocess() -> None:

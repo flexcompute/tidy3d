@@ -239,7 +239,7 @@ def mock_webapi(
 
 
 @responses.activate
-def test_upload(mock_upload):
+def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     sim = make_heat_sim()
     assert upload(sim, TASK_NAME, PROJECT_NAME)
 

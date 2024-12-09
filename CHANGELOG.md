@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mode solver fields are more consistently normalized with respect to grid-dependent sign inversions in high order modes.
 - `MeshOverrideStructure` accepts `Box` as geometry. Other geometry types will raise a warning and convert to bounding box.
 - Double precision mode solver is now supported in EME.
+- `estimate_cost` is now called at the end of every `web.upload` call.
 
 ### Fixed
 - Significant speedup for field projection computations.
