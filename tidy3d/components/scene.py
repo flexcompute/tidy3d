@@ -1657,7 +1657,6 @@ class Scene(Tidy3dBaseModel):
                 coords_dict[d_name] = [scene_bounds[0][d]]
             else:
                 coords_dict[d_name] = np.linspace(scene_bounds[0][d], scene_bounds[1][d], N)
-        print("scene bounds", scene_bounds)
 
         size = [len(coords_x) for _, coords_x in coords_dict.items()]
 
@@ -1688,9 +1687,41 @@ class Scene(Tidy3dBaseModel):
                 )
 
             elif isinstance(acceptors_per_struct[n], SpatialDataArray):
-                # for SpatialDataArray interpolate values to plotting coordinates
-                acceptors = acceptors + acceptors_per_struct[n].interp(
-                    **coords_dict, method="nearest", fill_value=0
+                # is that 2D
+                data_is_2d = any(
+                    dim_size <= 1 for _, dim_size in acceptors_per_struct[n].sizes.items()
+                )
+                interp_coords = coords_dict
+                if data_is_2d:
+                    # data is likely 2D so get the 2D coordinates
+                    interp_coords = {
+                        name: vals
+                        for name, vals in coords_dict.items()
+                        if acceptors_per_struct[n].sizes[name] > 1
+                    }
+                    # store the 3rd dimension
+                    third_dict = {
+                        name: vals
+                        for name, vals in coords_dict.items()
+                        if acceptors_per_struct[n].sizes[name] <= 1
+                    }
+
+                interpolated_data = acceptors_per_struct[n].interp(
+                    **interp_coords, method="nearest"
+                )
+
+                if data_is_2d:
+                    # first check if third dimension existed already in DataArray
+                    if list(third_dict.keys())[0] in acceptors_per_struct[n].sizes.keys():
+                        interpolated_data = interpolated_data.squeeze(list(third_dict.keys())[0])
+                        interpolated_data = interpolated_data.expand_dims(**third_dict)
+                    else:
+                        interpolated_data = interpolated_data.expand_dims(**third_dict, axis=-1)
+
+                interpolated_data = interpolated_data.transpose("x", "y", "z")
+
+                acceptors[indices_in_struct] = (
+                    acceptors[indices_in_struct] + interpolated_data.data[indices_in_struct]
                 )
 
             if isinstance(donors_per_struct[n], float):
@@ -1698,9 +1729,39 @@ class Scene(Tidy3dBaseModel):
                 donors[indices_in_struct] = donors[indices_in_struct] + donors_per_struct[n]
 
             elif isinstance(donors_per_struct[n], SpatialDataArray):
-                # for SpatialDataArray interpolate values to plotting coordinates
-                donors = donors + donors_per_struct[n].interp(
-                    **coords_dict, method="nearest", fill_value=0
+                # is that 2D
+                data_is_2d = any(
+                    dim_size <= 1 for _, dim_size in donors_per_struct[n].sizes.items()
+                )
+                interp_coords = coords_dict
+                if data_is_2d:
+                    # data is likely 2D so get the 2D coordinates
+                    interp_coords = {
+                        name: vals
+                        for name, vals in coords_dict.items()
+                        if donors_per_struct[n].sizes[name] > 1
+                    }
+                    # store the 3rd dimension
+                    third_dict = {
+                        name: vals
+                        for name, vals in coords_dict.items()
+                        if donors_per_struct[n].sizes[name] <= 1
+                    }
+
+                interpolated_data = donors_per_struct[n].interp(**interp_coords, method="nearest")
+
+                if data_is_2d:
+                    # first check if third dimension existed already in DataArray
+                    if list(third_dict.keys())[0] in donors_per_struct[n].sizes.keys():
+                        interpolated_data = interpolated_data.squeeze(list(third_dict.keys())[0])
+                        interpolated_data = interpolated_data.expand_dims(**third_dict)
+                    else:
+                        interpolated_data = interpolated_data.expand_dims(**third_dict, axis=-1)
+
+                interpolated_data = interpolated_data.transpose("x", "y", "z")
+
+                donors[indices_in_struct] = (
+                    donors[indices_in_struct] + interpolated_data.data[indices_in_struct]
                 )
 
             # handle doping boxes
