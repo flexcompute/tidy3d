@@ -13,7 +13,8 @@ from ....components.base import cached_property
 from ....components.data.sim_data import SimulationData
 from ....components.monitor import ModeMonitor
 from ....components.simulation import Simulation
-from ....components.source import GaussianPulse, ModeSource
+from ....components.source.field import ModeSource
+from ....components.source.time import GaussianPulse
 from ....components.types import Ax, Complex
 from ....components.viz import add_ax_if_none, equal_aspect
 from ....exceptions import SetupError

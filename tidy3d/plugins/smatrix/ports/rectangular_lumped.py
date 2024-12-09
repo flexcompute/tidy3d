@@ -17,7 +17,8 @@ from ....components.geometry.utils_2d import increment_float
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import LumpedResistor
 from ....components.monitor import FieldMonitor
-from ....components.source import GaussianPulse, UniformCurrentSource
+from ....components.source.current import UniformCurrentSource
+from ....components.source.time import GaussianPulse
 from ....components.types import Axis, FreqArray
 from ....components.validators import assert_plane
 from ....exceptions import SetupError, ValidationError

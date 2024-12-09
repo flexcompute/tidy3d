@@ -12,7 +12,8 @@ from ....components.geometry.utils_2d import increment_float
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import CoaxialLumpedResistor
 from ....components.monitor import FieldMonitor
-from ....components.source import CustomCurrentSource, GaussianPulse
+from ....components.source.current import CustomCurrentSource
+from ....components.source.time import GaussianPulse
 from ....components.types import Axis, Coordinate, Direction, FreqArray, Size
 from ....components.validators import skip_if_fields_missing
 from ....constants import MICROMETER

@@ -35,14 +35,18 @@ from ..monitor import (
     MonitorType,
     PermittivityMonitor,
 )
-from ..source import (
+from ..source.base import Source
+from ..source.current import (
     CustomCurrentSource,
+    PointDipole,
+)
+from ..source.field import (
     CustomFieldSource,
-    GaussianPulse,
     ModeSource,
     PlaneWave,
-    PointDipole,
-    Source,
+)
+from ..source.time import (
+    GaussianPulse,
     SourceTimeType,
 )
 from ..types import (

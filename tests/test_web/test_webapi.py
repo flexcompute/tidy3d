@@ -13,7 +13,8 @@ from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import FieldMonitor
-from tidy3d.components.source import GaussianPulse, PointDipole
+from tidy3d.components.source.current import PointDipole
+from tidy3d.components.source.time import GaussianPulse
 from tidy3d.exceptions import SetupError
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job

@@ -19,7 +19,8 @@ from ..medium import FullyAnisotropicMedium
 from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor, MonitorType
 from ..scene import Scene
 from ..simulation import AbstractYeeGridSimulation, Simulation
-from ..source import GaussianPulse, PointDipole
+from ..source.current import PointDipole
+from ..source.time import GaussianPulse
 from ..structure import Structure
 from ..types import Ax, Axis, FreqArray, Symmetry, annotate_type
 from ..validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty

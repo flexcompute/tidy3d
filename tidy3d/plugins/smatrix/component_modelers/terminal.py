@@ -12,7 +12,7 @@ from ....components.data.data_array import DataArray, FreqDataArray
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.utils_2d import snap_coordinate_to_grid
 from ....components.simulation import Simulation
-from ....components.source import GaussianPulse
+from ....components.source.time import GaussianPulse
 from ....components.types import Ax
 from ....components.viz import add_ax_if_none, equal_aspect
 from ....constants import C_0, OHM

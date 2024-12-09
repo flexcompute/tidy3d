@@ -13,7 +13,8 @@ from ....components.geometry.base import Box
 from ....components.grid.grid import Grid
 from ....components.monitor import FieldMonitor, ModeSolverMonitor
 from ....components.simulation import Simulation
-from ....components.source import GaussianPulse, ModeSource, ModeSpec
+from ....components.source.field import ModeSource, ModeSpec
+from ....components.source.time import GaussianPulse
 from ....components.types import Bound, Direction, FreqArray
 from ....exceptions import ValidationError
 from ...microwave import (

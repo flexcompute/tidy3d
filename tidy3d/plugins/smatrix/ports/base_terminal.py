@@ -9,7 +9,8 @@ from ....components.data.data_array import DataArray, FreqDataArray
 from ....components.data.sim_data import SimulationData
 from ....components.grid.grid import Grid
 from ....components.monitor import FieldMonitor
-from ....components.source import GaussianPulse, Source
+from ....components.source.base import Source
+from ....components.source.time import GaussianPulse
 from ....components.types import FreqArray
 
 

@@ -33,7 +33,8 @@ from ...components.mode import ModeSpec
 from ...components.monitor import ModeMonitor, ModeSolverMonitor
 from ...components.scene import Scene
 from ...components.simulation import Simulation
-from ...components.source import ModeSource, SourceTime
+from ...components.source.field import ModeSource
+from ...components.source.time import SourceTime
 from ...components.structure import Structure
 from ...components.subpixel_spec import SurfaceImpedance
 from ...components.types import (

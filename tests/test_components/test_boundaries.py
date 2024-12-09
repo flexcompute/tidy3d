@@ -14,7 +14,9 @@ from tidy3d.components.boundary import (
     PMCBoundary,
     StablePML,
 )
-from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
+from tidy3d.components.source.current import PointDipole
+from tidy3d.components.source.field import PlaneWave
+from tidy3d.components.source.time import GaussianPulse
 from tidy3d.exceptions import DataError, SetupError
 
 from ..utils import assert_log_level

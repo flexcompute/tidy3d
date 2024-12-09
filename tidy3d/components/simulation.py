@@ -70,20 +70,19 @@ from .monitor import (
 )
 from .run_time_spec import RunTimeSpec
 from .scene import MAX_NUM_MEDIUMS, Scene
-from .source import (
+from .source.base import Source
+from .source.current import CustomCurrentSource
+from .source.field import (
     TFSF,
     AstigmaticGaussianBeam,
-    ContinuousWave,
-    CustomCurrentSource,
     CustomFieldSource,
-    CustomSourceTime,
     FixedAngleSpec,
     GaussianBeam,
     ModeSource,
     PlaneWave,
-    Source,
-    SourceType,
 )
+from .source.time import ContinuousWave, CustomSourceTime
+from .source.utils import SourceType
 from .structure import MeshOverrideStructure, Structure
 from .subpixel_spec import SubpixelSpec
 from .types import TYPE_TAG_STR, Ax, Axis, FreqBound, InterpMethod, Literal, Symmetry, annotate_type

@@ -13,7 +13,7 @@ from ...exceptions import SetupError
 from ...log import log
 from ..base import Tidy3dBaseModel
 from ..geometry.base import Box
-from ..source import SourceType
+from ..source.utils import SourceType
 from ..structure import Structure, StructureType
 from ..types import TYPE_TAG_STR, Axis, Coordinate, Symmetry, annotate_type
 from .grid import Coords, Coords1D, Grid

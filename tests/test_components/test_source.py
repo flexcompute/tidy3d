@@ -5,7 +5,7 @@ import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
-from tidy3d.components.source import CHEB_GRID_WIDTH, DirectionalSource
+from tidy3d.components.source.field import CHEB_GRID_WIDTH, DirectionalSource
 from tidy3d.exceptions import SetupError
 
 from ..utils import AssertLogLevel, assert_log_level
@@ -79,7 +79,7 @@ def test_source_times():
     # plt.close()
 
     # test we can make cw pulse
-    from tidy3d.components.source import ContinuousWave
+    from tidy3d.components.source.time import ContinuousWave
 
     c = ContinuousWave(freq0=1e12, fwidth=0.1e12)
     c.amp_time(ts)

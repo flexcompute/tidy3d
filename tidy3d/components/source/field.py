@@ -1,686 +1,39 @@
-"""Defines electric current sources for injecting light into simulation."""
+"""Defines electric field sources for injecting light into simulation."""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
-from typing_extensions import Literal
 
-from ..constants import GLANCING_CUTOFF, HERTZ, MICROMETER, RADIAN, inf
-from ..exceptions import SetupError, ValidationError
-from ..log import log
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .base_sim.source import AbstractSource
-from .data.data_array import TimeDataArray
-from .data.dataset import FieldDataset, TimeDataset
-from .data.validators import validate_can_interpolate, validate_no_nans
-from .geometry.base import Box
-from .mode import ModeSpec
-from .time import AbstractTimeDependence
-from .types import (
+from ...constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
+from ...exceptions import SetupError
+from ...log import log
+from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from ..data.dataset import FieldDataset
+from ..data.validators import validate_can_interpolate, validate_no_nans
+from ..mode import ModeSpec
+from ..types import (
     TYPE_TAG_STR,
-    ArrayComplex1D,
-    ArrayFloat1D,
     Ax,
     Axis,
     Coordinate,
     Direction,
-    FreqBound,
-    PlotVal,
-    Polarization,
 )
-from .validators import (
-    _assert_min_freq,
+from ..validators import (
     assert_plane,
     assert_single_freq_in_range,
     assert_volumetric,
     warn_if_dataset_none,
 )
-from .viz import (
-    ARROW_ALPHA,
-    ARROW_COLOR_POLARIZATION,
-    ARROW_COLOR_SOURCE,
-    PlotParams,
-    add_ax_if_none,
-    plot_params_source,
-)
+from .base import Source
 
-# when checking if custom data spans the source plane, allow for a small tolerance
-# due to numerical precision
-DATA_SPAN_TOL = 1e-8
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
 CHEB_GRID_WIDTH = 1.5
 # Number of frequencies in a broadband source above which to issue a warning
 WARN_NUM_FREQS = 20
-# how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
-END_TIME_FACTOR_GAUSSIAN = 10
-
-
-class SourceTime(AbstractTimeDependence):
-    """Base class describing the time dependence of a source."""
-
-    @add_ax_if_none
-    def plot_spectrum(
-        self,
-        times: ArrayFloat1D,
-        num_freqs: int = 101,
-        val: PlotVal = "real",
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot the complex-valued amplitude of the source time-dependence.
-        Note: Only the real part of the time signal is used.
-
-        Parameters
-        ----------
-        times : np.ndarray
-            Array of evenly-spaced times (seconds) to evaluate source time-dependence at.
-            The spectrum is computed from this value and the source time frequency content.
-            To see source spectrum for a specific :class:`Simulation`,
-            pass ``simulation.tmesh``.
-        num_freqs : int = 101
-            Number of frequencies to plot within the SourceTime.frequency_range.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        fmin, fmax = self.frequency_range()
-        return self.plot_spectrum_in_frequency_range(
-            times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax
-        )
-
-    @abstractmethod
-    def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
-        """Frequency range within plus/minus ``num_fwidth * fwidth`` of the central frequency."""
-
-    @abstractmethod
-    def end_time(self) -> Optional[float]:
-        """Time after which the source is effectively turned off / close to zero amplitude."""
-
-
-class Pulse(SourceTime, ABC):
-    """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
-
-    freq0: pydantic.PositiveFloat = pydantic.Field(
-        ..., title="Central Frequency", description="Central frequency of the pulse.", units=HERTZ
-    )
-    fwidth: pydantic.PositiveFloat = pydantic.Field(
-        ...,
-        title="",
-        description="Standard deviation of the frequency content of the pulse.",
-        units=HERTZ,
-    )
-
-    offset: float = pydantic.Field(
-        5.0,
-        title="Offset",
-        description="Time delay of the maximum value of the "
-        "pulse in units of 1 / (``2pi * fwidth``).",
-        ge=2.5,
-    )
-
-    @property
-    def twidth(self) -> float:
-        """Width of pulse in seconds."""
-        return 1.0 / (2 * np.pi * self.fwidth)
-
-    def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
-        """Frequency range within 5 standard deviations of the central frequency.
-
-        Parameters
-        ----------
-        num_fwidth : float = 4.
-            Frequency range defined as plus/minus ``num_fwidth * self.fwdith``.
-
-        Returns
-        -------
-        Tuple[float, float]
-            Minimum and maximum frequencies of the :class:`GaussianPulse` or :class:`ContinuousWave`
-            power.
-        """
-
-        freq_width_range = num_fwidth * self.fwidth
-        freq_min = max(0, self.freq0 - freq_width_range)
-        freq_max = self.freq0 + freq_width_range
-        return (freq_min, freq_max)
-
-
-class GaussianPulse(Pulse):
-    """Source time dependence that describes a Gaussian pulse.
-
-    Example
-    -------
-    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    """
-
-    remove_dc_component: bool = pydantic.Field(
-        True,
-        title="Remove DC Component",
-        description="Whether to remove the DC component in the Gaussian pulse spectrum. "
-        "If ``True``, the Gaussian pulse is modified at low frequencies to zero out the "
-        "DC component, which is usually desirable so that the fields will decay. However, "
-        "for broadband simulations, it may be better to have non-vanishing source power "
-        "near zero frequency. Setting this to ``False`` results in an unmodified Gaussian "
-        "pulse spectrum which can have a nonzero DC component.",
-    )
-
-    def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time."""
-
-        omega0 = 2 * np.pi * self.freq0
-        time_shifted = time - self.offset * self.twidth
-
-        offset = np.exp(1j * self.phase)
-        oscillation = np.exp(-1j * omega0 * time)
-        amp = np.exp(-(time_shifted**2) / 2 / self.twidth**2) * self.amplitude
-
-        pulse_amp = offset * oscillation * amp
-
-        # subtract out DC component
-        if self.remove_dc_component:
-            pulse_amp = pulse_amp * (1j + time_shifted / self.twidth**2 / omega0)
-        else:
-            # 1j to make it agree in large omega0 limit
-            pulse_amp = pulse_amp * 1j
-
-        return pulse_amp
-
-    def end_time(self) -> Optional[float]:
-        """Time after which the source is effectively turned off / close to zero amplitude."""
-
-        # TODO: decide if we should continue to return an end_time if the DC component remains
-        # if not self.remove_dc_component:
-        #     return None
-
-        return self.offset * self.twidth + END_TIME_FACTOR_GAUSSIAN * self.twidth
-
-    @property
-    def amp_complex(self) -> complex:
-        """Grab the complex amplitude from a ``GaussianPulse``."""
-        phase = np.exp(1j * self.phase)
-        return self.amplitude * phase
-
-    @classmethod
-    def from_amp_complex(cls, amp: complex, **kwargs) -> GaussianPulse:
-        """Set the complex amplitude of a ``GaussianPulse``.
-
-        Parameters
-        ----------
-        amp : complex
-            Complex-valued amplitude to set in the returned ``GaussianPulse``.
-        kwargs : dict
-            Keyword arguments passed to ``GaussianPulse()``, excluding ``amplitude`` & ``phase``.
-        """
-        amplitude = abs(amp)
-        phase = np.angle(amp)
-        return cls(amplitude=amplitude, phase=phase, **kwargs)
-
-
-class ContinuousWave(Pulse):
-    """Source time dependence that ramps up to continuous oscillation
-    and holds until end of simulation.
-
-    Note
-    ----
-    Field decay will not occur, so the simulation will run for the full ``run_time``.
-    Also, source normalization of frequency-domain monitors is not meaningful.
-
-    Example
-    -------
-    >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
-    """
-
-    def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time."""
-
-        twidth = 1.0 / (2 * np.pi * self.fwidth)
-        omega0 = 2 * np.pi * self.freq0
-        time_shifted = time - self.offset * twidth
-
-        const = 1.0
-        offset = np.exp(1j * self.phase)
-        oscillation = np.exp(-1j * omega0 * time)
-        amp = 1 / (1 + np.exp(-time_shifted / twidth)) * self.amplitude
-
-        return const * offset * oscillation * amp
-
-    def end_time(self) -> Optional[float]:
-        """Time after which the source is effectively turned off / close to zero amplitude."""
-        return None
-
-
-class CustomSourceTime(Pulse):
-    """Custom source time dependence consisting of a real or complex envelope
-    modulated at a central frequency, as shown below.
-
-    Note
-    ----
-    .. math::
-
-        amp\\_time(t) = amplitude \\cdot \\
-                e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
-                envelope(t - offset / (2 \\pi \\cdot fwidth))
-
-    Note
-    ----
-    Depending on the envelope, field decay may not occur.
-    If field decay does not occur, then the simulation will run for the full ``run_time``.
-    Also, if field decay does not occur, then source normalization of frequency-domain
-    monitors is not meaningful.
-
-    Note
-    ----
-    The source time dependence is linearly interpolated to the simulation time steps.
-    The sampling rate should be sufficiently fast that this interpolation does not
-    introduce artifacts. The source time dependence should also start at zero and ramp up smoothly.
-    The first and last values of the envelope will be used for times that are out of range
-    of the provided data.
-
-    Example
-    -------
-    >>> cst = CustomSourceTime.from_values(freq0=1, fwidth=0.1,
-    ...     values=np.linspace(0, 9, 10), dt=0.1)
-
-    """
-
-    offset: float = pydantic.Field(
-        0.0,
-        title="Offset",
-        description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
-    )
-
-    source_time_dataset: Optional[TimeDataset] = pydantic.Field(
-        ...,
-        title="Source time dataset",
-        description="Dataset for storing the envelope of the custom source time. "
-        "This envelope will be modulated by a complex exponential at frequency ``freq0``.",
-    )
-
-    _no_nans_dataset = validate_no_nans("source_time_dataset")
-    _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
-
-    @pydantic.validator("source_time_dataset", always=True)
-    def _more_than_one_time(cls, val):
-        """Must have more than one time to interpolate."""
-        if val is None:
-            return val
-        if val.values.size <= 1:
-            raise ValidationError("'CustomSourceTime' must have more than one time coordinate.")
-        return val
-
-    @classmethod
-    def from_values(
-        cls, freq0: float, fwidth: float, values: ArrayComplex1D, dt: float
-    ) -> CustomSourceTime:
-        """Create a :class:`.CustomSourceTime` from a numpy array.
-
-        Parameters
-        ----------
-        freq0 : float
-            Central frequency of the source. The envelope provided will be modulated
-            by a complex exponential at this frequency.
-        fwidth : float
-            Estimated frequency width of the source.
-        values: ArrayComplex1D
-            Complex values of the source envelope.
-        dt: float
-            Time step for the ``values`` array. This value should be sufficiently small
-            that the interpolation to simulation time steps does not introduce artifacts.
-
-        Returns
-        -------
-        CustomSourceTime
-            :class:`.CustomSourceTime` with envelope given by ``values``, modulated by a complex
-            exponential at frequency ``freq0``. The time coordinates are evenly spaced
-            between ``0`` and ``dt * (N-1)`` with a step size of ``dt``, where ``N`` is the length of
-            the values array.
-        """
-
-        times = np.arange(len(values)) * dt
-        source_time_dataarray = TimeDataArray(values, coords=dict(t=times))
-        source_time_dataset = TimeDataset(values=source_time_dataarray)
-        return CustomSourceTime(
-            freq0=freq0,
-            fwidth=fwidth,
-            source_time_dataset=source_time_dataset,
-        )
-
-    @property
-    def data_times(self) -> ArrayFloat1D:
-        """Times of envelope definition."""
-        if self.source_time_dataset is None:
-            return []
-        data_times = self.source_time_dataset.values.coords["t"].values.squeeze()
-        return data_times
-
-    def _all_outside_range(self, run_time: float) -> bool:
-        """Whether all times are outside range of definition."""
-
-        # can't validate if data isn't loaded
-        if self.source_time_dataset is None:
-            return False
-
-        # make time a numpy array for uniform handling
-        data_times = self.data_times
-
-        # shift time
-        twidth = 1.0 / (2 * np.pi * self.fwidth)
-        max_time_shifted = run_time - self.offset * twidth
-        min_time_shifted = -self.offset * twidth
-
-        return (max_time_shifted < min(data_times)) | (min_time_shifted > max(data_times))
-
-    def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time.
-
-        Parameters
-        ----------
-        time : float
-            Time in seconds.
-
-        Returns
-        -------
-        complex
-            Complex-valued source amplitude at that time.
-        """
-
-        if self.source_time_dataset is None:
-            return None
-
-        # make time a numpy array for uniform handling
-        times = np.array([time] if isinstance(time, (int, float)) else time)
-        data_times = self.data_times
-
-        # shift time
-        twidth = 1.0 / (2 * np.pi * self.fwidth)
-        time_shifted = times - self.offset * twidth
-
-        # mask times that are out of range
-        mask = (time_shifted < min(data_times)) | (time_shifted > max(data_times))
-
-        # get envelope
-        envelope = np.zeros(len(time_shifted), dtype=complex)
-        values = self.source_time_dataset.values
-        envelope[mask] = values.sel(t=time_shifted[mask], method="nearest").to_numpy()
-        if not all(mask):
-            envelope[~mask] = values.interp(t=time_shifted[~mask]).to_numpy()
-
-        # modulation, phase, amplitude
-        omega0 = 2 * np.pi * self.freq0
-        offset = np.exp(1j * self.phase)
-        oscillation = np.exp(-1j * omega0 * times)
-        amp = self.amplitude
-
-        return offset * oscillation * amp * envelope
-
-    def end_time(self) -> Optional[float]:
-        """Time after which the source is effectively turned off / close to zero amplitude."""
-
-        if self.source_time_dataset is None:
-            return None
-
-        data_array = self.source_time_dataset.values
-
-        t_coords = data_array.coords["t"]
-        source_is_non_zero = ~np.isclose(abs(data_array), 0)
-        t_non_zero = t_coords[source_is_non_zero]
-
-        return np.max(t_non_zero)
-
-
-SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
-
-""" Source objects """
-
-
-class Source(Box, AbstractSource, ABC):
-    """Abstract base class for all sources."""
-
-    source_time: SourceTimeType = pydantic.Field(
-        ...,
-        title="Source Time",
-        description="Specification of the source time-dependence.",
-        discriminator=TYPE_TAG_STR,
-    )
-
-    @cached_property
-    def plot_params(self) -> PlotParams:
-        """Default parameters for plotting a Source object."""
-        return plot_params_source
-
-    @cached_property
-    def geometry(self) -> Box:
-        """:class:`Box` representation of source."""
-
-        return Box(center=self.center, size=self.size)
-
-    @cached_property
-    def _injection_axis(self):
-        """Injection axis of the source."""
-        return None
-
-    @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
-        """Returns a vector indicating the source direction for arrow plotting, if not None."""
-        return None
-
-    @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
-        """Returns a vector indicating the source polarization for arrow plotting, if not None."""
-        return None
-
-    @pydantic.validator("source_time", always=True)
-    def _freqs_lower_bound(cls, val):
-        """Raise validation error if central frequency is too low."""
-        _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
-        return val
-
-    def plot(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        **patch_kwargs,
-    ) -> Ax:
-        """Plot this source."""
-
-        kwargs_arrow_base = patch_kwargs.pop("arrow_base", None)
-
-        # call the `Source.plot()` function first.
-        ax = Box.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
-
-        kwargs_alpha = patch_kwargs.get("alpha")
-        arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
-
-        # then add the arrow based on the propagation direction
-        if self._dir_vector is not None:
-            bend_radius = None
-            bend_axis = None
-            if hasattr(self, "mode_spec"):
-                bend_radius = self.mode_spec.bend_radius
-                bend_axis = self._bend_axis
-
-            ax = self._plot_arrow(
-                x=x,
-                y=y,
-                z=z,
-                ax=ax,
-                direction=self._dir_vector,
-                bend_radius=bend_radius,
-                bend_axis=bend_axis,
-                color=ARROW_COLOR_SOURCE,
-                alpha=arrow_alpha,
-                both_dirs=False,
-                arrow_base=kwargs_arrow_base,
-            )
-
-        if self._pol_vector is not None:
-            ax = self._plot_arrow(
-                x=x,
-                y=y,
-                z=z,
-                ax=ax,
-                direction=self._pol_vector,
-                color=ARROW_COLOR_POLARIZATION,
-                alpha=arrow_alpha,
-                both_dirs=False,
-                arrow_base=kwargs_arrow_base,
-            )
-
-        return ax
-
-
-""" Sources either: (1) implement current distributions or (2) generate fields."""
-
-
-class CurrentSource(Source, ABC):
-    """Source implements a current distribution directly."""
-
-    polarization: Polarization = pydantic.Field(
-        ...,
-        title="Polarization",
-        description="Specifies the direction and type of current component.",
-    )
-
-    @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
-        """Returns a vector indicating the source polarization for arrow plotting, if not None."""
-        component = self.polarization[-1]  # 'x' 'y' or 'z'
-        pol_axis = "xyz".index(component)
-        pol_vec = [0, 0, 0]
-        pol_vec[pol_axis] = 1
-        return pol_vec
-
-
-class ReverseInterpolatedSource(Source):
-    """Abstract source that allows reverse-interpolation along zero-sized dimensions."""
-
-    interpolate: bool = pydantic.Field(
-        True,
-        title="Enable Interpolation",
-        description="Handles reverse-interpolation of zero-size dimensions of the source. "
-        "If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, "
-        "equivalent source data is applied on the surrounding Yee grid points to emulate "
-        "placement at the specified location using linear interpolation.",
-    )
-
-    confine_to_bounds: bool = pydantic.Field(
-        False,
-        title="Confine to Analytical Bounds",
-        description="If ``True``, any source amplitudes which, after discretization, fall beyond "
-        "the bounding box of the source are zeroed out, but only along directions where "
-        "the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` "
-        "when the current source is being used to excite a current in a conductive material.",
-    )
-
-
-class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
-    """Source in a rectangular volume with uniform time dependence.
-
-    Notes
-    -----
-
-        Inputting the parameter ``size=(0,0,0)`` defines the equivalent of a point source.
-
-    Example
-    -------
-    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')
-    """
-
-
-class PointDipole(CurrentSource, ReverseInterpolatedSource):
-    """Uniform current source with a zero size. The source corresponds to an infinitesimal antenna
-    with a fixed current density, and is slightly different from a related definition that is used
-    in some contexts, namely an oscillating electric or magnetic dipole. The two are related through
-    a factor of ``omega ** 2`` in the power normalization, where ``omega`` is the angular frequency
-    of the oscillation. This is discussed further in our
-    `source normalization <../../faq/docs/faq/How-are-results-normalized.html>`_ FAQ page.
-
-    ..
-        TODO add image of how it looks like based on sim 1.
-
-    Example
-    -------
-    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')
-
-    See Also
-    --------
-
-    **Notebooks**
-        * `Particle swarm optimization of quantum emitter light extraction to free space <../../notebooks/BullseyeCavityPSO.html>`_
-        * `Adjoint optimization of quantum emitter light extraction to an integrated waveguide <../../notebooks/AdjointPlugin12LightExtractor.html>`_
-    """
-
-    size: Tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
-        (0, 0, 0),
-        title="Size",
-        description="Size in x, y, and z directions, constrained to ``(0, 0, 0)``.",
-        units=MICROMETER,
-    )
-
-
-class CustomCurrentSource(ReverseInterpolatedSource):
-    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
-
-    Notes
-    -----
-
-        Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M`` current
-        distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the
-        source center.
-
-        The syntax is very similar to :class:`CustomFieldSource`, except instead of a ``field_dataset``, the source
-        accepts a :attr:`current_dataset`. This dataset still contains :math:`E_{x,y,z}` and :math:`H_{x,y,
-        z}` field components, which correspond to :math:`J` and :math:`M` components respectively. There are also
-        fewer constraints on the data requirements for :class:`CustomCurrentSource`. It can be volumetric or planar
-        without requiring tangential components. Finally, note that the dataset is still defined w.r.t. the source
-        center, just as in the case of the :class:`CustomFieldSource`, and can then be placed anywhere in the simulation.
-
-    Example
-    -------
-    >>> from tidy3d import ScalarFieldDataArray
-    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
-    >>> x = np.linspace(-1, 1, 101)
-    >>> y = np.linspace(-1, 1, 101)
-    >>> z = np.array([0])
-    >>> f = [2e14]
-    >>> coords = dict(x=x, y=y, z=z, f=f)
-    >>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)
-    >>> dataset = FieldDataset(Ex=scalar_field)
-    >>> custom_source = CustomCurrentSource(
-    ...     center=(1, 1, 1),
-    ...     size=(2, 2, 0),
-    ...     source_time=pulse,
-    ...     current_dataset=dataset)
-
-    See Also
-    --------
-
-    **Notebooks**
-        * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
-    """
-
-    current_dataset: Optional[FieldDataset] = pydantic.Field(
-        ...,
-        title="Current Dataset",
-        description=":class:`.FieldDataset` containing the desired frequency-domain "
-        "electric and magnetic current patterns to inject.",
-    )
-
-    _no_nans_dataset = validate_no_nans("current_dataset")
-    _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
-    _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
-    _can_interpolate = validate_can_interpolate("current_dataset")
 
 
 class FieldSource(Source, ABC):
@@ -824,7 +177,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
     Example
     -------
-    >>> from tidy3d import ScalarFieldDataArray
+    >>> from tidy3d import ScalarFieldDataArray, GaussianPulse
     >>> import tidy3d as td
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> x = np.linspace(-1, 1, 101)
@@ -1025,6 +378,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
 
     Example
     -------
+    >>> from tidy3d import GaussianPulse
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> mode_spec = ModeSpec(target_neff=2.)
     >>> mode_source = ModeSource(
@@ -1117,6 +471,7 @@ class PlaneWave(AngledFieldSource, PlanarSource):
 
     Example
     -------
+    >>> from tidy3d import GaussianPulse
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
 
@@ -1148,6 +503,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
     Example
     -------
+    >>> from tidy3d import GaussianPulse
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> gauss = GaussianBeam(
     ...     size=(0,3,3),
@@ -1208,6 +564,7 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
     Example
     -------
+    >>> from tidy3d import GaussianPulse
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> gauss = AstigmaticGaussianBeam(
     ...     size=(0,3,3),
@@ -1305,17 +662,3 @@ class TFSF(AngledFieldSource, VolumeSource):
         patch_kwargs["arrow_base"] = self.injection_plane_center
         ax = Source.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
         return ax
-
-
-# sources allowed in Simulation.sources
-SourceType = Union[
-    UniformCurrentSource,
-    PointDipole,
-    GaussianBeam,
-    AstigmaticGaussianBeam,
-    ModeSource,
-    PlaneWave,
-    CustomFieldSource,
-    CustomCurrentSource,
-    TFSF,
-]

@@ -239,25 +239,29 @@ from .components.scene import Scene
 
 # simulation
 from .components.simulation import Simulation
-
-# sources
-from .components.source import (
+from .components.source.base import Source
+from .components.source.current import (
+    CustomCurrentSource,
+    PointDipole,
+    UniformCurrentSource,
+)
+from .components.source.field import (
     TFSF,
     AstigmaticGaussianBeam,
-    ContinuousWave,
-    CustomCurrentSource,
     CustomFieldSource,
-    CustomSourceTime,
     FixedAngleSpec,
     FixedInPlaneKSpec,
     GaussianBeam,
-    GaussianPulse,
     ModeSource,
     PlaneWave,
-    PointDipole,
-    Source,
+)
+
+# sources
+from .components.source.time import (
+    ContinuousWave,
+    CustomSourceTime,
+    GaussianPulse,
     SourceTime,
-    UniformCurrentSource,
 )
 
 # structures

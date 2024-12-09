@@ -22,7 +22,8 @@ from ..base_sim.data.sim_data import AbstractSimulationData
 from ..file_util import replace_values
 from ..monitor import Monitor
 from ..simulation import Simulation
-from ..source import GaussianPulse, SourceType
+from ..source.time import GaussianPulse
+from ..source.utils import SourceType
 from ..structure import Structure
 from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
 from ..viz import add_ax_if_none, equal_aspect

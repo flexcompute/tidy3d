@@ -16,7 +16,8 @@ from ...components.grid.grid_spec import GridSpec
 from ...components.medium import Medium, MediumType
 from ...components.mode import ModeSpec
 from ...components.simulation import Simulation
-from ...components.source import GaussianPulse, ModeSource
+from ...components.source.field import ModeSource
+from ...components.source.time import GaussianPulse
 from ...components.structure import Structure
 from ...components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D
 from ...components.viz import add_ax_if_none
