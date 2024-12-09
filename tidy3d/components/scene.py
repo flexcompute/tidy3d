@@ -1615,13 +1615,13 @@ class Scene(Tidy3dBaseModel):
         """
 
         # set some resolutions
-        N = 100
+        N = 200
 
         semiconductor_structs = []
         bounds_structs = []
         acceptors_per_struct = []
         donors_per_struct = []
-        max_bounds = [[], []]
+        scene_bounds = [[5e50, 5e50, 5e50], [-5e50, -5e50, -5e50]]
 
         dims = [1, 1, 1]
         zero_dim_coords = [0, 0, 0]
@@ -1640,102 +1640,129 @@ class Scene(Tidy3dBaseModel):
                     if max == np.inf or min == np.inf:
                         dims[dim] = 0
 
+                    # scene bounds
+                    if scene_bounds[0][dim] > min:
+                        scene_bounds[0][dim] = min
+                    if scene_bounds[1][dim] < max:
+                        scene_bounds[1][dim] = max
+
                 # list of doping boces
                 acceptors_per_struct.append(struct.medium.electric_spec.acceptors)
                 donors_per_struct.append(struct.medium.electric_spec.donors)
 
-        acceptor_distributions = []
-        donors_distributions = []
+        # create coordinates for scene
+        coords_dict = {d: [] for d in "xyz"}
+        for d, d_name in enumerate("xyz"):
+            if scene_bounds[0][d] == scene_bounds[1][d]:
+                coords_dict[d_name] = [scene_bounds[0][d]]
+            else:
+                coords_dict[d_name] = np.linspace(scene_bounds[0][d], scene_bounds[1][d], N)
+        print("scene bounds", scene_bounds)
 
-        for n, bounds in enumerate(bounds_structs):
-            coords_dict = {d: [] for d in "xyz"}
-            for d, d_name in enumerate("xyz"):
-                if dims[d] == 0:
-                    coords_dict[d_name] = [zero_dim_coords[d]]
-                else:
-                    coords_dict[d_name] = np.linspace(bounds[0][d], bounds[1][d], N)
+        size = [len(coords_x) for _, coords_x in coords_dict.items()]
 
-            size = [len(coords_x) for _, coords_x in coords_dict.items()]
+        # gen coordinate matrices
+        X, Y, Z = np.meshgrid(coords_dict["x"], coords_dict["y"], coords_dict["z"])
 
-            # gen coordinate matrices
-            X, Y, Z = np.meshgrid(coords_dict["x"], coords_dict["y"], coords_dict["z"])
+        acceptors = np.zeros(tuple(size))
+        donors = np.zeros(tuple(size))
 
-            acceptors = np.zeros(tuple(size))
-            donors = np.zeros(tuple(size))
+        for n in range(len(acceptors_per_struct)):
+            indices_in_struct = np.logical_and(
+                X >= bounds_structs[n][0][0], X <= bounds_structs[n][1][0]
+            )
+            indices_in_struct = np.logical_and(indices_in_struct, Y >= bounds_structs[n][0][1])
+            indices_in_struct = np.logical_and(indices_in_struct, Y <= bounds_structs[n][1][1])
+            indices_in_struct = np.logical_and(indices_in_struct, Z >= bounds_structs[n][0][2])
+            indices_in_struct = np.logical_and(indices_in_struct, Z <= bounds_structs[n][1][2])
+
+            # for each struct reset the doping so that we don't duplicate dopings
+            acceptors[indices_in_struct] = 0
+            donors[indices_in_struct] = 0
 
             # distinguish between different type of dopings
             if isinstance(acceptors_per_struct[n], float):
                 # constant doping
-                acceptors = np.ones(tuple(size)) * acceptors_per_struct[n]
+                acceptors[indices_in_struct] = (
+                    acceptors[indices_in_struct] + acceptors_per_struct[n]
+                )
 
             elif isinstance(acceptors_per_struct[n], SpatialDataArray):
                 # for SpatialDataArray interpolate values to plotting coordinates
-                acceptors = acceptors_per_struct[n].interp(**coords_dict)
+                acceptors = acceptors + acceptors_per_struct[n].interp(
+                    **coords_dict, method="nearest", fill_value=0
+                )
 
             if isinstance(donors_per_struct[n], float):
                 # constant doping
-                donors = np.ones(tuple(size)) * donors_per_struct[n]
+                donors[indices_in_struct] = donors[indices_in_struct] + donors_per_struct[n]
 
             elif isinstance(donors_per_struct[n], SpatialDataArray):
                 # for SpatialDataArray interpolate values to plotting coordinates
-                donors = donors_per_struct[n].interp(**coords_dict)
+                donors = donors + donors_per_struct[n].interp(
+                    **coords_dict, method="nearest", fill_value=0
+                )
 
             # handle doping boxes
-            def get_gaussian_contrib(box_coords):
-                # points in the box
-                indices_in_box = (
-                    (X >= box_coords[0][0])
-                    + (X <= box_coords[1][0])
-                    + (Y >= box_coords[0][1])
-                    + (Y <= box_coords[1][1])
-                    + (Z >= box_coords[0][2])
-                    + (Z <= box_coords[1][2])
-                )
-
+            def get_gaussian_contrib(
+                indices_in_box_in_struct, box_coords, source, X, Y, Z, width, s
+            ):
                 x_contrib = np.zeros(tuple(size))
-                x_contrib[indices_in_box] = 1
+                x_contrib[indices_in_box_in_struct] = 1
                 # lower x face
-                x0 = box_coords[0][0]
-                indices = (X >= x0) + (X <= x0 + width)
-                x_contrib[indices] = x_contrib[indices] + np.exp(
-                    -(X[indices] - x0 - width) * (X[indices] - x0 - width) / 2 / s / s
-                )
+                if source != "xmin":
+                    x0 = box_coords[0][0]
+                    indices = np.logical_and(X >= x0, X <= x0 + width)
+                    indices = np.logical_and(indices, indices_in_box_in_struct)
+                    x_contrib[indices] = np.exp(
+                        -(X[indices] - x0 - width) * (X[indices] - x0 - width) / 2 / s / s
+                    )
                 # higher x face
-                x1 = box_coords[1][0]
-                indices = (X >= x1 - width) + (X <= x1)
-                x_contrib[indices] = x_contrib[indices] + np.exp(
-                    -(X[indices] - x1 + width) * (X[indices] - x1 + width) / 2 / s / s
-                )
+                if source != "xmax":
+                    x1 = box_coords[1][0]
+                    indices = np.logical_and(X >= x1 - width, X <= x1)
+                    indices = np.logical_and(indices, indices_in_box_in_struct)
+                    x_contrib[indices] = np.exp(
+                        -(X[indices] - x1 + width) * (X[indices] - x1 + width) / 2 / s / s
+                    )
 
                 y_contrib = np.zeros(tuple(size))
-                y_contrib[indices_in_box] = 1
+                y_contrib[indices_in_box_in_struct] = 1
                 # lower y face
-                y0 = box_coords[0][1]
-                indices = (Y >= y0) + (Y <= y0 + width)
-                y_contrib[indices] = y_contrib[indices] + np.exp(
-                    -(Y[indices] - y0 - width) * (Y[indices] - y0 - width) / 2 / s / s
-                )
+                if source != "ymin":
+                    y0 = box_coords[0][1]
+                    indices = np.logical_and(Y >= y0, Y <= y0 + width)
+                    indices = np.logical_and(indices, indices_in_box_in_struct)
+                    y_contrib[indices] = np.exp(
+                        -(Y[indices] - y0 - width) * (Y[indices] - y0 - width) / 2 / s / s
+                    )
                 # higher y face
-                y1 = box_coords[1][1]
-                indices = (Y >= y1 - width) + (Y <= y1)
-                y_contrib[indices] = y_contrib[indices] + np.exp(
-                    -(Y[indices] - y1 + width) * (Y[indices] - y1 + width) / 2 / s / s
-                )
+                if source != "ymax":
+                    y1 = box_coords[1][1]
+                    indices = np.logical_and(Y >= y1 - width, Y <= y1)
+                    indices = np.logical_and(indices, indices_in_box_in_struct)
+                    y_contrib[indices] = np.exp(
+                        -(Y[indices] - y1 + width) * (Y[indices] - y1 + width) / 2 / s / s
+                    )
 
                 z_contrib = np.zeros(tuple(size))
-                z_contrib[indices_in_box] = 1
+                z_contrib[indices_in_box_in_struct] = 1
                 # lower z face
-                z0 = box_coords[0][2]
-                indices = (Z >= z0) + (Z <= z0 + width)
-                z_contrib[indices] = z_contrib[indices] + np.exp(
-                    -(Z[indices] - z0 - width) * (Z[indices] - z0 - width) / 2 / s / s
-                )
+                if source != "zmin":
+                    z0 = box_coords[0][2]
+                    indices = np.logical_and(Z >= z0, Z <= z0 + width)
+                    indices = np.logical_and(indices, indices_in_box_in_struct)
+                    z_contrib[indices] = np.exp(
+                        -(Z[indices] - z0 - width) * (Z[indices] - z0 - width) / 2 / s / s
+                    )
                 # higher z face
-                z1 = box_coords[1][2]
-                indices = (Z >= z1 - width) + (Z <= z1)
-                z_contrib[indices] = z_contrib[indices] + np.exp(
-                    -(Z[indices] - z1 + width) * (Z[indices] - z1 + width) / 2 / s / s
-                )
+                if source != "zmax":
+                    z1 = box_coords[1][2]
+                    indices = np.logical_and(Z >= z1 - width, Z <= z1)
+                    indices = np.logical_and(indices, indices_in_box_in_struct)
+                    z_contrib[indices] = np.exp(
+                        -(Z[indices] - z1 + width) * (Z[indices] - z1 + width) / 2 / s / s
+                    )
 
                 return x_contrib, y_contrib, z_contrib
 
@@ -1744,32 +1771,36 @@ class Scene(Tidy3dBaseModel):
                     # if the box has 0-size dimensions but the structures don't, extrude
                     # in the zero-size dimension
                     new_coords = [list(doping_box.coords[0]), list(doping_box.coords[1])]
+
                     for d in range(len(dims)):
                         if dims[d] != 0:
                             if new_coords[1][d] == new_coords[0][d]:
                                 new_coords[0][d] = np.min(coords_dict["xyz"[d]]) - 1
                                 new_coords[1][d] = np.max(coords_dict["xyz"[d]]) + 1
 
+                    indices_in_box = np.logical_and(X >= new_coords[0][0], X <= new_coords[1][0])
+                    indices_in_box = np.logical_and(indices_in_box, Y >= new_coords[0][1])
+                    indices_in_box = np.logical_and(indices_in_box, Y <= new_coords[1][1])
+                    indices_in_box = np.logical_and(indices_in_box, Z >= new_coords[0][2])
+                    indices_in_box = np.logical_and(indices_in_box, Z <= new_coords[1][2])
+
+                    indices_in_box_in_struct = np.logical_and(indices_in_box, indices_in_struct)
+
                     if isinstance(doping_box, GaussianDoping):
                         width = doping_box.width
                         s = doping_box.sigma
+                        source = doping_box.source
 
-                        x_contrib, y_contrib, z_contrib = get_gaussian_contrib(new_coords)
+                        x_contrib, y_contrib, z_contrib = get_gaussian_contrib(
+                            indices_in_box_in_struct, new_coords, source, X, Y, Z, width, s
+                        )
                         # add contributions
                         acceptors = (
                             acceptors + doping_box.concentration * x_contrib * y_contrib * z_contrib
                         )
                     elif isinstance(doping_box, ConstantDoping):
-                        indices_in_box = (
-                            (X >= new_coords[0][0])
-                            + (X <= new_coords[1][0])
-                            + (Y >= new_coords[0][1])
-                            + (Y <= new_coords[1][1])
-                            + (Z >= new_coords[0][2])
-                            + (Z <= new_coords[1][2])
-                        )
                         contribution = np.zeros(tuple(size))
-                        contribution[indices_in_box] = doping_box.concentration
+                        contribution[indices_in_box_in_struct] = doping_box.concentration
                         acceptors = acceptors + contribution
 
             if isinstance(donors_per_struct[n], tuple):
@@ -1783,55 +1814,50 @@ class Scene(Tidy3dBaseModel):
                                 new_coords[0][d] = np.min(coords_dict["xyz"[d]]) - 1
                                 new_coords[1][d] = np.max(coords_dict["xyz"[d]]) + 1
 
+                    indices_in_box = np.logical_and(X >= new_coords[0][0], X <= new_coords[1][0])
+                    indices_in_box = np.logical_and(indices_in_box, Y >= new_coords[0][1])
+                    indices_in_box = np.logical_and(indices_in_box, Y <= new_coords[1][1])
+                    indices_in_box = np.logical_and(indices_in_box, Z >= new_coords[0][2])
+                    indices_in_box = np.logical_and(indices_in_box, Z <= new_coords[1][2])
+
+                    indices_in_box_in_struct = np.logical_and(indices_in_box, indices_in_struct)
+
                     if isinstance(doping_box, GaussianDoping):
                         width = doping_box.width
                         s = doping_box.sigma
+                        source = doping_box.source
 
-                        x_contrib, y_contrib, z_contrib = get_gaussian_contrib(new_coords)
+                        x_contrib, y_contrib, z_contrib = get_gaussian_contrib(
+                            indices_in_box_in_struct, new_coords, source, X, Y, Z, width, s
+                        )
                         # add contributions
                         donors = (
                             donors + doping_box.concentration * x_contrib * y_contrib * z_contrib
                         )
                     elif isinstance(doping_box, ConstantDoping):
-                        indices_in_box = (
-                            (X >= new_coords[0][0])
-                            + (X <= new_coords[1][0])
-                            + (Y >= new_coords[0][1])
-                            + (Y <= new_coords[1][1])
-                            + (Z >= new_coords[0][2])
-                            + (Z <= new_coords[1][2])
-                        )
                         contribution = np.zeros(tuple(size))
-                        contribution[indices_in_box] = doping_box.concentration
+                        contribution[indices_in_box_in_struct] = doping_box.concentration
                         donors = donors + contribution
 
-            acceptor_distributions.append(SpatialDataArray(data=acceptors, coords=coords_dict))
-            donors_distributions.append(SpatialDataArray(data=donors, coords=coords_dict))
+        acceptors = SpatialDataArray(data=acceptors, coords=coords_dict)
+        donors = SpatialDataArray(data=donors, coords=coords_dict)
 
         # now it is time to plot
         if ax is None:
             _, ax = plt.subplots()
-        sel_dict = {d: val for (d, val) in zip("xyz", (x, y, z)) if val is not None}
-        select = any([d is not None for d in [x, y, z]])
+        select = any(d is not None for d in [x, y, z])
 
-        import xarray as xr
+        if select:
+            sel_dict = {d: val for (d, val) in zip("xyz", (x, y, z)) if val is not None}
 
-        total_acceptors = xr.merge(acceptor_distributions)
-        total_donors = xr.merge(donors_distributions)
-        total_acceptors.sel(z=0, method="nearest").plot()
+            acceptors = acceptors.sel(**sel_dict, method="nearest")
+            donors = donors.sel(**sel_dict, method="nearest")
 
-        # for n in range(len(acceptor_distributions)):
-        #     acceptors = acceptor_distributions[n]
-        #     donors = donors_distributions[n]
-        #     if select:
-        #         acceptors = acceptors.sel(**sel_dict, method="nearest")
-        #         donors = donors.sel(**sel_dict, method="nearest")
-
-        #     if doping == "donors":
-        #         donors.plot(ax = ax)
-        #     elif doping == "acceptors":
-        #         acceptors.plot(ax=ax)
-        #     else:
-        #         (acceptors-donors).plot(ax=ax)
+        if doping == "donors":
+            donors.plot(ax=ax)
+        elif doping == "acceptors":
+            acceptors.plot(ax=ax)
+        else:
+            (acceptors - donors).plot(ax=ax)
 
         return ax

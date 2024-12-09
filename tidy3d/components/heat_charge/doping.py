@@ -80,6 +80,15 @@ class GaussianDoping(AbstractDopingBox):
         "of the box in a distance equal to 'width'. ",
     )
 
+    source: str = pd.Field(
+        "xmin",
+        title="Source face",
+        description="Specifies the side of the box acting as the source, i.e., "
+        "the face specified does not have a gaussian evolution normal to it, instead "
+        "the concentration is constant from this face. Accepted values for 'source' "
+        "are ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax']",
+    )
+
     @cached_property
     def sigma(self):
         """The sigma parameter of the pseudo-gaussian"""
