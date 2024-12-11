@@ -80,8 +80,8 @@ pyswarms = { version = "*", optional = true }
 
 # pytorch
 torch = [
-    { version = "^2.1.0", source = "PyPI", platform = "darwin", optional = true },
-    { version = "^2.1.0", source = "torch-cpu", platform = "!=darwin", optional = true },
+    { version = "^2.2.0", source = "PyPI", platform = "darwin", optional = true },
+    { version = "^2.2.0", source = "torch-cpu", platform = "!=darwin", optional = true },
 ]
 
 # scikit-rf
