@@ -379,3 +379,41 @@ def test_custom_field_source(log_capture):
         n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
         field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset2)
         make_custom_field_source(field_dataset)
+
+
+def test_fixed_angle_source():
+    plane_wave = td.PlaneWave(
+        size=(0, td.inf, td.inf),
+        direction="+",
+        angle_theta=np.pi / 6,
+        angle_phi=np.pi / 4,
+        pol_angle=np.pi / 5,
+        source_time=td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0),
+        angular_spec=td.FixedInPlaneKSpec(),
+    )
+
+    assert not plane_wave._is_fixed_angle
+
+    plane_wave = td.PlaneWave(
+        size=(0, td.inf, td.inf),
+        direction="+",
+        angle_theta=np.pi / 6,
+        angle_phi=np.pi / 4,
+        pol_angle=np.pi / 5,
+        source_time=td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0),
+        angular_spec=td.FixedAngleSpec(),
+    )
+
+    assert plane_wave._is_fixed_angle
+
+    plane_wave = td.PlaneWave(
+        size=(0, td.inf, td.inf),
+        direction="+",
+        angle_theta=0,
+        angle_phi=np.pi / 4,
+        pol_angle=np.pi / 5,
+        source_time=td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0),
+        angular_spec=td.FixedAngleSpec(),
+    )
+
+    assert not plane_wave._is_fixed_angle

@@ -12,7 +12,7 @@ from typing_extensions import Literal
 from ..constants import GLANCING_CUTOFF, HERTZ, MICROMETER, RADIAN, inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
-from .base import cached_property, skip_if_fields_missing
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .base_sim.source import AbstractSource
 from .data.data_array import TimeDataArray
 from .data.dataset import FieldDataset, TimeDataset
@@ -1095,6 +1095,23 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
 """ Angled Field Sources one can use. """
 
 
+class AbstractAngularSpec(Tidy3dBaseModel, ABC):
+    """Abstract base for defining angular variability specifications for plane waves."""
+
+
+class FixedInPlaneKSpec(AbstractAngularSpec):
+    """Plane wave is injected such that its in-plane wavevector is constant. That is,
+    the injected field satisfies Bloch boundary conditions and its propagation direction is
+    frequency dependent.
+    """
+
+
+class FixedAngleSpec(AbstractAngularSpec):
+    """Plane wave is injected such that its propagation direction is frequency independent.
+    When using this option boundary conditions in tangential directions must be set to periodic.
+    """
+
+
 class PlaneWave(AngledFieldSource, PlanarSource):
     """Uniform current distribution on an infinite extent plane. One element of size must be zero.
 
@@ -1112,6 +1129,18 @@ class PlaneWave(AngledFieldSource, PlanarSource):
     **Lectures:**
         * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
+
+    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = pydantic.Field(
+        FixedInPlaneKSpec(),
+        title="Angular Dependence Specification",
+        description="Specification of plane wave propagation direction dependence on wavelength.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @cached_property
+    def _is_fixed_angle(self) -> bool:
+        """Whether the plane wave is at a fixed non-zero angle."""
+        return isinstance(self.angular_spec, FixedAngleSpec) and self.angle_theta != 0.0
 
 
 class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):

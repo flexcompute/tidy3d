@@ -248,6 +248,8 @@ from .components.source import (
     CustomCurrentSource,
     CustomFieldSource,
     CustomSourceTime,
+    FixedAngleSpec,
+    FixedInPlaneKSpec,
     GaussianBeam,
     GaussianPulse,
     ModeSource,
@@ -559,4 +561,6 @@ __all__ = [
     "EMELengthSweep",
     "EMEModeSweep",
     "EMEFreqSweep",
+    "FixedAngleSpec",
+    "FixedInPlaneKSpec",
 ]

@@ -2797,7 +2797,7 @@ class DiffractionData(AbstractFieldProjectionData):
         units=MICROMETER,
     )
 
-    bloch_vecs: Tuple[float, float] = pd.Field(
+    bloch_vecs: Union[Tuple[float, float], Tuple[ArrayFloat1D, ArrayFloat1D]] = pd.Field(
         ...,
         title="Bloch vectors",
         description="Bloch vectors along the local x and y directions in units of "
@@ -2805,20 +2805,24 @@ class DiffractionData(AbstractFieldProjectionData):
     )
 
     @staticmethod
-    def shifted_orders(orders: Tuple[int, ...], bloch_vec: float) -> np.ndarray:
+    def shifted_orders(orders: Tuple[int, ...], bloch_vec: Union[float, np.ndarray]) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
-        return bloch_vec + np.atleast_1d(orders)
+        return bloch_vec + np.atleast_2d(orders).T
 
     @staticmethod
     def reciprocal_coords(
-        orders: np.ndarray, size: float, bloch_vec: float, f: float, medium: MediumType
+        orders: np.ndarray,
+        size: float,
+        bloch_vec: Union[float, np.ndarray],
+        f: float,
+        medium: MediumType,
     ) -> np.ndarray:
         """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
         if size == 0:
             return np.atleast_2d(0)
         epsilon = medium.eps_model(f)
         bloch_array = DiffractionData.shifted_orders(orders, bloch_vec)
-        return bloch_array[:, None] / size * C_0 / f / np.real(np.sqrt(epsilon))
+        return bloch_array / size * C_0 / f / np.real(np.sqrt(epsilon))
 
     @staticmethod
     def compute_angles(

@@ -77,6 +77,7 @@ from .source import (
     CustomCurrentSource,
     CustomFieldSource,
     CustomSourceTime,
+    FixedAngleSpec,
     GaussianBeam,
     ModeSource,
     PlaneWave,
@@ -141,6 +142,9 @@ NUM_STRUCTURES_WARN_EPSILON = 10_000
 
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = inf
+
+# additional (safety) time step reduction factor for fixed angle simulations
+FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
@@ -2418,16 +2422,28 @@ class Simulation(AbstractYeeGridSimulation):
                     )
 
                 # check the Bloch boundary + angled plane wave case
-                num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
-                if num_bloch > 0:
-                    cls._check_bloch_vec(
-                        source=source,
-                        source_ind=source_ind,
-                        bloch_vec=boundary[0].bloch_vec,
-                        dim=tan_dir,
-                        medium=medium,
-                        domain_size=size[tan_dir],
-                    )
+                if isinstance(source.angular_spec, FixedAngleSpec):
+                    num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                    if num_bloch > 0:
+                        raise SetupError(
+                            "Fixed angle plane wave sources ('FixedAngleSpec' and 'angle_theta' != 0) do "
+                            f"not require the Bloch boundary along dimension {tan_dir}. "
+                            "Either set the boundary conditions to 'Periodic' to proceed to simulate a plane "
+                            "wave with frequency-independent propagation direction, or switch to "
+                            "'FixedInPlaneKSpec' specification to simulate a plane wave with a fixed "
+                            "in-plane Bloch vector (frequency-dependent propagation direction)."
+                        )
+                else:
+                    num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                    if num_bloch > 0:
+                        cls._check_bloch_vec(
+                            source=source,
+                            source_ind=source_ind,
+                            bloch_vec=boundary[0].bloch_vec,
+                            dim=tan_dir,
+                            medium=medium,
+                            domain_size=size[tan_dir],
+                        )
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -2553,6 +2569,58 @@ class Simulation(AbstractYeeGridSimulation):
             if isinstance(source, TFSF) and not all(sym == 0 for sym in symmetry):
                 raise SetupError("TFSF sources cannot be used with symmetries.")
         return val
+
+    @staticmethod
+    def _get_fixed_angle_sources(sources: Tuple[SourceType, ...]) -> Tuple[SourceType, ...]:
+        """Get list of plane wave sources with ``FixedAngleSpec``."""
+
+        return [
+            source for source in sources if isinstance(source, PlaneWave) and source._is_fixed_angle
+        ]
+
+    @pydantic.root_validator()
+    @skip_if_fields_missing(["sources", "structures", "medium", "monitors"], root=True)
+    def check_fixed_angle_components(cls, values):
+        """Error if a fixed-angle plane wave is combined with other sources
+        or fully anisotropic mediums or gain mediums."""
+
+        fixed_angle_sources = cls._get_fixed_angle_sources(values["sources"])
+
+        if len(fixed_angle_sources) > 0:
+            if len(fixed_angle_sources) > 1:
+                raise SetupError(
+                    "A fixed-angle plane wave source cannot be combined with other sources."
+                )
+
+            structures = values.get("structures")
+            structures = structures or []
+            medium_bg = values.get("medium")
+            mediums = [medium_bg] + [structure.medium for structure in structures]
+
+            if any(med.is_fully_anisotropic for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of 'FullyAnisotropicMedium'."
+                )
+
+            if any(med.is_nonlinear for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of nonlinear materials."
+                )
+
+            if any(med.is_time_modulated for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of time-modulated materials."
+                )
+
+            if any(med.allow_gain for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of gain materials."
+                )
+
+            if any(isinstance(mnt, TimeMonitor) for mnt in values["monitors"]):
+                raise SetupError("Time monitors cannot be used in fixed-angle simulations.")
+
+        return values
 
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["size", "symmetry"])
@@ -3253,7 +3321,8 @@ class Simulation(AbstractYeeGridSimulation):
                             "indicating an unexpected error. Please create a github issue so "
                             "that the problem can be investigated."
                         )
-                    if isinstance(list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)):
+                    src_medium = list(mediums)[0]
+                    if isinstance(src_medium, (AnisotropicMedium, FullyAnisotropicMedium)):
                         raise SetupError(
                             f"An anisotropic medium is detected on plane intersecting a {source.type} "
                             f"source. Injection of {source.type} into anisotropic media currently is "
@@ -3261,13 +3330,23 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
                     # check if the medium is spatially uniform
-                    if not list(mediums)[0].is_spatially_uniform:
+                    if not src_medium.is_spatially_uniform:
                         consolidated_logger.warning(
                             f"Nonuniform custom medium detected on plane intersecting a {source.type}. "
                             "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
                             custom_loc=["sources", source_id],
                         )
 
+                    if isinstance(source, PlaneWave) and source._is_fixed_angle:
+                        is_lossless_dieletric = (
+                            isinstance(src_medium, Medium) and src_medium.conductivity == 0
+                        )
+
+                        if not is_lossless_dieletric:
+                            raise SetupError(
+                                "A fixed angle plane wave can only be injected into a homogeneous isotropic"
+                                "dispersionless medium."
+                            )
         return val
 
     @pydantic.validator("normalize_index", always=True)
@@ -3858,6 +3937,16 @@ class Simulation(AbstractYeeGridSimulation):
         )
         return self.scene.background_structure
 
+    @cached_property
+    def _fixed_angle_sources(self) -> Tuple[SourceType, ...]:
+        """List of plane wave sources with ``FixedAngleSpec``."""
+        return self._get_fixed_angle_sources(self.sources)
+
+    @cached_property
+    def _is_fixed_angle(self) -> bool:
+        """Whether the simulation contains fixed angle sources."""
+        return len(self._fixed_angle_sources) > 0
+
     # candidate for removal in 3.0
     @staticmethod
     def intersecting_media(
@@ -4283,6 +4372,19 @@ class Simulation(AbstractYeeGridSimulation):
     """ Discretization """
 
     @cached_property
+    def _dt_fixed_angle_reduction_factor(self) -> float:
+        """Reduction in time step due to plane wave source with ``FixedAngleSpec``."""
+        if self._is_fixed_angle:
+            theta = self._fixed_angle_sources[0].angle_theta
+            return (
+                FIXED_ANGLE_DT_SAFETY_FACTOR
+                * np.sqrt(3)
+                * np.cos(theta) ** 2
+                / np.sqrt(2 + np.cos(theta) ** 2)
+            )
+        return 1
+
+    @cached_property
     def scaled_courant(self) -> float:
         """When conformal mesh is applied, courant number is scaled down depending on `conformal_mesh_spec`."""
 
@@ -4312,7 +4414,7 @@ class Simulation(AbstractYeeGridSimulation):
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
-        return n_cfl * self.scaled_courant * dl_avg / C_0
+        return self._dt_fixed_angle_reduction_factor * n_cfl * self.scaled_courant * dl_avg / C_0
 
     @cached_property
     def tmesh(self) -> Coords1D:
@@ -4538,8 +4640,13 @@ class Simulation(AbstractYeeGridSimulation):
         # combined frequency upper bound
         freq_max = max(freq_source_max, freq_monitor_max)
 
+        # in fixed angle simulations both E and H are available at full and half steps
+        fixed_angle_factor = 1
+        if len(self._fixed_angle_sources) > 0:
+            fixed_angle_factor = 2
+
         if freq_max > 0:
-            nyquist_step = int(1 / (2 * freq_max) / self.dt) - 1
+            nyquist_step = int(1 / (2 * freq_max) / self.dt * fixed_angle_factor) - 1
             nyquist_step = max(1, nyquist_step)
         else:
             nyquist_step = 1

@@ -814,6 +814,7 @@ def test_nyquist():
         frequency_range = (-2, -1)
         monitors = ()
         _cached_properties = {}
+        _fixed_angle_sources = ()
 
     m = MockSim()
     assert td.Simulation.nyquist_step.fget(m) == 1
@@ -3027,3 +3028,96 @@ def test_validate_sources_monitors_in_bounds():
             grid_spec=td.GridSpec(wavelength=1.0),
             monitors=[mode_monitor],
         )
+
+
+def test_fixed_angle_sim():
+    wvl_um = 1.0
+    freq0 = td.C_0 / wvl_um
+    fwidth = freq0 / 5
+
+    freqs = freq0 + 0.5 * fwidth * np.linspace(-1, 1, 11)
+    med = td.Medium(permittivity=5)
+    sphere = td.Structure(
+        geometry=td.Sphere(radius=0.5),
+        medium=med,
+    )
+    flux_r_mnt = td.FluxMonitor(
+        center=(-1, 0, 0), size=(0, td.inf, td.inf), freqs=freqs, name="flux_r"
+    )
+    source = td.PlaneWave(
+        angle_phi=np.pi / 6,
+        angle_theta=np.pi / 5,
+        angular_spec=td.FixedAngleSpec(),
+        direction="+",
+        center=(-0.9, 0, 0),
+        size=(0, td.inf, td.inf),
+        pol_angle=np.pi / 4,
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+    )
+    sim_size = (2.2, 2.2, 2.2)
+    sim = td.Simulation(
+        structures=[sphere],
+        sources=[source],
+        monitors=[flux_r_mnt],
+        size=sim_size,
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=15),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.absorber(), y=td.Boundary.periodic(), z=td.Boundary.periodic()
+        ),
+        run_time=10 / fwidth,
+    )
+
+    assert sim._is_fixed_angle
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(),
+                y=td.Boundary.bloch_from_source(source=source, axis=1, domain_size=2.2),
+                z=td.Boundary.bloch_from_source(source=source, axis=2, domain_size=2.2),
+            )
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(med=td.Medium(conductivity=0.001))
+
+    anisotropic_med = td.FullyAnisotropicMedium(permittivity=[[2, 0, 0], [0, 1, 0], [0, 0, 3]])
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(structures=[sphere.updated_copy(medium=anisotropic_med)])
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(sources=[source, source])
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(
+            structures=[sphere.updated_copy(medium=td.Medium(conductivity=-0.1, allow_gain=True))]
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(monitors=[td.FieldTimeMonitor(size=[td.inf, td.inf, 0], name="time")])
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(monitors=[td.FluxTimeMonitor(size=[td.inf, td.inf, 0], name="time")])
+
+    nonlinear_med = td.Medium(
+        permittivity=3,
+        nonlinear_spec=td.NonlinearSpec(
+            models=[
+                td.KerrNonlinearity(n2=-1 + 1j, n0=1),
+            ],
+            num_iters=20,
+        ),
+    )
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(structures=[sphere.updated_copy(medium=nonlinear_med)])
+
+    time_modulated_med = td.Medium(
+        permittivity=2,
+        modulation_spec=td.ModulationSpec(
+            permittivity=td.SpaceTimeModulation(
+                time_modulation=td.ContinuousWaveTimeModulation(freq0=td.C_0, amplitude=1, phase=0),
+            )
+        ),
+    )
+    with pytest.raises(pydantic.ValidationError):
+        _ = sim.updated_copy(structures=[sphere.updated_copy(medium=time_modulated_med)])
