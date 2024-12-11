@@ -610,6 +610,58 @@ class HeatChargeSimulation(AbstractSimulation):
 
         return values
 
+    @pd.root_validator(skip_on_failure=True)
+    def estimate_charge_mesh_size(cls, values):
+        """Make an estimate of the mesh size and raise a warning if too big.
+        NOTE: this is a very rough estimate. The back-end will actually stop
+        execution based on actual node-count."""
+
+        if HeatChargeSimulationType.CHARGE not in cls._check_simulation_types(values=values):
+            return values
+
+        # let's raise a warning if the estimate is larger than 2M nodes
+        max_nodes = 2e6
+        nodes_estimate = 0
+
+        structures = values["structures"]
+        grid_spec = values["grid_spec"]
+
+        non_refined_structures = grid_spec.non_refined_structures
+
+        if isinstance(grid_spec, UniformUnstructuredGrid):
+            dl_min = grid_spec.dl
+            dl_max = dl_min
+        elif isinstance(grid_spec, DistanceUnstructuredGrid):
+            dl_min = grid_spec.dl_interface
+            dl_max = grid_spec.dl_bulk
+
+        for struct in structures:
+            name = struct.name
+            bounds = struct.geometry.bounds
+            dl = dl_min
+            if name in non_refined_structures:
+                dl = dl_max
+            nodes_structure = 1
+            for coord_min, coord_max in zip(bounds[0], bounds[1]):
+                if (
+                    (coord_min != coord_max)
+                    and (np.abs(coord_min) != np.inf)
+                    and (np.abs(coord_max) != np.inf)
+                ):
+                    nodes_structure = nodes_structure * (coord_max - coord_min) / dl
+
+            nodes_estimate = nodes_estimate + nodes_structure
+
+        if nodes_estimate > max_nodes:
+            log.warning(
+                "WARNING: It has been estimated the mesh to be bigger than the currently "
+                "supported mesh size for CHARGE simulations. The simulation may be "
+                "submitted but if the maximum number of nodes is indeed exceeded "
+                "the pipeline will be stopped. If this happens the grid specification "
+                "may need to be modified."
+            )
+        return values
+
     @equal_aspect
     @add_ax_if_none
     def plot_property(
