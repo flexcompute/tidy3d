@@ -52,14 +52,6 @@ class EMEModeSpec(ModeSpec):
         units=RADIAN,
     )
 
-    precision: Literal["single"] = pd.Field(
-        "single",
-        title="single or double precision in mode solver",
-        description="The solver will be faster and using less memory under "
-        "single precision, but more accurate under double precision. Only single precision is "
-        "currently supported in EME.",
-    )
-
     # this method is not supported because not all ModeSpec features are supported
     # @classmethod
     # def _from_mode_spec(cls, mode_spec: ModeSpec) -> EMEModeSpec:
