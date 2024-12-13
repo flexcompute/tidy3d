@@ -933,6 +933,15 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 new_data[comp] = np.conj(field)
         return self.copy(update=new_data)
 
+    def _check_fields_stored(self, components: list[str]):
+        """Check that all requested field components are stored in the data."""
+        missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
+        if len(missing_comps) > 0:
+            raise DataError(
+                f"Field components {missing_comps} not included in this data object. Use "
+                "the 'fields' argument of a field monitor to select which components are stored."
+            )
+
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
     """
