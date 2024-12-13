@@ -37,7 +37,8 @@ from .data_array import (
     SpatialDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
-    DCIndexedDataArray
+    DCIndexedDataArray,
+    DCSpatialDataArray,
 )
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
@@ -546,6 +547,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         "points.",
     )
 
+    _spatial_data_array_type = SpatialDataArray
+
     @property
     def name(self) -> str:
         """Dataset name."""
@@ -924,8 +927,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 field = self.values.isel(dict(zip(dim_list, multi_ind)))
                 add_field_to_vtk(field, field_name)
 
-        # TODO: generalize this
-
         return grid
 
     @requires_vtk
@@ -1007,8 +1008,27 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         field: str = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
+        values_type = IndexedDataArray,
     ) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
+
+    @requires_vtk
+    def _from_vtk_obj_internal(
+        self,
+        vtk_obj,
+        remove_degenerate_cells: bool = True,
+        remove_unused_points: bool = True,
+    ) -> UnstructuredGridDataset:
+        """Initialize from a vtk object when performing internal operations. When we do that we
+        pass structure of possibly multidimensional nature of values through parametes field and
+        values_type. We also turn on by default cleaning of geometry."""
+        return self._from_vtk_obj(
+            vtk_obj=vtk_obj,
+            field=self._values_coords_dict,
+            remove_degenerate_cells=remove_degenerate_cells,
+            remove_unused_points=remove_unused_points,
+            values_type=self._values_type,
+        )
 
     @classmethod
     @requires_vtk
@@ -1150,9 +1170,17 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @cached_property
     def _values_coords_dict(self):
-        coord_dict = {dim: self.values.coords[dim] for dim in self.values.dims}
+        coord_dict = {dim: self.values.coords[dim].data for dim in self.values.dims}
         _ = coord_dict.pop("index")
         return coord_dict
+
+    @cached_property
+    def _fields_shape(self):
+        return tuple([len(coord) for coord in self._values_coords_dict.values()])
+
+    @cached_property
+    def _num_fields(self):
+        return 1 if len(self._fields_shape) == 0 else np.prod(self._fields_shape)
 
     @cached_property
     def _values_type(self):
@@ -1196,9 +1224,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         if clean_clip.GetNumberOfPoints() == 0:
             raise DataError("Clipping box does not intersect the unstructured grid.")
 
-        return self._from_vtk_obj(
-            clean_clip, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type
-        )
+        return self._from_vtk_obj_internal(clean_clip)
 
     def interp(
         self,
@@ -1287,7 +1313,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     interpolated_values, x=x, y=y, z=z
                 )
 
-        return SpatialDataArray(
+        return self._spatial_data_array_type(
             interpolated_values, coords=dict(x=x, y=y, z=z), name=self.values.name
         )
 
@@ -1697,7 +1723,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         # get mesh info as numpy arrays
         points = self.points.values  # (num_points, num_dims)
-        data_values = self.values.values  # (num_points,)
+        data_values = self.values  # (num_points,)
         cell_connections = self.cells.values[cell_inds]
 
         # compute number of samples to generate per cell
@@ -1894,7 +1920,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return xyz_valid_inds, interpolated_valid
 
-    @abstractmethod
     @requires_vtk
     def sel(
         self,
@@ -1919,6 +1944,34 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         Union[TriangularGridDataset, SpatialDataArray]
             Extracted data.
         """
+
+    @requires_vtk
+    def isel(
+        self,
+        **sel_kwargs,
+    ) -> SpatialDataArray:
+        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
+        must be provided.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike] = None
+            x-coordinate of the slice.
+        y : Union[float, ArrayLike] = None
+            y-coordinate of the slice.
+        z : Union[float, ArrayLike] = None
+            z-coordinate of the slice.
+
+        Returns
+        -------
+        SpatialDataArray
+            Extracted data.
+        """
+
+        # convert individual values into lists of length 1
+        # so that xarray doesn't drop the corresponding dimension
+        sel_kwargs_only_lists = {key: value if isinstance(value, list) else [value] for key, value in sel_kwargs.items()}
+        return self.updated_copy(values=self.values.isel(**sel_kwargs_only_lists))
 
     @requires_vtk
     def sel_inside(self, bounds: Bound) -> UnstructuredGridDataset:
@@ -1986,7 +2039,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     extractor.Update()
                     tmp = extractor.GetOutput()
 
-        return self._from_vtk_obj(tmp, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type)
+        return self._from_vtk_obj_internal(tmp)
 
     def does_cover(self, bounds: Bound) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
@@ -2040,7 +2093,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         reflector.SetInputData(self._vtk_obj)
         reflector.Update()
 
-        return self._from_vtk_obj(reflector.GetOutput(), field=self._values_coords_dict, values_type=self._values_type)
+        # since reflection does not really change geometries, let's not clean it
+        return self._from_vtk_obj_internal(reflector.GetOutput(), remove_degenerate_cells=False, remove_unused_points=False)
 
 
 class TriangularGridDataset(UnstructuredGridDataset):
@@ -2130,7 +2184,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         field=None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
-        values_type = IndexedDataArray,
+        values_type=IndexedDataArray,
     ):
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -2234,22 +2288,21 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # axis of the resulting line
         slice_axis = 3 - self.normal_axis - axis
 
-        # sort found intersection in ascending order
-        sorting = np.argsort(points_numpy[:, slice_axis], kind="mergesort")
-
         # assemble coords for SpatialDataArray
         coords = [None, None, None]
         coords[axis] = [pos]
         coords[self.normal_axis] = [self.normal_pos]
-        coords[slice_axis] = points_numpy[sorting, slice_axis]
-        coords_dict = dict(zip("xyz", coords))
+        coords[slice_axis] = points_numpy[:, slice_axis]
+        coords_dict = self._values_coords_dict.copy()
+        coords_dict.update(dict(zip("xyz", coords)))
 
         # reshape values from a 1d array into a 3d array
         new_shape = [1, 1, 1]
-        new_shape[slice_axis] = len(values)
-        values_reshaped = np.reshape(values.data[sorting], new_shape)
+        new_shape[slice_axis] = len(values.index)
+        new_shape = list(np.shape(values.data))[:-1] + new_shape
+        values_reshaped = np.reshape(values.data, new_shape)
 
-        return SpatialDataArray(values_reshaped, coords=coords_dict, name=self.values.name)
+        return self._spatial_data_array_type(values_reshaped, coords=coords_dict, name=self.values.name).sortby("xyz"[slice_axis])
 
     @property
     def _triangulation_obj(self) -> Triangulation:
@@ -2270,7 +2323,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
         shading: Literal["gourand", "flat"] = "gouraud",
         cbar_kwargs: Dict = None,
         pcolor_kwargs: Dict = None,
-        **kwargs,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 
@@ -2312,9 +2364,15 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # plot data field if requested
         if field:
+            if self._num_fields != 1:
+                raise DataError(
+                    "Unstructured dataset contains more than 1 field. "
+                    "Use '.sel()' to select a single field from available dimensions "
+                    f"{self._values_coords_dict} before plotting."
+                )
             plot_obj = ax.tripcolor(
                 self._triangulation_obj,
-                self.values.sel(**kwargs).data,
+                self.values.data.ravel(),
                 shading=shading,
                 cmap=cmap,
                 vmin=vmin,
@@ -2428,7 +2486,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
             interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
         )
 
-        return SpatialDataArray(
+        return self._spatial_data_array_type(
             interp_broadcasted, coords=dict(x=x, y=y, z=z), name=self.values.name
         )
 
@@ -2489,6 +2547,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
+        method=None,
+        **sel_kwargs,
     ) -> SpatialDataArray:
         """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
         must be provided.
@@ -2512,6 +2572,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
         axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
         num_provided = len(axes)
 
+        # convert individual values into lists of length 1
+        # so that xarray doesn't drop the corresponding dimension
+        sel_kwargs_only_lists = {key: value if isinstance(value, list) else [value] for key, value in sel_kwargs.items()}
+        self_after_sel = self.updated_copy(values=self.values.sel(**sel_kwargs_only_lists, method=method))
+
         if self.normal_axis in axes:
             if xyz[self.normal_axis] != self.normal_pos:
                 raise DataError(
@@ -2523,20 +2588,22 @@ class TriangularGridDataset(UnstructuredGridDataset):
                 num_provided -= 1
                 axes.remove(self.normal_axis)
 
-        if num_provided == 0:
-            raise DataError("At least one of 'x', 'y', and 'z' must be specified.")
+        if num_provided == 0 and len(sel_kwargs) == 0:
+            raise DataError("At least one dimension for selection must be provided.")
 
         if num_provided == 1:
             axis = axes[0]
-            return self.plane_slice(axis=axis, pos=xyz[axis])
+            return self_after_sel.plane_slice(axis=axis, pos=xyz[axis])
 
         if num_provided == 2:
             pos = [x, y, z]
             pos[self.normal_axis] = [self.normal_pos]
-            return self.interp(x=pos[0], y=pos[1], z=pos[2])
+            return self_after_sel.interp(x=pos[0], y=pos[1], z=pos[2])
 
         if num_provided == 3:
-            return self.interp(x=x, y=y, z=z)
+            return self_after_sel.interp(x=x, y=y, z=z)
+
+        return self_after_sel
 
     @requires_vtk
     def reflect(
@@ -2660,6 +2727,8 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     ... )
     """
 
+    _traingular_dataset_type = TriangularGridDataset
+
     @classmethod
     def _point_dims(cls) -> pd.PositiveInt:
         """Dimensionality of stored grid point coordinates."""
@@ -2685,21 +2754,21 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     @requires_vtk
     def _from_vtk_obj(
         cls,
-        grid,
+        vtk_obj,
         field=None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
-        values_type = IndexedDataArray,
+        values_type=IndexedDataArray,
     ) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # read point, cells, and values info from a vtk instance
-        cells_numpy = vtk["vtk_to_numpy"](grid.GetCells().GetConnectivityArray())
-        points_numpy = vtk["vtk_to_numpy"](grid.GetPoints().GetData())
-        values = cls._get_values_from_vtk(grid, len(points_numpy), field, values_type)
+        cells_numpy = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetConnectivityArray())
+        points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
+        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy), field, values_type)
 
         # verify cell_types
-        cells_types = vtk["vtk_to_numpy"](grid.GetCellTypesArray())
+        cells_types = vtk["vtk_to_numpy"](vtk_obj.GetCellTypesArray())
         if not np.all(cells_types == cls._vtk_cell_type()):
             raise DataError("Only tetrahedral 'vtkUnstructuredGrid' is currently supported")
 
@@ -2748,8 +2817,12 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
 
-        return TriangularGridDataset._from_vtk_obj(
-            slice_vtk, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type
+        return self._traingular_dataset_type._from_vtk_obj(
+            slice_vtk,
+            remove_degenerate_cells=True,
+            remove_unused_points=True,
+            field=self._values_coords_dict,
+            values_type=self._values_type,
         )
 
     @requires_vtk
@@ -2799,9 +2872,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         if extracted_cells_vtk.GetNumberOfPoints() == 0:
             raise DataError("Slicing line does not intersect the unstructured grid.")
 
-        extracted_cells = TetrahedralGridDataset._from_vtk_obj(
-            extracted_cells_vtk, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type
-        )
+        extracted_cells = self._from_vtk_obj_internal(extracted_cells_vtk)
 
         tan_dims = [0, 1, 2]
         tan_dims.remove(axis)
@@ -2819,6 +2890,8 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
+        method=None,
+        **sel_kwargs,
     ) -> Union[TriangularGridDataset, SpatialDataArray]:
         """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
         must be provided.
@@ -2843,26 +2916,33 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         num_provided = len(axes)
 
+        # convert individual values into lists of length 1
+        # so that xarray doesn't drop the corresponding dimension
+        sel_kwargs_only_lists = {key: value if isinstance(value, list) else [value] for key, value in sel_kwargs.items()}
+        self_after_sel = self.updated_copy(values=self.values.sel(**sel_kwargs_only_lists, method=method))
+
         if num_provided < 3 and any(not np.isscalar(comp) for comp in xyz if comp is not None):
             raise DataError(
                 "Providing x, y, or z as array is only allowed for interpolation. That is, when all"
                 " three x, y, and z are provided or method '.interp()' is used explicitly."
             )
 
-        if num_provided == 0:
-            raise DataError("At least one of 'x', 'y', and 'z' must be specified.")
+        if num_provided == 0 and len(sel_kwargs) == 0:
+            raise DataError("Must provide at least one selecton key.")
 
         if num_provided == 1:
             axis = axes[0]
-            return self.plane_slice(axis=axis, pos=xyz[axis])
+            return self_after_sel.plane_slice(axis=axis, pos=xyz[axis])
 
         if num_provided == 2:
             axis = 3 - axes[0] - axes[1]
             xyz[axis] = 0
-            return self.line_slice(axis=axis, pos=xyz)
+            return self_after_sel.line_slice(axis=axis, pos=xyz)
 
         if num_provided == 3:
-            return self.interp(x=x, y=y, z=z)
+            return self_after_sel.interp(x=x, y=y, z=z)
+
+        return self_after_sel
 
     def _interp_py(
         self,
@@ -2916,7 +2996,6 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         )
 
 
-
 class DCTriangularGridDataset(TriangularGridDataset):
     """Dataset for storing triangular grid data. Data values are associated with the nodes of
     the grid.
@@ -2951,6 +3030,8 @@ class DCTriangularGridDataset(TriangularGridDataset):
     ...     values=tri_grid_values,
     ... )
     """
+
+    _spatial_data_array_type = DCSpatialDataArray
 
     values: DCIndexedDataArray = pd.Field(
         ...,
@@ -2991,6 +3072,9 @@ class DCTetrahedralGridDataset(TetrahedralGridDataset):
     ...     values=tet_grid_values,
     ... )
     """
+
+    _spatial_data_array_type = DCSpatialDataArray
+    _traingular_dataset_type = DCTriangularGridDataset
 
     values: DCIndexedDataArray = pd.Field(
         ...,

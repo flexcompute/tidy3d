@@ -65,6 +65,7 @@ from .components.data.data_array import (
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     SpatialDataArray,
+    DCSpatialDataArray,
 )
 from .components.data.dataset import (
     FieldDataset,
