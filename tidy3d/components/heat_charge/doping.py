@@ -1,41 +1,25 @@
 """File containing classes required for the setup of a DEVSIM case."""
 
-from abc import ABC
-
 import numpy as np
 import pydantic.v1 as pd
 
-from ..base import Tidy3dBaseModel, cached_property
-from ..types import Bound, Union
+from ...components.autograd.types import TracedSize
+from ...components.geometry.base import Box
+from ...constants import MICROMETER
+from ..base import cached_property
+from ..types import Union
 
 
-class AbstractDopingBox(ABC, Tidy3dBaseModel):
-    """"""
+class AbstractDopingBox(Box):
+    """Derived class from Box which redefines size so that
+    we have some default values"""
 
-    coords: Bound = pd.Field(
-        ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
-        title="Coordinates of box vertices.",
-        description="Tuple containing the minimum coordinates and the maximum "
-        "coordinates of the vertices composing the doping box. The format is "
-        "as follows: ((x_min, y_min, z_min), (x_max, y_max, z_max))",
+    size: TracedSize = pd.Field(
+        (1, 1, 1),
+        title="Size",
+        description="Size in x, y, and z directions.",
+        units=MICROMETER,
     )
-
-    @pd.validator("coords", always=True)
-    def check_coords(cls, val):
-        """Check that the minimum coordinates are indeed smaller than the maximum.
-        The case where both min and max are equal is also considered.
-        """
-        raise_error = False
-        for min, max in zip(val[0], val[1]):
-            if min > max:
-                raise_error = True
-
-        if raise_error:
-            raise pd.ValidationError(
-                "Minimum coordinate must be lower than or equal to the maximum coordinate "
-                "in each direction."
-            )
-        return val
 
 
 class ConstantDoping(AbstractDopingBox):
@@ -48,7 +32,10 @@ class ConstantDoping(AbstractDopingBox):
     ...     [-1, -1, -1],
     ...     [1, 1, 1]
     ... ]
-    >>> constant_box = td.ConstantDoping(coords=box_coords, concentration=1e18)
+    >>> constant_box1 = td.ConstantDoping(center=(0, 0, 0), size(2, 2, 2), concentration=1e18)
+    >>> constant_box2 = td.ConstantDoping()
+    >>> constant_box2 = constant_box2.from_bounds(rmin=box_coords[0], rmax=box_coords[1])
+    >>> constant_box2 = constant_box2.updated_copy(concentration=1e8)
     """
 
     concentration: pd.NonNegativeFloat = pd.Field(
