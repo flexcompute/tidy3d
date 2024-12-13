@@ -1298,6 +1298,24 @@ class DCIndexedDataArray(DataArray):
     __slots__ = ()
     _dims = ("voltage", "index")
 
+
+class DCSpatialDataArray(AbstractSpatialDataArray):
+    """Spatial distribution in the frequency-domain.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> f = [2e14, 3e14]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> fd = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z", "voltage")
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
