@@ -55,6 +55,7 @@ from .components.data.data_array import (
     FluxDataArray,
     FluxTimeDataArray,
     HeatDataArray,
+    DCIndexedDataArray,
     IndexedDataArray,
     ModeAmpsDataArray,
     ModeIndexDataArray,
@@ -72,6 +73,8 @@ from .components.data.dataset import (
     PermittivityDataset,
     TetrahedralGridDataset,
     TriangularGridDataset,
+    DCTetrahedralGridDataset,
+    DCTriangularGridDataset,
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,

@@ -37,6 +37,7 @@ from .data_array import (
     SpatialDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
+    DCIndexedDataArray
 )
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
@@ -596,7 +597,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def values_right_indexing(cls, val):
         """Check that data values are indexed correctly."""
         # currently support only simple ordered indexing of points, that is, 0, 1, 2, ...
-        indices_expected = np.arange(len(val.data))
+        indices_expected = np.arange(len(val.index.data))
         indices_given = val.index.data
         if np.any(indices_expected != indices_given):
             raise ValidationError(
@@ -610,7 +611,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @skip_if_fields_missing(["points"])
     def number_of_values_matches_points(cls, val, values):
         """Check that the number of data values matches the number of grid points."""
-        num_values = len(val)
+        num_values = len(val.index)
 
         points = values.get("points")
         num_points = len(points)
@@ -715,7 +716,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
             cells = CellDataArray(data=index_map[cells.data - min_index], coords=cells.coords)
             points = PointDataArray(points.data[used_indices, :], dims=["index", "axis"])
-            values = IndexedDataArray(values.data[used_indices], dims=["index"])
+#            values = IndexedDataArray(values.data[used_indices], dims=["index"])
+            values = values.sel(index=used_indices)
+            if "index" in values.coords:
+                # renumber if iindex given as a coordinate
+                values["index"] = np.arange(len(used_indices))
 
         return points, values, cells
 
@@ -774,7 +779,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @pd.root_validator(skip_on_failure=True, allow_reuse=True)
     def _warn_unused_points(cls, values):
         """Warn if some points are unused."""
-        point_indices = set(np.arange(len(values["values"].data)))
+        point_indices = set(np.arange(len(values["points"].data)))
         used_indices = set(values["cells"].values.ravel())
 
         if not point_indices.issubset(used_indices):
@@ -894,15 +899,32 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         grid.SetPoints(self._vtk_points)
         grid.SetCells(self._vtk_cell_type(), self._vtk_cells)
-        if self.is_complex:
-            # vtk doesn't support complex numbers
-            # so we will store our complex array as a two-component vtk array
-            data_values = self.values.values.view("(2,)float")
+        dim_list = list(self.values.dims)
+
+        def add_field_to_vtk(field, name):
+            if self.is_complex:
+                # vtk doesn't support complex numbers
+                # so we will store our complex array as a two-component vtk array
+                data_values = field.values.view("(2,)float")
+            else:
+                data_values = field.values
+            point_data_vtk = vtk["numpy_to_vtk"](data_values)
+            point_data_vtk.SetName(name)
+            grid.GetPointData().AddArray(point_data_vtk)
+
+        if len(dim_list) == 1:
+            add_field_to_vtk(self.values, self.name)
         else:
-            data_values = self.values.values
-        point_data_vtk = vtk["numpy_to_vtk"](data_values)
-        point_data_vtk.SetName(self.values.name)
-        grid.GetPointData().AddArray(point_data_vtk)
+            dim_list.remove("index")
+            fields_shape = [len(self.values.coords[dim]) for dim in dim_list]
+            num_fields = np.prod(fields_shape)
+            for field_ind in range(num_fields):
+                multi_ind = np.unravel_index(field_ind, fields_shape)
+                field_name = "_".join([dim + str(ind) for dim, ind in zip(dim_list, multi_ind)])
+                field = self.values.isel(dict(zip(dim_list, multi_ind)))
+                add_field_to_vtk(field, field_name)
+
+        # TODO: generalize this
 
         return grid
 
@@ -1041,7 +1063,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @classmethod
     @requires_vtk
     def _get_values_from_vtk(
-        cls, vtk_obj, num_points: pd.PositiveInt, field: str = None
+        cls, vtk_obj, num_points: pd.PositiveInt, field: str = None, values_type = IndexedDataArray
     ) -> IndexedDataArray:
         """Get point data values from a VTK object."""
 
@@ -1053,54 +1075,88 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 "No point data is found in a VTK object. '.values' will be initialized to zeros."
             )
             values_numpy = np.zeros(num_points)
+            values_coords = {"index": []}
             values_name = None
 
         else:
-            if field is not None:
-                array_vtk = point_data.GetAbstractArray(field)
+
+            def read_field_by_ind(field_ind):
+                array_vtk = point_data.GetAbstractArray(field_ind)
+                # currently we assume data is real or complex scalar
+                num_components = array_vtk.GetNumberOfComponents()
+                if num_components > 2:
+                    raise DataError(
+                        "Found point data array in a VTK object is expected to have maximum 2 "
+                        "components (1 is for real data, 2 is for complex data). "
+                        f"Found {num_components} components."
+                    )
+
+                # check that number of values matches number of grid points
+                num_tuples = array_vtk.GetNumberOfTuples()
+                if num_tuples != num_points:
+                    raise DataError(
+                        f"The length of found point data array ({num_tuples}) does not match the number"
+                        f" of grid points ({num_points})."
+                    )
+
+                values_numpy = vtk["vtk_to_numpy"](array_vtk)
+                values_name = array_vtk.GetName()
+
+                # vtk doesn't support complex numbers
+                # we store our complex array as a two-component vtk array
+                # so here we convert that into a single component complex array
+                if num_components == 2:
+                    values_numpy = values_numpy.view("complex")[:, 0]
+
+                return values_numpy, values_name
+
+            if isinstance(field, dict) and len(field) > 0:
+
+                fields_shape = [len(coord) for coord in field.values()]
+                num_fields = np.prod(fields_shape)
+                fields = []
+                for field_ind in range(num_fields):
+                    field_numpy, _ = read_field_by_ind(field_ind)
+                    fields.append(field_numpy)
+
+                values_numpy = np.reshape(fields, fields_shape + [num_points])
+                values_coords = field.copy()
+                values_coords["index"] = np.arange(num_points)
+                values_name = None
+
             else:
-                array_vtk = point_data.GetAbstractArray(0)
 
-            # currently we assume there is only one point data array provided in the VTK object
-            if num_point_arrays > 1 and field is None:
-                array_name = array_vtk.GetName()
-                log.warning(
-                    f"{num_point_arrays} point data arrays are found in a VTK object. "
-                    f"Only the first array (name: {array_name}) will be used to initialize "
-                    "'.values' while the rest will be ignored."
-                )
+                field_ind = 0
+                if isinstance(field, str):
+                    _ = point_data.GetAbstractArray(field, field_ind)
 
-            # currently we assume data is real or complex scalar
-            num_components = array_vtk.GetNumberOfComponents()
-            if num_components > 2:
-                raise DataError(
-                    "Found point data array in a VTK object is expected to have maximum 2 "
-                    "components (1 is for real data, 2 is for complex data). "
-                    f"Found {num_components} components."
-                )
+                values_numpy, values_name = read_field_by_ind(field_ind)
 
-            # check that number of values matches number of grid points
-            num_tuples = array_vtk.GetNumberOfTuples()
-            if num_tuples != num_points:
-                raise DataError(
-                    f"The length of found point data array ({num_tuples}) does not match the number"
-                    f" of grid points ({num_points})."
-                )
+                # currently we assume there is only one point data array provided in the VTK object
+                if num_point_arrays > 1 and field is None:
+                    log.warning(
+                        f"{num_point_arrays} point data arrays are found in a VTK object. "
+                        f"Only the first array (name: {values_name}) will be used to initialize "
+                        "'.values' while the rest will be ignored."
+                    )
 
-            values_numpy = vtk["vtk_to_numpy"](array_vtk)
-            values_name = array_vtk.GetName()
+                values_coords = dict(index=np.arange(len(values_numpy)))
 
-            # vtk doesn't support complex numbers
-            # we store our complex array as a two-component vtk array
-            # so here we convert that into a single component complex array
-            if num_components == 2:
-                values_numpy = values_numpy.view("complex")[:, 0]
-
-        values = IndexedDataArray(
-            values_numpy, coords=dict(index=np.arange(len(values_numpy))), name=values_name
+        values = values_type(
+            values_numpy, coords=values_coords, name=values_name
         )
 
         return values
+
+    @cached_property
+    def _values_coords_dict(self):
+        coord_dict = {dim: self.values.coords[dim] for dim in self.values.dims}
+        _ = coord_dict.pop("index")
+        return coord_dict
+
+    @cached_property
+    def _values_type(self):
+        return type(self.values)
 
     @requires_vtk
     def box_clip(self, bounds: Bound) -> UnstructuredGridDataset:
@@ -1141,7 +1197,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             raise DataError("Clipping box does not intersect the unstructured grid.")
 
         return self._from_vtk_obj(
-            clean_clip, remove_degenerate_cells=True, remove_unused_points=True
+            clean_clip, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type
         )
 
     def interp(
@@ -1149,7 +1205,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Union[float, Literal["extrapolate"]] = None,
+        fill_value: Union[float, Literal["extrapolate"]] = None,  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
@@ -1312,7 +1368,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: ArrayLike,
         y: ArrayLike,
         z: ArrayLike,
-        fill_value: float,
+        fill_value: float,  # TODO: an array if multidimensional
     ) -> ArrayLike:
         """Interpolate data at provided x, y, and z using vtk package.
 
@@ -1351,6 +1407,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         # get results in a numpy representation
         array_id = 0 if self.values.name is None else self.values.name
+
+        # TODO: generalize this
         values_numpy = vtk["vtk_to_numpy"](interpolated.GetPointData().GetAbstractArray(array_id))
 
         # fill points without interpolated values
@@ -1928,7 +1986,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     extractor.Update()
                     tmp = extractor.GetOutput()
 
-        return self._from_vtk_obj(tmp, remove_degenerate_cells=True, remove_unused_points=True)
+        return self._from_vtk_obj(tmp, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type)
 
     def does_cover(self, bounds: Bound) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
@@ -1982,7 +2040,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         reflector.SetInputData(self._vtk_obj)
         reflector.Update()
 
-        return self._from_vtk_obj(reflector.GetOutput())
+        return self._from_vtk_obj(reflector.GetOutput(), field=self._values_coords_dict, values_type=self._values_type)
 
 
 class TriangularGridDataset(UnstructuredGridDataset):
@@ -2072,6 +2130,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         field=None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
+        values_type = IndexedDataArray,
     ):
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -2093,7 +2152,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
 
         # data values are read directly into Tidy3D array
-        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy), field)
+        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy), field, values_type)
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
@@ -2170,7 +2229,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # perform slicing in vtk and get unprocessed points and values
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
         points_numpy = vtk["vtk_to_numpy"](slice_vtk.GetPoints().GetData())
-        values = self._get_values_from_vtk(slice_vtk, len(points_numpy))
+        values = self._get_values_from_vtk(slice_vtk, len(points_numpy), field=self._values_coords_dict, values_type=self._values_type)
 
         # axis of the resulting line
         slice_axis = 3 - self.normal_axis - axis
@@ -2211,6 +2270,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         shading: Literal["gourand", "flat"] = "gouraud",
         cbar_kwargs: Dict = None,
         pcolor_kwargs: Dict = None,
+        **kwargs,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 
@@ -2254,7 +2314,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         if field:
             plot_obj = ax.tripcolor(
                 self._triangulation_obj,
-                self.values.data,
+                self.values.sel(**kwargs).data,
                 shading=shading,
                 cmap=cmap,
                 vmin=vmin,
@@ -2629,13 +2689,14 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         field=None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
+        values_type = IndexedDataArray,
     ) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # read point, cells, and values info from a vtk instance
         cells_numpy = vtk["vtk_to_numpy"](grid.GetCells().GetConnectivityArray())
         points_numpy = vtk["vtk_to_numpy"](grid.GetPoints().GetData())
-        values = cls._get_values_from_vtk(grid, len(points_numpy), field)
+        values = cls._get_values_from_vtk(grid, len(points_numpy), field, values_type)
 
         # verify cell_types
         cells_types = vtk["vtk_to_numpy"](grid.GetCellTypesArray())
@@ -2688,7 +2749,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
 
         return TriangularGridDataset._from_vtk_obj(
-            slice_vtk, remove_degenerate_cells=True, remove_unused_points=True
+            slice_vtk, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type
         )
 
     @requires_vtk
@@ -2739,7 +2800,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             raise DataError("Slicing line does not intersect the unstructured grid.")
 
         extracted_cells = TetrahedralGridDataset._from_vtk_obj(
-            extracted_cells_vtk, remove_degenerate_cells=True, remove_unused_points=True
+            extracted_cells_vtk, remove_degenerate_cells=True, remove_unused_points=True, field=self._values_coords_dict, values_type=self._values_type
         )
 
         tan_dims = [0, 1, 2]
@@ -2853,6 +2914,89 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             rel_tol=rel_tol,
             axis_ignore=None,
         )
+
+
+
+class DCTriangularGridDataset(TriangularGridDataset):
+    """Dataset for storing triangular grid data. Data values are associated with the nodes of
+    the grid.
+
+    Note
+    ----
+    To use full functionality of unstructured datasets one must install ``vtk`` package (``pip
+    install tidy3d[vtk]`` or ``pip install vtk``). Otherwise the functionality of unstructured
+    datasets is limited to creation, writing to/loading from a file, and arithmetic manipulations.
+
+    Example
+    -------
+    >>> tri_grid_points = PointDataArray(
+    ...     [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+    ...     coords=dict(index=np.arange(4), axis=np.arange(2)),
+    ... )
+    >>>
+    >>> tri_grid_cells = CellDataArray(
+    ...     [[0, 1, 2], [1, 2, 3]],
+    ...     coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
+    ... )
+    >>>
+    >>> tri_grid_values = IndexedDataArray(
+    ...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),
+    ... )
+    >>>
+    >>> tri_grid = TriangularGridDataset(
+    ...     normal_axis=1,
+    ...     normal_pos=0,
+    ...     points=tri_grid_points,
+    ...     cells=tri_grid_cells,
+    ...     values=tri_grid_values,
+    ... )
+    """
+
+    values: DCIndexedDataArray = pd.Field(
+        ...,
+        title="Point Values",
+        description="Values stored at the grid points.",
+    )
+
+
+class DCTetrahedralGridDataset(TetrahedralGridDataset):
+    """Dataset for storing tetrahedral grid data. Data values are associated with the nodes of
+    the grid.
+
+    Note
+    ----
+    To use full functionality of unstructured datasets one must install ``vtk`` package (``pip
+    install tidy3d[vtk]`` or ``pip install vtk``). Otherwise the functionality of unstructured
+    datasets is limited to creation, writing to/loading from a file, and arithmetic manipulations.
+
+    Example
+    -------
+    >>> tet_grid_points = PointDataArray(
+    ...     [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    ...     coords=dict(index=np.arange(4), axis=np.arange(3)),
+    ... )
+    >>>
+    >>> tet_grid_cells = CellDataArray(
+    ...     [[0, 1, 2, 3]],
+    ...     coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
+    ... )
+    >>>
+    >>> tet_grid_values = IndexedDataArray(
+    ...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),
+    ... )
+    >>>
+    >>> tet_grid = TetrahedralGridDataset(
+    ...     points=tet_grid_points,
+    ...     cells=tet_grid_cells,
+    ...     values=tet_grid_values,
+    ... )
+    """
+
+    values: DCIndexedDataArray = pd.Field(
+        ...,
+        title="Point Values",
+        description="Values stored at the grid points.",
+    )
 
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]

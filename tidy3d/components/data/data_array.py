@@ -1282,6 +1282,22 @@ class IndexedDataArray(DataArray):
     _dims = ("index",)
 
 
+
+class DCIndexedDataArray(DataArray):
+    """Stores a one-dimensional array enumerated by coordinate ``index``. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated data or a ``CellDataArray``
+    to store cell-associated data.
+
+    Example
+    -------
+    >>> indexed_array = IndexedDataArray(
+    ...     (1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3))
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("voltage", "index")
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
@@ -1317,5 +1333,6 @@ DATA_ARRAY_TYPES = [
     PointDataArray,
     CellDataArray,
     IndexedDataArray,
+    DCIndexedDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
