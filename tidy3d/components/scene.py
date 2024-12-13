@@ -785,6 +785,80 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
+        self.plot_structures_property(
+            x=x,
+            y=y,
+            z=z,
+            freq=freq,
+            alpha=alpha,
+            cbar=cbar,
+            reverse=reverse,
+            limits=eps_lim,
+            ax=ax,
+            hlim=hlim,
+            vlim=vlim,
+            grid=grid,
+            property="eps",
+        )
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_structures_property(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        freq: float = None,
+        alpha: float = None,
+        cbar: bool = True,
+        reverse: bool = False,
+        limits: Tuple[Union[float, None], Union[float, None]] = (None, None),
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        grid: Grid = None,
+        property: str = "eps",
+    ) -> Ax:
+        """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        reverse : bool = False
+            If ``False``, the highest permittivity is plotted in black.
+            If ``True``, it is plotteed in white (suitable for black backgrounds).
+        cbar : bool = True
+            Whether to plot a colorbar for the relative permittivity.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        limits : Tuple[float, float] = None
+            Custom coloring limits for the property to plot.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        property: str = "eps"
+            Indicates the property to plot for the structures. Currently supported properties
+            are ["eps", "doping", "acceptors", "donors"]
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
         structures = self.structures
 
         # alpha is None just means plot without any transparency
@@ -806,16 +880,28 @@ class Scene(Tidy3dBaseModel):
                 structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
             )
 
-        eps_min, eps_max = eps_lim
+        property_min, property_max = limits
 
-        if eps_min is None or eps_max is None:
-            eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq)
+        if property_min is None or property_max is None:
+            if property == "eps":
+                eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq)
+            if property_min is None:
+                property_min = eps_min_sim
 
-            if eps_min is None:
-                eps_min = eps_min_sim
+            if property_max is None:
+                property_max = eps_max_sim
 
-            if eps_max is None:
-                eps_max = eps_max_sim
+            if property in ["donors", "acceptors", "doping"]:
+                acceptor_limits, donor_limits = self.doping_bounds()
+                if property == "donors":
+                    property_min = donor_limits[0]
+                    property_max = donor_limits[1]
+                elif property == "acceptors":
+                    property_min = acceptor_limits[0]
+                    property_max = acceptor_limits[1]
+                elif property == "doping":
+                    property_min = -donor_limits[1]
+                    property_max = acceptor_limits[1]
 
         for medium, shape in medium_shapes:
             # if the background medium is custom medium, it needs to be rendered separately
@@ -827,8 +913,8 @@ class Scene(Tidy3dBaseModel):
                     freq=freq,
                     alpha=alpha,
                     medium=medium,
-                    eps_min=eps_min,
-                    eps_max=eps_max,
+                    eps_min=property_min,
+                    eps_max=property_max,
                     reverse=reverse,
                     shape=shape,
                     ax=ax,
@@ -836,11 +922,22 @@ class Scene(Tidy3dBaseModel):
             else:
                 # For custom medium, apply pcolormesh clipped by the shape.
                 self._pcolormesh_shape_custom_medium_structure_eps(
-                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax, grid
+                    x,
+                    y,
+                    z,
+                    freq,
+                    alpha,
+                    medium,
+                    property_min,
+                    property_max,
+                    reverse,
+                    shape,
+                    ax,
+                    grid,
                 )
 
         if cbar:
-            self._add_cbar_eps(eps_min=eps_min, eps_max=eps_max, ax=ax)
+            self._add_cbar_eps(eps_min=property_min, eps_max=property_max, ax=ax)
 
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1591,6 +1688,44 @@ class Scene(Tidy3dBaseModel):
             scene_dict["medium"] = med.perturbed_copy(**array_dict, interp_method=interp_method)
 
         return Scene.parse_obj(scene_dict)
+
+    def doping_bounds(self):
+        """Get the maximum and minimum of the doping"""
+
+        acceptors_lims = [1e50, -1e50]
+        donors_lims = [1e50, -1e50]
+
+        for struct in self.structures:
+            if isinstance(struct.medium.electric_spec, SemiConductorSpec):
+                electric_spec = struct.medium.electric_spec
+                for doping, limits in zip(
+                    [electric_spec.acceptors, electric_spec.donors], [acceptors_lims, donors_lims]
+                ):
+                    if isinstance(doping, float):
+                        if doping < limits[0]:
+                            limits[0] = doping
+                        if doping > limits[1]:
+                            limits[1] = doping
+                    if isinstance(doping, SpatialDataArray):
+                        min_value = np, min(doping.data)
+                        max_value = np.max(doping.data)
+                        if min_value < limits[0]:
+                            limits[0] = min_value
+                        if max_value > limits[1]:
+                            limits[1] = max_value
+                    if isinstance(doping, tuple):
+                        for doping_box in doping:
+                            if isinstance(doping_box, ConstantDoping):
+                                if doping_box.concentration < limits[0]:
+                                    limits[0] = doping_box.concentration
+                                if doping_box.concentration > limits[1]:
+                                    limits[1] = doping_box.concentration
+                            if isinstance(doping_box, GaussianDoping):
+                                if doping_box.ref_con < limits[0]:
+                                    limits[0] = doping_box.ref_con
+                                if doping_box.concentration > limits[1]:
+                                    limits[1] = doping_box.concentration
+        return acceptors_lims, donors_lims
 
     def plot_doping(
         self,
