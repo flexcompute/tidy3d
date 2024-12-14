@@ -2,11 +2,11 @@
 
 # grid
 # apodization
-from .components.apodization import ApodizationSpec
+from tidy3d.components.apodization import ApodizationSpec
 
 # boundary placement for other solvers
 # boundary placement for other solvers
-from .components.bc_placement import (
+from tidy3d.components.bc_placement import (
     MediumMediumInterface,
     SimulationBoundary,
     StructureBoundary,
@@ -15,7 +15,7 @@ from .components.bc_placement import (
 )
 
 # boundary
-from .components.boundary import (
+from tidy3d.components.boundary import (
     PML,
     Absorber,
     AbsorberParams,
@@ -36,7 +36,7 @@ from .components.boundary import (
 )
 
 # data
-from .components.data.data_array import (
+from tidy3d.components.data.data_array import (
     AxialRatioDataArray,
     CellDataArray,
     ChargeDataArray,
@@ -65,7 +65,7 @@ from .components.data.data_array import (
     ScalarModeFieldDataArray,
     SpatialDataArray,
 )
-from .components.data.dataset import (
+from tidy3d.components.data.dataset import (
     FieldDataset,
     FieldTimeDataset,
     ModeSolverDataset,
@@ -73,7 +73,7 @@ from .components.data.dataset import (
     TetrahedralGridDataset,
     TriangularGridDataset,
 )
-from .components.data.monitor_data import (
+from tidy3d.components.data.monitor_data import (
     AbstractFieldProjectionData,
     DiffractionData,
     DirectivityData,
@@ -88,23 +88,27 @@ from .components.data.monitor_data import (
     ModeSolverData,
     PermittivityData,
 )
-from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
-from .components.eme.data.dataset import (
+from tidy3d.components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from tidy3d.components.eme.data.dataset import (
     EMECoefficientDataset,
     EMEFieldDataset,
     EMEModeSolverDataset,
     EMESMatrixDataset,
 )
-from .components.eme.data.monitor_data import EMECoefficientData, EMEFieldData, EMEModeSolverData
-from .components.eme.data.sim_data import EMESimulationData
-from .components.eme.grid import (
+from tidy3d.components.eme.data.monitor_data import (
+    EMECoefficientData,
+    EMEFieldData,
+    EMEModeSolverData,
+)
+from tidy3d.components.eme.data.sim_data import EMESimulationData
+from tidy3d.components.eme.grid import (
     EMECompositeGrid,
     EMEExplicitGrid,
     EMEGrid,
     EMEModeSpec,
     EMEUniformGrid,
 )
-from .components.eme.monitor import (
+from tidy3d.components.eme.monitor import (
     EMECoefficientMonitor,
     EMEFieldMonitor,
     EMEModeSolverMonitor,
@@ -112,29 +116,29 @@ from .components.eme.monitor import (
 )
 
 # EME
-from .components.eme.simulation import EMESimulation
-from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep
+from tidy3d.components.eme.simulation import EMESimulation
+from tidy3d.components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep
 
 # field projection
-from .components.field_projection import FieldProjector
+from tidy3d.components.field_projection import FieldProjector
 
 # frequency conversion utilities
-from .components.frequencies import frequencies, wavelengths
+from tidy3d.components.frequencies import frequencies, wavelengths
 
 # geometry
-from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
-from .components.geometry.mesh import TriangleMesh
-from .components.geometry.polyslab import PolySlab
-from .components.geometry.primitives import Cylinder, Sphere
-from .components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
-from .components.grid.grid_spec import (
+from tidy3d.components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
+from tidy3d.components.geometry.mesh import TriangleMesh
+from tidy3d.components.geometry.polyslab import PolySlab
+from tidy3d.components.geometry.primitives import Cylinder, Sphere
+from tidy3d.components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
+from tidy3d.components.grid.grid_spec import (
     AutoGrid,
     CustomGrid,
     CustomGridBoundaries,
     GridSpec,
     UniformGrid,
 )
-from .components.heat_charge.boundary import (
+from tidy3d.components.heat_charge.boundary import (
     ConvectionBC,
     CurrentBC,
     HeatBoundarySpec,
@@ -144,7 +148,7 @@ from .components.heat_charge.boundary import (
     TemperatureBC,
     VoltageBC,
 )
-from .components.heat_charge.charge_settings import (
+from tidy3d.components.heat_charge.charge_settings import (
     AugerRecombination,
     CaugheyThomasMobility,
     ChargeToleranceSpec,
@@ -153,28 +157,32 @@ from .components.heat_charge.charge_settings import (
     SlotboomNarrowingModel,
     SRHRecombination,
 )
-from .components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
-from .components.heat_charge.heat.simulation import HeatSimulation
-from .components.heat_charge.monitor import (
+from tidy3d.components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from tidy3d.components.heat_charge.heat.simulation import HeatSimulation
+from tidy3d.components.heat_charge.monitor import (
     CapacitanceMonitor,
     FreeCarrierMonitor,
     TemperatureMonitor,
     VoltageMonitor,
 )
-from .components.heat_charge.monitor_data import (
+from tidy3d.components.heat_charge.monitor_data import (
     CapacitanceData,
     FreeCarrierData,
     PotentialData,
     TemperatureData,
     VoltageData,
 )
-from .components.heat_charge.sim_data import HeatChargeSimulationData, HeatSimulationData
-from .components.heat_charge.simulation import HeatChargeSimulation
-from .components.heat_charge.source import HeatFromElectricSource, HeatSource, UniformHeatSource
+from tidy3d.components.heat_charge.sim_data import HeatChargeSimulationData, HeatSimulationData
+from tidy3d.components.heat_charge.simulation import HeatChargeSimulation
+from tidy3d.components.heat_charge.source import (
+    HeatFromElectricSource,
+    HeatSource,
+    UniformHeatSource,
+)
 
 # heat
 # heat
-from .components.heat_charge_spec import (
+from tidy3d.components.heat_charge_spec import (
     ConductorSpec,
     FluidSpec,
     InsulatorSpec,
@@ -183,7 +191,7 @@ from .components.heat_charge_spec import (
 )
 
 # lumped elements
-from .components.lumped_element import (
+from tidy3d.components.lumped_element import (
     AdmittanceNetwork,
     CoaxialLumpedResistor,
     LinearLumpedElement,
@@ -195,7 +203,7 @@ from .components.lumped_element import (
 
 # medium
 # for docs
-from .components.medium import (
+from tidy3d.components.medium import (
     PEC,
     PEC2D,
     AbstractMedium,
@@ -229,10 +237,10 @@ from .components.medium import (
 )
 
 # modes
-from .components.mode import ModeSpec
+from tidy3d.components.mode import ModeSpec
 
 # monitors
-from .components.monitor import (
+from tidy3d.components.monitor import (
     DiffractionMonitor,
     DirectivityMonitor,
     FieldMonitor,
@@ -248,7 +256,7 @@ from .components.monitor import (
     Monitor,
     PermittivityMonitor,
 )
-from .components.parameter_perturbation import (
+from tidy3d.components.parameter_perturbation import (
     CustomChargePerturbation,
     CustomHeatPerturbation,
     IndexPerturbation,
@@ -259,21 +267,21 @@ from .components.parameter_perturbation import (
 )
 
 # run time spec
-from .components.run_time_spec import RunTimeSpec
+from tidy3d.components.run_time_spec import RunTimeSpec
 
 # scene
 # scene
-from .components.scene import Scene
+from tidy3d.components.scene import Scene
 
 # simulation
-from .components.simulation import Simulation
-from .components.source.base import Source
-from .components.source.current import (
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.base import Source
+from tidy3d.components.source.current import (
     CustomCurrentSource,
     PointDipole,
     UniformCurrentSource,
 )
-from .components.source.field import (
+from tidy3d.components.source.field import (
     TFSF,
     AstigmaticGaussianBeam,
     CustomFieldSource,
@@ -285,7 +293,7 @@ from .components.source.field import (
 )
 
 # sources
-from .components.source.time import (
+from tidy3d.components.source.time import (
     ContinuousWave,
     CustomSourceTime,
     GaussianPulse,
@@ -293,10 +301,10 @@ from .components.source.time import (
 )
 
 # structures
-from .components.structure import MeshOverrideStructure, Structure
+from tidy3d.components.structure import MeshOverrideStructure, Structure
 
 # subpixel
-from .components.subpixel_spec import (
+from tidy3d.components.subpixel_spec import (
     HeuristicPECStaircasing,
     PECConformal,
     PolarizedAveraging,
@@ -307,31 +315,31 @@ from .components.subpixel_spec import (
 )
 
 # time modulation
-from .components.time_modulation import (
+from tidy3d.components.time_modulation import (
     ContinuousWaveTimeModulation,
     ModulationSpec,
     SpaceModulation,
     SpaceTimeModulation,
 )
-from .components.transformation import RotationAroundAxis
+from tidy3d.components.transformation import RotationAroundAxis
 
 # config
-from .config import config
+from tidy3d.config import config
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
-from .constants import C_0, EPSILON_0, ETA_0, HBAR, K_B, MU_0, Q_e, inf
-from .log import log, set_logging_console, set_logging_file
+from tidy3d.constants import C_0, EPSILON_0, ETA_0, HBAR, K_B, MU_0, Q_e, inf
+from tidy3d.log import log, set_logging_console, set_logging_file
 
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
-from .material_library.material_library import material_library
-from .material_library.parametric_materials import Graphene
+from tidy3d.material_library.material_library import material_library
+from tidy3d.material_library.parametric_materials import Graphene
 
 # updater
-from .updater import Updater
+from tidy3d.updater import Updater
 
 # version
-from .version import __version__
+from tidy3d.version import __version__
 
 
 def set_logging_level(level: str) -> None:
