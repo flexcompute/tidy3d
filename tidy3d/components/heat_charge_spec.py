@@ -23,8 +23,8 @@ from .heat_charge.charge_settings import (
     MobilityModelType,
     RadiativeRecombination,
     RecombinationModelType,
-    SlotboomNarrowingModel,
-    SRHRecombination,
+    ShockleyReedHallRecombination,
+    SlotboomNarrowingBandGap,
 )
 from .types import Union
 
@@ -149,13 +149,13 @@ class SemiConductorSpec(ConductorSpec):
     )
 
     recombination_model: Tuple[RecombinationModelType, ...] = pd.Field(
-        (SRHRecombination(), AugerRecombination(), RadiativeRecombination()),
+        (ShockleyReedHallRecombination(), AugerRecombination(), RadiativeRecombination()),
         title="Recombination models",
         description="Array containing the recombination models to be applied to the material.",
     )
 
     bandgap_model: BandgapNarrowingModelType = pd.Field(
-        SlotboomNarrowingModel(),
+        SlotboomNarrowingBandGap(),
         title="Bandgap narrowing model.",
         description="Bandgap narrowing model.",
     )

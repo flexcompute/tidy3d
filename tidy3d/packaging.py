@@ -10,7 +10,7 @@ from typing import Literal
 
 import numpy as np
 
-from .exceptions import Tidy3dImportError
+from tidy3d.exceptions import Tidy3dImportError
 
 vtk = {
     "mod": None,

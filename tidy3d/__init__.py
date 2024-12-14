@@ -154,8 +154,8 @@ from tidy3d.components.heat_charge.charge_settings import (
     ChargeToleranceSpec,
     DCSpec,
     RadiativeRecombination,
-    SlotboomNarrowingModel,
-    SRHRecombination,
+    ShockleyReedHallRecombination,
+    SlotboomNarrowingBandGap,
 )
 from tidy3d.components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
 from tidy3d.components.heat_charge.heat.simulation import HeatSimulation
@@ -561,7 +561,7 @@ __all__ = [
     "ChargeToleranceSpec",
     "DCSpec",
     "CaugheyThomasMobility",
-    "SlotboomNarrowingModel",
+    "SlotboomNarrowingBandGap",
     "ShockleyReedHallRecombination",
     "AugerRecombination",
     "RadiativeRecombination",
