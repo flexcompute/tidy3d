@@ -14,7 +14,7 @@ from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
 from ..log import log
 from .base import Tidy3dBaseModel, cached_property
-from .data.dataset import (
+from .data.utils import (
     CustomSpatialDataType,
     SpatialDataArray,
     TetrahedralGridDataset,

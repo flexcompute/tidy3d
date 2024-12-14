@@ -11,7 +11,7 @@ from ...exceptions import DataError
 from ...log import log
 from ..base_sim.data.sim_data import AbstractSimulationData
 from ..data.data_array import DCCapacitanceDataArray, DCIVCurveDataArray, SpatialDataArray
-from ..data.dataset import TetrahedralGridDataset, TriangularGridDataset, UnstructuredGridDataset
+from ..data.utils import TetrahedralGridDataset, TriangularGridDataset, UnstructuredGridDataset
 from ..types import Ax, Literal, RealFieldVal
 from ..viz import add_ax_if_none, equal_aspect
 from .heat.simulation import HeatSimulation

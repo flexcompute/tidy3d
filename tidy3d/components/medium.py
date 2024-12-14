@@ -39,16 +39,18 @@ from .autograd.types import AutogradFieldMap, TracedFloat, TracedPoleAndResidue,
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import (
-    CustomSpatialDataType,
-    CustomSpatialDataTypeAnnotated,
     ElectromagneticFieldDataset,
     PermittivityDataset,
-    UnstructuredGridDataset,
+)
+from .data.utils import (
+    CustomSpatialDataType,
+    CustomSpatialDataTypeAnnotated,
     _check_same_coordinates,
     _get_numpy_array,
     _ones_like,
     _zeros_like,
 )
+from .data.unstructured.base import UnstructuredGridDataset
 from .data.validators import validate_no_nans
 from .dispersion_fitter import (
     LOSS_CHECK_MAX,

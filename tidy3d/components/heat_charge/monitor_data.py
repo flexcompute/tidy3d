@@ -13,8 +13,8 @@ from ...constants import KELVIN, VOLT
 from ...log import log
 from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
-from ..data.data_array import DCCapacitanceDataArray, SpatialDataArray
-from ..data.dataset import IndexedDataArray, TetrahedralGridDataset, TriangularGridDataset
+from ..data.data_array import DCCapacitanceDataArray, SpatialDataArray, IndexedDataArray
+from ..data.utils import TetrahedralGridDataset, TriangularGridDataset
 from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
     CapacitanceMonitor,
