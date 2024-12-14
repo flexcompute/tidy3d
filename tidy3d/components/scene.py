@@ -10,6 +10,9 @@ import matplotlib.pylab as plt
 import pydantic.v1 as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from tidy3d.components.heat_charge_spec import SolidSpec
+from tidy3d.components.materials.tcad.charge import ChargeMedium
+
 from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
 from ..log import log
@@ -24,7 +27,6 @@ from .data.dataset import (
 from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, traverse_geometries
 from .grid.grid import Coords, Grid
-from .heat_charge_spec import ConductorSpec, SolidSpec
 from .medium import (
     AbstractCustomMedium,
     AbstractPerturbationMedium,
@@ -1352,7 +1354,7 @@ class Scene(Tidy3dBaseModel):
             cond_list = [medium.heat_spec.conductivity for medium in medium_list]
         elif property == "electric_conductivity":
             medium_list = [
-                medium for medium in medium_list if isinstance(medium.electric_spec, ConductorSpec)
+                medium for medium in medium_list if isinstance(medium.electric_spec, ChargeMedium)
             ]
             cond_list = [medium.electric_spec.conductivity for medium in medium_list]
 
@@ -1396,9 +1398,7 @@ class Scene(Tidy3dBaseModel):
         cond_medium = None
         if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidSpec):
             cond_medium = medium.heat_spec.conductivity
-        elif property == "electric_conductivity" and isinstance(
-            medium.electric_spec, ConductorSpec
-        ):
+        elif property == "electric_conductivity" and isinstance(medium.electric_spec, ChargeMedium):
             cond_medium = medium.electric_spec.conductivity
 
         if cond_medium is not None:

@@ -44,7 +44,7 @@ HeatChargeBCTypes = HeatChargeBoundaryConditionTypes = Union[
 ]
 
 
-class HeatChargeSimulationTypes(str, Enum):
+class TCADAnalysisTypes(str, Enum):
     """Enumeration of the types of simulations currently supported"""
 
     HEAT = "HEAT"

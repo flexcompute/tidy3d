@@ -1,5 +1,5 @@
 """
-This class defines standard SPICE analysis types (electrical simulations configurations).
+This class defines standard SPICE electrical_analysis types (electrical simulations configurations).
 """
 
 from typing import Optional

@@ -19,6 +19,7 @@ from tidy3d.components.bc_placement import (
 )
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.scene import Scene
+from tidy3d.components.spice.types import ElectricalAnalysisTypes, TransferFunctionDC
 from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.boundary.charge import (
     CurrentBC,
@@ -40,6 +41,9 @@ from tidy3d.components.tcad.grid import (
     UnstructuredGridType,
 )
 from tidy3d.components.tcad.materials.heat import SolidSpec
+from tidy3d.components.tcad.monitors.charge import (
+    StaticVoltageMonitor,
+)
 from tidy3d.components.tcad.monitors.heat import (
     TemperatureMonitor,
 )
@@ -57,7 +61,10 @@ from tidy3d.components.tcad.types import (
     ChargeSourceTypes,
     ElectricBCTypes,
     HeatBCTypes,
+    HeatChargeMonitorTypes,
+    HeatChargeSourceTypes,
     HeatSourceTypes,
+    TCADAnalysisTypes,
 )
 from tidy3d.components.tcad.viz import (
     CHARGE_BC_INSULATOR,
@@ -140,13 +147,13 @@ class HeatChargeSimulation(AbstractSimulation):
     ... )
     """
 
-    sources: Tuple[HeatChargeSourceType, ...] = pd.Field(
+    sources: Tuple[HeatChargeSourceTypes, ...] = pd.Field(
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
     )
 
-    monitors: Tuple[annotate_type(HeatChargeMonitorType), ...] = pd.Field(
+    monitors: Tuple[annotate_type(HeatChargeMonitorTypes), ...] = pd.Field(
         (),
         title="Monitors",
         description="Monitors in the simulation.",
@@ -174,7 +181,7 @@ class HeatChargeSimulation(AbstractSimulation):
         "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
     )
 
-    analysis: ElectricalAnalysisTypes = pd.Field(
+    electrical_analysis: ElectricalAnalysisTypes = pd.Field(
         TransferFunctionDC(), title="Charge settings.", description="Some Charge settings."
     )
 
@@ -229,7 +236,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     isinstance(medium.heat_spec, SolidSpec) for medium in medium_set
                 )
                 crosses_elec_spec = any(
-                    isinstance(medium.electric_spec, ConductorSpec) for medium in medium_set
+                    isinstance(medium.electric_spec, ChargeMedium) for medium in medium_set
                 )
             else:
                 # approximate check for volumetric objects based on bounding boxes
@@ -242,7 +249,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 crosses_elec_spec = any(
                     obj.intersects(structure.geometry)
                     for structure in total_structures
-                    if isinstance(structure.medium.electric_spec, ConductorSpec)
+                    if isinstance(structure.medium.electric_spec, ChargeMedium)
                 )
 
             if not crosses_solid:
@@ -263,7 +270,9 @@ class HeatChargeSimulation(AbstractSimulation):
         failed_solid_idx, failed_elect_idx = cls._check_cross_solids(val, values)
 
         temp_monitors = [idx for idx, mnt in enumerate(val) if isinstance(mnt, TemperatureMonitor)]
-        volt_monitors = [idx for idx, mnt in enumerate(val) if isinstance(mnt, VoltageMonitor)]
+        volt_monitors = [
+            idx for idx, mnt in enumerate(val) if isinstance(mnt, StaticVoltageMonitor)
+        ]
 
         failed_temp_mnt = [idx for idx in temp_monitors if idx in failed_solid_idx]
         failed_volt_mnt = [idx for idx in volt_monitors if idx in failed_elect_idx]
@@ -280,7 +289,7 @@ class HeatChargeSimulation(AbstractSimulation):
             monitor_names = [f"'{val[ind].name}'" for ind in failed_volt_mnt]
             raise SetupError(
                 f"Monitors {monitor_names} do not cross any conducting materials "
-                "('electric_spec=ConductorSpec(...)'). The voltage is only stored inside conducting "
+                "('electric_spec=ChargeMedium(...)'). The voltage is only stored inside conducting "
                 "materials. Thus, no information will be recorded in these monitors."
             )
 
@@ -371,11 +380,15 @@ class HeatChargeSimulation(AbstractSimulation):
     def check_charge_simulation(cls, values):
         """Makes sure that CHARGE simulations are set correctly."""
 
-        ChargeMonitorType = (VoltageMonitor, FreeCarrierMonitor, CapacitanceMonitor)
+        ChargeMonitorType = (
+            StaticVoltageMonitor,
+            StaticChargeCarrierMonitor,
+            StaticCapacitanceMonitor,
+        )
 
         simulation_types = cls._check_simulation_types(values=values)
 
-        if HeatChargeSimulationType.CHARGE in simulation_types:
+        if TCADAnalysisTypes.CHARGE in simulation_types:
             # check that we have at least 2 'VoltageBC's
             boundary_spec = values["boundary_spec"]
             voltage_bcs = 0
@@ -411,7 +424,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         raise_error = False
         for sim_type in simulation_types:
-            if sim_type == HeatChargeSimulationType.HEAT:
+            if sim_type == TCADAnalysisTypes.HEAT:
                 type_bcs = [
                     bc for bc in bounday_conditions if isinstance(bc.condition, HeatBCTypes)
                 ]
@@ -419,7 +432,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     isinstance(bc.condition, NeumannBCsHeat) for bc in type_bcs
                 ):
                     raise_error = True
-            elif sim_type == HeatChargeSimulationType.CONDUCTION:
+            elif sim_type == TCADAnalysisTypes.CONDUCTION:
                 type_bcs = [
                     bc for bc in bounday_conditions if isinstance(bc.condition, ElectricBCTypes)
                 ]
@@ -510,15 +523,15 @@ class HeatChargeSimulation(AbstractSimulation):
         simulation_types = cls._check_simulation_types(values=values)
 
         for sim_type in simulation_types:
-            if sim_type == HeatChargeSimulationType.HEAT:
+            if sim_type == TCADAnalysisTypes.HEAT:
                 if len(failed_solid_idx) > 0:
                     raise SetupError(
                         "No solid materials ('SolidSpec') are detected in heat simulation. Solution domain is empty."
                     )
-            elif sim_type == HeatChargeSimulationType.CONDUCTION:
+            elif sim_type == TCADAnalysisTypes.CONDUCTION:
                 if len(failed_elect_idx) > 0:
                     raise SetupError(
-                        "No conducting materials ('ConductorSpec') are detected in conduction simulation. Solution domain is empty."
+                        "No conducting materials ('ChargeMedium') are detected in conduction simulation. Solution domain is empty."
                     )
 
         return values
@@ -531,7 +544,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # make sure mediums with doping have been defined
         for structure in structures:
-            if isinstance(structure.medium.electric_spec, SemiConductorSpec):
+            if isinstance(structure.medium.electric_spec, ActiveSemiConductorMedium):
                 if (
                     structure.medium.electric_spec.donors is not None
                     or structure.medium.electric_spec.acceptors is not None
@@ -545,7 +558,7 @@ class HeatChargeSimulation(AbstractSimulation):
         HeatBCTypes=HeatBCTypes,
         ElectricBCTypes=ElectricBCTypes,
         HeatSourceTypes=HeatSourceTypes,
-    ) -> list[HeatChargeSimulationType]:
+    ) -> list[TCADAnalysisTypes]:
         """Given model dictionary ``values``, check the type of simulations to be run
         based on BCs and sources.
         """
@@ -559,22 +572,22 @@ class HeatChargeSimulation(AbstractSimulation):
             structures=structures
         )
         if semiconductor_present:
-            simulation_types.append(HeatChargeSimulationType.CHARGE)
+            simulation_types.append(TCADAnalysisTypes.CHARGE)
 
         for boundary in boundaries:
             if isinstance(boundary.condition, HeatBCTypes):
-                simulation_types.append(HeatChargeSimulationType.HEAT)
+                simulation_types.append(TCADAnalysisTypes.HEAT)
             if isinstance(boundary.condition, ElectricBCTypes):
                 # for the time being, assume tha the simulation will be of
                 # type CHARGE if we have semiconductors
                 if semiconductor_present:
-                    simulation_types.append(HeatChargeSimulationType.CHARGE)
+                    simulation_types.append(TCADAnalysisTypes.CHARGE)
                 else:
-                    simulation_types.append(HeatChargeSimulationType.CONDUCTION)
+                    simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         for source in sources:
             if isinstance(source, HeatSourceTypes):
-                simulation_types.append(HeatChargeSimulationType.HEAT)
+                simulation_types.append(TCADAnalysisTypes.HEAT)
 
         return set(simulation_types)
 
@@ -595,7 +608,7 @@ class HeatChargeSimulation(AbstractSimulation):
             if isinstance(source, HeatFromElectricSource) and len(simulation_types) < 2:
                 raise SetupError(
                     f"Using 'HeatFromElectricSource' requires the definition of both "
-                    f"{HeatChargeSimulationType.CONDUCTION.name} and {HeatChargeSimulationType.HEAT.name}. "
+                    f"{TCADAnalysisTypes.CONDUCTION.name} and {TCADAnalysisTypes.HEAT.name}. "
                     f"The current simulation setup contains only conditions of type {simulation_types[0].name}"
                 )
 
@@ -607,7 +620,7 @@ class HeatChargeSimulation(AbstractSimulation):
         NOTE: this is a very rough estimate. The back-end will actually stop
         execution based on actual node-count."""
 
-        if HeatChargeSimulationType.CHARGE not in cls._check_simulation_types(values=values):
+        if TCADAnalysisTypes.CHARGE not in cls._check_simulation_types(values=values):
             return values
 
         # let's raise a warning if the estimate is larger than 2M nodes
@@ -712,16 +725,14 @@ class HeatChargeSimulation(AbstractSimulation):
             raise ValueError(
                 "'plot_property' must be called with argument 'property' in "
                 "'HeatChargeSimulations' with multiple physics, i.e., a 'HeatChargeSimulation' "
-                f"with both {HeatChargeSimulationType.HEAT.name} and "
-                f"{HeatChargeSimulationType.CONDUCTION.name} simulation properties."
+                f"with both {TCADAnalysisTypes.HEAT.name} and "
+                f"{TCADAnalysisTypes.CONDUCTION.name} simulation properties."
             )
         if len(simulation_types) == 1:
             if (
-                property == "heat_conductivity"
-                and HeatChargeSimulationType.CONDUCTION in simulation_types
+                property == "heat_conductivity" and TCADAnalysisTypes.CONDUCTION in simulation_types
             ) or (
-                property == "electric_conductivity"
-                and HeatChargeSimulationType.HEAT in simulation_types
+                property == "electric_conductivity" and TCADAnalysisTypes.HEAT in simulation_types
             ):
                 raise ValueError(
                     f"'property' in 'plot_property()' was defined as {property} but the "
@@ -1275,7 +1286,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _get_structure_source_plot_params(
         self,
-        source: HeatChargeSourceType,
+        source: HeatChargeSourceTypes,
         source_min: float,
         source_max: float,
         alpha: float = None,
@@ -1300,7 +1311,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _plot_shape_structure_source(
         self,
-        source: HeatChargeSourceType,
+        source: HeatChargeSourceTypes,
         shape: Shapely,
         source_min: float,
         source_max: float,
@@ -1366,17 +1377,17 @@ class HeatChargeSimulation(AbstractSimulation):
             **kwargs,
         )
 
-    def _get_simulation_types(self) -> list[HeatChargeSimulationType]:
+    def _get_simulation_types(self) -> list[TCADAnalysisTypes]:
         """
         Checks through BCs and sources and returns the
         types of simulations.
         """
         simulation_types = []
 
-        # NOTE: for the time being, if a simulation has SemiConductorSpec
-        # then we consider it of being a 'HeatChargeSimulationType.CHARGE'
+        # NOTE: for the time being, if a simulation has ActiveSemiConductorMedium
+        # then we consider it of being a 'TCADAnalysisTypes.CHARGE'
         if self._check_if_semiconductor_present(self.structures):
-            return [HeatChargeSimulationType.CHARGE]
+            return [TCADAnalysisTypes.CHARGE]
 
         heat_source_present = any(isinstance(s, HeatSourceTypes) for s in self.sources)
 
@@ -1385,7 +1396,7 @@ class HeatChargeSimulation(AbstractSimulation):
         if heat_source_present and not heat_BCs_present:
             raise SetupError("Heat sources defined but no heat BCs present.")
         elif heat_BCs_present or heat_source_present:
-            simulation_types.append(HeatChargeSimulationType.HEAT)
+            simulation_types.append(TCADAnalysisTypes.HEAT)
 
         # check for conduction simulation
         electric_spec_present = any(
@@ -1404,7 +1415,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 "the solution domain is empty."
             )
         elif electric_BCs_present and electric_spec_present:
-            simulation_types.append(HeatChargeSimulationType.CONDUCTION)
+            simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         return simulation_types
 

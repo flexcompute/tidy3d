@@ -146,7 +146,7 @@ class DesignSpace(Tidy3dBaseModel):
         """Explore a parameter space with a supplied method using the user supplied function.
         Supplied functions are used to evaluate the design space and are called within the method.
         For optimization methods these functions act as the fitness function. A single function can be
-        supplied which will contain the preprocessing, computation, and analysis of the desired problem.
+        supplied which will contain the preprocessing, computation, and electrical_analysis of the desired problem.
         If running a Tidy3D simulation, it is recommended to split this function into a pre function, that creates a Simulation object(s),
         and a post function which analyses the SimulationData produced by the pre function Simulations. This allows the DesignSpace to
         manage the batching of Simulations, which varies between Method used, and saving time writing their own batching code.
@@ -188,7 +188,7 @@ class DesignSpace(Tidy3dBaseModel):
         The output of ``fn_post`` (or ``fn`` if only one function is supplied) must be a float
         or a container where the first element is a ``float`` and second element is a ``list`` / ``dict`` e,g. [float {"aux_1": str}].
         The float is used by the optimizers as the return of the fitness function.
-        The second element is for auxiliary data from the analysis that the user may want to keep.
+        The second element is for auxiliary data from the electrical_analysis that the user may want to keep.
         Sampling methods (``MethodGrid`` or ``MethodMonteCarlo``) can have any return type.
 
         Parameters

@@ -59,7 +59,7 @@ from .dispersion_fitter import (
 )
 from .geometry.base import Geometry
 from .grid.grid import Coords, Grid
-from .heat_charge_spec import ElectricSpecType, ThermalSpecType
+from .heat_charge_spec import ThermalSpecType
 from .parameter_perturbation import (
     IndexPerturbation,
     ParameterPerturbation,
@@ -734,12 +734,12 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    electric_spec: Optional[ElectricSpecType] = pd.Field(
-        None,
-        title="Electric Specification",
-        description="Specification of the medium electric properties.",
-        discriminator=TYPE_TAG_STR,
-    )
+    # electric_spec: Optional[ElectricSpecType] = pd.Field(
+    #     None,
+    #     title="Electric Specification",
+    #     description="Specification of the medium electric properties.",
+    #     discriminator=TYPE_TAG_STR,
+    # )
 
     @pd.validator("modulation_spec", always=True)
     @skip_if_fields_missing(["nonlinear_spec"])

@@ -40,7 +40,7 @@ def make_heat_charge_mediums():
             capacity=2,
             conductivity=3,
         ),
-        electric_spec=td.ConductorSpec(
+        electric_spec=td.ChargeMedium(
             conductivity=1,
         ),
         name="solid_medium",
@@ -49,7 +49,7 @@ def make_heat_charge_mediums():
     solid_noHeat = td.Medium(
         permittivity=5,
         conductivity=0.01,
-        electric_spec=td.ConductorSpec(
+        electric_spec=td.ChargeMedium(
             conductivity=1,
         ),
         name="solid_medium",
@@ -67,7 +67,7 @@ def make_heat_charge_mediums():
 
     insulator_medium = td.Medium(
         permittivity=3,
-        electric_spec=td.InsulatorSpec(),
+        electric_spec=td.ChargeMedium(),
         name="insulator_medium",
     )
 
@@ -221,7 +221,7 @@ def test_monitor_crosses_medium():
         center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage"
     )
     # a volt monitor in a heat sim should throw error
-    # if no materials with ConductorSpec present
+    # if no materials with ChargeMedium present
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(
             medium=solid_noElect, structures=[solid_struct_noElect], monitors=[volt_monitor]
@@ -620,7 +620,7 @@ def test_heat_charge_sim_bounds(shift_amount, log_level, log_capture):  # noqa: 
         _ = td.HeatChargeSimulation(
             size=(1.5, 1.5, 1.5),
             center=CENTER_SHIFT,
-            medium=td.Medium(electric_spec=td.ConductorSpec(conductivity=1)),
+            medium=td.Medium(electric_spec=td.ChargeMedium(conductivity=1)),
             structures=[
                 td.Structure(
                     geometry=td.Box(size=(1, 1, 1), center=shifted_center), medium=td.Medium()
@@ -665,7 +665,7 @@ def test_sim_structure_extent(log_capture, box_size, log_level):  # noqa: F811
     _ = td.HeatChargeSimulation(
         size=(1, 1, 1),
         structures=[box],
-        medium=td.Medium(electric_spec=td.ConductorSpec(conductivity=1)),
+        medium=td.Medium(electric_spec=td.ChargeMedium(conductivity=1)),
         boundary_spec=[
             td.HeatChargeBoundarySpec(
                 placement=td.SimulationBoundary(), condition=td.VoltageBC(voltage=1)
@@ -737,7 +737,7 @@ class TestCharge:
     @pytest.fixture(scope="class")
     def Si_p(self):
         return td.Medium(
-            electric_spec=td.SemiConductorSpec(
+            electric_spec=td.ActiveSemiConductorMedium(
                 conductivity=1,
                 permittivity=11.7,
                 donors=0,
@@ -749,7 +749,7 @@ class TestCharge:
     @pytest.fixture(scope="class")
     def Si_n(self):
         return td.Medium(
-            electric_spec=td.SemiConductorSpec(
+            electric_spec=td.ActiveSemiConductorMedium(
                 conductivity=1,
                 permittivity=11.7,
                 donors=CHARGE_SIMULATION.donors,
@@ -761,7 +761,7 @@ class TestCharge:
     @pytest.fixture(scope="class")
     def SiO2(self):
         return td.Medium(
-            electric_spec=td.InsulatorSpec(permittivity=3.9),
+            electric_spec=td.ChargeMedium(permittivity=3.9),
             name="SiO2",
         )
 
@@ -885,7 +885,7 @@ class TestCharge:
 
         # define ChargeSimulation with no Semiconductor materials
         medium = td.Medium(
-            electric_spec=td.ConductorSpec(permittivity=1, conductivity=1),
+            electric_spec=td.ChargeMedium(permittivity=1, conductivity=1),
             name="medium",
         )
         new_structures = [struct.updated_copy(medium=medium) for struct in sim.structures]
