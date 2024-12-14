@@ -114,7 +114,7 @@ class InsulatingBC(HeatChargeBC):
     """
 
 
-HeatChargeBoundaryConditionType = Union[
+HeatChargeBCTypes = Union[
     TemperatureBC, HeatFluxBC, ConvectionBC, VoltageBC, CurrentBC, InsulatingBC
 ]
 
@@ -137,7 +137,7 @@ class HeatChargeBoundarySpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    condition: HeatChargeBoundaryConditionType = pd.Field(
+    condition: HeatChargeBCTypes = pd.Field(
         title="Boundary Conditions",
         description="Boundary conditions to apply at the selected location.",
         discriminator=TYPE_TAG_STR,

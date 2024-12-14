@@ -98,4 +98,4 @@ class UniformHeatSource(HeatSource):
         return values
 
 
-HeatChargeSourceType = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]
+HeatChargeSourceTypes = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]

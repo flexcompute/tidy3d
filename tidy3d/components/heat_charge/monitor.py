@@ -74,7 +74,7 @@ class StaticCapacitanceMonitor(HeatChargeMonitor):
 
 
 # types of monitors that are accepted by heat simulation
-HeatChargeMonitorType = Union[
+HeatChargeMonitorTypes = Union[
     TemperatureMonitor,
     StaticVoltageMonitor,
     StaticChargeCarrierMonitor,

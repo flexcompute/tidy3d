@@ -18,11 +18,11 @@ from .base import Tidy3dBaseModel
 from .data.data_array import SpatialDataArray
 from .heat_charge.charge_settings import (
     AugerRecombination,
-    BandgapNarrowingModelType,
+    BandGapModelTypes,
     CaugheyThomasMobility,
-    MobilityModelType,
+    MobilityModelTypes,
     RadiativeRecombination,
-    RecombinationModelType,
+    RecombinationModelTypes,
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
 )
@@ -142,19 +142,19 @@ class SemiConductorSpec(ConductorSpec):
         4.05, title="Electron affinity", description="Electron affinity", units=ELECTRON_VOLT
     )
 
-    mobility_model: MobilityModelType = pd.Field(
+    mobility_model: MobilityModelTypes = pd.Field(
         CaugheyThomasMobility(),
         title="Mobility model",
         description="Mobility model",
     )
 
-    recombination_model: Tuple[RecombinationModelType, ...] = pd.Field(
+    recombination_model: Tuple[RecombinationModelTypes, ...] = pd.Field(
         (ShockleyReedHallRecombination(), AugerRecombination(), RadiativeRecombination()),
         title="Recombination models",
         description="Array containing the recombination models to be applied to the material.",
     )
 
-    bandgap_model: BandgapNarrowingModelType = pd.Field(
+    bandgap_model: BandGapModelTypes = pd.Field(
         SlotboomNarrowingBandGap(),
         title="Bandgap narrowing model.",
         description="Bandgap narrowing model.",

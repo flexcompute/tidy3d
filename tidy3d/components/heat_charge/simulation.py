@@ -40,7 +40,7 @@ from .boundary import (
 from .charge_settings import ChargeRegimeType, ChargeToleranceSpec, ChargeToleranceType
 from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, UnstructuredGridType
 from .monitor import (
-    HeatChargeMonitorType,
+    HeatChargeMonitorTypes,
     StaticCapacitanceMonitor,
     StaticChargeCarrierMonitor,
     StaticVoltageMonitor,
@@ -48,7 +48,7 @@ from .monitor import (
 )
 from .source import (
     GlobalHeatChargeSource,
-    HeatChargeSourceType,
+    HeatChargeSourceTypes,
     HeatFromElectricSource,
     HeatSource,
     UniformHeatSource,
@@ -142,13 +142,13 @@ class HeatChargeSimulation(AbstractSimulation):
     ... )
     """
 
-    sources: Tuple[HeatChargeSourceType, ...] = pd.Field(
+    sources: Tuple[HeatChargeSourceTypes, ...] = pd.Field(
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
     )
 
-    monitors: Tuple[annotate_type(HeatChargeMonitorType), ...] = pd.Field(
+    monitors: Tuple[annotate_type(HeatChargeMonitorTypes), ...] = pd.Field(
         (),
         title="Monitors",
         description="Monitors in the simulation.",
@@ -1290,7 +1290,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _get_structure_source_plot_params(
         self,
-        source: HeatChargeSourceType,
+        source: HeatChargeSourceTypes,
         source_min: float,
         source_max: float,
         alpha: float = None,
@@ -1315,7 +1315,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _plot_shape_structure_source(
         self,
-        source: HeatChargeSourceType,
+        source: HeatChargeSourceTypes,
         shape: Shapely,
         source_min: float,
         source_max: float,

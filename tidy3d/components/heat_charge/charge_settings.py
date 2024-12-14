@@ -206,8 +206,8 @@ class SlotboomNarrowingBandGap(Tidy3dBaseModel):
 
 ChargeToleranceType = Union[ChargeToleranceSpec]
 ChargeRegimeType = Union[DCSpec]
-MobilityModelType = Union[CaugheyThomasMobility]
-RecombinationModelType = Union[
+MobilityModelTypes = Union[CaugheyThomasMobility]
+RecombinationModelTypes = Union[
     AugerRecombination, RadiativeRecombination, ShockleyReedHallRecombination
 ]
-BandgapNarrowingModelType = Union[SlotboomNarrowingBandGap]
+BandGapModelTypes = Union[SlotboomNarrowingBandGap]

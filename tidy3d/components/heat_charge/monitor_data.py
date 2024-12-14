@@ -17,7 +17,7 @@ from ..data.data_array import DCCapacitanceDataArray, SpatialDataArray
 from ..data.dataset import IndexedDataArray, TetrahedralGridDataset, TriangularGridDataset
 from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
-    HeatChargeMonitorType,
+    HeatChargeMonitorTypes,
     StaticCapacitanceMonitor,
     StaticChargeCarrierMonitor,
     StaticVoltageMonitor,
@@ -32,7 +32,7 @@ FieldDataset = Union[
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
 
-    monitor: HeatChargeMonitorType = pd.Field(
+    monitor: HeatChargeMonitorTypes = pd.Field(
         ...,
         title="Monitor",
         description="Monitor associated with the data.",

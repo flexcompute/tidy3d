@@ -33,7 +33,7 @@ from tidy3d.log import log
 # from .monitor import (
 #     StaticCapacitanceMonitor,
 #     StaticChargeCarrierMonitor,
-#     HeatChargeMonitorType,
+#     HeatChargeMonitorTypes,
 #     TemperatureMonitor,
 #     StaticVoltageMonitor,
 # )
