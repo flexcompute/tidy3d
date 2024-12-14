@@ -1203,7 +1203,56 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return self._from_vtk_obj_internal(clean_clip)
 
+    def _non_spatial_interp(self, method="linear", fill_value=np.nan, **coords_kwargs):
+        coords_kwargs_only_lists = {key: value if isinstance(value, list) else [value] for key, value in coords_kwargs.items()}
+        return self.updated_copy(
+            values=self.values.interp(
+                **coords_kwargs_only_lists,
+                method="linear",
+                kwargs=dict(fill_value=fill_value),
+            )
+        )
+
     def interp(
+        self,
+        x: Union[float, ArrayLike] = None,
+        y: Union[float, ArrayLike] = None,
+        z: Union[float, ArrayLike] = None,
+        fill_value: Union[float, Literal["extrapolate"]] = None,  # TODO: an array if multiple fields?
+        use_vtk: bool = False,
+        method: Literal["linear", "nearest"] = "linear",
+        max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
+        max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
+        rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
+        **coords_kwargs,
+    ) -> SpatialDataArray:
+
+        if fill_value is None:
+            log.warning(
+                "Default parameter setting 'fill_value=0' will be changed to "
+                "'fill_value=``extrapolate``' in a future version."
+            )
+            fill_value = 0
+
+        spatial_dims_given = any(comp is not None for comp in [x, y, z])
+        if spatial_dims_given and any(comp is None for comp in [x, y, z]):
+            raise DataError("Must provide either all or none of 'x', 'y', and 'z'")
+
+        if not spatial_dims_given and len(coords_kwargs) == 0:
+            raise DataError("Must provide either 'x', 'y', and 'z' or points along other non-spatial dimensions.")
+
+        result = self
+        if len(coords_kwargs) > 0:
+            result = result._non_spatial_interp(method=method, fill_value=fill_value, **coords_kwargs)
+
+        if spatial_dims_given:
+            result = result._spatial_interp(x=x, y=y, z=z, fill_value=fill_value, use_vtk=use_vtk,
+                method=method, max_samples_per_step=max_samples_per_step,
+                max_cells_per_step=max_cells_per_step, rel_tol=rel_tol)
+
+        return result
+
+    def _spatial_interp(
         self,
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
@@ -1251,13 +1300,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Interpolated data.
         """
 
-        if fill_value is None:
-            log.warning(
-                "Default parameter setting 'fill_value=0' will be changed to "
-                "'fill_value=``extrapolate``' in a future version."
-            )
-            fill_value = 0
-
         # calculate the resulting array shape
         x = np.atleast_1d(x)
         y = np.atleast_1d(y)
@@ -1272,6 +1314,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 fill_value_actual = fill_value
 
             if use_vtk:
+                if self.is_complex:
+                    raise DataError("Option 'use_vtk=True' is not supported for complex datasets.")
+                if len(self._fields_shape) > 0:
+                    raise DataError("Option 'use_vtk=True' is not supported for multidimensional datasets.")
                 log.warning("Note that option 'use_vtk=True' will be removed in future versions.")
                 interpolated_values = self._interp_vtk(x=x, y=y, z=z, fill_value=fill_value_actual)
             else:
@@ -1355,6 +1401,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """
 
         # locate all nans
+        # do a quick and dirty in case of multiple fields: just look at the very first field
         nans = np.isnan(values).reshape((len(x), len(y), len(z), self._num_fields))[:, :, :, 0]
 
         if np.sum(nans) > 0:
@@ -2403,7 +2450,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
 
-    def interp(
+    def _spatial_interp(
         self,
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
@@ -2455,13 +2502,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Interpolated data.
         """
 
-        if fill_value is None:
-            log.warning(
-                "Default parameter setting 'fill_value=0' will be changed to "
-                "'fill_value=``extrapolate``' in a future version."
-            )
-            fill_value = 0
-
         if not ignore_normal_pos:
             log.warning(
                 "Parameter 'ignore_normal_pos' is depreciated. It is always assumed that data "
@@ -2475,7 +2515,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         xyz = [x, y, z]
         xyz[self.normal_axis] = [self.normal_pos]
-        interp_inplane = super().interp(
+        interp_inplane = super()._spatial_interp(
             **dict(zip("xyz", xyz)),
             fill_value=fill_value,
             use_vtk=use_vtk,
