@@ -15,7 +15,7 @@ from ..data.dataset import TetrahedralGridDataset, TriangularGridDataset, Unstru
 from ..types import Ax, Literal, RealFieldVal
 from ..viz import add_ax_if_none, equal_aspect
 from .heat.simulation import HeatSimulation
-from .monitor_data import HeatChargeMonitorDataType, TemperatureData, VoltageData
+from .monitor_data import HeatChargeMonitorDataType, StaticVoltageData, TemperatureData
 from .simulation import HeatChargeSimulation
 
 
@@ -166,7 +166,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
             field_data = self._field_component_value(monitor_data.temperature, val)
             property_to_plot = "heat_conductivity"
 
-        elif isinstance(monitor_data, VoltageData):
+        elif isinstance(monitor_data, StaticVoltageData):
             if monitor_data.voltage is None:
                 raise DataError(f"No data to plot for monitor '{monitor_name}'.")
             field_data = self._field_component_value(monitor_data.voltage, val)
@@ -175,7 +175,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
         else:
             raise DataError(
                 f"Monitor '{monitor_name}' (type '{monitor_data.monitor.type}') is not a "
-                f"supported monitor. Supported monitors are 'TemperatureData', 'VoltageData'."
+                f"supported monitor. Supported monitors are 'TemperatureData', 'StaticVoltageData'."
             )
 
         field_name = monitor_data.field_name(val)

@@ -40,11 +40,11 @@ from .boundary import (
 from .charge_settings import ChargeRegimeType, ChargeToleranceSpec, ChargeToleranceType
 from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, UnstructuredGridType
 from .monitor import (
-    CapacitanceMonitor,
-    FreeCarrierMonitor,
     HeatChargeMonitorType,
+    StaticCapacitanceMonitor,
+    StaticChargeCarrierMonitor,
+    StaticVoltageMonitor,
     TemperatureMonitor,
-    VoltageMonitor,
 )
 from .source import (
     GlobalHeatChargeSource,
@@ -272,7 +272,9 @@ class HeatChargeSimulation(AbstractSimulation):
         failed_solid_idx, failed_elect_idx = cls._check_cross_solids(val, values)
 
         temp_monitors = [idx for idx, mnt in enumerate(val) if isinstance(mnt, TemperatureMonitor)]
-        volt_monitors = [idx for idx, mnt in enumerate(val) if isinstance(mnt, VoltageMonitor)]
+        volt_monitors = [
+            idx for idx, mnt in enumerate(val) if isinstance(mnt, StaticVoltageMonitor)
+        ]
 
         failed_temp_mnt = [idx for idx in temp_monitors if idx in failed_solid_idx]
         failed_volt_mnt = [idx for idx in volt_monitors if idx in failed_elect_idx]
@@ -380,7 +382,11 @@ class HeatChargeSimulation(AbstractSimulation):
     def check_charge_simulation(cls, values):
         """Makes sure that CHARGE simulations are set correctly."""
 
-        ChargeMonitorType = (VoltageMonitor, FreeCarrierMonitor, CapacitanceMonitor)
+        ChargeMonitorType = (
+            StaticVoltageMonitor,
+            StaticChargeCarrierMonitor,
+            StaticCapacitanceMonitor,
+        )
 
         simulation_types = cls._check_simulation_types(values=values)
 
@@ -402,7 +408,7 @@ class HeatChargeSimulation(AbstractSimulation):
             if not any(isinstance(mnt, ChargeMonitorType) for mnt in monitors):
                 raise SetupError(
                     "CHARGE simulations require the definition of, at least, one of these monitors: "
-                    "'[VoltageMonitor, FreeCarrierMonitor, CapacitanceMonitor]' "
+                    "'[StaticVoltageMonitor, StaticChargeCarrierMonitor, StaticCapacitanceMonitor]' "
                     "but none have been defined."
                 )
 

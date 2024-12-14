@@ -38,7 +38,7 @@ from __future__ import annotations
 # from ..types import Ax, Literal, RealFieldVal
 # from ..viz import add_ax_if_none, equal_aspect
 # from .heat.simulation import HeatSimulation
-# from .monitor_data import HeatChargeMonitorDataType, TemperatureData, VoltageData
+# from .monitor_data import HeatChargeMonitorDataType, TemperatureData, StaticVoltageData
 # from .simulation import HeatChargeSimulation
 
 
@@ -198,7 +198,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
         else:
             raise DataError(
                 f"Monitor '{monitor_name}' (type '{monitor_data.monitor.type}') is not a "
-                f"supported monitor. Supported monitors are 'TemperatureData', 'VoltageData'."
+                f"supported monitor. Supported monitors are 'TemperatureData', 'StaticVoltageData'."
             )
 
         field_name = monitor_data.field_name(val)

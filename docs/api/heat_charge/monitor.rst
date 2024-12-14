@@ -8,4 +8,4 @@ Monitors
    :template: module.rst
 
    tidy3d.TemperatureMonitor
-   tidy3d.VoltageMonitor
+   tidy3d.StaticVoltageMonitor

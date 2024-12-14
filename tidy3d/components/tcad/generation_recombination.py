@@ -28,7 +28,7 @@ class RadiativeRecombination(Tidy3dBaseModel):
     )
 
 
-class SRHRecombination(Tidy3dBaseModel):
+class ShockleyReedHallRecombination(Tidy3dBaseModel):
     """This class defines the parameters for the Shockley-Reed-Hall recombination model.
     NOTE: currently, lifetimes are considered constant (not dependent on temp. nor doping)
     NOTE: default values are those appropriate for Silicon."""

@@ -17,11 +17,11 @@ from ..data.data_array import DCCapacitanceDataArray, SpatialDataArray
 from ..data.dataset import IndexedDataArray, TetrahedralGridDataset, TriangularGridDataset
 from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
-    CapacitanceMonitor,
-    FreeCarrierMonitor,
     HeatChargeMonitorType,
+    StaticCapacitanceMonitor,
+    StaticChargeCarrierMonitor,
+    StaticVoltageMonitor,
     TemperatureMonitor,
-    VoltageMonitor,
 )
 
 FieldDataset = Union[
@@ -183,24 +183,24 @@ class TemperatureData(HeatChargeMonitorData):
         return self.updated_copy(temperature=new_temp, symmetry=(0, 0, 0))
 
 
-class VoltageData(HeatChargeMonitorData):
+class StaticVoltageData(HeatChargeMonitorData):
     """Data associated with a :class:`VoltageMonitor`: spatial electric potential field.
 
     Example
     -------
-    >>> from tidy3d import VoltageMonitor, SpatialDataArray
+    >>> from tidy3d import StaticVoltageMonitor, SpatialDataArray
     >>> import numpy as np
     >>> voltage_data = SpatialDataArray(
     ...     np.ones((2, 3, 4)), coords={"x": [0, 1], "y": [0, 1, 2], "z": [0, 1, 2, 3]}
     ... )
-    >>> voltage_mnt = VoltageMonitor(size=(1, 2, 3), name="voltage")
-    >>> voltage_mnt_data = VoltageData(
+    >>> voltage_mnt = StaticVoltageMonitor(size=(1, 2, 3), name="voltage")
+    >>> voltage_mnt_data = StaticVoltageData(
     ...     monitor=voltage_mnt, voltage=voltage_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
     ... )
     >>> voltage_mnt_data_expanded = voltage_mnt_data.symmetry_expanded_copy
     """
 
-    monitor: VoltageMonitor = pd.Field(
+    monitor: StaticVoltageMonitor = pd.Field(
         ..., title="Monitor", description="Electric potential monitor associated with the data."
     )
 
@@ -234,7 +234,7 @@ class VoltageData(HeatChargeMonitorData):
         return val
 
     @property
-    def symmetry_expanded_copy(self) -> VoltageData:
+    def symmetry_expanded_copy(self) -> StaticVoltageData:
         """Return copy of self with symmetry applied."""
 
         new_phi = self._symmetry_expanded_copy(property=self.voltage)
@@ -277,10 +277,10 @@ class HeatChargeDataset(Tidy3dBaseModel):
         return values
 
 
-class PotentialData(HeatChargeMonitorData):
+class StaticPotentialData(HeatChargeMonitorData):
     """Class that stores electric potential from a charge simulation."""
 
-    monitor: VoltageMonitor = pd.Field(
+    monitor: StaticVoltageMonitor = pd.Field(
         ...,
         title="Voltage monitor",
         description="Electric potential monitor associated with a Charge simulation.",
@@ -306,7 +306,7 @@ class PotentialData(HeatChargeMonitorData):
         return val
 
     @property
-    def symmetry_expanded_copy(self) -> PotentialData:
+    def symmetry_expanded_copy(self) -> StaticPotentialData:
         """Return copy of self with symmetry applied."""
 
         new_voltages = self._symmetry_expanded_copy(property=self.voltage_series.field_series)
@@ -323,10 +323,10 @@ class PotentialData(HeatChargeMonitorData):
             return "V"
 
 
-class FreeCarrierData(HeatChargeMonitorData):
+class StaticFreeCarrierData(HeatChargeMonitorData):
     """Class that stores free carrier concentration in Charge simulations."""
 
-    monitor: FreeCarrierMonitor = pd.Field(
+    monitor: StaticChargeCarrierMonitor = pd.Field(
         ...,
         title="Free carrier monitor",
         description="Free carrier data associated with a Charge simulation.",
@@ -357,7 +357,7 @@ class FreeCarrierData(HeatChargeMonitorData):
         return values
 
     @property
-    def symmetry_expanded_copy(self) -> FreeCarrierData:
+    def symmetry_expanded_copy(self) -> StaticFreeCarrierData:
         """Return copy of self with symmetry applied."""
 
         new_electrons = self._symmetry_expanded_copy(property=self.electrons_series.field_series)
@@ -376,10 +376,10 @@ class FreeCarrierData(HeatChargeMonitorData):
             return "Electrons, Holes"
 
 
-class CapacitanceData(HeatChargeMonitorData):
+class StaticCapacitanceData(HeatChargeMonitorData):
     """Class that stores capacitance data from a Charge simulation."""
 
-    monitor: CapacitanceMonitor = pd.Field(
+    monitor: StaticCapacitanceMonitor = pd.Field(
         ...,
         title="Capacitance monitor",
         description="Capacitance data associated with a Charge simulation.",
@@ -418,5 +418,9 @@ class CapacitanceData(HeatChargeMonitorData):
 
 
 HeatChargeMonitorDataType = Union[
-    TemperatureData, VoltageData, PotentialData, FreeCarrierData, CapacitanceData
+    TemperatureData,
+    StaticVoltageData,
+    StaticPotentialData,
+    StaticFreeCarrierData,
+    StaticCapacitanceData,
 ]

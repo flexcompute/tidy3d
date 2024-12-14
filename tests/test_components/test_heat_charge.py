@@ -183,12 +183,12 @@ def make_heat_charge_mnts():
         center=(0, 0.9, 0), size=(1.6, 0, 3), name="empty", unstructured=True, conformal=False
     )
 
-    volt_mnt1 = td.VoltageMonitor(size=(1.6, 2, 3), name="v_test")
-    volt_mnt2 = td.VoltageMonitor(size=(1.6, 2, 3), name="v_tet", unstructured=True)
-    volt_mnt3 = td.VoltageMonitor(
+    volt_mnt1 = td.StaticVoltageMonitor(size=(1.6, 2, 3), name="v_test")
+    volt_mnt2 = td.StaticVoltageMonitor(size=(1.6, 2, 3), name="v_tet", unstructured=True)
+    volt_mnt3 = td.StaticVoltageMonitor(
         center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_tri", unstructured=True, conformal=True
     )
-    volt_mnt4 = td.VoltageMonitor(
+    volt_mnt4 = td.StaticVoltageMonitor(
         center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_empty", unstructured=True, conformal=False
     )
 
@@ -217,7 +217,7 @@ def test_monitor_crosses_medium():
     heat_sim = make_heat_charge_heat_sim()
     cond_sim = make_heat_charge_cond_sim()
 
-    volt_monitor = td.VoltageMonitor(
+    volt_monitor = td.StaticVoltageMonitor(
         center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="voltage"
     )
     # a volt monitor in a heat sim should throw error
@@ -325,7 +325,7 @@ def make_voltage_mnt_data():
     coords = dict(x=x, y=y, z=z)
     voltage_field = td.SpatialDataArray(T, coords=coords)
 
-    mnt_data1 = td.VoltageData(monitor=volt_mnt1, voltage=voltage_field)
+    mnt_data1 = td.StaticVoltageData(monitor=volt_mnt1, voltage=voltage_field)
 
     tet_grid_points = td.PointDataArray(
         [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -349,7 +349,7 @@ def make_voltage_mnt_data():
         values=tet_grid_values,
     )
 
-    mnt_data2 = td.VoltageData(monitor=volt_mnt2, voltage=tet_grid)
+    mnt_data2 = td.StaticVoltageData(monitor=volt_mnt2, voltage=tet_grid)
 
     tri_grid_points = td.PointDataArray(
         [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
@@ -375,9 +375,9 @@ def make_voltage_mnt_data():
         values=tri_grid_values,
     )
 
-    mnt_data3 = td.VoltageData(monitor=volt_mnt3, voltage=tri_grid)
+    mnt_data3 = td.StaticVoltageData(monitor=volt_mnt3, voltage=tri_grid)
 
-    mnt_data4 = td.VoltageData(monitor=volt_mnt4, voltage=None)
+    mnt_data4 = td.StaticVoltageData(monitor=volt_mnt4, voltage=None)
 
     return (mnt_data1, mnt_data2, mnt_data3, mnt_data4)
 
@@ -814,7 +814,7 @@ class TestCharge:
     # monitors
     @pytest.fixture(scope="class")
     def charge_global_mnt(self):
-        return td.FreeCarrierMonitor(
+        return td.StaticChargeCarrierMonitor(
             center=(0, 0, 0),
             size=(td.inf, td.inf, td.inf),
             name="charge_global_mnt",
@@ -823,7 +823,7 @@ class TestCharge:
 
     @pytest.fixture(scope="class")
     def potential_global_mnt(self):
-        return td.VoltageMonitor(
+        return td.StaticVoltageMonitor(
             center=(0, 0, 0),
             size=(td.inf, td.inf, td.inf),
             name="potential_global_mnt",
@@ -832,7 +832,7 @@ class TestCharge:
 
     @pytest.fixture(scope="class")
     def capacitance_global_mnt(self):
-        return td.CapacitanceMonitor(
+        return td.StaticCapacitanceMonitor(
             center=(0, 0, 0),
             size=(td.inf, td.inf, td.inf),
             name="capacitance_global_mnt",
