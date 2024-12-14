@@ -72,6 +72,8 @@ from .components.data.dataset import (
     FieldTimeDataset,
     ModeSolverDataset,
     PermittivityDataset,
+)
+from .components.data.utils import (
     TetrahedralGridDataset,
     TriangularGridDataset,
     DCTetrahedralGridDataset,

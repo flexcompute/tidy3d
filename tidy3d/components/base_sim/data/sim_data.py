@@ -11,7 +11,7 @@ import xarray as xr
 
 from ....exceptions import DataError, Tidy3dKeyError, ValidationError
 from ...base import Tidy3dBaseModel, skip_if_fields_missing
-from ...data.dataset import UnstructuredGridDatasetType
+from ...data.utils import UnstructuredGridDatasetType
 from ...types import FieldVal
 from ..simulation import AbstractSimulation
 from .monitor_data import AbstractMonitorData

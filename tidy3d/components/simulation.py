@@ -32,7 +32,8 @@ from .boundary import (
     StablePML,
 )
 from .data.data_array import FreqDataArray
-from .data.dataset import CustomSpatialDataType, Dataset
+from .data.dataset import Dataset
+from .data.utils import CustomSpatialDataType
 from .geometry.base import Box, Geometry
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
