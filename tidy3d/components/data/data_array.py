@@ -1282,7 +1282,6 @@ class IndexedDataArray(DataArray):
     _dims = ("index",)
 
 
-
 class DCIndexedDataArray(DataArray):
     """Stores a one-dimensional array enumerated by coordinate ``index``. It is typically used
     in conjuction with a ``PointDataArray`` to store point-associated data or a ``CellDataArray``
@@ -1296,7 +1295,7 @@ class DCIndexedDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("voltage", "index")
+    _dims = ("index", "voltage")
 
 
 class DCSpatialDataArray(AbstractSpatialDataArray):
