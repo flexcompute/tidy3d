@@ -901,11 +901,8 @@ def estimate_cost(task_id: str, verbose: bool = True, solver_version: str = None
                 console.log(f"  {fc_post:1.3f} FlexCredit of the total cost from post-processing.")
         return task_info.estFlexUnit
 
-    log.warning(
-        "Could not get estimated cost! It will be reported during a simulation run in the "
-        "preprocessing step."
-    )
-    return None
+    # Something went wrong
+    raise WebError("Could not get estimated cost!")
 
 
 @wait_for_connection
