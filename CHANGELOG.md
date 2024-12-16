@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug when `td.inf` are in `attrs` and files saved and loaded to .json twice.
 - Cached property cleared in copying an object with `validate=False`.
 - Error when `JaxSimulation` passed to `ModeSolver.simulation`: now it will be converted to a regular `Simulation`, with a warning.
+- Thread-safe creation of `TIDY3D_DIR`.
 
 ## [2.7.8] - 2024-11-27
 
