@@ -171,6 +171,17 @@ class ModeSolver(Tidy3dBaseModel):
         "like ``mode_area`` require all E-field components.",
     )
 
+    @pydantic.validator("simulation", pre=True, always=True)
+    def _convert_to_simulation(cls, val):
+        """Convert to regular Simulation if e.g. JaxSimulation given."""
+        if hasattr(val, "to_simulation"):
+            val = val.to_simulation()[0]
+            log.warning(
+                "'JaxSimulation' is no longer directly supported in 'ModeSolver', "
+                "converting to static simulation."
+            )
+        return val
+
     @pydantic.validator("plane", always=True)
     def is_plane(cls, val):
         """Raise validation error if not planar."""
