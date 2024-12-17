@@ -63,10 +63,8 @@ from ..types import (
 )
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from .data_array import (
-    AxialRatioDataArray,
     DataArray,
     DiffractionDataArray,
-    DirectivityDataArray,
     EMEFreqModeDataArray,
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
@@ -97,6 +95,7 @@ Coords1D = ArrayFloat1D
 
 # how much to shift the adjoint field source for 0-D axes dimensions
 SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
+AXIAL_RATIO_CAP = 100
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -2022,40 +2021,6 @@ class FluxTimeData(MonitorData):
     )
 
 
-class DirectivityData(MonitorData):
-    """
-    Data associated with a :class:`.DirectivityMonitor`.
-
-    Example
-    -------
-    >>> from tidy3d import DirectivityDataArray, AxialRatioDataArray
-    >>> f = np.linspace(1e14, 2e14, 10)
-    >>> r = np.atleast_1d(1e6)
-    >>> theta = np.linspace(0, np.pi, 10)
-    >>> phi = np.linspace(0, 2*np.pi, 20)
-    >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
-    >>> values = np.random.random((len(r), len(theta), len(phi), len(f)))
-    >>> scalar_directivity_field = DirectivityDataArray(values, coords=coords)
-    >>> scalar_axial_ratio_field = AxialRatioDataArray(values, coords=coords)
-    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
-    >>> data = DirectivityData(monitor=monitor, directivity=scalar_directivity_field, axial_ratio=scalar_axial_ratio_field)
-    """
-
-    monitor: DirectivityMonitor = pd.Field(
-        ...,
-        title="Directivity monitor",
-        description="Monitor describing the angle-based projection grid on which to measure directivity data.",
-    )
-
-    directivity: DirectivityDataArray = pd.Field(
-        ..., title="Directivity", description="Directivity with an angle-based projection grid."
-    )
-
-    axial_ratio: AxialRatioDataArray = pd.Field(
-        ..., title="Axial Ratio", description="Axial ratio with an angle-based projection grid."
-    )
-
-
 ProjFieldType = Union[
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
@@ -2068,6 +2033,7 @@ ProjMonitorType = Union[
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
+    DirectivityMonitor,
 ]
 
 
@@ -2083,7 +2049,7 @@ class AbstractFieldProjectionData(MonitorData):
 
     Er: ProjFieldType = pd.Field(
         ...,
-        title="Ephi",
+        title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
     Etheta: ProjFieldType = pd.Field(
@@ -2098,7 +2064,7 @@ class AbstractFieldProjectionData(MonitorData):
     )
     Hr: ProjFieldType = pd.Field(
         ...,
-        title="Hphi",
+        title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
     Htheta: ProjFieldType = pd.Field(
@@ -3083,6 +3049,156 @@ class DiffractionData(AbstractFieldProjectionData):
         )
 
         return adj_src
+
+
+class DirectivityData(AbstractFieldProjectionData):
+    """
+    Data associated with a :class:`.DirectivityMonitor`.
+
+    Example
+    -------
+    >>> from tidy3d import FluxDataArray, FieldProjectionAngleDataArray
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> r = np.atleast_1d(1e6)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
+    >>> coords_flux = dict(f=f)
+    >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
+    >>> flux_data = FluxDataArray(np.random.random(len(f)), coords=coords_flux)
+    >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
+    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
+    >>> data = DirectivityData(monitor=monitor, flux=flux_data, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field)
+    """
+
+    monitor: DirectivityMonitor = pd.Field(
+        ...,
+        title="Directivity monitor",
+        description="Monitor describing the angle-based projection grid on which to measure directivity data.",
+    )
+
+    flux: FluxDataArray = pd.Field(..., title="Flux", description="Flux values.")
+
+    Er: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Er",
+        description="Spatial distribution of r-component of the electric field.",
+    )
+    Etheta: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Etheta",
+        description="Spatial distribution of the theta-component of the electric field.",
+    )
+    Ephi: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Ephi",
+        description="Spatial distribution of phi-component of the electric field.",
+    )
+    Hr: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Hr",
+        description="Spatial distribution of r-component of the magnetic field.",
+    )
+    Htheta: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Htheta",
+        description="Spatial distribution of theta-component of the magnetic field.",
+    )
+    Hphi: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Hphi",
+        description="Spatial distribution of phi-component of the magnetic field.",
+    )
+
+    def normalize(
+        self, source_spectrum_fn: Callable[[float], complex]
+    ) -> Union[AbstractFieldProjectionData, FluxData]:
+        """
+        Return a copy of self after normalization is applied using the source
+        spectrum function, for both field components and flux data.
+        """
+
+        fields_norm = {}
+        for field_name, field_data in self.field_components.items():
+            src_amps = source_spectrum_fn(field_data.f)
+            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
+
+        # Normalize flux
+        source_freq_amps = source_spectrum_fn(self.flux.f)
+        source_power = abs(source_freq_amps) ** 2
+        new_flux = (self.flux / source_power).astype(self.flux.dtype)
+
+        return self.copy(update=dict(fields_norm, flux=new_flux))
+
+    @property
+    def directivity(self) -> DataArray:
+        """Directivity in the frequency domain as a function of angles theta and phi.
+        Directivity is a dimensionless quantity defined as the ratio of the radiation
+        intensity in a given direction to the average radiation intensity over all directions."""
+
+        power_theta = 0.5 * np.real(self.Etheta * np.conj(self.Hphi))
+        power_phi = 0.5 * np.real(-self.Ephi * np.conj(self.Htheta))
+        power = power_theta + power_phi
+
+        # Normalize the aligned flux by dividing by (4 * pi * r^2) to adjust the flux for
+        # spherical surface area normalization
+        flux_normed = self.flux / (4 * np.pi * self.monitor.proj_distance**2)
+
+        return power / flux_normed
+
+    @property
+    def axial_ratio(self) -> DataArray:
+        """Axial Ratio (AR) in the frequency domain as a function of angles theta and phi.
+        AR is a dimensionless quantity defined as the ratio of the major axis to the minor
+        axis of the polarization ellipse.
+
+        Note
+        ----
+        The axial ratio computation is based on:
+
+        Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        John Wiley & Sons, Chapter 2.12 (2016).
+        """
+
+        # Calculate the terms of the equation
+        E1_abs_squared = np.abs(self.Etheta) ** 2
+        E2_abs_squared = np.abs(self.Ephi) ** 2
+        E1_squared = self.Etheta**2
+        E2_squared = self.Ephi**2
+
+        # Axial ratio calculations based on equations (2-65) to (2-67)
+        # from Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        # John Wiley & Sons, 2016. These calculations use complex numbers
+        # directly and are equivalent to the referenced equations.
+        AR_numerator = E1_abs_squared + E2_abs_squared + np.abs(E1_squared + E2_squared)
+        AR_denominator = E1_abs_squared + E2_abs_squared - np.abs(E1_squared + E2_squared)
+
+        inds_zero = AR_numerator == 0
+        axial_ratio_inverse = xr.zeros_like(AR_numerator)
+        # Perform the axial ratio inverse calculation where the numerator is non-zero
+        axial_ratio_inverse = axial_ratio_inverse.where(
+            inds_zero, np.sqrt(np.abs(AR_denominator / AR_numerator))
+        )
+
+        # Cap the axial ratio values at 1 / AXIAL_RATIO_CAP
+        axial_ratio_inverse = axial_ratio_inverse.where(
+            axial_ratio_inverse >= 1 / AXIAL_RATIO_CAP, 1 / AXIAL_RATIO_CAP
+        )
+
+        return 1 / axial_ratio_inverse
+
+    @property
+    def left_polarization(self) -> DataArray:
+        "Electric far field for left-hand circular polarization"
+        "(counterclockwise component) with an angle-based projection grid."
+        return (self.Etheta - 1j * self.Ephi) / np.sqrt(2)
+
+    @property
+    def right_polarization(self) -> DataArray:
+        "Electric far field for right-hand circular polarization"
+        "(clockwise component) with an angle-based projection grid."
+        return (self.Etheta + 1j * self.Ephi) / np.sqrt(2)
 
 
 MonitorDataTypes = (

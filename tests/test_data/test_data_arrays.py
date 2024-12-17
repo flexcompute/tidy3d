@@ -184,19 +184,14 @@ def make_mode_index_data_array():
     return td.ModeIndexDataArray(values, coords=dict(f=FS, mode_index=MODE_INDICES))
 
 
+def make_far_field_data_array():
+    values = (1 + 1j) * np.random.random((len(PD), len(THETAS), len(PHIS), len(FS)))
+    return td.FieldProjectionAngleDataArray(values, coords=dict(r=PD, theta=THETAS, phi=PHIS, f=FS))
+
+
 def make_flux_data_array():
     values = np.random.random(len(FS))
     return td.FluxDataArray(values, coords=dict(f=FS))
-
-
-def make_directivity_data_array():
-    values = np.random.random((len(PD), len(THETAS), len(PHIS), len(FS)))
-    return td.DirectivityDataArray(values, coords=dict(r=PD, theta=THETAS, phi=PHIS, f=FS))
-
-
-def make_axial_ratio_data_array():
-    values = np.random.random((len(PD), len(THETAS), len(PHIS), len(FS)))
-    return td.AxialRatioDataArray(values, coords=dict(r=PD, theta=THETAS, phi=PHIS, f=FS))
 
 
 def make_flux_time_data_array():
@@ -261,13 +256,8 @@ def test_flux_time_data_array():
     data = data.interp(t=1e-13)
 
 
-def test_directivity_data_array():
-    data = make_directivity_data_array()
-    data = data.sel(f=1e14, phi=0)
-
-
-def test_axial_ratio_data_array():
-    data = make_axial_ratio_data_array()
+def test_far_field_data_array():
+    data = make_far_field_data_array()
     data = data.sel(f=1e14, phi=0)
 
 

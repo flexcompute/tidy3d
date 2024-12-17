@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an option to simulate plane wave propagation at fixed angles by setting parameter `angular_spec=FixedAngleSpec()` when defining a `PlaneWave` source.
 - The universal `tidy3d.web` can now also be used to handle `ModeSolver` simulations.
 - Support for differentiation with respect to `PolySlab.slab_bounds`.
+- `DirectivityMonitor` can now be used to decompose fields into circular polarization states.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
@@ -51,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `estimate_cost` is now called at the end of every `web.upload` call.
 - Internal refactor of adjoint shape gradients using `GradientSurfaceMesh`.
 - Enhanced progress bar display in batch operations with better formatting, colors, and status tracking.
+- The behavior of `DirectivityData` was changed, so that only far fields and flux are stored. Radiation characteristics (e.g., directivity, axial ratio) can be accessed through properties.
 
 ### Fixed
 - Significant speedup for field projection computations.
