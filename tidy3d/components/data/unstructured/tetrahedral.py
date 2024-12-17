@@ -6,6 +6,7 @@ from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
+from xarray import DataArray as XrDataArray
 
 from ....exceptions import DataError
 from ....packaging import requires_vtk, vtk
@@ -15,9 +16,7 @@ from ..data_array import (
     CellDataArray,
     IndexedDataArray,
     PointDataArray,
-    SpatialDataArray,
     DCIndexedDataArray,
-    DCSpatialDataArray,
 )
 from .base import UnstructuredGridDataset
 from .triangular import TriangularGridDataset, DCTriangularGridDataset
@@ -56,22 +55,31 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     ... )
     """
 
-    _traingular_dataset_type = TriangularGridDataset
+    """ Fundametal parameters to set up based on grid dimensionality """
+
+    @classmethod
+    def _traingular_dataset_type(cls) -> type:
+        """Corresponding class for triangular grid datasets. We need to know this when creating a triangular slice from a tetrahedral grid."""
+        return TriangularGridDataset
 
     @classmethod
     def _point_dims(cls) -> pd.PositiveInt:
         """Dimensionality of stored grid point coordinates."""
         return 3
 
+    @classmethod
+    def _cell_num_vertices(cls) -> pd.PositiveInt:
+        """Number of vertices in a cell."""
+        return 4
+
+    """ Convenience properties """
+
     @cached_property
     def _points_3d_array(self) -> Bound:
         """3D coordinates of grid points."""
         return self.points.data
 
-    @classmethod
-    def _cell_num_vertices(cls) -> pd.PositiveInt:
-        """Number of vertices in a cell."""
-        return 4
+    """ VTK interfacing """
 
     @classmethod
     @requires_vtk
@@ -128,6 +136,8 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return cls(points=points, cells=cells, values=values)
 
+    """ Grid operations """
+
     @requires_vtk
     def plane_slice(self, axis: Axis, pos: float) -> TriangularGridDataset:
         """Slice data with a plane and return the resulting :class:.`TriangularGridDataset`.
@@ -147,7 +157,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
 
-        return self._traingular_dataset_type._from_vtk_obj(
+        return self._traingular_dataset_type()._from_vtk_obj(
             slice_vtk,
             remove_degenerate_cells=True,
             remove_unused_points=True,
@@ -157,8 +167,8 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         )
 
     @requires_vtk
-    def line_slice(self, axis: Axis, pos: Coordinate) -> SpatialDataArray:
-        """Slice data with a line and return the resulting :class:.`SpatialDataArray`.
+    def line_slice(self, axis: Axis, pos: Coordinate) -> XrDataArray:
+        """Slice data with a line and return the resulting xarray.DataArray.
 
         Parameters
         ----------
@@ -169,7 +179,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         Returns
         -------
-        SpatialDataArray
+        xarray.DataArray
             The resulting slice.
         """
 
@@ -215,65 +225,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return line_slice
 
-    @requires_vtk
-    def sel(
-        self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        method=None,
-        **sel_kwargs,
-    ) -> Union[TriangularGridDataset, SpatialDataArray]:
-        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
-        must be provided.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike] = None
-            x-coordinate of the slice.
-        y : Union[float, ArrayLike] = None
-            y-coordinate of the slice.
-        z : Union[float, ArrayLike] = None
-            z-coordinate of the slice.
-
-        Returns
-        -------
-        Union[TriangularGridDataset, SpatialDataArray]
-            Extracted data.
-        """
-
-        xyz = [x, y, z]
-        axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
-
-        num_provided = len(axes)
-
-        if num_provided < 3 and any(not np.isscalar(comp) for comp in xyz if comp is not None):
-            raise DataError(
-                "Providing x, y, or z as array is only allowed for interpolation. That is, when all"
-                " three x, y, and z are provided or method '.interp()' is used explicitly."
-            )
-
-        if num_provided == 0 and len(sel_kwargs) == 0:
-            raise DataError(
-                "Must provide at least one dimension to select along "
-                "(available: {self._non_spatial_dims + list('xyz')})."
-            )
-
-        self_after_non_spatial_sel = self._non_spatial_sel(method=method, **sel_kwargs)
-
-        if num_provided == 1:
-            axis = axes[0]
-            return self_after_non_spatial_sel.plane_slice(axis=axis, pos=xyz[axis])
-
-        if num_provided == 2:
-            axis = 3 - axes[0] - axes[1]
-            xyz[axis] = 0
-            return self_after_non_spatial_sel.line_slice(axis=axis, pos=xyz)
-
-        if num_provided == 3:
-            return self_after_non_spatial_sel.interp(x=x, y=y, z=z)
-
-        return self_after_non_spatial_sel
+    """ Interpolation """
 
     def _interp_py(
         self,
@@ -326,6 +278,74 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             axis_ignore=None,
         )
 
+    """ Data selection """
+
+    @requires_vtk
+    def sel(
+        self,
+        x: Union[float, ArrayLike] = None,
+        y: Union[float, ArrayLike] = None,
+        z: Union[float, ArrayLike] = None,
+        method=None,
+        **sel_kwargs,
+    ) -> Union[TriangularGridDataset, XrDataArray]:
+        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument 
+        among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
+        grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to
+        .sel() xarray function. Parameter 'method' applies only to non-spatial dimensions.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike] = None
+            x-coordinate of the slice.
+        y : Union[float, ArrayLike] = None
+            y-coordinate of the slice.
+        z : Union[float, ArrayLike] = None
+            z-coordinate of the slice.
+        method: Literal[None, "nearest", "pad", "ffill", "backfill", "bfill"] = None
+            Method to use in xarray sel() function.
+        **sel_kwargs : dict
+            Keyword arguments to pass to the xarray sel() function.
+
+        Returns
+        -------
+        Union[TriangularGridDataset, xarray.DataArray]
+            Extracted data.
+        """
+
+        xyz = [x, y, z]
+        axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
+
+        num_provided = len(axes)
+
+        if num_provided < 3 and any(not np.isscalar(comp) for comp in xyz if comp is not None):
+            raise DataError(
+                "Providing x, y, or z as array is only allowed for interpolation. That is, when all"
+                " three x, y, and z are provided or method '.interp()' is used explicitly."
+            )
+
+        if num_provided == 0 and len(sel_kwargs) == 0:
+            raise DataError(
+                "Must provide at least one dimension to select along "
+                "(available: {self._non_spatial_dims + list('xyz')})."
+            )
+
+        self_after_non_spatial_sel = self._non_spatial_sel(method=method, **sel_kwargs)
+
+        if num_provided == 1:
+            axis = axes[0]
+            return self_after_non_spatial_sel.plane_slice(axis=axis, pos=xyz[axis])
+
+        if num_provided == 2:
+            axis = 3 - axes[0] - axes[1]
+            xyz[axis] = 0
+            return self_after_non_spatial_sel.line_slice(axis=axis, pos=xyz)
+
+        if num_provided == 3:
+            return self_after_non_spatial_sel.interp(x=x, y=y, z=z)
+
+        return self_after_non_spatial_sel
+
 
 class DCTetrahedralGridDataset(TetrahedralGridDataset):
     """Dataset for storing tetrahedral grid data. Data values are associated with the nodes of
@@ -360,8 +380,10 @@ class DCTetrahedralGridDataset(TetrahedralGridDataset):
     ... )
     """
 
-    _spatial_data_array_type = DCSpatialDataArray
-    _traingular_dataset_type = DCTriangularGridDataset
+    @classmethod
+    def _traingular_dataset_type(cls) -> type:
+        """Corresponding class for triangular grid datasets. We need to know this when creating a triangular slice from a tetrahedral grid."""
+        return DCTriangularGridDataset
 
     values: DCIndexedDataArray = pd.Field(
         ...,

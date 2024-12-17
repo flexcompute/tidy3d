@@ -8,6 +8,8 @@ from typing import Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
+import xarray as xr
+from xarray import DataArray as XrDataArray
 
 from ....constants import inf
 from ....exceptions import DataError, Tidy3dNotImplementedError, ValidationError
@@ -20,7 +22,6 @@ from ..data_array import (
     CellDataArray,
     IndexedDataArray,
     PointDataArray,
-    SpatialDataArray,
 )
 from ..dataset import Dataset
 
@@ -51,23 +52,19 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         "points.",
     )
 
-    _spatial_data_array_type = SpatialDataArray
+    """ Fundametal parameters to set up based on grid dimensionality """
 
-    @property
-    def name(self) -> str:
-        """Dataset name."""
-        # we redirect name to values.name
-        return self.values.name
+    @classmethod
+    @abstractmethod
+    def _point_dims(cls) -> pd.PositiveInt:
+        """Dimensionality of stored grid point coordinates."""
 
-    @property
-    def is_complex(self) -> bool:
-        """Data type."""
-        return np.iscomplexobj(self.values)
+    @classmethod
+    @abstractmethod
+    def _cell_num_vertices(cls) -> pd.PositiveInt:
+        """Number of vertices in a cell."""
 
-    @property
-    def _double_type(self):
-        """Corresponding double data type."""
-        return np.complex128 if self.is_complex else np.float64
+    """ Validators """
 
     @pd.validator("points", always=True)
     def points_right_dims(cls, val):
@@ -82,11 +79,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @property
-    def is_uniform(self):
-        """Whether each element is of equal value in ``values``."""
-        return self.values.is_uniform
-
     @pd.validator("points", always=True)
     def points_right_indexing(cls, val):
         """Check that points are indexed corrrectly."""
@@ -98,6 +90,13 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 "This can be easily achieved, for example, by using "
                 "PointDataArray(data, dims=['index', 'axis'])."
             )
+        return val
+
+    @pd.validator("values", always=True)
+    def first_values_dim_is_index(cls, val):
+        """Check that the number of data values matches the number of grid points."""
+        if val.dims[0] != "index":
+            raise ValidationError("First dimension of array 'values' must be 'index'.")
         return val
 
     @pd.validator("values", always=True)
@@ -173,79 +172,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 )
         return val
 
-    @classmethod
-    def _find_degenerate_cells(cls, cells: CellDataArray):
-        """Find explicitly degenerate cells if any.
-        That is, cells that use the same point indices for their different vertices.
-        """
-        indices = cells.data
-        # skip validation if zero size data
-        degenerate_cell_inds = set()
-        if len(indices) > 0:
-            for i in range(cls._cell_num_vertices() - 1):
-                for j in range(i + 1, cls._cell_num_vertices()):
-                    degenerate_cell_inds = degenerate_cell_inds.union(
-                        np.where(indices[:, i] == indices[:, j])[0]
-                    )
-
-        return degenerate_cell_inds
-
-    @classmethod
-    def _remove_degenerate_cells(cls, cells: CellDataArray):
-        """Remove explicitly degenerate cells if any.
-        That is, cells that use the same point indices for their different vertices.
-        """
-        degenerate_cells = cls._find_degenerate_cells(cells=cells)
-        if len(degenerate_cells) > 0:
-            data = np.delete(cells.values, list(degenerate_cells), axis=0)
-            cell_index = np.delete(cells.cell_index.values, list(degenerate_cells))
-            return CellDataArray(
-                data=data, coords=dict(cell_index=cell_index, vertex_index=cells.vertex_index)
-            )
-        return cells
-
-    @classmethod
-    def _remove_unused_points(
-        cls, points: PointDataArray, values: IndexedDataArray, cells: CellDataArray
-    ):
-        """Remove unused points if any.
-        That is, points that are not used in any grid cell.
-        """
-
-        used_indices = np.unique(cells.values.ravel())
-        num_points = len(points)
-
-        if len(used_indices) != num_points or np.any(np.diff(used_indices) != 1):
-            min_index = np.min(used_indices)
-            map_len = np.max(used_indices) - min_index + 1
-            index_map = np.zeros(map_len)
-            index_map[used_indices - min_index] = np.arange(len(used_indices))
-
-            cells = CellDataArray(data=index_map[cells.data - min_index], coords=cells.coords)
-            points = PointDataArray(points.data[used_indices, :], dims=["index", "axis"])
-#            values = IndexedDataArray(values.data[used_indices], dims=["index"])
-            values = values.sel(index=used_indices)
-            if "index" in values.coords:
-                # renumber if iindex given as a coordinate
-                values["index"] = np.arange(len(used_indices))
-
-        return points, values, cells
-
-    def clean(self, remove_degenerate_cells=True, remove_unused_points=True):
-        """Remove degenerate cells and/or unused points."""
-        if remove_degenerate_cells:
-            cells = self._remove_degenerate_cells(cells=self.cells)
-        else:
-            cells = self.cells
-
-        if remove_unused_points:
-            points, values, cells = self._remove_unused_points(self.points, self.values, cells)
-        else:
-            points = self.points
-            values = self.values
-
-        return self.updated_copy(points=points, values=values, cells=cells)
-
     @pd.validator("cells", always=True)
     def warn_degenerate_cells(cls, val):
         """Check that cell connections does not have duplicate points."""
@@ -297,18 +223,149 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return values
 
+    """ Convenience properties """
+
+    @property
+    def name(self) -> str:
+        """Dataset name."""
+        # we redirect name to values.name
+        return self.values.name
+
     def rename(self, name: str) -> UnstructuredGridDataset:
         """Return a renamed array."""
         return self.updated_copy(values=self.values.rename(name))
+
+    @property
+    def is_complex(self) -> bool:
+        """Data type."""
+        return np.iscomplexobj(self.values)
+
+    @property
+    def _double_type(self):
+        """Corresponding double data type."""
+        return np.complex128 if self.is_complex else np.float64
+
+    @property
+    def is_uniform(self):
+        """Whether each element is of equal value in ``values``."""
+        return self.values.is_uniform
+
+    @cached_property
+    def _values_coords_dict(self):
+        """Non-spatial dimensions are corresponding coordinate values of stored data."""
+        coord_dict = {dim: self.values.coords[dim].data for dim in self.values.dims}
+        _ = coord_dict.pop("index")
+        return coord_dict
+
+    @cached_property
+    def _fields_shape(self):
+        """Shape in which fields are stored."""
+        return [len(coord) for coord in self._values_coords_dict.values()]
+
+    @cached_property
+    def _num_fields(self):
+        """Total numbber of storeg fields."""
+        return 1 if len(self._fields_shape) == 0 else np.prod(self._fields_shape)
+
+    @cached_property
+    def _values_type(self):
+        """Type of array storing values."""
+        return type(self.values)
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Grid bounds."""
+        return tuple(np.min(self.points.data, axis=0)), tuple(np.max(self.points.data, axis=0))
+
+    @cached_property
+    @abstractmethod
+    def _points_3d_array(self):
+        """3D coordinates of grid points."""
+
+    """ Grid cleaning """
+
+    @classmethod
+    def _find_degenerate_cells(cls, cells: CellDataArray):
+        """Find explicitly degenerate cells if any.
+        That is, cells that use the same point indices for their different vertices.
+        """
+        indices = cells.data
+        # skip validation if zero size data
+        degenerate_cell_inds = set()
+        if len(indices) > 0:
+            for i in range(cls._cell_num_vertices() - 1):
+                for j in range(i + 1, cls._cell_num_vertices()):
+                    degenerate_cell_inds = degenerate_cell_inds.union(
+                        np.where(indices[:, i] == indices[:, j])[0]
+                    )
+
+        return degenerate_cell_inds
+
+    @classmethod
+    def _remove_degenerate_cells(cls, cells: CellDataArray):
+        """Remove explicitly degenerate cells if any.
+        That is, cells that use the same point indices for their different vertices.
+        """
+        degenerate_cells = cls._find_degenerate_cells(cells=cells)
+        if len(degenerate_cells) > 0:
+            data = np.delete(cells.values, list(degenerate_cells), axis=0)
+            cell_index = np.delete(cells.cell_index.values, list(degenerate_cells))
+            return CellDataArray(
+                data=data, coords=dict(cell_index=cell_index, vertex_index=cells.vertex_index)
+            )
+        return cells
+
+    @classmethod
+    def _remove_unused_points(
+        cls, points: PointDataArray, values: IndexedDataArray, cells: CellDataArray
+    ):
+        """Remove unused points if any.
+        That is, points that are not used in any grid cell.
+        """
+
+        used_indices = np.unique(cells.values.ravel())
+        num_points = len(points)
+
+        if len(used_indices) != num_points or np.any(np.diff(used_indices) != 1):
+            min_index = np.min(used_indices)
+            map_len = np.max(used_indices) - min_index + 1
+            index_map = np.zeros(map_len)
+            index_map[used_indices - min_index] = np.arange(len(used_indices))
+
+            cells = CellDataArray(data=index_map[cells.data - min_index], coords=cells.coords)
+            points = PointDataArray(points.data[used_indices, :], dims=["index", "axis"])
+            values = values.sel(index=used_indices)
+            if "index" in values.coords:
+                # renumber if index given as a coordinate
+                values["index"] = np.arange(len(used_indices))
+
+        return points, values, cells
+
+    def clean(self, remove_degenerate_cells=True, remove_unused_points=True):
+        """Remove degenerate cells and/or unused points."""
+        if remove_degenerate_cells:
+            cells = self._remove_degenerate_cells(cells=self.cells)
+        else:
+            cells = self.cells
+
+        if remove_unused_points:
+            points, values, cells = self._remove_unused_points(self.points, self.values, cells)
+        else:
+            points = self.points
+            values = self.values
+
+        return self.updated_copy(points=points, values=values, cells=cells)
+
+    """ Arithmetic operations """
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         """Override of numpy functions."""
 
         out = kwargs.get("out", ())
         for x in inputs + out:
-            # Only support operations with the same class or a scalar
-            if not isinstance(x, (numbers.Number, type(self))):
-                return Tidy3dNotImplementedError
+            # Only support operations with a scalar or an unstructured grid dataset of the same spatial dimensionality
+            if not (isinstance(x, numbers.Number) or (isinstance(x, UnstructuredGridDataset) and x._point_dims() == self._point_dims())):
+                raise Tidy3dNotImplementedError(f"Cannot perform arithmetic operations between instances of different classes ({type(self)} and {type(x)}).")
 
         # Defer to the implementation of the ufunc on unwrapped values.
         inputs = tuple(x.values if isinstance(x, UnstructuredGridDataset) else x for x in inputs)
@@ -343,25 +400,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """Absolute value of dataset."""
         return self.updated_copy(values=self.values.abs)
 
-    @cached_property
-    def bounds(self) -> Bound:
-        """Grid bounds."""
-        return tuple(np.min(self.points.data, axis=0)), tuple(np.max(self.points.data, axis=0))
-
-    @classmethod
-    @abstractmethod
-    def _point_dims(cls) -> pd.PositiveInt:
-        """Dimensionality of stored grid point coordinates."""
-
-    @cached_property
-    @abstractmethod
-    def _points_3d_array(self):
-        """3D coordinates of grid points."""
-
-    @classmethod
-    @abstractmethod
-    def _cell_num_vertices(cls) -> pd.PositiveInt:
-        """Number of vertices in a cell."""
+    """ VTK interfacing """
 
     @classmethod
     @abstractmethod
@@ -422,65 +461,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         grid.GetPointData().AddArray(point_data_vtk)
 
         return grid
-
-    @requires_vtk
-    def _plane_slice_raw(self, axis: Axis, pos: float):
-        """Slice data with a plane and return the resulting VTK object."""
-
-        if pos > self.bounds[1][axis] or pos < self.bounds[0][axis]:
-            raise DataError(
-                f"Slicing plane (axis: {axis}, pos: {pos}) does not intersect the unstructured grid "
-                f"(extent along axis {axis}: {self.bounds[0][axis]}, {self.bounds[1][axis]})."
-            )
-
-        origin = [0, 0, 0]
-        origin[axis] = pos
-
-        normal = [0, 0, 0]
-        # orientation of normal is important for edge (literally) cases
-        normal[axis] = -1
-        if pos > (self.bounds[0][axis] + self.bounds[1][axis]) / 2:
-            normal[axis] = 1
-
-        # create cutting plane
-        plane = vtk["mod"].vtkPlane()
-        plane.SetOrigin(origin[0], origin[1], origin[2])
-        plane.SetNormal(normal[0], normal[1], normal[2])
-
-        # create cutter
-        cutter = vtk["mod"].vtkPlaneCutter()
-        cutter.SetPlane(plane)
-        cutter.SetInputData(self._vtk_obj)
-        cutter.InterpolateAttributesOn()
-        cutter.Update()
-
-        # clean up the slice
-        cleaner = vtk["mod"].vtkCleanPolyData()
-        cleaner.SetInputData(cutter.GetOutput())
-        cleaner.Update()
-
-        return cleaner.GetOutput()
-
-    @abstractmethod
-    @requires_vtk
-    def plane_slice(
-        self, axis: Axis, pos: float
-    ) -> Union[SpatialDataArray, UnstructuredGridDataset]:
-        """Slice data with a plane and return the Tidy3D representation of the result
-        (``UnstructuredGridDataset``).
-
-        Parameters
-        ----------
-        axis : Axis
-            The normal direction of the slicing plane.
-        pos : float
-            Position of the slicing plane along its normal direction.
-
-        Returns
-        -------
-        Union[SpatialDataArray, UnstructuredGridDataset]
-            The resulting slice.
-        """
 
     @staticmethod
     @requires_vtk
@@ -649,23 +629,66 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return values
 
-    @cached_property
-    def _values_coords_dict(self):
-        coord_dict = {dim: self.values.coords[dim].data for dim in self.values.dims}
-        _ = coord_dict.pop("index")
-        return coord_dict
+    """ Grid operations """
 
-    @cached_property
-    def _fields_shape(self):
-        return [len(coord) for coord in self._values_coords_dict.values()]
+    @requires_vtk
+    def _plane_slice_raw(self, axis: Axis, pos: float):
+        """Slice data with a plane and return the resulting VTK object."""
 
-    @cached_property
-    def _num_fields(self):
-        return 1 if len(self._fields_shape) == 0 else np.prod(self._fields_shape)
+        if pos > self.bounds[1][axis] or pos < self.bounds[0][axis]:
+            raise DataError(
+                f"Slicing plane (axis: {axis}, pos: {pos}) does not intersect the unstructured grid "
+                f"(extent along axis {axis}: {self.bounds[0][axis]}, {self.bounds[1][axis]})."
+            )
 
-    @cached_property
-    def _values_type(self):
-        return type(self.values)
+        origin = [0, 0, 0]
+        origin[axis] = pos
+
+        normal = [0, 0, 0]
+        # orientation of normal is important for edge (literally) cases
+        normal[axis] = -1
+        if pos > (self.bounds[0][axis] + self.bounds[1][axis]) / 2:
+            normal[axis] = 1
+
+        # create cutting plane
+        plane = vtk["mod"].vtkPlane()
+        plane.SetOrigin(origin[0], origin[1], origin[2])
+        plane.SetNormal(normal[0], normal[1], normal[2])
+
+        # create cutter
+        cutter = vtk["mod"].vtkPlaneCutter()
+        cutter.SetPlane(plane)
+        cutter.SetInputData(self._vtk_obj)
+        cutter.InterpolateAttributesOn()
+        cutter.Update()
+
+        # clean up the slice
+        cleaner = vtk["mod"].vtkCleanPolyData()
+        cleaner.SetInputData(cutter.GetOutput())
+        cleaner.Update()
+
+        return cleaner.GetOutput()
+
+    @abstractmethod
+    @requires_vtk
+    def plane_slice(
+        self, axis: Axis, pos: float
+    ) -> Union[XrDataArray, UnstructuredGridDataset]:
+        """Slice data with a plane and return the Tidy3D representation of the result
+        (``UnstructuredGridDataset``).
+
+        Parameters
+        ----------
+        axis : Axis
+            The normal direction of the slicing plane.
+        pos : float
+            Position of the slicing plane along its normal direction.
+
+        Returns
+        -------
+        Union[xarray.DataArray, UnstructuredGridDataset]
+            The resulting slice.
+        """
 
     @requires_vtk
     def box_clip(self, bounds: Bound) -> UnstructuredGridDataset:
@@ -707,15 +730,40 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return self._from_vtk_obj_internal(clean_clip)
 
-    def _non_spatial_interp(self, method="linear", fill_value=np.nan, **coords_kwargs):
-        coords_kwargs_only_lists = {key: value if isinstance(value, list) else [value] for key, value in coords_kwargs.items()}
-        return self.updated_copy(
-            values=self.values.interp(
-                **coords_kwargs_only_lists,
-                method="linear",
-                kwargs=dict(fill_value=fill_value),
-            )
-        )
+    @requires_vtk
+    def reflect(
+        self, axis: Axis, center: float, reflection_only: bool = False
+    ) -> UnstructuredGridDataset:
+        """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
+        By default the original data is preserved, setting ``reflection_only`` to ``True`` will
+        produce only deflected data.
+
+        Parameters
+        ----------
+        axis : Literal[0, 1, 2]
+            Normal direction of the reflection plane.
+        center : float
+            Location of the reflection plane along its normal direction.
+        reflection_only : bool = False
+            Return only reflected data.
+
+        Returns
+        -------
+        UnstructuredGridDataset
+            Data after reflextion is performed.
+        """
+
+        reflector = vtk["mod"].vtkReflectionFilter()
+        reflector.SetPlane([reflector.USE_X, reflector.USE_Y, reflector.USE_Z][axis])
+        reflector.SetCenter(center)
+        reflector.SetCopyInput(not reflection_only)
+        reflector.SetInputData(self._vtk_obj)
+        reflector.Update()
+
+        # since reflection does not really change geometries, let's not clean it
+        return self._from_vtk_obj_internal(reflector.GetOutput(), remove_degenerate_cells=False, remove_unused_points=False)
+
+    """ Interpolation """
 
     def interp(
         self,
@@ -729,7 +777,45 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
         rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
         **coords_kwargs,
-    ) -> SpatialDataArray:
+    ) -> XrDataArray:
+        """Interpolate data along spatial dimensions x, y, and z and/or non-spatial dimensions. 
+        For spatial sampling points must provide all x, y, and z.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike] = None
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike] = None
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike] = None
+            z-coordinates of sampling points.
+        fill_value : Union[float, Literal["extrapolate"]] = 0
+            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
+            nearest values are used. Note: in a future version the default value will be changed
+            to ``"extrapolate"``.
+        use_vtk : bool = False
+            Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
+            option will be removed in a future version.
+        method: Literal["linear", "nearest"] = "linear"
+            Interpolation method to use.
+        max_samples_per_step : int = 1e4
+            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        max_cells_per_step : int = 1e4
+            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float = 1e-6
+            Relative tolerance when determining whether a point belongs to a cell.
+        **coords_kwargs : dict
+            Keyword arguments to pass to the xarray interp() function.
+
+        Returns
+        -------
+        xarray.DataArray
+            Interpolated data.
+        """
 
         if fill_value is None:
             log.warning(
@@ -756,6 +842,34 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return result
 
+    def _non_spatial_interp(self, method="linear", fill_value=np.nan, **coords_kwargs):
+        """Interpolate data at non-spatial dimensions using xarray's interp() function.
+
+        Parameters
+        ----------
+        method: Literal["linear", "nearest"] = "linear"
+            Interpolation method to use.
+        fill_value : Union[float, Literal["extrapolate"]] = 0
+            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
+            nearest values are used. Note: in a future version the default value will be changed
+            to ``"extrapolate"``.
+        **coords_kwargs : dict
+            Keyword arguments to pass to the xarray interp() function.
+
+        Returns
+        -------
+        xarray.DataArray
+            Interpolated data.
+        """
+        coords_kwargs_only_lists = {key: value if isinstance(value, list) else [value] for key, value in coords_kwargs.items()}
+        return self.updated_copy(
+            values=self.values.interp(
+                **coords_kwargs_only_lists,
+                method="linear",
+                kwargs=dict(fill_value=fill_value),
+            )
+        )
+
     def _spatial_interp(
         self,
         x: Union[float, ArrayLike],
@@ -767,8 +881,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
         max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
         rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
-    ) -> SpatialDataArray:
-        """Interpolate data at provided x, y, and z.
+    ) -> XrDataArray:
+        """Interpolate data along spatial dimensions at provided x, y, and z.
 
         Parameters
         ----------
@@ -800,7 +914,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Returns
         -------
-        SpatialDataArray
+        xarray.DataArray
             Interpolated data.
         """
 
@@ -840,10 +954,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     interpolated_values, x=x, y=y, z=z
                 )
 
-            coords_dict = dict(x=x, y=y, z=z)
-            coords_dict.update(self._values_coords_dict)
+        coords_dict = dict(x=x, y=y, z=z)
+        coords_dict.update(self._values_coords_dict)
 
-        return self._spatial_data_array_type(
+        return XrDataArray(
             interpolated_values, coords=coords_dict, name=self.values.name
         )
 
@@ -1451,15 +1565,21 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return xyz_valid_inds, interpolated_valid
 
+    """ Data selection """
+
     @requires_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-    ) -> Union[UnstructuredGridDataset, SpatialDataArray]:
-        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
-        must be provided.
+        method: Literal[None, "nearest", "pad", "ffill", "backfill", "bfill"] = None,
+        **sel_kwargs,
+    ) -> Union[UnstructuredGridDataset, XrDataArray]:
+        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument 
+        among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
+        grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to
+        .sel() xarray function. Parameter 'method' applies only to non-spatial dimensions.
 
         Parameters
         ----------
@@ -1469,10 +1589,14 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             y-coordinate of the slice.
         z : Union[float, ArrayLike] = None
             z-coordinate of the slice.
+        method: Literal[None, "nearest", "pad", "ffill", "backfill", "bfill"] = None
+            Method to use in xarray sel() function.
+        **sel_kwargs : dict
+            Keyword arguments to pass to the xarray sel() function.
 
         Returns
         -------
-        Union[TriangularGridDataset, SpatialDataArray]
+        Union[TriangularGridDataset, xarray.DataArray]
             Extracted data.
         """
 
@@ -1481,15 +1605,22 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         self,
         method=None,
         **sel_kwargs,
-    ) -> SpatialDataArray:
-        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
-        must be provided.
+    ) -> XrDataArray:
+        """Select/interpolate data along one or more non-Cartesian directions.
+
+        Parameters
+        ----------
+        **sel_kwargs : dict
+            Keyword arguments to pass to the xarray sel() function.
 
         Returns
         -------
-        SpatialDataArray
+        xarray.DataArray
             Extracted data.
         """
+
+        if "index" in sel_kwargs.keys():
+            raise DataError("Cannot select along dimension 'index'.")
 
         # convert individual values into lists of length 1
         # so that xarray doesn't drop the corresponding dimension
@@ -1500,24 +1631,22 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def isel(
         self,
         **sel_kwargs,
-    ) -> SpatialDataArray:
-        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
-        must be provided.
+    ) -> XrDataArray:
+        """Select data along one or more non-Cartesian directions by coordinate index.
 
         Parameters
         ----------
-        x : Union[float, ArrayLike] = None
-            x-coordinate of the slice.
-        y : Union[float, ArrayLike] = None
-            y-coordinate of the slice.
-        z : Union[float, ArrayLike] = None
-            z-coordinate of the slice.
+        **sel_kwargs : dict
+            Keyword arguments to pass to the xarray isel() function.
 
         Returns
         -------
-        SpatialDataArray
+        xarray.DataArray
             Extracted data.
         """
+
+        if "index" in sel_kwargs.keys():
+            raise DataError("Cannot select along dimension 'index'.")
 
         # convert individual values into lists of length 1
         # so that xarray doesn't drop the corresponding dimension
@@ -1528,7 +1657,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def sel_inside(self, bounds: Bound) -> UnstructuredGridDataset:
         """Return a new UnstructuredGridDataset that contains the minimal amount data necessary to
         cover a spatial region defined by ``bounds``.
-
 
         Parameters
         ----------
@@ -1597,7 +1725,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         only one point along a given direction, then it is assumed the data is constant along that
         direction and coverage is not checked.
 
-
         Parameters
         ----------
         bounds : Tuple[float, float, float], Tuple[float, float float]
@@ -1613,37 +1740,3 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             (dmin <= smin and dmax >= smax)
             for dmin, dmax, smin, smax in zip(self.bounds[0], self.bounds[1], bounds[0], bounds[1])
         )
-
-    @requires_vtk
-    def reflect(
-        self, axis: Axis, center: float, reflection_only: bool = False
-    ) -> UnstructuredGridDataset:
-        """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
-        By default the original data is preserved, setting ``reflection_only`` to ``True`` will
-        produce only deflected data.
-
-        Parameters
-        ----------
-        axis : Literal[0, 1, 2]
-            Normal direction of the reflection plane.
-        center : float
-            Location of the reflection plane along its normal direction.
-        reflection_only : bool = False
-            Return only reflected data.
-
-        Returns
-        -------
-        UnstructuredGridDataset
-            Data after reflextion is performed.
-        """
-
-        reflector = vtk["mod"].vtkReflectionFilter()
-        reflector.SetPlane([reflector.USE_X, reflector.USE_Y, reflector.USE_Z][axis])
-        reflector.SetCenter(center)
-        reflector.SetCopyInput(not reflection_only)
-        reflector.SetInputData(self._vtk_obj)
-        reflector.Update()
-
-        # since reflection does not really change geometries, let's not clean it
-        return self._from_vtk_obj_internal(reflector.GetOutput(), remove_degenerate_cells=False, remove_unused_points=False)
-

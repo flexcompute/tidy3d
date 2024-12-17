@@ -8,6 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 from matplotlib import pyplot as plt
 from matplotlib.tri import Triangulation
+from xarray import DataArray as XrDataArray
 
 from ....constants import inf
 from ....exceptions import DataError
@@ -20,9 +21,7 @@ from ..data_array import (
     CellDataArray,
     IndexedDataArray,
     PointDataArray,
-    SpatialDataArray,
     DCIndexedDataArray,
-    DCSpatialDataArray,
 )
 from .base import UnstructuredGridDataset, DEFAULT_MAX_SAMPLES_PER_STEP, DEFAULT_MAX_CELLS_PER_STEP, DEFAULT_TOLERANCE_CELL_FINDING
 
@@ -74,17 +73,26 @@ class TriangularGridDataset(UnstructuredGridDataset):
         description="Coordinate of the grid along the normal direction.",
     )
 
+    """ Fundametal parameters to set up based on grid dimensionality """
+
+    @classmethod
+    def _point_dims(cls) -> pd.PositiveInt:
+        """Dimensionality of stored grid point coordinates."""
+        return 2
+
+    @classmethod
+    def _cell_num_vertices(cls) -> pd.PositiveInt:
+        """Number of vertices in a cell."""
+        return 3
+
+    """ Convenience properties """
+
     @cached_property
     def bounds(self) -> Bound:
         """Grid bounds."""
         bounds_2d = super().bounds
         bounds_3d = self._points_2d_to_3d(bounds_2d)
         return tuple(bounds_3d[0]), tuple(bounds_3d[1])
-
-    @classmethod
-    def _point_dims(cls) -> pd.PositiveInt:
-        """Dimensionality of stored grid point coordinates."""
-        return 2
 
     def _points_2d_to_3d(self, pts: ArrayLike) -> ArrayLike:
         """Convert 2d points into 3d points."""
@@ -95,10 +103,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         """3D representation of grid points."""
         return self._points_2d_to_3d(self.points.data)
 
-    @classmethod
-    def _cell_num_vertices(cls) -> pd.PositiveInt:
-        """Number of vertices in a cell."""
-        return 3
+    """ VTK interfacing """
 
     @classmethod
     @requires_vtk
@@ -188,9 +193,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
             values=values,
         )
 
+    """ Grid operations """
+
     @requires_vtk
-    def plane_slice(self, axis: Axis, pos: float) -> SpatialDataArray:
-        """Slice data with a plane and return the resulting line as a SpatialDataArray.
+    def plane_slice(self, axis: Axis, pos: float) -> XrDataArray:
+        """Slice data with a plane and return the resulting line as a DataArray.
 
         Parameters
         ----------
@@ -201,7 +208,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         Returns
         -------
-        SpatialDataArray
+        xarray.DataArray
             The resulting slice.
         """
 
@@ -219,7 +226,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # axis of the resulting line
         slice_axis = 3 - self.normal_axis - axis
 
-        # assemble coords for SpatialDataArray
+        # assemble coords for DataArray
         coords = [None, None, None]
         coords[axis] = [pos]
         coords[self.normal_axis] = [self.normal_pos]
@@ -233,7 +240,303 @@ class TriangularGridDataset(UnstructuredGridDataset):
         new_shape = new_shape + list(np.shape(values.data))[1:]
         values_reshaped = np.reshape(values.data, new_shape)
 
-        return self._spatial_data_array_type(values_reshaped, coords=coords_dict, name=self.values.name).sortby("xyz"[slice_axis])
+        return XrDataArray(values_reshaped, coords=coords_dict, name=self.values.name).sortby("xyz"[slice_axis])
+
+    @requires_vtk
+    def reflect(
+        self, axis: Axis, center: float, reflection_only: bool = False
+    ) -> UnstructuredGridDataset:
+        """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
+        By default the original data is preserved, setting ``reflection_only`` to ``True`` will
+        produce only deflected data.
+
+        Parameters
+        ----------
+        axis : Literal[0, 1, 2]
+            Normal direction of the reflection plane.
+        center : float
+            Location of the reflection plane along its normal direction.
+        reflection_only : bool = False
+            Return only reflected data.
+
+        Returns
+        -------
+        UnstructuredGridDataset
+            Data after reflextion is performed.
+        """
+
+        # disallow reflecting along normal direction
+        if axis == self.normal_axis:
+            if reflection_only:
+                return self.updated_copy(normal_pos=2 * center - self.normal_pos)
+            else:
+                raise DataError(
+                    "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."
+                )
+
+        return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
+
+    """ Interpolation """
+
+    def _spatial_interp(
+        self,
+        x: Union[float, ArrayLike],
+        y: Union[float, ArrayLike],
+        z: Union[float, ArrayLike],
+        fill_value: Union[float, Literal["extrapolate"]] = None,
+        use_vtk: bool = False,
+        method: Literal["linear", "nearest"] = "linear",
+        ignore_normal_pos: bool = True,
+        max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
+        max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
+        rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
+    ) -> XrDataArray:
+        """Interpolate data at provided x, y, and z. Note that data is assumed to be invariant along
+        the dataset's normal direction.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : Union[float, Literal["extrapolate"]] = 0
+            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
+            nearest values are used. Note: in a future version the default value will be changed
+            to ``"extrapolate"``.
+        use_vtk : bool = False
+            Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
+            option will be removed in a future version.
+        method: Literal["linear", "nearest"] = "linear"
+            Interpolation method to use.
+        ignore_normal_pos : bool = True
+            (Depreciated) Assume data is invariant along the normal direction to the grid plane.
+        max_samples_per_step : int = 1e4
+            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        max_cells_per_step : int = 1e4
+            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float = 1e-6
+            Relative tolerance when determining whether a point belongs to a cell.
+
+        Returns
+        -------
+        xarray.DataArray
+            Interpolated data.
+        """
+
+        if not ignore_normal_pos:
+            log.warning(
+                "Parameter 'ignore_normal_pos' is depreciated. It is always assumed that data "
+                "contained in 'TriangularGridDataset' is invariant in the normal direction. "
+                "That is, 'ignore_normal_pos=True' is used."
+            )
+
+        x = np.atleast_1d(x)
+        y = np.atleast_1d(y)
+        z = np.atleast_1d(z)
+
+        xyz = [x, y, z]
+        xyz[self.normal_axis] = [self.normal_pos]
+        interp_inplane = super()._spatial_interp(
+            **dict(zip("xyz", xyz)),
+            fill_value=fill_value,
+            use_vtk=use_vtk,
+            method=method,
+            max_samples_per_step=max_samples_per_step,
+            max_cells_per_step=max_cells_per_step,
+        )
+        interp_broadcasted = np.broadcast_to(
+            interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]] + self._fields_shape
+        )
+
+        coords_dict = dict(x=x, y=y, z=z)
+        coords_dict.update(self._values_coords_dict)
+
+        return XrDataArray(
+            interp_broadcasted, coords=coords_dict, name=self.values.name
+        )
+
+    def _interp_py(
+        self,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+        fill_value: float,
+        max_samples_per_step: int,
+        max_cells_per_step: int,
+        rel_tol: float,
+    ) -> ArrayLike:
+        """2D-specific function to interpolate data at provided x, y, and z
+        using vectorized python implementation.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float
+            Value to use when filling points without interpolated values.
+        max_samples_per_step : int
+            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        max_cells_per_step : int
+            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float
+            Relative tolerance when determining whether a point belongs to a cell.
+
+        Returns
+        -------
+        ArrayLike
+            Interpolated data.
+        """
+
+        return self._interp_py_general(
+            x=x,
+            y=y,
+            z=z,
+            fill_value=fill_value,
+            max_samples_per_step=max_samples_per_step,
+            max_cells_per_step=max_cells_per_step,
+            rel_tol=rel_tol,
+            axis_ignore=self.normal_axis,
+        )
+
+    """ Data selection """
+
+    @requires_vtk
+    def sel(
+        self,
+        x: Union[float, ArrayLike] = None,
+        y: Union[float, ArrayLike] = None,
+        z: Union[float, ArrayLike] = None,
+        method: Literal[None, "nearest", "pad", "ffill", "backfill", "bfill"] = None,
+        **sel_kwargs,
+    ) -> XrDataArray:
+        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument 
+        among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
+        grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to
+        .sel() xarray function. Parameter 'method' applies only to non-spatial dimensions.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike] = None
+            x-coordinate of the slice.
+        y : Union[float, ArrayLike] = None
+            y-coordinate of the slice.
+        z : Union[float, ArrayLike] = None
+            z-coordinate of the slice.
+        method: Literal[None, "nearest", "pad", "ffill", "backfill", "bfill"] = None
+            Method to use in xarray sel() function.
+        **sel_kwargs : dict
+            Keyword arguments to pass to the xarray sel() function.
+
+        Returns
+        -------
+        xarray.DataArray
+            Extracted data.
+        """
+
+        xyz = [x, y, z]
+        axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
+        num_provided = len(axes)
+
+        if self.normal_axis in axes:
+            if xyz[self.normal_axis] != self.normal_pos:
+                raise DataError(
+                    f"No data for {'xyz'[self.normal_axis]} = {xyz[self.normal_axis]} (unstructured"
+                    f" grid is defined at {'xyz'[self.normal_axis]} = {self.normal_pos})."
+                )
+
+            if num_provided < 3:
+                num_provided -= 1
+                axes.remove(self.normal_axis)
+
+        if num_provided == 0 and len(sel_kwargs) == 0:
+            raise DataError("At least one dimension for selection must be provided.")
+
+        self_after_non_spatial_sel = self._non_spatial_sel(method=method, **sel_kwargs)
+
+        if num_provided == 1:
+            axis = axes[0]
+            return self_after_non_spatial_sel.plane_slice(axis=axis, pos=xyz[axis])
+
+        if num_provided == 2:
+            pos = [x, y, z]
+            pos[self.normal_axis] = [self.normal_pos]
+            return self_after_non_spatial_sel.interp(x=pos[0], y=pos[1], z=pos[2])
+
+        if num_provided == 3:
+            return self_after_non_spatial_sel.interp(x=x, y=y, z=z)
+
+        return self_after_non_spatial_sel
+
+    @requires_vtk
+    def sel_inside(self, bounds: Bound) -> TriangularGridDataset:
+        """Return a new ``TriangularGridDataset`` that contains the minimal amount data necessary to
+        cover a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        TriangularGridDataset
+            Extracted spatial data array.
+        """
+        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+            raise DataError(
+                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
+            )
+
+        # expand along normal direction
+        new_bounds = [list(bounds[0]), list(bounds[1])]
+
+        new_bounds[0][self.normal_axis] = -inf
+        new_bounds[1][self.normal_axis] = inf
+
+        return super().sel_inside(new_bounds)
+
+    def does_cover(self, bounds: Bound) -> bool:
+        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
+        only one point along a given direction, then it is assumed the data is constant along that
+        direction and coverage is not checked.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        bool
+            Full cover check outcome.
+        """
+
+        # expand along normal direction
+        new_bounds = [list(bounds[0]), list(bounds[1])]
+
+        new_bounds[0][self.normal_axis] = self.normal_pos
+        new_bounds[1][self.normal_axis] = self.normal_pos
+
+        return super().does_cover(new_bounds)
+
+    """ Plotting """
 
     @property
     def _triangulation_obj(self) -> Triangulation:
@@ -333,290 +636,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
 
-    def _spatial_interp(
-        self,
-        x: Union[float, ArrayLike],
-        y: Union[float, ArrayLike],
-        z: Union[float, ArrayLike],
-        fill_value: Union[float, Literal["extrapolate"]] = None,
-        use_vtk: bool = False,
-        method: Literal["linear", "nearest"] = "linear",
-        ignore_normal_pos: bool = True,
-        max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
-        max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
-        rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
-    ) -> SpatialDataArray:
-        """Interpolate data at provided x, y, and z. Note that data is assumed to be invariant along
-        the dataset's normal direction.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike]
-            x-coordinates of sampling points.
-        y : Union[float, ArrayLike]
-            y-coordinates of sampling points.
-        z : Union[float, ArrayLike]
-            z-coordinates of sampling points.
-        fill_value : Union[float, Literal["extrapolate"]] = 0
-            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
-            nearest values are used. Note: in a future version the default value will be changed
-            to ``"extrapolate"``.
-        use_vtk : bool = False
-            Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
-            option will be removed in a future version.
-        method: Literal["linear", "nearest"] = "linear"
-            Interpolation method to use.
-        ignore_normal_pos : bool = True
-            (Depreciated) Assume data is invariant along the normal direction to the grid plane.
-        max_samples_per_step : int = 1e4
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int = 1e4
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float = 1e-6
-            Relative tolerance when determining whether a point belongs to a cell.
-
-        Returns
-        -------
-        SpatialDataArray
-            Interpolated data.
-        """
-
-        if not ignore_normal_pos:
-            log.warning(
-                "Parameter 'ignore_normal_pos' is depreciated. It is always assumed that data "
-                "contained in 'TriangularGridDataset' is invariant in the normal direction. "
-                "That is, 'ignore_normal_pos=True' is used."
-            )
-
-        x = np.atleast_1d(x)
-        y = np.atleast_1d(y)
-        z = np.atleast_1d(z)
-
-        xyz = [x, y, z]
-        xyz[self.normal_axis] = [self.normal_pos]
-        interp_inplane = super()._spatial_interp(
-            **dict(zip("xyz", xyz)),
-            fill_value=fill_value,
-            use_vtk=use_vtk,
-            method=method,
-            max_samples_per_step=max_samples_per_step,
-            max_cells_per_step=max_cells_per_step,
-        )
-        interp_broadcasted = np.broadcast_to(
-            interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]] + self._fields_shape
-        )
-
-        coords_dict = dict(x=x, y=y, z=z)
-        coords_dict.update(self._values_coords_dict)
-
-        return self._spatial_data_array_type(
-            interp_broadcasted, coords=coords_dict, name=self.values.name
-        )
-
-    def _interp_py(
-        self,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-        fill_value: float,
-        max_samples_per_step: int,
-        max_cells_per_step: int,
-        rel_tol: float,
-    ) -> ArrayLike:
-        """2D-specific function to interpolate data at provided x, y, and z
-        using vectorized python implementation.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike]
-            x-coordinates of sampling points.
-        y : Union[float, ArrayLike]
-            y-coordinates of sampling points.
-        z : Union[float, ArrayLike]
-            z-coordinates of sampling points.
-        fill_value : float
-            Value to use when filling points without interpolated values.
-        max_samples_per_step : int
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float
-            Relative tolerance when determining whether a point belongs to a cell.
-
-        Returns
-        -------
-        ArrayLike
-            Interpolated data.
-        """
-
-        return self._interp_py_general(
-            x=x,
-            y=y,
-            z=z,
-            fill_value=fill_value,
-            max_samples_per_step=max_samples_per_step,
-            max_cells_per_step=max_cells_per_step,
-            rel_tol=rel_tol,
-            axis_ignore=self.normal_axis,
-        )
-
-    @requires_vtk
-    def sel(
-        self,
-        x: Union[float, ArrayLike] = None,
-        y: Union[float, ArrayLike] = None,
-        z: Union[float, ArrayLike] = None,
-        method=None,
-        **sel_kwargs,
-    ) -> SpatialDataArray:
-        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
-        must be provided.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike] = None
-            x-coordinate of the slice.
-        y : Union[float, ArrayLike] = None
-            y-coordinate of the slice.
-        z : Union[float, ArrayLike] = None
-            z-coordinate of the slice.
-
-        Returns
-        -------
-        SpatialDataArray
-            Extracted data.
-        """
-
-        xyz = [x, y, z]
-        axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
-        num_provided = len(axes)
-
-        if self.normal_axis in axes:
-            if xyz[self.normal_axis] != self.normal_pos:
-                raise DataError(
-                    f"No data for {'xyz'[self.normal_axis]} = {xyz[self.normal_axis]} (unstructured"
-                    f" grid is defined at {'xyz'[self.normal_axis]} = {self.normal_pos})."
-                )
-
-            if num_provided < 3:
-                num_provided -= 1
-                axes.remove(self.normal_axis)
-
-        if num_provided == 0 and len(sel_kwargs) == 0:
-            raise DataError("At least one dimension for selection must be provided.")
-
-        self_after_non_spatial_sel = self._non_spatial_sel(method=method, **sel_kwargs)
-
-        if num_provided == 1:
-            axis = axes[0]
-            return self_after_non_spatial_sel.plane_slice(axis=axis, pos=xyz[axis])
-
-        if num_provided == 2:
-            pos = [x, y, z]
-            pos[self.normal_axis] = [self.normal_pos]
-            return self_after_non_spatial_sel.interp(x=pos[0], y=pos[1], z=pos[2])
-
-        if num_provided == 3:
-            return self_after_non_spatial_sel.interp(x=x, y=y, z=z)
-
-        return self_after_non_spatial_sel
-
-    @requires_vtk
-    def reflect(
-        self, axis: Axis, center: float, reflection_only: bool = False
-    ) -> UnstructuredGridDataset:
-        """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
-        By default the original data is preserved, setting ``reflection_only`` to ``True`` will
-        produce only deflected data.
-
-        Parameters
-        ----------
-        axis : Literal[0, 1, 2]
-            Normal direction of the reflection plane.
-        center : float
-            Location of the reflection plane along its normal direction.
-        reflection_only : bool = False
-            Return only reflected data.
-
-        Returns
-        -------
-        UnstructuredGridDataset
-            Data after reflextion is performed.
-        """
-
-        # disallow reflecting along normal direction
-        if axis == self.normal_axis:
-            if reflection_only:
-                return self.updated_copy(normal_pos=2 * center - self.normal_pos)
-            else:
-                raise DataError(
-                    "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."
-                )
-
-        return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
-
-    @requires_vtk
-    def sel_inside(self, bounds: Bound) -> TriangularGridDataset:
-        """Return a new ``TriangularGridDataset`` that contains the minimal amount data necessary to
-        cover a spatial region defined by ``bounds``.
-
-
-        Parameters
-        ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-
-        Returns
-        -------
-        TriangularGridDataset
-            Extracted spatial data array.
-        """
-        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
-            raise DataError(
-                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
-            )
-
-        # expand along normal direction
-        new_bounds = [list(bounds[0]), list(bounds[1])]
-
-        new_bounds[0][self.normal_axis] = -inf
-        new_bounds[1][self.normal_axis] = inf
-
-        return super().sel_inside(new_bounds)
-
-    def does_cover(self, bounds: Bound) -> bool:
-        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
-        only one point along a given direction, then it is assumed the data is constant along that
-        direction and coverage is not checked.
-
-
-        Parameters
-        ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-
-        Returns
-        -------
-        bool
-            Full cover check outcome.
-        """
-
-        # expand along normal direction
-        new_bounds = [list(bounds[0]), list(bounds[1])]
-
-        new_bounds[0][self.normal_axis] = self.normal_pos
-        new_bounds[1][self.normal_axis] = self.normal_pos
-
-        return super().does_cover(new_bounds)
-
 
 
 class DCTriangularGridDataset(TriangularGridDataset):
@@ -653,8 +672,6 @@ class DCTriangularGridDataset(TriangularGridDataset):
     ...     values=tri_grid_values,
     ... )
     """
-
-    _spatial_data_array_type = DCSpatialDataArray
 
     values: DCIndexedDataArray = pd.Field(
         ...,
