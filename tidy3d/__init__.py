@@ -37,11 +37,9 @@ from .components.boundary import (
 
 # data
 from .components.data.data_array import (
-    AxialRatioDataArray,
     CellDataArray,
     ChargeDataArray,
     DiffractionDataArray,
-    DirectivityDataArray,
     EMECoefficientDataArray,
     EMEModeIndexDataArray,
     EMEScalarFieldDataArray,
@@ -417,8 +415,6 @@ __all__ = [
     "FieldProjectionCartesianDataArray",
     "FieldProjectionKSpaceDataArray",
     "DiffractionDataArray",
-    "DirectivityDataArray",
-    "AxialRatioDataArray",
     "HeatDataArray",
     "ChargeDataArray",
     "FieldDataset",

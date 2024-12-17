@@ -33,9 +33,8 @@ from .test_data_arrays import (
     PERMITTIVITY_MONITOR,
     SIM,
     SIM_SYM,
-    make_axial_ratio_data_array,
     make_diffraction_data_array,
-    make_directivity_data_array,
+    make_far_field_data_array,
     make_flux_data_array,
     make_flux_time_data_array,
     make_mode_amps_data_array,
@@ -54,9 +53,6 @@ FLUX_TIME = make_flux_time_data_array()
 GRID_CORRECTION = FreqModeDataArray(
     1 + 0.01 * np.random.rand(*N_COMPLEX.shape), coords=N_COMPLEX.coords
 )
-DIRECTIVITY = make_directivity_data_array()
-AXIALRATIO = make_axial_ratio_data_array()
-
 """ Make the montor data """
 
 
@@ -190,8 +186,16 @@ def make_flux_data():
 
 
 def make_directivity_data():
+    data = make_far_field_data_array()
     return DirectivityData(
-        monitor=DIRECTIVITY_MONITOR, directivity=DIRECTIVITY.copy(), axial_ratio=AXIALRATIO.copy()
+        monitor=DIRECTIVITY_MONITOR,
+        flux=FLUX.copy(),
+        Er=data,
+        Etheta=data,
+        Ephi=data,
+        Hr=data,
+        Htheta=data,
+        Hphi=data,
     )
 
 
@@ -337,6 +341,8 @@ def test_directivity_data():
     data = make_directivity_data()
     _ = data.directivity
     _ = data.axial_ratio
+    _ = data.left_polarization
+    _ = data.right_polarization
 
 
 def test_diffraction_data():
