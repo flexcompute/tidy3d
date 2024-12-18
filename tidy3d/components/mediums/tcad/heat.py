@@ -7,7 +7,6 @@ from abc import ABC
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import Union
 from tidy3d.constants import (
     SPECIFIC_HEAT_CAPACITY,
     THERMAL_CONDUCTIVITY,
@@ -51,6 +50,3 @@ class SolidSpec(AbstractHeatChargeSpec):
         description=f"Thermal conductivity of material in units of {THERMAL_CONDUCTIVITY}.",
         units=THERMAL_CONDUCTIVITY,
     )
-
-
-ThermalSpecType = Union[FluidSpec, SolidSpec]

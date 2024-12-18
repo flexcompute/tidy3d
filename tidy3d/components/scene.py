@@ -11,7 +11,7 @@ import pydantic.v1 as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from tidy3d.components.heat_charge_spec import SolidSpec
-from tidy3d.components.materials.tcad.charge import ChargeMedium
+from tidy3d.components.materials.tcad.charge import AbstractChargeMedium
 
 from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
@@ -1354,9 +1354,9 @@ class Scene(Tidy3dBaseModel):
             cond_list = [medium.heat_spec.conductivity for medium in medium_list]
         elif property == "electric_conductivity":
             medium_list = [
-                medium for medium in medium_list if isinstance(medium.electric_spec, ChargeMedium)
+                medium for medium in medium_list if isinstance(medium.charge, AbstractChargeMedium)
             ]
-            cond_list = [medium.electric_spec.conductivity for medium in medium_list]
+            cond_list = [medium.charge.conductivity for medium in medium_list]
 
         cond_min = min(cond_list)
         cond_max = max(cond_list)
@@ -1398,8 +1398,10 @@ class Scene(Tidy3dBaseModel):
         cond_medium = None
         if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidSpec):
             cond_medium = medium.heat_spec.conductivity
-        elif property == "electric_conductivity" and isinstance(medium.electric_spec, ChargeMedium):
-            cond_medium = medium.electric_spec.conductivity
+        elif property == "electric_conductivity" and isinstance(
+            medium.charge, AbstractChargeMedium
+        ):
+            cond_medium = medium.charge.conductivity
 
         if cond_medium is not None:
             delta_cond = cond_medium - property_val_min

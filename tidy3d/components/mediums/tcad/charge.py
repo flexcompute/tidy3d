@@ -25,29 +25,33 @@ from tidy3d.constants import (
 )
 
 
-class ChargeMedium(Medium):
-    """Abstract class for Charge specifications"""
+class AbstractChargeMedium(Medium):
+    pass
 
 
-# class ChargeMedium(ChargeMedium):
-#     """Insulating medium. Conduction simulations will not solve for electric
-#     potential in a structure that has a medium with this 'electric_spec'.
-#
-#     Example
-#     -------
-#     >>> solid = InsulatingSpec()
-#     >>> solid2 = InsulatingSpec(permittivity=1.1)
-#
-#     Note: relative permittivity will be assumed 1 if no value is specified.
-#     """
-
-
-class ChargeMedium(ChargeMedium):
-    """Conductor medium for conduction simulations.
+class TCADInsulatorMedium(AbstractChargeMedium):
+    """Insulating medium. Conduction simulations will not solve for electric
+    potential in a structure that has a medium with this 'charge'.
+    This is named as such because maybe we need to separate functionality from another conductor solver from charge,
+    as a specific subclass for the solver.
 
     Example
     -------
-    >>> solid = ChargeMedium(conductivity=3)
+    >>> solid = TCADInsulatorMedium()
+    >>> solid2 = TCADInsulatorMedium(permittivity=1.1)
+
+    Note: relative permittivity will be assumed 1 if no value is specified.
+    """
+
+
+class TCADConductorMedium(AbstractChargeMedium):
+    """Conductor medium for conduction simulations.
+    This is named as such because maybe we need to separate functionality from another conductor solver from charge,
+    as a specific subclass for the solver.
+
+    Example
+    -------
+    >>> solid = AbstractChargeMedium(conductivity=3)
 
     Note: relative permittivity will be assumed 1 if no value is specified.
     """
@@ -60,7 +64,7 @@ class ChargeMedium(ChargeMedium):
     )
 
 
-class ActiveSemiConductorMedium(ChargeMedium):
+class SemiconductorMedium(AbstractChargeMedium):
     """
     This class is used to define semiconductors.
 
@@ -126,6 +130,3 @@ class ActiveSemiConductorMedium(ChargeMedium):
         description="Units of 1/cm^3",
         units="1/cm^3",
     )
-
-
-ElectricSpecType = Union[ChargeMedium, ChargeMedium, ActiveSemiConductorMedium]

@@ -733,13 +733,22 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "``Simulation``.",
         discriminator=TYPE_TAG_STR,
     )
+    heat = heat_spec
 
-    # electric_spec: Optional[ElectricSpecType] = pd.Field(
-    #     None,
-    #     title="Electric Specification",
-    #     description="Specification of the medium electric properties.",
-    #     discriminator=TYPE_TAG_STR,
-    # )
+    @property
+    def charge(self):
+        # TODO add error
+        return None
+
+    @property
+    def electric(self):
+        # TODO add error
+        return None
+
+    @property
+    def optical(self):
+        # TODO add error
+        return None
 
     @pd.validator("modulation_spec", always=True)
     @skip_if_fields_missing(["nonlinear_spec"])

@@ -55,16 +55,16 @@ class SolidSpec(AbstractHeatChargeSpec):
 
 
 #
-# class ChargeMedium(AbstractHeatChargeSpec):
+# class AbstractChargeMedium(AbstractHeatChargeSpec):
 #     """Abstract class for Charge specifications"""
 #
 # # permittivity: float = pd.Field(
 # #     1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
 # # )
 # #
-# # class ChargeMedium(ChargeMedium):
+# # class AbstractChargeMedium(AbstractChargeMedium):
 # #     """Insulating medium. Conduction simulations will not solve for electric
-# #     potential in a structure that has a medium with this 'electric_spec'.
+# #     potential in a structure that has a medium with this 'charge'.
 # #
 # #     Example
 # #     -------
@@ -75,12 +75,12 @@ class SolidSpec(AbstractHeatChargeSpec):
 # #     """
 # #
 # #
-# # class ChargeMedium(ChargeMedium):
+# # class AbstractChargeMedium(AbstractChargeMedium):
 # #     """Conductor medium for conduction simulations.
 # #
 # #     Example
 # #     -------
-# #     >>> solid = ChargeMedium(conductivity=3)
+# #     >>> solid = AbstractChargeMedium(conductivity=3)
 # #
 # #     Note: relative permittivity will be assumed 1 if no value is specified.
 # #     """
@@ -91,8 +91,8 @@ class SolidSpec(AbstractHeatChargeSpec):
 # #         description=f"Electric conductivity of material in units of {CONDUCTIVITY}.",
 # #         units=CONDUCTIVITY,
 # #     )
-#
-# class ActiveSemiConductorMedium(ChargeMedium):
+
+# class SemiconductorMedium(AbstractChargeMedium):
 #     """
 #     This class is used to define semiconductors.
 #
@@ -158,7 +158,7 @@ class SolidSpec(AbstractHeatChargeSpec):
 #         description="Units of 1/cm^3",
 #         units="1/cm^3",
 #     )
-
+#
 
 ThermalSpecType = Union[FluidSpec, SolidSpec]
-# ElectricSpecType = Union[ChargeMedium, ActiveSemiConductorMedium]
+# ElectricSpecType = Union[AbstractChargeMedium, SemiconductorMedium]

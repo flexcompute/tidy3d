@@ -9,8 +9,8 @@ Material Thermal/Charge Specification
 
    tidy3d.FluidSpec
    tidy3d.SolidSpec
-   tidy3d.ChargeMedium
-   tidy3d.ChargeMedium
+   tidy3d.AbstractChargeMedium
+   tidy3d.AbstractChargeMedium
 
 
 Thermal Perturbation Specification

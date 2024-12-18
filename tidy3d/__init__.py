@@ -198,8 +198,8 @@ from tidy3d.components.lumped_element import (
     RLCNetwork,
 )
 from tidy3d.components.materials.tcad.charge import (
-    ActiveSemiConductorMedium,
-    ChargeMedium,
+    AbstractChargeMedium,
+    SemiconductorMedium,
 )
 
 # medium
@@ -382,7 +382,7 @@ __all__ = [
     "ChargeToleranceSpec",
     "ClipOperation",
     "CoaxialLumpedResistor",
-    "ChargeMedium",
+    "AbstractChargeMedium",
     "ContinuousWave",
     "ContinuousWaveTimeModulation",
     "ConvectionBC",
@@ -502,7 +502,7 @@ __all__ = [
     "IndexPerturbation",
     "IndexedDataArray",
     "InsulatingBC",
-    "ChargeMedium",
+    "AbstractChargeMedium",
     "K_B",
     "KerrNonlinearity",
     "LinearChargePerturbation",
@@ -566,7 +566,7 @@ __all__ = [
     "ScalarModeFieldDataArray",
     "Scene",
     "Sellmeier",
-    "ActiveSemiConductorMedium",
+    "SemiconductorMedium",
     "ShockleyReedHallRecombination",
     "Simulation",
     "SimulationBoundary",
