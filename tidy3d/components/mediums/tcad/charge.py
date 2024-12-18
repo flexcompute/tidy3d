@@ -29,7 +29,7 @@ class AbstractChargeMedium(Medium):
     pass
 
 
-class TCADInsulatorMedium(AbstractChargeMedium):
+class ChargeInsulatorMedium(AbstractChargeMedium):
     """Insulating medium. Conduction simulations will not solve for electric
     potential in a structure that has a medium with this 'charge'.
     This is named as such because maybe we need to separate functionality from another conductor solver from charge,
@@ -37,14 +37,14 @@ class TCADInsulatorMedium(AbstractChargeMedium):
 
     Example
     -------
-    >>> solid = TCADInsulatorMedium()
-    >>> solid2 = TCADInsulatorMedium(permittivity=1.1)
+    >>> solid = ChargeInsulatorMedium()
+    >>> solid2 = ChargeInsulatorMedium(permittivity=1.1)
 
     Note: relative permittivity will be assumed 1 if no value is specified.
     """
 
 
-class TCADConductorMedium(AbstractChargeMedium):
+class ChargeConductorMedium(AbstractChargeMedium):
     """Conductor medium for conduction simulations.
     This is named as such because maybe we need to separate functionality from another conductor solver from charge,
     as a specific subclass for the solver.
