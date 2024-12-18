@@ -110,6 +110,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
     def plot_field(
         self,
         monitor_name: str,
+        field_name: str = None,
         val: RealFieldVal = "real",
         scale: Literal["lin", "log"] = "lin",
         structures_alpha: float = 0.2,
@@ -125,6 +126,8 @@ class HeatChargeSimulationData(AbstractSimulationData):
         ----------
         field_monitor_name : str
             Name of :class:`.TemperatureMonitorData` to plot.
+        field_name : str = None
+            Name of ``field`` component to plot (eg. `'temperature'`). Not required if monitor data contains only one field.
         val : Literal['real', 'abs', 'abs^2'] = 'real'
             Which part of the field to plot.
         scale : Literal['lin', 'log']
@@ -160,25 +163,29 @@ class HeatChargeSimulationData(AbstractSimulationData):
         monitor_data = self[monitor_name]
         property_to_plot = None
 
+        if field_name is None:
+            if isinstance(monitor_data, TemperatureData):
+                field_name = "temperature"
+            elif isinstance(monitor_data, VoltageData):
+                field_name = "voltage"
+
+        if field_name not in monitor_data.field_components.keys():
+            raise DataError(f"field_name '{field_name}' not found in data.")
+
+        field = monitor_data.field_components[field_name]
+        # forward field name to actual data so it gets displayed
+        field.name = field_name
+        field_data = self._field_component_value(field, val)
+
         if isinstance(monitor_data, TemperatureData):
-            if monitor_data.temperature is None:
-                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
-            field_data = self._field_component_value(monitor_data.temperature, val)
             property_to_plot = "heat_conductivity"
-
         elif isinstance(monitor_data, VoltageData):
-            if monitor_data.voltage is None:
-                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
-            field_data = self._field_component_value(monitor_data.voltage, val)
             property_to_plot = "electric_conductivity"
-
         else:
             raise DataError(
                 f"Monitor '{monitor_name}' (type '{monitor_data.monitor.type}') is not a "
                 f"supported monitor. Supported monitors are 'TemperatureData', 'VoltageData'."
             )
-
-        field_name = monitor_data.field_name(val)
 
         if scale == "log":
             field_data = np.log10(np.abs(field_data))

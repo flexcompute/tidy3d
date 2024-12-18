@@ -14,7 +14,7 @@ from ...log import log
 from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
 from ..data.data_array import DCCapacitanceDataArray, SpatialDataArray, IndexedDataArray
-from ..data.utils import TetrahedralGridDataset, TriangularGridDataset
+from ..data.utils import TetrahedralGridDataset, TriangularGridDataset, DCTriangularGridDataset, DCTetrahedralGridDataset
 from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
     CapacitanceMonitor,
@@ -28,6 +28,8 @@ FieldDataset = Union[
     SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
 ]
 
+
+DCFieldDataset = Union[DCTriangularGridDataset, DCTetrahedralGridDataset]
 
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
@@ -153,6 +155,11 @@ class TemperatureData(HeatChargeMonitorData):
         units=KELVIN,
     )
 
+    @property
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        return dict(temperature=self.temperature)
+
     @pd.validator("temperature", always=True)
     @skip_if_fields_missing(["monitor"])
     def warn_no_data(cls, val, values):
@@ -211,6 +218,11 @@ class VoltageData(HeatChargeMonitorData):
         units=VOLT,
     )
 
+    @property
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        return dict(voltage=self.voltage)
+
     def field_name(self, val: str) -> str:
         """Gets the name of the fields to be plot."""
         if val == "abs^2":
@@ -241,42 +253,6 @@ class VoltageData(HeatChargeMonitorData):
         return self.updated_copy(voltage=new_phi, symmetry=(0, 0, 0))
 
 
-class HeatChargeDataset(Tidy3dBaseModel):
-    """Class that deals with parameter-depending fields."""
-
-    base_data: FieldDataset = pd.Field(title="Base data", description="Spatial dataset")
-
-    field_series: Tuple[IndexedDataArray, ...] = pd.Field(
-        title="Field series", description="Tuple of field solutions. "
-    )
-
-    parameter_array: Tuple[pd.FiniteFloat, ...] = pd.Field(
-        title="Parameter array",
-        description="Array containing the parameter values at which the field series are stored.",
-    )
-
-    @cached_property
-    def num_fields_saved(self):
-        """Number of fields stored"""
-        return len(self.parameter_array)
-
-    def get_field(self, loc: int):
-        """Returns the field specified by 'field' stored at the position specified by 'loc'"""
-
-        assert loc < self.num_fields_saved
-        return self.base_data.updated_copy(values=self.field_series[loc])
-
-    @pd.root_validator(skip_on_failure=True)
-    def check_data_and_params_have_same_length(cls, values):
-        """Check that both field series and parameter array have the same length."""
-
-        field_series = values["field_series"]
-        parameter_array = values["parameter_array"]
-        assert len(field_series) == len(parameter_array)
-
-        return values
-
-
 class PotentialData(HeatChargeMonitorData):
     """Class that stores electric potential from a charge simulation."""
 
@@ -286,11 +262,16 @@ class PotentialData(HeatChargeMonitorData):
         description="Electric potential monitor associated with a Charge simulation.",
     )
 
-    voltage_series: HeatChargeDataset = pd.Field(
+    potential: DCFieldDataset = pd.Field(
         None, title="Voltage series", description="Contains the voltages."
     )
 
-    @pd.validator("voltage_series", always=True)
+    @property
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        return dict(potential=self.potential)
+
+    @pd.validator("potential", always=True)
     @skip_if_fields_missing(["monitor"])
     def warn_no_data(cls, val, values):
         """Warn if no data provided."""
@@ -309,11 +290,8 @@ class PotentialData(HeatChargeMonitorData):
     def symmetry_expanded_copy(self) -> PotentialData:
         """Return copy of self with symmetry applied."""
 
-        new_voltages = self._symmetry_expanded_copy(property=self.voltage_series.field_series)
-
-        return self.updated_copy(
-            voltage_series=self.voltage_series.updated_copy(field_series=new_voltages)
-        )
+        new_potential = self._symmetry_expanded_copy(property=self.potential)
+        return self.updated_copy(potential=new_potential, symmetry=(0, 0, 0))
 
     def field_name(self, val: str) -> str:
         """Gets the name of the fields to be plot."""
@@ -332,13 +310,18 @@ class FreeCarrierData(HeatChargeMonitorData):
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons_series: HeatChargeDataset = pd.Field(
+    electrons: HeatChargeDataset = pd.Field(
         None, title="Electrons series", description="Contains the electrons."
     )
 
-    holes_series: HeatChargeDataset = pd.Field(
+    holes: HeatChargeDataset = pd.Field(
         None, title="Holes series", description="Contains the electrons."
     )
+
+    @property
+    def field_components(self) -> Dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        return dict(electrons=self.electrons, holes=self.holes)
 
     @pd.root_validator(skip_on_failure=True)
     def warn_no_data(cls, values):
@@ -360,12 +343,13 @@ class FreeCarrierData(HeatChargeMonitorData):
     def symmetry_expanded_copy(self) -> FreeCarrierData:
         """Return copy of self with symmetry applied."""
 
-        new_electrons = self._symmetry_expanded_copy(property=self.electrons_series.field_series)
-        new_holes = self._symmetry_expanded_copy(property=self.holes_series.field_series)
+        new_electrons = self._symmetry_expanded_copy(property=self.electrons)
+        new_holes = self._symmetry_expanded_copy(property=self.holes)
 
         return self.updated_copy(
-            electrons_series=self.electrons_series.updated_copy(field_series=new_electrons),
-            holes_series=self.holes_series.updated_copy(field_series=new_holes),
+            electrons=new_electrons,
+            holes=new_holes, 
+            symmetry=(0, 0, 0),
         )
 
     def field_name(self, val: str) -> str:
