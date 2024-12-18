@@ -40,8 +40,6 @@ from tidy3d.components.data.data_array import (
     AxialRatioDataArray,
     CellDataArray,
     ChargeDataArray,
-    DCCapacitanceDataArray,
-    DCIVCurveDataArray,
     DiffractionDataArray,
     DirectivityDataArray,
     EMECoefficientDataArray,
@@ -64,6 +62,8 @@ from tidy3d.components.data.data_array import (
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     SpatialDataArray,
+    SteadyCapacitanceVoltageDataArray,
+    SteadyCurrentVoltageDataArray,
 )
 from tidy3d.components.data.dataset import (
     FieldDataset,
@@ -160,16 +160,16 @@ from tidy3d.components.heat_charge.charge_settings import (
 from tidy3d.components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
 from tidy3d.components.heat_charge.heat.simulation import HeatSimulation
 from tidy3d.components.heat_charge.monitor import (
-    StaticCapacitanceMonitor,
-    StaticChargeCarrierMonitor,
-    StaticVoltageMonitor,
+    SteadyCapacitanceMonitor,
+    SteadyChargeCarrierMonitor,
+    SteadyVoltageMonitor,
     TemperatureMonitor,
 )
 from tidy3d.components.heat_charge.monitor_data import (
-    StaticCapacitanceData,
-    StaticFreeCarrierData,
-    StaticPotentialData,
-    StaticVoltageData,
+    SteadyCapacitanceData,
+    SteadyFreeCarrierData,
+    SteadyPotentialData,
+    SteadyVoltageData,
     TemperatureData,
 )
 from tidy3d.components.heat_charge.sim_data import HeatChargeSimulationData, HeatSimulationData
@@ -196,10 +196,6 @@ from tidy3d.components.lumped_element import (
     LumpedResistor,
     RectangularLumpedElement,
     RLCNetwork,
-)
-from tidy3d.components.materials.tcad.charge import (
-    AbstractChargeMedium,
-    SemiconductorMedium,
 )
 
 # medium
@@ -235,6 +231,10 @@ from tidy3d.components.medium import (
     SkinDepthFitterParam,
     TwoPhotonAbsorption,
     medium_from_nk,
+)
+from tidy3d.components.mediums.tcad.charge import (
+    AbstractChargeMedium,
+    SemiconductorMedium,
 )
 
 # modes
@@ -405,8 +405,8 @@ __all__ = [
     "CustomSourceTime",
     "Cylinder",
     "DATA_TYPE_MAP",
-    "DCCapacitanceDataArray",
-    "DCIVCurveDataArray",
+    "SteadyCapacitanceVoltageDataArray",
+    "SteadyCurrentVoltageDataArray",
     "DCSpec",
     "Debye",
     "DefaultAbsorberParameters",
@@ -582,13 +582,13 @@ __all__ = [
     "Sphere",
     "StablePML",
     "Staircasing",
-    "StaticCapacitanceData",
-    "StaticCapacitanceMonitor",
-    "StaticChargeCarrierMonitor",
-    "StaticFreeCarrierData",
-    "StaticPotentialData",
-    "StaticVoltageData",
-    "StaticVoltageMonitor",
+    "SteadyCapacitanceData",
+    "SteadyCapacitanceMonitor",
+    "SteadyChargeCarrierMonitor",
+    "SteadyFreeCarrierData",
+    "SteadyPotentialData",
+    "SteadyVoltageData",
+    "SteadyVoltageMonitor",
     "Structure",
     "StructureBoundary",
     "StructureSimulationBoundary",

@@ -11,7 +11,7 @@ import pydantic.v1 as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from tidy3d.components.heat_charge_spec import SolidSpec
-from tidy3d.components.materials.tcad.charge import AbstractChargeMedium
+from tidy3d.components.mediums.tcad.charge import AbstractChargeMedium
 
 from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError

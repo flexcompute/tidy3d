@@ -1193,14 +1193,14 @@ class ChargeDataArray(DataArray):
     _dims = ("n", "p")
 
 
-class DCIVCurveDataArray(DataArray):
+class SteadyCurrentVoltageDataArray(DataArray):
     """Semiconductor I-V curve data array.
 
     Example
     -------
     >>> I = [0. 0, 1, 4]
     >>> V = [-1, -0.5, 0, 0.5]
-    >>> td = DCIVCurveDataArray(data=I, coords={"Voltage (V)": V})
+    >>> td = SteadyCurrentVoltageDataArray(data=I, coords={"Voltage (V)": V})
     """
 
     __slots__ = ()
@@ -1208,14 +1208,14 @@ class DCIVCurveDataArray(DataArray):
     _data_attrs = {"long_name": "Current (A)"}
 
 
-class DCCapacitanceDataArray(DataArray):
+class SteadyCapacitanceVoltageDataArray(DataArray):
     """Semiconductor DC capacitance variations with respect to voltage.
 
     Example
     -------
     >>> C = [0. 0, 1, 4]
     >>> V = [-1, -0.5, 0, 0.5]
-    >>> td = DCCapacitanceDataArray(data=C, coords={"Voltage (V)": V})
+    >>> td = SteadyCapacitanceVoltageDataArray(data=C, coords={"Voltage (V)": V})
     """
 
     __slots__ = ()
@@ -1312,8 +1312,8 @@ DATA_ARRAY_TYPES = [
     EMEModeIndexDataArray,
     EMEFreqModeDataArray,
     ChargeDataArray,
-    DCIVCurveDataArray,
-    DCCapacitanceDataArray,
+    SteadyCurrentVoltageDataArray,
+    SteadyCapacitanceVoltageDataArray,
     PointDataArray,
     CellDataArray,
     IndexedDataArray,

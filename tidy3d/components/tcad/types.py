@@ -11,9 +11,9 @@ from tidy3d.components.tcad.generation_recombination import (
 )
 from tidy3d.components.tcad.mobility import CaugheyThomasMobility
 from tidy3d.components.tcad.monitors.charge import (
-    StaticCapacitanceMonitor,
-    StaticChargeCarrierMonitor,
-    StaticVoltageMonitor,
+    SteadyCapacitanceMonitor,
+    SteadyChargeCarrierMonitor,
+    SteadyVoltageMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
 from tidy3d.components.tcad.source.coupled import HeatFromElectricSource
@@ -22,11 +22,11 @@ from tidy3d.components.tcad.source.heat import HeatSource, UniformHeatSource
 # types of monitors that are accepted by heat simulation
 HeatChargeMonitorTypes = Union[
     TemperatureMonitor,
-    StaticVoltageMonitor,
-    StaticChargeCarrierMonitor,
-    StaticCapacitanceMonitor,
+    SteadyVoltageMonitor,
+    SteadyChargeCarrierMonitor,
+    SteadyCapacitanceMonitor,
 ]
-ChargeMonitorTypes = (StaticVoltageMonitor, StaticChargeCarrierMonitor, StaticCapacitanceMonitor)
+ChargeMonitorTypes = (SteadyVoltageMonitor, SteadyChargeCarrierMonitor, SteadyCapacitanceMonitor)
 HeatChargeSourceTypes = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]
 ChargeSourceTypes = None
 HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)

@@ -43,7 +43,7 @@ class TemperatureMonitor(HeatChargeMonitor):
     """Temperature monitor."""
 
 
-class StaticVoltageMonitor(HeatChargeMonitor):
+class SteadyVoltageMonitor(HeatChargeMonitor):
     """Electric potential monitor."""
 
     @pd.root_validator(skip_on_failure=True)
@@ -55,19 +55,19 @@ class StaticVoltageMonitor(HeatChargeMonitor):
             log.warning(
                 "Currently, charge simulations support only unstructured monitors. If monitor "
                 f"'{name}' is associated with a charge simulation, please set it tu unstructured. "
-                f"This can be done with 'your_monitor = tidy3d.StaticVoltageMonitor(unstructured=True)'"
+                f"This can be done with 'your_monitor = tidy3d.SteadyVoltageMonitor(unstructured=True)'"
             )
         return values
 
 
-class StaticChargeCarrierMonitor(HeatChargeMonitor):
+class SteadyChargeCarrierMonitor(HeatChargeMonitor):
     """Free-carrier monitor for Charge simulations."""
 
     # NOTE: for the time being supporting unstructured
     unstructured = True
 
 
-class StaticCapacitanceMonitor(HeatChargeMonitor):
+class SteadyCapacitanceMonitor(HeatChargeMonitor):
     """Capacitance monitor associated with a charge simulation."""
 
     unstructured = True
@@ -76,7 +76,7 @@ class StaticCapacitanceMonitor(HeatChargeMonitor):
 # types of monitors that are accepted by heat simulation
 HeatChargeMonitorTypes = Union[
     TemperatureMonitor,
-    StaticVoltageMonitor,
-    StaticChargeCarrierMonitor,
-    StaticCapacitanceMonitor,
+    SteadyVoltageMonitor,
+    SteadyChargeCarrierMonitor,
+    SteadyCapacitanceMonitor,
 ]

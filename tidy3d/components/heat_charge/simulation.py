@@ -24,7 +24,7 @@ from ..bc_placement import (
     StructureStructureInterface,
 )
 from ..geometry.base import Box
-from ..materials.tcad.charge import AbstractChargeMedium, SemiconductorMedium
+from ..mediums.tcad.charge import AbstractChargeMedium, SemiconductorMedium
 from ..scene import Scene
 from ..structure import Structure
 from ..types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
@@ -43,9 +43,9 @@ from .charge_settings import ChargeRegimeType, ChargeToleranceSpec, ChargeTolera
 from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, UnstructuredGridType
 from .monitor import (
     HeatChargeMonitorTypes,
-    StaticCapacitanceMonitor,
-    StaticChargeCarrierMonitor,
-    StaticVoltageMonitor,
+    SteadyCapacitanceMonitor,
+    SteadyChargeCarrierMonitor,
+    SteadyVoltageMonitor,
     TemperatureMonitor,
 )
 from .source import (
@@ -275,7 +275,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         temp_monitors = [idx for idx, mnt in enumerate(val) if isinstance(mnt, TemperatureMonitor)]
         volt_monitors = [
-            idx for idx, mnt in enumerate(val) if isinstance(mnt, StaticVoltageMonitor)
+            idx for idx, mnt in enumerate(val) if isinstance(mnt, SteadyVoltageMonitor)
         ]
 
         failed_temp_mnt = [idx for idx in temp_monitors if idx in failed_solid_idx]
@@ -385,9 +385,9 @@ class HeatChargeSimulation(AbstractSimulation):
         """Makes sure that CHARGE simulations are set correctly."""
 
         ChargeMonitorType = (
-            StaticVoltageMonitor,
-            StaticChargeCarrierMonitor,
-            StaticCapacitanceMonitor,
+            SteadyVoltageMonitor,
+            SteadyChargeCarrierMonitor,
+            SteadyCapacitanceMonitor,
         )
 
         simulation_types = cls._check_simulation_types(values=values)
@@ -410,7 +410,7 @@ class HeatChargeSimulation(AbstractSimulation):
             if not any(isinstance(mnt, ChargeMonitorType) for mnt in monitors):
                 raise SetupError(
                     "CHARGE simulations require the definition of, at least, one of these monitors: "
-                    "'[StaticVoltageMonitor, StaticChargeCarrierMonitor, StaticCapacitanceMonitor]' "
+                    "'[SteadyVoltageMonitor, SteadyChargeCarrierMonitor, SteadyCapacitanceMonitor]' "
                     "but none have been defined."
                 )
 

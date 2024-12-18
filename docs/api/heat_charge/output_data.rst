@@ -23,7 +23,7 @@ Monitor Data
    :template: module.rst
 
    tidy3d.TemperatureData
-   tidy3d.StaticVoltageData
+   tidy3d.SteadyVoltageData
 
 
 Unstructured Data Classes

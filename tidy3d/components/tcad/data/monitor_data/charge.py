@@ -14,19 +14,19 @@ from tidy3d.components.tcad.data.monitor_data.abstract import (
     HeatChargeMonitorData,
 )
 from tidy3d.components.tcad.monitors.charge import (
-    StaticCapacitanceMonitor,
-    StaticChargeCarrierMonitor,
-    StaticVoltageMonitor,
+    SteadyCapacitanceMonitor,
+    SteadyChargeCarrierMonitor,
+    SteadyVoltageMonitor,
 )
 from tidy3d.constants import VOLT
 from tidy3d.log import log
 
 
 # Isn't this just static voltage?
-class StaticPotentialData(HeatChargeMonitorData):
+class SteadyPotentialData(HeatChargeMonitorData):
     """Class that stores electric potential from a charge simulation."""
 
-    monitor: StaticVoltageMonitor = pd.Field(
+    monitor: SteadyVoltageMonitor = pd.Field(
         ...,
         title="Voltage monitor",
         description="Electric potential monitor associated with a Charge simulation.",
@@ -52,7 +52,7 @@ class StaticPotentialData(HeatChargeMonitorData):
         return val
 
     @property
-    def symmetry_expanded_copy(self) -> StaticPotentialData:
+    def symmetry_expanded_copy(self) -> SteadyPotentialData:
         """Return copy of self with symmetry applied."""
 
         new_voltages = self._symmetry_expanded_copy(property=self.voltage_series.field_series)
@@ -69,10 +69,10 @@ class StaticPotentialData(HeatChargeMonitorData):
             return "V"
 
 
-class StaticChargeCarrierData(HeatChargeMonitorData):
+class SteadyChargeCarrierData(HeatChargeMonitorData):
     """Class that stores free carrier concentration in Charge simulations."""
 
-    monitor: StaticChargeCarrierMonitor = pd.Field(
+    monitor: SteadyChargeCarrierMonitor = pd.Field(
         ...,
         title="Free carrier monitor",
         description="Free carrier data associated with a Charge simulation.",
@@ -103,7 +103,7 @@ class StaticChargeCarrierData(HeatChargeMonitorData):
         return values
 
     @property
-    def symmetry_expanded_copy(self) -> StaticChargeCarrierData:
+    def symmetry_expanded_copy(self) -> SteadyChargeCarrierData:
         """Return copy of self with symmetry applied."""
 
         new_electrons = self._symmetry_expanded_copy(property=self.electrons.field_series)
@@ -122,10 +122,10 @@ class StaticChargeCarrierData(HeatChargeMonitorData):
             return "Electrons, Holes"
 
 
-class StaticCapacitanceData(HeatChargeMonitorData):
+class SteadyCapacitanceData(HeatChargeMonitorData):
     """Class that stores capacitance data from a Charge simulation."""
 
-    monitor: StaticCapacitanceMonitor = pd.Field(
+    monitor: SteadyCapacitanceMonitor = pd.Field(
         ...,
         title="Capacitance monitor",
         description="Capacitance data associated with a Charge simulation.",
@@ -163,24 +163,24 @@ class StaticCapacitanceData(HeatChargeMonitorData):
         return ""
 
 
-class StaticVoltageData(HeatChargeMonitorData):
+class SteadyVoltageData(HeatChargeMonitorData):
     """Data associated with a :class:`VoltageMonitor`: spatial electric potential field.
 
     Example
     -------
-    >>> from tidy3d import StaticVoltageMonitor, SpatialDataArray
+    >>> from tidy3d import SteadyVoltageMonitor, SpatialDataArray
     >>> import numpy as np
     >>> voltage_data = SpatialDataArray(
     ...     np.ones((2, 3, 4)), coords={"x": [0, 1], "y": [0, 1, 2], "z": [0, 1, 2, 3]}
     ... )
-    >>> voltage_mnt = StaticVoltageMonitor(size=(1, 2, 3), name="voltage")
-    >>> voltage_mnt_data = StaticVoltageData(
+    >>> voltage_mnt = SteadyVoltageMonitor(size=(1, 2, 3), name="voltage")
+    >>> voltage_mnt_data = SteadyVoltageData(
     ...     monitor=voltage_mnt, voltage=voltage_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
     ... )
     >>> voltage_mnt_data_expanded = voltage_mnt_data.symmetry_expanded_copy
     """
 
-    monitor: StaticVoltageMonitor = pd.Field(
+    monitor: SteadyVoltageMonitor = pd.Field(
         ..., title="Monitor", description="Electric potential monitor associated with the data."
     )
 
@@ -214,7 +214,7 @@ class StaticVoltageData(HeatChargeMonitorData):
         return val
 
     @property
-    def symmetry_expanded_copy(self) -> StaticVoltageData:
+    def symmetry_expanded_copy(self) -> SteadyVoltageData:
         """Return copy of self with symmetry applied."""
 
         new_phi = self._symmetry_expanded_copy(property=self.voltage)

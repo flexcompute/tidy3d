@@ -27,15 +27,15 @@ from tidy3d.log import log
 # from ...log import log
 # from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 # from ..base_sim.data.monitor_data import AbstractMonitorData
-# from ..data.data_array import DCCapacitanceDataArray, SpatialDataArray
+# from ..data.data_array import SteadyCapacitanceVoltageDataArray, SpatialDataArray
 # from ..data.dataset import IndexedDataArray, TetrahedralGridDataset, TriangularGridDataset
 # from ..types import Coordinate, ScalarSymmetry, annotate_type
 # from .monitor import (
-#     StaticCapacitanceMonitor,
-#     StaticChargeCarrierMonitor,
+#     SteadyCapacitanceMonitor,
+#     SteadyChargeCarrierMonitor,
 #     HeatChargeMonitorTypes,
 #     TemperatureMonitor,
-#     StaticVoltageMonitor,
+#     SteadyVoltageMonitor,
 # )
 #
 # FieldDataset = Union[

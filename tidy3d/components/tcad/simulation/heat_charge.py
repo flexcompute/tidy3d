@@ -18,6 +18,8 @@ from tidy3d.components.bc_placement import (
     StructureStructureInterface,
 )
 from tidy3d.components.geometry.base import Box
+from tidy3d.components.mediums.tcad.charge import AbstractChargeMedium, SemiconductorMedium
+from tidy3d.components.mediums.tcad.heat import SolidSpec
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.types import ElectricalAnalysisTypes, TransferFunctionDC
 from tidy3d.components.structure import Structure
@@ -40,9 +42,8 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
-from tidy3d.components.tcad.materials.heat import SolidSpec
 from tidy3d.components.tcad.monitors.charge import (
-    StaticVoltageMonitor,
+    SteadyVoltageMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import (
     TemperatureMonitor,
@@ -58,6 +59,7 @@ from tidy3d.components.tcad.source.heat import (
     UniformHeatSource,
 )
 from tidy3d.components.tcad.types import (
+    ChargeMonitorTypes,
     ChargeSourceTypes,
     ElectricBCTypes,
     HeatBCTypes,
@@ -271,7 +273,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         temp_monitors = [idx for idx, mnt in enumerate(val) if isinstance(mnt, TemperatureMonitor)]
         volt_monitors = [
-            idx for idx, mnt in enumerate(val) if isinstance(mnt, StaticVoltageMonitor)
+            idx for idx, mnt in enumerate(val) if isinstance(mnt, SteadyVoltageMonitor)
         ]
 
         failed_temp_mnt = [idx for idx in temp_monitors if idx in failed_solid_idx]
@@ -380,12 +382,6 @@ class HeatChargeSimulation(AbstractSimulation):
     def check_charge_simulation(cls, values):
         """Makes sure that CHARGE simulations are set correctly."""
 
-        ChargeMonitorType = (
-            StaticVoltageMonitor,
-            StaticChargeCarrierMonitor,
-            StaticCapacitanceMonitor,
-        )
-
         simulation_types = cls._check_simulation_types(values=values)
 
         if TCADAnalysisTypes.CHARGE in simulation_types:
@@ -403,10 +399,10 @@ class HeatChargeSimulation(AbstractSimulation):
 
             # check that we have at least one charge monitor
             monitors = values["monitors"]
-            if not any(isinstance(mnt, ChargeMonitorType) for mnt in monitors):
+            if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in monitors):
                 raise SetupError(
                     "CHARGE simulations require the definition of, at least, one of these monitors: "
-                    "'[StaticVoltageMonitor, StaticChargeCarrierMonitor, StaticCapacitanceMonitor]' "
+                    "'[SteadyVoltageMonitor, SteadyChargeCarrierMonitor, SteadyCapacitanceMonitor]' "
                     "but none have been defined."
                 )
 
