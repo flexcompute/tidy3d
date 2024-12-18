@@ -748,7 +748,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return None
 
     @property
-    def electric(self):
+    def electrical(self):
         # TODO add error
         return None
 

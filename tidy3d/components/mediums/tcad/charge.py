@@ -26,7 +26,21 @@ from tidy3d.constants import (
 
 
 class AbstractChargeMedium(Medium):
-    pass
+    @property
+    def electrical(self):
+        return None
+
+    @property
+    def optical(self):
+        return None
+
+    @property
+    def charge(self):
+        return self
+
+    @property
+    def heat(self):
+        return None
 
 
 class ChargeInsulatorMedium(AbstractChargeMedium):

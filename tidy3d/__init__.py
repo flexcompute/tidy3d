@@ -180,13 +180,6 @@ from tidy3d.components.heat_charge.source import (
     UniformHeatSource,
 )
 
-# heat
-# heat
-from tidy3d.components.heat_charge_spec import (
-    FluidSpec,
-    SolidSpec,
-)
-
 # lumped elements
 from tidy3d.components.lumped_element import (
     AdmittanceNetwork,
@@ -232,9 +225,19 @@ from tidy3d.components.medium import (
     TwoPhotonAbsorption,
     medium_from_nk,
 )
+from tidy3d.components.mediums.multi_physics import MultiPhysicsMedium
 from tidy3d.components.mediums.tcad.charge import (
     AbstractChargeMedium,
+    ChargeConductorMedium,
+    ChargeInsulatorMedium,
     SemiconductorMedium,
+)
+
+# heat
+# heat
+from tidy3d.components.mediums.tcad.heat import (
+    FluidSpec,
+    SolidSpec,
 )
 
 # modes
@@ -383,6 +386,8 @@ __all__ = [
     "ClipOperation",
     "CoaxialLumpedResistor",
     "AbstractChargeMedium",
+    "ChargeConductorMedium",
+    "ChargeInsulatorMedium",
     "ContinuousWave",
     "ContinuousWaveTimeModulation",
     "ConvectionBC",
@@ -491,7 +496,7 @@ __all__ = [
     "HeatBoundarySpec",
     "HeatChargeBoundarySpec",
     "HeatChargeSimulation",
-    "HeatChargeSimulationData",
+    "HeatChargeSimuMediumlationData",
     "HeatDataArray",
     "HeatFluxBC",
     "HeatFromElectricSource",

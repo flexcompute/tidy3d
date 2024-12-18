@@ -33,15 +33,12 @@ def make_heat_charge_mediums():
         heat_spec=td.FluidSpec(),
         name="fluid_medium",
     )
-    solid_medium = td.Medium(
+    solid_medium_heat = td.Medium(
         permittivity=5,
         conductivity=0.01,
         heat_spec=td.SolidSpec(
             capacity=2,
             conductivity=3,
-        ),
-        electric_spec=td.AbstractChargeMedium(
-            conductivity=1,
         ),
         name="solid_medium",
     )
