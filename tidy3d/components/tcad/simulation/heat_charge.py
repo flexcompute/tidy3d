@@ -402,7 +402,7 @@ class HeatChargeSimulation(AbstractSimulation):
             if not any(isinstance(mnt, ChargeMonitorTypes) for mnt in monitors):
                 raise SetupError(
                     "CHARGE simulations require the definition of, at least, one of these monitors: "
-                    "'[SteadyVoltageMonitor, SteadyChargeCarrierMonitor, SteadyCapacitanceMonitor]' "
+                    "'[SteadyVoltageMonitor, SteadyFreeChargeCarrierMonitor, SteadyCapacitanceMonitor]' "
                     "but none have been defined."
                 )
 

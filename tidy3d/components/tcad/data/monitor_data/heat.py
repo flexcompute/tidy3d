@@ -32,7 +32,7 @@ from tidy3d.log import log
 # from ..types import Coordinate, ScalarSymmetry, annotate_type
 # from .monitor import (
 #     SteadyCapacitanceMonitor,
-#     SteadyChargeCarrierMonitor,
+#     SteadyFreeChargeCarrierMonitor,
 #     HeatChargeMonitorTypes,
 #     TemperatureMonitor,
 #     SteadyVoltageMonitor,

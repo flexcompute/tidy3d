@@ -161,7 +161,7 @@ from tidy3d.components.heat_charge.grid import DistanceUnstructuredGrid, Uniform
 from tidy3d.components.heat_charge.heat.simulation import HeatSimulation
 from tidy3d.components.heat_charge.monitor import (
     SteadyCapacitanceMonitor,
-    SteadyChargeCarrierMonitor,
+    SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
     TemperatureMonitor,
 )
@@ -584,7 +584,7 @@ __all__ = [
     "Staircasing",
     "SteadyCapacitanceData",
     "SteadyCapacitanceMonitor",
-    "SteadyChargeCarrierMonitor",
+    "SteadyFreeChargeCarrierMonitor",
     "SteadyFreeCarrierData",
     "SteadyPotentialData",
     "SteadyVoltageData",

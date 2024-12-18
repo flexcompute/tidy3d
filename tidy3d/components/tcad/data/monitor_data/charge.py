@@ -15,7 +15,7 @@ from tidy3d.components.tcad.data.monitor_data.abstract import (
 )
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
-    SteadyChargeCarrierMonitor,
+    SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
 )
 from tidy3d.constants import VOLT
@@ -72,7 +72,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
 class SteadyChargeCarrierData(HeatChargeMonitorData):
     """Class that stores free carrier concentration in Charge simulations."""
 
-    monitor: SteadyChargeCarrierMonitor = pd.Field(
+    monitor: SteadyFreeChargeCarrierMonitor = pd.Field(
         ...,
         title="Free carrier monitor",
         description="Free carrier data associated with a Charge simulation.",

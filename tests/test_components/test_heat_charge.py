@@ -814,7 +814,7 @@ class TestCharge:
     # monitors
     @pytest.fixture(scope="class")
     def charge_global_mnt(self):
-        return td.SteadyChargeCarrierMonitor(
+        return td.SteadyFreeChargeCarrierMonitor(
             center=(0, 0, 0),
             size=(td.inf, td.inf, td.inf),
             name="charge_global_mnt",

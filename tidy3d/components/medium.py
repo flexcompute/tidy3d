@@ -613,7 +613,11 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
-    """A medium within which electromagnetic waves propagate."""
+    """
+    A medium within which electromagnetic waves propagate.
+
+    In order to enable multiphysics compatibility
+    """
 
     name: str = pd.Field(None, title="Name", description="Optional unique name for medium.")
 
@@ -733,7 +737,10 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "``Simulation``.",
         discriminator=TYPE_TAG_STR,
     )
-    heat = heat_spec
+
+    @property
+    def heat(self):
+        return self.heat_spec
 
     @property
     def charge(self):

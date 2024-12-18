@@ -19,7 +19,7 @@ from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
     HeatChargeMonitorTypes,
     SteadyCapacitanceMonitor,
-    SteadyChargeCarrierMonitor,
+    SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
     TemperatureMonitor,
 )
@@ -326,7 +326,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
 class SteadyFreeCarrierData(HeatChargeMonitorData):
     """Class that stores free carrier concentration in Charge simulations."""
 
-    monitor: SteadyChargeCarrierMonitor = pd.Field(
+    monitor: SteadyFreeChargeCarrierMonitor = pd.Field(
         ...,
         title="Free carrier monitor",
         description="Free carrier data associated with a Charge simulation.",

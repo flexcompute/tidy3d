@@ -44,7 +44,7 @@ from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, Unstructure
 from .monitor import (
     HeatChargeMonitorTypes,
     SteadyCapacitanceMonitor,
-    SteadyChargeCarrierMonitor,
+    SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
     TemperatureMonitor,
 )
@@ -386,7 +386,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         ChargeMonitorType = (
             SteadyVoltageMonitor,
-            SteadyChargeCarrierMonitor,
+            SteadyFreeChargeCarrierMonitor,
             SteadyCapacitanceMonitor,
         )
 
@@ -410,7 +410,7 @@ class HeatChargeSimulation(AbstractSimulation):
             if not any(isinstance(mnt, ChargeMonitorType) for mnt in monitors):
                 raise SetupError(
                     "CHARGE simulations require the definition of, at least, one of these monitors: "
-                    "'[SteadyVoltageMonitor, SteadyChargeCarrierMonitor, SteadyCapacitanceMonitor]' "
+                    "'[SteadyVoltageMonitor, SteadyFreeChargeCarrierMonitor, SteadyCapacitanceMonitor]' "
                     "but none have been defined."
                 )
 

@@ -37,7 +37,7 @@ from tidy3d.components.types import Coordinate, ScalarSymmetry
 # from ..types import Coordinate, ScalarSymmetry, annotate_type
 # from .monitor import (
 #     SteadyCapacitanceMonitor,
-#     SteadyChargeCarrierMonitor,
+#     SteadyFreeChargeCarrierMonitor,
 #     HeatChargeMonitorTypes,
 #     TemperatureMonitor,
 #     SteadyVoltageMonitor,

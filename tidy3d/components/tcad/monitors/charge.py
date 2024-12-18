@@ -21,7 +21,7 @@ class SteadyVoltageMonitor(HeatChargeMonitor):
         return values
 
 
-class SteadyChargeCarrierMonitor(HeatChargeMonitor):
+class SteadyFreeChargeCarrierMonitor(HeatChargeMonitor):
     """Free-carrier monitor for Charge simulations."""
 
     # NOTE: for the time being supporting unstructured
