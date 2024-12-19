@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import copy
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Union
+from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
 from ...constants import KELVIN, VOLT
 from ...log import log
-from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from ..base import skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
-from ..data.data_array import DCCapacitanceDataArray, SpatialDataArray, IndexedDataArray
-from ..data.utils import TetrahedralGridDataset, TriangularGridDataset, DCTriangularGridDataset, DCTetrahedralGridDataset
+from ..data.data_array import DataArray, DCCapacitanceDataArray, SpatialDataArray
+from ..data.utils import (
+    DCTetrahedralGridDataset,
+    DCTriangularGridDataset,
+    TetrahedralGridDataset,
+    TriangularGridDataset,
+)
 from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
     CapacitanceMonitor,
@@ -30,6 +35,7 @@ FieldDataset = Union[
 
 
 DCFieldDataset = Union[DCTriangularGridDataset, DCTetrahedralGridDataset]
+
 
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
@@ -310,11 +316,11 @@ class FreeCarrierData(HeatChargeMonitorData):
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons: HeatChargeDataset = pd.Field(
+    electrons: DCFieldDataset = pd.Field(
         None, title="Electrons series", description="Contains the electrons."
     )
 
-    holes: HeatChargeDataset = pd.Field(
+    holes: DCFieldDataset = pd.Field(
         None, title="Holes series", description="Contains the electrons."
     )
 
@@ -328,8 +334,8 @@ class FreeCarrierData(HeatChargeMonitorData):
         """Warn if no data provided."""
 
         mnt = values.get("monitor")
-        electrons = values.get("electrons_series")
-        holes = values.get("holes_series")
+        electrons = values.get("electrons")
+        holes = values.get("holes")
 
         if electrons is None or holes is None:
             log.warning(
@@ -348,7 +354,7 @@ class FreeCarrierData(HeatChargeMonitorData):
 
         return self.updated_copy(
             electrons=new_electrons,
-            holes=new_holes, 
+            holes=new_holes,
             symmetry=(0, 0, 0),
         )
 
