@@ -17,13 +17,13 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, no
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     if dataset_type_ind == 0:
-        dataset_type = td.TriangularGridDataset 
+        dataset_type = td.TriangularGridDataset
         values_type = td.IndexedDataArray
         extra_dims = {}
 
     if dataset_type_ind == 1:
-        dataset_type = td.DCTriangularGridDataset 
-        values_type = td.DCIndexedDataArray
+        dataset_type = td.TriangularGridVoltageDataset
+        values_type = td.IndexVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
 
     # basic create
@@ -309,9 +309,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, no
             assert tri_grid == tri_grid_loaded
 
         with pytest.raises(AttributeError):
-            tri_grid_loaded = dataset_type.from_vtu(
-                tmp_path / "tri_grid_test.vtu", field="blah"
-            )
+            tri_grid_loaded = dataset_type.from_vtu(tmp_path / "tri_grid_test.vtu", field="blah")
 
     # test ariphmetic operations
     def operation(arr):
@@ -331,13 +329,13 @@ def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, n
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     if dataset_type_ind == 0:
-        dataset_type = td.TetrahedralGridDataset 
+        dataset_type = td.TetrahedralGridDataset
         values_type = td.IndexedDataArray
         extra_dims = {}
 
     if dataset_type_ind == 1:
-        dataset_type = td.DCTetrahedralGridDataset 
-        values_type = td.DCIndexedDataArray
+        dataset_type = td.TetrahedralGridVoltageDataset
+        values_type = td.IndexVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
 
     # basic create
@@ -530,7 +528,6 @@ def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, n
                     x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
                 )
 
-
         # outside of grid
         no_intersection = tet_grid.interp(
             x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
@@ -566,7 +563,7 @@ def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, n
             tet_grid_loaded = dataset_type.from_vtu(tmp_path / "tet_grid_test.vtu")
     else:
         tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
-        
+
         if len(extra_dims) == 0:
             tet_grid_loaded = dataset_type.from_vtu(tmp_path / "tet_grid_test.vtu")
             assert tet_grid == tet_grid_loaded
@@ -581,9 +578,7 @@ def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, n
             assert tet_grid == tet_grid_loaded
 
         with pytest.raises(AttributeError):
-            dataset_type.from_vtu(
-                tmp_path / "tet_grid_test.vtu", field="blah"
-            )
+            dataset_type.from_vtu(tmp_path / "tet_grid_test.vtu", field="blah")
 
     # test ariphmetic operations
     def operation(arr):

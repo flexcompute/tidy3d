@@ -15,10 +15,10 @@ from ..base import skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
 from ..data.data_array import DataArray, DCCapacitanceDataArray, SpatialDataArray
 from ..data.utils import (
-    DCTetrahedralGridDataset,
-    DCTriangularGridDataset,
     TetrahedralGridDataset,
+    TetrahedralGridVoltageDataset,
     TriangularGridDataset,
+    TriangularGridVoltageDataset,
 )
 from ..types import Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
@@ -34,7 +34,7 @@ FieldDataset = Union[
 ]
 
 
-DCFieldDataset = Union[DCTriangularGridDataset, DCTetrahedralGridDataset]
+FieldVoltageDataset = Union[TriangularGridVoltageDataset, TetrahedralGridVoltageDataset]
 
 
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
@@ -268,7 +268,7 @@ class PotentialData(HeatChargeMonitorData):
         description="Electric potential monitor associated with a Charge simulation.",
     )
 
-    potential: DCFieldDataset = pd.Field(
+    potential: FieldVoltageDataset = pd.Field(
         None, title="Voltage series", description="Contains the voltages."
     )
 
@@ -316,11 +316,11 @@ class FreeCarrierData(HeatChargeMonitorData):
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons: DCFieldDataset = pd.Field(
+    electrons: FieldVoltageDataset = pd.Field(
         None, title="Electrons series", description="Contains the electrons."
     )
 
-    holes: DCFieldDataset = pd.Field(
+    holes: FieldVoltageDataset = pd.Field(
         None, title="Holes series", description="Contains the electrons."
     )
 

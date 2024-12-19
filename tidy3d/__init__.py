@@ -55,8 +55,8 @@ from .components.data.data_array import (
     FluxDataArray,
     FluxTimeDataArray,
     HeatDataArray,
-    DCIndexedDataArray,
     IndexedDataArray,
+    IndexVoltageDataArray,
     ModeAmpsDataArray,
     ModeIndexDataArray,
     PointDataArray,
@@ -65,19 +65,13 @@ from .components.data.data_array import (
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     SpatialDataArray,
-    DCSpatialDataArray,
+    SpatialVoltageDataArray,
 )
 from .components.data.dataset import (
     FieldDataset,
     FieldTimeDataset,
     ModeSolverDataset,
     PermittivityDataset,
-)
-from .components.data.utils import (
-    TetrahedralGridDataset,
-    TriangularGridDataset,
-    DCTetrahedralGridDataset,
-    DCTriangularGridDataset,
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
@@ -95,6 +89,12 @@ from .components.data.monitor_data import (
     PermittivityData,
 )
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from .components.data.utils import (
+    TetrahedralGridDataset,
+    TetrahedralGridVoltageDataset,
+    TriangularGridDataset,
+    TriangularGridVoltageDataset,
+)
 from .components.eme.data.dataset import (
     EMECoefficientDataset,
     EMEFieldDataset,
@@ -444,6 +444,7 @@ __all__ = [
     "ScalarModeFieldCylindricalDataArray",
     "ScalarFieldTimeDataArray",
     "SpatialDataArray",
+    "SpatialVoltageDataArray",
     "ModeAmpsDataArray",
     "ModeIndexDataArray",
     "FluxDataArray",
@@ -578,10 +579,13 @@ __all__ = [
     "PointDataArray",
     "CellDataArray",
     "IndexedDataArray",
+    "IndexVoltageDataArray",
     "DCIVCurveDataArray",
     "DCCapacitanceDataArray",
     "TriangularGridDataset",
+    "TriangularGridVoltageDataset",
     "TetrahedralGridDataset",
+    "TetrahedralGridVoltageDataset",
     "medium_from_nk",
     "SubpixelSpec",
     "Staircasing",

@@ -173,8 +173,10 @@ class HeatChargeSimulationData(AbstractSimulationData):
             raise DataError(f"field_name '{field_name}' not found in data.")
 
         field = monitor_data.field_components[field_name]
+        if field is None:
+            raise DataError(f"Field {field_name} is empty and cannot be plotted.")
         # forward field name to actual data so it gets displayed
-        field.name = field_name
+        # field.name = field_name
         field_data = self._field_component_value(field, val)
 
         if isinstance(monitor_data, TemperatureData):

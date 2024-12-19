@@ -1282,15 +1282,15 @@ class IndexedDataArray(DataArray):
     _dims = ("index",)
 
 
-class DCIndexedDataArray(DataArray):
-    """Stores a one-dimensional array enumerated by coordinate ``index``. It is typically used
-    in conjuction with a ``PointDataArray`` to store point-associated data or a ``CellDataArray``
-    to store cell-associated data.
+class IndexVoltageDataArray(DataArray):
+    """Stores a two-dimensional array with coordinates ``index`` and ``voltage``, where
+    ``index`` is usually associated with ``PointDataArray`` and ``voltage`` indicates at what
+    bias/DC-voltage the data was obtained with.
 
     Example
     -------
-    >>> indexed_array = IndexedDataArray(
-    ...     (1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3))
+    >>> indexed_array = IndexVoltageDataArray(
+    ...     (1+1j) * np.random.random((3,2)), coords=dict(index=np.arange(3), voltage=[-1, 1])
     ... )
     """
 
@@ -1298,17 +1298,17 @@ class DCIndexedDataArray(DataArray):
     _dims = ("index", "voltage")
 
 
-class DCSpatialDataArray(AbstractSpatialDataArray):
-    """Spatial distribution in the frequency-domain.
+class SpatialVoltageDataArray(AbstractSpatialDataArray):
+    """Spatial distribution with voltage mapping.
 
     Example
     -------
     >>> x = [1,2]
     >>> y = [2,3,4]
     >>> z = [3,4,5,6]
-    >>> f = [2e14, 3e14]
-    >>> coords = dict(x=x, y=y, z=z, f=f)
-    >>> fd = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    >>> v = [-1, 1]
+    >>> coords = dict(x=x, y=y, z=z, voltage=v)
+    >>> fd = SpatialVoltageDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
     """
 
     __slots__ = ()
@@ -1350,6 +1350,6 @@ DATA_ARRAY_TYPES = [
     PointDataArray,
     CellDataArray,
     IndexedDataArray,
-    DCIndexedDataArray,
+    IndexVoltageDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
