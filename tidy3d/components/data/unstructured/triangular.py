@@ -20,10 +20,15 @@ from ...viz import add_ax_if_none, equal_aspect, plot_params_grid
 from ..data_array import (
     CellDataArray,
     IndexedDataArray,
+    IndexVoltageDataArray,
     PointDataArray,
-    DCIndexedDataArray,
 )
-from .base import UnstructuredGridDataset, DEFAULT_MAX_SAMPLES_PER_STEP, DEFAULT_MAX_CELLS_PER_STEP, DEFAULT_TOLERANCE_CELL_FINDING
+from .base import (
+    DEFAULT_MAX_CELLS_PER_STEP,
+    DEFAULT_MAX_SAMPLES_PER_STEP,
+    DEFAULT_TOLERANCE_CELL_FINDING,
+    UnstructuredGridDataset,
+)
 
 
 class TriangularGridDataset(UnstructuredGridDataset):
@@ -142,7 +147,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
 
         # data values are read directly into Tidy3D array
-        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy), field, values_type, expect_complex)
+        values = cls._get_values_from_vtk(
+            vtk_obj, len(points_numpy), field, values_type, expect_complex
+        )
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
@@ -221,7 +228,13 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # perform slicing in vtk and get unprocessed points and values
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
         points_numpy = vtk["vtk_to_numpy"](slice_vtk.GetPoints().GetData())
-        values = self._get_values_from_vtk(slice_vtk, len(points_numpy), field=self._values_coords_dict, values_type=self._values_type, expect_complex=self.is_complex)
+        values = self._get_values_from_vtk(
+            slice_vtk,
+            len(points_numpy),
+            field=self._values_coords_dict,
+            values_type=self._values_type,
+            expect_complex=self.is_complex,
+        )
 
         # axis of the resulting line
         slice_axis = 3 - self.normal_axis - axis
@@ -240,7 +253,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         new_shape = new_shape + list(np.shape(values.data))[1:]
         values_reshaped = np.reshape(values.data, new_shape)
 
-        return XrDataArray(values_reshaped, coords=coords_dict, name=self.values.name).sortby("xyz"[slice_axis])
+        return XrDataArray(values_reshaped, coords=coords_dict, name=self.values.name).sortby(
+            "xyz"[slice_axis]
+        )
 
     @requires_vtk
     def reflect(
@@ -358,9 +373,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         coords_dict = dict(x=x, y=y, z=z)
         coords_dict.update(self._values_coords_dict)
 
-        return XrDataArray(
-            interp_broadcasted, coords=coords_dict, name=self.values.name
-        )
+        return XrDataArray(interp_broadcasted, coords=coords_dict, name=self.values.name)
 
     def _interp_py(
         self,
@@ -424,7 +437,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         method: Literal[None, "nearest", "pad", "ffill", "backfill", "bfill"] = None,
         **sel_kwargs,
     ) -> XrDataArray:
-        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument 
+        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
         among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
         grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to
         .sel() xarray function. Parameter 'method' applies only to non-spatial dimensions.
@@ -637,10 +650,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
         return ax
 
 
-
-class DCTriangularGridDataset(TriangularGridDataset):
-    """Dataset for storing triangular grid data. Data values are associated with the nodes of
-    the grid.
+class TriangularGridVoltageDataset(TriangularGridDataset):
+    """Dataset for storing triangular grid data at different voltages. Data values
+    at each voltage are associated with the nodes of the grid.
 
     Note
     ----
@@ -661,10 +673,11 @@ class DCTriangularGridDataset(TriangularGridDataset):
     ... )
     >>>
     >>> tri_grid_values = IndexedDataArray(
-    ...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),
+    ...     [[1.0, 2.0, 3.0, 4.0],[5.0, 6.0, 7.0, 8.0]],
+    ...     coords=dict(index=np.arange(4), voltage=[-1.0, 1.0]),
     ... )
     >>>
-    >>> tri_grid = TriangularGridDataset(
+    >>> tri_grid = TriangularGridVoltageDataset(
     ...     normal_axis=1,
     ...     normal_pos=0,
     ...     points=tri_grid_points,
@@ -673,7 +686,7 @@ class DCTriangularGridDataset(TriangularGridDataset):
     ... )
     """
 
-    values: DCIndexedDataArray = pd.Field(
+    values: IndexVoltageDataArray = pd.Field(
         ...,
         title="Point Values",
         description="Values stored at the grid points.",

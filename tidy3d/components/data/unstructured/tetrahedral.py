@@ -15,11 +15,11 @@ from ...types import ArrayLike, Axis, Bound, Coordinate
 from ..data_array import (
     CellDataArray,
     IndexedDataArray,
+    IndexVoltageDataArray,
     PointDataArray,
-    DCIndexedDataArray,
 )
 from .base import UnstructuredGridDataset
-from .triangular import TriangularGridDataset, DCTriangularGridDataset
+from .triangular import TriangularGridDataset, TriangularGridVoltageDataset
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):
@@ -103,7 +103,9 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         # read point, cells, and values info from a vtk instance
         cells_numpy = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetConnectivityArray())
         points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
-        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy), field, values_type, expect_complex)
+        values = cls._get_values_from_vtk(
+            vtk_obj, len(points_numpy), field, values_type, expect_complex
+        )
 
         # verify cell_types
         cells_types = vtk["vtk_to_numpy"](vtk_obj.GetCellTypesArray())
@@ -289,7 +291,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         method=None,
         **sel_kwargs,
     ) -> Union[TriangularGridDataset, XrDataArray]:
-        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument 
+        """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
         among 'x', 'y', 'z' or non-spatial dimensions through additional arguments. Along spatial dimensions a suitable slicing of
         grid is applied (plane slice, line slice, or interpolation). Selection along non-spatial dimensions is forwarded to
         .sel() xarray function. Parameter 'method' applies only to non-spatial dimensions.
@@ -347,9 +349,9 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         return self_after_non_spatial_sel
 
 
-class DCTetrahedralGridDataset(TetrahedralGridDataset):
-    """Dataset for storing tetrahedral grid data. Data values are associated with the nodes of
-    the grid.
+class TetrahedralGridVoltageDataset(TetrahedralGridDataset):
+    """Dataset for storing tetrahedral grid data at different voltages. Data values
+    at each voltage are associated with the nodes of the grid.
 
     Note
     ----
@@ -370,10 +372,11 @@ class DCTetrahedralGridDataset(TetrahedralGridDataset):
     ... )
     >>>
     >>> tet_grid_values = IndexedDataArray(
-    ...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),
+    ...     [[1.0, 2.0, 3.0, 4.0],[5.0, 6.0, 7.0, 8.0]],
+    ...     coords=dict(index=np.arange(4), voltage=[-1.0, 1.0]),
     ... )
     >>>
-    >>> tet_grid = TetrahedralGridDataset(
+    >>> tet_grid = TetrahedralGridVoltageDataset(
     ...     points=tet_grid_points,
     ...     cells=tet_grid_cells,
     ...     values=tet_grid_values,
@@ -383,9 +386,9 @@ class DCTetrahedralGridDataset(TetrahedralGridDataset):
     @classmethod
     def _traingular_dataset_type(cls) -> type:
         """Corresponding class for triangular grid datasets. We need to know this when creating a triangular slice from a tetrahedral grid."""
-        return DCTriangularGridDataset
+        return TriangularGridVoltageDataset
 
-    values: DCIndexedDataArray = pd.Field(
+    values: IndexVoltageDataArray = pd.Field(
         ...,
         title="Point Values",
         description="Values stored at the grid points.",
