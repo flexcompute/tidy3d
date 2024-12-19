@@ -869,11 +869,21 @@ class Scene(Tidy3dBaseModel):
         if alpha <= 0:
             return ax
 
-        if alpha < 1 and not isinstance(self.medium, AbstractCustomMedium):
+        need_filtered_shaped = False
+        if property == "eps": 
+            need_filtered_shaped = alpha < 1 and not isinstance(self.medium, AbstractCustomMedium)
+        if property in ["donors", "acceptors", "doping"]:
+            need_filtered_shaped = alpha < 1
+
+        if need_filtered_shaped:
             axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
             plane = Box(center=center, size=size)
+            # for doping background structure could be a non-doping structure
+            # that needs to be rendered
+            if property in ["donors", "acceptors", "doping"]:
+                structures = [self.background_structure] + list(structures)
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
             structures = [self.background_structure] + list(structures)
@@ -905,16 +915,26 @@ class Scene(Tidy3dBaseModel):
                     property_max = acceptor_limits[1]
 
         for medium, shape in medium_shapes:
-            # if the background medium is custom medium, it needs to be rendered separately
-            if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
-                continue
             if property in ["doping", "acceptors", "donors"]:
-                if not isinstance(medium, AbstractCustomMedium):
-                    if isinstance(medium.electric_spec, SemiConductorSpec):
-                        self._pcolormesh_shape_doping_box(
-                            x, y, z, alpha, medium, property_min, property_max, shape, ax, property
-                        )
+                if not isinstance(medium.electric_spec, SemiConductorSpec):
+                    ax = self._plot_shape_structure_heat_charge_property(
+                        alpha=alpha,
+                        medium=medium,
+                        property_val_min=property_min,
+                        property_val_max=property_max,
+                        reverse=reverse,
+                        shape=shape,
+                        ax=ax,
+                        property="doping",
+                    )
+                else:
+                    self._pcolormesh_shape_doping_box(
+                        x, y, z, alpha, medium, property_min, property_max, shape, ax, property
+                    )
             else:
+                # if the background medium is custom medium, it needs to be rendered separately
+                if medium == self.medium and need_filtered_shaped:
+                    continue
                 # no need to add patches for custom medium
                 if not isinstance(medium, AbstractCustomMedium):
                     ax = self._plot_shape_structure_eps(
@@ -1516,6 +1536,8 @@ class Scene(Tidy3dBaseModel):
             medium.electric_spec, ConductorSpec
         ):
             cond_medium = medium.electric_spec.conductivity
+        elif property == "doping":
+            cond_medium = None
 
         if cond_medium is not None:
             delta_cond = cond_medium - property_val_min
@@ -1711,8 +1733,9 @@ class Scene(Tidy3dBaseModel):
 
         acceptors_lims = [1e50, -1e50]
         donors_lims = [1e50, -1e50]
+        
 
-        for struct in self.structures:
+        for struct in [self.background_structure] + list(self.structures):
             if isinstance(struct.medium.electric_spec, SemiConductorSpec):
                 electric_spec = struct.medium.electric_spec
                 for doping, limits in zip(
