@@ -10,13 +10,11 @@ import xarray as xr
 from ..types import ArrayLike, annotate_type
 from .data_array import DataArray, SpatialDataArray
 from .unstructured.base import UnstructuredGridDataset
-from .unstructured.tetrahedral import TetrahedralGridDataset, TetrahedralGridVoltageDataset
-from .unstructured.triangular import TriangularGridDataset, TriangularGridVoltageDataset
+from .unstructured.tetrahedral import TetrahedralGridDataset
+from .unstructured.triangular import TriangularGridDataset
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
-UnstructuredGridVoltageDatasetType = Union[
-    TriangularGridVoltageDataset, TetrahedralGridVoltageDataset
-]
+
 CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
 CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(UnstructuredGridDatasetType)]
 
