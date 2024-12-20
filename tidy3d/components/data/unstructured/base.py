@@ -255,8 +255,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """Non-spatial dimensions are corresponding coordinate values of stored data."""
         coord_dict = {dim: self.values.coords[dim].data for dim in self.values.dims}
         _ = coord_dict.pop("index")
-        if "voltage" in coord_dict.keys():
-            _ = coord_dict.pop("voltage")
         return coord_dict
 
     @cached_property

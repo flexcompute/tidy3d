@@ -16,6 +16,7 @@ from ..base_sim.data.monitor_data import AbstractMonitorData
 from ..data.data_array import (
     DataArray,
     DCCapacitanceDataArray,
+    IndexedDataArray,
     IndexVoltageDataArray,
     SpatialDataArray,
 )
@@ -187,7 +188,7 @@ class TemperatureData(HeatChargeMonitorData):
         mnt = values.get("monitor")
 
         if isinstance(val, TetrahedralGridDataset) or isinstance(val, TriangularGridDataset):
-            if isinstance(val.values, IndexVoltageDataArray):
+            if not isinstance(val.values, IndexedDataArray):
                 raise ValueError(
                     f"Monitor {mnt} of type 'TemperatureMonitor' cannot be associated with data arrays "
                     "of type 'IndexVoltageDataArray'."
@@ -273,7 +274,7 @@ class VoltageData(HeatChargeMonitorData):
         mnt = values.get("monitor")
 
         if isinstance(val, TetrahedralGridDataset) or isinstance(val, TriangularGridDataset):
-            if isinstance(val.values, IndexVoltageDataArray):
+            if not isinstance(val.values, IndexedDataArray):
                 raise ValueError(
                     f"Monitor {mnt} of type 'VoltageMonitor' cannot be associated with data arrays "
                     "of type 'IndexVoltageDataArray'."
