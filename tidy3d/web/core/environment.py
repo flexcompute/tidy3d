@@ -56,6 +56,13 @@ uat = EnvironmentConfig(
     website_endpoint="https://tidy3d.uat-simulation.cloud",
 )
 
+pre = EnvironmentConfig(
+    name="pre",
+    s3_region="us-gov-west-1",
+    web_api_endpoint="https://preprod-tidy3d-api.simulation.cloud",
+    website_endpoint="https://preprod-tidy3d.simulation.cloud",
+)
+
 prod = EnvironmentConfig(
     name="prod",
     s3_region="us-gov-west-1",
@@ -130,6 +137,17 @@ class Environment:
             The config for the uat environment.
         """
         return uat
+
+    @property
+    def pre(self) -> EnvironmentConfig:
+        """Get the preprod environment.
+
+        Returns
+        -------
+        EnvironmentConfig
+            The config for the preprod environment.
+        """
+        return pre
 
     @property
     def prod(self) -> EnvironmentConfig:
