@@ -169,6 +169,7 @@ class Job(WebContainer):
         "verbose",
         "simulation_type",
         "parent_tasks",
+        "solver_version",
     )
 
     def to_file(self, fname: str) -> None:

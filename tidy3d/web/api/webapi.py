@@ -151,6 +151,7 @@ def run(
         progress_callback=progress_callback_upload,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
+        solver_version=solver_version,
     )
     start(
         task_id,
@@ -174,6 +175,7 @@ def upload(
     simulation_type: str = "tidy3d",
     parent_tasks: List[str] = None,
     source_required: bool = True,
+    solver_version: str = None,
 ) -> TaskId:
     """
     Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -199,7 +201,8 @@ def upload(
         List of related task ids.
     source_required: bool = True
         If ``True``, simulations without sources will raise an error before being uploaded.
-
+    solver_version: str = None
+        target solver version.
     Returns
     -------
     str
@@ -252,7 +255,7 @@ def upload(
         progress_callback=progress_callback,
         remote_sim_file=remote_sim_file,
     )
-    estimate_cost(task_id=task.task_id, verbose=verbose)
+    estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
 
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
