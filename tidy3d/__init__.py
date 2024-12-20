@@ -91,9 +91,7 @@ from .components.data.monitor_data import (
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
 from .components.data.utils import (
     TetrahedralGridDataset,
-    TetrahedralGridVoltageDataset,
     TriangularGridDataset,
-    TriangularGridVoltageDataset,
 )
 from .components.eme.data.dataset import (
     EMECoefficientDataset,
@@ -583,9 +581,7 @@ __all__ = [
     "DCIVCurveDataArray",
     "DCCapacitanceDataArray",
     "TriangularGridDataset",
-    "TriangularGridVoltageDataset",
     "TetrahedralGridDataset",
-    "TetrahedralGridVoltageDataset",
     "medium_from_nk",
     "SubpixelSpec",
     "Staircasing",

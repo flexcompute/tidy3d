@@ -13,13 +13,13 @@ from ...constants import KELVIN, VOLT
 from ...log import log
 from ..base import skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
-from ..data.data_array import DataArray, DCCapacitanceDataArray, SpatialDataArray
-from ..data.utils import (
-    TetrahedralGridDataset,
-    TetrahedralGridVoltageDataset,
-    TriangularGridDataset,
-    TriangularGridVoltageDataset,
+from ..data.data_array import (
+    DataArray,
+    DCCapacitanceDataArray,
+    IndexVoltageDataArray,
+    SpatialDataArray,
 )
+from ..data.utils import TetrahedralGridDataset, TriangularGridDataset
 from ..types import TYPE_TAG_STR, Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
     CapacitanceMonitor,
@@ -32,9 +32,7 @@ from .monitor import (
 FieldDataset = Union[
     SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
 ]
-
-
-FieldVoltageDataset = Union[TriangularGridVoltageDataset, TetrahedralGridVoltageDataset]
+UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
 
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
@@ -181,6 +179,22 @@ class TemperatureData(HeatChargeMonitorData):
 
         return val
 
+    @pd.validator("temperature", always=True)
+    @skip_if_fields_missing(["monitor"])
+    def check_correct_data_type(cls, val, values):
+        """Issue error if incorrect data type is used"""
+
+        mnt = values.get("monitor")
+
+        if isinstance(val, TetrahedralGridDataset) or isinstance(val, TriangularGridDataset):
+            if isinstance(val.values, IndexVoltageDataArray):
+                raise ValueError(
+                    f"Monitor {mnt} of type 'TemperatureMonitor' cannot be associated with data arrays "
+                    "of type 'IndexVoltageDataArray'."
+                )
+
+        return val
+
     def field_name(self, val: str) -> str:
         """Gets the name of the fields to be plot."""
         if val == "abs^2":
@@ -251,6 +265,22 @@ class VoltageData(HeatChargeMonitorData):
 
         return val
 
+    @pd.validator("voltage", always=True)
+    @skip_if_fields_missing(["monitor"])
+    def check_correct_data_type(cls, val, values):
+        """Issue error if incorrect data type is used"""
+
+        mnt = values.get("monitor")
+
+        if isinstance(val, TetrahedralGridDataset) or isinstance(val, TriangularGridDataset):
+            if isinstance(val.values, IndexVoltageDataArray):
+                raise ValueError(
+                    f"Monitor {mnt} of type 'VoltageMonitor' cannot be associated with data arrays "
+                    "of type 'IndexVoltageDataArray'."
+                )
+
+        return val
+
     @property
     def symmetry_expanded_copy(self) -> VoltageData:
         """Return copy of self with symmetry applied."""
@@ -268,7 +298,7 @@ class PotentialData(HeatChargeMonitorData):
         description="Electric potential monitor associated with a Charge simulation.",
     )
 
-    potential: FieldVoltageDataset = pd.Field(
+    potential: UnstructuredFieldType = pd.Field(
         None,
         title="Voltage series",
         description="Contains the voltages.",
@@ -292,6 +322,22 @@ class PotentialData(HeatChargeMonitorData):
                 f"No data is available for monitor '{mnt.name}'. This is typically caused by "
                 "monitor not intersecting any solid medium."
             )
+
+        return val
+
+    @pd.validator("potential", always=True)
+    @skip_if_fields_missing(["monitor"])
+    def check_correct_data_type(cls, val, values):
+        """Issue error if incorrect data type is used"""
+
+        mnt = values.get("monitor")
+
+        if isinstance(val, TetrahedralGridDataset) or isinstance(val, TriangularGridDataset):
+            if not isinstance(val.values, IndexVoltageDataArray):
+                raise ValueError(
+                    f"Monitor {mnt} of type 'VoltageMonitor' is not associated with data arrays "
+                    "of type 'IndexVoltageDataArray' and cannot be associated with an applied voltage."
+                )
 
         return val
 
@@ -319,14 +365,14 @@ class FreeCarrierData(HeatChargeMonitorData):
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons: FieldVoltageDataset = pd.Field(
+    electrons: UnstructuredFieldType = pd.Field(
         None,
         title="Electrons series",
         description="Contains the electrons.",
         discriminator=TYPE_TAG_STR,
     )
 
-    holes: FieldVoltageDataset = pd.Field(
+    holes: UnstructuredFieldType = pd.Field(
         None,
         title="Holes series",
         description="Contains the electrons.",
@@ -337,6 +383,23 @@ class FreeCarrierData(HeatChargeMonitorData):
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to their associated data."""
         return dict(electrons=self.electrons, holes=self.holes)
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_correct_data_type(cls, values):
+        """Issue error if incorrect data type is used"""
+
+        mnt = values.get("monitor")
+        field_data = {field: values.get(field) for field in ["electrons", "holes"]}
+
+        for field, data in field_data.items():
+            if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
+                if not isinstance(data.values, IndexVoltageDataArray):
+                    raise ValueError(
+                        f"In the data associated with monitor {mnt}, the field {field} does not contain "
+                        "data associated to any voltage value."
+                    )
+
+        return values
 
     @pd.root_validator(skip_on_failure=True)
     def warn_no_data(cls, values):

@@ -15,11 +15,10 @@ from ...types import ArrayLike, Axis, Bound, Coordinate
 from ..data_array import (
     CellDataArray,
     IndexedDataArray,
-    IndexVoltageDataArray,
     PointDataArray,
 )
 from .base import UnstructuredGridDataset
-from .triangular import TriangularGridDataset, TriangularGridVoltageDataset
+from .triangular import TriangularGridDataset
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):
@@ -347,49 +346,3 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             return self_after_non_spatial_sel.interp(x=x, y=y, z=z)
 
         return self_after_non_spatial_sel
-
-
-class TetrahedralGridVoltageDataset(TetrahedralGridDataset):
-    """Dataset for storing tetrahedral grid data at different voltages. Data values
-    at each voltage are associated with the nodes of the grid.
-
-    Note
-    ----
-    To use full functionality of unstructured datasets one must install ``vtk`` package (``pip
-    install tidy3d[vtk]`` or ``pip install vtk``). Otherwise the functionality of unstructured
-    datasets is limited to creation, writing to/loading from a file, and arithmetic manipulations.
-
-    Example
-    -------
-    >>> tet_grid_points = PointDataArray(
-    ...     [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
-    ...     coords=dict(index=np.arange(4), axis=np.arange(3)),
-    ... )
-    >>>
-    >>> tet_grid_cells = CellDataArray(
-    ...     [[0, 1, 2, 3]],
-    ...     coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
-    ... )
-    >>>
-    >>> tet_grid_values = IndexedDataArray(
-    ...     [[1.0, 2.0, 3.0, 4.0],[5.0, 6.0, 7.0, 8.0]],
-    ...     coords=dict(index=np.arange(4), voltage=[-1.0, 1.0]),
-    ... )
-    >>>
-    >>> tet_grid = TetrahedralGridVoltageDataset(
-    ...     points=tet_grid_points,
-    ...     cells=tet_grid_cells,
-    ...     values=tet_grid_values,
-    ... )
-    """
-
-    @classmethod
-    def _traingular_dataset_type(cls) -> type:
-        """Corresponding class for triangular grid datasets. We need to know this when creating a triangular slice from a tetrahedral grid."""
-        return TriangularGridVoltageDataset
-
-    values: IndexVoltageDataArray = pd.Field(
-        ...,
-        title="Point Values",
-        description="Values stored at the grid points.",
-    )

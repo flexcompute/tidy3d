@@ -20,7 +20,6 @@ from ...viz import add_ax_if_none, equal_aspect, plot_params_grid
 from ..data_array import (
     CellDataArray,
     IndexedDataArray,
-    IndexVoltageDataArray,
     PointDataArray,
 )
 from .base import (
@@ -78,7 +77,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         description="Coordinate of the grid along the normal direction.",
     )
 
-    """ Fundametal parameters to set up based on grid dimensionality """
+    """ Fundamental parameters to set up based on grid dimensionality """
 
     @classmethod
     def _point_dims(cls) -> pd.PositiveInt:
@@ -648,46 +647,3 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_ylabel(ax_labels[1])
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
-
-
-class TriangularGridVoltageDataset(TriangularGridDataset):
-    """Dataset for storing triangular grid data at different voltages. Data values
-    at each voltage are associated with the nodes of the grid.
-
-    Note
-    ----
-    To use full functionality of unstructured datasets one must install ``vtk`` package (``pip
-    install tidy3d[vtk]`` or ``pip install vtk``). Otherwise the functionality of unstructured
-    datasets is limited to creation, writing to/loading from a file, and arithmetic manipulations.
-
-    Example
-    -------
-    >>> tri_grid_points = PointDataArray(
-    ...     [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
-    ...     coords=dict(index=np.arange(4), axis=np.arange(2)),
-    ... )
-    >>>
-    >>> tri_grid_cells = CellDataArray(
-    ...     [[0, 1, 2], [1, 2, 3]],
-    ...     coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
-    ... )
-    >>>
-    >>> tri_grid_values = IndexedDataArray(
-    ...     [[1.0, 2.0, 3.0, 4.0],[5.0, 6.0, 7.0, 8.0]],
-    ...     coords=dict(index=np.arange(4), voltage=[-1.0, 1.0]),
-    ... )
-    >>>
-    >>> tri_grid = TriangularGridVoltageDataset(
-    ...     normal_axis=1,
-    ...     normal_pos=0,
-    ...     points=tri_grid_points,
-    ...     cells=tri_grid_cells,
-    ...     values=tri_grid_values,
-    ... )
-    """
-
-    values: IndexVoltageDataArray = pd.Field(
-        ...,
-        title="Point Values",
-        description="Values stored at the grid points.",
-    )

@@ -31,14 +31,14 @@ from .boundary import (
     PMCBoundary,
     StablePML,
 )
-from .data.data_array import FreqDataArray, IndexedDataArray
-from .data.dataset import Dataset
-from .data.unstructured.tetrahedral import TetrahedralGridDataset, TetrahedralGridVoltageDataset
-from .data.unstructured.triangular import TriangularGridDataset, TriangularGridVoltageDataset
-from .data.utils import (
-    CustomSpatialDataType,
-    UnstructuredGridVoltageDatasetType,
+from .data.data_array import (
+    FreqDataArray,
+    IndexedDataArray,
 )
+from .data.dataset import Dataset
+from .data.unstructured.tetrahedral import TetrahedralGridDataset
+from .data.unstructured.triangular import TriangularGridDataset
+from .data.utils import CustomSpatialDataType
 from .geometry.base import Box, Geometry
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
@@ -153,9 +153,6 @@ PML_HEIGHT_FOR_0_DIMS = inf
 
 # additional (safety) time step reduction factor for fixed angle simulations
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
-
-# all type of spatial datasets
-GenericSpatialDatasetType = Union[CustomSpatialDataType, UnstructuredGridVoltageDatasetType]
 
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
@@ -4745,8 +4742,8 @@ class Simulation(AbstractYeeGridSimulation):
     def perturbed_mediums_copy(
         self,
         temperature: CustomSpatialDataType = None,
-        electron_density: GenericSpatialDatasetType = None,
-        hole_density: GenericSpatialDatasetType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
     ) -> Simulation:
         """Return a copy of the simulation with heat and/or charge data applied to all mediums
@@ -4792,35 +4789,35 @@ class Simulation(AbstractYeeGridSimulation):
         for carrier, data in zip(
             ["electron_density", "hole_density"], [electron_density, hole_density]
         ):
-            if isinstance(data, TetrahedralGridVoltageDataset) or isinstance(
-                data, TriangularGridVoltageDataset
-            ):
-                # make sure only one voltage is present
-                num_voltages = len(electron_density.values.voltage.data)
-                new_values = IndexedDataArray(
-                    np.array(data.values.data).flatten(), coords=dict(index=data.values.index.data)
-                )
-                if num_voltages > 1:
-                    raise ValueError(
-                        f"The value entered for '{carrier}' contains field values associated to "
-                        f"{num_voltages} voltage values. Please select one before calling this function. "
-                        "This can be done with 'electron_data.sel(voltage=1)'"
+            if isinstance(data, TriangularGridDataset) or isinstance(data, TetrahedralGridDataset):
+                if "voltage" in data.values.dims:
+                    # make sure only one voltage is present
+                    num_voltages = len(data.values.voltage.data)
+                    new_values = IndexedDataArray(
+                        np.array(data.values.data).flatten(),
+                        coords=dict(index=data.values.index.data),
                     )
-                else:
-                    if isinstance(data, TetrahedralGridVoltageDataset):
-                        new_carrier_data[carrier] = TetrahedralGridDataset(
-                            values=new_values,
-                            cells=data.cells,
-                            points=data.points,
+                    if num_voltages > 1:
+                        raise ValueError(
+                            f"The value entered for '{carrier}' contains field values associated to "
+                            f"{num_voltages} voltage values. Please select one before calling this function. "
+                            "This can be done with 'electron_data.sel(voltage=1)'"
                         )
-                    elif isinstance(data, TriangularGridVoltageDataset):
-                        new_carrier_data[carrier] = TriangularGridDataset(
-                            values=new_values,
-                            cells=data.cells,
-                            points=data.points,
-                            normal_pos=data.normal_pos,
-                            normal_axis=data.normal_axis,
-                        )
+                    else:
+                        if isinstance(data, TetrahedralGridDataset):
+                            new_carrier_data[carrier] = TetrahedralGridDataset(
+                                values=new_values,
+                                cells=data.cells,
+                                points=data.points,
+                            )
+                        elif isinstance(data, TriangularGridDataset):
+                            new_carrier_data[carrier] = TriangularGridDataset(
+                                values=new_values,
+                                cells=data.cells,
+                                points=data.points,
+                                normal_pos=data.normal_pos,
+                                normal_axis=data.normal_axis,
+                            )
 
         sim_dict = self.dict()
         structures = self.structures
