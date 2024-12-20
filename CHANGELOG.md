@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Double precision mode solver is now supported in EME.
 - `estimate_cost` is now called at the end of every `web.upload` call.
 - Internal refactor of adjoint shape gradients using `GradientSurfaceMesh`.
+- Enhanced progress bar display in batch operations with better formatting, colors, and status tracking.
 
 ### Fixed
 - Significant speedup for field projection computations.
