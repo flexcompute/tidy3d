@@ -20,7 +20,7 @@ from ..data.utils import (
     TriangularGridDataset,
     TriangularGridVoltageDataset,
 )
-from ..types import Coordinate, ScalarSymmetry, annotate_type
+from ..types import TYPE_TAG_STR, Coordinate, ScalarSymmetry, annotate_type
 from .monitor import (
     CapacitanceMonitor,
     FreeCarrierMonitor,
@@ -269,7 +269,10 @@ class PotentialData(HeatChargeMonitorData):
     )
 
     potential: FieldVoltageDataset = pd.Field(
-        None, title="Voltage series", description="Contains the voltages."
+        None,
+        title="Voltage series",
+        description="Contains the voltages.",
+        discriminator=TYPE_TAG_STR,
     )
 
     @property
@@ -317,11 +320,17 @@ class FreeCarrierData(HeatChargeMonitorData):
     )
 
     electrons: FieldVoltageDataset = pd.Field(
-        None, title="Electrons series", description="Contains the electrons."
+        None,
+        title="Electrons series",
+        description="Contains the electrons.",
+        discriminator=TYPE_TAG_STR,
     )
 
     holes: FieldVoltageDataset = pd.Field(
-        None, title="Holes series", description="Contains the electrons."
+        None,
+        title="Holes series",
+        description="Contains the electrons.",
+        discriminator=TYPE_TAG_STR,
     )
 
     @property

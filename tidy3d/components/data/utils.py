@@ -14,7 +14,9 @@ from .unstructured.tetrahedral import TetrahedralGridDataset, TetrahedralGridVol
 from .unstructured.triangular import TriangularGridDataset, TriangularGridVoltageDataset
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
-UnstructuredDCGridDatasetType = Union[TriangularGridVoltageDataset, TetrahedralGridVoltageDataset]
+UnstructuredGridVoltageDatasetType = Union[
+    TriangularGridVoltageDataset, TetrahedralGridVoltageDataset
+]
 CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
 CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(UnstructuredGridDatasetType)]
 
