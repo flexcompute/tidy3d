@@ -4790,34 +4790,31 @@ class Simulation(AbstractYeeGridSimulation):
             ["electron_density", "hole_density"], [electron_density, hole_density]
         ):
             if isinstance(data, TriangularGridDataset) or isinstance(data, TetrahedralGridDataset):
-                if "voltage" in data.values.dims:
-                    # make sure only one voltage is present
-                    num_voltages = len(data.values.voltage.data)
+                if data._num_fields > 1:
+                    raise ValueError(
+                        f"The value entered for '{carrier}' contains multiple field values. "
+                        "Please select one before calling this function. This can be "
+                        "done with, e.g., 'electron_data.sel(voltage=1)'"
+                    )
+                elif len(data.values.dims) > 1:
                     new_values = IndexedDataArray(
                         np.array(data.values.data).flatten(),
                         coords=dict(index=data.values.index.data),
                     )
-                    if num_voltages > 1:
-                        raise ValueError(
-                            f"The value entered for '{carrier}' contains field values associated to "
-                            f"{num_voltages} voltage values. Please select one before calling this function. "
-                            "This can be done with 'electron_data.sel(voltage=1)'"
+                    if isinstance(data, TetrahedralGridDataset):
+                        new_carrier_data[carrier] = TetrahedralGridDataset(
+                            values=new_values,
+                            cells=data.cells,
+                            points=data.points,
                         )
-                    else:
-                        if isinstance(data, TetrahedralGridDataset):
-                            new_carrier_data[carrier] = TetrahedralGridDataset(
-                                values=new_values,
-                                cells=data.cells,
-                                points=data.points,
-                            )
-                        elif isinstance(data, TriangularGridDataset):
-                            new_carrier_data[carrier] = TriangularGridDataset(
-                                values=new_values,
-                                cells=data.cells,
-                                points=data.points,
-                                normal_pos=data.normal_pos,
-                                normal_axis=data.normal_axis,
-                            )
+                    elif isinstance(data, TriangularGridDataset):
+                        new_carrier_data[carrier] = TriangularGridDataset(
+                            values=new_values,
+                            cells=data.cells,
+                            points=data.points,
+                            normal_pos=data.normal_pos,
+                            normal_axis=data.normal_axis,
+                        )
 
         sim_dict = self.dict()
         structures = self.structures
