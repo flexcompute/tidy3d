@@ -2,19 +2,10 @@
 
 from __future__ import annotations
 
-from abc import ABC
-from typing import Tuple, Union
-
 import pydantic.v1 as pd
 
-from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.bc_placement import BCPlacementType
-from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.constants import CURRENT_DENSITY, HEAT_FLUX, HEAT_TRANSFER_COEFF, KELVIN, VOLT
-
-
-class HeatChargeBC(ABC, Tidy3dBaseModel):
-    """Abstract heat-charge boundary conditions."""
+from tidy3d.components.tcad.boundary.abstract import HeatChargeBC
+from tidy3d.constants import HEAT_FLUX, HEAT_TRANSFER_COEFF, KELVIN
 
 
 class TemperatureBC(HeatChargeBC):
@@ -66,84 +57,3 @@ class ConvectionBC(HeatChargeBC):
         description=f"Heat flux value in units of {HEAT_TRANSFER_COEFF}.",
         units=HEAT_TRANSFER_COEFF,
     )
-
-
-class VoltageBC(HeatChargeBC):
-    """Electric potential (voltage) boundary condition.
-    Sets a potential at the specified boundary.
-    In charge simulations it also accepts an array of voltages.
-    In this case, a solution for each of these voltages will
-    be computed.
-
-    Example
-    -------
-    >>> bc1 = VoltageBC(voltage=2)
-    >>> bc2 = VoltageBC(voltage=[-1, 0, 1])
-    """
-
-    voltage: Union[pd.FiniteFloat, Tuple[pd.FiniteFloat, ...]] = pd.Field(
-        title="Voltage",
-        description="Electric potential to be applied at the specified boundary.",
-        units=VOLT,
-    )
-
-
-class CurrentBC(HeatChargeBC):
-    """Current boundary conditions.
-
-    Example
-    -------
-    >>> bc = CurrentBC(current_density=1)
-    """
-
-    current_density: pd.FiniteFloat = pd.Field(
-        title="Current density",
-        description="Current density.",
-        units=CURRENT_DENSITY,
-    )
-
-
-class InsulatingBC(HeatChargeBC):
-    """Insulation boundary condition.
-    Ensures electric fields as well as the surface recombination current density
-    are set to zero.
-
-    Example
-    -------
-    >>> bc = InsulatingBC()
-    """
-
-
-HeatChargeBCTypes = Union[
-    TemperatureBC, HeatFluxBC, ConvectionBC, VoltageBC, CurrentBC, InsulatingBC
-]
-
-
-class HeatChargeBoundarySpec(Tidy3dBaseModel):
-    """Heat-Charge boundary conditions specification.
-
-    Example
-    -------
-    >>> from tidy3d import SimulationBoundary
-    >>> bc_spec = HeatBoundarySpec(
-    ...     placement=SimulationBoundary(),
-    ...     condition=ConvectionBC(ambient_temperature=300, transfer_coeff=1),
-    ... )
-    """
-
-    placement: BCPlacementType = pd.Field(
-        title="Boundary Conditions Placement",
-        description="Location to apply boundary conditions.",
-        discriminator=TYPE_TAG_STR,
-    )
-
-    condition: HeatChargeBCTypes = pd.Field(
-        title="Boundary Conditions",
-        description="Boundary conditions to apply at the selected location.",
-        discriminator=TYPE_TAG_STR,
-    )
-
-
-class HeatBoundarySpec(HeatChargeBoundarySpec):
-    """Heat BC specification
-    NOTE: here for backward-compatibility only."""

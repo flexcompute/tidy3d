@@ -9,15 +9,9 @@ from tidy3d.components.material.tcad.heat import (
     FluidSpec,
     SolidSpec,
 )
-from tidy3d.components.tcad.boundary.heat import (
-    ConvectionBC,
-    CurrentBC,
+from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
-    HeatFluxBC,
-    InsulatingBC,
-    TemperatureBC,
-    VoltageBC,
 )
 from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
@@ -36,9 +30,15 @@ from tidy3d.components.tcad.source.heat import HeatFromElectricSource, HeatSourc
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
+    ConvectionBC,
+    CurrentBC,
+    HeatFluxBC,
+    InsulatingBC,
     RadiativeRecombination,
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
+    TemperatureBC,
+    VoltageBC,
 )
 
 from .components.apodization import ApodizationSpec

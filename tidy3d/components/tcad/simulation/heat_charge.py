@@ -29,15 +29,9 @@ from tidy3d.components.material.tcad.heat import (
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.types import ElectricalAnalysisTypes, TransferFunctionDC
 from tidy3d.components.structure import Structure
-from tidy3d.components.tcad.boundary.heat import (
-    ConvectionBC,
-    CurrentBC,
+from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
-    HeatFluxBC,
-    InsulatingBC,
-    TemperatureBC,
-    VoltageBC,
 )
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
@@ -60,7 +54,13 @@ from tidy3d.components.tcad.source.heat import (
     UniformHeatSource,
 )
 from tidy3d.components.tcad.types import (
+    ConvectionBC,
+    CurrentBC,
+    HeatFluxBC,
+    InsulatingBC,
     TCADMonitorTypes,
+    TemperatureBC,
+    VoltageBC,
 )
 from tidy3d.components.tcad.viz import (
     CHARGE_BC_INSULATOR,

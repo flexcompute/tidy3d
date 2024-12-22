@@ -1,6 +1,8 @@
 """File containing classes required for the setup of a DEVSIM case."""
 
 from tidy3d.components.tcad.bandgap import SlotboomNarrowingBandGap
+from tidy3d.components.tcad.boundary.charge import CurrentBC, InsulatingBC, VoltageBC
+from tidy3d.components.tcad.boundary.heat import ConvectionBC, HeatFluxBC, TemperatureBC
 from tidy3d.components.tcad.generation_recombination import (
     AugerRecombination,
     RadiativeRecombination,
@@ -27,4 +29,8 @@ TCADMonitorTypes = Union[
     SteadyVoltageMonitor,
     SteadyFreeChargeCarrierMonitor,
     SteadyCapacitanceMonitor,
+]
+
+HeatChargeBCTypes = Union[
+    TemperatureBC, HeatFluxBC, ConvectionBC, VoltageBC, CurrentBC, InsulatingBC
 ]
