@@ -30,6 +30,13 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
+from tidy3d.components.tcad.source.heat import (
+    GlobalHeatChargeSource,
+    HeatFromElectricSource,
+    HeatSource,
+    TCADSourceTypes,
+    UniformHeatSource,
+)
 
 from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError
@@ -54,13 +61,6 @@ from .monitor import (
     SteadyVoltageMonitor,
     TCADMonitorTypes,
     TemperatureMonitor,
-)
-from .source import (
-    GlobalHeatChargeSource,
-    HeatFromElectricSource,
-    HeatSource,
-    TCADSourceTypes,
-    UniformHeatSource,
 )
 from .viz import (
     CHARGE_BC_INSULATOR,

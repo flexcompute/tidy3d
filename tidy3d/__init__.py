@@ -23,6 +23,7 @@ from tidy3d.components.tcad.boundary.heat import (
 )
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from tidy3d.components.tcad.source.heat import HeatFromElectricSource, HeatSource, UniformHeatSource
 
 from .components.apodization import ApodizationSpec
 
@@ -185,7 +186,6 @@ from .components.heat_charge.monitor_data import (
 )
 from .components.heat_charge.sim_data import HeatChargeSimulationData, HeatSimulationData
 from .components.heat_charge.simulation import HeatChargeSimulation
-from .components.heat_charge.source import HeatFromElectricSource, HeatSource, UniformHeatSource
 
 # lumped elements
 from .components.lumped_element import (
