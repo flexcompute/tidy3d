@@ -25,6 +25,11 @@ from tidy3d.components.tcad.boundary.heat import (
     TemperatureBC,
     VoltageBC,
 )
+from tidy3d.components.tcad.grid import (
+    DistanceUnstructuredGrid,
+    UniformUnstructuredGrid,
+    UnstructuredGridType,
+)
 
 from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError
@@ -43,7 +48,6 @@ from ..scene import Scene
 from ..structure import Structure
 from ..types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
 from ..viz import PlotParams, add_ax_if_none, equal_aspect
-from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, UnstructuredGridType
 from .monitor import (
     SteadyCapacitanceMonitor,
     SteadyFreeChargeCarrierMonitor,
