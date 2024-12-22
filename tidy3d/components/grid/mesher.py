@@ -528,7 +528,7 @@ class GradedMesher(Mesher):
                 ):
                     # for 2d medium, will always ignore even if not PEC;
                     # later, this will be handled by _grid_corrections_2dmaterials
-                    # in simulation.py
+                    # in heat_charge.py
                     index = 1.0
                 else:
                     eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
