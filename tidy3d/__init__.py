@@ -41,8 +41,6 @@ from tidy3d.components.tcad.source.heat import HeatFromElectricSource, HeatSourc
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
-    ChargeToleranceSpec,
-    DCSpec,
     RadiativeRecombination,
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
@@ -554,8 +552,6 @@ __all__ = [
     "SteadyPotentialData",
     "SteadyFreeCarrierData",
     "SteadyCapacitanceData",
-    "ChargeToleranceSpec",
-    "DCSpec",
     "CaugheyThomasMobility",
     "SlotboomNarrowingBandGap",
     "ShockleyReedHallRecombination",
