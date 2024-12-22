@@ -37,6 +37,7 @@ from tidy3d.components.tcad.monitors.heat import (
     SteadyVoltageMonitor,
     TemperatureMonitor,
 )
+from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.components.tcad.source.heat import HeatFromElectricSource, HeatSource, UniformHeatSource
 
@@ -185,7 +186,6 @@ from .components.heat_charge.charge_settings import (
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
 )
-from .components.heat_charge.heat.simulation import HeatSimulation
 
 # lumped elements
 from .components.lumped_element import (

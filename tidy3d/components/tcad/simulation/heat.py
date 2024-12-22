@@ -8,10 +8,9 @@ from typing import Tuple
 import pydantic.v1 as pd
 
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-
-from ....log import log
-from ...types import Ax
-from ...viz import add_ax_if_none, equal_aspect
+from tidy3d.components.types import Ax
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.log import log
 
 
 class HeatSimulation(HeatChargeSimulation):
