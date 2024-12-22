@@ -30,6 +30,13 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
+from tidy3d.components.tcad.monitors.heat import (
+    SteadyCapacitanceMonitor,
+    SteadyFreeChargeCarrierMonitor,
+    SteadyVoltageMonitor,
+    TCADMonitorTypes,
+    TemperatureMonitor,
+)
 from tidy3d.components.tcad.source.heat import (
     GlobalHeatChargeSource,
     HeatFromElectricSource,
@@ -64,13 +71,6 @@ from ..scene import Scene
 from ..structure import Structure
 from ..types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
 from ..viz import PlotParams, add_ax_if_none, equal_aspect
-from .monitor import (
-    SteadyCapacitanceMonitor,
-    SteadyFreeChargeCarrierMonitor,
-    SteadyVoltageMonitor,
-    TCADMonitorTypes,
-    TemperatureMonitor,
-)
 
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 

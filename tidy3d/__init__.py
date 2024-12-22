@@ -31,6 +31,12 @@ from tidy3d.components.tcad.data.monitor_data.monitor_data import (
 from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from tidy3d.components.tcad.monitors.heat import (
+    SteadyCapacitanceMonitor,
+    SteadyFreeChargeCarrierMonitor,
+    SteadyVoltageMonitor,
+    TemperatureMonitor,
+)
 from tidy3d.components.tcad.source.heat import HeatFromElectricSource, HeatSource, UniformHeatSource
 
 from .components.apodization import ApodizationSpec
@@ -179,12 +185,6 @@ from .components.heat_charge.charge_settings import (
     SlotboomNarrowingBandGap,
 )
 from .components.heat_charge.heat.simulation import HeatSimulation
-from .components.heat_charge.monitor import (
-    SteadyCapacitanceMonitor,
-    SteadyFreeChargeCarrierMonitor,
-    SteadyVoltageMonitor,
-    TemperatureMonitor,
-)
 from .components.heat_charge.simulation import HeatChargeSimulation
 
 # lumped elements

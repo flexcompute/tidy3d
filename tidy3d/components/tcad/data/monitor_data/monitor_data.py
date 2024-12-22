@@ -19,7 +19,7 @@ from tidy3d.components.data.data_array import (
     SteadyCapacitanceVoltageDataArray,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
-from tidy3d.components.heat_charge.monitor import (
+from tidy3d.components.tcad.monitors.heat import (
     SteadyCapacitanceMonitor,
     SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
