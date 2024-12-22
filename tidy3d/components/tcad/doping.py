@@ -5,11 +5,11 @@ from typing import Optional
 import numpy as np
 import pydantic.v1 as pd
 
-from ...components.autograd.types import TracedSize
-from ...components.geometry.base import Box
-from ...constants import MICROMETER
-from ..base import cached_property
-from ..types import Bound, Union
+from tidy3d.components.autograd.types import TracedSize
+from tidy3d.components.base import cached_property
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.types import Bound, Union
+from tidy3d.constants import MICROMETER
 
 
 class AbstractDopingBox(Box):

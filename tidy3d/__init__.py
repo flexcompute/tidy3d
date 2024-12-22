@@ -21,6 +21,7 @@ from tidy3d.components.tcad.boundary.heat import (
     TemperatureBC,
     VoltageBC,
 )
+from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
 
 from .components.apodization import ApodizationSpec
@@ -168,7 +169,6 @@ from .components.heat_charge.charge_settings import (
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
 )
-from .components.heat_charge.doping import ConstantDoping, GaussianDoping
 from .components.heat_charge.heat.simulation import HeatSimulation
 from .components.heat_charge.monitor import (
     SteadyCapacitanceMonitor,

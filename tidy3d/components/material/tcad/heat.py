@@ -19,8 +19,8 @@ from tidy3d.components.heat_charge.charge_settings import (
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
 )
-from tidy3d.components.heat_charge.doping import DopingBoxType
 from tidy3d.components.medium import AbstractMedium
+from tidy3d.components.tcad.doping import DopingBoxType
 from tidy3d.components.types import Union
 from tidy3d.constants import (
     CONDUCTIVITY,
