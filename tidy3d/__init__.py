@@ -29,10 +29,12 @@ from tidy3d.components.tcad.data.monitor_data.monitor_data import (
 from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
-from tidy3d.components.tcad.monitors.heat import (
+from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
+)
+from tidy3d.components.tcad.monitors.heat import (
     TemperatureMonitor,
 )
 from tidy3d.components.tcad.simulation.heat import HeatSimulation

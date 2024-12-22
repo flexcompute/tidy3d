@@ -44,11 +44,12 @@ from tidy3d.components.tcad.grid import (
     UniformUnstructuredGrid,
     UnstructuredGridType,
 )
-from tidy3d.components.tcad.monitors.heat import (
+from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
-    TCADMonitorTypes,
+)
+from tidy3d.components.tcad.monitors.heat import (
     TemperatureMonitor,
 )
 from tidy3d.components.tcad.source.heat import (
@@ -57,6 +58,9 @@ from tidy3d.components.tcad.source.heat import (
     HeatSource,
     TCADSourceTypes,
     UniformHeatSource,
+)
+from tidy3d.components.tcad.types import (
+    TCADMonitorTypes,
 )
 from tidy3d.components.tcad.viz import (
     CHARGE_BC_INSULATOR,
