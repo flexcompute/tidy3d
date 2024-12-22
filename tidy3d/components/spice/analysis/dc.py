@@ -35,8 +35,7 @@ class TransferFunctionDC(Tidy3dBaseModel):
     >>> charge_settings = td.ChargeToleranceSpec(abs_tol=1e8, rel_tol=1e-10, max_iters=30)
     """
 
-    sources: StaticTransferSourceDC | MultiStaticTransferSourceDC = []
-
+    sources: Optional[StaticTransferSourceDC | MultiStaticTransferSourceDC] = []
     absolute_tolerance: Optional[pd.PositiveFloat] = pd.Field(
         default=1e10,
         title="Absolute tolerance.",
