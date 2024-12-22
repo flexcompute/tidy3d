@@ -29,7 +29,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 class AbstractStaticTransferSourceDC(Tidy3dBaseModel):
     name: str
     start: Optional[pd.PositiveFloat] = 0
-    stop: Optional[pd.PositiveFloat] | None = None
+    stop: Optional[pd.PositiveFloat] = None
     """
     TODOMARC chat Either they define the stop or they define the step, how do we want to enforce, validator?
     """
