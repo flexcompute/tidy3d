@@ -11,6 +11,16 @@ from tidy3d.components.material.tcad.heat import (
     SemiconductorMedium,
     SolidSpec,
 )
+from tidy3d.components.tcad.boundary.heat import (
+    ConvectionBC,
+    CurrentBC,
+    HeatBoundarySpec,
+    HeatChargeBoundarySpec,
+    HeatFluxBC,
+    InsulatingBC,
+    TemperatureBC,
+    VoltageBC,
+)
 
 from .components.apodization import ApodizationSpec
 
@@ -147,16 +157,6 @@ from .components.grid.grid_spec import (
     CustomGridBoundaries,
     GridSpec,
     UniformGrid,
-)
-from .components.heat_charge.boundary import (
-    ConvectionBC,
-    CurrentBC,
-    HeatBoundarySpec,
-    HeatChargeBoundarySpec,
-    HeatFluxBC,
-    InsulatingBC,
-    TemperatureBC,
-    VoltageBC,
 )
 from .components.heat_charge.charge_settings import (
     AugerRecombination,

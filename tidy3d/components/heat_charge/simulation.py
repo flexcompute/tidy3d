@@ -15,6 +15,16 @@ from tidy3d.components.material.tcad.heat import (
     SolidSpec,
 )
 from tidy3d.components.spice.types import ElectricalAnalysisTypes, TransferFunctionDC
+from tidy3d.components.tcad.boundary.heat import (
+    ConvectionBC,
+    CurrentBC,
+    HeatBoundarySpec,
+    HeatChargeBoundarySpec,
+    HeatFluxBC,
+    InsulatingBC,
+    TemperatureBC,
+    VoltageBC,
+)
 
 from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError
@@ -33,16 +43,6 @@ from ..scene import Scene
 from ..structure import Structure
 from ..types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
 from ..viz import PlotParams, add_ax_if_none, equal_aspect
-from .boundary import (
-    ConvectionBC,
-    CurrentBC,
-    HeatBoundarySpec,
-    HeatChargeBoundarySpec,
-    HeatFluxBC,
-    InsulatingBC,
-    TemperatureBC,
-    VoltageBC,
-)
 from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, UnstructuredGridType
 from .monitor import (
     SteadyCapacitanceMonitor,
