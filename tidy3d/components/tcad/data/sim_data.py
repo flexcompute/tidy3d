@@ -19,12 +19,12 @@ from tidy3d.components.data.utils import (
     UnstructuredGridDataset,
 )
 from tidy3d.components.heat_charge.heat.simulation import HeatSimulation
-from tidy3d.components.heat_charge.monitor_data import (
+from tidy3d.components.heat_charge.simulation import HeatChargeSimulation
+from tidy3d.components.tcad.data.monitor_data.monitor_data import (
     SteadyVoltageData,
     TCADMonitorDataTypes,
     TemperatureData,
 )
-from tidy3d.components.heat_charge.simulation import HeatChargeSimulation
 from tidy3d.components.types import Ax, Literal, RealFieldVal
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError
