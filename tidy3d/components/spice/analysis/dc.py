@@ -7,7 +7,7 @@ from typing import Optional
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.spice.sources.dc import MultiStaticTransferSourceDC, StaticTransferSourceDC
+from tidy3d.components.spice.sources.dc import MultiStaticTransferSourceDC
 
 
 class OperatingPointDC(Tidy3dBaseModel):
@@ -35,7 +35,7 @@ class TransferFunctionDC(Tidy3dBaseModel):
     >>> charge_settings = td.ChargeToleranceSpec(abs_tol=1e8, rel_tol=1e-10, max_iters=30)
     """
 
-    sources: Optional[StaticTransferSourceDC | MultiStaticTransferSourceDC] = []
+    sources: Optional[MultiStaticTransferSourceDC] = []  # todo accept a single source
     absolute_tolerance: Optional[pd.PositiveFloat] = pd.Field(
         default=1e10,
         title="Absolute tolerance.",
