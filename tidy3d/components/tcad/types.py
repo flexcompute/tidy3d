@@ -15,6 +15,8 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyVoltageMonitor,
 )
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
+from tidy3d.components.tcad.source.coupled import HeatFromElectricSource
+from tidy3d.components.tcad.source.heat import HeatSource, UniformHeatSource
 from tidy3d.components.types import Union
 
 MobilityModelTypes = Union[CaugheyThomasMobility]
@@ -30,7 +32,7 @@ TCADMonitorTypes = Union[
     SteadyFreeChargeCarrierMonitor,
     SteadyCapacitanceMonitor,
 ]
-
+TCADSourceTypes = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]
 HeatChargeBCTypes = Union[
     TemperatureBC, HeatFluxBC, ConvectionBC, VoltageBC, CurrentBC, InsulatingBC
 ]

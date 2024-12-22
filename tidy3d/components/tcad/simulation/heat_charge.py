@@ -46,20 +46,20 @@ from tidy3d.components.tcad.monitors.charge import (
 from tidy3d.components.tcad.monitors.heat import (
     TemperatureMonitor,
 )
-from tidy3d.components.tcad.source.heat import (
+from tidy3d.components.tcad.source.abstract import (
     GlobalHeatChargeSource,
-    HeatFromElectricSource,
-    HeatSource,
-    TCADSourceTypes,
-    UniformHeatSource,
 )
 from tidy3d.components.tcad.types import (
     ConvectionBC,
     CurrentBC,
     HeatFluxBC,
+    HeatFromElectricSource,
+    HeatSource,
     InsulatingBC,
     TCADMonitorTypes,
+    TCADSourceTypes,
     TemperatureBC,
+    UniformHeatSource,
     VoltageBC,
 )
 from tidy3d.components.tcad.viz import (

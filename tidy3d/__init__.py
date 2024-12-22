@@ -26,18 +26,20 @@ from tidy3d.components.tcad.monitors.heat import (
 )
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.tcad.source.heat import HeatFromElectricSource, HeatSource, UniformHeatSource
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
     ConvectionBC,
     CurrentBC,
     HeatFluxBC,
+    HeatFromElectricSource,
+    HeatSource,
     InsulatingBC,
     RadiativeRecombination,
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
     TemperatureBC,
+    UniformHeatSource,
     VoltageBC,
 )
 
