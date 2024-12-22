@@ -17,7 +17,7 @@ import pydantic.v1 as pd
 import xarray as xr
 from scipy import signal
 
-from tidy3d.components.material.solver_types import ThermalSpecType
+from tidy3d.components.material.tcad.heat import ThermalSpecType
 
 from ..constants import (
     C_0,

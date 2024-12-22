@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from typing import Union
 
 import pydantic.v1 as pd
 
@@ -63,3 +64,7 @@ class SolidSpec(AbstractHeatMedium):
         description=f"Thermal conductivity of material in units of {THERMAL_CONDUCTIVITY}.",
         units=THERMAL_CONDUCTIVITY,
     )
+
+
+ThermalSpecType = Union[FluidSpec, SolidSpec]
+# Note this needs to remain here to avoid circuilar imports in the new medium structure.

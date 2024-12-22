@@ -1,14 +1,12 @@
 """Tidy3d package imports"""
 
-# grid
-# apodization
-# heat
-# heat
-from tidy3d.components.material.tcad.heat import (
+from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     ChargeInsulatorMedium,
-    FluidSpec,
     SemiconductorMedium,
+)
+from tidy3d.components.material.tcad.heat import (
+    FluidSpec,
     SolidSpec,
 )
 from tidy3d.components.tcad.boundary.heat import (

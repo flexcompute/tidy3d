@@ -19,9 +19,11 @@ from tidy3d.components.bc_placement import (
     StructureStructureInterface,
 )
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.material.tcad.heat import (
+from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     SemiconductorMedium,
+)
+from tidy3d.components.material.tcad.heat import (
     SolidSpec,
 )
 from tidy3d.components.scene import Scene

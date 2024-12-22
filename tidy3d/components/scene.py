@@ -10,9 +10,11 @@ import matplotlib.pylab as plt
 import pydantic.v1 as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from tidy3d.components.material.tcad.heat import (
+from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     SemiconductorMedium,
+)
+from tidy3d.components.material.tcad.heat import (
     SolidSpec,
 )
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
