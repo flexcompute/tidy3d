@@ -9,7 +9,9 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import SpatialDataArray
-from tidy3d.components.heat_charge.charge_settings import (
+from tidy3d.components.medium import AbstractMedium
+from tidy3d.components.tcad.doping import DopingBoxType
+from tidy3d.components.tcad.types import (
     AugerRecombination,
     BandGapModelTypes,
     CaugheyThomasMobility,
@@ -19,8 +21,6 @@ from tidy3d.components.heat_charge.charge_settings import (
     ShockleyReedHallRecombination,
     SlotboomNarrowingBandGap,
 )
-from tidy3d.components.medium import AbstractMedium
-from tidy3d.components.tcad.doping import DopingBoxType
 from tidy3d.components.types import Union
 from tidy3d.constants import (
     CONDUCTIVITY,
