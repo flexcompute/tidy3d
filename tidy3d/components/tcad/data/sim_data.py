@@ -18,7 +18,7 @@ from tidy3d.components.data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
 )
-from tidy3d.components.tcad.data.monitor_data.monitor_data import (
+from tidy3d.components.tcad.data.types import (
     SteadyVoltageData,
     TCADMonitorDataTypes,
     TemperatureData,

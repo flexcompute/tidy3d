@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import copy
-from abc import ABC, abstractmethod
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Optional, Union
 
-import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import skip_if_fields_missing
-from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.data.data_array import (
     DataArray,
     IndexedDataArray,
@@ -19,200 +15,20 @@ from tidy3d.components.data.data_array import (
     SteadyCapacitanceVoltageDataArray,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
+from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyFreeChargeCarrierMonitor,
     SteadyVoltageMonitor,
 )
-from tidy3d.components.tcad.monitors.heat import (
-    TemperatureMonitor,
-)
-from tidy3d.components.tcad.types import (
-    TCADMonitorTypes,
-)
-from tidy3d.components.types import TYPE_TAG_STR, Coordinate, ScalarSymmetry, annotate_type
-from tidy3d.constants import KELVIN, VOLT
+from tidy3d.components.types import TYPE_TAG_STR, annotate_type
+from tidy3d.constants import VOLT
 from tidy3d.log import log
 
 FieldDataset = Union[
     SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
 ]
 UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
-
-
-class HeatChargeMonitorData(AbstractMonitorData, ABC):
-    """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
-
-    monitor: TCADMonitorTypes = pd.Field(
-        ...,
-        title="Monitor",
-        description="Monitor associated with the data.",
-    )
-
-    symmetry: Tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
-        (0, 0, 0),
-        title="Symmetry",
-        description="Symmetry of the original simulation in x, y, and z.",
-    )
-
-    symmetry_center: Coordinate = pd.Field(
-        (0, 0, 0),
-        title="Symmetry Center",
-        description="Symmetry center of the original simulation in x, y, and z.",
-    )
-
-    @property
-    def symmetry_expanded_copy(self) -> HeatChargeMonitorData:
-        """Return copy of self with symmetry applied."""
-        return self.copy()
-
-    @abstractmethod
-    def field_name(self, val: str) -> str:
-        """Gets the name of the fields to be plot."""
-
-    # def _symmetry_expanded_copy(self, property):
-    def _symmetry_expanded_copy(self, property: FieldDataset) -> FieldDataset:
-        """Return the property with symmetry applied."""
-
-        # no symmetry
-        if all(sym == 0 for sym in self.symmetry):
-            return property
-
-        new_property = copy.copy(property)
-
-        mnt_bounds = np.array(self.monitor.bounds)
-
-        if isinstance(new_property, SpatialDataArray):
-            data_bounds = [
-                [np.min(new_property.x), np.min(new_property.y), np.min(new_property.z)],
-                [np.max(new_property.x), np.max(new_property.y), np.max(new_property.z)],
-            ]
-        else:
-            data_bounds = new_property.bounds
-
-        dims_need_clipping_left = []
-        dims_need_clipping_right = []
-        for dim in range(3):
-            # do not expand monitor with zero size along symmetry direction
-            # this is done because 2d unstructured data does not support this
-            if self.symmetry[dim] == 1:
-                center = self.symmetry_center[dim]
-
-                if mnt_bounds[1][dim] < data_bounds[0][dim]:
-                    # (note that mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim] will be satisfied based on backend behavior)
-                    # simple reflection
-                    new_property = new_property.reflect(
-                        axis=dim, center=center, reflection_only=True
-                    )
-                elif mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim]:
-                    # expand only if monitor bounds missing data
-                    # if we do expand, simply reflect symmetrically the whole data
-                    new_property = new_property.reflect(axis=dim, center=center)
-
-                    # if it turns out that we expanded too much, we will trim unnecessary data later
-                    if mnt_bounds[0][dim] > 2 * center - data_bounds[1][dim]:
-                        dims_need_clipping_left.append(dim)
-
-                    # likewise, if some of original data was only for symmetry expansion, thim excess on the right
-                    if mnt_bounds[1][dim] < data_bounds[1][dim]:
-                        dims_need_clipping_right.append(dim)
-
-        # trim over-expanded data
-        if len(dims_need_clipping_left) > 0 or len(dims_need_clipping_right) > 0:
-            # enlarge clipping domain on positive side arbitrary by 1
-            # should not matter by how much
-            clip_bounds = [mnt_bounds[0] - 1, mnt_bounds[1] + 1]
-            for dim in dims_need_clipping_left:
-                clip_bounds[0][dim] = mnt_bounds[0][dim]
-
-            for dim in dims_need_clipping_right:
-                clip_bounds[1][dim] = mnt_bounds[1][dim]
-
-            if isinstance(new_property, SpatialDataArray):
-                new_property = new_property.sel_inside(clip_bounds)
-            else:
-                new_property = new_property.box_clip(bounds=clip_bounds)
-
-        return new_property
-
-
-class TemperatureData(HeatChargeMonitorData):
-    """Data associated with a :class:`TemperatureMonitor`: spatial temperature field.
-
-    Example
-    -------
-    >>> from tidy3d import TemperatureMonitor, SpatialDataArray
-    >>> import numpy as np
-    >>> temp_data = SpatialDataArray(
-    ...     np.ones((2, 3, 4)), coords={"x": [0, 1], "y": [0, 1, 2], "z": [0, 1, 2, 3]}
-    ... )
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="temperature")
-    >>> temp_mnt_data = TemperatureData(
-    ...     monitor=temp_mnt, temperature=temp_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
-    ... )
-    >>> temp_mnt_data_expanded = temp_mnt_data.symmetry_expanded_copy
-    """
-
-    monitor: TemperatureMonitor = pd.Field(
-        ..., title="Monitor", description="Temperature monitor associated with the data."
-    )
-
-    temperature: Optional[FieldDataset] = pd.Field(
-        ...,
-        title="Temperature",
-        description="Spatial temperature field.",
-        units=KELVIN,
-    )
-
-    @property
-    def field_components(self) -> Dict[str, DataArray]:
-        """Maps the field components to their associated data."""
-        return dict(temperature=self.temperature)
-
-    @pd.validator("temperature", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def warn_no_data(cls, val, values):
-        """Warn if no data provided."""
-
-        mnt = values.get("monitor")
-
-        if val is None:
-            log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
-            )
-
-        return val
-
-    @pd.validator("temperature", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def check_correct_data_type(cls, val, values):
-        """Issue error if incorrect data type is used"""
-
-        mnt = values.get("monitor")
-
-        if isinstance(val, TetrahedralGridDataset) or isinstance(val, TriangularGridDataset):
-            if not isinstance(val.values, IndexedDataArray):
-                raise ValueError(
-                    f"Monitor {mnt} of type 'TemperatureMonitor' cannot be associated with data arrays "
-                    "of type 'IndexVoltageDataArray'."
-                )
-
-        return val
-
-    def field_name(self, val: str) -> str:
-        """Gets the name of the fields to be plot."""
-        if val == "abs^2":
-            return "|T|², K²"
-        else:
-            return "T, K"
-
-    @property
-    def symmetry_expanded_copy(self) -> TemperatureData:
-        """Return copy of self with symmetry applied."""
-
-        new_temp = self._symmetry_expanded_copy(property=self.temperature)
-        return self.updated_copy(temperature=new_temp, symmetry=(0, 0, 0))
 
 
 class SteadyVoltageData(HeatChargeMonitorData):
@@ -482,12 +298,3 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     def field_name(self, val: str) -> str:
         """Gets the name of the fields to be plot."""
         return ""
-
-
-TCADMonitorDataTypes = Union[
-    TemperatureData,
-    SteadyVoltageData,
-    SteadyPotentialData,
-    SteadyFreeCarrierData,
-    SteadyCapacitanceData,
-]

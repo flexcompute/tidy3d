@@ -19,13 +19,6 @@ from tidy3d.components.tcad.boundary.heat import (
     TemperatureBC,
     VoltageBC,
 )
-from tidy3d.components.tcad.data.monitor_data.monitor_data import (
-    SteadyCapacitanceData,
-    SteadyFreeCarrierData,
-    SteadyPotentialData,
-    SteadyVoltageData,
-    TemperatureData,
-)
 from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
