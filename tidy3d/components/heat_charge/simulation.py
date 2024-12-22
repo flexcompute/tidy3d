@@ -37,6 +37,15 @@ from tidy3d.components.tcad.source.heat import (
     TCADSourceTypes,
     UniformHeatSource,
 )
+from tidy3d.components.tcad.viz import (
+    CHARGE_BC_INSULATOR,
+    HEAT_BC_COLOR_CONVECTION,
+    HEAT_BC_COLOR_FLUX,
+    HEAT_BC_COLOR_TEMPERATURE,
+    HEAT_SOURCE_CMAP,
+    plot_params_heat_bc,
+    plot_params_heat_source,
+)
 
 from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError
@@ -61,15 +70,6 @@ from .monitor import (
     SteadyVoltageMonitor,
     TCADMonitorTypes,
     TemperatureMonitor,
-)
-from .viz import (
-    CHARGE_BC_INSULATOR,
-    HEAT_BC_COLOR_CONVECTION,
-    HEAT_BC_COLOR_FLUX,
-    HEAT_BC_COLOR_TEMPERATURE,
-    HEAT_SOURCE_CMAP,
-    plot_params_heat_bc,
-    plot_params_heat_source,
 )
 
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"

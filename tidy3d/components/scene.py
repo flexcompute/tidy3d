@@ -16,6 +16,7 @@ from tidy3d.components.material.tcad.heat import (
     SolidSpec,
 )
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
+from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
 
 from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
@@ -32,7 +33,6 @@ from .data.utils import (
 from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, traverse_geometries
 from .grid.grid import Coords, Grid
-from .heat_charge.viz import HEAT_SOURCE_CMAP
 from .medium import (
     AbstractCustomMedium,
     AbstractPerturbationMedium,
