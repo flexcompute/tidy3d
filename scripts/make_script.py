@@ -2,9 +2,9 @@
 
 Usage:
 
-$ python make_script.py simulation.json heat_charge.py
+$ python make_script.py simulation.json simulation.py
 
-to turn existing `simulation.json` into a script `heat_charge.py`
+to turn existing `simulation.json` into a script `simulation.py`
 
 """
 
@@ -31,7 +31,7 @@ def parse_arguments(args):
     parser.add_argument(
         "script_file",
         type=str,
-        default="heat_charge.py",
+        default="simulation.py",
         help="path to the .py script to write to.",
     )
 

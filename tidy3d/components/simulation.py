@@ -2967,7 +2967,7 @@ class Simulation(AbstractYeeGridSimulation):
     @pydantic.validator("monitors", always=True)
     def _projection_direction(cls, val, values):
         """Warn if field projection observation points are behind surface projection monitors."""
-        # This validator is in heat_charge.py rather than heat.py because volume monitors are
+        # This validator is in simulation.py rather than monitor.py because volume monitors are
         # eventually converted to their bounding surface projection monitors, in which case we
         # do not want this validator to be triggered.
 
