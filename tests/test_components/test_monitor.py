@@ -355,16 +355,16 @@ def test_monitor():
     m5 = td.ModeMonitor(
         size=(1, 1, 0), center=center, mode_spec=td.ModeSpec(), freqs=FREQS, name="test_mon"
     )
-    m6 = td.ModeSolverMonitor(
+    m6 = td.ModeMonitor(size=(1, 1, 0), center=center, freqs=FREQS, name="test_mon")
+    m7 = td.ModeSolverMonitor(
         size=(1, 1, 0),
         center=center,
-        mode_spec=td.ModeSpec(),
         freqs=FREQS,
         name="test_mon",
         direction="-",
     )
-    m7 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
-    m8 = td.DirectivityMonitor(
+    m8 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
+    m9 = td.DirectivityMonitor(
         size=size,
         center=center,
         theta=thetas,
@@ -373,12 +373,11 @@ def test_monitor():
         freqs=FREQS,
         name="directivity",
     )
+    m10 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
 
     tmesh = np.linspace(0, 1, 10)
 
-    for m in [m1, m2, m3, m4, m5, m6, m7, m8]:
-        # m.plot(y=2)
-        # plt.close()
+    for m in [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10]:
         m.storage_size(num_cells=100, tmesh=tmesh)
 
     for m in [m2, m4]:

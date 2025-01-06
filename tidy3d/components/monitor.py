@@ -285,7 +285,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
     """:class:`Monitor` that records mode-related data."""
 
     mode_spec: ModeSpec = pydantic.Field(
-        ...,
+        ModeSpec(),
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
