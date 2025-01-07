@@ -1145,6 +1145,36 @@ class ChargeDataArray(DataArray):
     _dims = ("n", "p")
 
 
+class SteadyCurrentVoltageDataArray(DataArray):
+    """Semiconductor I-V curve data array.
+
+    Example
+    -------
+    >>> I = [0. 0, 1, 4]
+    >>> V = [-1, -0.5, 0, 0.5]
+    >>> td = SteadyCurrentVoltageDataArray(data=I, coords={"Voltage (V)": V})
+    """
+
+    __slots__ = ()
+    _dims = ("Voltage (V)",)
+    _data_attrs = {"long_name": "Current (A)"}
+
+
+class SteadyCapacitanceVoltageDataArray(DataArray):
+    """Semiconductor DC capacitance variations with respect to voltage.
+
+    Example
+    -------
+    >>> C = [0. 0, 1, 4]
+    >>> V = [-1, -0.5, 0, 0.5]
+    >>> td = SteadyCapacitanceVoltageDataArray(data=C, coords={"Voltage (V)": V})
+    """
+
+    __slots__ = ()
+    _dims = ("Voltage (V)",)
+    _data_attrs = {"long_name": "Capacitance (fF)"}
+
+
 class PointDataArray(DataArray):
     """A two-dimensional array that stores coordinates of a collection of points.
     Dimension ``index`` denotes the index of a point in the collection, and dimension ``axis``
@@ -1204,6 +1234,39 @@ class IndexedDataArray(DataArray):
     _dims = ("index",)
 
 
+class IndexVoltageDataArray(DataArray):
+    """Stores a two-dimensional array with coordinates ``index`` and ``voltage``, where
+    ``index`` is usually associated with ``PointDataArray`` and ``voltage`` indicates at what
+    bias/DC-voltage the data was obtained with.
+
+    Example
+    -------
+    >>> indexed_array = IndexVoltageDataArray(
+    ...     (1+1j) * np.random.random((3,2)), coords=dict(index=np.arange(3), voltage=[-1, 1])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "voltage")
+
+
+class SpatialVoltageDataArray(AbstractSpatialDataArray):
+    """Spatial distribution with voltage mapping.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> v = [-1, 1]
+    >>> coords = dict(x=x, y=y, z=z, voltage=v)
+    >>> fd = SpatialVoltageDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z", "voltage")
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
@@ -1232,8 +1295,13 @@ DATA_ARRAY_TYPES = [
     EMEModeIndexDataArray,
     EMEFreqModeDataArray,
     ChargeDataArray,
+    SteadyCurrentVoltageDataArray,
+    SteadyCapacitanceVoltageDataArray,
     PointDataArray,
     CellDataArray,
     IndexedDataArray,
+    IndexVoltageDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
+
+IndexedDataArrayTypes = Union[IndexedDataArray, IndexVoltageDataArray]

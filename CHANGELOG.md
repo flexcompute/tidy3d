@@ -5,10 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0rc1]
 ## [Unreleased]
 
 ### Added
 - `VisualizationSpec` that allows `Medium` instances to specify color and transparency plotting attributes that override default ones.
+- Added :zap: CHARGE Solver API, `SPICE` & `MultiPhysicsMedium` functionality. 
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.

@@ -900,6 +900,7 @@ class GridSpec(Tidy3dBaseModel):
         cls,
         wavelength: pd.PositiveFloat = None,
         min_steps_per_wvl: pd.PositiveFloat = 10.0,
+        min_steps_per_sim_size: pd.PositiveFloat = 10.0,
         max_scale: pd.PositiveFloat = 1.4,
         override_structures: List[StructureType] = (),
         snapping_points: Tuple[Coordinate, ...] = (),
