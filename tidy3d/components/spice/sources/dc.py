@@ -24,9 +24,43 @@ from typing import Optional, Union
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.constants import AMP, VOLT
 
 
 class DCVoltageSource(Tidy3dBaseModel):
+    """
+    This represents a DC voltage source in volts. An extended version of a SPICE model of steady-state independent
+    voltage source.
+
+    Notes
+    -----
+
+        This voltage refers to potential above the equivalent simulation ground. Currently, electrical ports
+        are not defined.
+
+    Examples
+    --------
+    >>> import tidy3d as td
+    >>> voltages = [-0.5, 0, 1, 2, 3, 4]
+    >>> td.DCVoltageSource(voltage=voltages)
+    """
+
     name: Optional[str]
     voltage: Union[pd.FiniteFloat, list[pd.FiniteFloat]] = pd.Field(title="Voltage")
-    # units: Union[VOLT, AMP] = VOLT
+    units: str = VOLT
+
+
+class DCCurrentSource(Tidy3dBaseModel):
+    """
+    This represents a DC current source in amperes. An extended version of a SPICE model of steady-state independent current source.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> currents = [-0.5, 0, 1, 2, 3, 4]
+    >>> td.DCCurrentSource(voltage=currents)
+    """
+
+    name: Optional[str]
+    current: Union[pd.FiniteFloat, list[pd.FiniteFloat]] = pd.Field(title="Current")
+    units: str = AMP

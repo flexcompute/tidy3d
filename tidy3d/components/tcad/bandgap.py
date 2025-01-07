@@ -5,7 +5,7 @@ from tidy3d.constants import VOLT
 
 
 # Band-gap narrowing models
-class SlotboomNarrowingBandGap(Tidy3dBaseModel):
+class SlotboomBandGapNarrowing(Tidy3dBaseModel):
     """
     This class specifies the parameters for the Slotboom model for band-gap narrowing.
 

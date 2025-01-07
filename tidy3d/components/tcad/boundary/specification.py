@@ -15,10 +15,10 @@ class HeatChargeBoundarySpec(Tidy3dBaseModel):
 
     Example
     -------
-    >>> from tidy3d import SimulationBoundary
-    >>> bc_spec = HeatBoundarySpec(
-    ...     placement=SimulationBoundary(),
-    ...     condition=ConvectionBC(ambient_temperature=300, transfer_coeff=1),
+    >>> import tidy3d as td
+    >>> bc_v1 = td.HeatChargeBoundarySpec(
+    ... condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
+    ... placement=td.StructureBoundary(structure=contact_left.name),
     ... )
     """
 
@@ -36,5 +36,18 @@ class HeatChargeBoundarySpec(Tidy3dBaseModel):
 
 
 class HeatBoundarySpec(HeatChargeBoundarySpec):
-    """Heat BC specification
-    NOTE: here for backward-compatibility only."""
+    """Heat BC specification. DEPRECIATED.
+
+    Warning
+    -------
+        Included backward-compatibility only.
+
+    Example
+    --------
+    >>> from tidy3d import SimulationBoundary
+    >>> bc_spec = HeatBoundarySpec(
+    ...     placement=SimulationBoundary(),
+    ...     condition=ConvectionBC(ambient_temperature=300, transfer_coeff=1),
+    ... )
+
+    """

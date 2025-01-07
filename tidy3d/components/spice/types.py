@@ -1,5 +1,5 @@
 from typing import Union
 
-from tidy3d.components.spice.analysis.dc import SteadyDCAnalysis
+from tidy3d.components.spice.analysis.dc import SteadyChargeDCAnalysis
 
-ElectricalAnalysisTypes = Union[SteadyDCAnalysis]
+ElectricalAnalysisTypes = Union[SteadyChargeDCAnalysis]

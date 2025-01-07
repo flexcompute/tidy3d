@@ -62,4 +62,4 @@ Bandgap
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.SlotboomNarrowingBandGap
+   tidy3d.SlotboomBandGapNarrowing

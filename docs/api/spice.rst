@@ -20,4 +20,4 @@ Analysis
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SteadyDCAnalysis
+   tidy3d.SteadyChargeDCAnalysis

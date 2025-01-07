@@ -868,7 +868,7 @@ class Scene(Tidy3dBaseModel):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         property: str = "eps"
             Indicates the property to plot for the structures. Currently supported properties
-            are ["eps", "doping", "acceptors", "donors"]
+            are ["eps", "doping", "N_a", "N_d"]
 
         Returns
         -------
@@ -888,7 +888,7 @@ class Scene(Tidy3dBaseModel):
         need_filtered_shaped = False
         if property == "eps":
             need_filtered_shaped = alpha < 1 and not isinstance(self.medium, AbstractCustomMedium)
-        if property in ["donors", "acceptors", "doping"]:
+        if property in ["N_d", "N_a", "doping"]:
             need_filtered_shaped = alpha < 1
 
         if need_filtered_shaped:
@@ -898,7 +898,7 @@ class Scene(Tidy3dBaseModel):
             plane = Box(center=center, size=size)
             # for doping background structure could be a non-doping structure
             # that needs to be rendered
-            if property in ["donors", "acceptors", "doping"]:
+            if property in ["N_d", "N_a", "doping"]:
                 structures = [self.background_structure] + list(structures)
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
@@ -918,12 +918,12 @@ class Scene(Tidy3dBaseModel):
                 if property_max is None:
                     property_max = eps_max_sim
 
-            if property in ["donors", "acceptors", "doping"]:
+            if property in ["N_d", "N_a", "doping"]:
                 acceptor_limits, donor_limits = self.doping_bounds()
-                if property == "donors":
+                if property == "N_d":
                     property_min = donor_limits[0]
                     property_max = donor_limits[1]
-                elif property == "acceptors":
+                elif property == "N_a":
                     property_min = acceptor_limits[0]
                     property_max = acceptor_limits[1]
                 elif property == "doping":
@@ -931,7 +931,7 @@ class Scene(Tidy3dBaseModel):
                     property_max = acceptor_limits[1]
 
         for medium, shape in medium_shapes:
-            if property in ["doping", "acceptors", "donors"]:
+            if property in ["doping", "N_a", "N_d"]:
                 if not isinstance(medium.charge, SemiconductorMedium):
                     ax = self._plot_shape_structure_heat_charge_property(
                         alpha=alpha,
@@ -981,7 +981,7 @@ class Scene(Tidy3dBaseModel):
                     )
 
         if cbar:
-            if property in ["doping", "acceptors", "donors"]:
+            if property in ["doping", "N_a", "N_d"]:
                 Scene._add_cbar(
                     vmin=property_min,
                     vmax=property_max,
@@ -1757,7 +1757,7 @@ class Scene(Tidy3dBaseModel):
             if isinstance(struct.medium.charge, SemiconductorMedium):
                 electric_spec = struct.medium.charge
                 for doping, limits in zip(
-                    [electric_spec.acceptors, electric_spec.donors], [acceptors_lims, donors_lims]
+                    [electric_spec.N_a, electric_spec.N_d], [acceptors_lims, donors_lims]
                 ):
                     if isinstance(doping, float):
                         if doping < limits[0]:
@@ -1800,7 +1800,7 @@ class Scene(Tidy3dBaseModel):
     ):
         """
         Plot shape made of structure defined with doping.
-        plt_type accepts ["doping", "acceptors", "donors"]
+        plt_type accepts ["doping", "N_a", "N_d"]
         """
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1823,12 +1823,12 @@ class Scene(Tidy3dBaseModel):
         X, Y = np.meshgrid(coords_2D[0], coords_2D[1], indexing="ij")
 
         struct_doping = [
-            np.zeros(X.shape),  # let's use 0 for acceptors
-            np.zeros(X.shape),  # and 1 for donors
+            np.zeros(X.shape),  # let's use 0 for N_a
+            np.zeros(X.shape),  # and 1 for N_d
         ]
 
         electric_spec = medium.charge
-        for n, doping in enumerate([electric_spec.acceptors, electric_spec.donors]):
+        for n, doping in enumerate([electric_spec.N_a, electric_spec.N_d]):
             if isinstance(doping, float):
                 struct_doping[n] = struct_doping[n] + doping
             if isinstance(doping, SpatialDataArray):
@@ -1853,9 +1853,9 @@ class Scene(Tidy3dBaseModel):
 
         if plt_type == "doping":
             struct_doping_to_plot = struct_doping[0] - struct_doping[1]
-        elif plt_type == "acceptors":
+        elif plt_type == "N_a":
             struct_doping_to_plot = struct_doping[0]
-        elif plt_type == "donors":
+        elif plt_type == "N_d":
             struct_doping_to_plot = struct_doping[1]
 
         ax.pcolormesh(

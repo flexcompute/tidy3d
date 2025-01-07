@@ -724,7 +724,7 @@ class TestCharge:
     # Define charge settings as fixtures within the class
     @pytest.fixture(scope="class")
     def charge_tolerance(self):
-        return td.SteadyDCAnalysis(
+        return td.SteadyChargeDCAnalysis(
             tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
         )
 

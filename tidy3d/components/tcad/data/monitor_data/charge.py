@@ -65,22 +65,6 @@ class SteadyPotentialData(HeatChargeMonitorData):
 
         return val
 
-    # @pd.validator("potential", always=True)
-    # @skip_if_fields_missing(["monitor"])
-    # def check_correct_data_type(cls, val, values):
-    #     """Issue error if incorrect data type is used"""
-
-    #     mnt = values.get("monitor")
-
-    #     if isinstance(val, TetrahedralGridDataset) or isinstance(val, TriangularGridDataset):
-    #         if not isinstance(val.values, IndexVoltageDataArray):
-    #             raise ValueError(
-    #                 f"Monitor {mnt} of type 'SteadyVoltageMonitor' is not associated with data arrays "
-    #                 "of type 'IndexVoltageDataArray' and cannot be associated with an applied voltage."
-    #             )
-
-    #     return val
-
     @property
     def symmetry_expanded_copy(self) -> SteadyPotentialData:
         """Return copy of self with symmetry applied."""
@@ -97,7 +81,24 @@ class SteadyPotentialData(HeatChargeMonitorData):
 
 
 class SteadyFreeCarrierData(HeatChargeMonitorData):
-    """Class that stores free carrier concentration in Charge simulations."""
+    """
+    This data class stores free-carrier concentration in charge simulations.
+
+    I guess this is this?
+
+    .. math::
+
+        \\begin{equation}
+            n = N_c \\exp\\left( \\frac{E_{Fn} - E_C}{k_B T} \\right)
+        \\end{equation}
+
+    .. math::
+
+        \\begin{equation}
+            p = N_v \\exp\\left( \\frac{E_V - E_{Fp}}{k_B T} \\right)
+        \\end{equation}
+
+    """
 
     monitor: SteadyFreeCarrierMonitor = pd.Field(
         ...,

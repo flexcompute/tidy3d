@@ -1,6 +1,6 @@
 """File containing classes required for the setup of a DEVSIM case."""
 
-from tidy3d.components.tcad.bandgap import SlotboomNarrowingBandGap
+from tidy3d.components.tcad.bandgap import SlotboomBandGapNarrowing
 from tidy3d.components.tcad.boundary.charge import CurrentBC, InsulatingBC, VoltageBC
 from tidy3d.components.tcad.boundary.heat import ConvectionBC, HeatFluxBC, TemperatureBC
 from tidy3d.components.tcad.generation_recombination import (
@@ -23,7 +23,7 @@ MobilityModelTypes = Union[CaugheyThomasMobility]
 RecombinationModelTypes = Union[
     AugerRecombination, RadiativeRecombination, ShockleyReedHallRecombination
 ]
-BandGapModelTypes = Union[SlotboomNarrowingBandGap]
+BandGapNarrowingModelTypes = Union[SlotboomBandGapNarrowing]
 
 # types of monitors that are accepted by heat simulation
 HeatChargeMonitorTypes = Union[
