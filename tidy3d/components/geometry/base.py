@@ -2536,7 +2536,7 @@ class Box(SimplePlaneIntersection, Centered):
         def integrate_face(arr: xr.DataArray) -> complex:
             """Interpolate and integrate a scalar field data over the face using bounds."""
 
-            arr_at_face = arr.interp(**{dim_normal: coord_normal_face}, assume_sorted=True)
+            arr_at_face = arr.interp(**{dim_normal: float(coord_normal_face)}, assume_sorted=True)
 
             integral_result = integrate_within_bounds(
                 arr=arr_at_face,
