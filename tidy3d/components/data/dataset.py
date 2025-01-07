@@ -9,8 +9,12 @@ from typing import Any, Callable, Dict, Tuple, Union
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
-from matplotlib import pyplot as plt
-from matplotlib.tri import Triangulation
+
+try:
+    from matplotlib import pyplot as plt
+    from matplotlib.tri import Triangulation
+except ImportError:
+    pass
 
 from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER, inf
 from ...exceptions import DataError, Tidy3dNotImplementedError, ValidationError

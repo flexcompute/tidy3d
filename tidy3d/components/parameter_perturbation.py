@@ -6,7 +6,10 @@ import functools
 from abc import ABC, abstractmethod
 from typing import Callable, List, Optional, Tuple, Union
 
-import matplotlib.pyplot as plt
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    pass
 import numpy as np
 import pydantic.v1 as pd
 

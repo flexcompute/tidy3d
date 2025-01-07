@@ -6,7 +6,6 @@ from abc import ABC
 from typing import Any, Dict, List, Mapping, Union
 
 import autograd.numpy as anp
-import dask
 import h5py
 import numpy as np
 import xarray as xr
@@ -256,6 +255,8 @@ class DataArray(xr.DataArray):
 
     def __hash__(self) -> int:
         """Generate hash value for a :class:.`DataArray` instance, needed for custom components."""
+        import dask
+
         token_str = dask.base.tokenize(self)
         return hash(token_str)
 

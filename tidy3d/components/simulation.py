@@ -9,7 +9,12 @@ from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import autograd.numpy as np
-import matplotlib as mpl
+
+try:
+    import matplotlib as mpl
+except ImportError:
+    pass
+
 import pydantic.v1 as pydantic
 import xarray as xr
 

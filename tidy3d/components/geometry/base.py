@@ -11,7 +11,11 @@ import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 import xarray as xr
-from matplotlib import patches
+
+try:
+    from matplotlib import patches
+except ImportError:
+    pass
 
 from ...constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
 from ...exceptions import (

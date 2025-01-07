@@ -6,11 +6,18 @@ from functools import wraps
 from html import escape
 from typing import Any
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
 import pydantic.v1 as pd
-from matplotlib.patches import ArrowStyle, PathPatch
-from matplotlib.path import Path
+
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as ticker
+    from matplotlib.patches import ArrowStyle, PathPatch
+    from matplotlib.path import Path
+
+    # default arrow style
+    arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
+except ImportError:
+    arrow_style = None
 from numpy import array, concatenate, inf, ones
 
 from ..constants import UnitScaling
@@ -160,10 +167,6 @@ MEDIUM_CMAP = [
 # colormap for structure's permittivity in plot_eps
 STRUCTURE_EPS_CMAP = "gist_yarg"
 STRUCTURE_HEAT_COND_CMAP = "gist_yarg"
-
-# default arrow style
-arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
-
 
 """=================================================================================================
 Descartes modified from https://pypi.org/project/descartes/ for Shapely >= 1.8.0
