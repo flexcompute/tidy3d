@@ -1698,7 +1698,7 @@ class PolySlab(base.Planar):
             verts_3d[plane_axs[1], :] = self.vertices[:, 1]
             rotation = RotationAroundAxis(angle=angle, axis=axis)
             rotated_vertices = rotation.rotate_vector(verts_3d)
-            rotated_vertices = np.take(rotated_vertices, plane_axs, axis=0).T
+            rotated_vertices = rotated_vertices[plane_axs, :].T
             return self.updated_copy(vertices=rotated_vertices)
 
         return super().rotated(angle=angle, axis=axis)

@@ -1867,3 +1867,98 @@ class TestDataArrayGrads:
         b = 1.0
         check_grads(lambda x: objective(x, b), modes=["fwd", "rev"], order=2)(a)
         check_grads(lambda x: objective(a, x), modes=["fwd", "rev"], order=2)(b)
+
+
+@pytest.fixture
+def polyslab() -> td.PolySlab:
+    """Creates a PolySlab instance for testing affine transformations."""
+    vertices = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
+    axis = 1  # 0 for x, 1 for y, 2 for z
+    slab_bounds = (-1.0, 1.0)
+
+    return td.PolySlab(vertices=vertices, axis=axis, slab_bounds=slab_bounds)
+
+
+@pytest.mark.parametrize(
+    "x, y, z",
+    [
+        (0.0, 0.0, 0.0),  # No translation (edge case)
+        (0.1, 0.2, 0.3),  # Small positive values
+        (-0.1, -0.2, -0.3),  # Small negative values
+        (1e-5, 1e-5, 1e-5),  # Near-zero translation
+        (10.0, 10.0, 10.0),  # Large values
+    ],
+)
+def test_polyslab_translated_grad(polyslab: td.PolySlab, x: float, y: float, z: float) -> None:
+    """Checks the differentiability of the translation operation of PolySlab."""
+    poly = polyslab
+
+    def translated_grad(x: float, y: float, z: float) -> np.ndarray:
+        """Computes the translated vertices of a PolySlab object."""
+        new_poly = poly.translated(x, y, z)
+        return new_poly.vertices
+
+    check_grads(lambda x: translated_grad(x, y, z), modes=["rev"])(x)
+    check_grads(lambda y: translated_grad(x, y, z), modes=["rev"])(y)
+    check_grads(lambda z: translated_grad(x, y, z), modes=["rev"])(z)
+
+
+@pytest.mark.parametrize(
+    "x, y, z, expect_exception",
+    [
+        (0.0, 0.0, 0.0, True),  # No scaling
+        (0.1, 0.2, 0.3, False),  # Small positive values
+        (-0.1, 0.2, -0.3, False),  # Reflect along x and z axes
+        (0.1, -0.2, 0.3, True),  # Flips slab bounds (pydantic validation to fail)
+        (1e-5, 1e-5, 1e-5, True),  # Near-zero scaling (polygon almost collapses to a 1D curve)
+        (10.0, 10.0, 10.0, False),  # Large values
+    ],
+)
+def test_polyslab_scaled_grad(
+    polyslab: td.PolySlab, x: float, y: float, z: float, expect_exception: bool
+) -> None:
+    """Checks the differentiability of the scaling operation of PolySlab."""
+    poly = polyslab
+
+    def scaled_grad(x: float, y: float, z: float) -> np.ndarray:
+        """Computes the scaled vertices of a PolySlab object."""
+        new_poly = poly.scaled(x, y, z)
+        return new_poly.vertices
+
+    if expect_exception:
+        with pytest.raises(ValueError, match=".*"):
+            check_grads(lambda x: scaled_grad(x, y, z), modes=["rev"])(x)
+            check_grads(lambda y: scaled_grad(x, y, z), modes=["rev"])(y)
+            check_grads(lambda z: scaled_grad(x, y, z), modes=["rev"])(z)
+    else:
+        check_grads(lambda x: scaled_grad(x, y, z), modes=["rev"])(x)
+        check_grads(lambda y: scaled_grad(x, y, z), modes=["rev"])(y)
+        check_grads(lambda z: scaled_grad(x, y, z), modes=["rev"])(z)
+
+
+@pytest.mark.parametrize(
+    "theta, axis",
+    [
+        (0.0, 0),  # No rotation around x-axis
+        (np.pi / 6, 1),  # Small rotation around y-axis
+        (-np.pi / 4, 2),  # Rotation around z-axis
+        (np.pi / 4, 1),  # 90-degree rotation around y-axis
+        (np.pi, 1),  # 180-degree rotation around y-axis
+    ],
+)
+def test_polyslab_rotated_grad(polyslab: td.PolySlab, theta: float, axis: int) -> None:
+    """Checks the differentiability of the rotation operation of PolySlab."""
+    poly = polyslab
+    expect_exception = axis != poly.axis  # Rotation about different axis will fail
+
+    def rotated_grad(angle: float, axis: int) -> np.ndarray:
+        """Computes the rotated vertices of a PolySlab object."""
+        return poly.rotated(angle, axis).vertices
+
+    if expect_exception:
+        with pytest.raises(
+            AttributeError, match=".*'Transformed' object has no attribute 'vertices'.*"
+        ):
+            rotated_grad(theta, axis)
+    else:
+        check_grads(lambda theta: rotated_grad(theta, axis), modes=["rev"])(theta)

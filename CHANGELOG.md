@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.8.0rc1] - 2024-12-17
 
 ### Added
+- Autograd support for polyslab transformations.
 - Support for differentiation with respect to `ComplexPolySlab.vertices`.
 - Introduce RF material library. Users can now import `rf_material_library` from `tidy3d.plugins.microwave`.
 - Users can specify the background medium for a structure in automatic differentiation by supplying `Structure.background_permittivity`.
