@@ -68,8 +68,8 @@ gdspy = { version = "*", optional = true }
 gdstk = { version = ">=0.9.49", optional = true }
 
 # jax
-jaxlib = { version = ">=0.4.25", source = "jaxsource", optional = true }
-jax = { version = ">=0.4.25", extras = [
+jaxlib = { version = ">=0.4.26", source = "jaxsource", optional = true }
+jax = { version = ">=0.4.26", extras = [
   "cpu",
 ], source = "jaxsource", optional = true }
 
