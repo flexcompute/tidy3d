@@ -12,6 +12,7 @@ from ..constants import RADIAN
 from ..exceptions import ValidationError
 from .base import Tidy3dBaseModel, cached_property
 from .types import ArrayFloat2D, Axis, Coordinate, TensorReal
+from .autograd import TracedFloat
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):
@@ -79,7 +80,7 @@ class RotationAroundAxis(AbstractRotation):
         "indicating x, y, or z.",
     )
 
-    angle: float = pd.Field(
+    angle: TracedFloat = pd.Field(
         0.0,
         title="Angle of Rotation",
         description="Angle of rotation in radians.",
@@ -103,13 +104,11 @@ class RotationAroundAxis(AbstractRotation):
             )
         return val
 
-    @cached_property
     def isidentity(self) -> bool:
         """Check whether rotation is identity."""
 
         return np.isclose(self.angle % (2 * np.pi), 0)
 
-    @cached_property
     def matrix(self) -> TensorReal:
         """Rotation matrix."""
 
