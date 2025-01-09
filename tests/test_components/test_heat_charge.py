@@ -143,7 +143,7 @@ def boundary_conditions():
     bc_flux = td.HeatFluxBC(flux=20)
     bc_conv = td.ConvectionBC(ambient_temperature=400, transfer_coeff=0.2)
     bc_volt = td.VoltageBC(source=td.DCVoltageSource(voltage=[1]))
-    bc_current = td.CurrentBC(current_density=3e-1)
+    bc_current = td.CurrentBC(source=td.DCCurrentSource(current=3e-1))
 
     return [bc_temp, bc_flux, bc_conv, bc_volt, bc_current]
 
@@ -468,7 +468,7 @@ def test_heat_charge_bcs_validation(boundary_conditions):
 
     # Invalid CurrentBC: infinite current density
     with pytest.raises(pd.ValidationError):
-        td.CurrentBC(current_density=td.inf)
+        td.CurrentBC(source=td.DCCurrentSource(current=td.inf))
 
 
 def test_heat_charge_monitors_validation(monitors):
@@ -622,8 +622,8 @@ class TestCharge:
             charge=td.SemiconductorMedium(
                 conductivity=1,
                 permittivity=11.7,
-                donors=0,
-                acceptors=CHARGE_SIMULATION.acceptors,
+                N_d=0,
+                N_a=CHARGE_SIMULATION.acceptors,
             ),
             name="Si_p",
         )
@@ -634,8 +634,8 @@ class TestCharge:
             charge=td.SemiconductorMedium(
                 conductivity=1,
                 permittivity=11.7,
-                donors=CHARGE_SIMULATION.donors,
-                acceptors=0,
+                N_d=CHARGE_SIMULATION.donors,
+                N_a=0,
             ),
             name="Si_n",
         )

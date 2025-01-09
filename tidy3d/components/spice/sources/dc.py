@@ -58,7 +58,7 @@ class DCCurrentSource(Tidy3dBaseModel):
     -------
     >>> import tidy3d as td
     >>> currents = [-0.5, 0, 1, 2, 3, 4]
-    >>> td.DCCurrentSource(voltage=currents)
+    >>> td.DCCurrentSource(current=currents)
     """
 
     name: Optional[str]

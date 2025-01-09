@@ -155,7 +155,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         \\end{equation}
 
     i.e., we are not considering the effect of band-gab narrowing and degeneracy on the effective
-    electric field :math:`\\mathbf{F_{n,p}}`.
+    electric field :math:`\\mathbf{F_{n,p}}`. This is a good approximation for non-degenerate semiconductors.
 
     Let's explore how material properties are defined as class parameters or other classes.
 
