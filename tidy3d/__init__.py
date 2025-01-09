@@ -284,6 +284,7 @@ from .components.time_modulation import (
     SpaceTimeModulation,
 )
 from .components.transformation import RotationAroundAxis
+from .components.viz import VisualizationSpec
 
 # config
 from .config import config
@@ -534,6 +535,7 @@ __all__ = [
     "HeuristicPECStaircasing",
     "PECConformal",
     "SurfaceImpedance",
+    "VisualizationSpec",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",

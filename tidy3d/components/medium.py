@@ -82,7 +82,7 @@ from .types import (
     TensorReal,
 )
 from .validators import _warn_potential_error, validate_name_str, validate_parameter_perturbation
-from .viz import add_ax_if_none
+from .viz import VisualizationSpec, add_ax_if_none
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -644,6 +644,12 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         None,
         title="Modulation Spec",
         description="Modulation spec applied on top of the base medium properties.",
+    )
+
+    viz_spec: Optional[VisualizationSpec] = pd.Field(
+        None,
+        title="Visualization Specification",
+        description="Plotting specification for visualizing medium.",
     )
 
     @cached_property
