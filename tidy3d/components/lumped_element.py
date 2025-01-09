@@ -884,6 +884,12 @@ class LinearLumpedElement(RectangularLumpedElement):
         discriminator=TYPE_TAG_STR,
     )
 
+    backend_impl: bool = pd.Field(
+        ...,
+        title="Backend implementation",
+        description="Use backend implementation, internal usage.",
+    )
+
     def to_structure(self, grid: Grid = None) -> Structure:
         """Converts the :class:`LinearLumpedElement` object to a :class:`Structure`
         ready to be added to the :class:`Simulation`"""
