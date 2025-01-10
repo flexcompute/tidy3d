@@ -21,6 +21,7 @@ def hide_vtk(monkeypatch, request):
 
 
 @pytest.mark.usefixtures("hide_vtk")
+@pytest.mark.parametrize("dataset_type_ind", [0, 1])
 def test_triangular_dataset_no_vtk(tmp_path, log_capture, dataset_type_ind):
     _test_triangular_dataset(log_capture, tmp_path, "test_name", dataset_type_ind, no_vtk=True)
 
