@@ -22,7 +22,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, no
         extra_dims = {}
 
     if dataset_type_ind == 1:
-        dataset_type = td.TriangularGridVoltageDataset
+        dataset_type = td.TriangularGridDataset
         values_type = td.IndexVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
 
@@ -334,7 +334,7 @@ def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, dataset_type_ind, n
         extra_dims = {}
 
     if dataset_type_ind == 1:
-        dataset_type = td.TetrahedralGridVoltageDataset
+        dataset_type = td.TetrahedralGridDataset
         values_type = td.IndexVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
 
