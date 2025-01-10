@@ -6,8 +6,13 @@ from typing import Dict, Literal, Union
 
 import numpy as np
 import pydantic.v1 as pd
-from matplotlib import pyplot as plt
-from matplotlib.tri import Triangulation
+
+try:
+    from matplotlib import pyplot as plt
+    from matplotlib.tri import Triangulation
+except ImportError:
+    pass
+
 from xarray import DataArray as XrDataArray
 
 from ....constants import inf
