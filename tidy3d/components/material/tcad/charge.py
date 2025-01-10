@@ -204,6 +204,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         - Boltzmann statistics are supported
         - Iso-thermal equations with :math:`T=300K`
         - Steady state only
+        - Dopants are considered to be fully ionized
 
     Note
     ----
