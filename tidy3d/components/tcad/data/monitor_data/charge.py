@@ -103,7 +103,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         description=r"Contains the computed electrons concentration $n$.",
         discriminator=TYPE_TAG_STR,
     )
-    # electrons = n
+    # n = electrons
 
     holes: UnstructuredFieldType = pd.Field(
         None,
@@ -111,7 +111,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         description=r"Contains the computed holes concentration $p$.",
         discriminator=TYPE_TAG_STR,
     )
-    # holes = p
+    # p = holes
 
     @property
     def field_components(self) -> Dict[str, DataArray]:
@@ -186,7 +186,8 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
 
         C_{n,p} = \frac{Q_{n,p}(V + \\Delta V) - Q_{n,p}(V)}{\\Delta V}
 
-    TODO is this the convergence dV Marc or voltages=[]?
+
+    This is only computed when a voltage source with more than two sources is included within the simulation and determines the :math:`\\Delta V`.
     """
 
     monitor: SteadyCapacitanceMonitor = pd.Field(
@@ -200,14 +201,14 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
         title="Hole capacitance",
         description=r"Small signal capacitance ($\frac{dQ_p}{dV}$) associated to the monitor.",
     )
-    # hole_capacitance = C_p
+    # C_p = hole_capacitance
 
     electron_capacitance: SteadyCapacitanceVoltageDataArray = pd.Field(
         None,
         title="Electron capacitance",
         description=r"Small signal capacitance ($\frac{dQn}{dV}$) associated to the monitor.",
     )
-    #  electron_capacitance = C_n
+    # C_n = electron_capacitance
 
     @pd.validator("hole_capacitance", always=True)
     @skip_if_fields_missing(["monitor"])
