@@ -489,8 +489,9 @@ class Scene(Tidy3dBaseModel):
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
             plot_params = plot_params.copy(update={"facecolor": facecolor})
-            if medium.viz_spec is not None:
-                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+            if hasattr(medium, "viz_spec"):
+                if medium.viz_spec is not None:
+                    plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
         else:
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
@@ -1233,8 +1234,9 @@ class Scene(Tidy3dBaseModel):
         """Constructs the plot parameters for a given medium in scene.plot_eps()."""
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        if medium.viz_spec is not None:
-            plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+        if hasattr(medium, "viz_spec"):
+            if medium.viz_spec is not None:
+                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
@@ -1560,8 +1562,9 @@ class Scene(Tidy3dBaseModel):
         """
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        if medium.viz_spec is not None:
-            plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+        if hasattr(medium, "viz_spec"):
+            if medium.viz_spec is not None:
+                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
