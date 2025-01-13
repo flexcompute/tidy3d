@@ -1076,9 +1076,24 @@ def test_gaussian_doping_sigma_calculation():
 
 def test_gaussian_doping_get_contrib():
     """Test get_contrib method in GaussianDoping."""
-    box = td.GaussianDoping(ref_con=1e15, concentration=1e18, width=0.1, source="xmin")
+    max_N = 1e18
+    min_N = 1e15
+    width = 0.1
+
+    box = td.GaussianDoping(ref_con=min_N, concentration=max_N, width=width, source="xmin")
+
     coords = {"x": [0], "y": [0], "z": [0]}
     contrib = box.get_contrib(coords)
+    assert np.isclose(float(contrib), max_N, rtol=1e-6)
+
+    coords = {"x": [0.5], "y": [0], "z": [0]}
+    contrib = box.get_contrib(coords)
+    assert np.isclose(float(contrib), min_N, rtol=1e-6)
+
+    coords = {"x": [0.5 - width / 2], "y": [0], "z": [0]}
+    contrib = box.get_contrib(coords)
+    expected_value = max_N * np.exp(-width * width / 4 / box.sigma / box.sigma / 2)
+    assert np.isclose(float(contrib), expected_value, rtol=1e-6)
 
 
 def test_gaussian_doping_get_contrib_2d_coords():
