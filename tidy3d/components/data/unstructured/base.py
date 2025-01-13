@@ -1632,7 +1632,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Extracted data.
         """
 
-    @requires_vtk
     def _non_spatial_sel(
         self,
         method=None,
@@ -1661,7 +1660,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         }
         return self.updated_copy(values=self.values.sel(**sel_kwargs_only_lists, method=method))
 
-    @requires_vtk
     def isel(
         self,
         **sel_kwargs,
