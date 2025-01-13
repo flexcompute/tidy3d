@@ -2,9 +2,10 @@
 
 import inspect
 from datetime import datetime
-from typing import Callable, List, Union
+from typing import Callable, List, Tuple, Union
 
 from rich.console import Console
+from rich.text import Text
 from typing_extensions import Literal
 
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
@@ -41,9 +42,9 @@ DEFAULT_LOG_STYLES = {
 CONSOLE_WIDTH = 80
 
 
-def _default_log_level_format(level: str) -> str:
-    """By default just return unformatted log level string."""
-    return level
+def _default_log_level_format(level: str, message: str) -> Tuple[str, str]:
+    """By default just return unformatted prefix and message."""
+    return level, message
 
 
 def _get_level_int(level: LogValue) -> int:
@@ -68,26 +69,36 @@ class LogHandler:
         console: Console,
         level: LogValue,
         log_level_format: Callable = _default_log_level_format,
+        prefix_every_line: bool = False,
     ):
         self.level = _get_level_int(level)
         self.console = console
         self.log_level_format = log_level_format
+        self.prefix_every_line = prefix_every_line
 
     def handle(self, level, level_name, message):
         """Output log messages depending on log level"""
         if level >= self.level:
             stack = inspect.stack()
+            console = self.console
             offset = 4
             if stack[offset - 1].filename.endswith("exceptions.py"):
                 # We want the calling site for exceptions.py
                 offset += 1
-            self.console.log(
-                self.log_level_format(level_name),
-                message,
-                sep=": ",
-                style=DEFAULT_LOG_STYLES[level_name],
-                _stack_offset=offset,
-            )
+            prefix, msg = self.log_level_format(level_name, message)
+            if self.prefix_every_line:
+                wrapped_text = Text(msg, style="default")
+                msgs = wrapped_text.wrap(console=console, width=console.width - len(prefix) - 2)
+            else:
+                msgs = [msg]
+            for msg in msgs:
+                console.log(
+                    prefix,
+                    msg,
+                    sep=": ",
+                    style=DEFAULT_LOG_STYLES[level_name],
+                    _stack_offset=offset,
+                )
 
 
 class Logger:

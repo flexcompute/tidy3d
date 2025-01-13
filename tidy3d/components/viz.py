@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from functools import wraps
 from html import escape
-from typing import Any
+from typing import Any, Dict, Optional
 
 import pydantic.v1 as pd
 
 try:
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
+    from matplotlib.colors import is_color_like
     from matplotlib.patches import ArrowStyle, PathPatch
     from matplotlib.path import Path
 
@@ -18,6 +19,7 @@ try:
     arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
 except ImportError:
     arrow_style = None
+
 from numpy import array, concatenate, inf, ones
 
 from ..constants import UnitScaling
@@ -99,6 +101,10 @@ class AbstractPlotParams(Tidy3dBaseModel):
         }
         return self.copy(update=update_dict)
 
+    def override_with_viz_spec(self, viz_spec) -> AbstractPlotParams:
+        """Override plot params with supplied VisualizationSpec."""
+        return self.include_kwargs(**dict(viz_spec))
+
     def to_kwargs(self) -> dict:
         """Export the plot parameters as kwargs dict that can be supplied to plot function."""
         kwarg_dict = self.dict()
@@ -167,6 +173,47 @@ MEDIUM_CMAP = [
 # colormap for structure's permittivity in plot_eps
 STRUCTURE_EPS_CMAP = "gist_yarg"
 STRUCTURE_HEAT_COND_CMAP = "gist_yarg"
+
+
+def is_valid_color(value: str) -> str:
+    if not is_color_like(value):
+        raise pd.ValidationError(f"{value} is not a valid plotting color")
+
+    return value
+
+
+class VisualizationSpec(Tidy3dBaseModel):
+    """Defines specification for visualization when used with plotting functions."""
+
+    facecolor: str = pd.Field(
+        "",
+        title="Face color",
+        description="Color applied to the faces in visualization.",
+    )
+
+    edgecolor: Optional[str] = pd.Field(
+        "",
+        title="Edge color",
+        description="Color applied to the edges in visualization.",
+    )
+
+    alpha: Optional[pd.confloat(ge=0.0, le=1.0)] = pd.Field(
+        1.0,
+        title="Opacity",
+        description="Opacity/alpha value in plotting between 0 and 1.",
+    )
+
+    @pd.validator("facecolor", always=True)
+    def validate_color(value: str) -> str:
+        return is_valid_color(value)
+
+    @pd.validator("edgecolor", always=True)
+    def validate_and_copy_color(value: str, values: Dict[str, Any]) -> str:
+        if (value == "") and "facecolor" in values:
+            return is_valid_color(values["facecolor"])
+
+        return is_valid_color(value)
+
 
 """=================================================================================================
 Descartes modified from https://pypi.org/project/descartes/ for Shapely >= 1.8.0

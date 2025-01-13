@@ -51,6 +51,7 @@ from ..viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
     PlotParams,
+    VisualizationSpec,
     add_ax_if_none,
     arrow_style,
     equal_aspect,
@@ -450,6 +451,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         z: float = None,
         ax: Ax = None,
         plot_length_units: LengthUnit = None,
+        viz_spec: VisualizationSpec = None,
         **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
@@ -466,6 +468,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Matplotlib axes to plot on, if not specified, one is created.
         plot_length_units : LengthUnit = None
             Specify units to use for axis labels, tick labels, and the title.
+        viz_spec : VisualizationSpec = None
+            Plotting parameters associated with a medium to use instead of defaults.
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -481,7 +485,10 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections_plane(x=x, y=y, z=z)
 
-        plot_params = self.plot_params.include_kwargs(**patch_kwargs)
+        plot_params = self.plot_params
+        if viz_spec is not None:
+            plot_params = plot_params.override_with_viz_spec(viz_spec)
+        plot_params = plot_params.include_kwargs(**patch_kwargs)
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
