@@ -29,6 +29,7 @@ class VoltageBC(HeatChargeBC):
     """
 
     source: VoltageSourceTypes = pd.Field(
+        ...,
         title="Voltage",
         description="Electric potential to be applied at the specified boundary.",
         units=VOLT,
@@ -47,6 +48,7 @@ class CurrentBC(HeatChargeBC):
     """
 
     source: CurrentSourceTypes = pd.Field(
+        ...,
         title="Current Source",
         description="A current source",
         units=CURRENT_DENSITY,
