@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Potential task name mismatches between forward and adjoint simulations in batch tasks.
+- Magnitude of gradient computation in `CustomMedium` by accounting properly for full volume element when permittivity data is defined over fewer dimensions than the medium.
+
 ## [2.7.8] - 2024-11-27
 
 ### Changed
@@ -15,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Gradient inaccuracy when a multi-frequency monitor is used but a single frequency is selected.
 - Revert single cell center approximation for custom medium gradient.
-- Potential task name mismatches between forward and adjoint simulations in batch tasks.
 
 ## [2.7.7] - 2024-11-15
 
