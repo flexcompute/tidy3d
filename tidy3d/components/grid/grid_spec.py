@@ -900,11 +900,11 @@ class GridSpec(Tidy3dBaseModel):
         cls,
         wavelength: pd.PositiveFloat = None,
         min_steps_per_wvl: pd.PositiveFloat = 10.0,
-        min_steps_per_sim_size: pd.PositiveFloat = 10.0,
         max_scale: pd.PositiveFloat = 1.4,
         override_structures: List[StructureType] = (),
         snapping_points: Tuple[Coordinate, ...] = (),
         dl_min: pd.NonNegativeFloat = 0.0,
+        min_steps_per_sim_size: pd.PositiveFloat = 10.0,
         mesher: MesherType = GradedMesher(),
     ) -> GridSpec:
         """Use the same :class:`AutoGrid` along each of the three directions.
@@ -927,6 +927,8 @@ class GridSpec(Tidy3dBaseModel):
             A set of points that enforce grid boundaries to pass through them.
         dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
+        min_steps_per_sim_size : pd.PositiveFloat, optional
+            Minimal number of steps per longest edge length of simulation domain.
         mesher : MesherType = GradedMesher()
             The type of mesher to use to generate the grid automatically.
 
