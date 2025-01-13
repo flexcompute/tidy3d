@@ -485,12 +485,19 @@ class Scene(Tidy3dBaseModel):
         elif isinstance(medium, Medium2D):
             # 2d material
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
-        else:
+        elif isinstance(medium, Medium):
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
             plot_params = plot_params.copy(update={"facecolor": facecolor})
             if medium.viz_spec is not None:
                 plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+        else:
+            # regular medium
+            facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
+            plot_params = plot_params.copy(update={"facecolor": facecolor})
+            if hasattr(medium, "viz_spec"):
+                if medium.viz_spec is not None:
+                    plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
 
         return plot_params
 
