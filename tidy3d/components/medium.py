@@ -2648,7 +2648,17 @@ class CustomMedium(AbstractCustomMedium):
 
         coords_interp = {key: eps_data.coords[key] for key in "xyz"}
         coords_interp = {key: val for key, val in coords_interp.items() if len(val) > 1}
-        dims_sum = [dim for dim in "xyz" if dim not in coords_interp]
+
+        E_der_dim_interp = E_der_map[f"E{dim}"]
+
+        for dim_ in "xyz":
+            if dim_ not in coords_interp:
+                bound_max = np.max(E_der_dim_interp.coords[dim_])
+                bound_min = np.min(E_der_dim_interp.coords[dim_])
+                dimension_size = bound_max - bound_min
+
+                if dimension_size > 0.0:
+                    E_der_dim_interp = E_der_dim_interp.integrate(dim_)
 
         # compute sizes along each of the interpolation dimensions
         sizes_list = []
@@ -2676,27 +2686,24 @@ class CustomMedium(AbstractCustomMedium):
             d_vol = np.array(1.0)
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        E_der_dim = E_der_map[f"E{dim}"]
         E_der_dim_interp = (
-            E_der_dim.interp(**coords_interp, assume_sorted=True).fillna(0.0).sum(dims_sum).real
+            E_der_dim_interp.interp(**coords_interp, assume_sorted=True).fillna(0.0).real.sum("f")
         )
-        E_der_dim_interp = E_der_dim_interp.sum("f")
 
-        vjp_array = np.array(E_der_dim_interp.values, dtype=float)
-        vjp_array = vjp_array.reshape(eps_data.shape)
-
-        # multiply by volume elements (if possible, being defensive here..)
         try:
-            vjp_array *= d_vol.reshape(vjp_array.shape)
+            E_der_dim_interp = E_der_dim_interp * d_vol.reshape(E_der_dim_interp.shape)
         except ValueError:
             log.warning(
                 "Skipping volume element normalization of 'CustomMedium' gradients. "
                 f"Could not reshape the volume elements of shape {d_vol.shape} "
-                f"to the shape of the gradient {vjp_array.shape}. "
+                f"to the shape of the fields {E_der_dim_interp.shape}. "
                 "If you encounter this warning, gradient direction will be accurate but the norm "
                 "will be inaccurate. Please raise an issue on the tidy3d front end with this "
                 "message and some information about your simulation setup and we will investigate. "
             )
+        vjp_array = E_der_dim_interp.values
+        vjp_array = vjp_array.reshape(eps_data.shape)
+
         return vjp_array
 
 
