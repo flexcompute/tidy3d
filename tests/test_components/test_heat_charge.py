@@ -627,6 +627,10 @@ def test_heat_charge_bcs_validation(boundary_conditions):
     with pytest.raises(pd.ValidationError):
         td.VoltageBC(source=td.DCVoltageSource(voltage=[td.inf]))
 
+    # Invalid CurrentBC: infinite current density
+    with pytest.raises(pd.ValidationError):
+        td.CurrentBC(source=td.DCCurrentSource(current=td.inf))
+
 
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
