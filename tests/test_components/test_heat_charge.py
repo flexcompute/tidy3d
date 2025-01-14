@@ -169,7 +169,22 @@ def monitors():
         center=(0, 0.9, 0), size=(1.6, 0, 3), name="v_empty", unstructured=True, conformal=False
     )
 
-    return [temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4]
+    capacitance_mnt1 = td.SteadyCapacitanceMonitor(size=(1.6, 2, 3), name="cmnt_test")
+
+    free_carrier_mnt1 = td.SteadyFreeCarrierMonitor(size=(1.6, 2, 3), name="carrier_test")
+
+    return [
+        temp_mnt1,
+        temp_mnt2,
+        temp_mnt3,
+        temp_mnt4,
+        volt_mnt1,
+        volt_mnt2,
+        volt_mnt3,
+        volt_mnt4,
+        capacitance_mnt1,
+        free_carrier_mnt1,
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -246,6 +261,96 @@ def conduction_simulation(mediums, structures, boundary_conditions, monitors, gr
 
 
 @pytest.fixture(scope="module")
+def voltage_capacitance_simulation(mediums, structures, boundary_conditions, monitors, grid_specs):
+    """
+    Creates a HeatChargeSimulation that focuses on voltage sweeping (for capacitance).
+    Specifically, we define a voltage BC with multiple voltage values (an array)
+    so that 'SteadyCapacitanceMonitor' can compute capacitance over this array.
+    """
+    # We will define our own VoltageBC with an array of voltages for the sweep
+    voltage_bc_array = td.VoltageBC(
+        source=td.DCVoltageSource(voltage=[0.0, 1.0, 2.0]),
+    )
+
+    # For illustration, we can reuse the insulator structure as background (like conduction).
+    # Suppose we want to set the voltage array at the simulation boundary
+    pl6 = td.HeatChargeBoundarySpec(
+        condition=voltage_bc_array,
+        placement=td.SimulationBoundary(),
+    )
+
+    # We can optionally define a second boundary condition if desired, e.g. an insulating BC:
+    bc_insulating = td.InsulatingBC()
+    pl7 = td.HeatChargeBoundarySpec(
+        condition=bc_insulating,
+        placement=td.StructureBoundary(structure="solid_structure"),
+    )
+
+    # Let’s pick a couple of monitors. We'll definitely include the CapacitanceMonitor
+    # (monitors[8] -> 'cap_mt1') so that we can measure capacitance. We can also include
+    # a potential monitor to see the fields, e.g. monitors[4] -> volt_mnt1 for demonstration.
+    cap_monitor = monitors[8]  # 'capacitance_mnt1'
+    volt_monitor = monitors[4]  # 'volt_mnt1'
+    chosen_monitors = [cap_monitor, volt_monitor]
+
+    # Build a new HeatChargeSimulation
+    voltage_cap_sim = td.HeatChargeSimulation(
+        medium=mediums["insulator_medium"],
+        structures=[structures["insulator_structure"], structures["solid_structure"]],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[pl6, pl7],
+        grid_spec=grid_specs["uniform"],
+        sources=[],
+        monitors=chosen_monitors,
+    )
+
+    return voltage_cap_sim
+
+
+@pytest.fixture(scope="module")
+def current_voltage_simulation(mediums, structures, boundary_conditions, monitors, grid_specs):
+    """
+    Creates a HeatChargeSimulation for a scenario combining a current BC and a voltage BC.
+    This can be used to measure conduction properties and free carriers with different
+    monitors, e.g. potential monitors and free carrier monitors.
+    """
+    # We'll reuse bc_volt=boundary_conditions[3] and bc_current=boundary_conditions[4]
+    bc_volt = boundary_conditions[3]  # VoltageBC(source=td.DCVoltageSource(voltage=[1]))
+    bc_current = boundary_conditions[4]  # CurrentBC(source=td.DCCurrentSource(current=3e-1))
+
+    # Place the voltage BC at the simulation boundary
+    pl6 = td.HeatChargeBoundarySpec(
+        condition=bc_volt,
+        placement=td.SimulationBoundary(),
+    )
+    # Place the current BC at the boundary of the "insulator_structure" (arbitrary choice here)
+    pl7 = td.HeatChargeBoundarySpec(
+        condition=bc_current,
+        placement=td.StructureBoundary(structure="insulator_structure"),
+    )
+
+    # Pick a voltage monitor and a free carrier monitor
+    # e.g., monitors[5] -> 'volt_mnt2', monitors[9] -> 'free_carrier_mnt1'
+    volt_monitor = monitors[4]
+    free_carrier_monitor = monitors[9]
+    chosen_monitors = [volt_monitor, free_carrier_monitor]
+
+    current_volt_sim = td.HeatChargeSimulation(
+        medium=mediums["insulator_medium"],
+        structures=[structures["insulator_structure"], structures["solid_structure"]],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[pl6, pl7],
+        grid_spec=grid_specs["uniform"],
+        sources=[],
+        monitors=chosen_monitors,
+    )
+
+    return current_volt_sim
+
+
+@pytest.fixture(scope="module")
 def temperature_monitor_data(monitors):
     """Creates different temperature monitor data."""
     temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4, *_ = monitors
@@ -315,13 +420,18 @@ def temperature_monitor_data(monitors):
 
     mnt_data4 = td.TemperatureData(monitor=temp_mnt4, temperature=None)
 
+    default_field_name = mnt_data3.field_name()
+    target_field_name = mnt_data3.field_name("abs^2")
+    assert default_field_name is not None
+    assert target_field_name is not None
+
     return (mnt_data1, mnt_data2, mnt_data3, mnt_data4)
 
 
 @pytest.fixture(scope="module")
 def voltage_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4 = monitors
+    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _ = monitors
 
     # SpatialDataArray
     nx, ny, nz = 9, 6, 5
@@ -392,8 +502,49 @@ def voltage_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def capacitance_monitor_data(monitors):
+    """Creates different voltage monitor data."""
+    _, _, _, _, _, _, _, _, cap_mt1, _ = monitors
+
+    # SpatialDataArray
+    cap_data1 = td.SteadyCapacitanceData(monitor=cap_mt1)
+    cap_data2 = cap_data1.symmetry_expanded_copy
+
+    return (cap_data1,)
+
+
+@pytest.fixture(scope="module")
+def free_carrier_monitor_data(monitors):
+    """Creates different voltage monitor data."""
+    _, _, _, _, _, _, _, _, _, fc_mnt = monitors
+
+    # SpatialDataArray
+    fc_data1 = td.SteadyFreeCarrierData(monitor=fc_mnt)
+    fc_data2 = fc_data1.symmetry_expanded_copy
+    assert fc_data2 is not None
+
+    field_components = fc_data1.field_components
+
+    fc_fields = fc_data1.field_name("abs^2")
+    assert fc_fields is not None
+    fc_fields_default = fc_data1.field_name()
+    assert fc_fields_default is not None
+
+    assert field_components is not None
+
+    return (fc_data1,)
+
+
+@pytest.fixture(scope="module")
 def simulation_data(
-    heat_simulation, conduction_simulation, temperature_monitor_data, voltage_monitor_data
+    heat_simulation,
+    conduction_simulation,
+    voltage_capacitance_simulation,
+    current_voltage_simulation,
+    temperature_monitor_data,
+    voltage_monitor_data,
+    capacitance_monitor_data,
+    free_carrier_monitor_data,
 ):
     """Creates 'HeatChargeSimulationData' for both HEAT and CONDUCTION simulations."""
     heat_sim_data = td.HeatChargeSimulationData(
@@ -406,7 +557,17 @@ def simulation_data(
         data=voltage_monitor_data,
     )
 
-    return [heat_sim_data, cond_sim_data]
+    voltage_capacitance_sim_data = td.HeatChargeSimulationData(
+        simulation=voltage_capacitance_simulation,
+        data=(capacitance_monitor_data[0], voltage_monitor_data[0]),
+    )
+
+    current_voltage_sim_data = td.HeatChargeSimulationData(
+        simulation=current_voltage_simulation,
+        data=(voltage_monitor_data[0], free_carrier_monitor_data[0]),
+    )
+
+    return [heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_sim_data]
 
 
 # --------------------------
@@ -512,11 +673,12 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
         )
 
 
-def test_heat_charge_mnt_data(temperature_monitor_data, voltage_monitor_data):
+def test_heat_charge_mnt_data(
+    temperature_monitor_data, voltage_monitor_data, capacitance_monitor_data
+):
     """Tests whether different heat-charge monitor data can be created."""
     assert len(temperature_monitor_data) == 4, "Expected 4 temperature monitor data entries."
     assert len(voltage_monitor_data) == 4, "Expected 4 voltage monitor data entries."
-    # Additional assertions can be added here if necessary
 
 
 def test_grid_spec_validation(grid_specs):
@@ -555,7 +717,9 @@ def test_heat_charge_sources(log_capture, structures):
 
 def test_heat_charge_simulation(simulation_data):
     """Tests 'HeatChargeSimulation' and 'ConductionSimulation' objects."""
-    heat_sim_data, cond_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_simulation_data = (
+        simulation_data
+    )
 
     # Test Heat Simulation
     heat_sim = heat_sim_data.simulation
@@ -565,10 +729,20 @@ def test_heat_charge_simulation(simulation_data):
     cond_sim = cond_sim_data.simulation
     assert cond_sim is not None, "Conduction simulation should be created successfully."
 
+    voltage_capacitance_sim = voltage_capacitance_sim_data.simulation
+    assert (
+        voltage_capacitance_sim is not None
+    ), "Voltage-Capacitance simulation should be created successfully."
+
+    current_voltage_sim = current_voltage_simulation_data.simulation
+    assert (
+        current_voltage_sim is not None
+    ), "Current-Voltage simulation should be created successfully."
+
 
 def test_sim_data_plotting(simulation_data):
     """Tests whether simulation data can be plotted and appropriate errors are raised."""
-    heat_sim_data, cond_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
 
     # Plotting temperature data
     heat_sim_data.plot_field("test", z=0)
@@ -865,3 +1039,234 @@ def test_sim_structure_extent(box_size, log_level, log_capture):
     )
 
     assert_log_level(log_capture, log_level)
+
+
+def test_abstract_doping_box_default_size_and_center():
+    """Test default size and center for AbstractDopingBox."""
+    box = td.ConstantDoping()
+    assert box.size == (1, 1, 1), "Default size should be (1, 1, 1)."
+    assert box.center == (0, 0, 0), "Default center should be (0, 0, 0)."
+
+
+def test_abstract_doping_box_with_box_coords():
+    """Test AbstractDopingBox with provided box_coords."""
+    box_coords = ((-1, -1, -1), (1, 1, 1))
+    box = td.ConstantDoping(box_coords=box_coords)
+    assert box.size == (2, 2, 2), "Size should be calculated based on box_coords."
+    assert box.center == (0, 0, 0), "Center should be calculated based on box_coords."
+
+
+def test_constant_doping_initialization():
+    """Test initialization of ConstantDoping."""
+    box = td.ConstantDoping(concentration=1e18)
+    assert box.concentration == 1e18, "Concentration should be set to 1e18."
+
+
+def test_gaussian_doping_initialization():
+    """Test initialization of GaussianDoping."""
+    box = td.GaussianDoping(ref_con=1e15, concentration=1e18, width=0.1, source="xmin")
+    assert box.ref_con == 1e15, "Reference concentration should be 1e15."
+    assert box.concentration == 1e18, "Concentration should be 1e18."
+    assert box.width == 0.1, "Width should be 0.1."
+    assert box.source == "xmin", "Source should be 'xmin'."
+
+
+def test_gaussian_doping_sigma_calculation():
+    """Test sigma calculation in GaussianDoping."""
+    box = td.GaussianDoping(ref_con=1e15, concentration=1e18, width=0.1, source="xmin")
+    expected_sigma = np.sqrt(-(0.1**2) / (2 * np.log(1e15 / 1e18)))
+    assert np.isclose(box.sigma, expected_sigma), "Sigma calculation is incorrect."
+
+
+def test_gaussian_doping_get_contrib():
+    """Test get_contrib method in GaussianDoping."""
+    max_N = 1e18
+    min_N = 1e15
+    width = 0.1
+
+    box = td.GaussianDoping(ref_con=min_N, concentration=max_N, width=width, source="xmin")
+
+    coords = {"x": [0], "y": [0], "z": [0]}
+    contrib = box.get_contrib(coords)
+    assert np.isclose(float(contrib), max_N, rtol=1e-6)
+
+    coords = {"x": [0.5], "y": [0], "z": [0]}
+    contrib = box.get_contrib(coords)
+    assert np.isclose(float(contrib), min_N, rtol=1e-6)
+
+    coords = {"x": [0.5 - width / 2], "y": [0], "z": [0]}
+    contrib = box.get_contrib(coords)
+    expected_value = max_N * np.exp(-width * width / 4 / box.sigma / box.sigma / 2)
+    assert np.isclose(float(contrib), expected_value, rtol=1e-6)
+
+
+def test_gaussian_doping_get_contrib_2d_coords():
+    """Test get_contrib method in GaussianDoping with 2D coordinates."""
+    box = td.GaussianDoping(ref_con=1e15, concentration=1e18, width=0.1, source="xmin")
+    coords = {"x": [0], "y": [0], "z": [-0.5, 0, 0.5]}
+    contrib = box.get_contrib(coords)
+
+
+def test_gaussian_doping_bounds_behavior():
+    """Test GaussianDoping bounds behavior."""
+    box_coords = ((-1, -1, -1), (1, 1, 1))
+    box = td.GaussianDoping(
+        box_coords=box_coords,
+        ref_con=1e15,
+        concentration=1e18,
+        width=0.1,
+        source="xmin",
+    )
+    assert box.bounds == box_coords, "Bounds should match provided box_coords."
+
+
+def test_edge_case_boundary_conditions():
+    """Test boundary conditions with extreme values."""
+    # Zero heat flux
+    bc_zero_flux = td.HeatFluxBC(flux=0)
+    assert bc_zero_flux.flux == 0
+
+    # Negative heat flux
+    bc_neg_flux = td.HeatFluxBC(flux=-10)
+    assert bc_neg_flux.flux == -10
+
+
+def test_simulation_initialization_invalid_parameters(
+    mediums, structures, boundary_conditions, monitors, grid_specs
+):
+    """Test simulation initialization with invalid parameters."""
+    # Invalid simulation size
+    with pytest.raises(pd.ValidationError):
+        td.HeatChargeSimulation(
+            medium=mediums["fluid_medium"],
+            structures=[structures["fluid_structure"]],
+            center=(0, 0, 0),
+            size=(-1, 2, 2),  # Negative size
+            boundary_spec=[],
+            grid_spec=grid_specs["uniform"],
+            sources=[],
+            monitors=[],
+        )
+
+    # Invalid monitor type
+    with pytest.raises(pd.ValidationError):
+        td.HeatChargeSimulation(
+            medium=mediums["fluid_medium"],
+            structures=[structures["fluid_structure"]],
+            center=(0, 0, 0),
+            size=(2, 2, 2),
+            boundary_spec=[],
+            grid_spec=grid_specs["uniform"],
+            sources=[],
+            monitors=["invalid_monitor"],  # Should be monitor objects
+        )
+
+
+def test_simulation_with_multiple_sources_and_monitors(
+    mediums, structures, boundary_conditions, grid_specs
+):
+    """Test simulation with multiple heat sources and monitors."""
+    sources = [
+        td.HeatSource(structures=["solid_structure"], rate=100),
+        td.HeatSource(structures=["fluid_structure"], rate=200),
+    ]
+
+    monitors = [
+        td.TemperatureMonitor(size=(1.6, 2, 3), name="temp_mnt1"),
+        td.SteadyPotentialMonitor(size=(1.6, 2, 3), name="volt_mnt1"),
+    ]
+
+    boundary_spec = [
+        td.HeatChargeBoundarySpec(
+            condition=boundary_conditions[0],  # TemperatureBC
+            placement=td.SimulationBoundary(),
+        ),
+        td.HeatChargeBoundarySpec(
+            condition=boundary_conditions[1],  # HeatFluxBC
+            placement=td.StructureBoundary(structure="solid_structure"),
+        ),
+    ]
+
+    sim = td.HeatChargeSimulation(
+        medium=mediums["solid_medium"],
+        structures=[structures["solid_structure"], structures["fluid_structure"]],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=boundary_spec,
+        grid_spec=grid_specs["uniform"],
+        sources=sources,
+        monitors=monitors,
+    )
+
+    assert len(sim.sources) == 2
+    assert len(sim.monitors) == 2
+
+
+def test_dynamic_simulation_updates(heat_simulation):
+    """Test updating simulation parameters after initialization."""
+    # Update simulation size
+    new_size = (3, 3, 3)
+    updated_sim = heat_simulation.updated_copy(size=new_size)
+    assert updated_sim.size == new_size
+
+    # Update center
+    new_center = (1, 1, 1)
+    updated_sim = heat_simulation.updated_copy(center=new_center)
+    assert updated_sim.center == new_center
+
+    # Add a new monitor
+    new_monitor = td.TemperatureMonitor(size=(1, 1, 1), name="new_temp_mnt")
+    updated_sim = heat_simulation.updated_copy(
+        monitors=tuple(list(heat_simulation.monitors) + [new_monitor])
+    )
+    assert len(updated_sim.monitors) == len(heat_simulation.monitors) + 1
+    assert updated_sim.monitors[-1].name == "new_temp_mnt"
+
+
+def test_plotting_functions(simulation_data):
+    """Test plotting functions with various data."""
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
+
+    # Valid plotting
+    try:
+        heat_sim_data.plot_field("test", z=0)
+        cond_sim_data.plot_field("v_test", y=1)
+    except Exception as e:
+        pytest.fail(f"Plotting raised an exception unexpectedly: {e}")
+
+    # Invalid field name
+    with pytest.raises(KeyError):
+        heat_sim_data.plot_field("non_existent_field")
+
+    # Invalid plotting parameters
+    with pytest.raises(KeyError):
+        heat_sim_data.plot_field("test", invalid_param=0)
+
+
+def test_additional_edge_cases():
+    """Test additional edge cases and error handling."""
+    # Attempt to create a monitor with zero size
+    td.TemperatureMonitor(size=(0, 0, 0), name="zero_size_mnt")
+
+    # Create a simulation with overlapping structures
+    td.HeatChargeSimulation(
+        medium=td.MultiPhysicsMedium(
+            optical=td.Medium(permittivity=5),
+            charge=td.ChargeConductorMedium(conductivity=1),
+            name="overlap_medium",
+        ),
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=td.Medium(name="medium1")
+            ),
+            td.Structure(
+                geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=td.Medium(name="medium2")
+            ),
+        ],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        sources=[],
+        monitors=[],
+    )

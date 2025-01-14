@@ -91,7 +91,7 @@ class TemperatureData(HeatChargeMonitorData):
 
         return val
 
-    def field_name(self, val: str) -> str:
+    def field_name(self, val: str = "") -> str:
         """Gets the name of the fields to be plot."""
         if val == "abs^2":
             return "|T|², K²"

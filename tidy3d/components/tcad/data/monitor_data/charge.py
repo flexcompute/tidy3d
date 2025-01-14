@@ -31,7 +31,7 @@ UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
-    """Class that stores electric potential from a charge simulation."""
+    """Class that stores electric potential :math:`\\psi` from a charge simulation."""
 
     monitor: SteadyPotentialMonitor = pd.Field(
         ...,
@@ -84,20 +84,11 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     """
     This data class stores free-carrier concentration in charge simulations.
 
-    I guess this is this?
+    Notes
+    -----
 
-    .. math::
-
-        \\begin{equation}
-            n = N_c \\exp\\left( \\frac{E_{Fn} - E_C}{k_B T} \\right)
-        \\end{equation}
-
-    .. math::
-
-        \\begin{equation}
-            p = N_v \\exp\\left( \\frac{E_V - E_{Fp}}{k_B T} \\right)
-        \\end{equation}
-
+        This data contains the carrier concentrations: the amount of electrons and holes per unit volume as defined in the
+        ``monitor``.
     """
 
     monitor: SteadyFreeCarrierMonitor = pd.Field(
@@ -109,16 +100,18 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     electrons: UnstructuredFieldType = pd.Field(
         None,
         title="Electrons series",
-        description="Contains the electrons.",
+        description=r"Contains the computed electrons concentration $n$.",
         discriminator=TYPE_TAG_STR,
     )
+    # n = electrons
 
     holes: UnstructuredFieldType = pd.Field(
         None,
         title="Holes series",
-        description="Contains the electrons.",
+        description=r"Contains the computed holes concentration $p$.",
         discriminator=TYPE_TAG_STR,
     )
+    # p = holes
 
     @property
     def field_components(self) -> Dict[str, DataArray]:
@@ -171,7 +164,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
             symmetry=(0, 0, 0),
         )
 
-    def field_name(self, val: str) -> str:
+    def field_name(self, val: str = "") -> str:
         """Gets the name of the fields to be plot."""
         if val == "abs^2":
             return "Electrons², Holes²"
@@ -180,7 +173,22 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
 
 
 class SteadyCapacitanceData(HeatChargeMonitorData):
-    """Class that stores capacitance data from a Charge simulation."""
+    """
+    Class that stores capacitance data from a Charge simulation.
+
+    Notes
+    -----
+    The small signal-capacitance of electrons :math:`C_n` and holes :math:`C_p` is computed from the charge due to
+     electrons :math:`Q_n` and holes :math:`Q_p` at an applied voltage :math:`V` at a voltage difference
+    :math:`\\Delta V` between two simulations.
+
+    .. math::
+
+        C_{n,p} = \frac{Q_{n,p}(V + \\Delta V) - Q_{n,p}(V)}{\\Delta V}
+
+
+    This is only computed when a voltage source with more than two sources is included within the simulation and determines the :math:`\\Delta V`.
+    """
 
     monitor: SteadyCapacitanceMonitor = pd.Field(
         ...,
@@ -191,14 +199,16 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     hole_capacitance: SteadyCapacitanceVoltageDataArray = pd.Field(
         None,
         title="Hole capacitance",
-        description="Small signal capacitance (dQh/dV) associated to the monitor.",
+        description=r"Small signal capacitance ($\frac{dQ_p}{dV}$) associated to the monitor.",
     )
+    # C_p = hole_capacitance
 
     electron_capacitance: SteadyCapacitanceVoltageDataArray = pd.Field(
         None,
         title="Electron capacitance",
-        description="Small signal capacitance (dQe/dV) associated to the monitor.",
+        description=r"Small signal capacitance ($\frac{dQn}{dV}$) associated to the monitor.",
     )
+    # C_n = electron_capacitance
 
     @pd.validator("hole_capacitance", always=True)
     @skip_if_fields_missing(["monitor"])
