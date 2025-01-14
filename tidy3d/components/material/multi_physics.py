@@ -2,10 +2,10 @@ from typing import Optional
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.solver_types import (
-    ChargeMediumTypes,
-    ElectricalMediumTypes,
-    HeatMediumTypes,
-    OpticalMediumTypes,
+    ChargeMediumType,
+    ElectricalMediumType,
+    HeatMediumType,
+    OpticalMediumType,
 )
 
 
@@ -25,10 +25,10 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
 
     # TODO requires backwards compatibility.
     name: Optional[str] = None
-    optical: Optional[OpticalMediumTypes] = None
-    electrical: Optional[ElectricalMediumTypes] = None
-    heat: Optional[HeatMediumTypes] = None
-    charge: Optional[ChargeMediumTypes] = None
+    optical: Optional[OpticalMediumType] = None
+    electrical: Optional[ElectricalMediumType] = None
+    heat: Optional[HeatMediumType] = None
+    charge: Optional[ChargeMediumType] = None
 
     @property
     def heat_spec(self):

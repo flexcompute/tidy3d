@@ -2,23 +2,23 @@ from typing import Union
 
 from .multi_physics import MultiPhysicsMedium
 from .solver_types import (
-    ChargeMediumTypes,
-    ChargeMediumTypes3D,
-    ElectricalMediumTypes,
-    ElectricalMediumTypes3D,
-    HeatMediumTypes,
-    OpticalMediumTypes,
-    OpticalMediumTypes3D,
+    ChargeMediumType,
+    ChargeMediumType3D,
+    ElectricalMediumType,
+    ElectricalMediumType3D,
+    HeatMediumType,
+    OpticalMediumType,
+    OpticalMediumType3D,
 )
 
-StructureMediumTypes = Union[
+StructureMediumType = Union[
     MultiPhysicsMedium,
-    OpticalMediumTypes,
-    ElectricalMediumTypes,
-    HeatMediumTypes,
-    ChargeMediumTypes,
+    OpticalMediumType,
+    ElectricalMediumType,
+    HeatMediumType,
+    ChargeMediumType,
 ]
 
-MultiPhysicsMediumTypes3D = Union[
-    MultiPhysicsMedium, OpticalMediumTypes3D, ElectricalMediumTypes3D, ChargeMediumTypes3D
+MultiPhysicsMediumType3D = Union[
+    MultiPhysicsMedium, OpticalMediumType3D, ElectricalMediumType3D, ChargeMediumType3D
 ]

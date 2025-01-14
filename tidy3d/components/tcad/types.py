@@ -19,20 +19,20 @@ from tidy3d.components.tcad.source.coupled import HeatFromElectricSource
 from tidy3d.components.tcad.source.heat import HeatSource, UniformHeatSource
 from tidy3d.components.types import Union
 
-MobilityModelTypes = Union[CaugheyThomasMobility]
-RecombinationModelTypes = Union[
+MobilityModelType = Union[CaugheyThomasMobility]
+RecombinationModelType = Union[
     AugerRecombination, RadiativeRecombination, ShockleyReedHallRecombination
 ]
-BandGapNarrowingModelTypes = Union[SlotboomBandGapNarrowing]
+BandGapNarrowingModelType = Union[SlotboomBandGapNarrowing]
 
 # types of monitors that are accepted by heat simulation
-HeatChargeMonitorTypes = Union[
+HeatChargeMonitorType = Union[
     TemperatureMonitor,
     SteadyPotentialMonitor,
     SteadyFreeCarrierMonitor,
     SteadyCapacitanceMonitor,
 ]
-HeatChargeSourceTypes = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]
-HeatChargeBCTypes = Union[
+HeatChargeSourceType = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]
+HeatChargeBCType = Union[
     TemperatureBC, HeatFluxBC, ConvectionBC, VoltageBC, CurrentBC, InsulatingBC
 ]

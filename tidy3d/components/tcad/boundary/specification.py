@@ -6,7 +6,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.bc_placement import BCPlacementType
-from tidy3d.components.tcad.types import HeatChargeBCTypes
+from tidy3d.components.tcad.types import HeatChargeBCType
 from tidy3d.components.types import TYPE_TAG_STR
 
 
@@ -28,7 +28,7 @@ class HeatChargeBoundarySpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    condition: HeatChargeBCTypes = pd.Field(
+    condition: HeatChargeBCType = pd.Field(
         title="Boundary Conditions",
         description="Boundary conditions to apply at the selected location.",
         discriminator=TYPE_TAG_STR,

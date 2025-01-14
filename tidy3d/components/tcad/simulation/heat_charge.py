@@ -31,11 +31,11 @@ from tidy3d.components.material.tcad.charge import (
 from tidy3d.components.material.tcad.heat import (
     SolidSpec,
 )
-from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumTypes
+from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
 from tidy3d.components.medium import Medium
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.sources.dc import DCVoltageSource
-from tidy3d.components.spice.types import ElectricalAnalysisTypes
+from tidy3d.components.spice.types import ElectricalAnalysisType
 from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
@@ -60,8 +60,8 @@ from tidy3d.components.tcad.source.abstract import (
 from tidy3d.components.tcad.types import (
     ConvectionBC,
     CurrentBC,
-    HeatChargeMonitorTypes,
-    HeatChargeSourceTypes,
+    HeatChargeMonitorType,
+    HeatChargeSourceType,
     HeatFluxBC,
     HeatFromElectricSource,
     HeatSource,
@@ -92,7 +92,7 @@ HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
 
-AnalysisSpecTypes = ElectricalAnalysisTypes
+AnalysisSpecType = ElectricalAnalysisType
 
 
 class TCADAnalysisTypes(str, Enum):
@@ -249,7 +249,7 @@ class HeatChargeSimulation(AbstractSimulation):
     top of the coupling heat source.
     """
 
-    medium: StructureMediumTypes = pd.Field(
+    medium: StructureMediumType = pd.Field(
         Medium(),
         title="Background Medium",
         description="Background medium of simulation, defaults to a standard dispersion-less :class:`Medium` if not "
@@ -260,14 +260,14 @@ class HeatChargeSimulation(AbstractSimulation):
     Background medium of simulation, defaults to a standard dispersion-less :class:`Medium` if not specified.
     """
 
-    sources: Tuple[HeatChargeSourceTypes, ...] = pd.Field(
+    sources: Tuple[HeatChargeSourceType, ...] = pd.Field(
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
         discriminator=TYPE_TAG_STR,
     )
 
-    monitors: Tuple[HeatChargeMonitorTypes, ...] = pd.Field(
+    monitors: Tuple[HeatChargeMonitorType, ...] = pd.Field(
         (), title="Monitors", description="Monitors in the simulation.", discriminator=TYPE_TAG_STR
     )
 
@@ -294,7 +294,7 @@ class HeatChargeSimulation(AbstractSimulation):
         "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
     )
 
-    analysis_spec: AnalysisSpecTypes = pd.Field(
+    analysis_spec: AnalysisSpecType = pd.Field(
         None,
         title="Analysis specification.",
         description="The `analysis_spec` is used to validate that the simulation parameters and tolerance settings "
@@ -1434,7 +1434,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _get_structure_source_plot_params(
         self,
-        source: HeatChargeSourceTypes,
+        source: HeatChargeSourceType,
         source_min: float,
         source_max: float,
         alpha: float = None,
@@ -1459,7 +1459,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     def _plot_shape_structure_source(
         self,
-        source: HeatChargeSourceTypes,
+        source: HeatChargeSourceType,
         shape: Shapely,
         source_min: float,
         source_max: float,

@@ -21,7 +21,7 @@ from tidy3d.components.material.tcad.charge import (
 from tidy3d.components.material.tcad.heat import (
     SolidSpec,
 )
-from tidy3d.components.material.types import MultiPhysicsMediumTypes3D, StructureMediumTypes
+from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
 
@@ -94,7 +94,7 @@ class Scene(Tidy3dBaseModel):
     ... )
     """
 
-    medium: MultiPhysicsMediumTypes3D = pd.Field(
+    medium: MultiPhysicsMediumType3D = pd.Field(
         Medium(),
         title="Background Medium",
         description="Background medium of scene, defaults to vacuum if not specified.",
@@ -219,7 +219,7 @@ class Scene(Tidy3dBaseModel):
         return Box(center=self.center, size=self.size)
 
     @cached_property
-    def mediums(self) -> Set[StructureMediumTypes]:
+    def mediums(self) -> Set[StructureMediumType]:
         """Returns set of distinct :class:`.AbstractMedium` in scene.
 
         Returns
@@ -232,7 +232,7 @@ class Scene(Tidy3dBaseModel):
         return list(medium_dict.keys())
 
     @cached_property
-    def medium_map(self) -> Dict[StructureMediumTypes, pd.NonNegativeInt]:
+    def medium_map(self) -> Dict[StructureMediumType, pd.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium` in scene.
 
@@ -253,7 +253,7 @@ class Scene(Tidy3dBaseModel):
     @staticmethod
     def intersecting_media(
         test_object: Box, structures: Tuple[Structure, ...]
-    ) -> Tuple[StructureMediumTypes, ...]:
+    ) -> Tuple[StructureMediumType, ...]:
         """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
         surfaces, if it is a volume.
@@ -449,7 +449,7 @@ class Scene(Tidy3dBaseModel):
         return ax
 
     def _plot_shape_structure(
-        self, medium: MultiPhysicsMediumTypes3D, mat_index: int, shape: Shapely, ax: Ax
+        self, medium: MultiPhysicsMediumType3D, mat_index: int, shape: Shapely, ax: Ax
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
         plot_params_struct = self._get_structure_plot_params(medium=medium, mat_index=mat_index)
@@ -457,7 +457,7 @@ class Scene(Tidy3dBaseModel):
         return ax
 
     def _get_structure_plot_params(
-        self, mat_index: int, medium: MultiPhysicsMediumTypes3D
+        self, mat_index: int, medium: MultiPhysicsMediumType3D
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot()."""
 

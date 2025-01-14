@@ -15,7 +15,7 @@ from tidy3d.components.data.data_array import (
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.types import (
-    HeatChargeMonitorTypes,
+    HeatChargeMonitorType,
 )
 from tidy3d.components.types import Coordinate, ScalarSymmetry, annotate_type
 
@@ -28,7 +28,7 @@ UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 class HeatChargeMonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`HeatChargeMonitor`."""
 
-    monitor: HeatChargeMonitorTypes = pd.Field(
+    monitor: HeatChargeMonitorType = pd.Field(
         ...,
         title="Monitor",
         description="Monitor associated with the data.",

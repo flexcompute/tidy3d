@@ -11,7 +11,7 @@ from tidy3d.components.tcad.data.monitor_data.charge import (
 )
 from tidy3d.components.tcad.data.monitor_data.heat import TemperatureData
 
-TCADMonitorDataTypes = Union[
+TCADMonitorDataType = Union[
     TemperatureData,
     SteadyPotentialData,
     SteadyFreeCarrierData,

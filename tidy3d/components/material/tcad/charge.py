@@ -11,11 +11,11 @@ from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import DopingBoxType
 from tidy3d.components.tcad.types import (
     AugerRecombination,
-    BandGapNarrowingModelTypes,
+    BandGapNarrowingModelType,
     CaugheyThomasMobility,
-    MobilityModelTypes,
+    MobilityModelType,
     RadiativeRecombination,
-    RecombinationModelTypes,
+    RecombinationModelType,
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
 )
@@ -237,19 +237,19 @@ class SemiconductorMedium(AbstractChargeMedium):
         units=ELECTRON_VOLT,
     )
 
-    mobility: MobilityModelTypes = pd.Field(
+    mobility: MobilityModelType = pd.Field(
         CaugheyThomasMobility(),
         title="Mobility model",
         description="Mobility model",
     )
 
-    R: Tuple[RecombinationModelTypes, ...] = pd.Field(
+    R: Tuple[RecombinationModelType, ...] = pd.Field(
         (ShockleyReedHallRecombination(), AugerRecombination(), RadiativeRecombination()),
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material.",
     )
 
-    delta_E_g: BandGapNarrowingModelTypes = pd.Field(
+    delta_E_g: BandGapNarrowingModelType = pd.Field(
         SlotboomBandGapNarrowing(),
         title=r"$\Delta E_g$ Bandgap narrowing model.",
         description="Bandgap narrowing model.",

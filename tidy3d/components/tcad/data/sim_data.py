@@ -20,7 +20,7 @@ from tidy3d.components.data.utils import (
 )
 from tidy3d.components.tcad.data.types import (
     SteadyPotentialData,
-    TCADMonitorDataTypes,
+    TCADMonitorDataType,
     TemperatureData,
 )
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
@@ -80,7 +80,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
         description="Original :class:`.HeatChargeSimulation` associated with the data.",
     )
 
-    data: Tuple[TCADMonitorDataTypes, ...] = pd.Field(
+    data: Tuple[TCADMonitorDataType, ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
