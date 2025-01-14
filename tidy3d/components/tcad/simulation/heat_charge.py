@@ -79,7 +79,7 @@ from tidy3d.components.tcad.viz import (
     plot_params_heat_bc,
     plot_params_heat_source,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely
 from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect
 from tidy3d.constants import VOLUMETRIC_HEAT_RATE, inf
 from tidy3d.exceptions import SetupError
@@ -266,7 +266,7 @@ class HeatChargeSimulation(AbstractSimulation):
         description="List of heat and/or charge sources.",
     )
 
-    monitors: Tuple[annotate_type(HeatChargeMonitorTypes), ...] = pd.Field(
+    monitors: Tuple[HeatChargeMonitorTypes, ...] = pd.Field(
         (),
         title="Monitors",
         description="Monitors in the simulation.",
