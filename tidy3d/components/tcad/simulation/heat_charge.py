@@ -264,11 +264,12 @@ class HeatChargeSimulation(AbstractSimulation):
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
-        discriminator=TYPE_TAG_STR,
     )
 
     monitors: Tuple[annotate_type(HeatChargeMonitorType), ...] = pd.Field(
-        (), title="Monitors", description="Monitors in the simulation.", discriminator=TYPE_TAG_STR
+        (),
+        title="Monitors",
+        description="Monitors in the simulation.",
     )
 
     boundary_spec: Tuple[annotate_type(Union[HeatChargeBoundarySpec, HeatBoundarySpec]), ...] = (
@@ -276,7 +277,6 @@ class HeatChargeSimulation(AbstractSimulation):
             (),
             title="Boundary Condition Specifications",
             description="List of boundary condition specifications.",
-            discriminator=TYPE_TAG_STR,
         )
     )
     # NOTE: creating a union with HeatBoundarySpec for backwards compatibility
