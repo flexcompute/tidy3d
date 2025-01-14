@@ -13,6 +13,7 @@ from autograd.extend import defvjp, primitive
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.types import Literal
 
 from ...core.s3utils import download_file, upload_file
 from ..asynchronous import DEFAULT_DATA_DIR
@@ -90,6 +91,7 @@ def run(
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
     local_gradient: bool = LOCAL_GRADIENT,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -123,6 +125,8 @@ def run(
     local_gradient: bool = False
         Whether to perform gradient calculation locally, requiring more downloads but potentially
         more stable with experimental features.
+    reduce_simulation: Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
 
     Returns
     -------
@@ -199,6 +203,7 @@ def run(
         worker_group=worker_group,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
+        reduce_simulation=reduce_simulation,
     )
 
 
@@ -212,6 +217,7 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: dict[str, list[str]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -236,6 +242,8 @@ def run_async(
     local_gradient: bool = False
         Whether to perform gradient calculations locally, requiring more downloads but potentially
         more stable with experimental features.
+    reduce_simulation: Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
 
     Returns
     ------
@@ -275,6 +283,7 @@ def run_async(
         verbose=verbose,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
+        reduce_simulation=reduce_simulation,
     )
 
 

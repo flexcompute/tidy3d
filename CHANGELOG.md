@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `VisualizationSpec` that allows `Medium` instances to specify color and transparency plotting attributes that override default ones.
+- `reduce_simulation` argument added to all web functions to allow automatically reducing structures only to the simulation domain, including truncating data in custom media, thus reducing the simulation upload size. Currently only implemented for mode solver simulation types.
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.

@@ -13,6 +13,7 @@ from tidy3d.web.api.webapi import (
     download_json,
     estimate_cost,
     get_info,
+    get_reduced_simulation,
     get_run_info,
     load_simulation,
     run,
@@ -257,8 +258,8 @@ def mock_webapi(
 @responses.activate
 def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     sim = make_mode_sim()
-    print(sim)
-    assert upload(sim, TASK_NAME, PROJECT_NAME)
+    assert sim != get_reduced_simulation(sim, reduce_simulation=True)
+    assert upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=True)
 
 
 @responses.activate

@@ -9,6 +9,7 @@ import pytz
 from requests import HTTPError
 from rich.progress import Progress
 
+from ...components.medium import AbstractCustomMedium
 from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import get_logging_console, log
@@ -67,6 +68,7 @@ def run(
     worker_group: str = None,
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -97,6 +99,8 @@ def run(
         target solver version.
     worker_group: str = None
         worker group
+    reduce_simulation : Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
 
     Returns
     -------
@@ -152,6 +156,7 @@ def run(
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
         solver_version=solver_version,
+        reduce_simulation=reduce_simulation,
     )
     start(
         task_id,
@@ -176,6 +181,7 @@ def upload(
     parent_tasks: List[str] = None,
     source_required: bool = True,
     solver_version: str = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> TaskId:
     """
     Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -203,6 +209,9 @@ def upload(
         If ``True``, simulations without sources will raise an error before being uploaded.
     solver_version: str = None
         target solver version.
+    reduce_simulation: Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+
     Returns
     -------
     str
@@ -248,6 +257,7 @@ def upload(
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
+        simulation = get_reduced_simulation(simulation, reduce_simulation)
 
     task.upload_simulation(
         stub=stub,
@@ -260,6 +270,53 @@ def upload(
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
     return task.task_id
+
+
+def get_reduced_simulation(simulation, reduce_simulation):
+    """
+    Adjust the given simulation object based on the reduce_simulation parameter. Currently only
+    implemented for the mode solver.
+
+    Parameters
+    ----------
+    simulation : Simulation
+        The simulation object to be potentially reduced.
+    reduce_simulation : Literal["auto", True, False]
+        Determines whether to reduce the simulation. If "auto", the function will decide based on
+        the presence of custom mediums in the simulation.
+
+    Returns
+    -------
+    Simulation
+        The potentially reduced simulation object.
+    """
+
+    """
+    TODO: This only works for the mode solver, which is also why `simulation.simulation.scene` is
+    used below. After refactor to use the new ModeSimulation, it should be possible to put the call
+    to this function outside of the MODE_SOLVER check in the upload function. We could implement
+    dummy `reduced_simulation_copy` methods for the other solvers or also implement reductions
+    there. Note that if we do the latter we may want to also modify the warning below to only
+    happen if there are custom media *and* they extend beyond the simulation domain.
+    """
+
+    if reduce_simulation == "auto":
+        sim_mediums = simulation.simulation.scene.mediums
+        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
+        reduce_simulation = contains_custom
+
+        if reduce_simulation:
+            log.warning(
+                f"The {type(simulation)} object contains custom mediums. It will be "
+                "automatically restricted to the solver domain to reduce data for uploading. "
+                "To force uploading the original object use 'reduce_simulation=False'."
+                " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
+                " silence this warning."
+            )
+
+    if reduce_simulation:
+        return simulation.reduced_simulation_copy
+    return simulation
 
 
 @wait_for_connection

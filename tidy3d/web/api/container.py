@@ -14,7 +14,7 @@ import pydantic.v1 as pd
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.types import annotate_type
+from ...components.types import Literal, annotate_type
 from ...exceptions import DataError
 from ...log import get_logging_console, log
 from ..api import webapi as web
@@ -161,6 +161,12 @@ class Job(WebContainer):
         "fields that were not used to create the task will cause errors.",
     )
 
+    reduce_simulation: Literal["auto", True, False] = pd.Field(
+        "auto",
+        title="Reduce Simulation",
+        description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
+    )
+
     _upload_fields = (
         "simulation",
         "task_name",
@@ -170,6 +176,7 @@ class Job(WebContainer):
         "simulation_type",
         "parent_tasks",
         "solver_version",
+        "reduce_simulation",
     )
 
     def to_file(self, fname: str) -> None:
@@ -218,8 +225,7 @@ class Job(WebContainer):
     def _upload(self) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
-        self_dict = self.dict()
-        upload_kwargs = {key: self_dict.get(key) for key in self._upload_fields}
+        upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
         task_id = web.upload(**upload_kwargs)
         return task_id
 
@@ -506,6 +512,12 @@ class Batch(WebContainer):
         "number of threads available on the system.",
     )
 
+    reduce_simulation: Literal["auto", True, False] = pd.Field(
+        "auto",
+        title="Reduce Simulation",
+        description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
+    )
+
     jobs_cached: Dict[TaskName, Job] = pd.Field(
         None,
         title="Jobs (Cached)",
@@ -587,6 +599,7 @@ class Batch(WebContainer):
             job_kwargs["simulation"] = simulation
             job_kwargs["verbose"] = False
             job_kwargs["solver_version"] = self.solver_version
+            job_kwargs["reduce_simulation"] = self.reduce_simulation
             if self.parent_tasks and task_name in self.parent_tasks:
                 job_kwargs["parent_tasks"] = self.parent_tasks[task_name]
             job = JobType(**job_kwargs)
