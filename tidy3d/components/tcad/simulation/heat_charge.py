@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
@@ -356,7 +356,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     isinstance(medium.heat_spec, SolidSpec) for medium in medium_set
                 )
                 crosses_elec_spec = any(
-                    isinstance(medium.charge, ValidElectricTypes) for medium in medium_set
+                    isinstance(medium.charge, get_args(ValidElectricTypes)) for medium in medium_set
                 )
             else:
                 # approximate check for volumetric objects based on bounding boxes
@@ -369,7 +369,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 crosses_elec_spec = any(
                     obj.intersects(structure.geometry)
                     for structure in total_structures
-                    if isinstance(structure.medium.charge, ValidElectricTypes)
+                    if isinstance(structure.medium.charge, get_args(ValidElectricTypes))
                 )
 
             if not crosses_solid:
@@ -377,9 +377,6 @@ class HeatChargeSimulation(AbstractSimulation):
             if not crosses_elec_spec:
                 obj_do_not_cross_cond_idx.append(ind)
 
-        return obj_do_not_cross_solid_idx, obj_do_not_cross_cond_idx
-
-    @pd.validator("monitors", always=True)
     @skip_if_fields_missing(["medium", "center", "size", "structures"])
     def _monitors_cross_solids(cls, val, values):
         """Error if monitors does not cross any solid medium."""
