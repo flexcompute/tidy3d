@@ -92,7 +92,7 @@ HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
 
-AnalysisSpecTypes = Union[ElectricalAnalysisTypes]
+AnalysisSpecTypes = ElectricalAnalysisTypes
 
 
 class TCADAnalysisTypes(str, Enum):
@@ -160,15 +160,15 @@ class HeatChargeSimulation(AbstractSimulation):
     --------
     To run a thermal (``HEAT`` |:fire:|) simulation with a solid conductive structure:
 
-    >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, TemperatureMonitor
-    >>> heat_sim = HeatChargeSimulation(
+    >>> import tidy3d as td
+    >>> heat_sim = td.HeatChargeSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
-    ...         Structure(
-    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
-    ...             medium=Medium(
+    ...         td.Structure(
+    ...             geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+    ...             medium=td.Medium(
     ...                 permittivity=2.0,
-    ...                 heat_spec=SolidSpec(
+    ...                 heat_spec=td.SolidSpec(
     ...                     conductivity=1,
     ...                     capacity=1,
     ...                 )
@@ -176,16 +176,16 @@ class HeatChargeSimulation(AbstractSimulation):
     ...             name="box",
     ...         ),
     ...     ],
-    ...     medium=Medium(permittivity=3.0, heat_spec=FluidSpec()),
-    ...     grid_spec=UniformUnstructuredGrid(dl=0.1),
-    ...     sources=[HeatSource(rate=1, structures=["box"])],
+    ...     medium=td.Medium(permittivity=3.0, heat_spec=td.FluidSpec()),
+    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+    ...     sources=[td.HeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
-    ...         HeatChargeBoundarySpec(
-    ...             placement=StructureBoundary(structure="box"),
-    ...             condition=TemperatureBC(temperature=500),
+    ...         td.HeatChargeBoundarySpec(
+    ...             placement=td.StructureBoundary(structure="box"),
+    ...             condition=td.TemperatureBC(temperature=500),
     ...         )
     ...     ],
-    ...     monitors=[TemperatureMonitor(size=(1, 2, 3), name="sample")],
+    ...     monitors=[td.TemperatureMonitor(size=(1, 2, 3), name="sample")],
     ... )
 
     To run a drift-diffusion (``CHARGE`` |:zap:|) system:
@@ -264,20 +264,20 @@ class HeatChargeSimulation(AbstractSimulation):
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
+        discriminator=TYPE_TAG_STR,
     )
 
     monitors: Tuple[HeatChargeMonitorTypes, ...] = pd.Field(
-        (),
-        title="Monitors",
-        description="Monitors in the simulation.",
+        (), title="Monitors", description="Monitors in the simulation.", discriminator=TYPE_TAG_STR
     )
 
-    # NOTE: creating a union with HeatBoundarySpec for backwards compatibility
     boundary_spec: Tuple[Union[HeatChargeBoundarySpec, HeatBoundarySpec], ...] = pd.Field(
         (),
         title="Boundary Condition Specifications",
         description="List of boundary condition specifications.",
+        discriminator=TYPE_TAG_STR,
     )
+    # NOTE: creating a union with HeatBoundarySpec for backwards compatibility
 
     grid_spec: UnstructuredGridType = pd.Field(
         title="Grid Specification",
