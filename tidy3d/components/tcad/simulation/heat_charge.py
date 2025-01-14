@@ -260,18 +260,18 @@ class HeatChargeSimulation(AbstractSimulation):
     Background medium of simulation, defaults to a standard dispersion-less :class:`Medium` if not specified.
     """
 
-    sources: Tuple[HeatChargeSourceTypes, ...] = pd.Field(
+    sources: Tuple[annotate_type(HeatChargeSourceTypes), ...] = pd.Field(
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
         discriminator=TYPE_TAG_STR,
     )
 
-    monitors: Tuple[HeatChargeMonitorTypes, ...] = pd.Field(
+    monitors: Tuple[annotate_type(HeatChargeMonitorTypes), ...] = pd.Field(
         (), title="Monitors", description="Monitors in the simulation.", discriminator=TYPE_TAG_STR
     )
 
-    boundary_spec: Tuple[Union[HeatChargeBoundarySpec, HeatBoundarySpec], ...] = pd.Field(
+    boundary_spec: Tuple[annotate_type(Union[HeatChargeBoundarySpec, HeatBoundarySpec]), ...] = pd.Field(
         (),
         title="Boundary Condition Specifications",
         description="List of boundary condition specifications.",
