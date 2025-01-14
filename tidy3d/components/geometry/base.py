@@ -1696,8 +1696,6 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         "along the ``axis`` direction; "
         "and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section "
         "along the ``axis`` direction.",
-        gt=-np.pi / 2,
-        lt=np.pi / 2,
         units=RADIAN,
     )
 
@@ -1711,6 +1709,16 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
         "``top`` refers to the positive side of the y-axis.",
     )
+
+    @pydantic.validator("sidewall_angle", always=True)
+    def validate_angle(cls, value: float) -> float:
+        lower_bound = -np.pi / 2
+        upper_bound = np.pi / 2
+        if (value <= lower_bound) or (value >= upper_bound):
+            # u03C0 is unicode for pi
+            raise ValidationError(f"Sidewall angle ({value}) must be between -π/2 and π/2 rad.")
+
+        return value
 
     @property
     @abstractmethod

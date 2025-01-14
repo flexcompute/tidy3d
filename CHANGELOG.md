@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.
+- Update sidewall angle validator to clarify angle should be specified in radians.
 
 ### Fixed
 - NumPy 2.1 compatibility issue where `numpy.float64` values passed to xarray interpolation would raise TypeError.
