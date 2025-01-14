@@ -189,7 +189,46 @@ class HeatChargeSimulation(AbstractSimulation):
     ... )
 
     To run a drift-diffusion (``CHARGE`` |:zap:|) system:
-    TODO EXAMPLE
+    >>> import tidy3d as td
+    >>> Si_n = td.MultiPhysicsMedium(charge=td.SemiconductorMedium(
+    ...     permittivity=11.7,
+    ...     N_d=1e15,
+    ...     N_a=0,
+    ...     ), name="Si_n",
+    ... )
+    >>> Si_p = Si_n.updated_copy(N_d=0, N_p=1e16, name="Si_p")
+    >>> n_side = td.Structure(
+    ...     geometry=td.Box(center=(-0.5, 0, 0), size=(1, 1, 1)),
+    ...     medium=Si_n,
+    ...     name="n_side"
+    ... )
+    >>> p_side = td.Structure(
+    ...     geometry=td.Box(center=(0.5, 0, 0), size=(1, 1, 1)),
+    ...     medium=Si_p,
+    ...     name="p_side"
+    ... )
+    >>> bc_v1 = td.HeatChargeBoundarySpec(
+    ...     condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[-1, 0, 0.5])),
+    ...     placement=td.MediumMediumInterface(mediums=[air.name, Si_n.name]),
+    ... )
+    >>> bc_v2 = td.HeatChargeBoundarySpec(
+    ...     condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
+    ...     placement=td.MediumMediumInterface(mediums=[air.name, Si_p.name]),
+    ... )
+    >>> charge_sim = td.HeatChargeSimulation(
+    ...     structures=[]n_side, p_side,
+    ...     medium=td.Medium(heat_spec=td.FluidSpec(), name="air"),
+    ...     monitors=[td.SteadyFreeCarrierMonitor(
+    ...         center=(0, 0, 0), size=(td.inf, td.inf, 0), name="charge_mnt", unstructured=True
+    ...     )],
+    ...     center=(0, 0, 0),
+    ...     size=(3, 3, 3),
+    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+    ...     boundary_spec=[bc_v1, bc_v2],
+    ...     analysis_spec=td.SteadyChargeDCAnalysis(
+    ...         tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=3e3, max_iters=400),
+    ...         convergence_dv=10),
+    ...     )
 
 
     Coupling between ``HEAT`` and electrical ``CONDUCTION`` simulations is currently limited to 1-way.
@@ -207,8 +246,7 @@ class HeatChargeSimulation(AbstractSimulation):
             starting the ``HEAT`` simulation.
 
     Additional heat sources can be defined, in which case, they will be added on
-    top of the coupling heat source. Let's review an example:
-    TODO EXAMPLE
+    top of the coupling heat source.
     """
 
     medium: StructureMediumTypes = pd.Field(
