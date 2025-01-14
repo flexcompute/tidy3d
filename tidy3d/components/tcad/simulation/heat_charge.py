@@ -79,7 +79,7 @@ from tidy3d.components.tcad.viz import (
     plot_params_heat_bc,
     plot_params_heat_source,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
 from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect
 from tidy3d.constants import VOLUMETRIC_HEAT_RATE, inf
 from tidy3d.exceptions import SetupError
@@ -260,22 +260,24 @@ class HeatChargeSimulation(AbstractSimulation):
     Background medium of simulation, defaults to a standard dispersion-less :class:`Medium` if not specified.
     """
 
-    sources: Tuple[HeatChargeSourceType, ...] = pd.Field(
+    sources: Tuple[annotate_type(HeatChargeSourceType), ...] = pd.Field(
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
         discriminator=TYPE_TAG_STR,
     )
 
-    monitors: Tuple[HeatChargeMonitorType, ...] = pd.Field(
+    monitors: Tuple[annotate_type(HeatChargeMonitorType), ...] = pd.Field(
         (), title="Monitors", description="Monitors in the simulation.", discriminator=TYPE_TAG_STR
     )
 
-    boundary_spec: Tuple[Union[HeatChargeBoundarySpec, HeatBoundarySpec], ...] = pd.Field(
-        (),
-        title="Boundary Condition Specifications",
-        description="List of boundary condition specifications.",
-        discriminator=TYPE_TAG_STR,
+    boundary_spec: Tuple[annotate_type(Union[HeatChargeBoundarySpec, HeatBoundarySpec]), ...] = (
+        pd.Field(
+            (),
+            title="Boundary Condition Specifications",
+            description="List of boundary condition specifications.",
+            discriminator=TYPE_TAG_STR,
+        )
     )
     # NOTE: creating a union with HeatBoundarySpec for backwards compatibility
 
@@ -320,7 +322,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # NOTE: when considering CONDUCTION or CHARGE cases, both conductors and semiconductors
         # will be accepted
-        ValidElectricTypes = Union[SemiconductorMedium, ChargeConductorMedium]
+        valid_electric_medium = (SemiconductorMedium, ChargeConductorMedium)
 
         try:
             size = values["size"]
@@ -356,7 +358,8 @@ class HeatChargeSimulation(AbstractSimulation):
                     isinstance(medium.heat_spec, SolidSpec) for medium in medium_set
                 )
                 crosses_elec_spec = any(
-                    isinstance(medium.charge, ValidElectricTypes) for medium in medium_set
+                    any([isinstance(medium.charge, medium_i)] for medium_i in valid_electric_medium)
+                    for medium in medium_set
                 )
             else:
                 # approximate check for volumetric objects based on bounding boxes
@@ -369,7 +372,10 @@ class HeatChargeSimulation(AbstractSimulation):
                 crosses_elec_spec = any(
                     obj.intersects(structure.geometry)
                     for structure in total_structures
-                    if isinstance(structure.medium.charge, ValidElectricTypes)
+                    if any(
+                        [isinstance(structure.medium.charge, medium_i)]
+                        for medium_i in valid_electric_medium
+                    )
                 )
 
             if not crosses_solid:
