@@ -625,3 +625,23 @@ def test_validate_invdes_metric():
     invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
     with pytest.raises(ValueError, match="must return a real"):
         invdes.updated_copy(metric=metric)
+
+
+def test_pixel_size_warn_validator_no_sources(log_capture):
+    """Test that pixel size validator handles simulations without sources."""
+
+    sourceless_sim = simulation.updated_copy(sources=[])
+
+    invdes = make_invdes()
+    invdes = invdes.updated_copy(simulation=sourceless_sim)
+
+    with AssertLogLevel(log_capture, "WARNING", contains_str="Cannot validate pixel size"):
+        region_coarse = invdes.design_region.updated_copy(pixel_size=1.0)
+        invdes = invdes.updated_copy(design_region=region_coarse)
+
+    invdes_multi = make_invdes_multi()
+    sourceless_sims = [sourceless_sim for _ in invdes_multi.simulations]
+    invdes_multi = invdes_multi.updated_copy(simulations=sourceless_sims)
+
+    with AssertLogLevel(log_capture, "WARNING", contains_str="Cannot validate pixel size"):
+        invdes_multi = invdes_multi.updated_copy(design_region=region_coarse)
