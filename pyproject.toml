@@ -59,6 +59,8 @@ pre-commit = { version = "*", optional = true }
 pylint = { version = "*", optional = true }
 pytest = { version = ">=8.1", optional = true }
 pytest-timeout = { version = "*", optional = true }
+pytest-xdist = "^3.6.1"
+pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
 
 # gdspy
@@ -150,6 +152,8 @@ dev = [
   'pyswarms',
   'pytest',
   'pytest-timeout',
+  'pytest-xdist',
+  'pytest-env',
   'rtree',
   'ruff',
   'sax',
@@ -261,7 +265,8 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules"
+addopts = "--doctest-modules -n auto"
+env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
   "tests/_test_local",
