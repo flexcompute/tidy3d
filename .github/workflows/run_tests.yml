@@ -44,7 +44,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.local
-        key: ${{ runner.os }}-poetry-tool-${{ matrix.python-version }}
+        key: poetry-tool-${{ runner.os }}-py${{ matrix.python-version }}
 
     #----------------------------------------------
     # install & configure poetry
@@ -66,9 +66,10 @@ jobs:
         path: |
           ~/.cache/pypoetry
           .venv
-        key: ${{ runner.os }}-poetry-${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+        key: deps-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
         restore-keys: |
-          ${{ runner.os }}-poetry-${{ matrix.python-version }}-
+          deps-${{ runner.os }}-py${{ matrix.python-version }}-
+          deps-${{ runner.os }}-
 
     #----------------------------------------------
     # install root project, if required
