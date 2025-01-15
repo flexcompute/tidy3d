@@ -23,7 +23,8 @@ from .geometry.base import Box, Geometry
 from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
-from .medium import AbstractCustomMedium, CustomMedium, Medium, Medium2D, MediumType
+from .material.types import StructureMediumType
+from .medium import AbstractCustomMedium, CustomMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
 from .types import TYPE_TAG_STR, Ax, Axis
 from .validators import validate_name_str
@@ -65,7 +66,7 @@ class AbstractStructure(Tidy3dBaseModel):
         "when performing shape optimization with autograd.",
     )
 
-    background_medium: MediumType = pydantic.Field(
+    background_medium: StructureMediumType = pydantic.Field(
         None,
         title="Background Medium",
         description="Medium used for the background of this structure "
@@ -179,7 +180,7 @@ class Structure(AbstractStructure):
     * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
 
-    medium: MediumType = pydantic.Field(
+    medium: StructureMediumType = pydantic.Field(
         ...,
         title="Medium",
         description="Defines the electromagnetic properties of the structure's medium.",

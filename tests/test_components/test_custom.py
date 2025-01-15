@@ -8,11 +8,8 @@ import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
 import xarray as xr
-from tidy3d.components.data.dataset import (
-    PermittivityDataset,
-    UnstructuredGridDataset,
-    _get_numpy_array,
-)
+from tidy3d.components.data.dataset import PermittivityDataset
+from tidy3d.components.data.utils import UnstructuredGridDataset, _get_numpy_array
 from tidy3d.components.medium import (
     AbstractCustomMedium,
     CustomAnisotropicMedium,

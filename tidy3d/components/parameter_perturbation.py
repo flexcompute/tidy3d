@@ -21,9 +21,9 @@ from ..exceptions import DataError
 from ..log import log
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import ChargeDataArray, HeatDataArray, IndexedDataArray, SpatialDataArray
-from .data.dataset import (
+from .data.unstructured.base import UnstructuredGridDataset
+from .data.utils import (
     CustomSpatialDataType,
-    UnstructuredGridDataset,
     _check_same_coordinates,
     _get_numpy_array,
     _zeros_like,

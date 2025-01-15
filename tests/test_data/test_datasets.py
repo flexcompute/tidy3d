@@ -10,10 +10,21 @@ from ..utils import AssertLogLevel, cartesian_to_unstructured
 np.random.seed(4)
 
 
+@pytest.mark.parametrize("dataset_type_ind", [0, 1])
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
+def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
+
+    if dataset_type_ind == 0:
+        dataset_type = td.TriangularGridDataset
+        values_type = td.IndexedDataArray
+        extra_dims = {}
+
+    if dataset_type_ind == 1:
+        dataset_type = td.TriangularGridDataset
+        values_type = td.IndexVoltageDataArray
+        extra_dims = {"voltage": [0, 1, 2]}
 
     # basic create
     tri_grid_points = td.PointDataArray(
@@ -26,13 +37,13 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         dims=("cell_index", "vertex_index"),
     )
 
-    tri_grid_values = td.IndexedDataArray(
-        [1.0, 2.0, 3.0, 4.0],
-        coords=dict(index=np.arange(4)),
+    tri_grid_values = values_type(
+        np.random.rand(4, *[len(coord) for coord in extra_dims.values()]),
+        coords=dict(index=np.arange(4), **extra_dims),
         name=ds_name,
     )
 
-    tri_grid = td.TriangularGridDataset(
+    tri_grid = dataset_type(
         normal_axis=1,
         normal_pos=0,
         points=tri_grid_points,
@@ -50,7 +61,7 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
             coords=dict(index=np.arange(4), axis=np.arange(3)),
         )
 
-        _ = td.TriangularGridDataset(
+        _ = dataset_type(
             normal_axis=0,
             normal_pos=10,
             points=tri_grid_points_bad,
@@ -65,7 +76,7 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     )
 
     with AssertLogLevel("WARNING"):
-        tri_grid_with_degenerates = td.TriangularGridDataset(
+        tri_grid_with_degenerates = dataset_type(
             normal_axis=2,
             normal_pos=-3,
             points=tri_grid_points,
@@ -100,7 +111,7 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
     )
     with pytest.raises(pd.ValidationError):
-        _ = td.TriangularGridDataset(
+        _ = dataset_type(
             normal_axis=2,
             normal_pos=-3,
             points=tri_grid_points,
@@ -113,7 +124,7 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
     )
     with pytest.raises(pd.ValidationError):
-        _ = td.TriangularGridDataset(
+        _ = dataset_type(
             normal_axis=2,
             normal_pos=-3,
             points=tri_grid_points,
@@ -122,12 +133,12 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         )
 
     # wrong number of values
-    tri_grid_values_bad = td.IndexedDataArray(
-        [1.0, 2.0, 3.0],
-        coords=dict(index=np.arange(3)),
+    tri_grid_values_bad = values_type(
+        np.random.rand(3, *[len(coord) for coord in extra_dims.values()]),
+        coords=dict(index=np.arange(3), **extra_dims),
     )
     with pytest.raises(pd.ValidationError):
-        _ = td.TriangularGridDataset(
+        _ = dataset_type(
             normal_axis=0,
             normal_pos=0,
             points=tri_grid_points,
@@ -197,13 +208,18 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         assert np.all(interp.isel(y=0).data == interp.isel(y=1).data)
         assert interp.name == ds_name
 
-        interp_vtk = tri_grid.interp(
-            x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
-        )
-        assert np.all(interp_vtk.isel(y=0).data == interp_vtk.isel(y=1).data)
-        assert interp_vtk.name == ds_name
-
-        assert np.allclose(interp_vtk, interp)
+        if len(extra_dims) == 0:
+            interp_vtk = tri_grid.interp(
+                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+            )
+            assert np.all(interp_vtk.isel(y=0).data == interp_vtk.isel(y=1).data)
+            assert interp_vtk.name == ds_name
+            assert np.allclose(interp_vtk, interp)
+        else:
+            with pytest.raises(DataError):
+                interp_vtk = tri_grid.interp(
+                    x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+                )
 
         # outside of grid
         no_intersection = tri_grid.interp(
@@ -216,29 +232,35 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     tri_grid_renamed = tri_grid.rename("renamed")
     assert tri_grid_renamed.name == "renamed"
 
+    if len(extra_dims) > 0:
+        with pytest.raises(DataError):
+            _ = tri_grid.plot()
+
+    tri_grid_one_field = tri_grid.isel(**{key: value[0] for key, value in extra_dims.items()})
+
     # plotting
-    _ = tri_grid.plot()
+    _ = tri_grid_one_field.plot()
     plt.close()
 
-    _ = tri_grid.plot(grid=False)
+    _ = tri_grid_one_field.plot(grid=False)
     plt.close()
 
-    _ = tri_grid.plot(field=False)
+    _ = tri_grid_one_field.plot(field=False)
     plt.close()
 
-    _ = tri_grid.plot(cbar=False)
+    _ = tri_grid_one_field.plot(cbar=False)
     plt.close()
 
-    _ = tri_grid.plot(vmin=-20, vmax=100)
+    _ = tri_grid_one_field.plot(vmin=-20, vmax=100)
     plt.close()
 
-    _ = tri_grid.plot(cbar_kwargs=dict(label="test"))
+    _ = tri_grid_one_field.plot(cbar_kwargs=dict(label="test"))
     plt.close()
 
-    _ = tri_grid.plot(cmap="RdBu")
+    _ = tri_grid_one_field.plot(cmap="RdBu")
     plt.close()
 
-    _ = tri_grid.plot(shading="flat")
+    _ = tri_grid_one_field.plot(shading="flat")
     plt.close()
 
     with pytest.raises(DataError):
@@ -261,7 +283,7 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     # writing/reading
     tri_grid.to_file(tmp_path / "tri_grid_test.hdf5")
 
-    tri_grid_loaded = td.TriangularGridDataset.from_file(tmp_path / "tri_grid_test.hdf5")
+    tri_grid_loaded = dataset_type.from_file(tmp_path / "tri_grid_test.hdf5")
     assert tri_grid == tri_grid_loaded
 
     # writing/reading .vtu
@@ -269,26 +291,25 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         with pytest.raises(Tidy3dImportError):
             tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
         with pytest.raises(Tidy3dImportError):
-            tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
+            tri_grid_loaded = dataset_type.from_vtu(tmp_path / "tri_grid_test.vtu")
     else:
         tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
 
-        tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
-        assert tri_grid == tri_grid_loaded
+        if len(extra_dims) == 0:
+            tri_grid_loaded = dataset_type.from_vtu(tmp_path / "tri_grid_test.vtu")
+            assert tri_grid == tri_grid_loaded
 
-        custom_name = "newname"
-        tri_grid_renamed = tri_grid.rename(custom_name)
-        tri_grid_renamed.to_vtu(tmp_path / "tri_grid_test.vtu")
+            custom_name = "newname"
+            tri_grid_renamed = tri_grid.rename(custom_name)
+            tri_grid_renamed.to_vtu(tmp_path / "tri_grid_test.vtu")
 
-        tri_grid_loaded = td.TriangularGridDataset.from_vtu(
-            tmp_path / "tri_grid_test.vtu", field=custom_name
-        )
-        assert tri_grid == tri_grid_loaded
+            tri_grid_loaded = dataset_type.from_vtu(
+                tmp_path / "tri_grid_test.vtu", field=custom_name
+            )
+            assert tri_grid == tri_grid_loaded
 
         with pytest.raises(AttributeError):
-            tri_grid_loaded = td.TriangularGridDataset.from_vtu(
-                tmp_path / "tri_grid_test.vtu", field=custom_name + "blah"
-            )
+            tri_grid_loaded = dataset_type.from_vtu(tmp_path / "tri_grid_test.vtu", field="blah")
 
     # test ariphmetic operations
     def operation(arr):
@@ -301,10 +322,21 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     assert result.name == ds_name
 
 
+@pytest.mark.parametrize("dataset_type_ind", [0, 1])
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
+def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
+
+    if dataset_type_ind == 0:
+        dataset_type = td.TetrahedralGridDataset
+        values_type = td.IndexedDataArray
+        extra_dims = {}
+
+    if dataset_type_ind == 1:
+        dataset_type = td.TetrahedralGridDataset
+        values_type = td.IndexVoltageDataArray
+        extra_dims = {"voltage": [0, 1, 2]}
 
     # basic create
     tet_grid_points = td.PointDataArray(
@@ -326,13 +358,13 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         dims=("cell_index", "vertex_index"),
     )
 
-    tet_grid_values = td.IndexedDataArray(
-        np.linspace(-1, 2, 8),
-        dims=("index"),
+    tet_grid_values = values_type(
+        np.random.rand(8, *[len(coord) for coord in extra_dims.values()]),
+        coords=dict(index=np.arange(8), **extra_dims),
         name=ds_name,
     )
 
-    tet_grid = td.TetrahedralGridDataset(
+    tet_grid = dataset_type(
         points=tet_grid_points,
         cells=tet_grid_cells,
         values=tet_grid_values,
@@ -344,7 +376,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         coords=dict(index=np.arange(8), axis=np.arange(2)),
     )
     with pytest.raises(pd.ValidationError):
-        _ = td.TetrahedralGridDataset(
+        _ = dataset_type(
             points=tet_grid_points_bad,
             cells=tet_grid_cells,
             values=tet_grid_values,
@@ -357,7 +389,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     )
 
     with AssertLogLevel("WARNING"):
-        tet_grid_with_degenerates = td.TetrahedralGridDataset(
+        tet_grid_with_degenerates = dataset_type(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
             values=tet_grid_values,
@@ -390,7 +422,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         coords=dict(cell_index=np.arange(6), vertex_index=np.arange(3)),
     )
     with pytest.raises(pd.ValidationError):
-        _ = td.TetrahedralGridDataset(
+        _ = dataset_type(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
             values=tet_grid_values,
@@ -401,19 +433,19 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         coords=dict(cell_index=np.arange(6), vertex_index=np.arange(4)),
     )
     with pytest.raises(pd.ValidationError):
-        _ = td.TetrahedralGridDataset(
+        _ = dataset_type(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
             values=tet_grid_values,
         )
 
     # wrong number of values
-    tet_grid_values_bad = td.IndexedDataArray(
-        np.linspace(-1, 2, 18),
-        dims=("index"),
+    tet_grid_values_bad = values_type(
+        np.random.rand(5, *[len(coord) for coord in extra_dims.values()]),
+        coords=dict(index=np.arange(5), **extra_dims),
     )
     with pytest.raises(pd.ValidationError):
-        _ = td.TetrahedralGridDataset(
+        _ = dataset_type(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
             values=tet_grid_values_bad,
@@ -484,12 +516,17 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         result = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
         assert result.name == ds_name
 
-        result_vtk = tet_grid.interp(
-            x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
-        )
-        assert result.name == ds_name
-
-        assert np.allclose(result_vtk, result)
+        if len(extra_dims) == 0:
+            result_vtk = tet_grid.interp(
+                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+            )
+            assert result.name == ds_name
+            assert np.allclose(result_vtk, result)
+        else:
+            with pytest.raises(DataError):
+                result_vtk = tet_grid.interp(
+                    x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+                )
 
         # outside of grid
         no_intersection = tet_grid.interp(
@@ -515,7 +552,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     # writing/reading
     tet_grid.to_file(tmp_path / "tri_grid_test.hdf5")
 
-    tet_grid_loaded = td.TetrahedralGridDataset.from_file(tmp_path / "tri_grid_test.hdf5")
+    tet_grid_loaded = dataset_type.from_file(tmp_path / "tri_grid_test.hdf5")
     assert tet_grid == tet_grid_loaded
 
     # writing/reading .vtu
@@ -523,26 +560,25 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         with pytest.raises(Tidy3dImportError):
             tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
         with pytest.raises(Tidy3dImportError):
-            tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
+            tet_grid_loaded = dataset_type.from_vtu(tmp_path / "tet_grid_test.vtu")
     else:
         tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
-        tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
 
-        assert tet_grid == tet_grid_loaded
+        if len(extra_dims) == 0:
+            tet_grid_loaded = dataset_type.from_vtu(tmp_path / "tet_grid_test.vtu")
+            assert tet_grid == tet_grid_loaded
 
-        custom_name = "newname"
-        tet_grid_renamed = tet_grid.rename(custom_name)
-        tet_grid_renamed.to_vtu(tmp_path / "tet_grid_test.vtu")
+            custom_name = "newname"
+            tet_grid_renamed = tet_grid.rename(custom_name)
+            tet_grid_renamed.to_vtu(tmp_path / "tet_grid_test.vtu")
 
-        tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(
-            tmp_path / "tet_grid_test.vtu", field=custom_name
-        )
-        assert tet_grid == tet_grid_loaded
+            tet_grid_loaded = dataset_type.from_vtu(
+                tmp_path / "tet_grid_test.vtu", field=custom_name
+            )
+            assert tet_grid == tet_grid_loaded
 
         with pytest.raises(AttributeError):
-            td.TetrahedralGridDataset.from_vtu(
-                tmp_path / "tet_grid_test.vtu", field=custom_name + "blah"
-            )
+            dataset_type.from_vtu(tmp_path / "tet_grid_test.vtu", field="blah")
 
     # test ariphmetic operations
     def operation(arr):
@@ -623,3 +659,11 @@ def test_triangular_dataset_uniform():
         values=tri_grid_values,
     )
     assert tri_grid.is_uniform
+
+    tri_grid_values = td.IndexedDataArray(
+        [1.0, 2.0, 3.0, 1.0],
+        dims=("index"),
+    )
+
+    tri_grid = tri_grid.updated_copy(values=tri_grid_values)
+    assert not tri_grid.is_uniform
