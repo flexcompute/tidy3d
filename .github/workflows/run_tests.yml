@@ -37,9 +37,20 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     #----------------------------------------------
+    # cache poetry installation
+    #----------------------------------------------
+    - name: Cache poetry installation
+      id: poetry-tool-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.local
+        key: ${{ runner.os }}-poetry-tool-${{ matrix.python-version }}
+
+    #----------------------------------------------
     # install & configure poetry
     #----------------------------------------------
     - name: Install Poetry
+      if: steps.poetry-tool-cache.outputs.cache-hit != 'true'
       run: |
         python3 -m pip install --upgrade pip
         python3 -m pip install "poetry==1.8.2"
