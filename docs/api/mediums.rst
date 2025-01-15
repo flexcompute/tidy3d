@@ -1,8 +1,8 @@
 
 .. currentmodule:: tidy3d
 
-Mediums
-=======
+EM Mediums
+==========
 
 Non-Dispersive Medium
 ---------------------
@@ -137,3 +137,16 @@ Abstract Classes
 
    tidy3d.components.medium.AbstractPerturbationMedium
    tidy3d.components.medium.NonlinearModel
+
+
+Multi-Physics Medium
+====================
+
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   tidy3d.components.material.multi_physics.MultiPhysicsMedium
+
+
+

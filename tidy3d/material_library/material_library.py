@@ -1,9 +1,19 @@
 """Holds dispersive models for several commonly used optical materials."""
 
 import json
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pydantic.v1 as pd
+
+from tidy3d.components.material.multi_physics import MultiPhysicsMedium
+from tidy3d.components.material.tcad.charge import SemiconductorMedium
+from tidy3d.components.tcad.types import (
+    AugerRecombination,
+    CaugheyThomasMobility,
+    RadiativeRecombination,
+    ShockleyReedHallRecombination,
+    SlotboomBandGapNarrowing,
+)
 
 from ..components.base import Tidy3dBaseModel
 from ..components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
@@ -64,7 +74,7 @@ class AbstractVariantItem(Tidy3dBaseModel):
 class VariantItem(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a material."""
 
-    medium: PoleResidue = pd.Field(
+    medium: Union[PoleResidue, MultiPhysicsMedium] = pd.Field(
         ...,
         title="Material dispersion model",
         description="A dispersive medium described by the pole-residue pair model.",
@@ -1132,7 +1142,6 @@ MoSe2_Li2014 = VariantItem2D(
     reference=[material_refs["Li2014"]],
 )
 
-
 Ni_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
@@ -1869,6 +1878,46 @@ cSi_PalikLossless = VariantItem(
     reference=[material_refs["Palik_Lossless"]],
 )
 
+cSi_MultiPhysics = VariantItem(
+    medium=MultiPhysicsMedium(
+        optical=cSi_Green2008.medium,
+        charge=SemiconductorMedium(
+            permittivity=11.7,
+            N_c=2.86e19,
+            N_v=3.1e19,
+            E_g=1.11,
+            mobility=CaugheyThomasMobility(
+                mu_n_min=52.2,
+                mu_n=1471.0,
+                mu_p_min=44.9,
+                mu_p=470.5,
+                exp_t_mu=-2.33,
+                exp_d_n=0.68,
+                exp_d_p=0.719,
+                ref_N=2.23e17,
+                exp_t_mu_min=-0.57,
+                exp_t_d=2.4,
+                exp_t_d_exp=-0.146,
+            ),
+            R=[
+                ShockleyReedHallRecombination(tau_n=3.3e-6, tau_p=4e-6),
+                RadiativeRecombination(r_const=1.6e-14),
+                AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
+            ],
+            delta_E_g=SlotboomBandGapNarrowing(
+                v1=6.92 * 1e-3,
+                n2=1.3e17,
+                c2=0.5,
+                min_N=1e15,
+            ),
+            N_a=0,
+            N_d=0,
+        ),
+    ),
+    reference=[material_refs["Green2008"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si/Green-2008.yml",
+)
 
 material_library = dict(
     Ag=MaterialItem(
@@ -2307,6 +2356,7 @@ material_library = dict(
             Li1993_293K=cSi_Li1993_293K,
             Green2008=cSi_Green2008,
             Green2008_Lossless=cSi_Green2008Lossless,
+            Si_MultiPhysics=cSi_MultiPhysics,
         ),
         default="Green2008",
     ),

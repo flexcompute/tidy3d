@@ -15,11 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New field `shadow` in `MeshOverrideStructure` that sets grid size in overlapping region according to structure list or minimal grid size.
 - Scientific notation for frequency range warnings.
 
+- `MultiphysicsMedium` allows for the modularization definition of physical properties. So in addition to the usual optical properties, one can now add heat properties or electric properties.
+- Added :zap: Charge Solver API. It is now possible to solve the Drift-Diffusion (DD) equations for semiconductors. These simulations can be set up with the new class `HeatChargeSimulation` (which supersedes `HeatSimulation`) in a way similar to that of Heat simulations. The solver has currently limited capabilities (which will be expanded in future releases): steady only, isothermal, Boltzmann statistics (non-degenerate semiconductors only).
+- `SemiconductorMedium` has been added. This is used in combination with `MultiPhysicsMedium` to define the mediums used in the Charge solver. It allows to specify mobility, bandgap narrowing, and generation/recombination models as well as doping. Doping can be defined as constant or through "doping boxes" or, more generally, via `SpatialDataArray` objects for full flexibility.
+- Mobility models for `SemiconductorMedium`: `ConstantMobilityModel`, `CaugheyThomasMobility`
+- Bandgap narrowing models for `SemiconductorMedium`: `SlotboomBandGapNarrowing`
+- Generation-recombination models for `SemiconductorMedium`: `ShockleyReedHallRecombination`, `RadiativeRecombination`, `AugerRecombination`
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.
 - Update sidewall angle validator to clarify angle should be specified in radians.
 - Reduced the complex tolerance in the mode solver below which permittivity is considered lossless, in order to correctly compute very low-loss modes.
+-`HeatChargeSimulation` supersedes `HeatSimulation`. Though both of the can be used for Heat simulation interchangeably, the latter has been deprecated and will disappear in the future. 
+- `FluidSpec` and `SolidSpec` are now deprecated in favor of `FluidMedium` and `SolidMedium`. Both can still be used interchangeably.
 
 ### Fixed
 - NumPy 2.1 compatibility issue where `numpy.float64` values passed to xarray interpolation would raise TypeError.

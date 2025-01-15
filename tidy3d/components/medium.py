@@ -17,6 +17,8 @@ import pydantic.v1 as pd
 import xarray as xr
 from scipy import signal
 
+from tidy3d.components.material.tcad.heat import ThermalSpecType
+
 from ..constants import (
     C_0,
     CONDUCTIVITY,
@@ -39,11 +41,13 @@ from .autograd.types import AutogradFieldMap, TracedFloat, TracedPoleAndResidue,
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import (
-    CustomSpatialDataType,
-    CustomSpatialDataTypeAnnotated,
     ElectromagneticFieldDataset,
     PermittivityDataset,
-    UnstructuredGridDataset,
+)
+from .data.unstructured.base import UnstructuredGridDataset
+from .data.utils import (
+    CustomSpatialDataType,
+    CustomSpatialDataTypeAnnotated,
     _check_same_coordinates,
     _get_numpy_array,
     _ones_like,
@@ -59,7 +63,6 @@ from .dispersion_fitter import (
 )
 from .geometry.base import Geometry
 from .grid.grid import Coords, Grid
-from .heat_charge_spec import ElectricSpecType, ThermalSpecType
 from .parameter_perturbation import (
     IndexPerturbation,
     ParameterPerturbation,
@@ -729,9 +732,9 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     heat_spec: Optional[ThermalSpecType] = pd.Field(
         None,
         title="Heat Specification",
-        description="Specification of the medium heat properties. They are used for solving "
-        "the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for "
-        "investigating the influence of heat propagation on the properties of optical systems. "
+        description="DEPRECATED: Use `td.MultiPhysicsMedium`. Specification of the medium heat properties. They are "
+        "used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be"
+        "used for investigating the influence of heat propagation on the properties of optical systems. "
         "Once the temperature distribution in the system is found using ``HeatSimulation`` object, "
         "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
         "models defined into spatially dependent custom mediums. "
@@ -740,12 +743,26 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    electric_spec: Optional[ElectricSpecType] = pd.Field(
-        None,
-        title="Electric Specification",
-        description="Specification of the medium electric properties.",
-        discriminator=TYPE_TAG_STR,
-    )
+    @property
+    def charge(self):
+        return ValueError(f"A `charge` medium does not exist in this Medium definition: {self}")
+
+    @property
+    def electrical(self):
+        return ValueError(
+            f"An `electrical` medium does not exist in this Medium definition: {self}"
+        )
+
+    @property
+    def heat(self):
+        if self.heat_spec:
+            return self.heat_spec
+        else:
+            return ValueError(f"A `heat` medium does not exist in this Medium definition: {self}")
+
+    @property
+    def optical(self):
+        return ValueError(f"An `optical` medium does not exist in this Medium definition: {self}")
 
     @pd.validator("modulation_spec", always=True)
     @skip_if_fields_missing(["nonlinear_spec"])
@@ -825,6 +842,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
+        # TODO this should be moved out of here into FDTD Simulation Mediums?
         """Complex-valued permittivity as a function of frequency.
 
         Parameters
@@ -915,6 +933,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @cached_property
     @abstractmethod
     def n_cfl(self):
+        # TODO this should be moved out of here into FDTD Simulation Mediums?
         """To ensure a stable FDTD simulation, it is essential to select an appropriate
         time step size in accordance with the CFL condition. The maximal time step
         size is inversely proportional to the speed of light in the medium, and thus

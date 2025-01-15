@@ -1,7 +1,68 @@
 """Tidy3d package imports"""
 
-# grid
-# apodization
+from tidy3d.components.material.multi_physics import MultiPhysicsMedium
+from tidy3d.components.material.tcad.charge import (
+    ChargeConductorMedium,
+    ChargeInsulatorMedium,
+    SemiconductorMedium,
+)
+from tidy3d.components.material.tcad.heat import (
+    FluidMedium,
+    FluidSpec,
+    SolidMedium,
+    SolidSpec,
+)
+from tidy3d.components.spice.analysis.dc import (
+    ChargeToleranceSpec,
+    IsothermalSteadyChargeDCAnalysis,
+)
+from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource
+from tidy3d.components.spice.sources.types import VoltageSourceType
+from tidy3d.components.tcad.boundary.specification import (
+    HeatBoundarySpec,
+    HeatChargeBoundarySpec,
+)
+from tidy3d.components.tcad.data.sim_data import (
+    DeviceCharacteristics,
+    HeatChargeSimulationData,
+    HeatSimulationData,
+)
+from tidy3d.components.tcad.data.types import (
+    SteadyCapacitanceData,
+    SteadyFreeCarrierData,
+    SteadyPotentialData,
+    TemperatureData,
+)
+from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
+from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from tidy3d.components.tcad.monitors.charge import (
+    SteadyCapacitanceMonitor,
+    SteadyFreeCarrierMonitor,
+    SteadyPotentialMonitor,
+)
+from tidy3d.components.tcad.monitors.heat import (
+    TemperatureMonitor,
+)
+from tidy3d.components.tcad.simulation.heat import HeatSimulation
+from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
+from tidy3d.components.tcad.types import (
+    AugerRecombination,
+    CaugheyThomasMobility,
+    ConstantMobilityModel,
+    ConvectionBC,
+    CurrentBC,
+    HeatFluxBC,
+    HeatFromElectricSource,
+    HeatSource,
+    InsulatingBC,
+    RadiativeRecombination,
+    ShockleyReedHallRecombination,
+    SlotboomBandGapNarrowing,
+    TemperatureBC,
+    UniformHeatSource,
+    VoltageBC,
+)
+
 from .components.apodization import ApodizationSpec
 
 # boundary placement for other solvers
@@ -52,6 +113,7 @@ from .components.data.data_array import (
     FluxTimeDataArray,
     HeatDataArray,
     IndexedDataArray,
+    IndexedVoltageDataArray,
     ModeAmpsDataArray,
     ModeIndexDataArray,
     PointDataArray,
@@ -60,14 +122,14 @@ from .components.data.data_array import (
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     SpatialDataArray,
+    SpatialVoltageDataArray,
+    SteadyVoltageDataArray,
 )
 from .components.data.dataset import (
     FieldDataset,
     FieldTimeDataset,
     ModeSolverDataset,
     PermittivityDataset,
-    TetrahedralGridDataset,
-    TriangularGridDataset,
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
@@ -85,6 +147,10 @@ from .components.data.monitor_data import (
     PermittivityData,
 )
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from .components.data.utils import (
+    TetrahedralGridDataset,
+    TriangularGridDataset,
+)
 from .components.eme.data.dataset import (
     EMECoefficientDataset,
     EMEFieldDataset,
@@ -131,27 +197,6 @@ from .components.grid.grid_spec import (
     QuasiUniformGrid,
     UniformGrid,
 )
-from .components.heat_charge.boundary import (
-    ConvectionBC,
-    CurrentBC,
-    HeatBoundarySpec,
-    HeatChargeBoundarySpec,
-    HeatFluxBC,
-    InsulatingBC,
-    TemperatureBC,
-    VoltageBC,
-)
-from .components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
-from .components.heat_charge.heat.simulation import HeatSimulation
-from .components.heat_charge.monitor import TemperatureMonitor, VoltageMonitor
-from .components.heat_charge.monitor_data import TemperatureData, VoltageData
-from .components.heat_charge.sim_data import HeatChargeSimulationData, HeatSimulationData
-from .components.heat_charge.simulation import HeatChargeSimulation
-from .components.heat_charge.source import HeatFromElectricSource, HeatSource, UniformHeatSource
-
-# heat
-# heat
-from .components.heat_charge_spec import ConductorSpec, FluidSpec, InsulatorSpec, SolidSpec
 
 # lumped elements
 from .components.lumped_element import (
@@ -410,6 +455,7 @@ __all__ = [
     "ScalarModeFieldCylindricalDataArray",
     "ScalarFieldTimeDataArray",
     "SpatialDataArray",
+    "SpatialVoltageDataArray",
     "ModeAmpsDataArray",
     "ModeIndexDataArray",
     "FluxDataArray",
@@ -495,12 +541,17 @@ __all__ = [
     "MediumMediumInterface",
     "StructureSimulationBoundary",
     "SimulationBoundary",
+    "FluidMedium",
     "FluidSpec",
+    "SolidMedium",
     "SolidSpec",
-    "ConductorSpec",
-    "InsulatorSpec",
+    "ChargeConductorMedium",
+    "SemiconductorMedium",
+    "ChargeInsulatorMedium",
     "HeatSimulation",
     "HeatSimulationData",
+    "HeatChargeSimulationData",
+    "DeviceCharacteristics",
     "TemperatureBC",
     "ConvectionBC",
     "HeatFluxBC",
@@ -516,10 +567,21 @@ __all__ = [
     "TemperatureData",
     "TemperatureMonitor",
     "HeatChargeSimulation",
-    "HeatChargeSimulationData",
-    "VoltageData",
+    "SteadyPotentialData",
+    "SteadyFreeCarrierData",
+    "SteadyCapacitanceData",
+    "CaugheyThomasMobility",
+    "ConstantMobilityModel",
+    "SlotboomBandGapNarrowing",
+    "ShockleyReedHallRecombination",
+    "AugerRecombination",
+    "RadiativeRecombination",
+    "ConstantDoping",
+    "GaussianDoping",
     "HeatChargeBoundarySpec",
-    "VoltageMonitor",
+    "SteadyPotentialMonitor",
+    "SteadyFreeCarrierMonitor",
+    "SteadyCapacitanceMonitor",
     "SpaceTimeModulation",
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
@@ -527,6 +589,8 @@ __all__ = [
     "PointDataArray",
     "CellDataArray",
     "IndexedDataArray",
+    "IndexedVoltageDataArray",
+    "SteadyVoltageDataArray",
     "TriangularGridDataset",
     "TetrahedralGridDataset",
     "medium_from_nk",
@@ -567,4 +631,10 @@ __all__ = [
     "EMEFreqSweep",
     "FixedAngleSpec",
     "FixedInPlaneKSpec",
+    "MultiPhysicsMedium",
+    "DCVoltageSource",
+    "DCCurrentSource",
+    "VoltageSourceType",
+    "IsothermalSteadyChargeDCAnalysis",
+    "ChargeToleranceSpec",
 ]

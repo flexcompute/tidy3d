@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Literal, Optional, Set, Tuple, Union
 
 import autograd.numpy as np
 
@@ -14,12 +14,24 @@ except ImportError:
     pass
 import pydantic.v1 as pd
 
+from tidy3d.components.material.tcad.charge import (
+    ChargeConductorMedium,
+    SemiconductorMedium,
+)
+from tidy3d.components.material.tcad.heat import (
+    SolidSpec,
+)
+from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
+from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
+from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
+
 from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
 from ..log import log
 from .base import Tidy3dBaseModel, cached_property
-from .data.dataset import (
+from .data.utils import (
     CustomSpatialDataType,
+    SpatialDataArray,
     TetrahedralGridDataset,
     TriangularGridDataset,
     UnstructuredGridDataset,
@@ -28,14 +40,13 @@ from .data.dataset import (
 from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, traverse_geometries
 from .grid.grid import Coords, Grid
-from .heat_charge_spec import ConductorSpec, SolidSpec
+from .material.multi_physics import MultiPhysicsMedium
 from .medium import (
     AbstractCustomMedium,
+    AbstractMedium,
     AbstractPerturbationMedium,
     Medium,
     Medium2D,
-    MediumType,
-    MediumType3D,
 )
 from .structure import Structure
 from .types import (
@@ -85,7 +96,7 @@ class Scene(Tidy3dBaseModel):
     ... )
     """
 
-    medium: MediumType3D = pd.Field(
+    medium: MultiPhysicsMediumType3D = pd.Field(
         Medium(),
         title="Background Medium",
         description="Background medium of scene, defaults to vacuum if not specified.",
@@ -210,7 +221,7 @@ class Scene(Tidy3dBaseModel):
         return Box(center=self.center, size=self.size)
 
     @cached_property
-    def mediums(self) -> Set[MediumType]:
+    def mediums(self) -> Set[StructureMediumType]:
         """Returns set of distinct :class:`.AbstractMedium` in scene.
 
         Returns
@@ -223,7 +234,7 @@ class Scene(Tidy3dBaseModel):
         return list(medium_dict.keys())
 
     @cached_property
-    def medium_map(self) -> Dict[MediumType, pd.NonNegativeInt]:
+    def medium_map(self) -> Dict[StructureMediumType, pd.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium` in scene.
 
@@ -244,7 +255,7 @@ class Scene(Tidy3dBaseModel):
     @staticmethod
     def intersecting_media(
         test_object: Box, structures: Tuple[Structure, ...]
-    ) -> Tuple[MediumType, ...]:
+    ) -> Tuple[StructureMediumType, ...]:
         """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
         surfaces, if it is a volume.
@@ -439,26 +450,37 @@ class Scene(Tidy3dBaseModel):
         )
         return ax
 
-    def _plot_shape_structure(self, medium: Medium, mat_index: int, shape: Shapely, ax: Ax) -> Ax:
+    def _plot_shape_structure(
+        self, medium: MultiPhysicsMediumType3D, mat_index: int, shape: Shapely, ax: Ax
+    ) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
         plot_params_struct = self._get_structure_plot_params(medium=medium, mat_index=mat_index)
         ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
         return ax
 
-    def _get_structure_plot_params(self, mat_index: int, medium: Medium) -> PlotParams:
+    def _get_structure_plot_params(
+        self, mat_index: int, medium: MultiPhysicsMediumType3D
+    ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot()."""
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
 
+        if isinstance(medium, MultiPhysicsMedium):
+            is_pec = medium.optical is not None and medium.optical.is_pec
+            is_time_modulated = medium.optical is not None and medium.optical.is_time_modulated
+        else:
+            is_pec = medium.is_pec
+            is_time_modulated = medium.is_time_modulated
+
         if mat_index == 0 or medium == self.medium:
             # background medium
             plot_params = plot_params.copy(update={"facecolor": "white", "edgecolor": "white"})
-        elif medium.is_pec:
+        elif is_pec:
             # perfect electrical conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
-        elif medium.is_time_modulated:
+        elif is_time_modulated:
             # time modulated medium
             plot_params = plot_params.copy(
                 update={"facecolor": "red", "linewidth": 0, "hatch": "x*"}
@@ -466,12 +488,20 @@ class Scene(Tidy3dBaseModel):
         elif isinstance(medium, Medium2D):
             # 2d material
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
+        elif isinstance(medium, Medium):
+            # regular medium
+            facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
+            plot_params = plot_params.copy(update={"facecolor": facecolor})
+            if hasattr(medium, "viz_spec"):
+                if medium.viz_spec is not None:
+                    plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
         else:
             # regular medium
             facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
             plot_params = plot_params.copy(update={"facecolor": facecolor})
-            if medium.viz_spec is not None:
-                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+            if hasattr(medium, "viz_spec"):
+                if medium.viz_spec is not None:
+                    plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
 
         return plot_params
 
@@ -789,6 +819,80 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
+        return self.plot_structures_property(
+            x=x,
+            y=y,
+            z=z,
+            freq=freq,
+            alpha=alpha,
+            cbar=cbar,
+            reverse=reverse,
+            limits=eps_lim,
+            ax=ax,
+            hlim=hlim,
+            vlim=vlim,
+            grid=grid,
+            property="eps",
+        )
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_structures_property(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        freq: float = None,
+        alpha: float = None,
+        cbar: bool = True,
+        reverse: bool = False,
+        limits: Tuple[Union[float, None], Union[float, None]] = (None, None),
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        grid: Grid = None,
+        property: Literal["eps", "doping", "N_a", "N_d"] = "eps",
+    ) -> Ax:
+        """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        reverse : bool = False
+            If ``False``, the highest permittivity is plotted in black.
+            If ``True``, it is plotteed in white (suitable for black backgrounds).
+        cbar : bool = True
+            Whether to plot a colorbar for the relative permittivity.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        limits : Tuple[float, float] = None
+            Custom coloring limits for the property to plot.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        property: Literal["eps", "doping", "N_a", "N_d"] = "eps"
+            Indicates the property to plot for the structures. Currently supported properties
+            are ["eps", "doping", "N_a", "N_d"]
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
         structures = self.structures
 
         # alpha is None just means plot without any transparency
@@ -798,11 +902,21 @@ class Scene(Tidy3dBaseModel):
         if alpha <= 0:
             return ax
 
-        if alpha < 1 and not isinstance(self.medium, AbstractCustomMedium):
+        need_filtered_shaped = False
+        if property == "eps":
+            need_filtered_shaped = alpha < 1 and not isinstance(self.medium, AbstractCustomMedium)
+        if property in ["N_d", "N_a", "doping"]:
+            need_filtered_shaped = alpha < 1
+
+        if need_filtered_shaped:
             axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
             plane = Box(center=center, size=size)
+            # for doping background structure could be a non-doping structure
+            # that needs to be rendered
+            if property in ["N_d", "N_a", "doping"]:
+                structures = [self.background_structure] + list(structures)
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
             structures = [self.background_structure] + list(structures)
@@ -810,41 +924,90 @@ class Scene(Tidy3dBaseModel):
                 structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
             )
 
-        eps_min, eps_max = eps_lim
+        property_min, property_max = limits
 
-        if eps_min is None or eps_max is None:
-            eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq)
+        if property_min is None or property_max is None:
+            if property == "eps":
+                eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq)
+                if property_min is None:
+                    property_min = eps_min_sim
 
-            if eps_min is None:
-                eps_min = eps_min_sim
+                if property_max is None:
+                    property_max = eps_max_sim
 
-            if eps_max is None:
-                eps_max = eps_max_sim
+            if property in ["N_d", "N_a", "doping"]:
+                acceptor_limits, donor_limits = self.doping_bounds()
+                if property == "N_d":
+                    property_min = donor_limits[0]
+                    property_max = donor_limits[1]
+                elif property == "N_a":
+                    property_min = acceptor_limits[0]
+                    property_max = acceptor_limits[1]
+                elif property == "doping":
+                    property_min = -donor_limits[1]
+                    property_max = acceptor_limits[1]
 
         for medium, shape in medium_shapes:
-            # if the background medium is custom medium, it needs to be rendered separately
-            if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
-                continue
-            # no need to add patches for custom medium
-            if not isinstance(medium, AbstractCustomMedium):
-                ax = self._plot_shape_structure_eps(
-                    freq=freq,
-                    alpha=alpha,
-                    medium=medium,
-                    eps_min=eps_min,
-                    eps_max=eps_max,
-                    reverse=reverse,
-                    shape=shape,
+            if property in ["doping", "N_a", "N_d"]:
+                if not isinstance(medium.charge, SemiconductorMedium):
+                    ax = self._plot_shape_structure_heat_charge_property(
+                        alpha=alpha,
+                        medium=medium,
+                        property_val_min=property_min,
+                        property_val_max=property_max,
+                        reverse=reverse,
+                        shape=shape,
+                        ax=ax,
+                        property="doping",
+                    )
+                else:
+                    self._pcolormesh_shape_doping_box(
+                        x, y, z, alpha, medium, property_min, property_max, shape, ax, property
+                    )
+            else:
+                # if the background medium is custom medium, it needs to be rendered separately
+                if medium == self.medium and need_filtered_shaped:
+                    continue
+                # no need to add patches for custom medium
+                if not isinstance(medium, AbstractCustomMedium):
+                    ax = self._plot_shape_structure_eps(
+                        freq=freq,
+                        alpha=alpha,
+                        medium=medium,
+                        eps_min=property_min,
+                        eps_max=property_max,
+                        reverse=reverse,
+                        shape=shape,
+                        ax=ax,
+                    )
+                else:
+                    # For custom medium, apply pcolormesh clipped by the shape.
+                    self._pcolormesh_shape_custom_medium_structure_eps(
+                        x,
+                        y,
+                        z,
+                        freq,
+                        alpha,
+                        medium,
+                        property_min,
+                        property_max,
+                        reverse,
+                        shape,
+                        ax,
+                        grid,
+                    )
+
+        if cbar:
+            if property in ["doping", "N_a", "N_d"]:
+                Scene._add_cbar(
+                    vmin=property_min,
+                    vmax=property_max,
+                    label=r"$\rm{Doping} \#/cm^3$",
+                    cmap=HEAT_SOURCE_CMAP,
                     ax=ax,
                 )
             else:
-                # For custom medium, apply pcolormesh clipped by the shape.
-                self._pcolormesh_shape_custom_medium_structure_eps(
-                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax, grid
-                )
-
-        if cbar:
-            self._add_cbar_eps(eps_min=eps_min, eps_max=eps_max, ax=ax)
+                self._add_cbar_eps(eps_min=property_min, eps_max=property_max, ax=ax)
 
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1074,8 +1237,9 @@ class Scene(Tidy3dBaseModel):
         """Constructs the plot parameters for a given medium in scene.plot_eps()."""
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        if medium.viz_spec is not None:
-            plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+        if isinstance(medium, AbstractMedium):
+            if medium.viz_spec is not None:
+                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
@@ -1359,10 +1523,13 @@ class Scene(Tidy3dBaseModel):
             ]
             cond_list = [medium.heat_spec.conductivity for medium in medium_list]
         elif property == "electric_conductivity":
-            medium_list = [
-                medium for medium in medium_list if isinstance(medium.electric_spec, ConductorSpec)
+            cond_mediums = [
+                medium for medium in medium_list if isinstance(medium.charge, ChargeConductorMedium)
             ]
-            cond_list = [medium.electric_spec.conductivity for medium in medium_list]
+            cond_list = [medium.charge.conductivity for medium in cond_mediums]
+
+        if len(cond_list) == 0:
+            cond_list = [0]
 
         cond_min = min(cond_list)
         cond_max = max(cond_list)
@@ -1398,8 +1565,9 @@ class Scene(Tidy3dBaseModel):
         """
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        if medium.viz_spec is not None:
-            plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+        if hasattr(medium, "viz_spec"):
+            if medium.viz_spec is not None:
+                plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
@@ -1407,9 +1575,11 @@ class Scene(Tidy3dBaseModel):
         if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidSpec):
             cond_medium = medium.heat_spec.conductivity
         elif property == "electric_conductivity" and isinstance(
-            medium.electric_spec, ConductorSpec
+            medium.charge, ChargeConductorMedium
         ):
-            cond_medium = medium.electric_spec.conductivity
+            cond_medium = medium.charge.conductivity
+        elif property == "doping":
+            cond_medium = None
 
         if cond_medium is not None:
             delta_cond = cond_medium - property_val_min
@@ -1599,3 +1769,126 @@ class Scene(Tidy3dBaseModel):
             scene_dict["medium"] = med.perturbed_copy(**array_dict, interp_method=interp_method)
 
         return Scene.parse_obj(scene_dict)
+
+    def doping_bounds(self):
+        """Get the maximum and minimum of the doping"""
+
+        acceptors_lims = [1e50, -1e50]
+        donors_lims = [1e50, -1e50]
+
+        for struct in [self.background_structure] + list(self.structures):
+            if isinstance(struct.medium.charge, SemiconductorMedium):
+                electric_spec = struct.medium.charge
+                for doping, limits in zip(
+                    [electric_spec.N_a, electric_spec.N_d], [acceptors_lims, donors_lims]
+                ):
+                    if isinstance(doping, float):
+                        if doping < limits[0]:
+                            limits[0] = doping
+                        if doping > limits[1]:
+                            limits[1] = doping
+                    if isinstance(doping, SpatialDataArray):
+                        min_value = np, min(doping.data)
+                        max_value = np.max(doping.data)
+                        if min_value < limits[0]:
+                            limits[0] = min_value
+                        if max_value > limits[1]:
+                            limits[1] = max_value
+                    if isinstance(doping, tuple):
+                        for doping_box in doping:
+                            if isinstance(doping_box, ConstantDoping):
+                                if doping_box.concentration < limits[0]:
+                                    limits[0] = doping_box.concentration
+                                if doping_box.concentration > limits[1]:
+                                    limits[1] = doping_box.concentration
+                            if isinstance(doping_box, GaussianDoping):
+                                if doping_box.ref_con < limits[0]:
+                                    limits[0] = doping_box.ref_con
+                                if doping_box.concentration > limits[1]:
+                                    limits[1] = doping_box.concentration
+        return acceptors_lims, donors_lims
+
+    def _pcolormesh_shape_doping_box(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        alpha: float,
+        medium: Medium,
+        doping_min: float,
+        doping_max: float,
+        shape: Shapely,
+        ax: Ax,
+        plt_type: str = "doping",
+    ):
+        """
+        Plot shape made of structure defined with doping.
+        plt_type accepts ["doping", "N_a", "N_d"]
+        """
+        coords = "xyz"
+        normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
+
+        # make grid for eps interpolation
+        # we will do this by combining shape bounds and points where custom eps is provided
+        shape_bounds = shape.bounds
+        rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
+        rmin.insert(normal_axis_ind, normal_position)
+        rmax.insert(normal_axis_ind, normal_position)
+
+        # for the time being let's assume we'll always need to generate a mesh
+        plane_axes_inds = [0, 1, 2]
+        plane_axes_inds.pop(normal_axis_ind)
+
+        # build grid
+        N = 100
+        coords_2D = [np.linspace(rmin[d], rmax[d], N) for d in plane_axes_inds]
+        X, Y = np.meshgrid(coords_2D[0], coords_2D[1], indexing="ij")
+
+        struct_doping = [
+            np.zeros(X.shape),  # let's use 0 for N_a
+            np.zeros(X.shape),  # and 1 for N_d
+        ]
+
+        electric_spec = medium.charge
+        for n, doping in enumerate([electric_spec.N_a, electric_spec.N_d]):
+            if isinstance(doping, float):
+                struct_doping[n] = struct_doping[n] + doping
+            if isinstance(doping, SpatialDataArray):
+                struct_coords = {"xyz"[d]: coords_2D[i] for i, d in enumerate(plane_axes_inds)}
+                data_2D = doping
+                # check whether the provided doping data is 2 or 3D
+                data_is_2d = any(dim_size <= 1 for _, dim_size in doping.sizes.items())
+                if not data_is_2d:
+                    selector = {"xyz"[normal_axis_ind]: normal_position}
+                    data_2D = doping.sel(**selector)
+                contrib = data_2D.interp(**struct_coords, method="nearest")
+                struct_doping[n] = struct_doping[n] + contrib
+            if isinstance(doping, tuple):
+                for doping_box in doping:
+                    if isinstance(doping_box, ConstantDoping):
+                        contrib = np.ones(X.shape) * doping_box.concentration
+                        struct_doping[n] = struct_doping[n] + contrib
+                    if isinstance(doping_box, GaussianDoping):
+                        coords_dict = {"xyz"[d]: coords_2D[d] for d in plane_axes_inds}
+                        contrib = doping_box._get_contrib(coords_dict)
+                        struct_doping[n] = struct_doping[n] + contrib
+
+        if plt_type == "doping":
+            struct_doping_to_plot = struct_doping[0] - struct_doping[1]
+        elif plt_type == "N_a":
+            struct_doping_to_plot = struct_doping[0]
+        elif plt_type == "N_d":
+            struct_doping_to_plot = struct_doping[1]
+
+        ax.pcolormesh(
+            X,
+            Y,
+            struct_doping_to_plot,
+            clip_path=(polygon_path(shape), ax.transData),
+            cmap=HEAT_SOURCE_CMAP,
+            vmin=doping_min,
+            vmax=doping_max,
+            alpha=alpha,
+            clip_box=ax.bbox,
+        )

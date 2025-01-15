@@ -36,8 +36,14 @@ from .boundary import (
     PMCBoundary,
     StablePML,
 )
-from .data.data_array import FreqDataArray
-from .data.dataset import CustomSpatialDataType, Dataset
+from .data.data_array import (
+    FreqDataArray,
+    IndexedDataArray,
+)
+from .data.dataset import Dataset
+from .data.unstructured.tetrahedral import TetrahedralGridDataset
+from .data.unstructured.triangular import TriangularGridDataset
+from .data.utils import CustomSpatialDataType
 from .geometry.base import Box, Geometry
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
@@ -4784,13 +4790,47 @@ class Simulation(AbstractYeeGridSimulation):
             Simulation after application of heat and/or charge data.
         """
 
+        new_carrier_data = {
+            "electron_density": electron_density,
+            "hole_density": hole_density,
+        }
+        for carrier, data in zip(
+            ["electron_density", "hole_density"], [electron_density, hole_density]
+        ):
+            if isinstance(data, TriangularGridDataset) or isinstance(data, TetrahedralGridDataset):
+                if data._num_fields > 1:
+                    raise ValueError(
+                        f"The value entered for '{carrier}' contains multiple field values. "
+                        "Please select one before calling this function. This can be "
+                        "done with, e.g., 'electron_data.sel(voltage=1)'"
+                    )
+                elif len(data.values.dims) > 1:
+                    new_values = IndexedDataArray(
+                        np.array(data.values.data).flatten(),
+                        coords=dict(index=data.values.index.data),
+                    )
+                    if isinstance(data, TetrahedralGridDataset):
+                        new_carrier_data[carrier] = TetrahedralGridDataset(
+                            values=new_values,
+                            cells=data.cells,
+                            points=data.points,
+                        )
+                    elif isinstance(data, TriangularGridDataset):
+                        new_carrier_data[carrier] = TriangularGridDataset(
+                            values=new_values,
+                            cells=data.cells,
+                            points=data.points,
+                            normal_pos=data.normal_pos,
+                            normal_axis=data.normal_axis,
+                        )
+
         sim_dict = self.dict()
         structures = self.structures
         sim_bounds = self.simulation_bounds
         array_dict = {
             "temperature": temperature,
-            "electron_density": electron_density,
-            "hole_density": hole_density,
+            "electron_density": new_carrier_data["electron_density"],
+            "hole_density": new_carrier_data["hole_density"],
         }
 
         # For each structure made of mediums with perturbation models, convert those mediums into
