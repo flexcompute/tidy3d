@@ -18,8 +18,8 @@
         "allow_gain": false,
         "nonlinear_spec": null,
         "modulation_spec": null,
+        "viz_spec": null,
         "heat_spec": null,
-        "electric_spec": null,
         "type": "Medium",
         "permittivity": 1.0,
         "conductivity": 0.0
@@ -52,8 +52,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 2.0,
                 "conductivity": 0.0
@@ -86,8 +86,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 2.0,
                 "conductivity": 0.0
@@ -132,8 +132,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomMedium",
                 "interp_method": "nearest",
                 "subpixel": false,
@@ -169,8 +169,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 2.0,
                 "conductivity": 0.0
@@ -203,8 +203,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 1.0,
                 "conductivity": 3.0
@@ -233,8 +233,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Sellmeier",
                 "coeffs": [
                     [
@@ -275,8 +275,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Lorentz",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -315,8 +315,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Debye",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -349,8 +349,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Debye",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -388,8 +388,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Drude",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -427,8 +427,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium2D",
                 "ss": {
                     "attrs": {},
@@ -437,8 +437,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "PoleResidue",
                     "eps_inf": 1.0,
                     "poles": [
@@ -461,8 +461,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "PoleResidue",
                     "eps_inf": 1.0,
                     "poles": [
@@ -507,8 +507,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium2D",
                 "ss": {
                     "attrs": {},
@@ -517,8 +517,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "PECMedium"
                 },
                 "tt": {
@@ -528,8 +528,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "PECMedium"
                 }
             }
@@ -561,8 +561,8 @@
                 "allow_gain": null,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "AnisotropicMedium",
                 "xx": {
                     "attrs": {},
@@ -571,8 +571,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "PECMedium"
                 },
                 "yy": {
@@ -582,8 +582,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "Medium",
                     "permittivity": 1.0,
                     "conductivity": 0.0
@@ -595,8 +595,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "Medium",
                     "permittivity": 1.0,
                     "conductivity": 0.0
@@ -636,8 +636,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "PECMedium"
             }
         },
@@ -668,8 +668,8 @@
                 "allow_gain": null,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "AnisotropicMedium",
                 "xx": {
                     "attrs": {},
@@ -678,8 +678,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "Medium",
                     "permittivity": 1.0,
                     "conductivity": 0.0
@@ -691,8 +691,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "Medium",
                     "permittivity": 2.0,
                     "conductivity": 0.0
@@ -704,8 +704,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "Medium",
                     "permittivity": 3.0,
                     "conductivity": 0.0
@@ -751,8 +751,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "PoleResidue",
                 "eps_inf": 1.0,
                 "poles": [
@@ -796,8 +796,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomMedium",
                 "interp_method": "nearest",
                 "subpixel": false,
@@ -833,8 +833,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomDrude",
                 "eps_inf": "SpatialDataArray",
                 "coeffs": [
@@ -874,8 +874,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomLorentz",
                 "eps_inf": "SpatialDataArray",
                 "coeffs": [
@@ -916,8 +916,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomDebye",
                 "eps_inf": "SpatialDataArray",
                 "coeffs": [
@@ -957,8 +957,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomPoleResidue",
                 "eps_inf": "SpatialDataArray",
                 "poles": [
@@ -998,8 +998,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomSellmeier",
                 "coeffs": [
                     [
@@ -1038,8 +1038,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomMedium",
                 "interp_method": "nearest",
                 "subpixel": false,
@@ -1081,8 +1081,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomDrude",
                 "eps_inf": {
                     "attrs": {},
@@ -1140,8 +1140,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomLorentz",
                 "eps_inf": {
                     "attrs": {},
@@ -1206,8 +1206,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomDebye",
                 "eps_inf": {
                     "attrs": {},
@@ -1265,8 +1265,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomPoleResidue",
                 "eps_inf": {
                     "attrs": {},
@@ -1324,8 +1324,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "CustomSellmeier",
                 "coeffs": [
                     [
@@ -1381,8 +1381,8 @@
                     "numiters": 20
                 },
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 1.0,
                 "conductivity": 0.0
@@ -1449,8 +1449,8 @@
                     "type": "NonlinearSpec"
                 },
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 1.0,
                 "conductivity": 0.0
@@ -1495,8 +1495,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "PoleResidue",
                 "eps_inf": 1.0,
                 "poles": [
@@ -1535,8 +1535,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 5.0,
                 "conductivity": 0.0
@@ -1579,8 +1579,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 5.0,
                 "conductivity": 0.0
@@ -1632,8 +1632,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 3.0,
                 "conductivity": 0.0
@@ -1696,8 +1696,8 @@
                 "allow_gain": false,
                 "nonlinear_spec": null,
                 "modulation_spec": null,
+                "viz_spec": null,
                 "heat_spec": null,
-                "electric_spec": null,
                 "type": "Medium",
                 "permittivity": 1.5,
                 "conductivity": 0.0
@@ -2942,13 +2942,14 @@
         "grid_x": {
             "attrs": {},
             "type": "AutoGrid",
-            "min_steps_per_wvl": 10.0,
             "max_scale": 1.4,
-            "dl_min": 0.0,
             "mesher": {
                 "attrs": {},
                 "type": "GradedMesher"
-            }
+            },
+            "dl_min": null,
+            "min_steps_per_wvl": 10.0,
+            "min_steps_per_sim_size": 10.0
         },
         "grid_y": {
             "attrs": {},
@@ -3091,8 +3092,8 @@
                     "allow_gain": false,
                     "nonlinear_spec": null,
                     "modulation_spec": null,
+                    "viz_spec": null,
                     "heat_spec": null,
-                    "electric_spec": null,
                     "type": "Medium",
                     "permittivity": 2.0,
                     "conductivity": 0.0
