@@ -231,11 +231,11 @@ class EMEExplicitGrid(EMEGridSpec):
         sim_rmin = center[axis] - size[axis] / 2
         sim_rmax = center[axis] + size[axis] / 2
         if len(self.boundaries) > 0:
-            if self.boundaries[0] < sim_rmin - fp_eps:
+            if np.float32(sim_rmin) - np.float32(self.boundaries[0]) > fp_eps:
                 raise ValidationError(
                     "The first item in 'boundaries' is outside the simulation domain."
                 )
-            if self.boundaries[-1] > sim_rmax + fp_eps:
+            if np.float32(self.boundaries[-1]) - np.float32(sim_rmax) > fp_eps:
                 raise ValidationError(
                     "The last item in 'boundaries' is outside the simulation domain."
                 )
@@ -324,11 +324,11 @@ class EMECompositeGrid(EMEGridSpec):
         bounds = []
         sim_rmin = center[axis] - size[axis] / 2
         sim_rmax = center[axis] + size[axis] / 2
-        if self.subgrid_boundaries[0] < sim_rmin - fp_eps:
+        if np.float32(sim_rmin) - np.float32(self.subgrid_boundaries[0]) > fp_eps:
             raise ValidationError(
                 "The first item in 'subgrid_boundaries' is outside the simulation domain."
             )
-        if self.subgrid_boundaries[-1] > sim_rmax + fp_eps:
+        if np.float32(self.subgrid_boundaries[-1]) - np.float32(sim_rmax) > fp_eps:
             raise ValidationError(
                 "The last item in 'subgrid_boundaries' is outside the simulation domain."
             )
@@ -438,7 +438,7 @@ class EMEGrid(Box):
                 "so that there is one mode spec per EME cell."
             )
         rmin = boundaries[0]
-        if rmin < sim_rmin - fp_eps:
+        if np.float32(sim_rmin) - np.float32(rmin) > fp_eps:
             raise ValidationError(
                 "The first item in 'boundaries' is outside the simulation domain."
             )
@@ -446,7 +446,7 @@ class EMEGrid(Box):
             if rmax < rmin:
                 raise ValidationError("The 'subgrid_boundaries' must be increasing.")
             rmin = rmax
-        if rmax > sim_rmax + fp_eps:
+        if np.float32(rmax) - np.float32(sim_rmax) > fp_eps:
             raise ValidationError("The last item in 'boundaries' is outside the simulation domain.")
         return val
 
