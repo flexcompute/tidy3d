@@ -25,7 +25,7 @@ from tidy3d import (
 )
 from tidy3d.exceptions import DataError
 
-from ..utils import AssertLogLevel, assert_log_level, cartesian_to_unstructured
+from ..utils import AssertLogLevel, cartesian_to_unstructured
 
 
 def make_heat_mediums():
@@ -393,7 +393,7 @@ def test_heat_sim():
 
 
 @pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
-def test_heat_sim_bounds(shift_amount, log_level, log_capture):
+def test_heat_sim_bounds(shift_amount, log_level):
     """make sure bounds are working correctly"""
 
     # make sure all things are shifted to this central location
@@ -431,8 +431,8 @@ def test_heat_sim_bounds(shift_amount, log_level, log_capture):
             center = shift_amount * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            place_box(tuple(center))
-    assert_log_level(log_capture, log_level)
+            with AssertLogLevel(log_level):
+                place_box(tuple(center))
 
 
 @pytest.mark.parametrize(
@@ -443,23 +443,23 @@ def test_heat_sim_bounds(shift_amount, log_level, log_capture):
         ((0.1, 0.1, 1), "WARNING"),
     ],
 )
-def test_sim_structure_extent(log_capture, box_size, log_level):
+def test_sim_structure_extent(box_size, log_level):
     """Make sure we warn if structure extends exactly to simulation edges."""
 
     box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
-    _ = td.HeatSimulation(
-        size=(1, 1, 1),
-        medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=1)),
-        structures=[box],
-        boundary_spec=[
-            td.HeatBoundarySpec(
-                placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
-            )
-        ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
-    )
 
-    assert_log_level(log_capture, log_level)
+    with AssertLogLevel(log_level):
+        _ = td.HeatSimulation(
+            size=(1, 1, 1),
+            medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=1)),
+            structures=[box],
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
+                )
+            ],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        )
 
 
 def make_heat_sim_data():
@@ -502,8 +502,8 @@ def test_sim_data():
         _ = heat_sim_data.updated_copy(simulation=sim)
 
 
-def test_relative_min_dl_warning(log_capture):
-    with AssertLogLevel(log_capture, "WARNING"):
+def test_relative_min_dl_warning():
+    with AssertLogLevel("WARNING"):
         _ = td.HeatSimulation(
             size=(1, 1, 1),
             medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=2)),
@@ -515,7 +515,7 @@ def test_relative_min_dl_warning(log_capture):
             ],
         )
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.HeatSimulation(
             size=(1, 1, 1),
             medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=2)),
@@ -533,7 +533,7 @@ def test_relative_min_dl_warning(log_capture):
             ],
         )
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.HeatSimulation(
             size=(1, 1, 1),
             medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=2)),
@@ -552,12 +552,12 @@ def test_relative_min_dl_warning(log_capture):
         )
 
 
-def test_sim_version_update(log_capture):
+def test_sim_version_update():
     heat_sim = make_heat_sim()
     heat_sim_dict = heat_sim.dict()
     heat_sim_dict["version"] = "ancient_version"
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         heat_sim_new = td.HeatSimulation.parse_obj(heat_sim_dict)
 
     assert heat_sim_new.version == td.__version__

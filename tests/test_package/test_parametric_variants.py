@@ -30,7 +30,7 @@ def test_graphene_defaults():
 
 
 @pytest.mark.parametrize("rng_seed", np.arange(0, 15))
-def test_graphene(rng_seed, log_capture):
+def test_graphene(rng_seed):
     """test graphene for range of physical parameters"""
     rng = default_rng(rng_seed)
     gamma_min = GRAPHENE_GAMMA_MIN
@@ -63,5 +63,5 @@ def test_graphene(rng_seed, log_capture):
     temp = 300
     mu_c = 0.55
 
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         _ = Graphene(gamma=gamma, mu_c=mu_c, temp=temp).medium

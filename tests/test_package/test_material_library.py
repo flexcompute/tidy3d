@@ -12,19 +12,19 @@ from tidy3d.material_library.material_library import (
     material_library,
 )
 
-from ..utils import assert_log_level
+from ..utils import AssertLogLevel
 
 
-def test_warning_default_variant_switching(log_capture):
+def test_warning_default_variant_switching():
     """Issue warning for switching default medium variant."""
 
     # no warning for most materials with no default change
-    _ = td.material_library["cSi"].medium
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        _ = td.material_library["cSi"].medium
 
     # issue warning for SiO2
-    _ = td.material_library["SiO2"].medium
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        _ = td.material_library["SiO2"].medium
 
 
 def test_VariantItem():

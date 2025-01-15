@@ -18,7 +18,7 @@ from tidy3d.components.data.monitor_data import (
 )
 from tidy3d.exceptions import DataError
 
-from ..utils import assert_log_level
+from ..utils import AssertLogLevel
 from .test_data_arrays import (
     DIFFRACTION_MONITOR,
     DIRECTIVITY_MONITOR,
@@ -502,16 +502,16 @@ def test_data_array_attrs():
     assert data.flux.f.attrs, "data coordinates have no attrs"
 
 
-def test_data_array_json_warns(log_capture, tmp_path):
+def test_data_array_json_warns(tmp_path):
     data = make_flux_data()
-    data.to_file(str(tmp_path / "flux.json"))
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        data.to_file(str(tmp_path / "flux.json"))
 
 
-def test_data_array_hdf5_no_warnings(log_capture, tmp_path):
+def test_data_array_hdf5_no_warnings(tmp_path):
     data = make_flux_data()
-    data.to_file(str(tmp_path / "flux.hdf5"))
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        data.to_file(str(tmp_path / "flux.hdf5"))
 
 
 def test_diffraction_data_use_medium():

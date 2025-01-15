@@ -310,14 +310,12 @@ def test_default_params(use_emulated_run):  # noqa: F811
     optimizer.run(post_process_fn=post_process_fn)
 
 
-def test_warn_zero_grad(log_capture, use_emulated_run):  # noqa: F811
+def test_warn_zero_grad(use_emulated_run):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
-    with AssertLogLevel(
-        log_capture, "WARNING", contains_str="All elements of the gradient are almost zero"
-    ):
-        _ = optimizer.run(post_process_fn=post_process_fn_untraced)
+    with AssertLogLevel("WARNING", contains_str="All elements of the gradient are almost zero"):
+        optimizer.run(post_process_fn=post_process_fn_untraced)
 
 
 def make_result_multi(use_emulated_run):  # noqa: F811
@@ -437,7 +435,7 @@ def test_result_empty():
         result_empty.get_last("params")
 
 
-def test_invdes_io(tmp_path, log_capture, use_emulated_run):  # noqa: F811
+def test_invdes_io(tmp_path, use_emulated_run):  # noqa: F811
     """Test saving a loading ``invdes`` components to file."""
 
     result = make_result(use_emulated_run)
@@ -485,21 +483,21 @@ def test_objective_utilities(use_emulated_run):  # noqa: F811
         utils.get_amps(sim_data, MNT_NAME1)
 
 
-def test_pixel_size_warn_validator(log_capture):
+def test_pixel_size_warn_validator():
     """test that pixel size validator warning is raised if too large."""
 
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         invdes = make_invdes()
 
     wvl_mat_min = invdes.simulation.wvl_mat_min
     region_too_coarse = invdes.design_region.updated_copy(pixel_size=wvl_mat_min)
-    with AssertLogLevel(log_capture, "WARNING", contains_str="pixel_size"):
+    with AssertLogLevel("WARNING", contains_str="pixel_size"):
         invdes = invdes.updated_copy(design_region=region_too_coarse)
 
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         invdes_multi = make_invdes_multi()
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="pixel_size"):
+    with AssertLogLevel("WARNING", contains_str="pixel_size"):
         invdes_multi = invdes_multi.updated_copy(design_region=region_too_coarse)
 
 
@@ -627,7 +625,7 @@ def test_validate_invdes_metric():
         invdes.updated_copy(metric=metric)
 
 
-def test_pixel_size_warn_validator_no_sources(log_capture):
+def test_pixel_size_warn_validator_no_sources():
     """Test that pixel size validator handles simulations without sources."""
 
     sourceless_sim = simulation.updated_copy(sources=[])
@@ -635,7 +633,7 @@ def test_pixel_size_warn_validator_no_sources(log_capture):
     invdes = make_invdes()
     invdes = invdes.updated_copy(simulation=sourceless_sim)
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="Cannot validate pixel size"):
+    with AssertLogLevel("WARNING", contains_str="Cannot validate pixel size"):
         region_coarse = invdes.design_region.updated_copy(pixel_size=1.0)
         invdes = invdes.updated_copy(design_region=region_coarse)
 
@@ -643,5 +641,5 @@ def test_pixel_size_warn_validator_no_sources(log_capture):
     sourceless_sims = [sourceless_sim for _ in invdes_multi.simulations]
     invdes_multi = invdes_multi.updated_copy(simulations=sourceless_sims)
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="Cannot validate pixel size"):
+    with AssertLogLevel("WARNING", contains_str="Cannot validate pixel size"):
         invdes_multi = invdes_multi.updated_copy(design_region=region_coarse)

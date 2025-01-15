@@ -7,7 +7,7 @@ import tidy3d as td
 from matplotlib import pyplot as plt
 from tidy3d.exceptions import DataError
 
-from ..utils import assert_log_level
+from ..utils import AssertLogLevel
 
 
 def make_heat_charge_mediums():
@@ -401,19 +401,19 @@ def test_grid_spec():
         grid_spec.updated_copy(distance_interface=2, distance_bulk=1)
 
 
-def test_heat_charge_sources(log_capture):  # noqa: F811
+def test_heat_charge_sources():  # noqa: F811
     """ "Tests whether heat-charge sources can be created and associated warnings"""
     # this shouldn't issue warning
-    _ = td.HeatSource(structures=["solid_structure"], rate=100)
-    assert len(log_capture) == 0
+    with AssertLogLevel(None):
+        _ = td.HeatSource(structures=["solid_structure"], rate=100)
 
     # this should issue warning
-    _ = td.UniformHeatSource(structures=["solid_structure"], rate=100)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        _ = td.UniformHeatSource(structures=["solid_structure"], rate=100)
 
     # this shouldn't issue warning
-    _ = td.HeatSource(structures=["solid_structure"], rate="100")
-    assert len(log_capture) == 1
+    with AssertLogLevel(None):
+        _ = td.HeatSource(structures=["solid_structure"], rate="100")
 
 
 def make_heat_charge_heat_sim():
@@ -483,7 +483,7 @@ def make_heat_charge_cond_sim():
     return cond_sim
 
 
-def test_heat_charge_sim(log_capture):  # noqa: F811
+def test_heat_charge_sim():  # noqa: F811
     """Creates heat-charge simulations and performs a bunch of
     checks for different conditions"""
     bc_temp, bc_flux, bc_conv, bc_volt, bc_current = make_heat_charge_bcs()
@@ -592,7 +592,7 @@ def test_heat_charge_sim(log_capture):  # noqa: F811
 
 
 @pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
-def test_heat_charge_sim_bounds(shift_amount, log_level, log_capture):  # noqa: F811
+def test_heat_charge_sim_bounds(shift_amount, log_level):  # noqa: F811
     """make sure bounds are working correctly"""
 
     # make sure all things are shifted to this central location
@@ -630,8 +630,8 @@ def test_heat_charge_sim_bounds(shift_amount, log_level, log_capture):  # noqa: 
             center = shift_amount * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            place_box(tuple(center))
-    assert_log_level(log_capture, log_level)
+            with AssertLogLevel(log_level):
+                place_box(tuple(center))
 
 
 @pytest.mark.parametrize(
@@ -642,23 +642,23 @@ def test_heat_charge_sim_bounds(shift_amount, log_level, log_capture):  # noqa: 
         ((0.1, 0.1, 1), "WARNING"),
     ],
 )
-def test_sim_structure_extent(log_capture, box_size, log_level):  # noqa: F811
+def test_sim_structure_extent(box_size, log_level):  # noqa: F811
     """Make sure we warn if structure extends exactly to simulation edges."""
 
     box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
-    _ = td.HeatChargeSimulation(
-        size=(1, 1, 1),
-        structures=[box],
-        medium=td.Medium(electric_spec=td.ConductorSpec(conductivity=1)),
-        boundary_spec=[
-            td.HeatChargeBoundarySpec(
-                placement=td.SimulationBoundary(), condition=td.VoltageBC(voltage=1)
-            )
-        ],
-        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
-    )
 
-    assert_log_level(log_capture, log_level)
+    with AssertLogLevel(log_level):
+        _ = td.HeatChargeSimulation(
+            size=(1, 1, 1),
+            structures=[box],
+            medium=td.Medium(electric_spec=td.ConductorSpec(conductivity=1)),
+            boundary_spec=[
+                td.HeatChargeBoundarySpec(
+                    placement=td.SimulationBoundary(), condition=td.VoltageBC(voltage=1)
+                )
+            ],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        )
 
 
 def make_heat_charge_sim_data():

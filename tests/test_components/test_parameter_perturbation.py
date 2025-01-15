@@ -16,7 +16,7 @@ sp_arr_2d_u = cartesian_to_unstructured(sp_arr_2d)
 sp_arrs = [sp_arr, sp_arr_u, sp_arr_2d, sp_arr_2d_u]
 
 
-def test_heat_perturbation(log_capture):
+def test_heat_perturbation():
     perturb = td.LinearHeatPerturbation(
         coeff=0.01,
         temperature_ref=300,
@@ -89,7 +89,7 @@ def test_heat_perturbation(log_capture):
         assert perturb.perturbation_range == (1j, 3 + 1j)
 
         # warning if trying to provide temperature range by hands
-        with AssertLogLevel(log_capture, "WARNING"):
+        with AssertLogLevel("WARNING"):
             _ = td.CustomHeatPerturbation(
                 perturbation_values=perturb_data,
                 interp_method=interp_method,
@@ -97,7 +97,7 @@ def test_heat_perturbation(log_capture):
             )
 
         # no warning if temperature range is correct
-        with AssertLogLevel(log_capture, None):
+        with AssertLogLevel(None):
             _ = td.CustomHeatPerturbation(
                 perturbation_values=perturb_data,
                 interp_method=interp_method,
@@ -143,7 +143,7 @@ def test_heat_perturbation(log_capture):
     plt.close("all")
 
 
-def test_charge_perturbation(log_capture):
+def test_charge_perturbation():
     perturb = td.LinearChargePerturbation(
         electron_coeff=1e-21,
         electron_ref=0,
@@ -274,7 +274,7 @@ def test_charge_perturbation(log_capture):
         assert perturb.is_complex
 
         # warning if trying to provide density ranges by hands
-        with AssertLogLevel(log_capture, "WARNING"):
+        with AssertLogLevel("WARNING"):
             _ = td.CustomChargePerturbation(
                 perturbation_values=perturb_data,
                 interp_method=interp_method,
@@ -282,7 +282,7 @@ def test_charge_perturbation(log_capture):
                 hole_range=(1e16, 1e18),
             )
 
-        with AssertLogLevel(log_capture, "WARNING"):
+        with AssertLogLevel("WARNING"):
             _ = td.CustomChargePerturbation(
                 perturbation_values=perturb_data,
                 interp_method=interp_method,
@@ -291,7 +291,7 @@ def test_charge_perturbation(log_capture):
             )
 
         # no warning if density ranges are correct
-        with AssertLogLevel(log_capture, None):
+        with AssertLogLevel(None):
             _ = td.CustomChargePerturbation(
                 perturbation_values=perturb_data,
                 interp_method=interp_method,

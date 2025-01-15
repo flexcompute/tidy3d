@@ -14,7 +14,7 @@ from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.web.core.environment import Env
 
-from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import AssertLogLevel, cartesian_to_unstructured
 
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
 WAVEGUIDE = td.Structure(geometry=td.Box(size=(1.5, 100, 1)), medium=WG_MEDIUM)
@@ -296,7 +296,7 @@ def test_mode_solver_validation():
 
 
 @pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, None)))
-def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
+def test_mode_solver_group_index_warning(group_index_step, log_level):
     """Test mode solver setups issuing warnings."""
 
     simulation = td.Simulation(
@@ -304,10 +304,12 @@ def test_mode_solver_group_index_warning(group_index_step, log_level, log_captur
         grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
     )
-    mode_spec = td.ModeSpec(
-        num_modes=1,
-        group_index_step=group_index_step,
-    )
+
+    with AssertLogLevel(log_level):
+        mode_spec = td.ModeSpec(
+            num_modes=1,
+            group_index_step=group_index_step,
+        )
 
     _ = ModeSolver(
         simulation=simulation,
@@ -316,7 +318,6 @@ def test_mode_solver_group_index_warning(group_index_step, log_level, log_captur
         freqs=[1e12],
         direction="+",
     )
-    assert_log_level(log_capture, log_level)
 
 
 def test_mode_solver_fields():
@@ -795,7 +796,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, log_capture, local):
+def test_group_index(mock_remote_api, local):
     """Test group index and dispersion calculation"""
 
     simulation = td.Simulation(
@@ -833,17 +834,12 @@ def test_group_index(mock_remote_api, log_capture, local):
     )
     modes = ms.solve() if local else msweb.run(ms)
     if local:
-        assert modes.n_group is None
-        assert len(log_capture) == 1
-        assert modes.dispersion is None
-        assert len(log_capture) == 2
-        for log_msg in log_capture:
-            assert log_msg[0] == 30
-            assert "ModeSpec" in log_msg[1]
-        _ = modes.n_group
-        assert len(log_capture) == 2
-        _ = modes.dispersion
-        assert len(log_capture) == 2
+        with AssertLogLevel("WARNING", contains_str="ModeSpec") as ctx:
+            assert modes.n_group is None
+            assert ctx.num_records == 1
+        with AssertLogLevel("WARNING", contains_str="ModeSpec") as ctx:
+            assert modes.dispersion is None
+            assert ctx.num_records == 1
         check_ms_reduction(ms)
 
     # Group index calculated

@@ -866,7 +866,7 @@ def test_to_gds(geometry, tmp_path):
     assert len(cell.polygons) == 0
 
 
-def test_custom_surface_geometry(tmp_path, log_capture):
+def test_custom_surface_geometry(tmp_path):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
@@ -917,34 +917,34 @@ def test_custom_surface_geometry(tmp_path, log_capture):
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[2, 3, 1], [0, 2, 3], [0, 3, 1], [0, 1, 2]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING", contains_str="face orientations"):
+    with AssertLogLevel("WARNING", contains_str="face orientations"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         geom = geom.fix_winding()
 
     # test non-watertight mesh
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING", contains_str="watertight"):
+    with AssertLogLevel("WARNING", contains_str="watertight"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         geom = geom.fill_holes()
 
     # test inward normals
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[2, 1, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING", contains_str="outward"):
+    with AssertLogLevel("WARNING", contains_str="outward"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         geom = geom.fix_normals()
 
     # test zero area triangles
     vertices = np.array([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
     assert all(np.array(geom.trimesh.area_faces) > AREA_SIZE_THRESHOLD)
 

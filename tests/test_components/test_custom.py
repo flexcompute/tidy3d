@@ -24,7 +24,7 @@ from tidy3d.components.medium import (
     CustomSellmeier,
 )
 
-from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import AssertLogLevel, cartesian_to_unstructured
 
 np.random.seed(4)
 
@@ -160,13 +160,13 @@ def test_io_hdf5(tmp_path):
     assert FIELD_SRC == FIELD_SRC2
 
 
-def test_io_json(tmp_path, log_capture):
+def test_io_json(tmp_path):
     """to json warns and then from json errors."""
     path = str(tmp_path / "custom_source.json")
-    FIELD_SRC.to_file(path)
-    assert_log_level(log_capture, "WARNING")
-    FIELD_SRC2 = FIELD_SRC.from_file(path)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        FIELD_SRC.to_file(path)
+    with AssertLogLevel("WARNING"):
+        FIELD_SRC2 = FIELD_SRC.from_file(path)
     assert FIELD_SRC2.field_dataset is None
 
 
@@ -978,7 +978,7 @@ def test_custom_debye(unstructured):
 
 
 @pytest.mark.parametrize("unstructured", [True])
-def test_custom_anisotropic_medium(log_capture, unstructured):
+def test_custom_anisotropic_medium(unstructured):
     """Custom anisotropic medium."""
     seed = 43243
 
@@ -1008,8 +1008,8 @@ def test_custom_anisotropic_medium(log_capture, unstructured):
     verify_custom_medium_methods(mat, [])
     assert not mat.is_spatially_uniform
 
-    mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, subpixel=True)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, subpixel=True)
 
     ## interpolation method verification for "xx" component
     # 1) xx-component is using `interp_method = nearest`, and mat using `None`;
@@ -1127,7 +1127,7 @@ def test_io_dispersive(tmp_path, unstructured, z_custom):
     assert sim_load == sim
 
 
-def test_warn_planewave_intersection(log_capture):
+def test_warn_planewave_intersection():
     """Warn that if a nonuniform custom medium is intersecting PlaneWave source."""
     src = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
@@ -1144,15 +1144,15 @@ def test_warn_planewave_intersection(log_capture):
         medium=mat,
     )
 
-    sim = td.Simulation(
-        size=(1, 1, 2),
-        structures=[box],
-        grid_spec=td.GridSpec.auto(wavelength=1),
-        sources=[src],
-        run_time=1e-12,
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-    )
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        sim = td.Simulation(
+            size=(1, 1, 2),
+            structures=[box],
+            grid_spec=td.GridSpec.auto(wavelength=1),
+            sources=[src],
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
 
     # nonuniform custom medium
     permittivity = make_spatial_data(value=1, unstructured=False, seed=0, uniform=False)
@@ -1161,11 +1161,11 @@ def test_warn_planewave_intersection(log_capture):
         geometry=td.Box(size=(td.inf, td.inf, 1)),
         medium=mat,
     )
-    sim.updated_copy(structures=[box])
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        sim.updated_copy(structures=[box])
 
 
-def test_warn_diffraction_monitor_intersection(log_capture):
+def test_warn_diffraction_monitor_intersection():
     """Warn that if a nonuniform custom medium is intersecting Diffraction Monitor."""
     src = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
@@ -1188,16 +1188,16 @@ def test_warn_diffraction_monitor_intersection(log_capture):
         medium=mat,
     )
 
-    sim = td.Simulation(
-        size=(1, 1, 2),
-        structures=[box],
-        grid_spec=td.GridSpec.auto(wavelength=1),
-        monitors=[monitor],
-        sources=[src],
-        run_time=1e-12,
-        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
-    )
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        sim = td.Simulation(
+            size=(1, 1, 2),
+            structures=[box],
+            grid_spec=td.GridSpec.auto(wavelength=1),
+            monitors=[monitor],
+            sources=[src],
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
 
     # nonuniform custom medium
     permittivity = make_spatial_data(value=1, unstructured=False, seed=0, uniform=False)
@@ -1206,8 +1206,8 @@ def test_warn_diffraction_monitor_intersection(log_capture):
         geometry=td.Box(size=(td.inf, td.inf, 1)),
         medium=mat,
     )
-    sim.updated_copy(structures=[box])
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        sim.updated_copy(structures=[box])
 
 
 @pytest.mark.parametrize(

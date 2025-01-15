@@ -9,7 +9,7 @@ import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
-from ..utils import AssertLogLevel, assert_log_level
+from ..utils import AssertLogLevel
 
 MEDIUM = td.Medium()
 ANIS_MEDIUM = td.AnisotropicMedium(xx=MEDIUM, yy=MEDIUM, zz=MEDIUM)
@@ -83,14 +83,14 @@ def test_medium_conversions():
     assert np.isclose(k, k_)
 
 
-def test_lorentz_medium_conversions(log_capture):
+def test_lorentz_medium_conversions():
     freq = 3.0
 
     # lossless, eps_r > 1
     eps_complex = 2 + 0j
     n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
-    medium = td.Lorentz.from_nk(n, k, freq)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        medium = td.Lorentz.from_nk(n, k, freq)
     eps_model = medium.eps_model(freq)
     assert np.isclose(eps_complex, eps_model)
 
@@ -111,8 +111,8 @@ def test_lorentz_medium_conversions(log_capture):
     # lossy, eps_r > 1
     eps_complex = 1.5 + 2j
     n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
-    medium = td.Lorentz.from_nk(n, k, freq)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        medium = td.Lorentz.from_nk(n, k, freq)
     eps_model = medium.eps_model(freq)
     assert np.isclose(eps_complex, eps_model)
 
@@ -374,7 +374,7 @@ def test_n_cfl():
     assert material.n_cfl == 2
 
 
-def test_gain_medium(log_capture):
+def test_gain_medium():
     """Test passive and gain medium validations."""
     # non-dispersive
     with pytest.raises(pydantic.ValidationError):
@@ -411,14 +411,14 @@ def test_gain_medium(log_capture):
 
     # anisotropic medium, warn allow_gain is ignored
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=True)
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
 
 
-def test_medium2d(log_capture):
+def test_medium2d():
     sigma = 0.45
     thickness = 0.01
     cond_med = td.Medium(conductivity=sigma)
@@ -447,13 +447,9 @@ def test_medium2d(log_capture):
     # this should also not warn, since it could be used for override structure
     td.Structure(medium=medium3d, geometry=td.Box(size=(1, 0, 1)))
 
-    # no warnings so far
-    assert_log_level(log_capture, None)
-
-    # this should give warning
-    _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
+    with AssertLogLevel("WARNING"):
+        _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
     plt.close()
-    assert_log_level(log_capture, "WARNING")
 
     with pytest.raises(pydantic.ValidationError):
         _ = td.Medium2D(ss=td.PECMedium(), tt=td.Medium())
@@ -570,7 +566,7 @@ def test_fully_anisotropic_media():
         )
 
 
-def test_nonlinear_medium(log_capture):
+def test_nonlinear_medium():
     med = td.Medium(
         nonlinear_spec=td.NonlinearSpec(
             models=[
@@ -583,8 +579,8 @@ def test_nonlinear_medium(log_capture):
     )
 
     # warn about deprecated api
-    med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
 
     # don't use deprecated numiters
     with pytest.raises(ValidationError):
@@ -654,7 +650,7 @@ def test_nonlinear_medium(log_capture):
     assert freq0 == nonlinear_spec.models[0]._get_freq0(freq0=None, freqs=[freq0])
 
     # two photon absorption is phenomenological
-    with AssertLogLevel(log_capture, "WARNING", contains_str="phenomenological"):
+    with AssertLogLevel("WARNING", contains_str="phenomenological"):
         med = td.Medium(
             nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
             allow_gain=True,
@@ -662,7 +658,7 @@ def test_nonlinear_medium(log_capture):
         sim.updated_copy(medium=med, path="structures/0")
 
     # complex parameters
-    with AssertLogLevel(log_capture, "WARNING", contains_str="preferred"):
+    with AssertLogLevel("WARNING", contains_str="preferred"):
         med = td.Medium(
             nonlinear_spec=td.NonlinearSpec(
                 models=[
@@ -719,7 +715,7 @@ def test_nonlinear_medium(log_capture):
         td.Medium2D(ss=modulated, tt=modulated)
 
 
-def test_custom_medium(log_capture):
+def test_custom_medium():
     Nx, Ny, Nz, Nf = 4, 3, 1, 1
     X = np.linspace(-1, 1, Nx)
     Y = np.linspace(-1, 1, Ny)
@@ -744,8 +740,8 @@ def test_custom_medium(log_capture):
         )
         _ = td.CustomMedium(eps_dataset=eps_xyz_dataset, interp_method="nearest")
 
-    create_mediums(n_dataset=n_dataset)
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        create_mediums(n_dataset=n_dataset)
 
     with pytest.raises(pydantic.ValidationError):
         # repeat some entries so data cannot be interpolated
@@ -755,7 +751,7 @@ def test_custom_medium(log_capture):
         create_mediums(n_dataset=n_dataset2)
 
 
-def test_medium_from_admittance_coeffs(log_capture):
+def test_medium_from_admittance_coeffs():
     """Test that ``from_admittance_coeffs`` produces same PoleResidue model as
     conversions from Drude and Lorentz models. Also test some special cases."""
     freqs = np.linspace(0.01, 1, 1001)
@@ -811,10 +807,11 @@ def test_medium_from_admittance_coeffs(log_capture):
         C1 * C2 * L1 * R1 * R2 + C1 * C2 * L2 * R2 * R3 + C1 * L1 * L2,
         C1 * C2 * L1 * L2 * R2,
     ]
-    m_transfer = td.PoleResidue.from_admittance_coeffs(np.array(a), np.array(b))
+
     # Should be no warnings due to passivity
-    # (atlhough numerically there is a small negative part at high frequencies)
-    assert_log_level(log_capture, None)
+    # (although numerically there is a small negative part at high frequencies)
+    with AssertLogLevel(None):
+        m_transfer = td.PoleResidue.from_admittance_coeffs(np.array(a), np.array(b))
 
     # test corner case of an admittance function representing a pure capacitance
     C = 1e-12  # 1 pF capacitor

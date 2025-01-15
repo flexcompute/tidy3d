@@ -8,7 +8,7 @@ import tidy3d as td
 from tidy3d.components.source.field import CHEB_GRID_WIDTH, DirectionalSource
 from tidy3d.exceptions import SetupError
 
-from ..utils import AssertLogLevel, assert_log_level
+from ..utils import AssertLogLevel
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -279,7 +279,7 @@ def test_broadband_source():
         )
 
 
-def test_custom_source_time(log_capture):
+def test_custom_source_time():
     ts = np.linspace(0, 30e-12, 1001)
     amp_time = ts / max(ts)
     freq0 = 1e12
@@ -328,20 +328,18 @@ def test_custom_source_time(log_capture):
     _ = cst.amp_time(-1)
     assert np.allclose(cst.amp_time([2]), np.exp(-1j * 2 * np.pi * 2 * freq0), rtol=0, atol=ATOL)
 
-    assert_log_level(log_capture, None)
-
     vals = td.components.data.data_array.TimeDataArray([1, 2], coords=dict(t=[-1, -0.5]))
     dataset = td.components.data.dataset.TimeDataset(values=vals)
     cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
-    with AssertLogLevel(log_capture, "WARNING", contains_str="defined over a time range"):
+    with AssertLogLevel("WARNING", contains_str="defined over a time range"):
         sim = sim.updated_copy(sources=[source])
 
     # test normalization warning
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         sim = sim.updated_copy(normalize_index=0)
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         source = source.updated_copy(source_time=td.ContinuousWave(freq0=freq0, fwidth=0.1e12))
         sim = sim.updated_copy(sources=[source])
 
@@ -353,7 +351,7 @@ def test_custom_source_time(log_capture):
         assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
 
 
-def test_custom_field_source(log_capture):
+def test_custom_field_source():
     Nx, Ny, Nz, Nf = 4, 3, 1, 1
     X = np.linspace(-1, 1, Nx)
     Y = np.linspace(-1, 1, Ny)
@@ -369,8 +367,8 @@ def test_custom_field_source(log_capture):
         return custom_source
 
     field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset)
-    make_custom_field_source(field_dataset)
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        make_custom_field_source(field_dataset)
 
     with pytest.raises(pydantic.ValidationError):
         # repeat some entries so data cannot be interpolated

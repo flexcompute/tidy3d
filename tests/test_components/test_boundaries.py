@@ -19,7 +19,7 @@ from tidy3d.components.source.field import PlaneWave
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.exceptions import DataError, SetupError
 
-from ..utils import assert_log_level
+from ..utils import AssertLogLevel
 
 
 def test_bloch_phase():
@@ -87,17 +87,17 @@ def test_boundary_validators():
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
-def test_boundary_validator_warnings(log_capture, boundary, log_level):
+def test_boundary_validator_warnings(boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
-    boundary = Boundary(plus=PECBoundary(), minus=boundary)
-    assert_log_level(log_capture, log_level)
+    with AssertLogLevel(log_level):
+        _ = Boundary(plus=PECBoundary(), minus=boundary)
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
-def test_boundary_validator_warnings_switched(log_capture, boundary, log_level):
+def test_boundary_validator_warnings_switched(boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
-    boundary = Boundary(minus=PECBoundary(), plus=boundary)
-    assert_log_level(log_capture, log_level)
+    with AssertLogLevel(log_level):
+        _ = Boundary(minus=PECBoundary(), plus=boundary)
 
 
 def test_boundary():

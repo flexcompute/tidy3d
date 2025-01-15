@@ -733,7 +733,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     print(f"avg(diff(objectives)) = {diff_objectives_num:.4f}")
 
 
-def test_run_zero_grad(use_emulated_run, log_capture):
+def test_run_zero_grad(use_emulated_run):
     """Test warning if no adjoint sim is run (no adjoint sources).
 
     This checks the case where a simulation is still part of the computational
@@ -752,7 +752,7 @@ def test_run_zero_grad(use_emulated_run, log_capture):
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return 0 * postprocess(sim_data)
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="no sources"):
+    with AssertLogLevel("WARNING", contains_str="no sources"):
         grad = ag.grad(objective)(params0)
 
 
@@ -813,7 +813,7 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async_some_zero_grad(use_emulated_run, log_capture, structure_key, monitor_key):
+def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_key):
     """Test objective where only some simulations in batch have adjoint sources."""
 
     fn_dict = get_functions(structure_key, monitor_key)
@@ -830,13 +830,12 @@ def test_autograd_async_some_zero_grad(use_emulated_run, log_capture, structure_
             values.append(postprocess(sim_data))
         return min(values)
 
-    # with AssertLogLevel(log_capture, "DEBUG", contains_str="no sources"):
     val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0"
 
 
-def test_autograd_async_all_zero_grad(use_emulated_run, log_capture):
+def test_autograd_async_all_zero_grad(use_emulated_run):
     """Test objective where no simulation in batch has adjoint sources."""
 
     fn_dict = get_functions(args[0][0], args[0][1])
@@ -853,7 +852,7 @@ def test_autograd_async_all_zero_grad(use_emulated_run, log_capture):
             values.append(postprocess(sim_data))
         return 0 * sum(values)
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="contains adjoint sources"):
+    with AssertLogLevel("WARNING", contains_str="contains adjoint sources"):
         grad = ag.grad(objective)(params0)
 
 
@@ -1030,7 +1029,7 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
-def test_sim_traced_override_structures(log_capture):
+def test_sim_traced_override_structures():
     """Make sure that sims with traced override structures are handled properly."""
 
     def f(x):
@@ -1041,7 +1040,7 @@ def test_sim_traced_override_structures(log_capture):
         sim = SIM_FULL.updated_copy(override_structures=[override_structure], path="grid_spec")
         return sim.grid_spec.override_structures[0].geometry.size[2]
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="override structures"):
+    with AssertLogLevel("WARNING", contains_str="override structures"):
         ag.grad(f)(1.0)
 
 
@@ -1062,7 +1061,7 @@ def test_sim_fields_io(structure_key, tmp_path):
         assert np.all(data == autograd_field_map[path])
 
 
-def test_web_incompatible_inputs(log_capture, monkeypatch):
+def test_web_incompatible_inputs(monkeypatch):
     """Test what happens when bad inputs passed to web.run()."""
 
     def catch(*args, **kwargs):
@@ -1097,7 +1096,7 @@ def test_web_incompatible_inputs(log_capture, monkeypatch):
         td.web.run_async([SIM_BASE])
 
 
-def test_too_many_traced_structures(monkeypatch, log_capture, use_emulated_run):
+def test_too_many_traced_structures(monkeypatch, use_emulated_run):
     """More traced structures than allowed."""
 
     from tidy3d.web.api.autograd.autograd import MAX_NUM_TRACED_STRUCTURES
@@ -1568,7 +1567,7 @@ def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.
     return ag.grad(objective)(params)
 
 
-def check_1_src_single(log_capture, structure_key):
+def check_1_src_single(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 1 adjoint sources."""
         amps = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1577,7 +1576,7 @@ def check_1_src_single(log_capture, structure_key):
     return postprocess
 
 
-def check_2_src_single(log_capture, structure_key):
+def check_2_src_single(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
         amps = get_amps(sim_data, "single").sel(mode_index=0)
@@ -1586,7 +1585,7 @@ def check_2_src_single(log_capture, structure_key):
     return postprocess
 
 
-def check_1_src_multi(log_capture, structure_key):
+def check_1_src_multi(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 1 adjoint sources."""
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
@@ -1595,7 +1594,7 @@ def check_1_src_multi(log_capture, structure_key):
     return postprocess
 
 
-def check_2_src_multi(log_capture, structure_key):
+def check_2_src_multi(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
         amps = get_amps(sim_data, "multi").sel(mode_index=0, f=FREQ1)
@@ -1604,7 +1603,7 @@ def check_2_src_multi(log_capture, structure_key):
     return postprocess
 
 
-def check_2_src_both(log_capture, structure_key):
+def check_2_src_both(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
         amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1614,7 +1613,7 @@ def check_2_src_both(log_capture, structure_key):
     return postprocess
 
 
-def check_1_multisrc(log_capture, structure_key):
+def check_1_multisrc(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should raise ValueError because diff sources, diff freqs."""
         amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1624,7 +1623,7 @@ def check_1_multisrc(log_capture, structure_key):
     return postprocess
 
 
-def check_2_multisrc(log_capture, structure_key):
+def check_2_multisrc(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should raise ValueError because diff sources, diff freqs."""
         amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1634,7 +1633,7 @@ def check_2_multisrc(log_capture, structure_key):
     return postprocess
 
 
-def check_1_src_broadband(log_capture, structure_key):
+def check_1_src_broadband(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 1 broadband adjoint sources with many freqs."""
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
@@ -1659,9 +1658,7 @@ checks = list(MULT_FREQ_TEST_CASES.items())
 
 @pytest.mark.parametrize("label, check_fn", checks)
 @pytest.mark.parametrize("structure_key", ("custom_med",))
-def test_multi_freq_edge_cases(
-    log_capture, use_emulated_run, structure_key, label, check_fn, monkeypatch
-):
+def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn, monkeypatch):
     # test multi-frequency adjoint handling
 
     import tidy3d.components.data.sim_data as sd
@@ -1669,7 +1666,7 @@ def test_multi_freq_edge_cases(
     monkeypatch.setattr(sd, "RESIDUAL_CUTOFF_ADJOINT", 1)
     reload(td)
 
-    postprocess_fn = check_fn(structure_key=structure_key, log_capture=log_capture)
+    postprocess_fn = check_fn(structure_key=structure_key)
 
     def objective(params):
         structure_traced = make_structures(params)[structure_key]
@@ -1733,7 +1730,7 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
     assert not np.any(np.isclose(grad_multi, 0))
 
 
-def test_error_flux(use_emulated_run, log_capture):
+def test_error_flux(use_emulated_run):
     """Make sure proper error raised if differentiating w.r.t. FluxData."""
 
     def objective(params):
@@ -1751,7 +1748,7 @@ def test_error_flux(use_emulated_run, log_capture):
         g = ag.grad(objective)(params0)
 
 
-def test_extraneous_field(use_emulated_run, log_capture):
+def test_extraneous_field(use_emulated_run):
     """Make sure this doesnt fail."""
 
     def objective(params):
@@ -1776,7 +1773,7 @@ def test_extraneous_field(use_emulated_run, log_capture):
     g = ag.grad(objective)(params0)
 
 
-def test_background_medium(log_capture):
+def test_background_medium():
     geo = td.Box(size=(1, 1, 1), center=(0, 0, 0))
     med = td.Medium(permittivity=2.0)
 
@@ -1814,7 +1811,7 @@ def test_background_medium(log_capture):
     )
 
     # background permittivity (deprecated)
-    with AssertLogLevel(log_capture, "WARNING", contains_str="deprecated"):
+    with AssertLogLevel("WARNING", contains_str="deprecated"):
         s_warn = td.Structure(
             geometry=geo,
             medium=med,

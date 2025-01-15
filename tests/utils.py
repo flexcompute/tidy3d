@@ -1,3 +1,4 @@
+import dataclasses
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
@@ -1157,28 +1158,48 @@ def assert_log_level(
             )
 
 
-@pd.dataclasses.dataclass
+class AssertLogLevelHandler:
+    """Log handler used to store log records during assertion."""
+
+    def __init__(self):
+        self.records = []
+
+    def handle(self, level, level_name, message):
+        self.records.append((level, message))
+
+
+@dataclasses.dataclass
 class AssertLogLevel:
     """Context manager to check log level for records logged within its context."""
 
-    records: Any
     log_level_expected: Union[str, None]
     contains_str: str = None
 
-    def __enter__(self):
-        # record number of records going into this context
-        self.num_records_before = len(self.records)
+    @property
+    def records(self):
+        """Get the records from the handler."""
+        return self.handler.records if hasattr(self, "handler") else []
 
+    @property
+    def num_records(self):
+        """Get the number of records."""
+        return len(self.records)
+
+    def __enter__(self):
+        # Create and register handler
+        self.handler = AssertLogLevelHandler()
+        td.log.handlers["assert_log_level"] = self.handler
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        # only check NEW records recorded since __enter__
-        records_check = self.records[self.num_records_before :]
+        # Check the records and clean up
         assert_log_level(
-            records=records_check,
+            records=self.records,
             log_level_expected=self.log_level_expected,
             contains_str=self.contains_str,
         )
+        # Remove handler
+        del td.log.handlers["assert_log_level"]
 
 
 def get_test_root_dir():
