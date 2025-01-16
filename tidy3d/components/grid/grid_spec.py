@@ -476,14 +476,15 @@ class AbstractAutoGrid(GridSpec1d):
 
         sim_cent = list(structures[0].geometry.center)
         sim_size = list(structures[0].geometry.size)
+
+        # upper bound of grid step size based on total sim_size
+        dl_max = self._dl_max(sim_size)
+
         for dim, sym in enumerate(symmetry):
             if sym != 0:
                 sim_cent[dim] += sim_size[dim] / 4
                 sim_size[dim] /= 2
         symmetry_domain = Box(center=sim_cent, size=sim_size)
-
-        # upper bound of grid step size
-        dl_max = self._dl_max(sim_size)
 
         # New list of structures with symmetry applied
         struct_list = [Structure(geometry=symmetry_domain, medium=structures[0].medium)]
