@@ -527,7 +527,7 @@ class PolySlab(base.Planar):
 
             # vertical sidewall
             if math.isclose(self.sidewall_angle, 0):
-                face_polygon = shapely.Polygon(self.reference_polygon)
+                face_polygon = shapely.Polygon(self.reference_polygon).buffer(fp_eps)
                 shapely.prepare(face_polygon)
                 inside_polygon_slab = shapely.contains_xy(face_polygon, x=xs_slab, y=ys_slab)
                 inside_polygon[inside_height] = inside_polygon_slab
@@ -550,7 +550,7 @@ class PolySlab(base.Planar):
                     vertices_z = self._shift_vertices(
                         self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
-                    face_polygon = shapely.Polygon(vertices_z)
+                    face_polygon = shapely.Polygon(vertices_z).buffer(fp_eps)
                     shapely.prepare(face_polygon)
                     xs = x_axis[:, :, 0].flatten()
                     ys = y_axis[:, :, 0].flatten()
@@ -559,7 +559,7 @@ class PolySlab(base.Planar):
                 inside_polygon = _move_axis_reverse(inside_polygon_axis)
         else:
             vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-            face_polygon = self.make_shapely_polygon(vertices_z)
+            face_polygon = self.make_shapely_polygon(vertices_z).buffer(fp_eps)
             point = shapely.Point(x, y)
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
