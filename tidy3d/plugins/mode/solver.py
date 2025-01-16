@@ -15,7 +15,7 @@ from .derivatives import create_s_matrices as s_mats
 from .transforms import angled_transform, radial_transform
 
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
-TOL_COMPLEX = fp_eps
+TOL_COMPLEX = 1e-10
 # Tolerance for eigs
 TOL_EIGS = fp_eps
 # Tolerance for deciding on the matrix to be diagonal or tensorial
