@@ -1015,6 +1015,7 @@ class Scene(Tidy3dBaseModel):
         }
         coord_shape = Coords(**coord_dict)
         # interpolate permittivity and take the average over components
+        tmp = medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape)
         eps_shape = np.mean(medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape), axis=0)
         # remove the normal_axis and take real part
         eps_shape = eps_shape.real.mean(axis=normal_axis_ind)
