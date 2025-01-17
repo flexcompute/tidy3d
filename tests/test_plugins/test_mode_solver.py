@@ -408,7 +408,7 @@ def test_mode_solver_simple(mock_remote_api, local):
 
 
 @responses.activate
-def test_mode_solver_remote_after_local(mock_remote_api):
+def test_mode_solver_remote_after_local(mock_remote_api, tmp_path):
     """Test that running a remote solver after a local one modifies the stored data. This is to
     catch a bug if ``_cached_properties["data"]`` is inadvertently used."""
 
@@ -436,7 +436,9 @@ def test_mode_solver_remote_after_local(mock_remote_api):
         direction="-",
     )
     data_local = ms.data
-    data_remote = msweb.run(ms)
+
+    data_remote = msweb.run(ms, results_file=tmp_path / "ms_remote.hdf5")
+
     assert np.all(data_local.n_eff != data_remote.n_eff)
 
 
@@ -482,7 +484,9 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
             freqs=[freq0],
             direction="+",
         )
-        modes = ms.solve() if local else msweb.run(ms)
+        modes = (
+            ms.solve() if local else msweb.run(ms, results_file=tmp_path / "ms_custom_medium.hdf5")
+        )
         n_eff.append(modes.n_eff.values)
 
         if local:
@@ -796,7 +800,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, local):
+def test_group_index(mock_remote_api, local, tmp_path):
     """Test group index and dispersion calculation"""
 
     simulation = td.Simulation(
@@ -832,7 +836,9 @@ def test_group_index(mock_remote_api, local):
         freqs=freqs,
         direction="-",
     )
-    modes = ms.solve() if local else msweb.run(ms)
+
+    modes = ms.solve() if local else msweb.run(ms, results_file=tmp_path / "ms_remote.hdf5")
+
     if local:
         with AssertLogLevel("WARNING", contains_str="ModeSpec") as ctx:
             assert modes.n_group is None

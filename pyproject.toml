@@ -265,7 +265,7 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules -n auto"
+addopts = "--doctest-modules -n auto --dist worksteal"
 env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
