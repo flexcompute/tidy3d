@@ -29,8 +29,7 @@ from tidy3d.constants import AMP, VOLT
 
 class DCVoltageSource(Tidy3dBaseModel):
     """
-    This represents a DC voltage source in volts. An extended version of a SPICE model of steady-state independent
-    voltage source.
+    DC voltage source in volts.
 
     Notes
     -----
@@ -55,7 +54,7 @@ class DCVoltageSource(Tidy3dBaseModel):
 
 class DCCurrentSource(Tidy3dBaseModel):
     """
-    This represents a DC current source in amperes. An extended version of a SPICE model of steady-state independent current source.
+    DC current source in amperes.
 
     Example
     -------

@@ -9,7 +9,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 
 class ChargeToleranceSpec(Tidy3dBaseModel):
     """
-    This class sets some charge tolerance parameters relevant to multiple simulation analyis types.
+    Charge tolerance parameters relevant to multiple simulation analysis types.
 
     Example
     -------
@@ -40,10 +40,8 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
 
 class SteadyChargeDCAnalysis(Tidy3dBaseModel):
     """
-    This class configures relevant steady-state DC simulation parameters for a charge simulation.
+    Configures relevant steady-state DC simulation parameters for a charge simulation.
     """
-
-    # TODO move.
 
     tolerance_settings: ChargeToleranceSpec = pd.Field(
         default=ChargeToleranceSpec(), title="Tolerance settings"
@@ -54,6 +52,6 @@ class SteadyChargeDCAnalysis(Tidy3dBaseModel):
         title="Bias step.",
         description="By default, a solution is computed at 0 bias. If a bias different than "
         "0 is requested through a voltage source, the charge solver will start at 0 and increase bias "
-        "at 'convergence_dv' intervals until the required bias is reached. This is, therefore, a "
+        "at `convergence_dv` intervals until the required bias is reached. This is, therefore, a "
         "convergence parameter in DC computations.",
     )

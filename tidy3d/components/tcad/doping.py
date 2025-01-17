@@ -57,7 +57,7 @@ class AbstractDopingBox(Box):
 
 class ConstantDoping(AbstractDopingBox):
     """
-    This class sets constant doping :math:`N` in the specified box with a :parameter`size` and :parameter:`concentration`.
+    Sets constant doping :math:`N` in the specified box with a :parameter`size` and :parameter:`concentration`.
 
     Example
     -------
@@ -66,7 +66,7 @@ class ConstantDoping(AbstractDopingBox):
     ...     [-1, -1, -1],
     ...     [1, 1, 1]
     ... ]
-    >>> constant_box1 = td.ConstantDoping(center=(0, 0, 0), size(2, 2, 2), concentration=1e18)
+    >>> constant_box1 = td.ConstantDoping(center=(0, 0, 0), size=(2, 2, 2), concentration=1e18)
     >>> constant_box2 = td.ConstantDoping(box_coords=box_coords, concentration=1e18)
     """
 
@@ -78,7 +78,7 @@ class ConstantDoping(AbstractDopingBox):
 
 
 class GaussianDoping(AbstractDopingBox):
-    """This class sets a gaussian doping in the specified box.
+    """Sets a gaussian doping in the specified box.
 
     Notes
     -----
@@ -107,13 +107,15 @@ class GaussianDoping(AbstractDopingBox):
     ... ]
     >>> gaussian_box1 = td.GaussianDoping(
     ...     center=(0, 0, 0),
-    ...     size(2, 2, 2),
+    ...     size=(2, 2, 2),
+    ...     ref_con=1e15,
     ...     concentration=1e18,
     ...     width=0.1,
     ...     source="xmin"
     ... )
     >>> gaussian_box2 = td.GaussianDoping(
     ...     box_coords=box_coords,
+    ...     ref_con=1e15,
     ...     concentration=1e18,
     ...     width=0.1,
     ...     source="xmin"
@@ -121,7 +123,6 @@ class GaussianDoping(AbstractDopingBox):
     """
 
     ref_con: pd.PositiveFloat = pd.Field(
-        1e15,
         title="Reference concentration.",
         description="Reference concentration. This is the minimum concentration in the box "
         "and it is attained at the edges/faces of the box.",

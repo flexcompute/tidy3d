@@ -1,17 +1,6 @@
 .. currentmodule:: tidy3d
 
-Charge Perturbation Specification
-------------------------------------
-
-.. autosummary::
-   :toctree: ../_autosummary/
-   :template: module.rst
-
-   tidy3d.LinearChargePerturbation
-   tidy3d.CustomChargePerturbation
-
-
-Charge Specification
+Charge Mediums
 -------------------------------
 
 .. autosummary::
@@ -63,3 +52,14 @@ Bandgap
    :template: module.rst
 
    tidy3d.SlotboomBandGapNarrowing
+
+
+Charge Carrier Properties
+------------------------------------
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.LinearChargePerturbation
+   tidy3d.CustomChargePerturbation

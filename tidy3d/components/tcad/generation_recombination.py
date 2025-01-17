@@ -5,7 +5,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 
 class AugerRecombination(Tidy3dBaseModel):
     """
-    This class defines the parameters for the Auger recombination model.
+    Parameters for the Auger recombination model.
 
     Notes
     -----
@@ -17,22 +17,27 @@ class AugerRecombination(Tidy3dBaseModel):
 
             R_A = \\left( C_n n + C_p p \\right) \\left( np - n_0 p_0 \\right)
 
-    Note
-    -----
-        The default parameters are those appropriate for Silicon."""
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.AugerRecombination(
+        ...   c_n=2.8e-31,
+        ...   c_p=9.9e-32,
+        ... )
+    """
 
     c_n: pd.PositiveFloat = pd.Field(
-        2.8e-31, title="Constant for electrons", description="Constant for electrons in cm^6/s"
+        title="Constant for electrons", description="Constant for electrons in cm^6/s"
     )
 
     c_p: pd.PositiveFloat = pd.Field(
-        9.9e-32, title="Constant for holes", description="Constant for holes in cm^6/s"
+        title="Constant for holes", description="Constant for holes in cm^6/s"
     )
 
 
 class RadiativeRecombination(Tidy3dBaseModel):
     """
-    This class is used to define the parameters for the radiative recombination model.
+    Defines the parameters for the radiative recombination model.
 
     Notes
     -----
@@ -43,20 +48,22 @@ class RadiativeRecombination(Tidy3dBaseModel):
 
             R_{\\text{rad}} = C \\left( np - n_0 p_0 \\right)
 
-    Note
-    ----
-        The default values are those appropriate for Silicon.
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.RadiativeRecombination(
+        ...   r_const=1.6e-14
+        ... )
     """
 
     r_const: float = pd.Field(
-        1.6e-14,
         title="Radiation constant in cm^3/s",
         description="Radiation constant in cm^3/s",
     )
 
 
 class ShockleyReedHallRecombination(Tidy3dBaseModel):
-    """This class defines the parameters for the Shockley-Reed-Hall (SRH) recombination model.
+    """Defines the parameters for the Shockley-Reed-Hall (SRH) recombination model.
 
     Notes
     -----
@@ -74,6 +81,13 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
         .. [1] Schenk. A model for the field and temperature dependence of shockley-read-hall
                lifetimes in silicon. Solid-State Electronics, 35:1585–1596, 1992.
 
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.ShockleyReedHallRecombination(
+        ...   tau_n=3.3e-6,
+        ...   tau_p=4e-6,
+        ... )
 
     Note
     ----
@@ -81,11 +95,12 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
 
     - Currently, lifetimes are considered constant (not dependent on temperature or doping).
     - This model represents mid-gap traps Shockley-Reed-Hall recombination.
-    - Default values are those appropriate for Silicon.
     """
 
     tau_n: pd.PositiveFloat = pd.Field(
-        3.3e-6, title="Electron lifetime.", description="Electron lifetime."
+        title="Electron lifetime", description="Electron lifetime in seconds. TODOMARCCHECK"
     )
 
-    tau_p: pd.PositiveFloat = pd.Field(4e-6, title="Hole lifetime.", description="Hole lifetime.")
+    tau_p: pd.PositiveFloat = pd.Field(
+        title="Hole lifetime", description="Hole lifetime in seconds. TODOMARCCHECK."
+    )

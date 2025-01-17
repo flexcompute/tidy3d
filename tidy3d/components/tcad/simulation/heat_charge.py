@@ -105,7 +105,7 @@ class TCADAnalysisTypes(str, Enum):
 
 class HeatChargeSimulation(AbstractSimulation):
     """
-    This class is used to define thermo-electric simulations.
+    Defines thermoelectric simulations.
 
     Notes
     -----

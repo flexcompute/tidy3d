@@ -5,6 +5,11 @@ import pydantic.v1 as pd
 import pytest
 import tidy3d as td
 from matplotlib import pyplot as plt
+from tidy3d.components.tcad.types import (
+    AugerRecombination,
+    CaugheyThomasMobility,
+    SlotboomBandGapNarrowing,
+)
 from tidy3d.exceptions import DataError
 
 from ..utils import AssertLogLevel
@@ -24,6 +29,40 @@ class CHARGE_SIMULATION:
     # Doping concentrations
     acceptors = 1e17
     donors = 5e17
+
+    # intrinsic semiconductor
+    intrinsic_Si = td.MultiPhysicsMedium(
+        charge=td.SemiconductorMedium(
+            permittivity=11.7,
+            N_d=0,
+            N_a=0,
+            N_c=2.86e19,
+            N_v=3.1e19,
+            E_g=1.11,
+            mobility=CaugheyThomasMobility(
+                mu_n_min=52.2,
+                mu_n=1471.0,
+                mu_p_min=44.9,
+                mu_p=470.5,
+                exp_t_mu=-2.33,
+                exp_d_n=0.68,
+                exp_d_p=0.719,
+                ref_N=2.23e17,
+                exp_t_mu_min=-0.57,
+                exp_t_d=2.4,
+                exp_t_d_exp=-0.146,
+            ),
+            R=[
+                AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
+            ],
+            delta_E_g=SlotboomBandGapNarrowing(
+                v1=6.92 * 1e-3,
+                n2=1.3e17,
+                c2=0.5,
+            ),
+        ),
+        name="Si_intrinsic",
+    )
 
 
 # --------------------------
@@ -805,25 +844,21 @@ class TestCharge:
     # Define semiconductor materials as fixtures within the class
     @pytest.fixture(scope="class")
     def Si_p(self):
-        return td.MultiPhysicsMedium(
-            charge=td.SemiconductorMedium(
-                permittivity=11.7,
-                N_d=0,
-                N_a=CHARGE_SIMULATION.acceptors,
-            ),
+        semiconductor = CHARGE_SIMULATION.intrinsic_Si.charge
+        semiconductor = semiconductor.updated_copy(
+            N_a=CHARGE_SIMULATION.acceptors,
             name="Si_p",
         )
+        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=semiconductor)
 
     @pytest.fixture(scope="class")
     def Si_n(self):
-        return td.MultiPhysicsMedium(
-            charge=td.SemiconductorMedium(
-                permittivity=11.7,
-                N_d=CHARGE_SIMULATION.donors,
-                N_a=0,
-            ),
+        semiconductor = CHARGE_SIMULATION.intrinsic_Si.charge
+        semiconductor = semiconductor.updated_copy(
+            N_d=CHARGE_SIMULATION.donors,
             name="Si_n",
         )
+        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=semiconductor)
 
     @pytest.fixture(scope="class")
     def SiO2(self):
@@ -934,7 +969,7 @@ class TestCharge:
         sim = td.HeatChargeSimulation(
             structures=[oxide, p_side, n_side],
             medium=td.MultiPhysicsMedium(
-                heat=td.FluidSpec(), charge=td.ChargeConductorMedium(), name="air"
+                heat=td.FluidSpec(), charge=td.ChargeConductorMedium(conductivity=1), name="air"
             ),
             monitors=[charge_global_mnt, potential_global_mnt, capacitance_global_mnt],
             center=(0, 0, 0),

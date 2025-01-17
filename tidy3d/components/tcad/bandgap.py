@@ -1,17 +1,17 @@
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.constants import VOLT
+from tidy3d.constants import PERCMCUBE, VOLT
 
 
 # Band-gap narrowing models
 class SlotboomBandGapNarrowing(Tidy3dBaseModel):
     """
-    This class specifies the parameters for the Slotboom model for band-gap narrowing.
+    Parameters for the Slotboom model for band-gap narrowing.
 
     Notes
     ------
-        The Slotboom band-gap narrowing model :math:`\\Delta E_G` is discussed in [1]_ as follows:
+        The Slotboom band-gap narrowing :math:`\\Delta E_G` model is discussed in [1]_ as follows:
 
         .. math::
 
@@ -23,23 +23,30 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
 
         Note that :math:`N_{tot}` is the total doping as defined within a :class:`SemiconductorMedium`.
 
-        TODO define are the other parameters
+        Example
+        -------
+            >>> import tidy3d as td
+            >>> default_Si = td.SlotboomBandGapNarrowing(
+            ...    v1=6.92 * 1e-3,
+            ...    n2=1.3e17,
+            ...    c2=0.5,
+            ... )
 
-        .. [1] 'UNIFIED APPARENT BANDGAP NARROWING IN n- AND p-TYPE SILICON'
-                Solid-State Electronics Vol. 35, No. 2, pp. 125-129, 1992"""
+        .. [1] 'UNIFIED APPARENT BANDGAP NARROWING IN n- AND p-TYPE SILICON' Solid-State Electronics Vol. 35, No. 2, pp. 125-129, 1992"""
 
     v1: pd.PositiveFloat = pd.Field(
-        6.92 * 1e-3, title="V1 parameter", description=f"V1 parameter in {VOLT}", units=VOLT
+        title=r"$V_{1,bgn}$ parameter",
+        description=r"$V_{1,bgn}$ parameter",
+        units=VOLT,
     )
 
     n2: pd.PositiveFloat = pd.Field(
-        1.3e17,
-        title="n2 parameter",
-        description="n2 parameter in cm^(-3)",
+        title=r"$N_{2,bgn}$ parameter",
+        description=r"$N_{2,bgn}$ parameter",
+        units=PERCMCUBE,
     )
 
     c2: float = pd.Field(
-        0.5,
-        title="c2 parameter",
-        description="c2 parameter",
+        title=r"$C_{2,bgn}$ parameter",
+        description=r"$C_{2,bgn}$ parameter",
     )

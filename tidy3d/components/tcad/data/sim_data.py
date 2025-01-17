@@ -75,7 +75,7 @@ class DeviceCharacteristics(Tidy3dBaseModel):
 
 
 class HeatChargeSimulationData(AbstractSimulationData):
-    """Stores results of a heat-charge simulation.
+    """Stores results of a :class:`HeatChargeSimulation`.
 
     Example
     -------
@@ -348,12 +348,17 @@ class HeatChargeSimulationData(AbstractSimulationData):
 
 
 class HeatSimulationData(HeatChargeSimulationData):
-    """Wrapper for Heat simulation data. 'HeatSimulationData' is deprecated.
-    Consider using 'HeatChargeSimulationData' instead."""
+    """DEPRECATED: Wrapper for Heat Simulation data.
+
+    Warning
+    -------
+        :class`HeatSimulationData` is DEPRECATED.
+        Consider using :class:`HeatChargeSimulationData` instead.
+    """
 
     simulation: HeatSimulation = pd.Field(
         title="Heat Simulation",
-        description="Original :class:`.HeatSimulation` associated with the data.",
+        description="Original :class:`HeatSimulation` associated with the data.",
     )
 
     @pd.root_validator(skip_on_failure=True)

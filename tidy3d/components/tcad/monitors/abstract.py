@@ -22,10 +22,10 @@ class HeatChargeMonitor(AbstractMonitor, ABC):
     conformal: bool = pd.Field(
         False,
         title="Conformal Monitor Meshing",
-        description="If ``True`` the heat simulation mesh will conform to the monitor's geometry. "
+        description="If ``True`` the simulation mesh will conform to the monitor's geometry. "
         "While this can be set for both Cartesian and unstructured monitors, it bears higher "
         "significance for the latter ones. Effectively, setting ``conformal = True`` for "
-        "unstructured monitors (``unstructured = True``) ensures that returned temperature values "
+        "unstructured monitors (``unstructured = True``) ensures that returned values "
         "will not be obtained by interpolation during postprocessing but rather directly "
         "transferred from the computational grid.",
     )

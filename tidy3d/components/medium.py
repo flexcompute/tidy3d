@@ -732,7 +732,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     heat_spec: Optional[ThermalSpecType] = pd.Field(
         None,
         title="Heat Specification",
-        description="DEPRECIATED: Use `td.MultiPhysicsMedium`. Specification of the medium heat properties. They are "
+        description="DEPRECATED: Use `td.MultiPhysicsMedium`. Specification of the medium heat properties. They are "
         "used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be"
         "used for investigating the influence of heat propagation on the properties of optical systems. "
         "Once the temperature distribution in the system is found using ``HeatSimulation`` object, "
@@ -758,7 +758,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         if self.heat_spec:
             return self.heat_spec
         else:
-            return ValueError(f"An `heat` medium does not exist in this Medium definition: {self}")
+            return ValueError(f"A `heat` medium does not exist in this Medium definition: {self}")
 
     @property
     def optical(self):

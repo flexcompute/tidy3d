@@ -10,14 +10,9 @@ from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import DopingBoxType
 from tidy3d.components.tcad.types import (
-    AugerRecombination,
     BandGapNarrowingModelType,
-    CaugheyThomasMobility,
     MobilityModelType,
-    RadiativeRecombination,
     RecombinationModelType,
-    ShockleyReedHallRecombination,
-    SlotboomBandGapNarrowing,
 )
 from tidy3d.components.types import Union
 from tidy3d.constants import (
@@ -28,7 +23,8 @@ from tidy3d.constants import (
 
 
 class AbstractChargeMedium(AbstractMedium):
-    """Abstract class for Charge specifications"""
+    """Abstract class for Charge specifications
+    Currently, permittivity is treated as a constant."""
 
     permittivity: float = pd.Field(
         1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
@@ -43,7 +39,6 @@ class AbstractChargeMedium(AbstractMedium):
         return self
 
     def eps_model(self, frequency: float) -> complex:
-        # TODO just pass it directly for charge simulations
         return self.permittivity
 
     def n_cfl(self):
@@ -81,7 +76,7 @@ class ChargeConductorMedium(AbstractChargeMedium):
     """
 
     conductivity: pd.PositiveFloat = pd.Field(
-        1,
+        ...,
         title="Electric conductivity",
         description=f"Electric conductivity of material in units of {CONDUCTIVITY}.",
         units=CONDUCTIVITY,
@@ -190,6 +185,49 @@ class SemiconductorMedium(AbstractChargeMedium):
          - ``tidy3d.constants.Q_e``
          - Fundamental electron charge.
 
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.SemiconductorMedium(
+        ...     N_c=2.86e19,
+        ...     N_v=3.1e19,
+        ...     E_g=1.11,
+        ...     mobility=td.CaugheyThomasMobility(
+        ...         mu_n_min=52.2,
+        ...         mu_n=1471.0,
+        ...         mu_p_min=44.9,
+        ...         mu_p=470.5,
+        ...         exp_t_mu=-2.33,
+        ...         exp_d_n=0.68,
+        ...         exp_d_p=0.719,
+        ...         ref_N=2.23e17,
+        ...         exp_t_mu_min=-0.57,
+        ...         exp_t_d=2.4,
+        ...         exp_t_d_exp=-0.146,
+        ...     ),
+        ...     R=([
+        ...         td.ShockleyReedHallRecombination(
+        ...             tau_n=3.3e-6,
+        ...             tau_p=4e-6
+        ...         ),
+        ...         td.RadiativeRecombination(
+        ...             r_const=1.6e-14
+        ...         ),
+        ...         td.AugerRecombination(
+        ...             c_n=2.8e-31,
+        ...             c_p=9.9e-32
+        ...         ),
+        ...     ]),
+        ...     delta_E_g=td.SlotboomBandGapNarrowing(
+        ...         v1=6.92 * 1e-3,
+        ...         n2=1.3e17,
+        ...         c2=0.5,
+        ...     ),
+        ...     N_a=0,
+        ...     N_d=0
+        ... )
+
+
     Warning
     -------
         Current limitations of the formulation include:
@@ -211,40 +249,34 @@ class SemiconductorMedium(AbstractChargeMedium):
     """
 
     N_c: pd.PositiveFloat = pd.Field(
-        2.86e19,
         title="Effective density of electron states",
         description=r"$N_c$ Effective density of states in the conduction band.",
         units="cm^(-3)",
     )
 
     N_v: pd.PositiveFloat = pd.Field(
-        3.1e19,
         title="Effective density of hole states",
         description=r"$N_v$ Effective density of states in the valence band.",
         units="cm^(-3)",
     )
 
     E_g: pd.PositiveFloat = pd.Field(
-        1.11,
         title="Band-gap energy",
         description="Band-gap energy",
         units=ELECTRON_VOLT,
     )
 
     mobility: MobilityModelType = pd.Field(
-        CaugheyThomasMobility(),
         title="Mobility model",
         description="Mobility model",
     )
 
     R: Tuple[RecombinationModelType, ...] = pd.Field(
-        (ShockleyReedHallRecombination(), AugerRecombination(), RadiativeRecombination()),
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material.",
     )
 
     delta_E_g: BandGapNarrowingModelType = pd.Field(
-        SlotboomBandGapNarrowing(),
         title=r"$\Delta E_g$ Bandgap narrowing model.",
         description="Bandgap narrowing model.",
     )

@@ -31,12 +31,12 @@ UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
-    """Class that stores electric potential :math:`\\psi` from a charge simulation."""
+    """Stores electric potential :math:`\\psi` from a charge simulation."""
 
     monitor: SteadyPotentialMonitor = pd.Field(
         ...,
         title="Voltage monitor",
-        description="Electric potential monitor associated with a Charge simulation.",
+        description="Electric potential monitor associated with a `charge` simulation.",
     )
 
     potential: FieldDataset = pd.Field(
@@ -82,7 +82,7 @@ class SteadyPotentialData(HeatChargeMonitorData):
 
 class SteadyFreeCarrierData(HeatChargeMonitorData):
     """
-    This data class stores free-carrier concentration in charge simulations.
+    Stores free-carrier concentration in charge simulations.
 
     Notes
     -----

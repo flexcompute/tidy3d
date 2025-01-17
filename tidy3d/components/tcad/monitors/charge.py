@@ -45,7 +45,7 @@ class SteadyFreeCarrierMonitor(HeatChargeMonitor):
     """
 
     # NOTE: for the time being supporting unstructured
-    unstructured = True
+    unstructured: bool = True
 
 
 class SteadyCapacitanceMonitor(HeatChargeMonitor):
@@ -60,4 +60,4 @@ class SteadyCapacitanceMonitor(HeatChargeMonitor):
     ... )
     """
 
-    unstructured = True
+    unstructured: bool = True
