@@ -26,5 +26,5 @@ def test_triangular_dataset_no_vtk(tmp_path):
 
 
 @pytest.mark.usefixtures("hide_vtk")
-def test_tetrahedral_dataset_no_vtk(tmp_path, log_capture):
+def test_tetrahedral_dataset_no_vtk(tmp_path):
     _test_tetrahedral_dataset(tmp_path, "test_name", 0, no_vtk=True)
