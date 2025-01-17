@@ -224,6 +224,12 @@ class GradedMesher(Mesher):
             structures_effective
         )
 
+        # no containment check for those structures
+        skip_containment = [
+            isinstance(structure, MeshOverrideStructure) and not structure.shadow
+            for structure in structures_ordered
+        ]
+
         # Required maximum steps in every structure
         structure_steps = self.structure_steps(
             structures_ordered, wavelength, min_steps_per_wvl, dl_min, dl_max, axis
@@ -271,13 +277,16 @@ class GradedMesher(Mesher):
                 if bbox is None:
                     # Structure has been removed because it is completely contained
                     continue
-                bbox_2d = self.make_shapely_box(bbox)
 
-                # List of structure indexes that may intersect the current structure in 2D
-                try:
-                    query_inds = tree.query_items(bbox_2d)
-                except AttributeError:
-                    query_inds = tree.query(bbox_2d)
+                query_inds = []
+                if not skip_containment[str_ind]:
+                    bbox_2d = self.make_shapely_box(bbox)
+
+                    # List of structure indexes that may intersect the current structure in 2D
+                    try:
+                        query_inds = tree.query_items(bbox_2d)
+                    except AttributeError:
+                        query_inds = tree.query(bbox_2d)
 
                 # Remove all lower structures that the current structure completely contains
                 inds_lower = [
@@ -289,11 +298,15 @@ class GradedMesher(Mesher):
                     struct_bbox[inds_lower[ind]] = None
 
                 # List of structure bboxes that contain the current structure in 2D
-                inds_upper = [ind for ind in query_inds if ind > str_ind]
-                query_bbox = [
-                    struct_bbox[ind] for ind in inds_upper if struct_bbox[ind] is not None
-                ]
-                bbox_contained_2d = self.contained_2d(bbox, query_bbox)
+                bbox_contained_2d = []
+                if not skip_containment[str_ind]:
+                    inds_upper = [ind for ind in query_inds if ind > str_ind]
+                    query_bbox = [
+                        struct_bbox[ind]
+                        for ind in inds_upper
+                        if struct_bbox[ind] is not None and not skip_containment[ind]
+                    ]
+                    bbox_contained_2d = self.contained_2d(bbox, query_bbox)
 
                 # Handle insertion of the current structure bounds in the intervals
                 # The intervals list is modified in-place

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `VisualizationSpec` that allows `Medium` instances to specify color and transparency plotting attributes that override default ones.
 - `reduce_simulation` argument added to all web functions to allow automatically reducing structures only to the simulation domain, including truncating data in custom media, thus reducing the simulation upload size. Currently only implemented for mode solver simulation types.
+- Support for quasi-uniform grid specifications via `QuasiUniformGrid` that subclasses from `GridSpec1d`. The grids are almost uniform, but can adjust locally to the edge of structure bounding boxes, and snapping points.
+- New field `min_steps_per_sim_size` in `AutoGrid` that sets minimal number of grid steps per longest edge length of simulation domain.
+- New field `shadow` in `MeshOverrideStructure` that sets grid size in overlapping region according to structure list or minimal grid size.
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.
@@ -17,8 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - NumPy 2.1 compatibility issue where `numpy.float64` values passed to xarray interpolation would raise TypeError.
-- Support for quasi-uniform grid specifications via `QuasiUniformGrid` that subclasses from `GridSpec1d`. The grids are almost uniform, but can adjust locally to the edge of structure bounding boxes, and snapping points.
-- New field `min_steps_per_sim_size` in `AutoGrid` that sets minimal number of grid steps per longest edge length of simulation domain.
 - Validation error in inverse design plugin when simulation has no sources by adding a source existence check before validating pixel size.
 - System-dependent floating-point precision issue in EMEGrid validation.
 - Fixed magnitude of gradient computation in `CustomMedium` by accounting properly for full volume element when permittivity data is defined over less dimensions than the medium.

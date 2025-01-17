@@ -817,3 +817,41 @@ def test_override_are_box():
     assert isinstance(
         override_not_box.geometry, td.Box
     ), "Sphere override structure was not converted to Box"
+
+
+def test_override_unshadowed():
+    """Test that when an override structure completely covers a structure of smaller grid size, it overrides
+    the grid size with `shadow=True`; but not with `shadow=False`.
+    """
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+
+    # override structure of same geometry and shadow = True will override even it has larger grid size
+    override_structure = td.MeshOverrideStructure(
+        geometry=BOX1.geometry,
+        dl=[
+            0.2,
+        ]
+        * 3,
+        shadow=True,
+    )
+    sim_shadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    sizes = sim_shadow.grid.sizes.to_list[2]
+    assert sizes[len(sizes) // 2] > 0.19
+
+    # now shadow = False
+    override_structure = override_structure.updated_copy(shadow=False)
+    sim_unshadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    sizes = sim_unshadow.grid.sizes.to_list[2]
+    assert sizes[len(sizes) // 2] < 0.1

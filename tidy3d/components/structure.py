@@ -665,11 +665,19 @@ class MeshOverrideStructure(AbstractStructure):
 
     enforce: bool = pydantic.Field(
         False,
-        title="Enforce grid size",
+        title="Enforce Grid Size",
         description="If ``True``, enforce the grid size setup inside the structure "
         "even if the structure is inside a structure of smaller grid size. In the intersection "
         "region of multiple structures of ``enforce=True``, grid size is decided by "
         "the last added structure of ``enforce=True``.",
+    )
+
+    shadow: bool = pydantic.Field(
+        True,
+        title="Grid Size Choice In Structure Overlapping Region",
+        description="In structure intersection region, grid size is decided by the latter added "
+        "structure in the structure list when ``shadow=True``; or the structure of smaller grid size "
+        "when ``shadow=False``.",
     )
 
     @pydantic.validator("geometry")
@@ -682,6 +690,13 @@ class MeshOverrideStructure(AbstractStructure):
                     f"Given type of '{type(val)}, using '{type(val)}.bounding_box' instead."
                 )
                 return val.bounding_box
+        return val
+
+    @pydantic.validator("shadow")
+    def _unshadowed_cannot_be_enforced(cls, val, values):
+        """Unshadowed structure cannot be enforced."""
+        if not val and values["enforce"]:
+            raise SetupError("A structure cannot be simultaneously enforced and unshadowed.")
         return val
 
 
