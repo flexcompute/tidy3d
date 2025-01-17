@@ -57,10 +57,9 @@ class DCCurrentSource(Tidy3dBaseModel):
     Example
     -------
     >>> import tidy3d as td
-    >>> currents = [-0.5, 0, 1, 2, 3, 4]
-    >>> td.DCCurrentSource(current=currents)
+    >>> td.DCCurrentSource(current=0.4)
     """
 
     name: Optional[str]
-    current: Union[pd.FiniteFloat, list[pd.FiniteFloat]] = pd.Field(title="Current")
+    current: pd.FiniteFloat = pd.Field(title="Current")
     units: str = AMP
