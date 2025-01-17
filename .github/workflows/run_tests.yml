@@ -3,7 +3,7 @@ name: "tidy3d-frontend-tests"
 on:
   workflow_dispatch:
   push:
-    branches: [ develop, latest ]
+    branches: [ develop, latest, 'pre/*' ]
   pull_request:
     branches:
       - latest
