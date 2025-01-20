@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PlaneWaveBeamProfile`, `GaussianBeamProfile` and `AstigmaticGaussianBeamProfile` components to compute field data associated to such beams based on their corresponding analytical expressions, and compute field overlaps with other data.
 - `num_freqs` argument to the `PlaneWave` source.
 - Support for running multiple adjoint simulations from a single forward simulation in adjoint pipeline depending on monitor configuration.
+- Ability to directly create `DirectivityData` from an `xarrray.Dataset` containing electromagnetic fields, where the flux is calculated by integrating the fields over the surface of a sphere.
+- Ability to the `TerminalComponentModeler` that enables the computation of antenna parameters and figures of merit, such as gain, radiation efficiency, and reflection efficiency. When there are multiple ports in the `TerminalComponentModeler`, these antenna parameters may be calculated with user-specified port excitation magnitudes and phases.
 
 ### Changed
 - The coordinate of snapping points in `GridSpec` can take value `None`, so that mesh can be selectively snapped only along certain dimensions.
@@ -26,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added warning when a lumped element is not completely within the simulation bounds, since now lumped elements will only have an effect on the `Simulation` when they are completely within the simulation bounds.
 - Allow `ModeData` to be passed to path integral computations in the `microwave` plugin.
 - Default number of grid cells refining lumped elements is changed to 1, and some of the generated `MeshOverrideStructure` are replaced by grid snapping points.
+- Definition of left- and right-handed circular polarization in `DirectivityData` to follow engineering convention.
+- Extended the number of quantities provided by the `DirectivityData`, which now includes more parameters of interest like radiation intensity and gain. In addition, antenna parameters can be decomposed into contributions from individual polarization components according to a specified polarization basis, either `linear` or `circular`.
 
 ### Fixed
 - Make gauge selection for non-converged modes more robust.

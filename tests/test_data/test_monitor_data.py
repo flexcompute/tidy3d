@@ -5,7 +5,11 @@ import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
-from tidy3d.components.data.data_array import FreqModeDataArray
+import xarray as xr
+from tidy3d.components.data.data_array import (
+    FreqDataArray,
+    FreqModeDataArray,
+)
 from tidy3d.components.data.monitor_data import (
     DiffractionData,
     DirectivityData,
@@ -185,10 +189,15 @@ def make_flux_data():
     return FluxData(monitor=FLUX_MONITOR, flux=FLUX.copy())
 
 
-def make_directivity_data():
+def make_directivity_data(planar_monitor: bool = False):
     data = make_far_field_data_array()
+    monitor = DIRECTIVITY_MONITOR
+    if planar_monitor:
+        size = list(DIRECTIVITY_MONITOR.size)
+        size[1] = 0
+        monitor = DIRECTIVITY_MONITOR.updated_copy(size=size)
     return DirectivityData(
-        monitor=DIRECTIVITY_MONITOR,
+        monitor=monitor,
         flux=FLUX.copy(),
         Er=data,
         Etheta=data,
@@ -196,7 +205,38 @@ def make_directivity_data():
         Hr=data,
         Htheta=data,
         Hphi=data,
+        projection_surfaces=monitor.projection_surfaces,
     )
+
+
+def make_field_dataset_using_power_density(
+    values: np.ndarray, theta: np.ndarray, phi: np.ndarray, freqs: np.ndarray, r_proj: np.ndarray
+):
+    """Helper function to create ``DirectivityMonitor`` and field dataset with a desired power density."""
+    monitor = td.DirectivityMonitor(
+        size=(2, 2, 2),
+        center=(0, 0, 0),
+        freqs=freqs,
+        name="proj_monitor",
+        far_field_approx=True,
+        proj_distance=r_proj,
+        theta=theta,
+        phi=phi,
+    )
+
+    coords = dict(r=r_proj, theta=theta, phi=phi, f=freqs)
+    field = td.FieldProjectionAngleDataArray(values, coords=coords)
+
+    field_components = dict(
+        Er=field,
+        Etheta=field,
+        Ephi=field,
+        Hr=field,
+        Htheta=-1.0 * field,
+        Hphi=field,
+    )
+    field_dataset = xr.Dataset(field_components)
+    return monitor, field_dataset
 
 
 def make_flux_time_data():
@@ -337,12 +377,102 @@ def test_flux_time_data():
     _ = data.flux
 
 
-def test_directivity_data():
-    data = make_directivity_data()
-    _ = data.directivity
-    _ = data.axial_ratio
-    _ = data.left_polarization
-    _ = data.right_polarization
+@pytest.mark.parametrize("planar_monitor", [False, True])
+def test_directivity_data(planar_monitor):
+    data = make_directivity_data(planar_monitor)
+    _ = data.flux
+    f = data.flux.f.values
+    # make some dummy data to represent power supplied to antenna
+    power_in = FreqDataArray(np.abs(np.random.random(size=np.shape(f))), coords=dict(f=f))
+    assert isinstance(data.partial_radiation_intensity(), xr.Dataset)
+    assert isinstance(data.radiation_intensity, xr.DataArray)
+    assert isinstance(data.partial_directivity(), xr.Dataset)
+    assert isinstance(data.directivity, xr.DataArray)
+
+    assert isinstance(data.calc_partial_gain(power_in), xr.Dataset)
+    assert isinstance(data.calc_gain(power_in), xr.DataArray)
+    assert isinstance(data.axial_ratio, xr.DataArray)
+    assert isinstance(data.left_polarization, xr.DataArray)
+    assert isinstance(data.right_polarization, xr.DataArray)
+
+    # Test computations using the circular polarization basis
+    pol_basis = "circular"
+    assert isinstance(data.fields_circular_polarization, xr.Dataset)
+    assert isinstance(data.partial_radiation_intensity(pol_basis), xr.Dataset)
+    assert isinstance(data.partial_directivity(pol_basis), xr.Dataset)
+    assert isinstance(data.calc_partial_gain(power_in=power_in, pol_basis=pol_basis), xr.Dataset)
+
+    # Test raise exception when pol_basis is wrong
+    with pytest.raises(ValueError):
+        data.partial_radiation_intensity("invalid")
+    with pytest.raises(ValueError):
+        data.partial_directivity("invalid")
+    with pytest.raises(ValueError):
+        data.calc_partial_gain(power_in, "invalid")
+    # Test helpers to slice data along a constant phi
+    DirectivityData.get_phi_slice(data.Etheta, phi=0)
+    DirectivityData.get_phi_slice(data.Etheta, phi=np.pi, symmetric=True)
+
+
+def test_directivity_data_from_projected_fields():
+    """Test DirectivityData is constructed properly and integration of uniform fields over
+    spherical surface matches analytic value. Also test validation of angle sampling."""
+
+    freqs = np.array([1e9, 10e9])
+    r_proj = np.array([1.0])
+    # Test invalid theta range
+    theta = np.linspace(0, np.pi / 2, 20)  # Missing half sphere
+    phi = np.linspace(0, 2 * np.pi, 40)
+    values = np.ones((len(r_proj), len(theta), len(phi), len(freqs)), dtype=complex)
+    monitor, proj_angle_data = make_field_dataset_using_power_density(
+        values, theta, phi, freqs, r_proj
+    )
+    with pytest.raises(ValueError, match="Chosen limits for `theta` are not appropriate"):
+        dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
+
+    # Test invalid phi range
+    theta = np.linspace(0, np.pi, 20)
+    phi = np.linspace(0, np.pi, 40)  # Missing half sphere
+    values = np.ones((len(r_proj), len(theta), len(phi), len(freqs)), dtype=complex)
+    monitor, proj_angle_data = make_field_dataset_using_power_density(
+        values, theta, phi, freqs, r_proj
+    )
+    with pytest.raises(ValueError, match="Chosen limits for `phi` are not appropriate"):
+        dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
+
+    # Test too coarse sampling
+    theta = np.linspace(0, np.pi, 5)  # Too few points
+    phi = np.linspace(0, 2 * np.pi, 40)
+    values = np.ones((len(r_proj), len(theta), len(phi), len(freqs)), dtype=complex)
+    monitor, proj_angle_data = make_field_dataset_using_power_density(
+        values, theta, phi, freqs, r_proj
+    )
+    with pytest.raises(ValueError, match="There are not enough sampling points"):
+        dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
+
+    # Test unsorted
+    theta = np.linspace(0, np.pi, 20)[::-1]
+    phi = np.linspace(0, 2 * np.pi, 40)
+    values = np.ones((len(r_proj), len(theta), len(phi), len(freqs)), dtype=complex)
+    monitor, proj_angle_data = make_field_dataset_using_power_density(
+        values, theta, phi, freqs, r_proj
+    )
+    with pytest.raises(ValueError, match="theta was not provided as a sorted array."):
+        dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
+
+    # Test success case with proper sampling
+    theta = np.linspace(0, np.pi, 20)
+    phi = np.linspace(0, 2 * np.pi, 40)
+    values = np.ones((len(r_proj), len(theta), len(phi), len(freqs)), dtype=complex)
+    monitor, proj_angle_data = make_field_dataset_using_power_density(
+        values, theta, phi, freqs, r_proj
+    )
+    dir_data = td.DirectivityData.from_spherical_field_dataset(monitor, proj_angle_data)
+
+    # Flux should correspond with the surface area of a sphere
+    flux_values = dir_data.flux.values
+    # Check against analytical value with 1% tolerance
+    assert np.allclose(flux_values, 4 * np.pi, rtol=1e-2)
 
 
 def test_diffraction_data():

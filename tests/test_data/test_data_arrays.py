@@ -43,8 +43,8 @@ FS = np.linspace(1e14, 2e14, 5)
 TS = np.linspace(0, 1e-12, 4)
 MODE_INDICES = np.arange(0, 4)
 DIRECTIONS = ["+", "-"]
-PHIS = np.linspace(0, np.pi, 100)
-THETAS = np.linspace(0, 2 * np.pi, 100)
+PHIS = np.linspace(0, 2 * np.pi, 100)
+THETAS = np.linspace(0, np.pi, 100)
 PD = np.atleast_1d(4000)
 
 FIELD_MONITOR = td.FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)

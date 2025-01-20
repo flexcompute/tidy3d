@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic.v1 as pd
 import pytest
 import tidy3d as td
+import xarray as xr
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
@@ -73,8 +74,26 @@ def test_validate_no_sources(tmp_path):
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
     sim_w_source = modeler.simulation.copy(update=dict(sources=(source,)))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = modeler.copy(update=dict(simulation=sim_w_source))
+
+
+def test_validate_3D_sim(tmp_path):
+    modeler = make_component_modeler(planar_pec=False, path_dir=str(tmp_path))
+    sim = td.Simulation(
+        size=(10e3, 10e3, 0),
+        sources=[],
+        monitors=[],
+        grid_spec=td.GridSpec.uniform(dl=1e3),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.periodic(),
+        ),
+        run_time=1e-10,
+    )
+    with pytest.raises(pd.ValidationError):
+        _ = modeler.updated_copy(simulation=sim)
 
 
 def test_no_port(tmp_path):
@@ -224,7 +243,7 @@ def test_coarse_grid_at_port(monkeypatch, tmp_path):
 
 
 def test_validate_port_voltage_axis():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
 
 
@@ -271,7 +290,7 @@ def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path):
 
 
 def test_validate_coaxial_center_not_inf():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         CoaxialLumpedPort(
             center=(td.inf, 0, 0),
             outer_diameter=8,
@@ -285,7 +304,7 @@ def test_validate_coaxial_center_not_inf():
 
 
 def test_validate_coaxial_port_diameters():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         CoaxialLumpedPort(
             center=(0, 0, 0),
             outer_diameter=1,
@@ -487,7 +506,7 @@ def test_wave_port_path_integral_validation():
         current_integral=custom_current_path,
     )
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = WavePort(
             center=center_port,
             size=size_port,
@@ -499,7 +518,7 @@ def test_wave_port_path_integral_validation():
         )
 
     voltage_path = voltage_path.updated_copy(size=(4, 0, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = WavePort(
             center=center_port,
             size=size_port,
@@ -513,7 +532,7 @@ def test_wave_port_path_integral_validation():
     custom_current_path = CustomCurrentIntegral2D.from_circular_path(
         center=center_port, radius=3, num_points=21, normal_axis=2, clockwise=False
     )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = WavePort(
             center=center_port,
             size=size_port,
@@ -580,5 +599,177 @@ def test_wave_port_validate_current_integral(tmp_path):
     modeler = make_coaxial_component_modeler(
         path_dir=str(tmp_path), port_types=(WavePort, WavePort)
     )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = modeler.updated_copy(direction="-", path="ports/0/")
+
+
+def test_port_impedance_check():
+    """ "Tests the impedance consistency check."""
+    Z_numpy = np.ones((50, 3))
+    Z_numpy[:, 1] = -1.0
+    # All ok if same sign for every frequency
+    TerminalComponentModeler._check_port_impedance_sign(Z_numpy)
+    Z_numpy[25, 1] = 1.0
+    # Change of sign is unexpected
+    with pytest.raises(Tidy3dError):
+        TerminalComponentModeler._check_port_impedance_sign(Z_numpy)
+
+
+def test_antenna_helpers(monkeypatch, tmp_path):
+    """Test monitor data normalization and combination helpers for antenna parameters."""
+    # Setup basic modeler with radiation monitor
+    modeler = make_component_modeler(False, path_dir=str(tmp_path))
+    sim = modeler.simulation
+    theta = np.linspace(0, np.pi, 40)
+    phi = np.linspace(0, 2 * np.pi, 80)
+    radiation_monitor = td.DirectivityMonitor(
+        size=sim.size,
+        center=sim.center,
+        freqs=modeler.freqs,
+        name="antenna_monitor",
+        far_field_approx=True,
+        proj_distance=max(sim.size) * 100,
+        theta=theta,
+        phi=phi,
+    )
+    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+
+    # Run simulation to get data
+    _ = run_component_modeler(monkeypatch, modeler)
+    batch_data = modeler.batch_data
+    sim_data = batch_data[modeler._task_name(modeler.ports[0])]
+    rad_mon_data = sim_data[radiation_monitor.name]
+
+    # Test monitor helper
+    found_mon = modeler.get_radiation_monitor_by_name(radiation_monitor.name)
+    assert found_mon == radiation_monitor
+    with pytest.raises(Tidy3dKeyError):
+        modeler.get_radiation_monitor_by_name("invalid")
+
+    # Test monitor data normalization with different amplitude types
+    a_array = FreqDataArray(np.ones(len(modeler.freqs)), dict(f=modeler.freqs))
+    normalized_data_array = modeler._monitor_data_at_port_amplitude(
+        modeler.ports[0], sim_data, rad_mon_data, a_array
+    )
+    normalized_data_const = modeler._monitor_data_at_port_amplitude(
+        modeler.ports[0], sim_data, rad_mon_data, 1.0
+    )
+    assert isinstance(normalized_data_array, td.DirectivityData)
+    assert isinstance(normalized_data_const, td.DirectivityData)
+
+    # Test combining monitor data
+    combined_data = normalized_data_array + normalized_data_const
+    assert isinstance(combined_data, td.DirectivityData)
+
+    # Test power wave amplitude computation
+    a, b = modeler.compute_power_wave_amplitudes_at_each_port(
+        modeler.port_reference_impedances, sim_data
+    )
+    assert isinstance(a, PortDataArray)
+    assert isinstance(b, PortDataArray)
+
+
+def test_antenna_parameters(monkeypatch, tmp_path):
+    """Test basic antenna parameters computation and validation."""
+    # Setup modeler with radiation monitor
+    modeler = make_component_modeler(False, path_dir=str(tmp_path))
+    sim = modeler.simulation
+    theta = np.linspace(0, np.pi, 101)
+    phi = np.linspace(0, 2 * np.pi, 201)
+    proj_distance = max(sim.size) * 100
+    # First test validation of the radiation monitors
+    # The frequencies should be a subset of the freqs set in the TerminalComponentModeler
+    freqs = [3.14e13]
+    radiation_monitor = td.DirectivityMonitor(
+        size=sim.size,
+        center=sim.center,
+        freqs=freqs,
+        name="antenna_monitor",
+        far_field_approx=True,
+        proj_distance=proj_distance,
+        theta=theta,
+        phi=phi,
+    )
+    with pytest.raises(pd.ValidationError):
+        modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+
+    radiation_monitor = radiation_monitor.updated_copy(freqs=modeler.freqs)
+    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+
+    # Run simulation and get antenna parameters
+    _ = run_component_modeler(monkeypatch, modeler)
+    antenna_params = modeler.get_antenna_metrics_data()
+
+    # Test that all essential parameters exist and are correct type
+    assert isinstance(antenna_params.radiation_efficiency, FreqDataArray)
+    assert isinstance(antenna_params.reflection_efficiency, FreqDataArray)
+    assert isinstance(antenna_params.gain, xr.DataArray)
+    assert isinstance(antenna_params.realized_gain, xr.DataArray)
+
+    # Test partial gain computations in linear basis
+    partial_gain_linear = antenna_params.partial_gain(pol_basis="linear")
+    assert isinstance(partial_gain_linear, xr.Dataset)
+    assert "Gtheta" in partial_gain_linear
+    assert "Gphi" in partial_gain_linear
+
+    # Test partial gain computations in circular basis
+    partial_gain_circular = antenna_params.partial_gain(pol_basis="circular")
+    assert isinstance(partial_gain_circular, xr.Dataset)
+    assert "Gright" in partial_gain_circular
+    assert "Gleft" in partial_gain_circular
+
+    # Test partial realized gain computations in both bases
+    assert isinstance(antenna_params.partial_realized_gain("linear"), xr.Dataset)
+    assert isinstance(antenna_params.partial_realized_gain("circular"), xr.Dataset)
+
+    # Test validation of pol_basis parameter
+    with pytest.raises(ValueError):
+        antenna_params.partial_gain("invalid")
+    with pytest.raises(ValueError):
+        antenna_params.partial_realized_gain("invalid")
+
+
+def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
+    """Test the computation of combined antenna parameters from multiple ports."""
+    modeler = make_component_modeler(False, path_dir=str(tmp_path))
+    sim = modeler.simulation
+    theta = np.linspace(0, np.pi, 101)
+    phi = np.linspace(0, 2 * np.pi, 201)
+    proj_distance = max(sim.size) * 100
+    radiation_monitor = td.DirectivityMonitor(
+        size=sim.size,
+        center=sim.center,
+        freqs=modeler.freqs,
+        name="antenna_monitor",
+        far_field_approx=True,
+        proj_distance=proj_distance,
+        theta=theta,
+        phi=phi,
+    )
+    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    s_matrix = run_component_modeler(monkeypatch, modeler)
+
+    # Define port amplitudes
+    port_amplitudes = {modeler.ports[0].name: 1.0, modeler.ports[1].name: 1j}
+
+    # Get combined antenna parameters
+    antenna_params = modeler.get_antenna_metrics_data(
+        port_amplitudes, monitor_name="antenna_monitor"
+    )
+
+    # Check that essential properties exist and are correct type
+    assert isinstance(antenna_params.radiation_efficiency, FreqDataArray)
+    assert isinstance(antenna_params.reflection_efficiency, FreqDataArray)
+    assert isinstance(antenna_params.partial_gain(), xr.Dataset)
+    assert isinstance(antenna_params.gain, xr.DataArray)
+    assert isinstance(antenna_params.partial_realized_gain(), xr.Dataset)
+    assert isinstance(antenna_params.realized_gain, xr.DataArray)
+
+    # Test with single port for comparison
+    single_port_params = modeler.get_antenna_metrics_data()
+
+    # Values should be different when combining ports vs single port
+    assert not np.allclose(antenna_params.gain, single_port_params.gain)
+    assert not np.allclose(
+        antenna_params.radiation_efficiency, single_port_params.radiation_efficiency
+    )

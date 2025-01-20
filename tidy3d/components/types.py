@@ -226,6 +226,7 @@ EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = Union[Tuple[float, ...], ArrayFloat1D]
 ObsGridArray = Union[Tuple[float, ...], ArrayFloat1D]
+PolarizationBasis = Literal["linear", "circular"]
 
 """ plotting """
 
