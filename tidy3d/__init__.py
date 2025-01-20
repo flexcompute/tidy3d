@@ -12,6 +12,9 @@ from tidy3d.components.material.tcad.heat import (
     SolidMedium,
     SolidSpec,
 )
+from tidy3d.components.microwave.data.monitor_data import (
+    AntennaMetricsData,
+)
 from tidy3d.components.spice.analysis.dc import (
     ChargeToleranceSpec,
     IsothermalSteadyChargeDCAnalysis,
@@ -661,4 +664,5 @@ __all__ = [
     "VoltageSourceType",
     "IsothermalSteadyChargeDCAnalysis",
     "ChargeToleranceSpec",
+    "AntennaMetricsData",
 ]

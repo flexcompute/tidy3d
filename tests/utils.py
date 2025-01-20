@@ -1057,6 +1057,31 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         flux = make_data(coords=coords, data_array_type=td.FluxDataArray, is_complex=False)
         return td.FluxData(monitor=monitor, flux=flux)
 
+    def make_directivity_data(monitor: td.DirectivityMonitor) -> td.DirectivityData:
+        """make a random DirectivityData from a DirectivityMonitor."""
+
+        f = list(monitor.freqs)
+        r = np.atleast_1d(monitor.proj_distance)
+        theta = list(monitor.theta)
+        phi = list(monitor.phi)
+        fluxcoords = dict(f=f)
+        fluxdata = make_data(coords=fluxcoords, data_array_type=td.FluxDataArray, is_complex=False)
+        coords = dict(r=r, theta=theta, phi=phi, f=f)
+        scalar_field = make_data(
+            coords=coords, data_array_type=td.FieldProjectionAngleDataArray, is_complex=True
+        )
+        return td.DirectivityData(
+            monitor=monitor,
+            flux=fluxdata,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
         td.FieldTimeMonitor: make_field_time_data,
@@ -1065,6 +1090,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.PermittivityMonitor: make_eps_data,
         td.DiffractionMonitor: make_diff_data,
         td.FluxMonitor: make_flux_data,
+        td.DirectivityMonitor: make_directivity_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]

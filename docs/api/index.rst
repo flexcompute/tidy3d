@@ -27,6 +27,7 @@ API |:computer:|
     heat/index
     charge/index
     eme/index
+    microwave/index
     plugins/index
     spice
     constants
@@ -53,6 +54,7 @@ API |:computer:|
 .. include:: /api/heat/index.rst
 .. include:: /api/charge/index.rst
 .. include:: /api/eme/index.rst
+.. include:: /api/microwave/index.rst
 .. include:: /api/plugins/index.rst
 .. include:: /api/constants.rst
 .. include:: /api/abstract_base.rst

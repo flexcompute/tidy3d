@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC
+from math import isclose
 from typing import Any, Callable, Dict, List, Tuple, Union
 
 import autograd.numpy as np
@@ -57,6 +58,7 @@ from ..types import (
     EpsSpecType,
     Literal,
     Numpy,
+    PolarizationBasis,
     Size,
     Symmetry,
     TrackFreq,
@@ -96,6 +98,8 @@ Coords1D = ArrayFloat1D
 # how much to shift the adjoint field source for 0-D axes dimensions
 SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
 AXIAL_RATIO_CAP = 100
+# At this sampling rate, the computed area of a sphere is within ~1% of the true value.
+MIN_ANGULAR_SAMPLES_SPHERE = 10
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -118,6 +122,31 @@ class MonitorData(AbstractMonitorData, ABC):
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Dataset:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
+
+    def scale_fields_by_freq_array(
+        self, freq_array: FreqDataArray, method: str = None
+    ) -> MonitorData:
+        """Scale fields in :class:`.MonitorData` by an array of values stored in a :class:`.FreqDataArray`.
+
+        Parameters
+        ----------
+        freq_array : FreqDataArray
+            Array containing the scaling factors in the frequency domain.
+        method : str = None
+            Interpolation method to use when selecting frequency values. If None, uses default xarray
+            method. Passed to xarray's sel() method.
+
+        Returns
+        -------
+        :class:`.MonitorData`
+            A new instance of :class:`.MonitorData` with scaled field values.
+        """
+
+        # Reuse the normalize method, so we need the inverse of the scaling amplitude
+        def amplitude_fn(freq: list[float]) -> complex:
+            return 1.0 / freq_array.sel(f=freq, method=method).values
+
+        return self.normalize(amplitude_fn)
 
     def _updated(self, update: Dict) -> MonitorData:
         """Similar to ``updated_copy``, but does not actually copy components, for speed.
@@ -2518,6 +2547,94 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         # compute updated fields and their coordinates
         return self.make_renormalized_data(phase, proj_distance)
 
+    @property
+    def tangential_dims(self) -> list[str]:
+        """Tangential dimensions to a spherical surface in the spherical coordinate system."""
+        tangential_dims = ["theta", "phi"]
+        return tangential_dims
+
+    @staticmethod
+    def _check_coords_sorted(coord: np.ndarray, name: str):
+        """Helper for checking whether an array is sorted and raises an exception if it is not."""
+        is_sorted = np.all(np.diff(coord) >= 0)
+        if not is_sorted:
+            raise ValueError(f"{name} was not provided as a sorted array.")
+
+    def _check_integration_suitability(self):
+        """Checks whether the sampling of ``theta`` and ``phi`` is suitable for
+        integrating over a spherical surface."""
+        if (
+            len(self.theta) < MIN_ANGULAR_SAMPLES_SPHERE
+            or len(self.phi) < 2 * MIN_ANGULAR_SAMPLES_SPHERE
+        ):
+            raise ValueError(
+                "There are not enough sampling points along `theta` or `phi` for accurate integration. "
+                f"Currently, {len(self.theta)} samples for `theta` and {len(self.phi)} samples for `phi`. "
+                f"Consider using, at the very least, {MIN_ANGULAR_SAMPLES_SPHERE} samples for `theta` and "
+                f"{2*MIN_ANGULAR_SAMPLES_SPHERE} samples for `phi`."
+            )
+        self._check_coords_sorted(self.theta, "theta")
+        self._check_coords_sorted(self.phi, "phi")
+        if not isclose(self.theta[0], 0) or not isclose(self.theta[-1], np.pi):
+            raise ValueError(
+                "Chosen limits for `theta` are not appropriate for integration. "
+                "`theta` must range from 0 to π."
+            )
+        if not isclose(self.phi[0], 0) or not isclose(self.phi[-1], 2 * np.pi):
+            raise ValueError(
+                "Chosen limits for `phi` are not appropriate for integration. "
+                "`phi` must range from 0 to 2π."
+            )
+
+    def flux_from_projected_fields(self) -> FluxDataArray:
+        """Flux calculated by integrating the projected fields on a spherical surface.
+
+        Returns
+        -------
+        :class:`.FluxDataArray`
+            Flux in the frequency domain.
+        """
+        self._check_integration_suitability()
+        d_solid_angle = np.sin(self.Etheta.theta)
+        integrand = (self.power * d_solid_angle).sel(r=self.monitor.proj_distance)
+        flux = self.monitor.proj_distance**2 * integrand.integrate(self.tangential_dims)
+        return FluxDataArray(flux)
+
+    @staticmethod
+    def get_phi_slice(
+        field_array: FieldProjectionAngleDataArray, phi: float, symmetric: bool = False
+    ) -> FieldProjectionAngleDataArray:
+        """Get a planar slice of the :class:`.FieldProjectionAngleDataArray` along a given phi angle.
+        Extends theta range from [0, π] to [0, 2π] to create a full slice.
+
+        Parameters
+        ----------
+        field_array : :class:`.FieldProjectionAngleDataArray`
+            Field array to slice.
+        phi : float
+            Angle phi in radians to slice at.
+        symmetric : bool = False
+            If True, uses same data for both halves. If False, takes opposite phi angle
+            for back half.
+
+        Returns
+        -------
+        :class:`.FieldProjectionAngleDataArray`
+            2D slice with theta going from 0 to 2π.
+        """
+        slice_phi = field_array.sel(phi=phi, method="nearest")
+        slice_phi = slice_phi.where(slice_phi.theta < np.pi)
+        if symmetric:
+            slice_opposite_phi = field_array.sel(phi=phi, method="nearest")
+        else:
+            slice_opposite_phi = field_array.sel(phi=phi + np.pi, method="nearest")
+        slice_opposite_phi = slice_opposite_phi.where(slice_opposite_phi.theta > 0)
+        slice_opposite_phi = slice_opposite_phi.assign_coords(
+            theta=(2 * np.pi - slice_opposite_phi.theta)
+        )
+        data_array = xr.concat((slice_phi, slice_opposite_phi), dim="theta").sortby("theta")
+        return FieldProjectionAngleDataArray(data_array)
+
 
 class FieldProjectionCartesianData(AbstractFieldProjectionData):
     """Data associated with a :class:`.FieldProjectionCartesianMonitor`: components of
@@ -2627,7 +2744,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
 
     @cached_property
     def flux(self) -> FluxDataArray:
-        """Flux for projecteded field data corresponding to a Cartesian field projection monitor."""
+        """Flux for projected field data corresponding to a Cartesian field projection monitor."""
         flux = self.poynting.integrate(self.tangential_dims)
         return FluxDataArray(flux)
 
@@ -3143,7 +3260,7 @@ class DiffractionData(AbstractFieldProjectionData):
         return adj_src
 
 
-class DirectivityData(AbstractFieldProjectionData):
+class DirectivityData(FieldProjectionAngleData):
     """
     Data associated with a :class:`.DirectivityMonitor`.
 
@@ -3161,51 +3278,73 @@ class DirectivityData(AbstractFieldProjectionData):
     >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
     >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
     >>> data = DirectivityData(monitor=monitor, flux=flux_data, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
-    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field)
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces)
     """
 
     monitor: DirectivityMonitor = pd.Field(
         ...,
-        title="Directivity monitor",
+        title="Monitor",
         description="Monitor describing the angle-based projection grid on which to measure directivity data.",
     )
 
-    flux: FluxDataArray = pd.Field(..., title="Flux", description="Flux values.")
-
-    Er: FieldProjectionAngleDataArray = pd.Field(
+    flux: FluxDataArray = pd.Field(
         ...,
-        title="Er",
-        description="Spatial distribution of r-component of the electric field.",
-    )
-    Etheta: FieldProjectionAngleDataArray = pd.Field(
-        ...,
-        title="Etheta",
-        description="Spatial distribution of the theta-component of the electric field.",
-    )
-    Ephi: FieldProjectionAngleDataArray = pd.Field(
-        ...,
-        title="Ephi",
-        description="Spatial distribution of phi-component of the electric field.",
-    )
-    Hr: FieldProjectionAngleDataArray = pd.Field(
-        ...,
-        title="Hr",
-        description="Spatial distribution of r-component of the magnetic field.",
-    )
-    Htheta: FieldProjectionAngleDataArray = pd.Field(
-        ...,
-        title="Htheta",
-        description="Spatial distribution of theta-component of the magnetic field.",
-    )
-    Hphi: FieldProjectionAngleDataArray = pd.Field(
-        ...,
-        title="Hphi",
-        description="Spatial distribution of phi-component of the magnetic field.",
+        title="Flux",
+        description="Flux values that are either computed from fields recorded on the "
+        "projection surfaces or by integrating the projected fields over a spherical surface.",
     )
 
-    def normalize(
-        self, source_spectrum_fn: Callable[[float], complex]
-    ) -> Union[AbstractFieldProjectionData, FluxData]:
+    @staticmethod
+    def from_spherical_field_dataset(
+        monitor: DirectivityMonitor,
+        field_dataset: xr.Dataset,
+    ) -> DirectivityData:
+        """Creates a :class:`.DirectivityData` instance from a spherical field dataset.
+
+        Parameters
+        ----------
+        monitor : :class:`.DirectivityMonitor`
+            Monitor defining measurement parameters.
+        field_dataset : ``xr.Dataset``
+            Dataset containing spherical field components (Er, Etheta, etc.).
+            Must sample the entire spherical surface to compute flux correctly.
+
+        Returns
+        -------
+        :class:`.DirectivityData`
+            New :class:`.DirectivityData` instance with computed flux from spherical field integration.
+        """
+        f = list(monitor.freqs)
+        flux = FluxDataArray(np.zeros(len(f)), coords=dict(f=f))
+        dir_data = DirectivityData(
+            monitor=monitor,
+            flux=flux,
+            Er=field_dataset.Er,
+            Etheta=field_dataset.Etheta,
+            Ephi=field_dataset.Ephi,
+            Hr=field_dataset.Hr,
+            Htheta=field_dataset.Htheta,
+            Hphi=field_dataset.Hphi,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+        flux = dir_data.flux_from_projected_fields()
+        return dir_data.updated_copy(flux=flux)
+
+    def __add__(self, other: DirectivityData) -> DirectivityData:
+        """Form the superposition of two :class:`.DirectivityData`. Flux is recomputed by
+        integrating the projected fields over a sphere.
+
+        Note
+        ----
+        Intended use is for combining fields from different simulations that were recorded
+        using the same ``monitor``. The returned :class:`.DirectivityData` takes the ``monitor``
+        from ``self``.
+        """
+        fields_dataset = self.fields_spherical + other.fields_spherical
+        combined_data = DirectivityData.from_spherical_field_dataset(self.monitor, fields_dataset)
+        return combined_data
+
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> DirectivityData:
         """
         Return a copy of self after normalization is applied using the source
         spectrum function, for both field components and flux data.
@@ -3223,24 +3362,170 @@ class DirectivityData(AbstractFieldProjectionData):
 
         return self.copy(update=dict(fields_norm, flux=new_flux))
 
+    @staticmethod
+    def _check_valid_pol_basis(pol_basis: PolarizationBasis):
+        if pol_basis != "linear" and pol_basis != "circular":
+            raise ValueError("``pol_basis`` must be either 'linear' or 'circular'")
+
+    def partial_radiation_intensity(self, pol_basis: PolarizationBasis = "linear") -> xr.Dataset:
+        """Partial radiation intensity in the frequency domain as a function of angles theta and phi.
+        The partial radiation intensities are computed in the ``linear`` or ``circular`` polarization
+        bases. Radiation intensity is measured in units of Watts per unit solid angle.
+
+        Parameters
+        ----------
+        pol_basis : PolarizationBasis
+            The desired polarization basis used to express partial radiation intensity, either
+            ``linear`` or ``circular``.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing the partial radiation intensities split into the two polarization states.
+        """
+        self._check_valid_pol_basis(pol_basis)
+        if pol_basis == "linear":
+            E1 = self.Etheta
+            E2 = self.Ephi
+            H1 = self.Htheta
+            H2 = self.Hphi
+            keys = ("Utheta", "Uphi")
+        else:
+            E1 = self.fields_circular_polarization.Eright
+            E2 = self.fields_circular_polarization.Eleft
+            # needs extra -1 to counteract -1 in cross product below
+            H1 = -1.0 * self.fields_circular_polarization.Hleft
+            H2 = self.fields_circular_polarization.Hright
+            keys = ("Uright", "Uleft")
+
+        U_1 = (self.monitor.proj_distance**2) * 0.5 * np.real(E1 * np.conj(H2))
+        U_2 = (self.monitor.proj_distance**2) * 0.5 * np.real(-E2 * np.conj(H1))
+
+        data_arrays = (U_1, U_2)
+        return xr.Dataset(dict(zip(keys, data_arrays)))
+
     @property
-    def directivity(self) -> DataArray:
+    def radiation_intensity(self) -> FieldProjectionAngleDataArray:
+        """Radiation intensity in the frequency domain as a function of angles theta and phi.
+        Radiation intensity is measured in units of Watts per unit solid angle.
+        """
+        # Calls partial radiation intensity using default linear polarization basis
+        partial_U = self.partial_radiation_intensity()
+        return partial_U.Utheta + partial_U.Uphi
+
+    @property
+    def radiated_power(self) -> FreqDataArray:
+        """Total radiated power in the frequency domain with units of Watts."""
+        # If this data was created using FieldProjectionAngleData, the sign
+        # will already be correct. Also will be correct if monitor size is all nonzero.
+        # TODO fix this sign issue in the backend if possible
+        if (
+            isinstance(self.monitor, FieldProjectionAngleMonitor)
+            or self.monitor.size.count(0.0) == 0
+        ):
+            return FreqDataArray(self.flux.values, dict(f=self.f))
+        # The monitor could be planar and directed downward
+        sign = 1.0 if self.monitor.normal_dir == "+" else -1.0
+        return FreqDataArray(sign * self.flux.values, dict(f=self.f))
+
+    def partial_directivity(self, pol_basis: PolarizationBasis = "linear") -> xr.Dataset:
+        """Directivity in the frequency domain as a function of angles theta and phi.
+        The partial directivities are computed in the ``linear`` or ``circular`` polarization
+        bases. Directivity is a dimensionless quantity defined as the ratio
+        of the radiation intensity in a given direction to the average radiation intensity
+        over all directions.
+
+        Parameters
+        ----------
+        pol_basis : PolarizationBasis
+            The desired polarization basis used to express partial directivity, either
+            ``linear`` or ``circular``.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            Dataset containing the partial directivities split into the two polarization states.
+        """
+        self._check_valid_pol_basis(pol_basis)
+        if pol_basis == "linear":
+            rename_mapping = {"Utheta": "Dtheta", "Uphi": "Dphi"}
+        else:
+            rename_mapping = {"Uright": "Dright", "Uleft": "Dleft"}
+        # Average radiation intensity is total radiated power divided by 4 pi
+        avg_radiation_intensity = self.radiated_power / (4 * np.pi)
+        partial_U = self.partial_radiation_intensity(pol_basis=pol_basis)
+        partial_D = partial_U / avg_radiation_intensity
+        return partial_D.rename(rename_mapping)
+
+    @property
+    def directivity(self) -> FieldProjectionAngleDataArray:
         """Directivity in the frequency domain as a function of angles theta and phi.
         Directivity is a dimensionless quantity defined as the ratio of the radiation
-        intensity in a given direction to the average radiation intensity over all directions."""
+        intensity in a given direction to the average radiation intensity over all directions.
+        """
+        # Calls partial directivity using default linear polarization basis
+        partial_D = self.partial_directivity()
+        return FieldProjectionAngleDataArray(partial_D.Dtheta + partial_D.Dphi)
 
-        power_theta = 0.5 * np.real(self.Etheta * np.conj(self.Hphi))
-        power_phi = 0.5 * np.real(-self.Ephi * np.conj(self.Htheta))
-        power = power_theta + power_phi
+    def calc_radiation_efficiency(self, power_in: FreqDataArray) -> FreqDataArray:
+        """Calculate radiation efficiency as the ratio of radiated power to input power.
 
-        # Normalize the aligned flux by dividing by (4 * pi * r^2) to adjust the flux for
-        # spherical surface area normalization
-        flux_normed = self.flux / (4 * np.pi * self.monitor.proj_distance**2)
+        Parameters
+        ----------
+        power_in : FreqDataArray
+            Power supplied to the radiating element in the frequency domain, in units of Watts.
 
-        return power / flux_normed
+        Returns
+        -------
+        FreqDataArray
+            Radiation efficiency (dimensionless) in the frequency domain, computed as
+            radiated_power / power_in.
+        """
+        return FreqDataArray((self.radiated_power / power_in).values, dict(f=self.f))
+
+    def calc_partial_gain(
+        self, power_in: FreqDataArray, pol_basis: PolarizationBasis = "linear"
+    ) -> xr.Dataset:
+        """The partial gain figures of merit for antennas. The partial gains are computed
+        in the ``linear`` or ``circular`` polarization bases. Gain is dimensionless.
+
+        Parameters
+        ----------
+        power_in : FreqDataArray
+            Power, in units of Watts, supplied to the radiating element in the frequency domain.
+
+        pol_basis : PolarizationBasis
+            The desired polarization basis used to express partial gain, either
+            ``linear`` or ``circular``.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            Dataset containing the partial gains split into the two polarization states.
+        """
+        self._check_valid_pol_basis(pol_basis)
+        radiation_efficiency = self.calc_radiation_efficiency(power_in)
+        partial_D = self.partial_directivity(pol_basis=pol_basis)
+        partial_G = radiation_efficiency * partial_D
+        if pol_basis == "linear":
+            rename_mapping = {"Dtheta": "Gtheta", "Dphi": "Gphi"}
+        else:
+            rename_mapping = {"Dright": "Gright", "Dleft": "Gleft"}
+        return partial_G.rename(rename_mapping)
+
+    def calc_gain(self, power_in: FreqDataArray) -> FieldProjectionAngleDataArray:
+        """The gain figure of merit for antennas. Gain is dimensionless.
+
+        Parameters
+        ----------
+        power_in : FreqDataArray
+            Power, in units of Watts, supplied to the radiating element in the frequency domain.
+        """
+        partial_G = self.calc_partial_gain(power_in)
+        return FieldProjectionAngleDataArray(partial_G.Gtheta + partial_G.Gphi)
 
     @property
-    def axial_ratio(self) -> DataArray:
+    def axial_ratio(self) -> FieldProjectionAngleDataArray:
         """Axial Ratio (AR) in the frequency domain as a function of angles theta and phi.
         AR is a dimensionless quantity defined as the ratio of the major axis to the minor
         axis of the polarization ellipse.
@@ -3281,16 +3566,44 @@ class DirectivityData(AbstractFieldProjectionData):
         return 1 / axial_ratio_inverse
 
     @property
-    def left_polarization(self) -> DataArray:
-        "Electric far field for left-hand circular polarization"
-        "(counterclockwise component) with an angle-based projection grid."
+    def left_polarization(self) -> FieldProjectionAngleDataArray:
+        """Electric far field for left-hand circular polarization
+        (counterclockwise component) with an angle-based projection grid.
+        """
+        return (self.Etheta + 1j * self.Ephi) / np.sqrt(2)
+
+    @property
+    def right_polarization(self) -> FieldProjectionAngleDataArray:
+        """Electric far field for right-hand circular polarization
+        (clockwise component) with an angle-based projection grid.
+        """
         return (self.Etheta - 1j * self.Ephi) / np.sqrt(2)
 
     @property
-    def right_polarization(self) -> DataArray:
-        "Electric far field for right-hand circular polarization"
-        "(clockwise component) with an angle-based projection grid."
-        return (self.Etheta + 1j * self.Ephi) / np.sqrt(2)
+    def fields_circular_polarization(self) -> xr.Dataset:
+        """Electric and magnetic fields in the circular polarization basis.
+
+        Note
+        ----
+        Uses IEEE handedness convention for polarization state, which means right-handed circularly
+        polarization is associated with a clockwise rotation of the electric field vector from the
+        point of the view of the source. However, we use the physics convention for time evolution
+        of time-harmonic fields, which modifies the computation when compared to engineering references.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (``Eleft``, ``Eright``, ``Hleft``, ``Hright``)
+            in Spherical coordinates.
+        """
+        Eleft = (self.Etheta + 1j * self.Ephi) / np.sqrt(2.0)
+        Eright = (self.Etheta - 1j * self.Ephi) / np.sqrt(2.0)
+        Hleft = (self.Hphi - 1j * self.Htheta) / np.sqrt(2.0)
+        Hright = (self.Hphi + 1j * self.Htheta) / np.sqrt(2.0)
+
+        keys = ("Eleft", "Eright", "Hleft", "Hright")
+        data_arrays = (Eleft, Eright, Hleft, Hright)
+        return xr.Dataset(dict(zip(keys, data_arrays)))
 
 
 MonitorDataTypes = (

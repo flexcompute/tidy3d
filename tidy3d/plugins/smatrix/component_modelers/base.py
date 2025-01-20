@@ -11,8 +11,10 @@ import pydantic.v1 as pd
 
 from ....components.base import Tidy3dBaseModel, cached_property
 from ....components.data.data_array import DataArray
+from ....components.data.sim_data import SimulationData
 from ....components.simulation import Simulation
 from ....components.types import FreqArray
+from ....config import config
 from ....constants import HERTZ
 from ....exceptions import SetupError, Tidy3dKeyError
 from ....web.api.container import Batch, BatchData
@@ -281,3 +283,11 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
 
         new_pos = grid_centers[shifted_index]
         return new_pos - port_position
+
+    def sim_data_by_task_name(self, task_name: str) -> SimulationData:
+        """Get the simulation data by task name, avoids emitting warnings from the ``Simulation``."""
+        log_level_cache = config.logging_level
+        config.logging_level = "ERROR"
+        sim_data = self.batch_data[task_name]
+        config.logging_level = log_level_cache
+        return sim_data
