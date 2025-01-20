@@ -1893,14 +1893,30 @@ def test_polyslab_translated_grad(polyslab: td.PolySlab, x: float, y: float, z: 
     """Checks the differentiability of the translation operation of PolySlab."""
     poly = polyslab
 
-    def translated_grad(x: float, y: float, z: float) -> np.ndarray:
+    def translated_grad_with_vertices(x: float, y: float, z: float) -> anp.ndarray:
         """Computes the translated vertices of a PolySlab object."""
         new_poly = poly.translated(x, y, z)
         return new_poly.vertices
 
-    check_grads(lambda x: translated_grad(x, y, z), modes=["rev"])(x)
-    check_grads(lambda y: translated_grad(x, y, z), modes=["rev"])(y)
-    check_grads(lambda z: translated_grad(x, y, z), modes=["rev"])(z)
+    def translated_grad_with_slab_bounds(x: float, y: float, z: float) -> anp.ndarray:
+        """Computes the translated slab bounds of a PolySlab object."""
+        new_poly = poly.translated(x, y, z)
+        return anp.array([new_poly.slab_bounds[0], new_poly.slab_bounds[1]])
+
+    if poly.axis == 0:
+        check_grads(lambda x: translated_grad_with_slab_bounds(x, y, z), modes=["rev"])(x)
+    else:
+        check_grads(lambda x: translated_grad_with_vertices(x, y, z), modes=["rev"])(x)
+
+    if poly.axis == 1:
+        check_grads(lambda y: translated_grad_with_slab_bounds(x, y, z), modes=["rev"])(y)
+    else:
+        check_grads(lambda y: translated_grad_with_vertices(x, y, z), modes=["rev"])(y)
+
+    if poly.axis == 2:
+        check_grads(lambda z: translated_grad_with_slab_bounds(x, y, z), modes=["rev"])(z)
+    else:
+        check_grads(lambda z: translated_grad_with_vertices(x, y, z), modes=["rev"])(z)
 
 
 @pytest.mark.parametrize(
@@ -1920,20 +1936,36 @@ def test_polyslab_scaled_grad(
     """Checks the differentiability of the scaling operation of PolySlab."""
     poly = polyslab
 
-    def scaled_grad(x: float, y: float, z: float) -> np.ndarray:
+    def scaled_grad_with_vertices(x: float, y: float, z: float) -> anp.ndarray:
         """Computes the scaled vertices of a PolySlab object."""
         new_poly = poly.scaled(x, y, z)
         return new_poly.vertices
 
+    def scaled_grad_with_slab_bounds(x: float, y: float, z: float) -> anp.ndarray:
+        """Computes the scaled slab bounds of a PolySlab object."""
+        new_poly = poly.scaled(x, y, z)
+        return anp.array([new_poly.slab_bounds[0], new_poly.slab_bounds[1]])
+
     if expect_exception:
         with pytest.raises(ValueError, match=".*"):
-            check_grads(lambda x: scaled_grad(x, y, z), modes=["rev"])(x)
-            check_grads(lambda y: scaled_grad(x, y, z), modes=["rev"])(y)
-            check_grads(lambda z: scaled_grad(x, y, z), modes=["rev"])(z)
+            check_grads(lambda x: scaled_grad_with_vertices(x, y, z), modes=["rev"])(x)
+            check_grads(lambda y: scaled_grad_with_vertices(x, y, z), modes=["rev"])(y)
+            check_grads(lambda z: scaled_grad_with_vertices(x, y, z), modes=["rev"])(z)
     else:
-        check_grads(lambda x: scaled_grad(x, y, z), modes=["rev"])(x)
-        check_grads(lambda y: scaled_grad(x, y, z), modes=["rev"])(y)
-        check_grads(lambda z: scaled_grad(x, y, z), modes=["rev"])(z)
+        if poly.axis == 0:
+            check_grads(lambda x: scaled_grad_with_slab_bounds(x, y, z), modes=["rev"])(x)
+        else:
+            check_grads(lambda x: scaled_grad_with_vertices(x, y, z), modes=["rev"])(x)
+
+        if poly.axis == 1:
+            check_grads(lambda y: scaled_grad_with_slab_bounds(x, y, z), modes=["rev"])(y)
+        else:
+            check_grads(lambda y: scaled_grad_with_vertices(x, y, z), modes=["rev"])(y)
+
+        if poly.axis == 2:
+            check_grads(lambda z: scaled_grad_with_slab_bounds(x, y, z), modes=["rev"])(z)
+        else:
+            check_grads(lambda z: scaled_grad_with_vertices(x, y, z), modes=["rev"])(z)
 
 
 @pytest.mark.parametrize(
