@@ -12,6 +12,7 @@ from requests import HTTPError
 from rich.progress import Progress
 
 from ...components.medium import AbstractCustomMedium
+from ...components.mode.simulation import ModeSimulation
 from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import get_logging_console, log
@@ -48,7 +49,13 @@ GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
 BETA_TASK_TYPES = ["HEAT", "EME"]
 
 # map task_type to solver name for display
-SOLVER_NAME = {"FDTD": "FDTD", "HEAT": "HeatCharge", "MODE_SOLVER": "Mode", "EME": "EME"}
+SOLVER_NAME = {
+    "FDTD": "FDTD",
+    "HEAT": "HeatCharge",
+    "MODE_SOLVER": "Mode",
+    "EME": "EME",
+    "MODE": "Mode",
+}
 
 
 def _get_url(task_id: str) -> str:
@@ -232,6 +239,7 @@ def upload(
         It will not run until you explicitly tell it to do so with :meth:`tidy3d.web.api.webapi.start`.
 
     """
+
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
@@ -259,6 +267,7 @@ def upload(
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER" or task_type == "MODE":
         simulation = get_reduced_simulation(simulation, reduce_simulation)
 
     task.upload_simulation(
@@ -303,7 +312,10 @@ def get_reduced_simulation(simulation, reduce_simulation):
     """
 
     if reduce_simulation == "auto":
-        sim_mediums = simulation.simulation.scene.mediums
+        if isinstance(simulation, ModeSimulation):
+            sim_mediums = simulation.scene.mediums
+        else:
+            sim_mediums = simulation.simulation.scene.mediums
         contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
         reduce_simulation = contains_custom
 

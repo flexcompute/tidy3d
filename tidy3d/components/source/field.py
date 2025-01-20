@@ -14,7 +14,7 @@ from ...log import log
 from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ..data.dataset import FieldDataset
 from ..data.validators import validate_can_interpolate, validate_no_nans
-from ..mode import ModeSpec
+from ..mode_spec import ModeSpec
 from ..types import (
     TYPE_TAG_STR,
     Ax,

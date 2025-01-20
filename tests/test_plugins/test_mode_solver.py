@@ -7,11 +7,11 @@ import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
+from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
+from tidy3d.components.mode.solver import compute_modes
 from tidy3d.exceptions import DataError, SetupError
 from tidy3d.plugins.mode import ModeSolver
-from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
-from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.web.core.environment import Env
 
 from ..utils import AssertLogLevel, cartesian_to_unstructured

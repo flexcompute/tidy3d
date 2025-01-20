@@ -1933,6 +1933,16 @@ class Box(SimplePlaneIntersection, Centered):
         size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
         return cls(center=center, size=size, **kwargs)
 
+    @cached_property
+    def _normal_axis(self) -> Axis:
+        """Axis normal to the Box. Errors if box is not planar."""
+        if self.size.count(0.0) != 1:
+            raise ValidationError(
+                "Tried to get 'normal_axis' of 'Box' that is not planar. "
+                f"Given 'size={self.size}.'"
+            )
+        return self.size.index(0.0)
+
     @classmethod
     def surfaces(cls, size: Size, center: Coordinate, **kwargs):
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.

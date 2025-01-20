@@ -8,7 +8,7 @@ from ..log import log
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .data.dataset import Dataset, FieldDataset
 from .geometry.base import Box
-from .mode import ModeSpec
+from .mode_spec import ModeSpec
 from .types import Tuple
 
 """ Explanation of pydantic validators:
