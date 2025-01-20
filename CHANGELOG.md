@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bandgap narrowing models for `SemiconductorMedium`: `SlotboomBandGapNarrowing`
 - Generation-recombination models for `SemiconductorMedium`: `ShockleyReedHallRecombination`, `RadiativeRecombination`, `AugerRecombination`
 - Accessors and length functions implemented for `Result` class in design plugin.
+- New interface for mode solver simulations via `ModeSimulation` class.
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.

@@ -7,9 +7,9 @@ import scipy.linalg as linalg
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
-from ...components.base import Tidy3dBaseModel
-from ...components.types import EpsSpecType, ModeSolverType, Numpy
 from ...constants import C_0, ETA_0, fp_eps, pec_val
+from ..base import Tidy3dBaseModel
+from ..types import EpsSpecType, ModeSolverType, Numpy
 from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
 from .transforms import angled_transform, radial_transform

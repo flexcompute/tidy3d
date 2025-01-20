@@ -18,6 +18,8 @@ from ...components.data.monitor_data import ModeSolverData
 from ...components.data.sim_data import SimulationData
 from ...components.eme.data.sim_data import EMESimulationData
 from ...components.eme.simulation import EMESimulation
+from ...components.mode.data.sim_data import ModeSimulationData
+from ...components.mode.simulation import ModeSimulation
 from ...components.simulation import Simulation
 from ...plugins.mode.mode_solver import ModeSolver
 from ..core.file_util import (
@@ -28,9 +30,16 @@ from ..core.file_util import (
 from ..core.stub import TaskStub, TaskStubData
 from ..core.types import TaskType
 
-SimulationType = Union[Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation, ModeSolver]
+SimulationType = Union[
+    Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation, ModeSolver, ModeSimulation
+]
 SimulationDataType = Union[
-    SimulationData, HeatChargeSimulationData, HeatSimulationData, EMESimulationData, ModeSolverData
+    SimulationData,
+    HeatChargeSimulationData,
+    HeatSimulationData,
+    EMESimulationData,
+    ModeSolverData,
+    ModeSimulationData,
 ]
 
 
@@ -77,6 +86,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = HeatChargeSimulation.from_file(file_path)
         elif "EMESimulation" == type_:
             sim = EMESimulation.from_file(file_path)
+        elif "ModeSimulation" == type_:
+            sim = ModeSimulation.from_file(file_path)
 
         return sim
 
@@ -135,6 +146,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.HEAT.name
         elif isinstance(self.simulation, EMESimulation):
             return TaskType.EME.name
+        elif isinstance(self.simulation, ModeSimulation):
+            return TaskType.MODE.name
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
@@ -185,6 +198,8 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             sim_data = HeatChargeSimulationData.from_file(file_path)
         elif "EMESimulationData" == type_:
             sim_data = EMESimulationData.from_file(file_path)
+        elif "ModeSimulationData" == type_:
+            sim_data = ModeSimulationData.from_file(file_path)
 
         return sim_data
 
@@ -240,7 +255,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                 )
 
         if (
-            not isinstance(stub_data, ModeSolverData)
+            not isinstance(stub_data, (ModeSolverData, ModeSimulationData))
             and "WARNING" in stub_data.log
             and not warned_about_warnings
         ):

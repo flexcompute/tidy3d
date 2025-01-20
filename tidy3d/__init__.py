@@ -247,9 +247,13 @@ from .components.medium import (
     TwoPhotonAbsorption,
     medium_from_nk,
 )
+from .components.mode.data.sim_data import ModeSimulationData
+
+# Mode
+from .components.mode.simulation import ModeSimulation
 
 # modes
-from .components.mode import ModeSpec
+from .components.mode_spec import ModeSpec
 
 # monitors
 from .components.monitor import (
@@ -637,6 +641,8 @@ __all__ = [
     "EMELengthSweep",
     "EMEModeSweep",
     "EMEFreqSweep",
+    "ModeSimulation",
+    "ModeSimulationData",
     "FixedAngleSpec",
     "FixedInPlaneKSpec",
     "MultiPhysicsMedium",
