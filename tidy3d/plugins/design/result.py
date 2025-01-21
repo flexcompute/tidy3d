@@ -427,3 +427,16 @@ class Result(Tidy3dBaseModel):
             return new_result
 
         return self.updated_copy(values=new_values, coords=new_coords)
+
+    def __len__(self):
+        """Implement len function to return the number of items in the result."""
+
+        return len(self.coords)
+
+    def __getitem__(self, data_index):
+        """Implement the accessor function to index into the coordinates and values of the result."""
+
+        features = self.coords[data_index]
+        labels = self.values[data_index]
+
+        return np.array(features), np.array(labels)

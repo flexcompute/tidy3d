@@ -782,3 +782,72 @@ def test_genalg_run_count():
 
     # Check that the result and the aux are the same value
     assert all(df["output"] == df["aux_key_0"])
+
+
+@pytest.mark.parametrize(
+    "dims, coords, values, multi_val",
+    [
+        (("a", "b", "c"), ((1, 0, 1), (2, 3, 4), (5, 1, 2)), (1, 2, 3), False),
+        (("a", "b", "c"), ((5, 2, 0), (1, 2, 3), (3, 4, 1)), ((3, 4), (4, 6), (6, 9)), True),
+        (("x", "y", "z", "t"), ((1, 2, 3, 4), (5, 6, 7, 8)), (5, 3), False),
+        (tuple("a"), (tuple("b"), tuple("c")), ("d", "e"), False),
+    ],
+)
+def test_result_accessor_and_len(dims, coords, values, multi_val):
+    """Test the accessor for Result lines up with regular indexing into the coordinates and values
+    and that the length matches that of the coordinates and values. Finally, since we have defined
+    accessors and length, ensure we can cast the Result class to a list and tuple"""
+
+    result = tdd.Result(dims=dims, values=values, coords=coords)
+
+    for idx in range(0, len(values)):
+        coord, value = result[idx]
+
+        assert all(coord == coords[idx])
+
+        if multi_val:
+            assert all(value == values[idx])
+        else:
+            assert value == values[idx]
+
+    assert len(result) == len(coords)
+    assert len(result) == len(values)
+
+    result_list = list(result)
+    result_tuple = tuple(result)
+
+
+def test_dim_coord_alignment():
+    """Test that the dims coming out of the optimization method align with the ordering of the coordinates.
+    The ordering of these dimensions from the optimization can differ from the initial ordering of dimensions
+    input into the DesignSpace."""
+    bay_opt = tdd.MethodBayOpt(initial_iter=5, n_iter=2, seed=1)
+
+    parameters_sweep = [
+        [
+            tdd.ParameterFloat(name="radius", span=(1, 5)),
+            tdd.ParameterFloat(name="alpha", span=(-5, -1)),
+        ],
+        [
+            tdd.ParameterFloat(name="alpha", span=(-5, -1)),
+            tdd.ParameterFloat(name="radius", span=(1, 5)),
+        ],
+    ]
+
+    for parameters in parameters_sweep:
+        design_space = tdd.DesignSpace(
+            parameters=parameters, method=bay_opt, name="bay opt", task_name="bayesian"
+        )
+
+        def opt_fn(radius, alpha):
+            return radius**2 - alpha * radius + alpha**2 - 2 * radius + 2 * alpha
+
+        result = design_space.run(opt_fn)
+
+        # get the location of these parameters according to the result
+        radius_parameter_location = result.dims.index("radius")
+        alpha_parameter_location = result.dims.index("alpha")
+
+        # make sure each of the coordinates (as given by their dimension) make sense with their allowed spans
+        assert all(coord[radius_parameter_location] > 0 for coord in result.coords)
+        assert all(coord[alpha_parameter_location] < 0 for coord in result.coords)

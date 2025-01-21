@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobility models for `SemiconductorMedium`: `ConstantMobilityModel`, `CaugheyThomasMobility`
 - Bandgap narrowing models for `SemiconductorMedium`: `SlotboomBandGapNarrowing`
 - Generation-recombination models for `SemiconductorMedium`: `ShockleyReedHallRecombination`, `RadiativeRecombination`, `AugerRecombination`
+- Accessors and length functions implemented for `Result` class in design plugin.
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validation error in inverse design plugin when simulation has no sources by adding a source existence check before validating pixel size.
 - System-dependent floating-point precision issue in EMEGrid validation.
 - Fixed magnitude of gradient computation in `CustomMedium` by accounting properly for full volume element when permittivity data is defined over less dimensions than the medium.
+- Fixed key ordering in design plugin when returning `Result` from an optimization method run.
 
 ## [2.8.0rc1] - 2024-12-17
 

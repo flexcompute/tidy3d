@@ -124,7 +124,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_args_coords_T = list(map(list, zip(*fn_args_coords)))
 
         return Result(
-            dims=self.dims,
+            dims=tuple(fn_args[0].keys()),
             values=fn_values,
             coords=fn_args_coords_T,
             fn_source=fn_source,
