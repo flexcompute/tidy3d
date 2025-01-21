@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import pydantic.v1 as pd
@@ -10,8 +10,7 @@ import pydantic.v1 as pd
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
     SpatialDataArray,
-    SteadyCapacitanceVoltageDataArray,
-    SteadyCurrentVoltageDataArray,
+    SteadyVoltageDataArray,
 )
 from tidy3d.components.data.utils import (
     TetrahedralGridDataset,
@@ -29,6 +28,50 @@ from tidy3d.components.types import Ax, Literal, RealFieldVal
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
+
+from ...base import Tidy3dBaseModel
+
+
+class DeviceCharacteristics(Tidy3dBaseModel):
+    """Stores device characteristics. For example, in steady-state it stores
+    the steady DC capacitance (provided an array of voltages has been defined
+    in the simulation).
+
+    Example
+    -------
+
+    >>> import tidy3d as td
+    >>> C = [0, 1, 4]
+    >>> V = [-1, -0.5, 0.5]
+    >>> intensities = [0.1, 1.5, 3.6]
+    >>> capacitance = SteadyVoltageDataArray(data=C, coords={"v": V})
+    >>> current_voltage = SteadyVoltageDataArray(data=intensities, coords={"v": V})
+    >>> device_characteristics = DeviceCharacteristics(
+    ...     steady_dc_hole_capacitance=capacitance,
+    ...     steady_dc_current_voltage=current_voltage,
+    ... )
+
+    """
+
+    steady_dc_hole_capacitance: Optional[SteadyVoltageDataArray] = pd.Field(
+        None,
+        title="Steady DC hole capacitance",
+        description="Device steady DC capacitance data based on holes. If the simulation "
+        "has converged, these result should be close to that of electrons.",
+    )
+
+    steady_dc_electron_capacitance: Optional[SteadyVoltageDataArray] = pd.Field(
+        None,
+        title="Steady DC electron capacitance",
+        description="Device steady DC capacitance data based on electrons. If the simulation "
+        "has converged, these result should be close to that of holes.",
+    )
+
+    steady_dc_current_voltage: Optional[SteadyVoltageDataArray] = pd.Field(
+        None,
+        title="Steady DC current-voltage",
+        description="Device steady DC current-voltage relation for the device.",
+    )
 
 
 class HeatChargeSimulationData(AbstractSimulationData):
@@ -87,35 +130,12 @@ class HeatChargeSimulationData(AbstractSimulationData):
         "associated with the monitors of the original :class:`.Simulation`.",
     )
 
-    device_characteristics: Optional[Dict] = pd.Field(
+    device_characteristics: Optional[DeviceCharacteristics] = pd.Field(
         None,
         title="Device characteristics",
         description="Data characterizing the device. Current characteristics include: "
         "'iv_curve' for and I-V curve and 'cv_curve' for a capacitance curve.",
     )
-
-    @pd.validator("device_characteristics", pre=True)
-    def validate_device_characteristics(cls, val):
-        if val is None:
-            return val
-
-        validated_dict = {}
-        for key, dc in val.items():
-            if isinstance(dc, SteadyCapacitanceVoltageDataArray):
-                validated_dict[key] = SteadyCapacitanceVoltageDataArray(
-                    data=dc.data,
-                    dims=["Voltage (V)"],
-                    coords=dc.coords,
-                    attrs={"long_name": "Capacitance (fF)"},
-                )
-            elif isinstance(dc, SteadyCurrentVoltageDataArray):
-                validated_dict[key] = SteadyCurrentVoltageDataArray(
-                    data=dc.data,
-                    dims=["Voltage (V)"],
-                    coords=dc.coords,
-                    attrs={"long_name": "Current (A)"},
-                )
-        return validated_dict
 
     @equal_aspect
     @add_ax_if_none

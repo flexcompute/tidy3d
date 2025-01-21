@@ -1145,34 +1145,20 @@ class ChargeDataArray(DataArray):
     _dims = ("n", "p")
 
 
-class SteadyCurrentVoltageDataArray(DataArray):
-    """Semiconductor I-V curve data array.
+class SteadyVoltageDataArray(DataArray):
+    """Steady voltage data array. Data array used with steady state
+    simulations with voltage as dimension.
 
     Example
     -------
-    >>> I = [0. 0, 1, 4]
-    >>> V = [-1, -0.5, 0, 0.5]
-    >>> td = SteadyCurrentVoltageDataArray(data=I, coords={"Voltage (V)": V})
+    >>> import tidy3d as td
+    >>> intensities = [0, 1, 4]
+    >>> V = [-1, -0.5, 0]
+    >>> voltage_dataarray = td.SteadyVoltageDataArray(data=intensities, coords={"v": V})
     """
 
     __slots__ = ()
-    _dims = ("Voltage (V)",)
-    _data_attrs = {"long_name": "Current (A)"}
-
-
-class SteadyCapacitanceVoltageDataArray(DataArray):
-    """Semiconductor DC capacitance variations with respect to voltage.
-
-    Example
-    -------
-    >>> C = [0. 0, 1, 4]
-    >>> V = [-1, -0.5, 0, 0.5]
-    >>> td = SteadyCapacitanceVoltageDataArray(data=C, coords={"Voltage (V)": V})
-    """
-
-    __slots__ = ()
-    _dims = ("Voltage (V)",)
-    _data_attrs = {"long_name": "Capacitance (fF)"}
+    _dims = ("v",)
 
 
 class PointDataArray(DataArray):
@@ -1234,14 +1220,14 @@ class IndexedDataArray(DataArray):
     _dims = ("index",)
 
 
-class IndexVoltageDataArray(DataArray):
+class IndexedVoltageDataArray(DataArray):
     """Stores a two-dimensional array with coordinates ``index`` and ``voltage``, where
     ``index`` is usually associated with ``PointDataArray`` and ``voltage`` indicates at what
     bias/DC-voltage the data was obtained with.
 
     Example
     -------
-    >>> indexed_array = IndexVoltageDataArray(
+    >>> indexed_array = IndexedVoltageDataArray(
     ...     (1+1j) * np.random.random((3,2)), coords=dict(index=np.arange(3), voltage=[-1, 1])
     ... )
     """
@@ -1295,13 +1281,12 @@ DATA_ARRAY_TYPES = [
     EMEModeIndexDataArray,
     EMEFreqModeDataArray,
     ChargeDataArray,
-    SteadyCurrentVoltageDataArray,
-    SteadyCapacitanceVoltageDataArray,
+    SteadyVoltageDataArray,
     PointDataArray,
     CellDataArray,
     IndexedDataArray,
-    IndexVoltageDataArray,
+    IndexedVoltageDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
-IndexedDataArrayTypes = Union[IndexedDataArray, IndexVoltageDataArray]
+IndexedDataArrayTypes = Union[IndexedDataArray, IndexedVoltageDataArray]

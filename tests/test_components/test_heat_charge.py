@@ -700,6 +700,19 @@ def test_grid_spec_validation(grid_specs):
         distance_grid.updated_copy(distance_interface=2, distance_bulk=1)
 
 
+def test_device_characteristics():
+    C = [0, 1, 4]
+    V = [-1, -0.5, 0]
+    intensities = [0.1, 1.5, 3.6]
+    capacitance = td.SteadyVoltageDataArray(data=C, coords={"v": V})
+    current_voltage = td.SteadyVoltageDataArray(data=intensities, coords={"v": V})
+    _ = td.DeviceCharacteristics(
+        steady_dc_hole_capacitance=capacitance,
+        steady_dc_electron_capacitance=capacitance,
+        steady_dc_current_voltage=current_voltage,
+    )
+
+
 def test_heat_charge_sources(structures):
     """Tests whether heat-charge sources can be created and associated warnings."""
     # this shouldn't issue warning
@@ -794,7 +807,6 @@ class TestCharge:
     def Si_p(self):
         return td.MultiPhysicsMedium(
             charge=td.SemiconductorMedium(
-                conductivity=1,
                 permittivity=11.7,
                 N_d=0,
                 N_a=CHARGE_SIMULATION.acceptors,
@@ -806,7 +818,6 @@ class TestCharge:
     def Si_n(self):
         return td.MultiPhysicsMedium(
             charge=td.SemiconductorMedium(
-                conductivity=1,
                 permittivity=11.7,
                 N_d=CHARGE_SIMULATION.donors,
                 N_a=0,

@@ -30,13 +30,6 @@ from tidy3d.constants import (
 class AbstractChargeMedium(AbstractMedium):
     """Abstract class for Charge specifications"""
 
-    conductivity: pd.PositiveFloat = pd.Field(
-        1,
-        title="TODO MARC DECIDE VALUE conductivity",
-        description=f"Electric conductivity of material in units of {CONDUCTIVITY}.",
-        units=CONDUCTIVITY,
-    )
-
     permittivity: float = pd.Field(
         1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )

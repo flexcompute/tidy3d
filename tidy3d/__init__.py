@@ -19,7 +19,11 @@ from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
 )
-from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
+from tidy3d.components.tcad.data.sim_data import (
+    DeviceCharacteristics,
+    HeatChargeSimulationData,
+    HeatSimulationData,
+)
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
     SteadyFreeCarrierData,
@@ -105,7 +109,7 @@ from .components.data.data_array import (
     FluxTimeDataArray,
     HeatDataArray,
     IndexedDataArray,
-    IndexVoltageDataArray,
+    IndexedVoltageDataArray,
     ModeAmpsDataArray,
     ModeIndexDataArray,
     PointDataArray,
@@ -115,8 +119,7 @@ from .components.data.data_array import (
     ScalarModeFieldDataArray,
     SpatialDataArray,
     SpatialVoltageDataArray,
-    SteadyCapacitanceVoltageDataArray,
-    SteadyCurrentVoltageDataArray,
+    SteadyVoltageDataArray,
 )
 from .components.data.dataset import (
     FieldDataset,
@@ -544,6 +547,7 @@ __all__ = [
     "HeatSimulation",
     "HeatSimulationData",
     "HeatChargeSimulationData",
+    "DeviceCharacteristics",
     "TemperatureBC",
     "ConvectionBC",
     "HeatFluxBC",
@@ -580,9 +584,8 @@ __all__ = [
     "PointDataArray",
     "CellDataArray",
     "IndexedDataArray",
-    "IndexVoltageDataArray",
-    "SteadyCurrentVoltageDataArray",
-    "SteadyCapacitanceVoltageDataArray",
+    "IndexedVoltageDataArray",
+    "SteadyVoltageDataArray",
     "TriangularGridDataset",
     "TetrahedralGridDataset",
     "medium_from_nk",

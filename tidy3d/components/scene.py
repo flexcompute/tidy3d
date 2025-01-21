@@ -40,6 +40,7 @@ from .data.utils import (
 from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, traverse_geometries
 from .grid.grid import Coords, Grid
+from .material.multi_physics import MultiPhysicsMedium
 from .medium import (
     AbstractCustomMedium,
     AbstractPerturbationMedium,
@@ -462,11 +463,12 @@ class Scene(Tidy3dBaseModel):
         """Constructs the plot parameters for a given medium in scene.plot()."""
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        is_pec = False
-        if hasattr(medium, "is_pec"):
+
+        if isinstance(medium, MultiPhysicsMedium):
+            is_pec = medium.optical is not None and medium.optical.is_pec
+            is_time_modulated = medium.optical is not None and medium.optical.is_time_modulated
+        else:
             is_pec = medium.is_pec
-        is_time_modulated = False
-        if hasattr(medium, "is_time_modulated"):
             is_time_modulated = medium.is_time_modulated
 
         if mat_index == 0 or medium == self.medium:

@@ -9,9 +9,9 @@ import pydantic.v1 as pd
 from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.data_array import (
     DataArray,
-    IndexVoltageDataArray,
+    IndexedVoltageDataArray,
     SpatialDataArray,
-    SteadyCapacitanceVoltageDataArray,
+    SteadyVoltageDataArray,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
@@ -127,7 +127,7 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
 
         for field, data in field_data.items():
             if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
-                if not isinstance(data.values, IndexVoltageDataArray):
+                if not isinstance(data.values, IndexedVoltageDataArray):
                     raise ValueError(
                         f"In the data associated with monitor {mnt}, the field {field} does not contain "
                         "data associated to any voltage value."
@@ -196,14 +196,14 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
         description="Capacitance data associated with a Charge simulation.",
     )
 
-    hole_capacitance: SteadyCapacitanceVoltageDataArray = pd.Field(
+    hole_capacitance: SteadyVoltageDataArray = pd.Field(
         None,
         title="Hole capacitance",
         description=r"Small signal capacitance ($\frac{dQ_p}{dV}$) associated to the monitor.",
     )
     # C_p = hole_capacitance
 
-    electron_capacitance: SteadyCapacitanceVoltageDataArray = pd.Field(
+    electron_capacitance: SteadyVoltageDataArray = pd.Field(
         None,
         title="Electron capacitance",
         description=r"Small signal capacitance ($\frac{dQn}{dV}$) associated to the monitor.",

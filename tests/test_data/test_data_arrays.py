@@ -299,6 +299,12 @@ def test_heat_data_array():
     _ = td.HeatDataArray((1 + 1j) * np.random.random((3,)), coords=dict(T=T))
 
 
+def test_steady_voltage_data_array():
+    intensities = [0.0, 1, 4]
+    V = [-1, -0.5, 0]
+    _ = td.SteadyVoltageDataArray(data=intensities, coords={"v": V})
+
+
 def test_charge_data_array():
     n = [0, 1e-12, 2e-12]
     p = [0, 3e-12, 4e-12]
