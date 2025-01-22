@@ -2833,6 +2833,8 @@ class Simulation(AbstractYeeGridSimulation):
 
                     # make sure medium frequency range includes all monitor frequencies
                     fmin_med, fmax_med = medium.frequency_range
+                    sci_fmin_med, sci_fmax_med = cls._scientific_notation(fmin_med, fmax_med)
+
                     if fmin_mon < fmin_med or fmax_mon > fmax_med:
                         if medium_index == 0:
                             medium_str = "The simulation background medium"
@@ -2849,7 +2851,7 @@ class Simulation(AbstractYeeGridSimulation):
                             ]
 
                         consolidated_logger.warning(
-                            f"{medium_str} has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
+                            f"{medium_str} has a frequency range: ({sci_fmin_med}, {sci_fmax_med}) "
                             "(Hz) that does not fully cover the frequencies contained in "
                             f"monitors[{monitor_index}]. "
                             "This can cause inaccuracies in the recorded results.",
@@ -2875,6 +2877,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
+        sci_fmin, sci_fmax = cls._scientific_notation(freq_min, freq_max)
 
         with log as consolidated_logger:
             for monitor_index, monitor in enumerate(val):
@@ -2885,7 +2888,7 @@ class Simulation(AbstractYeeGridSimulation):
                 if freqs.min() < freq_min or freqs.max() > freq_max:
                     consolidated_logger.warning(
                         f"monitors[{monitor_index}] contains frequencies "
-                        f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
+                        f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
                         "(Hz) as defined by the sources.",
                         custom_loc=["monitors", monitor_index, "freqs"],
                     )

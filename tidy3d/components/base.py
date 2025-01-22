@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import os
 import pathlib
 import tempfile
@@ -1161,3 +1162,40 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         fields[hash_].append((key, index))
 
         return fields
+
+    @staticmethod
+    def _scientific_notation(
+        min_val: float, max_val: float, min_digits: int = 4
+    ) -> Tuple[str, str]:
+        """
+        Convert numbers to scientific notation, displaying only digits up to the point of difference,
+        with a minimum number of significant digits specified by `min_digits`.
+        """
+
+        def to_sci(value: float, exponent: int, precision: int) -> str:
+            normalized_value = value / (10**exponent)
+            return f"{normalized_value:.{precision}f}e{exponent}"
+
+        if min_val == 0 or max_val == 0:
+            return f"{min_val:.0e}", f"{max_val:.0e}"
+
+        exponent_min = math.floor(math.log10(abs(min_val)))
+        exponent_max = math.floor(math.log10(abs(max_val)))
+
+        common_exponent = min(exponent_min, exponent_max)
+        normalized_min = min_val / (10**common_exponent)
+        normalized_max = max_val / (10**common_exponent)
+
+        if normalized_min == normalized_max:
+            precision = min_digits
+        else:
+            precision = 0
+            while round(normalized_min, precision) == round(normalized_max, precision):
+                precision += 1
+
+        precision = max(precision, min_digits)
+
+        sci_min = to_sci(min_val, common_exponent, precision)
+        sci_max = to_sci(max_val, common_exponent, precision)
+
+        return sci_min, sci_max

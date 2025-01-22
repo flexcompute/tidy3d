@@ -232,3 +232,28 @@ def test_attrs(tmp_path):
     obj.attrs["not_serializable"] = type
     with pytest.raises(TypeError):
         obj.json()
+
+
+@pytest.mark.parametrize(
+    "min_val, max_val, min_digits, expected",
+    [
+        (1234567, 1234577, 4, ("1.23457e6", "1.23458e6")),
+        (1234567, 1234577, 6, ("1.234567e6", "1.234577e6")),
+        (1.23e-3, 1.28e-3, 4, ("1.2300e-3", "1.2800e-3")),
+        (123456789012345, 123456789012346, 4, ("1.23456789012345e14", "1.23456789012346e14")),
+        (123656789012345, 123756789012346, 4, ("1.2366e14", "1.2376e14")),
+        (123, 123, 4, ("1.2300e2", "1.2300e2")),
+    ],
+    ids=[
+        "default_min_digits",
+        "increased_min_digits",
+        "small_numbers",
+        "large_numbers_precise",
+        "large_numbers_rounded",
+        "identical_numbers",
+    ],
+)
+def test_scientific_notation(min_val, max_val, min_digits, expected):
+    """Test the _scientific_notation method with various inputs."""
+    result = Tidy3dBaseModel._scientific_notation(min_val, max_val, min_digits=min_digits)
+    assert result == expected
