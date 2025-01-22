@@ -2897,7 +2897,7 @@
         "snapping_points": [],
         "type": "GridSpec"
     },
-    "version": "2.7.8",
+    "version": "2.7.9",
     "lumped_elements": [],
     "subpixel": false,
     "simulation_type": "tidy3d",
