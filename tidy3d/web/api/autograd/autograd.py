@@ -704,7 +704,7 @@ def _run_async_bwd(
             return sim_fields_vjp_dict
 
         task_names_adj = list(sims_to_run.keys())
-        task_names_fwd = [name.rstrip("_adjoint") for name in task_names_adj]
+        task_names_fwd = [name.removesuffix("_adjoint") for name in task_names_adj]
 
         if local_gradient:
             # run adjoint simulation
