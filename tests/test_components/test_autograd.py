@@ -755,7 +755,7 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"1", "2", "3", "4"}
+    task_names = {"test_a", "adjoint", "task1", "_test"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}

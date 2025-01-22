@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Gradient inaccuracy when a multi-frequency monitor is used but a single frequency is selected.
 - Revert single cell center approximation for custom medium gradient.
+- Potential task name mismatches between forward and adjoint simulations in batch tasks.
 
 ## [2.7.7] - 2024-11-15
 
