@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - System-dependent floating-point precision issue in EMEGrid validation.
 - Fixed magnitude of gradient computation in `CustomMedium` by accounting properly for full volume element when permittivity data is defined over less dimensions than the medium.
 - Fixed key ordering in design plugin when returning `Result` from an optimization method run.
+- Bug in `Batch`, where duplicate folders might be created in the Web UI if the folder did not already exist.
 
 ## [2.8.0rc1] - 2024-12-17
 
