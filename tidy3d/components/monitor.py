@@ -78,6 +78,11 @@ class Monitor(AbstractMonitor):
         """Size of intermediate data recorded by the monitor during a solver run."""
         return self.storage_size(num_cells=num_cells, tmesh=tmesh)
 
+    def make_adjoint_proxy_monitor(self) -> AbstractMonitor:
+        """Create a proxy monitor to be used in adjoint computations. By default,
+        each monitor is sufficient for creating the adjoint source."""
+        return self
+
 
 class FreqMonitor(Monitor, ABC):
     """:class:`Monitor` that records data in the frequency-domain."""
@@ -605,6 +610,20 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
     * `THz integrated demultiplexer/filter based on a ring resonator <../../notebooks/THzDemultiplexerFilter.html>`_
     """
+
+    def make_adjoint_proxy_monitor(self) -> FieldMonitor:
+        """Create a proxy FieldMonitor for the FluxMonitor to ensure enough information is
+        available when computing the adjoint source."""
+        return FieldMonitor(
+            size=self.size,
+            center=self.center,
+            freqs=self.freqs,
+            fields=("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"),
+            name=self.name,
+            colocate=self.colocate,
+            interval_space=self.interval_space,
+            apodization=self.apodization,
+        )
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""

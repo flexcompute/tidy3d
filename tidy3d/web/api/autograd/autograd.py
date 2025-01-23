@@ -400,6 +400,18 @@ def _run_primitive(
 
     td.log.info("running primitive '_run_primitive()'")
 
+    adjoint_proxy_monitors = []
+    for monitor_ in sim_original.monitors:
+        mnt_proxy = monitor_.make_adjoint_proxy_monitor()
+
+        adjoint_proxy_monitors.append(mnt_proxy)
+
+    proxy_monitors = [
+        sim_original.monitors[idx].make_adjoint_proxy_monitor()
+        for idx in range(0, len(sim_original.monitors))
+    ]
+    sim_original = sim_original.copy(update=dict(monitors=proxy_monitors))
+
     # compute the combined simulation for both local and remote, so we can validate it
     sim_combined = setup_fwd(
         sim_fields=sim_fields,

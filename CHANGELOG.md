@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for quasi-uniform grid specifications via `QuasiUniformGrid` that subclasses from `GridSpec1d`. The grids are almost uniform, but can adjust locally to the edge of structure bounding boxes, and snapping points.
 - New field `min_steps_per_sim_size` in `AutoGrid` that sets minimal number of grid steps per longest edge length of simulation domain.
 - New field `shadow` in `MeshOverrideStructure` that sets grid size in overlapping region according to structure list or minimal grid size.
+- `FluxData` can now be used in autograd. The `FluxMonitor` is replaced with a `FieldMonitor` to create the proper adjoint source.
 
 ### Changed
 - `ModeMonitor` and `ModeSolverMonitor` now use the default `td.ModeSpec()` with `num_modes=1` when `mode_spec` is not provided.

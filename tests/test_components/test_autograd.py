@@ -1730,8 +1730,8 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
     assert not np.any(np.isclose(grad_multi, 0))
 
 
-def test_error_flux(use_emulated_run):
-    """Make sure proper error raised if differentiating w.r.t. FluxData."""
+def test_flux_grad_through_field(use_emulated_run):
+    """Test we can differentiate through FluxData via creation of FieldMonitor."""
 
     def objective(params):
         structure_traced = make_structures(params)["medium"]
@@ -1742,9 +1742,6 @@ def test_error_flux(use_emulated_run):
         data = run(sim, task_name="flux_error")
         return anp.sum(data["flux"].flux.values)
 
-    with pytest.raises(
-        NotImplementedError, match="Could not formulate adjoint source for 'FluxMonitor' output"
-    ):
         g = ag.grad(objective)(params0)
 
 
