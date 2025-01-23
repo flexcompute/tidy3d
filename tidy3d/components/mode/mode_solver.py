@@ -346,7 +346,7 @@ class ModeSolver(Tidy3dBaseModel):
         normal_axis = plane.size.index(0.0)
         mode_symmetry = list(simulation.symmetry)
         for dim in range(3):
-            if simulation.center[dim] != plane.center[dim]:
+            if not isclose(simulation.center[dim], plane.center[dim]):
                 mode_symmetry[dim] = 0
         _, solver_sym = plane.pop_axis(mode_symmetry, axis=normal_axis)
         return solver_sym

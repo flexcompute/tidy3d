@@ -1694,9 +1694,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
 
         # combine all data into dictionary
-        if coord_key[0] == "E":
-            # off-diagonal components are sampled at respective locations (eg. `eps_xy` at `Ex`)
-            coords = grid[coord_key[0:2]]
+        if coord_key[0] == "E" and len(coord_key) > 2:
+            # off-diagonal components are sampled at grid boundaries
+            coords = grid["boundaries"]
+            coords = Coords(x=coords.x[:-1], y=coords.y[:-1], z=coords.z[:-1])
         else:
             coords = grid[coord_key]
         return make_eps_data(coords)
