@@ -179,7 +179,7 @@ Further Information
 
   install
   lectures/index
-  notebooks/docs/index
+  Example Library <https://flexcompute-tidy3d-notebooks-docs.readthedocs-hosted.com/en/demo-test-self_contained_notebooks/>
   faq/docs/index
   api/index
   development/index
