@@ -274,6 +274,8 @@ class EigSolver(Tidy3dBaseModel):
             direction,
             enable_incidence_matrices,
             basis_E=basis_E,
+            dls=dls,
+            dmin_pmc=dmin_pmc,
         )
 
         # Transform back to original axes, E = J^T E'
@@ -308,6 +310,8 @@ class EigSolver(Tidy3dBaseModel):
         direction,
         enable_incidence_matrices,
         basis_E,
+        dls,
+        dmin_pmc=None,
     ):
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
@@ -323,7 +327,7 @@ class EigSolver(Tidy3dBaseModel):
         mu_tensor : np.ndarray
             Shape (3, 3, N), the permittivity tensor at every point in the plane.
         der_mats : List[scipy.sparse.csr_matrix]
-            The sparce derivative matrices dxf, dxb, dyf, dyb, including the PML.
+            The sparse derivative matrices dxf, dxb, dyf, dyb, including the PML.
         num_modes : int
             Number of modes to solve for.
         neff_guess : float
@@ -334,6 +338,10 @@ class EigSolver(Tidy3dBaseModel):
             Direction of mode propagation.
         basis_E: np.ndarray
             Basis for mode solving.
+        dls: Tuple[List[np.ndarray], List[np.ndarray]]
+            Primal and dual grid steps along each of the two tangential dimensions.
+        dmin_pmc: List[bool]
+            List of booleans indicating whether to apply PMC at the near end of the grid.
 
         Returns
         -------
@@ -377,8 +385,8 @@ class EigSolver(Tidy3dBaseModel):
         # initial vector for eigensolver in correct data type
         vec_init = cls.set_initial_vec(Nx, Ny, is_tensorial=is_tensorial)
 
-        # call solver
-        kwargs = {
+        # call solver: base kwargs shared by diagonal and tensorial solvers
+        base_kwargs = {
             "eps": eps_tensor,
             "mu": mu_tensor,
             "der_mats": der_mats,
@@ -388,18 +396,19 @@ class EigSolver(Tidy3dBaseModel):
             "mat_precision": mat_precision,
         }
 
-        is_eps_complex = cls.isinstance_complex(eps_tensor)
-
         if basis_E is not None and is_tensorial:
             raise RuntimeError(
                 "Tensorial eps not yet supported in relative mode solver "
                 "(with basis fields provided)."
             )
 
+        # Determine if epsilon has complex values (used to select real vs complex tensorial solver)
+        is_eps_complex = cls.isinstance_complex(eps_tensor)
+
         if not is_tensorial:
             eps_spec = "diagonal"
             E, H, neff, keff = cls.solver_diagonal(
-                **kwargs,
+                **base_kwargs,
                 enable_incidence_matrices=enable_incidence_matrices,
                 basis_E=basis_E,
             )
@@ -410,51 +419,28 @@ class EigSolver(Tidy3dBaseModel):
 
         elif not is_eps_complex:
             eps_spec = "tensorial_real"
-            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction="+")
+            E, H, neff, keff = cls.solver_tensorial(
+                **base_kwargs,
+                direction="+",
+                dls=dls,
+                Nxy=(Nx, Ny),
+                dmin_pmc=dmin_pmc,
+            )
             if direction == "-":
                 E = np.conj(E)
                 H = -np.conj(H)
 
         else:
             eps_spec = "tensorial_complex"
-            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction=direction)
+            E, H, neff, keff = cls.solver_tensorial(
+                **base_kwargs,
+                direction=direction,
+                dls=dls,
+                Nxy=(Nx, Ny),
+                dmin_pmc=dmin_pmc,
+            )
 
         return E, H, neff, keff, eps_spec
-
-    @classmethod
-    def matrix_data_type(cls, eps, mu, der_mats, mat_precision, is_tensorial):
-        """Determine data type that should be used for the matrix for diagonalization."""
-        mat_dtype = np.float32
-        # In tensorial case, even though the matrix can be real, the
-        # expected eigenvalue is purely imaginary. So for now we enforce
-        # the matrix to be complex type so that it will look for the right eigenvalues.
-        if is_tensorial:
-            mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
-        else:
-            # 1) check if complex or not
-            complex_solver = (
-                cls.isinstance_complex(eps)
-                or cls.isinstance_complex(mu)
-                or np.any([cls.isinstance_complex(f) for f in der_mats])
-            )
-            # 2) determine precision
-            if complex_solver:
-                mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
-            else:
-                if mat_precision == "double":
-                    mat_dtype = np.float64
-
-        return mat_dtype
-
-    @classmethod
-    def trim_small_values(cls, mat: sp.csr_matrix, tol: float) -> sp.csr_matrix:
-        """Eliminate elements of matrix ``mat`` for which ``abs(element) / abs(max_element) < tol``,
-        or ``np.abs(mat_data) < tol``. This operates in-place on mat so there is no return.
-        """
-        max_element = np.amax(np.abs(mat))
-        mat.data *= np.logical_or(np.abs(mat.data) / max_element > tol, np.abs(mat.data) > tol)
-        mat.eliminate_zeros()
-        return mat
 
     @classmethod
     def solver_diagonal(
@@ -685,8 +671,54 @@ class EigSolver(Tidy3dBaseModel):
         return E, H, neff, keff
 
     @classmethod
+    def matrix_data_type(cls, eps, mu, der_mats, mat_precision, is_tensorial):
+        """Determine data type that should be used for the matrix for diagonalization."""
+        mat_dtype = np.float32
+        # In tensorial case, even though the matrix can be real, the
+        # expected eigenvalue is purely imaginary. So for now we enforce
+        # the matrix to be complex type so that it will look for the right eigenvalues.
+        if is_tensorial:
+            mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
+        else:
+            # 1) check if complex or not
+            complex_solver = (
+                cls.isinstance_complex(eps)
+                or cls.isinstance_complex(mu)
+                or np.any([cls.isinstance_complex(f) for f in der_mats])
+            )
+            # 2) determine precision
+            if complex_solver:
+                mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
+            else:
+                if mat_precision == "double":
+                    mat_dtype = np.float64
+
+        return mat_dtype
+
+    @classmethod
+    def trim_small_values(cls, mat: sp.csr_matrix, tol: float) -> sp.csr_matrix:
+        """Eliminate elements of matrix ``mat`` for which ``abs(element) / abs(max_element) < tol``,
+        or ``np.abs(mat_data) < tol``. This operates in-place on mat so there is no return.
+        """
+        max_element = np.amax(np.abs(mat))
+        mat.data *= np.logical_or(np.abs(mat.data) / max_element > tol, np.abs(mat.data) > tol)
+        mat.eliminate_zeros()
+        return mat
+
+    @classmethod
     def solver_tensorial(
-        cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision, direction
+        cls,
+        eps,
+        mu,
+        der_mats,
+        num_modes,
+        neff_guess,
+        vec_init,
+        mat_precision,
+        direction,
+        dls,
+        Nxy=None,
+        dmin_pmc=None,
     ):
         """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
         import scipy.sparse as sp
