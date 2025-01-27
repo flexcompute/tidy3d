@@ -1866,10 +1866,7 @@ class Scene(Tidy3dBaseModel):
                 struct_doping[n] = struct_doping[n] + contrib
             if isinstance(doping, tuple):
                 for doping_box in doping:
-                    if isinstance(doping_box, ConstantDoping):
-                        contrib = np.ones(X.shape) * doping_box.concentration
-                        struct_doping[n] = struct_doping[n] + contrib
-                    if isinstance(doping_box, GaussianDoping):
+                    if isinstance(doping_box, (ConstantDoping, GaussianDoping)):
                         coords_dict = {"xyz"[d]: coords_2D[d] for d in plane_axes_inds}
                         contrib = doping_box._get_contrib(coords_dict)
                         struct_doping[n] = struct_doping[n] + contrib

@@ -1096,30 +1096,25 @@ def test_sim_structure_extent(box_size, log_level):
         )
 
 
-def test_abstract_doping_box_default_size_and_center():
-    """Test default size and center for AbstractDopingBox."""
-    box = td.ConstantDoping()
-    assert box.size == (1, 1, 1), "Default size should be (1, 1, 1)."
-    assert box.center == (0, 0, 0), "Default center should be (0, 0, 0)."
-
-
 def test_abstract_doping_box_with_box_coords():
     """Test AbstractDopingBox with provided box_coords."""
     box_coords = ((-1, -1, -1), (1, 1, 1))
-    box = td.ConstantDoping(box_coords=box_coords)
+    box = td.ConstantDoping.from_bounds(rmin=box_coords[0], rmax=box_coords[1])
     assert box.size == (2, 2, 2), "Size should be calculated based on box_coords."
     assert box.center == (0, 0, 0), "Center should be calculated based on box_coords."
 
 
 def test_constant_doping_initialization():
     """Test initialization of ConstantDoping."""
-    box = td.ConstantDoping(concentration=1e18)
+    box = td.ConstantDoping(center=(0, 0, 0), size=(1, 1, 1), concentration=1e18)
     assert box.concentration == 1e18, "Concentration should be set to 1e18."
 
 
 def test_gaussian_doping_initialization():
     """Test initialization of GaussianDoping."""
-    box = td.GaussianDoping(ref_con=1e15, concentration=1e18, width=0.1, source="xmin")
+    box = td.GaussianDoping(
+        size=(1, 1, 1), ref_con=1e15, concentration=1e18, width=0.1, source="xmin"
+    )
     assert box.ref_con == 1e15, "Reference concentration should be 1e15."
     assert box.concentration == 1e18, "Concentration should be 1e18."
     assert box.width == 0.1, "Width should be 0.1."
@@ -1128,7 +1123,9 @@ def test_gaussian_doping_initialization():
 
 def test_gaussian_doping_sigma_calculation():
     """Test sigma calculation in GaussianDoping."""
-    box = td.GaussianDoping(ref_con=1e15, concentration=1e18, width=0.1, source="xmin")
+    box = td.GaussianDoping(
+        size=(1, 1, 1), ref_con=1e15, concentration=1e18, width=0.1, source="xmin"
+    )
     expected_sigma = np.sqrt(-(0.1**2) / (2 * np.log(1e15 / 1e18)))
     assert np.isclose(box.sigma, expected_sigma), "Sigma calculation is incorrect."
 
@@ -1139,7 +1136,9 @@ def test_gaussian_doping_get_contrib():
     min_N = 1e15
     width = 0.1
 
-    box = td.GaussianDoping(ref_con=min_N, concentration=max_N, width=width, source="xmin")
+    box = td.GaussianDoping(
+        size=(1, 1, 1), ref_con=min_N, concentration=max_N, width=width, source="xmin"
+    )
 
     coords = {"x": [0], "y": [0], "z": [0]}
     contrib = box._get_contrib(coords)
@@ -1157,22 +1156,34 @@ def test_gaussian_doping_get_contrib():
 
 def test_gaussian_doping_get_contrib_2d_coords():
     """Test _get_contrib method in GaussianDoping with 2D coordinates."""
-    box = td.GaussianDoping(ref_con=1e15, concentration=1e18, width=0.1, source="xmin")
+    box = td.GaussianDoping(
+        size=(1, 1, 1), ref_con=1e15, concentration=1e18, width=0.1, source="xmin"
+    )
     coords = {"x": [0], "y": [0], "z": [-0.5, 0, 0.5]}
-    contrib = box._get_contrib(coords)
+    _ = box._get_contrib(coords)
 
 
 def test_gaussian_doping_bounds_behavior():
     """Test GaussianDoping bounds behavior."""
     box_coords = ((-1, -1, -1), (1, 1, 1))
-    box = td.GaussianDoping(
-        box_coords=box_coords,
+    box = td.GaussianDoping.from_bounds(
+        rmin=box_coords[0],
+        rmax=box_coords[1],
         ref_con=1e15,
         concentration=1e18,
         width=0.1,
         source="xmin",
     )
     assert box.bounds == box_coords, "Bounds should match provided box_coords."
+
+
+def test_2D_doping_box():
+    """Check that the doping boxes can handle 2D cases correctly."""
+
+    _ = td.ConstantDoping(size=(1, 1, np.inf), concentration=1)
+
+    with pytest.raises(pd.ValidationError):
+        _ = td.ConstantDoping(size=(1, 1, 0), concentration=1)
 
 
 def test_edge_case_boundary_conditions():

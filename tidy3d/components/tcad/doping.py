@@ -1,58 +1,89 @@
 """File containing classes required for the setup of a DEVSIM case."""
 
-from typing import Optional
-
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.autograd.types import TracedSize
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import Bound, Union
-from tidy3d.constants import MICROMETER
+from tidy3d.components.types import Union
+from tidy3d.exceptions import SetupError
 
 from ...constants import PERCMCUBE
 
 
 class AbstractDopingBox(Box):
-    """Derived class from Box which redefines size so that
-    we have some default values"""
+    """Derived class from Box to deal with dopings"""
 
-    # redefining size so that it doesn't fail validation when the box
-    # is defined through box_coords
-    size: TracedSize = pd.Field(
-        (1, 1, 1),
-        title="Size",
-        description="Size in x, y, and z directions.",
-        units=MICROMETER,
-    )
+    def _normal_dim(self):
+        """Returns the normal direction if the box is 2D. False otherwise"""
 
-    # equivalent to Box().bounds but defined here so that we can actually
-    # define boxes through this
-    box_coords: Optional[Bound] = pd.Field(title="Doping box coordinates", description="")
+        normal_dim = None
+        for dim in range(3):
+            if self.size[dim] == np.inf:
+                if normal_dim is not None:
+                    raise SetupError("Only 3D and 2D boxes are considered for doping.")
+                normal_dim = dim
+
+        return normal_dim
+
+    def _get_indices_in_box(self, coords: dict, meshgrid: bool = True):
+        """Returns locations inside box"""
+
+        # work out whether x,y, and z are present
+        dim_missing = len(list(coords.keys())) < 3
+        if dim_missing:
+            for var_name in "xyz":
+                if var_name not in coords.keys():
+                    coords[var_name] = [0]
+
+        # work out whether the dimensions are 2D
+        normal_axis = None
+        # normal_position = None
+        for dim in range(3):
+            var_name = "xyz"[dim]
+            if len(coords[var_name]) == 1:
+                normal_axis = dim
+                # normal_position = coords[var_name][0]
+
+        # if provided coordinates are 3D, check if box is 2D
+        normal_axis = self._normal_dim()
+
+        if meshgrid:
+            X, Y, Z = np.meshgrid(coords["x"], coords["y"], coords["z"], indexing="ij")
+        else:
+            X = coords["x"]
+            Y = coords["y"]
+            Z = coords["z"]
+
+        new_bounds = [list(self.bounds[0]), list(self.bounds[1])]
+        for d in range(3):
+            if new_bounds[0][d] == new_bounds[1][d]:
+                new_bounds[0][d] = -np.inf
+                new_bounds[1][d] = np.inf
+
+        # let's assume some of these coordinates may lay outside the box
+        indices_in_box = np.logical_and(X >= new_bounds[0][0], X <= new_bounds[1][0])
+        indices_in_box = np.logical_and(indices_in_box, Y >= new_bounds[0][1])
+        indices_in_box = np.logical_and(indices_in_box, Y <= new_bounds[1][1])
+        indices_in_box = np.logical_and(indices_in_box, Z >= new_bounds[0][2])
+        indices_in_box = np.logical_and(indices_in_box, Z <= new_bounds[1][2])
+
+        return indices_in_box, X, Y, Z, normal_axis
 
     @pd.root_validator(skip_on_failure=True)
-    def check_bounds(cls, values):
-        """When 'box_coords' is provided, make sure to rewrite 'size' and 'center' appropriately"""
+    def check_dimensions(cls, values):
+        """Make sure dimensionality is specified correctly. I.e.,
+        a 2D box must be defined with an inf size in the normal direction."""
 
-        if "box_coords" in values.keys():
-            box_coords = values["box_coords"]
-            if box_coords is not None:
-                size = [box_coords[1][d] - box_coords[0][d] for d in range(3)]
-                center = [0.5 * (box_coords[1][d] + box_coords[0][d]) for d in range(3)]
-
-                values["size"] = tuple(size)
-                values["center"] = tuple(center)
-                return values
-            else:
-                size = values["size"]
-                center = values["center"]
-                box_coords = (
-                    tuple([center[d] - 0.5 * size[d] for d in range(3)]),
-                    tuple([center[d] + 0.5 * size[d] for d in range(3)]),
+        size = values["size"]
+        for dim in range(3):
+            if size[dim] == 0:
+                dim_name = "xyz"[dim]
+                raise SetupError(
+                    f"The doping box has been set up with 0 size in the {dim_name} direction. "
+                    "If this was intended to be translationally invariant, the box must have inf size in the "
+                    "perpendicular direction."
                 )
-
-                values["box_coords"] = box_coords
 
         return values
 
@@ -60,6 +91,9 @@ class AbstractDopingBox(Box):
 class ConstantDoping(AbstractDopingBox):
     """
     Sets constant doping :math:`N` in the specified box with a :parameter`size` and :parameter:`concentration`.
+
+    For translationally invariant behavior in one dimension, the box must have infinite size in the
+    homogenous (invariant) direction.
 
     Example
     -------
@@ -69,7 +103,7 @@ class ConstantDoping(AbstractDopingBox):
     ...     [1, 1, 1]
     ... ]
     >>> constant_box1 = td.ConstantDoping(center=(0, 0, 0), size=(2, 2, 2), concentration=1e18)
-    >>> constant_box2 = td.ConstantDoping(box_coords=box_coords, concentration=1e18)
+    >>> constant_box2 = td.ConstantDoping.from_bounds(rmin=box_coords[0], rmax=box_coords[1], concentration=1e18)
     """
 
     concentration: pd.NonNegativeFloat = pd.Field(
@@ -79,9 +113,29 @@ class ConstantDoping(AbstractDopingBox):
         units=PERCMCUBE,
     )
 
+    def _get_contrib(self, coords: dict, meshgrid: bool = True):
+        """Returns the contribution to the doping a the locations specified in coords"""
+
+        indices_in_box, X, _, _, normal_axis = self._get_indices_in_box(
+            coords=coords, meshgrid=meshgrid
+        )
+
+        contrib = np.zeros(X.shape)
+        contrib[indices_in_box] = self.concentration
+
+        if normal_axis is not None and meshgrid:
+            slices = [slice(None)] * X.ndim
+            slices[normal_axis] = 0
+            return contrib[tuple(slices)]
+        else:
+            return contrib
+
 
 class GaussianDoping(AbstractDopingBox):
     """Sets a gaussian doping in the specified box.
+
+    For translationally invariant behavior in one dimension, the box must have infinite size in the
+    homogenous (invariant) direction.
 
     Notes
     -----
@@ -118,8 +172,9 @@ class GaussianDoping(AbstractDopingBox):
     ...     width=0.1,
     ...     source="xmin"
     ... )
-    >>> gaussian_box2 = td.GaussianDoping(
-    ...     box_coords=box_coords,
+    >>> gaussian_box2 = td.GaussianDoping.from_bounds(
+    ...     rmin=box_coords[0],
+    ...     rmax=box_coords[1],
     ...     ref_con=1e15,
     ...     concentration=1e18,
     ...     width=0.1,
@@ -162,43 +217,9 @@ class GaussianDoping(AbstractDopingBox):
     def _get_contrib(self, coords: dict, meshgrid: bool = True):
         """Returns the contribution to the doping a the locations specified in coords"""
 
-        # work out whether x,y, and z are present
-        dim_missing = len(list(coords.keys())) < 3
-        if dim_missing:
-            for var_name in "xyz":
-                if var_name not in coords.keys():
-                    coords[var_name] = [0]
-
-        # work out whether the dimensions are 2D
-        normal_axis = None
-        # normal_position = None
-        for dim in range(3):
-            var_name = "xyz"[dim]
-            if len(coords[var_name]) == 1:
-                normal_axis = dim
-                # normal_position = coords[var_name][0]
-
-        if meshgrid:
-            X, Y, Z = np.meshgrid(coords["x"], coords["y"], coords["z"], indexing="ij")
-        else:
-            X = coords["x"]
-            Y = coords["y"]
-            Z = coords["z"]
-
-        bounds = [list(self.bounds[0]), list(self.bounds[1])]
-        for d in range(3):
-            if bounds[0][d] == bounds[1][d]:
-                bounds[0][d] = -np.inf
-                bounds[1][d] = np.inf
-                if normal_axis is None:
-                    normal_axis = d
-
-        # let's assume some of these coordinates may lay outside the box
-        indices_in_box = np.logical_and(X >= bounds[0][0], X <= bounds[1][0])
-        indices_in_box = np.logical_and(indices_in_box, Y >= bounds[0][1])
-        indices_in_box = np.logical_and(indices_in_box, Y <= bounds[1][1])
-        indices_in_box = np.logical_and(indices_in_box, Z >= bounds[0][2])
-        indices_in_box = np.logical_and(indices_in_box, Z <= bounds[1][2])
+        indices_in_box, X, Y, Z, normal_axis = self._get_indices_in_box(
+            coords=coords, meshgrid=meshgrid
+        )
 
         x_contrib = np.ones(X.shape)
         if normal_axis != 0:
