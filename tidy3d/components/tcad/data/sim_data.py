@@ -24,7 +24,7 @@ from tidy3d.components.tcad.data.types import (
 )
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import Ax, Literal, RealFieldVal
+from tidy3d.components.types import Ax, Literal, RealFieldVal, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
@@ -123,7 +123,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
         description="Original :class:`.HeatChargeSimulation` associated with the data.",
     )
 
-    data: Tuple[TCADMonitorDataType, ...] = pd.Field(
+    data: Tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
