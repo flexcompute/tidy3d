@@ -2,8 +2,13 @@ name: "tidy3d-frontend-tests"
 
 on:
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: 'Run test suite'
+        type: boolean
+        default: false
   push:
-    branches: [ develop, latest ]
+    branches: [ develop, latest , 'pre/*']
   pull_request:
     branches:
       - latest
@@ -12,22 +17,24 @@ on:
 
 jobs:
 
-  pre-commit:
+  lint:
+    name: Run linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          submodules: 'recursive'
-      - name: Test pre-commit hooks
-        run: |
-          python -m pip install --upgrade pip
-          pip install pre-commit
-          pre-commit run # this should be really more agressive
+          fetch-depth: 1
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: 0.5.5
+      - name: Run ruff format
+        run: ruff format --check --diff
+      - name: Run ruff check
+        run: ruff check tidy3d
 
-  build:
+  test:
+    # Run on internal PRs/pushes OR when manually triggered with run_tests=true
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository || (github.event_name == 'workflow_dispatch' && inputs.run_tests)
     name: Python ${{ matrix.python-version }} - ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     strategy:
@@ -43,10 +50,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
 
-    #----------------------------------------------
-    #  -----  install & configure poetry  -----
-    #----------------------------------------------
     - name: Install Poetry
       uses: snok/install-poetry@v1
       with:
@@ -59,10 +65,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    #----------------------------------------------
-    # install your root project, if required
-    #----------------------------------------------
-    - name: Install library
+    - name: Install project
       run: |
         poetry --version
         poetry env use python
@@ -71,12 +74,13 @@ jobs:
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
 
-    #----------------------------------------------
-    #    add matrix specifics and run test suite
-    #----------------------------------------------
-    - name: Run tests
+    - name: Run doctests
       run: |
-        poetry run ruff format . --check --diff
-        poetry run ruff check tidy3d --fix --exit-non-zero-on-fix
-        poetry run pytest -rA tests
-        poetry run pytest -rA tests/_test_data/_test_datasets_no_vtk.py
+        poetry run pytest -rF --tb=short tidy3d
+
+    - name: Run tests
+      env:
+        PYTHONUNBUFFERED: "1"
+      run: |
+        poetry run pytest -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        poetry run pytest -rF --tb=short tests
