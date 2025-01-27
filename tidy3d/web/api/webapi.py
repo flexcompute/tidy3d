@@ -1,6 +1,8 @@
 """Provides lowest level, user-facing interface to server."""
 
+import json
 import os
+import tempfile
 import time
 from datetime import datetime, timedelta
 from typing import Callable, Dict, List
@@ -46,7 +48,7 @@ GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
 BETA_TASK_TYPES = ["HEAT", "EME"]
 
 # map task_type to solver name for display
-SOLVER_NAME = {"FDTD": "FDTD", "HEAT": "Heat", "MODE_SOLVER": "Mode", "EME": "EME"}
+SOLVER_NAME = {"FDTD": "FDTD", "HEAT": "HeatCharge", "MODE_SOLVER": "Mode", "EME": "EME"}
 
 
 def _get_url(task_id: str) -> str:
@@ -405,10 +407,19 @@ def get_status(task_id) -> str:
     if status == "visualize":
         return "success"
     if status == "error":
-        raise WebError(
-            f"Error running task {task_id}! Use 'web.download_log(task_id)' to "
-            "download and examine the solver log, and/or contact customer support for help."
-        )
+        try:
+            # Try to obtain the error message
+            task = SimulationTask(taskId=task_id)
+            with tempfile.NamedTemporaryFile(suffix=".json") as tmp_file:
+                task.get_error_json(to_file=tmp_file.name)
+                with open(tmp_file.name) as f:
+                    error_content = json.load(f)
+                    error_msg = error_content["msg"]
+        except Exception:
+            # If the error message could not be obtained, raise a generic error message
+            error_msg = "Error message could not be obtained, please contact customer support."
+
+        raise WebError(f"Error running task {task_id}! {error_msg}")
     return status
 
 
@@ -547,6 +558,10 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 perc_done, _ = get_run_info(task_id)
                 new_description = "solver progress"
                 progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
+        else:
+            while get_status(task_id) == "running":
+                perc_done, _ = get_run_info(task_id)
+                time.sleep(1.0)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100

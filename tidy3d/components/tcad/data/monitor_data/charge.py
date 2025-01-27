@@ -41,8 +41,8 @@ class SteadyPotentialData(HeatChargeMonitorData):
 
     potential: FieldDataset = pd.Field(
         None,
-        title="Voltage series",
-        description="Contains the voltages.",
+        title="Electric potential series",
+        description="Contains the electric potential series.",
     )
 
     @property

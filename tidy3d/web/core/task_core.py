@@ -14,7 +14,7 @@ from pydantic.v1 import Extra, Field, parse_obj_as
 
 from . import http_util
 from .cache import FOLDER_CACHE
-from .constants import SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5_GZ
+from .constants import SIM_ERROR_FILE, SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5_GZ
 from .core_config import get_logger_console
 from .environment import Env
 from .exceptions import WebError
@@ -292,7 +292,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
 
@@ -469,7 +469,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
@@ -526,7 +526,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
@@ -576,7 +576,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
@@ -597,6 +597,31 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             to_file=to_file,
             verbose=verbose,
             progress_callback=progress_callback,
+        )
+
+    def get_error_json(self, to_file: str, verbose: bool = True) -> pathlib.Path:
+        """Get error json file for a :class:`.Simulation` from server.
+
+        Parameters
+        ----------
+        to_file: str
+            Save file to path.
+        verbose: bool = True
+            Whether to display progress bars.
+
+        Returns
+        -------
+        path: pathlib.Path
+            Path to saved file.
+        """
+        if not self.task_id:
+            raise WebError("Expected field 'task_id' is unset.")
+
+        return download_file(
+            self.task_id,
+            SIM_ERROR_FILE,
+            to_file=to_file,
+            verbose=verbose,
         )
 
     def abort(self):
