@@ -22,6 +22,7 @@ from ..data_array import (
     IndexedDataArray,
     IndexedDataArrayTypes,
     PointDataArray,
+    SpatialDataArray,
 )
 from ..dataset import Dataset
 
@@ -989,7 +990,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         coords_dict = dict(x=x, y=y, z=z)
         coords_dict.update(self._values_coords_dict)
 
-        return XrDataArray(interpolated_values, coords=coords_dict, name=self.values.name)
+        if len(self._values_coords_dict) == 0:
+            return SpatialDataArray(interpolated_values, coords=coords_dict, name=self.values.name)
+        else:
+            return XrDataArray(interpolated_values, coords=coords_dict, name=self.values.name)
 
     def _interp_nearest(
         self,

@@ -26,6 +26,7 @@ from ..data_array import (
     CellDataArray,
     IndexedDataArray,
     PointDataArray,
+    SpatialDataArray,
 )
 from .base import (
     DEFAULT_MAX_CELLS_PER_STEP,
@@ -377,7 +378,10 @@ class TriangularGridDataset(UnstructuredGridDataset):
         coords_dict = dict(x=x, y=y, z=z)
         coords_dict.update(self._values_coords_dict)
 
-        return XrDataArray(interp_broadcasted, coords=coords_dict, name=self.values.name)
+        if len(self._values_coords_dict) == 0:
+            return SpatialDataArray(interp_broadcasted, coords=coords_dict, name=self.values.name)
+        else:
+            return XrDataArray(interp_broadcasted, coords=coords_dict, name=self.values.name)
 
     def _interp_py(
         self,
