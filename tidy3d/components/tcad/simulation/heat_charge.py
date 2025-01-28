@@ -933,6 +933,81 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @equal_aspect
     @add_ax_if_none
+    def plot_heat_conductivity(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        alpha: float = None,
+        source_alpha: float = None,
+        monitor_alpha: float = None,
+        colorbar: str = "conductivity",
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        **kwargs,
+    ) -> Ax:
+        """
+        DEPRECATED: Method added for backwards compatibility with :class:`HeatSimulation.plot_heat_conductivity`.
+        Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        source_alpha : float = None
+            Opacity of the sources. If ``None``, uses Tidy3d default.
+        monitor_alpha : float = None
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
+        colorbar: str = "conductivity"
+            Display colorbar for thermal conductivity ("conductivity") or heat source rate
+            ("source").
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        log.warning(
+            """This function `plot_heat_conductivity` is 
+            deprecated and will be discontinued. In its place you can use
+            `plot_property(property="heat_conductivity")`"""
+        )
+
+        plot_type = "heat_conductivity"
+        if colorbar == "conductivity":
+            plot_type = "heat_conductivity"
+        elif colorbar == "source":
+            plot_type = "source"
+
+        return self.plot_property(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            alpha=alpha,
+            source_alpha=source_alpha,
+            monitor_alpha=monitor_alpha,
+            property=plot_type,
+            hlim=hlim,
+            vlim=vlim,
+        )
+
+    @equal_aspect
+    @add_ax_if_none
     def plot_boundaries(
         self,
         x: float = None,
