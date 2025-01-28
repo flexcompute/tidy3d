@@ -55,6 +55,7 @@ coverage = { version = "*", optional = true }
 dill = { version = "*", optional = true }
 ipython = { version = "*", optional = true }
 memory_profiler = { version = "*", optional = true }
+psutil = { version = "*", optional = true }
 pre-commit = { version = "*", optional = true }
 pylint = { version = "*", optional = true }
 pytest = { version = ">=8.1", optional = true }
@@ -140,6 +141,7 @@ dev = [
   'jupyter',
   'myst-parser',
   'memory_profiler',
+  'psutil',
   'nbconvert',
   'nbdime',
   'nbsphinx',

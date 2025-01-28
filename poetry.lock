@@ -2777,8 +2777,8 @@ files = [
 numpy = [
     {version = ">=1.26.0", markers = "python_version >= \"3.12\" and python_version < \"3.13\""},
     {version = ">=1.23.3", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
-    {version = ">=1.21", markers = "python_version < \"3.10\""},
     {version = ">=1.21.2", markers = "python_version >= \"3.10\" and python_version < \"3.11\""},
+    {version = ">=1.21", markers = "python_version < \"3.10\""},
 ]
 
 [package.extras]
@@ -6129,7 +6129,7 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 type = ["pytest-mypy"]
 
 [extras]
-dev = ["bayesian-optimization", "bump-my-version", "cma", "coverage", "devsim", "dill", "gdspy", "gdstk", "grcwa", "ipython", "ipython", "jax", "jaxlib", "jinja2", "jupyter", "memory_profiler", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "pydata-sphinx-theme", "pygad", "pylint", "pyswarms", "pytest", "pytest-env", "pytest-timeout", "pytest-xdist", "rtree", "ruff", "sax", "scikit-rf", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "torch", "torch", "tox", "trimesh", "vtk"]
+dev = ["bayesian-optimization", "bump-my-version", "cma", "coverage", "devsim", "dill", "gdspy", "gdstk", "grcwa", "ipython", "ipython", "jax", "jaxlib", "jinja2", "jupyter", "memory_profiler", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "psutil", "pydata-sphinx-theme", "pygad", "pylint", "pyswarms", "pytest", "pytest-env", "pytest-timeout", "pytest-xdist", "rtree", "ruff", "sax", "scikit-rf", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "torch", "torch", "tox", "trimesh", "vtk"]
 docs = ["cma", "devsim", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
@@ -6142,4 +6142,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0.0"
-content-hash = "014d0add4490678645ee29000f5d6a4c89168608a3022216e062697289c7c294"
+content-hash = "0a16ce7a60e84d86f622bd9d40bfd8093018c20507c7c914b733d3e7081da956"
