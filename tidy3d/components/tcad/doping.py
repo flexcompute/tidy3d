@@ -78,11 +78,12 @@ class AbstractDopingBox(Box):
         size = values["size"]
         for dim in range(3):
             if size[dim] == 0:
-                dim_name = "xyz"[dim]
+                zero_dim_name = "xyz"[dim]
+
                 raise SetupError(
-                    f"The doping box has been set up with 0 size in the {dim_name} direction. "
-                    "If this was intended to be translationally invariant, the box must have inf size in the "
-                    "perpendicular direction."
+                    f"The doping box has been set up with 0 size in the {zero_dim_name} direction. "
+                    "If this was intended to be translationally invariant, the box must have a large "
+                    "or infinite ('td.inf') size in the perpendicular direction."
                 )
 
         return values

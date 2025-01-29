@@ -249,34 +249,40 @@ class SemiconductorMedium(AbstractChargeMedium):
     """
 
     N_c: pd.PositiveFloat = pd.Field(
+        ...,
         title="Effective density of electron states",
         description=r"$N_c$ Effective density of states in the conduction band.",
         units="cm^(-3)",
     )
 
     N_v: pd.PositiveFloat = pd.Field(
+        ...,
         title="Effective density of hole states",
         description=r"$N_v$ Effective density of states in the valence band.",
         units="cm^(-3)",
     )
 
     E_g: pd.PositiveFloat = pd.Field(
+        ...,
         title="Band-gap energy",
         description="Band-gap energy",
         units=ELECTRON_VOLT,
     )
 
     mobility: MobilityModelType = pd.Field(
+        ...,
         title="Mobility model",
         description="Mobility model",
     )
 
     R: Tuple[RecombinationModelType, ...] = pd.Field(
+        [],
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material.",
     )
 
     delta_E_g: BandGapNarrowingModelType = pd.Field(
+        None,
         title=r"$\Delta E_g$ Bandgap narrowing model.",
         description="Bandgap narrowing model.",
     )

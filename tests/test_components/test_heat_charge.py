@@ -1183,7 +1183,15 @@ def test_2D_doping_box():
     _ = td.ConstantDoping(size=(1, 1, np.inf), concentration=1)
 
     with pytest.raises(pd.ValidationError):
+        _ = td.ConstantDoping(size=(0, 1, 1), concentration=1)
+
+    with pytest.raises(pd.ValidationError):
+        _ = td.ConstantDoping(size=(1, 0, 1), concentration=1)
+
+    with pytest.raises(pd.ValidationError):
         _ = td.ConstantDoping(size=(1, 1, 0), concentration=1)
+
+    _ = td.ConstantDoping.from_bounds(rmin=(-td.inf, -1, -1), rmax=(td.inf, 1, 1), concentration=1)
 
 
 def test_edge_case_boundary_conditions():
