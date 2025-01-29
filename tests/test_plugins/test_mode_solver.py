@@ -1193,3 +1193,12 @@ def test_high_order_mode_normalization():
     ms2 = make_high_order_mode_solver(-1, 2)
     values = ms2.data.Ez.isel(mode_index=2).values.squeeze().real
     assert (values[: values.size // 3] > 0).all()
+
+
+def test_gauge_robustness():
+    array = np.zeros((5, 5), dtype=float)
+    ij = np.arange(5)
+    assert ModeSolver._weighted_coord_max(array, ij, ij) == (0, 0)
+
+    array[1, -1] = np.nan
+    assert ModeSolver._weighted_coord_max(array, ij, ij) == (0, 0)

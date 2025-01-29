@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - The coordinate of snapping points in `GridSpec` can take value `None`, so that mesh can be selectively snapped only along certain dimensions.
 - Grid snapping for `MeshOverrideStructure` with `shadow=False` is only on if the structure refines the mesh.
+### Fixed
+- Make gauge selection for non-converged modes more robust.
 
 ## [2.8.0rc2] - 2025-01-28
 

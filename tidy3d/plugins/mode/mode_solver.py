@@ -1303,12 +1303,19 @@ class ModeSolver(Tidy3dBaseModel):
         array: ArrayFloat2D, u: ArrayFloat1D, v: ArrayFloat1D
     ) -> Tuple[int, int]:
         """2D argmax for an array weighted in both directions."""
+        if not np.all(np.isfinite(array)):  # make sure the array is valid
+            return 0, 0
+
         m = array * u.reshape(-1, 1)
         i = np.arange(array.shape[0])
-        i = int(0.5 + (m * i.reshape(-1, 1)).sum() / m.sum())
+        i = (m * i.reshape(-1, 1)).sum() / m.sum()
+        i = int(0.5 + i) if np.isfinite(i) else 0  # in case m.sum() ~ 0
+
         m = array * v
         j = np.arange(array.shape[1])
-        j = int(0.5 + (m * j).sum() / m.sum())
+        j = (m * j).sum() / m.sum()
+        j = int(0.5 + j) if np.isfinite(j) else 0
+
         return i, j
 
     @staticmethod
