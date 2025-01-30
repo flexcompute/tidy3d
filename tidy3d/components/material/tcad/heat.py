@@ -18,6 +18,8 @@ from tidy3d.constants import (
 class AbstractHeatMedium(ABC, Tidy3dBaseModel):
     """Abstract heat material specification."""
 
+    name: str = pd.Field(None, title="Name", description="Optional unique name for medium.")
+
     @property
     def heat(self):
         """

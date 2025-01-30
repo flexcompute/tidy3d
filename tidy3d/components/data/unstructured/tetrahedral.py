@@ -8,15 +8,16 @@ import numpy as np
 import pydantic.v1 as pd
 from xarray import DataArray as XrDataArray
 
-from ....exceptions import DataError
-from ....packaging import requires_vtk, vtk
-from ...base import cached_property
-from ...types import ArrayLike, Axis, Bound, Coordinate
-from ..data_array import (
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import (
     CellDataArray,
     IndexedDataArray,
     PointDataArray,
 )
+from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
+from tidy3d.exceptions import DataError
+from tidy3d.packaging import requires_vtk, vtk
+
 from .base import UnstructuredGridDataset
 from .triangular import TriangularGridDataset
 

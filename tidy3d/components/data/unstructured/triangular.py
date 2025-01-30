@@ -15,19 +15,20 @@ except ImportError:
 
 from xarray import DataArray as XrDataArray
 
-from ....constants import inf
-from ....exceptions import DataError
-from ....log import log
-from ....packaging import requires_vtk, vtk
-from ...base import cached_property
-from ...types import ArrayLike, Ax, Axis, Bound
-from ...viz import add_ax_if_none, equal_aspect, plot_params_grid
-from ..data_array import (
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import (
     CellDataArray,
     IndexedDataArray,
     PointDataArray,
     SpatialDataArray,
 )
+from tidy3d.components.types import ArrayLike, Ax, Axis, Bound
+from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_grid
+from tidy3d.constants import inf
+from tidy3d.exceptions import DataError
+from tidy3d.log import log
+from tidy3d.packaging import requires_vtk, vtk
+
 from .base import (
     DEFAULT_MAX_CELLS_PER_STEP,
     DEFAULT_MAX_SAMPLES_PER_STEP,

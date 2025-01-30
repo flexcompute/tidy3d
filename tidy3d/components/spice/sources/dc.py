@@ -41,7 +41,7 @@ class DCVoltageSource(Tidy3dBaseModel):
     --------
     >>> import tidy3d as td
     >>> voltages = [-0.5, 0, 1, 2, 3, 4]
-    >>> td.DCVoltageSource(voltage=voltages)
+    >>> voltage_source = td.DCVoltageSource(voltage=voltages)
     """
 
     name: Optional[str]
@@ -59,7 +59,7 @@ class DCCurrentSource(Tidy3dBaseModel):
     Example
     -------
     >>> import tidy3d as td
-    >>> td.DCCurrentSource(current=0.4)
+    >>> current_source = td.DCCurrentSource(current=0.4)
     """
 
     name: Optional[str]

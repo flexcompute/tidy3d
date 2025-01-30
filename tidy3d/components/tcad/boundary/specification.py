@@ -17,8 +17,8 @@ class HeatChargeBoundarySpec(Tidy3dBaseModel):
     -------
     >>> import tidy3d as td
     >>> bc_v1 = td.HeatChargeBoundarySpec(
-    ... condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
-    ... placement=td.StructureBoundary(structure=contact_left.name),
+    ...   condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
+    ...   placement=td.StructureBoundary(structure="contact_left"),
     ... )
     """
 
@@ -44,10 +44,10 @@ class HeatBoundarySpec(HeatChargeBoundarySpec):
 
     Example
     --------
-    >>> from tidy3d import SimulationBoundary
-    >>> bc_spec = HeatBoundarySpec(
-    ...     placement=SimulationBoundary(),
-    ...     condition=ConvectionBC(ambient_temperature=300, transfer_coeff=1),
+    >>> import tidy3d as td
+    >>> bc_spec = td.HeatBoundarySpec(
+    ...     placement=td.SimulationBoundary(),
+    ...     condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=1),
     ... )
 
     """

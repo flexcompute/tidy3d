@@ -63,6 +63,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         ...             v1=6.92 * 1e-3,
         ...             n2=1.3e17,
         ...             c2=0.5,
+        ...             min_N=1e15,
         ...         ),
         ...         N_a=0,
         ...         N_d=0

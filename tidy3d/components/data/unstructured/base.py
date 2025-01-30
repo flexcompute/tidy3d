@@ -10,13 +10,8 @@ import numpy as np
 import pydantic.v1 as pd
 from xarray import DataArray as XrDataArray
 
-from ....constants import inf
-from ....exceptions import DataError, Tidy3dNotImplementedError, ValidationError
-from ....log import log
-from ....packaging import requires_vtk, vtk
-from ...base import cached_property, skip_if_fields_missing
-from ...types import ArrayLike, Axis, Bound
-from ..data_array import (
+from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.data.data_array import (
     DATA_ARRAY_MAP,
     CellDataArray,
     IndexedDataArray,
@@ -24,7 +19,12 @@ from ..data_array import (
     PointDataArray,
     SpatialDataArray,
 )
-from ..dataset import Dataset
+from tidy3d.components.data.dataset import Dataset
+from tidy3d.components.types import ArrayLike, Axis, Bound
+from tidy3d.constants import inf
+from tidy3d.exceptions import DataError, Tidy3dNotImplementedError, ValidationError
+from tidy3d.log import log
+from tidy3d.packaging import requires_vtk, vtk
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000

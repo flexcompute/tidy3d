@@ -13,7 +13,8 @@ class TemperatureBC(HeatChargeBC):
 
     Example
     -------
-    >>> bc = TemperatureBC(temperature=300)
+    >>> import tidy3d as td
+    >>> bc = td.TemperatureBC(temperature=300)
     """
 
     temperature: pd.PositiveFloat = pd.Field(
@@ -28,7 +29,8 @@ class HeatFluxBC(HeatChargeBC):
 
     Example
     -------
-    >>> bc = HeatFluxBC(flux=1)
+    >>> import tidy3d as td
+    >>> bc = td.HeatFluxBC(flux=1)
     """
 
     flux: float = pd.Field(
@@ -43,7 +45,8 @@ class ConvectionBC(HeatChargeBC):
 
     Example
     -------
-    >>> bc = ConvectionBC(ambient_temperature=300, transfer_coeff=1)
+    >>> import tidy3d as td
+    >>> bc = td.ConvectionBC(ambient_temperature=300, transfer_coeff=1)
     """
 
     ambient_temperature: pd.PositiveFloat = pd.Field(

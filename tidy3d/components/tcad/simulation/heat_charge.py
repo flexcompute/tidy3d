@@ -190,13 +190,12 @@ class HeatChargeSimulation(AbstractSimulation):
 
     To run a drift-diffusion (``Charge`` |:zap:|) system:
     >>> import tidy3d as td
-    >>> Si_n = td.MultiPhysicsMedium(charge=td.SemiconductorMedium(
-    ...     permittivity=11.7,
-    ...     N_d=1e15,
-    ...     N_a=0,
-    ...     ), name="Si_n",
+    >>> air = td.FluidMedium(
+    ...     name="air"
     ... )
-    >>> Si_p = Si_n.updated_copy(N_d=0, N_p=1e16, name="Si_p")
+    >>> intrinsic_Si = td.material_library['cSi'].variants['Si_MultiPhysics'].medium.charge
+    >>> Si_n = intrinsic_Si.updated_copy(N_d=1e16, name="Si_n")
+    >>> Si_p = intrinsic_Si.updated_copy(N_a=1e16, name="Si_p")
     >>> n_side = td.Structure(
     ...     geometry=td.Box(center=(-0.5, 0, 0), size=(1, 1, 1)),
     ...     medium=Si_n,
@@ -225,7 +224,7 @@ class HeatChargeSimulation(AbstractSimulation):
     ...     size=(3, 3, 3),
     ...     grid_spec=td.UniformUnstructuredGrid(dl=0.05),
     ...     boundary_spec=[bc_v1, bc_v2],
-    ...     analysis_spec=td.SteadyChargeDCAnalysis(
+    ...     analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
     ...         tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=3e3, max_iters=400),
     ...         convergence_dv=10),
     ...     )
