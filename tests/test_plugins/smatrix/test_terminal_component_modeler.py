@@ -98,9 +98,12 @@ def test_plot_sim_eps(tmp_path):
 
 @pytest.mark.parametrize("port_refinement", [False, True])
 def test_make_component_modeler(tmp_path, port_refinement):
-    _ = make_component_modeler(
+    modeler = make_component_modeler(
         planar_pec=False, path_dir=str(tmp_path), port_refinement=port_refinement
     )
+    if port_refinement:
+        for sim in modeler.sim_dict.values():
+            _ = sim.volumetric_structures
 
 
 def test_run(monkeypatch, tmp_path):
@@ -235,7 +238,12 @@ def test_converting_port_to_simulation_objects(snap_center):
 
 @pytest.mark.parametrize("port_refinement", [False, True])
 def test_make_coaxial_component_modeler(tmp_path, port_refinement):
-    _ = make_coaxial_component_modeler(path_dir=str(tmp_path), port_refinement=port_refinement)
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_refinement=port_refinement
+    )
+    if port_refinement:
+        for sim in modeler.sim_dict.values():
+            _ = sim.volumetric_structures
 
 
 def test_run_coaxial_component_modeler(monkeypatch, tmp_path):

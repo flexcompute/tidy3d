@@ -83,14 +83,14 @@ class LumpedElement(Tidy3dBaseModel, ABC):
         """Converts the :class:`.LumpedElement` object to a :class:`.Geometry`."""
 
     @abstractmethod
-    def to_structure(self) -> Structure:
+    def to_structure(self, grid: Grid = None) -> Structure:
         """Converts the network portion of the :class:`.LumpedElement` object to a
         :class:`.Structure`."""
 
     def to_structures(self, grid: Grid = None) -> list[Structure]:
         """Converts the :class:`.LumpedElement` object to a list of :class:`.Structure`
         which are ready to be added to the :class:`.Simulation`"""
-        return [self.to_structure]
+        return [self.to_structure(grid)]
 
 
 class RectangularLumpedElement(LumpedElement, Box):

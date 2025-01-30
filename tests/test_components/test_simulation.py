@@ -3061,3 +3061,49 @@ def test_fixed_angle_sim():
     )
     with pytest.raises(pydantic.ValidationError):
         _ = sim.updated_copy(structures=[sphere.updated_copy(medium=time_modulated_med)])
+
+
+def test_sim_volumetric_structures_with_lumped_elements(tmp_path):
+    """Test volumetric equivalent of lumped elements."""
+    grid_dl = 0.1
+    center = (-2, 0, 0)
+    network = td.RLCNetwork(resistance=42, capacitance=5e-12, network_topology="parallel")
+    resistor = td.LumpedResistor(
+        center=center, size=(0, 1, 2), name="resistor", voltage_axis=1, resistance=54
+    )
+    coax_resistor = td.CoaxialLumpedResistor(
+        center=center,
+        outer_diameter=3,
+        inner_diameter=0.5,
+        name="coax_resistor",
+        normal_axis=0,
+        resistance=54,
+    )
+    linear_element = td.LinearLumpedElement(
+        center=center, size=(0, 1, 2), name="linear_element", voltage_axis=1, network=network
+    )
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    substrate = td.Structure(
+        geometry=td.Box(size=(4, td.inf, td.inf)), medium=td.Medium(permittivity=3.5)
+    )
+    for element in [resistor, coax_resistor, linear_element]:
+        sim = td.Simulation(
+            size=(10, 10, 10),
+            structures=[substrate],
+            sources=[src],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(num_layers=6),
+                y=td.Boundary.pml(num_layers=6),
+                z=td.Boundary.pml(num_layers=6),
+            ),
+            lumped_elements=[element],
+            grid_spec=td.GridSpec.uniform(dl=grid_dl),
+            run_time=1e-12,
+        )
+        vol_structures = sim.volumetric_structures
+        assert len(vol_structures) == 2
+        assert np.isclose(vol_structures[1].geometry.bounding_box.size[0], 0, rtol=RTOL)

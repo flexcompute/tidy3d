@@ -849,7 +849,22 @@ SIM_FULL = td.Simulation(
     lumped_elements=[
         td.LumpedResistor(
             center=(2, 2, 0), size=(0.2, 0.2, 0), name="Resistor", resistance=42, voltage_axis=0
-        )
+        ),
+        td.CoaxialLumpedResistor(
+            center=(3, 2, 0),
+            outer_diameter=2.0,
+            inner_diameter=0.2,
+            name="Coax Resistor",
+            resistance=42,
+            normal_axis=0,
+        ),
+        td.LinearLumpedElement(
+            center=(1, 2, 0),
+            size=(0.2, 0.2, 0),
+            name="LCParallel",
+            network=td.RLCNetwork(inductance=1e-9, capacitance=10e-12, network_topology="parallel"),
+            voltage_axis=0,
+        ),
     ],
     symmetry=(0, 0, 0),
     boundary_spec=td.BoundarySpec(
