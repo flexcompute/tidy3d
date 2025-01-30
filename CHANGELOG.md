@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reduced the complex tolerance in the mode solver below which permittivity is considered lossless, in order to correctly compute very low-loss modes.
 -`HeatChargeSimulation` supersedes `HeatSimulation`. Though both of the can be used for Heat simulation interchangeably, the latter has been deprecated and will disappear in the future. 
 - `FluidSpec` and `SolidSpec` are now deprecated in favor of `FluidMedium` and `SolidMedium`. Both can still be used interchangeably.
+- Exclude `FluxMonitor` frequencies from adjoint design region gradient monitors since we do not differentiate through `FluxData`
 
 ### Fixed
 - NumPy 2.1 compatibility issue where `numpy.float64` values passed to xarray interpolation would raise TypeError.

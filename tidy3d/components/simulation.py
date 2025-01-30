@@ -74,6 +74,7 @@ from .monitor import (
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     FieldTimeMonitor,
+    FluxMonitor,
     FreqMonitor,
     ModeMonitor,
     Monitor,
@@ -3893,7 +3894,9 @@ class Simulation(AbstractYeeGridSimulation):
 
         freqs = set()
         for mnt in self.monitors:
-            if isinstance(mnt, FreqMonitor):
+            # since we cannot differentiate through the FluxMonitor, we can ignore
+            # the frequencies it is tracking
+            if isinstance(mnt, FreqMonitor) and not isinstance(mnt, FluxMonitor):
                 freqs.update(mnt.freqs)
         freqs = sorted(freqs)
         return freqs

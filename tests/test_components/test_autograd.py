@@ -1737,7 +1737,10 @@ def test_error_flux(use_emulated_run):
         structure_traced = make_structures(params)["medium"]
         sim = SIM_BASE.updated_copy(
             structures=[structure_traced],
-            monitors=[td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="flux")],
+            monitors=[
+                td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="flux"),
+                td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
+            ],
         )
         data = run(sim, task_name="flux_error")
         return anp.sum(data["flux"].flux.values)
@@ -1994,3 +1997,32 @@ def test_polyslab_rotated_grad(polyslab: td.PolySlab, theta: float, axis: int) -
             rotated_grad(theta, axis)
     else:
         check_grads(lambda theta: rotated_grad(theta, axis), modes=["rev"])(theta)
+
+
+def test_flux_monitor_freq_exclusion(use_emulated_run):
+    """Checks if we are excluding flux monitor frequencies from the adjoint frequencies since
+    we cannot differentiate through flux data."""
+
+    monitors_just_field = [
+        td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field")
+    ]
+
+    monitors_with_flux = [
+        td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
+        td.FluxMonitor(
+            size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0 - FWIDTH, FREQ0 + FWIDTH], name="flux"
+        ),
+    ]
+
+    def objective_with_monitors(monitors):
+        def objective(params):
+            structure_traced = make_structures(params)["medium"]
+            sim = SIM_BASE.updated_copy(structures=[structure_traced], monitors=monitors)
+            data = run(sim, task_name="adjoint_freq_test")
+            assert data.simulation.freqs_adjoint == [FREQ0]
+            return anp.sum(data["field"].flux.values)
+
+        return objective
+
+    grad_no_flux_monitors = ag.grad(objective_with_monitors(monitors_just_field))(params0)
+    grad_with_flux_monitors = ag.grad(objective_with_monitors(monitors_with_flux))(params0)
