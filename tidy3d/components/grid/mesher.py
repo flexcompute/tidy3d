@@ -230,23 +230,23 @@ class GradedMesher(Mesher):
         # structures.
         structures_effective = self.filter_structures_effective_dl(structures, axis)
 
-        # Special attention needs to be paid to enforced overrideStructures.
-        # They shouldn't be overridden by other structures;
-        # for overlapping enforced structures, the grid size of the overlapped
-        # region is determined by the last enforced structure. We take two
-        # steps to implement the feature:
+        # Special attention needs to be paid to enforced or unshadowed overrideStructures.
+        # 1) enforced structures shouldn't be overridden by other structures; for overlapping enforced
+        #    structures, the grid size of the overlapped region is determined by the last enforced structure.
+        # 2) unshadowed structures don't override other structures based on the structure list order,
+        #    but by grid size; additionally, unshadowed structures won't add new intervals if they
+        #    don't reduce grid size in the intervals.
+        #  We take two steps to implement the feature:
         # 1) reorder structure list so that enforce = True structures are shifted to
-        #    the end of the last.
+        #    the end of the last, and unshadowed structures to the begining (but after simulation structure).
         # 2) in each interval, the maximal grid size is:
         #    a) no enforced structure: min(grid size of each structure).
         #    b) with enforced structure: grid size of the last override structure.
 
-        # reorder structure list to place enforced ones to the end
-        num_unenforced, structures_ordered = self.reorder_structures_enforced_to_end(
-            structures_effective
-        )
+        # reorder structure list
+        num_unenforced, structures_ordered = self.reorder_structures(structures_effective)
 
-        # no containment check for those structures
+        # no containment check for unshadowed structures
         skip_containment = [
             isinstance(structure, MeshOverrideStructure) and not structure.shadow
             for structure in structures_ordered
@@ -312,7 +312,9 @@ class GradedMesher(Mesher):
 
                 # Remove all lower structures that the current structure completely contains
                 inds_lower = [
-                    ind for ind in query_inds if ind < str_ind and struct_bbox[ind] is not None
+                    ind
+                    for ind in query_inds
+                    if ind < str_ind and struct_bbox[ind] is not None and not skip_containment[ind]
                 ]
                 query_bbox = [struct_bbox[ind] for ind in inds_lower]
                 bbox_contains_inds = self.contains_3d(bbox, query_bbox)
@@ -332,7 +334,15 @@ class GradedMesher(Mesher):
 
                 # Handle insertion of the current structure bounds in the intervals
                 # The intervals list is modified in-place
-                too_small = self.insert_bbox(intervals, str_ind, bbox, bbox_contained_2d, min_step)
+                too_small = self.insert_bbox(
+                    intervals,
+                    str_ind,
+                    bbox,
+                    bbox_contained_2d,
+                    min_step,
+                    structure_steps,
+                    skip_containment[str_ind],
+                )
                 if too_small and (bbox[1, 2] - bbox[0, 2]) > 0:
                     # If the structure is too small (but not 0D), issue a warning
                     log.warning(
@@ -378,11 +388,14 @@ class GradedMesher(Mesher):
         str_bbox: ArrayFloat1D,
         bbox_contained_2d: List[ArrayFloat1D],
         min_step: float,
+        structure_steps: ArrayFloat1D,
+        unshadowed: bool,
     ) -> Dict[str, List]:
         """Figure out where to place the bounding box coordinates of current structure.
         For both the left and the right bounds of the structure along the meshing direction,
-        we check if they are not too close to an already existing coordinate, and if the
-        structure is not completely covered by another structure at that location.
+        we check if they are not too close to an already existing coordinate, if the
+        structure is not completely covered by another structure at that location, and if
+        the structure is unshadowed and it refines grid size,
         Only then we add that boundary to the list of interval coordinates.
         We also don't add the bounds if ``str_ind==0``, since the domain bounds have already
         been added to the interval coords at the start.
@@ -402,6 +415,10 @@ class GradedMesher(Mesher):
             List of 3D bounding boxes that contain the current structure in 2D.
         min_step : float
             Absolute minimum interval size to impose.
+        structure_steps : ArrayFloat1D
+            Maximal grid size in each structure.
+        unshadowed : Bool
+            Whether the current structure is unshadowed.
 
         Returns
         -------
@@ -427,9 +444,21 @@ class GradedMesher(Mesher):
         is_close_r = self.is_close(bound_coord, coords, indmin, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
 
+        # special treatment to unshadowed structure
+        skip_unshadowed = False
+        if unshadowed:
+            grid_size_str = structure_steps[str_ind]
+            min_grid_size = min(
+                (structure_steps[ind] for ind in structs[indmin - 1]), default=grid_size_str
+            )
+            if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
+                skip_unshadowed = True
+
         # Decide on whether coordinate should be inserted or indmin modified
-        if is_close_l:
-            # Don't insert coordinate but decrease indmin
+        if is_close_l or skip_unshadowed:
+            # Don't insert coordinate but decrease indmin.
+            # Note that for `skip_unshadowed`, it makes no difference to decrease indmin or not, as it will not
+            # decrease grid size in this interval.
             indmin -= 1
         elif not is_close_r and not is_contained and str_ind > 0:
             # Add current structure bounding box coordinates
@@ -446,8 +475,18 @@ class GradedMesher(Mesher):
         is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
 
+        # special treatment to unshadowed structure
+        skip_unshadowed = False
+        if unshadowed:
+            grid_size_str = structure_steps[str_ind]
+            min_grid_size = min(
+                (structure_steps[ind] for ind in structs[indmax]), default=grid_size_str
+            )
+            if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
+                skip_unshadowed = True
+
         # Decide on whether coordinate should be inserted or indmax modified
-        if is_close_r:
+        if is_close_r or skip_unshadowed:
             # Don't insert coordinate but increase indmax
             indmax += 1
         elif not is_close_l and not is_contained and str_ind > 0:
@@ -469,11 +508,14 @@ class GradedMesher(Mesher):
         return indmin >= indmax
 
     @staticmethod
-    def reorder_structures_enforced_to_end(
+    def reorder_structures(
         structures: List[StructureType],
     ) -> Tuple[int, List[StructureType]]:
-        """Reorder structure list so that MeshOverrideStructures with ``enforce=True``
-        are shifted to the end of list.
+        """Reorder structure list to order as follows:
+        1). simulation structure `str[0]` remains as the first structure;
+        2). MeshOverrideStructures with ``shadow=False``;
+        3). Structures other than 1),2),4);
+        4). MeshOverrideStructures with ``enforce=True``.
 
         Parameters
         ----------
@@ -487,21 +529,40 @@ class GradedMesher(Mesher):
 
         """
 
-        # boolean list for enforced unenforced structures
+        # boolean list for enforced structures
         enforced_list = [
             isinstance(structure, MeshOverrideStructure) and structure.enforce
             for structure in structures
         ]
-
-        # if no enforced structure, a quick return here
-        if not any(enforced_list):
+        # boolean list for unshadowed structures
+        unshadowed_list = [
+            isinstance(structure, MeshOverrideStructure) and not structure.shadow
+            for structure in structures
+        ]
+        # if no special structure, a quick return here
+        if not (any(enforced_list) or any(unshadowed_list)):
             return len(structures), structures
 
         # filter structures
         structures_enforced = list(compress(structures, enforced_list))
-        structures_others = list(compress(structures, [not enforced for enforced in enforced_list]))
+        structures_unshadowed = list(compress(structures, unshadowed_list))
+        structures_others = list(
+            compress(
+                structures,
+                [
+                    not (enforced or unshadowed)
+                    for unshadowed, enforced in zip(unshadowed_list, enforced_list)
+                ],
+            )
+        )
 
-        return len(structures_others), structures_others + structures_enforced
+        ordered_structures = (
+            [structures_others[0]]
+            + structures_unshadowed
+            + structures_others[1:]
+            + structures_enforced
+        )
+        return len(structures_others) + len(structures_unshadowed), ordered_structures
 
     @staticmethod
     def filter_structures_effective_dl(

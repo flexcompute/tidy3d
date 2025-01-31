@@ -855,3 +855,43 @@ def test_override_unshadowed():
     )
     sizes = sim_unshadow.grid.sizes.to_list[2]
     assert sizes[len(sizes) // 2] < 0.1
+
+
+def test_override_unshadowed_snapping():
+    """Test that an unshadowed override structure won't snap to grid if it doesn't reduce grid size in the overriding
+    region.
+    """
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+
+    # override structure takes no effect (including bounding box snapping) if its grid size is
+    # larger than the existing ones in the overriding region.
+    override_structure = td.MeshOverrideStructure(
+        geometry=td.Box(size=(1, 1, 1)),
+        dl=[0.2, 0.2, 0.2],
+        shadow=False,
+    )
+    sim_shadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    assert sim_shadow.num_cells == sim.num_cells
+    assert not any(np.isclose(sim_shadow.grid.boundaries.x, 0.5))
+
+    # override structure takes effect if its grid size is smaller
+    override_structure = td.MeshOverrideStructure(
+        geometry=td.Box(size=(1, 1, 1)),
+        dl=[0.07, 0.07, 0.07],
+        shadow=False,
+    )
+    sim_shadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    assert sim_shadow.num_cells > sim.num_cells
+    assert any(np.isclose(sim_shadow.grid.boundaries.x, 0.5))
