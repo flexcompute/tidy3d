@@ -424,3 +424,43 @@ def test_quasiuniform_grid():
         grid_spec=td.GridSpec.quasiuniform(dl=0.1, snapping_points=snapping_points)
     )
     assert any(np.isclose(sim.grid.boundaries.x, pos))
+
+
+def test_domain_mismatch():
+    """Test that generated grids match simulation domain. Previously it errors for z-axis."""
+    lam0 = 5
+
+    length = 5
+    width = 5
+    top_thickness = 0.2
+    bottom_thickness = 0.2
+
+    bottom = td.Structure(
+        geometry=td.Box(
+            center=[0, 0, 0],
+            size=[width, length, bottom_thickness],
+        ),
+        medium=td.Medium(permittivity=4),
+    )
+
+    top = td.Structure(
+        geometry=td.Box(
+            center=[0, 0, bottom_thickness / 2 + top_thickness / 2],
+            size=[width, length, top_thickness],
+        ),
+        medium=td.Medium(),
+    )
+
+    sim = td.Simulation(
+        center=[0, 0, 0],
+        size=[6, 6, 1],
+        grid_spec=td.GridSpec.auto(
+            min_steps_per_wvl=10,
+            wavelength=lam0,
+        ),
+        structures=[bottom, top],
+        sources=[],
+        run_time=1e-20,
+        boundary_spec=td.BoundarySpec.pml(),
+    )
+    z = sim.grid.boundaries.z

@@ -673,7 +673,9 @@ class GradedMesher(Mesher):
         coords_filter = [interval_coords[0]]
         steps_filter = []
         for coord_ind, coord in enumerate(interval_coords[1:]):
-            if coord - coords_filter[-1] >= min_step:
+            if coord - coords_filter[-1] >= min_step or (
+                coord_ind == len(interval_coords) - 2 and not isclose(coord, coords_filter[-1])
+            ):
                 coords_filter.append(coord)
                 steps_filter.append(max_steps[coord_ind])
 
