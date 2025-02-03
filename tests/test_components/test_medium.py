@@ -591,6 +591,18 @@ def test_nonlinear_medium():
         )
     )
 
+    assert med._nonlinear_num_iters == 20
+    assert td.Medium()._nonlinear_num_iters == 0
+    assert td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))._nonlinear_num_iters == 1
+    assert (
+        td.Medium(
+            nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=2)
+        )._nonlinear_num_iters
+        == 2
+    )
+    assert td.Medium()._nonlinear_models == []
+    assert td.Medium(nonlinear_spec=td.NonlinearSpec())._nonlinear_models == []
+
     # warn about deprecated api
     with AssertLogLevel("WARNING"):
         med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
@@ -634,11 +646,15 @@ def test_nonlinear_medium():
     # active materials
     with pytest.raises(ValidationError):
         med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)])
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1, freq0=1)])
         )
 
     with pytest.raises(ValidationError):
-        med = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=-1j, n0=1)]))
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[td.KerrNonlinearity(n2=-1j, n0=1, use_complex_fields=True)]
+            )
+        )
 
     # automatic detection of n0 and freq0
     n0 = 2
@@ -662,26 +678,6 @@ def test_nonlinear_medium():
     assert n0 == nonlinear_spec.models[0]._get_n0(n0=None, medium=medium, freqs=[freq0])
     assert freq0 == nonlinear_spec.models[0]._get_freq0(freq0=None, freqs=[freq0])
 
-    # two photon absorption is phenomenological
-    with AssertLogLevel("WARNING", contains_str="phenomenological"):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
-            allow_gain=True,
-        )
-        sim.updated_copy(medium=med, path="structures/0")
-
-    # complex parameters
-    with AssertLogLevel("WARNING", contains_str="preferred"):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(
-                models=[
-                    td.KerrNonlinearity(n2=-1 + 1j, n0=1),
-                ],
-                num_iters=20,
-            )
-        )
-        sim.updated_copy(medium=med, path="structures/0")
-
     # subsection with nonlinear materials needs to hardcode source info
     sim2 = sim.updated_copy(center=(-4, -4, -4), path="sources/0")
     sim2 = sim2.updated_copy(
@@ -696,12 +692,26 @@ def test_nonlinear_medium():
     source2 = source.updated_copy(source_time=source_time2)
     with pytest.raises(SetupError):
         sim.updated_copy(sources=[source, source2])
+    with pytest.raises(SetupError):
+        sim.updated_copy(sources=[])
 
     # but if we provided it, it's ok
     nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
     assert 1 == nonlinear_spec.models[0]._get_n0(n0=1, medium=medium, freqs=[1, 2])
+
+    nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1)])
+    structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
+    sim = sim.updated_copy(structures=[structure])
+    with pytest.raises(SetupError):
+        sim = sim.updated_copy(structures=[structure], sources=[source, source2])
+    with pytest.raises(SetupError):
+        sim = sim.updated_copy(structures=[structure], sources=[])
+    nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1, freq0=1)])
+    structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
+    sim = sim.updated_copy(structures=[structure])
+    assert 1 == nonlinear_spec.models[0]._get_freq0(freq0=1, freqs=[1, 2])
 
     # active materials with automatic detection of n0
     nonlinear_spec_active = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1)])
@@ -726,6 +736,38 @@ def test_nonlinear_medium():
         td.Medium2D(ss=medium, tt=medium)
     with pytest.raises(ValidationError):
         td.Medium2D(ss=modulated, tt=modulated)
+
+    # some parameters must be real now, unless we use old implementation
+    _ = td.TwoPhotonAbsorption(beta=1j, use_complex_fields=True)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.TwoPhotonAbsorption(beta=1j)
+    _ = td.KerrNonlinearity(n2=1j, use_complex_fields=True)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.KerrNonlinearity(n2=1j)
+
+    # consistent complex fields
+    _ = td.NonlinearSpec(
+        models=[
+            td.TwoPhotonAbsorption(beta=1, use_complex_fields=True),
+            td.KerrNonlinearity(n2=1, use_complex_fields=True),
+        ]
+    )
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.NonlinearSpec(
+            models=[
+                td.TwoPhotonAbsorption(beta=1, use_complex_fields=True),
+                td.KerrNonlinearity(n2=1, use_complex_fields=False),
+            ]
+        )
+
+    # warn if using old implementation
+    with AssertLogLevel("WARNING", contains_str="use_complex_fields"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[td.KerrNonlinearity(n2=1, use_complex_fields=True)]
+            )
+        )
+        _ = sim.updated_copy(medium=med, path="structures/0")
 
 
 def test_custom_medium():

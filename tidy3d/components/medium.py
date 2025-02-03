@@ -218,6 +218,8 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
         freqs: List[pd.PositiveFloat],
     ) -> complex:
         """Get a single value for n0."""
+        if freqs is None:
+            freqs = []
         freqs = np.array(freqs, dtype=float)
         ns, ks = medium.nk_model(freqs)
         nks = ns + 1j * ks
@@ -256,7 +258,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
     @property
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
-        pass
+        return False
 
 
 class NonlinearSusceptibility(NonlinearModel):
@@ -322,11 +324,6 @@ class NonlinearSusceptibility(NonlinearModel):
             )
         return val
 
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        return False
-
 
 class TwoPhotonAbsorption(NonlinearModel):
     """Model for two-photon absorption (TPA) nonlinearity which gives an intensity-dependent
@@ -334,40 +331,59 @@ class TwoPhotonAbsorption(NonlinearModel):
     Also includes free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) effects.
     The expression for the nonlinear polarization is given below.
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        P_{NL} = P_{TPA} + P_{FCA} + P_{FCPD} \\\\
-        P_{TPA} = -\\frac{c_0^2 \\varepsilon_0^2 n_0 \\operatorname{Re}(n_0) \\beta}{2 i \\omega} |E|^2 E \\\\
-        P_{FCA} = -\\frac{c_0 \\varepsilon_0 n_0 \\sigma N_f}{i \\omega} E \\\\
-        \\frac{dN_f}{dt} = \\frac{c_0^2 \\varepsilon_0^2 n_0^2 \\beta}{8 q_e \\hbar \\omega} |E|^4 - \\frac{N_f}{\\tau} \\\\
-        N_e = N_h = N_f \\\\
-        P_{FCPD} = \\varepsilon_0 2 n_0 \\Delta n (N_f) E \\\\
-        \\Delta n (N_f) = (c_e N_e^{e_e} + c_h N_h^{e_h})
+        This model uses real time-domain fields, so :math:`\\beta` must be real.
 
-    Note
-    ----
-    This frequency-domain equation is implemented in the time domain using complex-valued fields.
+        .. math::
 
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
+            P_{NL} = P_{TPA} + P_{FCA} + P_{FCPD} \\\\
+            P_{TPA} = -\\frac{4}{3}\\frac{c_0^2 \\varepsilon_0^2 n_0^2 \\beta}{2 i \\omega} |E|^2 E \\\\
+            P_{FCA} = -\\frac{c_0 \\varepsilon_0 n_0 \\sigma N_f}{i \\omega} E \\\\
+            \\frac{dN_f}{dt} = \\frac{8}{3}\\frac{c_0^2 \\varepsilon_0^2 n_0^2 \\beta}{8 q_e \\hbar \\omega} |E|^4 - \\frac{N_f}{\\tau} \\\\
+            N_e = N_h = N_f \\\\
+            P_{FCPD} = \\varepsilon_0 2 n_0 \\Delta n (N_f) E \\\\
+            \\Delta n (N_f) = (c_e N_e^{e_e} + c_h N_h^{e_h})
 
-    Note
-    ----
-    The implementation is described in::
+        In these equations, :math:`n_0` means the real part of the linear
+        refractive index of the medium.
 
-        N. Suzuki, "FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si
-        High-Index-Contrast Waveguides," J. Light. Technol. 25, 9 (2007).
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.num_iters` can
+        help with convergence.
+
+        For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+        is applied separately to the real and imaginary parts, so that the above equation
+        holds when both :math:`E` and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        The nonlinearity is only applied to the real-valued fields since they are the
+        physical fields.
+
+        Different field components do not interact nonlinearly. For example,
+        when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+        This approximation is valid when the :math:`E` field is predominantly polarized along one
+        of the ``x``, ``y``, or ``z`` axes.
+
+        The implementation is described in::
+
+            N. Suzuki, "FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si
+            High-Index-Contrast Waveguides," J. Light. Technol. 25, 9 (2007).
+
+        .. TODO add links to notebooks here.
 
     Example
     -------
     >>> tpa_model = TwoPhotonAbsorption(beta=1)
     """
+
+    use_complex_fields: bool = pd.Field(
+        False,
+        title="Use complex fields",
+        description="Whether to use the old deprecated complex-fields implementation. "
+        "The default real-field implementation is more physical and is always "
+        "recommended; this option is only available for backwards compatibility "
+        "with Tidy3D version < 2.8 and may be removed in a future release.",
+    )
 
     beta: Union[float, Complex] = pd.Field(
         0,
@@ -429,10 +445,26 @@ class TwoPhotonAbsorption(NonlinearModel):
         "from the simulation sources (as long as these are all equal).",
     )
 
+    @pd.validator("beta", always=True)
+    def _validate_beta_real(cls, val, values):
+        """Check that beta is real and give a useful error if it is not."""
+        use_complex_fields = values.get("use_complex_fields")
+        if use_complex_fields:
+            return val
+        if not np.isreal(val):
+            raise SetupError(
+                "Complex values of 'beta' in 'TwoPhotonAbsorption' are not "
+                "supported; the implementation uses the "
+                "physical real-valued fields."
+            )
+        return val
+
     def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
         """Any validation that depends on knowing the central frequencies of the sources.
         This includes passivity checking, if necessary."""
         n0 = self._get_n0(self.n0, medium, freqs)
+        if freqs is not None:
+            _ = self._get_freq0(self.freq0, freqs)
         beta = self.beta
         if not medium.allow_gain:
             chi_imag = np.real(beta * n0 * np.real(n0))
@@ -457,12 +489,12 @@ class TwoPhotonAbsorption(NonlinearModel):
         """Check that the model is compatible with the medium."""
         # if n0 is specified, we can go ahead and validate passivity
         if self.n0 is not None:
-            self._validate_medium_freqs(medium, [])
+            self._validate_medium_freqs(medium, None)
 
     @property
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
-        return True
+        return self.use_complex_fields
 
 
 class KerrNonlinearity(NonlinearModel):
@@ -470,33 +502,56 @@ class KerrNonlinearity(NonlinearModel):
     of the form :math:`n = n_0 + n_2 I`. The expression for the nonlinear polarization
     is given below.
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        P_{NL} = \\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0) n_2 |E|^2 E
+        This model uses real time-domain fields, so :math:`\\n_2` must be real.
 
-    Note
-    ----
-    The fields in this equation are complex-valued, allowing a direct implementation of the Kerr
-    nonlinearity. In contrast, the model :class:`.NonlinearSusceptibility` implements a
-    chi3 nonlinear susceptibility using real-valued fields, giving rise to Kerr nonlinearity
-    as well as third-harmonic generation and other effects. The relationship between the parameters is given by
-    :math:`n_2 = \\frac{3}{4} \\frac{1}{\\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0)} \\chi_3`. The additional
-    factor of :math:`\\frac{3}{4}` comes from the usage of complex-valued fields for the Kerr
-    nonlinearity and real-valued fields for the nonlinear susceptibility.
+        This model is equivalent to a :class:`.NonlinearSusceptibility`; the
+        relation between the parameters is given below.
 
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
+        .. math::
+
+            P_{NL} = \\varepsilon_0 \\chi_3 |E|^2 E \\\\
+            n_2 = \\frac{3}{4 n_0^2 \\varepsilon_0 c_0} \\chi_3
+
+        In these equations, :math:`n_0` means the real part of the linear
+        refractive index of the medium.
+
+        To simulate nonlinear loss, consider instead using a :class:`.TwoPhotonAbsorption`
+        model, which implements a more physical dispersive loss of the form
+        :math:`\\chi_{TPA} = i \\frac{c_0 n_0 \\beta}{\\omega} I`.
+
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.num_iters` can
+        help with convergence.
+
+        For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+        is applied separately to the real and imaginary parts, so that the above equation
+        holds when both :math:`E` and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        The nonlinearity is only applied to the real-valued fields since they are the
+        physical fields.
+
+        Different field components do not interact nonlinearly. For example,
+        when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+        This approximation is valid when the :math:`E` field is predominantly polarized along one
+        of the ``x``, ``y``, or ``z`` axes.
+
+        .. TODO add links to notebooks here.
 
     Example
     -------
     >>> kerr_model = KerrNonlinearity(n2=1)
     """
+
+    use_complex_fields: bool = pd.Field(
+        False,
+        title="Use complex fields",
+        description="Whether to use the old deprecated complex-fields implementation. "
+        "The default real-field implementation is more physical and is always "
+        "recommended; this option is only available for backwards compatibility "
+        "with Tidy3D version < 2.8 and may be removed in a future release.",
+    )
 
     n2: Complex = pd.Field(
         0,
@@ -513,11 +568,31 @@ class KerrNonlinearity(NonlinearModel):
         "frequencies of the simulation sources (as long as these are all equal).",
     )
 
+    @pd.validator("n2", always=True)
+    def _validate_n2_real(cls, val, values):
+        """Check that n2 is real and give a useful error if it is not."""
+        use_complex_fields = values.get("use_complex_fields")
+        if use_complex_fields:
+            return val
+        if not np.isreal(val):
+            raise SetupError(
+                "Complex values of 'n2' in 'KerrNonlinearity' are not "
+                "supported; the implementation uses the "
+                "physical real-valued fields. "
+                "To simulate nonlinear loss, consider instead using a "
+                "'TwoPhotonAbsorption' model, which implements a "
+                "more physical dispersive loss of the form "
+                "'chi_{TPA} = i (c_0 n_0 beta / omega) I'."
+            )
+        return val
+
     def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
         """Any validation that depends on knowing the central frequencies of the sources.
         This includes passivity checking, if necessary."""
         n0 = self._get_n0(self.n0, medium, freqs)
         n2 = self.n2
+        if not self.use_complex_fields:
+            return
         if not medium.allow_gain:
             chi_imag = np.imag(n2 * n0 * np.real(n0))
             if chi_imag < 0:
@@ -529,6 +604,12 @@ class KerrNonlinearity(NonlinearModel):
                     "gain medium are unstable, and are likely to diverge."
                 )
 
+    def _validate_medium(self, medium: AbstractMedium):
+        """Check that the model is compatible with the medium."""
+        # if n0 is specified, we can go ahead and validate passivity
+        if self.n0 is not None:
+            self._validate_medium_freqs(medium, [])
+
     def _hardcode_medium_freqs(
         self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
     ) -> KerrNonlinearity:
@@ -536,16 +617,10 @@ class KerrNonlinearity(NonlinearModel):
         n0 = self._get_n0(n0=self.n0, medium=medium, freqs=freqs)
         return self.updated_copy(n0=n0)
 
-    def _validate_medium(self, medium: AbstractMedium):
-        """Check that the model is compatible with the medium."""
-        # if n0 is specified, we can go ahead and validate passivity
-        if self.n0 is not None:
-            self._validate_medium_freqs(medium, [])
-
     @property
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
-        return True
+        return self.use_complex_fields
 
 
 NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
@@ -593,6 +668,29 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
                 "were found in a single 'NonlinearSpec'. Please ensure that "
                 "each type of 'NonlinearModel' appears at most once in a single 'NonlinearSpec'."
             )
+        return val
+
+    @pd.validator("models", always=True)
+    def _consistent_old_complex_fields(cls, val):
+        """Ensure that old complex fields implementation is used consistently."""
+        if val is None:
+            return val
+        use_complex_fields = False
+        for model in val:
+            if isinstance(model, (KerrNonlinearity, TwoPhotonAbsorption)):
+                if model.use_complex_fields:
+                    use_complex_fields = True
+                elif use_complex_fields:
+                    # if one model uses complex fields, they all should
+                    raise SetupError(
+                        "Some of the nonlinear models have "
+                        "'use_complex_fields=True' and some have "
+                        "'use_complex_fields=False'. This option "
+                        "is only available for backwards compatibility "
+                        "with Tidy3D version < 2.8 "
+                        "and it must be consistent across the nonlinear "
+                        "models in a given 'NonlinearSpec'."
+                    )
         return val
 
     @pd.validator("num_iters", always=True)
@@ -657,7 +755,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     )
 
     @cached_property
-    def _nonlinear_models(self) -> NonlinearSpec:
+    def _nonlinear_models(self) -> List:
         """The nonlinear models in the nonlinear_spec."""
         if self.nonlinear_spec is None:
             return []
@@ -665,7 +763,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             return [self.nonlinear_spec]
         if self.nonlinear_spec.models is None:
             return []
-        return self.nonlinear_spec.models
+        return list(self.nonlinear_spec.models)
 
     @cached_property
     def _nonlinear_num_iters(self) -> pd.PositiveInt:

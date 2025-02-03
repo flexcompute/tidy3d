@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Renamed `SkinDepthFitterParam` --> `SurfaceImpedanceFitterParam` used in `LossyMetalMedium`. `plot` in `LossyMetalMedium` now plots complex-valued surface impedance.
 - Changed plot_3d iframe url to tidy3d production environment.
 - `num_freqs` is now set to 3 by default for the `PlaneWave`, `GaussianBeam`, and `AnalyticGaussianBeam` sources, which makes the injection more accurate in broadband cases.
+- Nonlinear models `KerrNonlinearity` and `TwoPhotonAbsorption` now default to using the physical real fields instead of complex fields.
 
 ### Fixed
 - Make gauge selection for non-converged modes more robust.
