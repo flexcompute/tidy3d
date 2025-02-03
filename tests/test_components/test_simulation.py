@@ -3073,7 +3073,7 @@ def test_fixed_angle_sim():
         permittivity=3,
         nonlinear_spec=td.NonlinearSpec(
             models=[
-                td.KerrNonlinearity(n2=-1 + 1j, n0=1),
+                td.KerrNonlinearity(n2=1, n0=1),
             ],
             num_iters=20,
         ),
