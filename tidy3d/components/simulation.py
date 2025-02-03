@@ -4642,6 +4642,12 @@ class Simulation(AbstractYeeGridSimulation):
         float
             Minimum wavelength in the material (microns).
         """
+        if len(self.sources) == 0:
+            raise Tidy3dError(
+                "There are no sources present in the simulation. Please "
+                "add sources before querying for the minimum material "
+                "wavelength."
+            )
         freq_max = max(source.source_time.freq0 for source in self.sources)
         wvl_min = C_0 / freq_max
 

@@ -9,7 +9,7 @@ import tidy3d as td
 from tidy3d.components import simulation
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
 from tidy3d.components.simulation import MAX_NUM_SOURCES
-from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 
 from ..utils import (
     SIM_FULL,
@@ -619,6 +619,14 @@ def test_max_geometry_validation():
 def test_no_monitor():
     with pytest.raises(Tidy3dKeyError):
         SIM.get_monitor_by_name("NOPE")
+
+
+def test_wvl_mat_min_error():
+    """Make sure we get an error when there are no sources in the simulation but
+    we ask for the minimum wavelength in material."""
+
+    with pytest.raises(Tidy3dError):
+        SIM.wvl_mat_min()
 
 
 def test_plot_structure():

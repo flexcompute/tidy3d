@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -`HeatChargeSimulation` supersedes `HeatSimulation`. Though both of the can be used for Heat simulation interchangeably, the latter has been deprecated and will disappear in the future. 
 - `FluidSpec` and `SolidSpec` are now deprecated in favor of `FluidMedium` and `SolidMedium`. Both can still be used interchangeably.
 - Exclude `FluxMonitor` frequencies from adjoint design region gradient monitors since we do not differentiate through `FluxData`
+- Check for empty source list in `wvl_mat_min` in `Simulation` and raise user friendly error if no sources exist in the simulation.
 
 ### Fixed
 - NumPy 2.1 compatibility issue where `numpy.float64` values passed to xarray interpolation would raise TypeError.
