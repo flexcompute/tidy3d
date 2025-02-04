@@ -445,6 +445,17 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         return self.n_group_raw
 
     @property
+    def n_group_new(self) -> GroupIndexDataArray:
+        """Group index."""
+        if self.n_group_analytic is None:
+            log.warning(
+                "The group index was not computed. To calculate group index, pass "
+                "'calculate_group_index = True' in the 'ModeSpec'.",
+                log_once=True,
+            )
+        return self.n_group_analytic
+
+    @property
     def dispersion(self) -> ModeDispersionDataArray:
         r"""Dispersion parameter.
 
@@ -459,6 +470,17 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
                 log_once=True,
             )
         return self.dispersion_raw
+
+    @property
+    def dispersion_new(self) -> ModeDispersionDataArray:
+        """Group index."""
+        if self.dispersion_analytic is None:
+            log.warning(
+                "The dispersion was not computed. To calculate dispersion, pass "
+                "'calculate_group_index = True' in the 'ModeSpec'.",
+                log_once=True,
+            )
+        return self.dispersion_analytic
 
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
