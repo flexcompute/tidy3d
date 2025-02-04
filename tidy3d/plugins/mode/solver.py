@@ -865,6 +865,10 @@ class EigSolver(Tidy3dBaseModel):
         q1_mat = sp.bmat([[q1_11, q1_12], [q1_21, q1_22]])
         mat1 = p0_mat.dot(q1_mat) + p1_mat.dot(q0_mat)
 
+        alpha = 0.005
+
+        mat_approx = mat0 + alpha * mat1
+
         # second order correction matrix
 
         p2_11 = -3. * dxf.dot(inv_eps_zz).dot(dyb)
@@ -885,7 +889,7 @@ class EigSolver(Tidy3dBaseModel):
         mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=False)
         mat0 = cls.type_conversion(mat0, mat_dtype)
         mat1 = cls.type_conversion(mat1, mat_dtype)
-        mat2 = cls.type_conversion(mat1, mat_dtype)
+        mat2 = cls.type_conversion(mat2, mat_dtype)
 
         # Trim small values in single precision case
         if mat_precision == "single":
@@ -941,6 +945,15 @@ class EigSolver(Tidy3dBaseModel):
                 mode_solver_type=mode_solver_type,
                 M=precon,
             )
+
+            vals_m_approx_s_exact, vecs_m_approx_s_exact = cls.solver_eigs(
+                mat_approx,
+                num_modes,
+                vec_init,
+                guess_value=eig_guess,
+                mode_solver_type=mode_solver_type,
+                M=precon,
+            )
         else:
             vals, vecs = cls.solver_eigs_relative(
                 mat0,
@@ -954,10 +967,17 @@ class EigSolver(Tidy3dBaseModel):
 
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
+        neff_m_approx_s_exact, keff_m_approx_s_exact = cls.eigs_to_effective_index(vals_m_approx_s_exact, mode_solver_type)
+
         # Sort by descending neff
         sort_inds = np.argsort(neff)[::-1]
         neff = neff[sort_inds]
         keff = keff[sort_inds]
+
+        # Sort by descending neff
+        sort_inds_m_approx_s_exact = np.argsort(neff_m_approx_s_exact)[::-1]
+        neff_m_approx_s_exact = neff_m_approx_s_exact[sort_inds_m_approx_s_exact]
+        keff_m_approx_s_exact = keff_m_approx_s_exact[sort_inds_m_approx_s_exact]
 
         if basis_E is None:
             if enable_preconditioner:
@@ -968,17 +988,31 @@ class EigSolver(Tidy3dBaseModel):
 
         vecs = vecs[:, sort_inds]
 
+        vecs_m_approx_s_exact = vecs_m_approx_s_exact[:, sort_inds_m_approx_s_exact]
+
         # Calculate the first order correction to the eigenvalues
 
         vals_1 = np.zeros(num_modes)
         for mode_index in range(num_modes):
-            vals_1[mode_index] = np.real(( (vecs[:, mode_index].T) @ (mat1 @ vecs[:, mode_index]) ) / ((vecs[:, mode_index].T) @ vecs[:, mode_index]))
+            vals_1[mode_index] = np.real(( (vecs[:, mode_index].conjugate().T) @ (mat1 @ vecs[:, mode_index]) ) / ((vecs[:, mode_index].conjugate().T) @ vecs[:, mode_index]))
+
+        vals_m_approx_s_approx = vals + alpha * vals_1
+
+        neff_m_approx_s_approx, keff_m_approx_s_approx = cls.eigs_to_effective_index(vals_m_approx_s_approx, mode_solver_type)
+
+        delta_vals = (vals_m_approx_s_exact - vals_m_approx_s_approx) / vals_m_approx_s_exact
+
+        n_group_m_approx_s_exact = neff + (neff_m_approx_s_exact - neff)/alpha
+
+        n_group_m_approx_s_approx = neff + (neff_m_approx_s_approx - neff)/alpha
 
         # Calculate the first order correction to the n_eff -> group index
 
-        n_group = np.zeros(num_modes)
+        n_group_perturbation = np.zeros(num_modes)
         for mode_index in range(num_modes):
-            n_group[mode_index] = neff[mode_index] - vals_1[mode_index] / 2. / neff[mode_index]
+            n_group_perturbation[mode_index] = neff[mode_index] - vals_1[mode_index] / 2. / neff[mode_index]
+
+        n_group_result = n_group_m_approx_s_approx
 
         GVD = np.zeros(num_modes)
 
@@ -1005,8 +1039,7 @@ class EigSolver(Tidy3dBaseModel):
             H_vectors = H,
             n_eff = neff,
             k_eff = keff,
-            n_group = n_group,
-            GVD = GVD,
+            n_group = n_group_result,
         )
 
         return solver_result
