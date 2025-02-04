@@ -865,15 +865,33 @@ class EigSolver(Tidy3dBaseModel):
         q1_mat = sp.bmat([[q1_11, q1_12], [q1_21, q1_22]])
         mat1 = p0_mat.dot(q1_mat) + p1_mat.dot(q0_mat)
 
+        # second order correction matrix
+
+        p2_11 = -3. * dxf.dot(inv_eps_zz).dot(dyb)
+        p2_12 = 3. * dxf.dot(inv_eps_zz).dot(dxb)
+        p2_21 = -3. * dyf.dot(inv_eps_zz).dot(dyb)
+        p2_22 = 3. * dyf.dot(inv_eps_zz).dot(dxb)
+
+        q2_11 = -3. * dxb.dot(inv_mu_zz).dot(dyf)
+        q2_12 = 3. * dxb.dot(inv_mu_zz).dot(dxf)
+        q2_21 = -3. * dyb.dot(inv_mu_zz).dot(dyf)
+        q2_22 = 3. * dyb.dot(inv_mu_zz).dot(dxf)
+
+        p2_mat = sp.bmat([[p2_11, p2_12], [p2_21, p2_22]])
+        q2_mat = sp.bmat([[q2_11, q2_12], [q2_21, q2_22]])
+        mat2 = p0_mat.dot(q2_mat) + p1_mat.dot(q1_mat) + p2_mat.dot(q0_mat)
+
         # Cast matrix to target data type
         mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=False)
         mat0 = cls.type_conversion(mat0, mat_dtype)
         mat1 = cls.type_conversion(mat1, mat_dtype)
+        mat2 = cls.type_conversion(mat1, mat_dtype)
 
         # Trim small values in single precision case
         if mat_precision == "single":
             cls.trim_small_values(mat0, tol=fp_eps)
             cls.trim_small_values(mat1, tol=fp_eps)
+            cls.trim_small_values(mat2, tol=fp_eps)
 
         # Casting starting vector to target data type
         vec_init = cls.type_conversion(vec_init, mat_dtype)
@@ -884,6 +902,7 @@ class EigSolver(Tidy3dBaseModel):
         if enable_incidence_matrices:
             mat0 = dnz * mat0 * dnz.T
             mat1 = dnz * mat1 * dnz.T
+            mat2 = dnz * mat2 * dnz.T
             vec_init = dnz * vec_init
 
         if enable_preconditioner:
@@ -953,13 +972,15 @@ class EigSolver(Tidy3dBaseModel):
 
         vals_1 = np.zeros(num_modes)
         for mode_index in range(num_modes):
-            vals_1[mode_index] = vecs[mode_index].T * mat1 * vecs[mode_index]
+            vals_1[mode_index] = np.real(( (vecs[:, mode_index].T) @ (mat1 @ vecs[:, mode_index]) ) / ((vecs[:, mode_index].T) @ vecs[:, mode_index]))
 
-        # Calculate the first order correction to the neff -> group index
+        # Calculate the first order correction to the n_eff -> group index
 
         n_group = np.zeros(num_modes)
         for mode_index in range(num_modes):
-            n_group[mode_index] = vals_1[mode_index] / 2. / vals_1[mode_index] / (freq * freq)
+            n_group[mode_index] = neff[mode_index] - vals_1[mode_index] / 2. / neff[mode_index]
+
+        GVD = np.zeros(num_modes)
 
         # Field components from eigenvectors
         Ex = vecs[:N, :]
@@ -985,6 +1006,7 @@ class EigSolver(Tidy3dBaseModel):
             n_eff = neff,
             k_eff = keff,
             n_group = n_group,
+            GVD = GVD,
         )
 
         return solver_result
