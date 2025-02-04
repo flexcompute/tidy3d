@@ -151,10 +151,6 @@ html_theme_options = {
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
     "repository_branch": "main",
-    "launch_buttons": {
-        "colab_url": "https://colab.research.google.com",
-        "notebook_interface": "jupyterlab",
-    },
     "use_edit_page_button": False,
     "use_issues_button": True,
     "use_repository_button": True,
