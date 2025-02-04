@@ -84,6 +84,7 @@ from .types import (
     FreqBound,
     InterpMethod,
     Literal,
+    PermittivityComponent,
     PoleAndResidue,
     TensorReal,
 )
@@ -1053,6 +1054,30 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             return self.eps_model(frequency)
         return 0j
 
+    def _eps_plot(
+        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+    ) -> float:
+        """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
+        be selected for anisotropic medium.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at.
+        eps_component : PermittivityComponent
+            Component of the permittivity tensor to plot
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
+
+        Returns
+        -------
+        float
+            Element ``eps_component`` of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        # Assumes the material is isotropic
+        # Will need to be overridden for anisotropic materials
+        return self.eps_model(frequency).real
+
     @cached_property
     @abstractmethod
     def n_cfl(self):
@@ -1529,6 +1554,36 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             return (eps, eps, eps)
         eps_spatial_array = (_get_numpy_array(eps_comp).ravel() for eps_comp in eps_spatial)
         return tuple(eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_spatial_array)
+
+    def _get_real_vals(self, x: np.ndarray) -> np.ndarray:
+        """Grab the real part of the values in array.
+        Used for _eps_bounds()
+        """
+        return _get_numpy_array(np.real(x)).ravel()
+
+    def _eps_bounds(
+        self, frequency: float = None, eps_component: Optional[PermittivityComponent] = None
+    ) -> Tuple[float, float]:
+        """Returns permittivity bounds for setting the color bounds when plotting.
+
+        Parameters
+        ----------
+        frequency : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
+
+        Returns
+        -------
+        Tuple[float, float]
+            The min and max values of the permittivity for the selected component and evaluated at ``frequency``.
+        """
+        eps_dataarray = self.eps_dataarray_freq(frequency)
+        all_eps = np.concatenate(self._get_real_vals(eps_comp) for eps_comp in eps_dataarray)
+        return (np.min(all_eps), np.max(all_eps))
 
     @staticmethod
     def _validate_isreal_dataarray(dataarray: CustomSpatialDataType) -> bool:
@@ -5728,6 +5783,38 @@ class AnisotropicMedium(AbstractMedium):
         field_name = cmp + cmp
         return self.components[field_name].eps_model(frequency)
 
+    def _eps_plot(
+        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+    ) -> float:
+        """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
+        be selected for anisotropic medium.
+
+        Parameters
+        ----------
+        frequency : float
+        eps_component : PermittivityComponent
+
+        Returns
+        -------
+        float
+            Element ``eps_component`` of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        if eps_component is None:
+            # return the average of the diag
+            return self.eps_model(frequency).real
+        elif eps_component in ["xx", "yy", "zz"]:
+            # return the requested diagonal component
+            comp2indx = {"x": 0, "y": 1, "z": 2}
+            return self.eps_comp(
+                row=comp2indx[eps_component[0]],
+                col=comp2indx[eps_component[1]],
+                frequency=frequency,
+            ).real
+        else:
+            raise ValueError(
+                f"Plotting component '{eps_component}' of a diagonally-anisotropic permittivity tensor is not supported."
+            )
+
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
         """Plot n, k of a :class:`.Medium` as a function of frequency."""
@@ -6017,6 +6104,32 @@ class FullyAnisotropicMedium(AbstractMedium):
         sig = self.conductivity[row][col]
         return AbstractMedium.eps_sigma_to_eps_complex(eps, sig, frequency)
 
+    def _eps_plot(
+        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+    ) -> float:
+        """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
+        be selected for anisotropic medium.
+
+        Parameters
+        ----------
+        frequency : float
+        eps_component : PermittivityComponent
+
+        Returns
+        -------
+        float
+            Element ``eps_component`` of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        if eps_component is None:
+            # return the average of the diag
+            return self.eps_model(frequency).real
+
+        # return the requested component
+        comp2indx = {"x": 0, "y": 1, "z": 2}
+        return self.eps_comp(
+            row=comp2indx[eps_component[0]], col=comp2indx[eps_component[1]], frequency=frequency
+        ).real
+
     @cached_property
     def n_cfl(self):
         """This property computes the index of refraction related to CFL condition, so that
@@ -6226,6 +6339,40 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
             mat_component.eps_dataarray_freq(frequency)[ind]
             for ind, mat_component in enumerate(self.components.values())
         )
+
+    def _eps_bounds(
+        self, frequency: float = None, eps_component: Optional[PermittivityComponent] = None
+    ) -> Tuple[float, float]:
+        """Returns permittivity bounds for setting the color bounds when plotting.
+
+        Parameters
+        ----------
+        frequency : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
+
+        Returns
+        -------
+        Tuple[float, float]
+            The min and max values of the permittivity for the selected component and evaluated at ``frequency``.
+        """
+        comps = ["xx", "yy", "zz"]
+        if eps_component in comps:
+            # Return the bounds of a specific component
+            eps_dataarray = self.eps_dataarray_freq(frequency)
+            eps = self._get_real_vals(eps_dataarray[comps.index(eps_component)])
+            return (np.min(eps), np.max(eps))
+        elif eps_component is None:
+            # Returns the bounds across all components
+            return super()._eps_bounds(frequency=frequency)
+        else:
+            raise ValueError(
+                f"Plotting component '{eps_component}' of a diagonally-anisotropic permittivity tensor is not supported."
+            )
 
     def _sel_custom_data_inside(self, bounds: Bound):
         return self

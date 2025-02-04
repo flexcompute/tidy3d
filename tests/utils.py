@@ -398,6 +398,7 @@ start_node = VJPNode.new_root()
 tracer = new_box(1.0, 0, start_node)
 tracer_arr = new_box(np.array([[[1.0]]]), 0, start_node)
 
+
 SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),
     run_time=1e-12,
@@ -469,6 +470,12 @@ SIM_FULL = td.Simulation(
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=td.AnisotropicMedium(xx=td.PEC, yy=td.Medium(), zz=td.Medium()),
+        ),
+        # Test a fully anistropic medium
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.FullyAnisotropicMedium(permittivity=[[6, 2, 3], [2, 7, 4], [3, 4, 9]]),
+            name="fully_anisotropic_box",
         ),
         td.Structure(
             geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),

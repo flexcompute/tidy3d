@@ -6,7 +6,7 @@ import math
 import pathlib
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union, get_args
 
 import autograd.numpy as np
 
@@ -107,6 +107,7 @@ from .types import (
     FreqBound,
     InterpMethod,
     Literal,
+    PermittivityComponent,
     Symmetry,
     annotate_type,
 )
@@ -468,6 +469,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         ax: Ax = None,
+        eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -500,6 +502,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
 
         Returns
         -------
@@ -512,6 +518,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         **Notebooks**
             * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
         """
+
+        # check that eps_component is one of the allowed values, otherwise raise an error
+        if eps_component is not None:
+            if eps_component not in get_args(PermittivityComponent):
+                raise ValueError(
+                    f"eps_component '{eps_component}' is not supported. "
+                    "eps_component must be one of the following values:"
+                    "'xx', 'yy', 'zz', 'xy', 'yx', 'xz', 'zx', 'yz', 'zy', or 'None'"
+                )
 
         hlim, vlim = Scene._get_plot_lims(
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
@@ -527,6 +542,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             z=z,
             hlim=hlim,
             vlim=vlim,
+            eps_component=eps_component,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
@@ -555,6 +571,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -586,6 +603,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
 
         Returns
         -------
@@ -620,6 +641,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             vlim=vlim,
             grid=self.grid,
             reverse=reverse,
+            eps_component=eps_component,
         )
 
     @equal_aspect

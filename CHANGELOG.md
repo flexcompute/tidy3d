@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `fill` and `fill_structures` argument in `td.Simulation.plot_structures()` and `td.Simulation.plot()` respectively to disable fill and plot outlines of structures only.
 - New subpixel averaging option `ContourPathAveraging` applied to dielectric material boundaries.
 - A property `interior_angle` in `PolySlab` that stores angles formed inside polygon by two adjacent edges.
+- `eps_component` argument in `td.Simulation.plot_eps()` to optionally select a specific permittivity component to plot (eg. `"xx"`).
 
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
