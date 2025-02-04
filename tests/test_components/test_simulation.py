@@ -1,11 +1,15 @@
 """Tests the simulation and its validators."""
 
+import shutil
+from pathlib import Path
+
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
+from matplotlib.testing.decorators import check_figures_equal
 from tidy3d.components import simulation
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
 from tidy3d.components.simulation import MAX_NUM_SOURCES
@@ -691,6 +695,208 @@ def test_plot_eps_bounds():
     plt.close()
     _ = SIM_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
     plt.close()
+
+
+class TestAnisotropicPlotting:
+    """Tests for plotting anisotropic media"""
+
+    diag_comps = ["xx", "yy", "zz"]
+    offdiag_comps = ["xy", "yx", "xz", "zx", "yz", "zy"]
+    allcomps = diag_comps + offdiag_comps
+
+    medium_diag = td.AnisotropicMedium(
+        xx=td.Medium(permittivity=5), yy=td.Medium(permittivity=10), zz=td.Medium(permittivity=15)
+    )
+
+    medium_fullyani = td.FullyAnisotropicMedium(permittivity=[[6, 2, 3], [2, 7, 4], [3, 4, 8]])
+
+    @pytest.fixture(scope="class")
+    def medium_customani(self):
+        """based this custom medium on
+        https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.CustomAnisotropicMedium.html
+        """
+        Nx, Ny, Nz = 100, 100, 100
+        x = np.linspace(-1, 1, Nx)
+        y = np.linspace(-1, 1, Ny)
+        z = np.linspace(-1, 1, Nz)
+        coords = dict(x=x, y=y, z=z)
+        permittivity = td.SpatialDataArray(2 * np.ones((Nx, Ny, Nz)), coords=coords)
+        conductivity = td.SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+        medium_xx = td.CustomMedium(permittivity=permittivity, conductivity=conductivity)
+        medium_yy = td.CustomMedium(permittivity=2 * permittivity, conductivity=conductivity)
+
+        # make the zz component a spatially varying medium
+        # define coordinate array
+        x_mesh, y_mesh, _ = np.meshgrid(x, y, z, indexing="ij")
+        r_mesh = np.sqrt(x_mesh**2 + y_mesh**2)  # radial distance
+
+        # index of refraction array
+        # assign the refractive index value to the array according to the desired profile
+        n_data = np.ones((Nx, Ny, Nz))
+        n0 = 2
+        A = 0.5
+        r = 1
+        n_data[r_mesh <= r] = n0 * (1 - A * r_mesh[r_mesh <= r] ** 2)
+        # convert to dataset array
+        n_dataset = td.SpatialDataArray(n_data, coords=dict(x=x, y=y, z=z))
+        medium_zz = td.CustomMedium.from_nk(n_dataset, interp_method="nearest")
+
+        return td.CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+
+    @pytest.fixture(scope="module", autouse=True)
+    def cleanup_figures(self):
+        yield  # Run tests first
+        fig_dir = Path().resolve() / "result_images"
+        shutil.rmtree(fig_dir, ignore_errors=False)
+
+    def make_sim(self, medium):
+        L = 5
+
+        source = td.UniformCurrentSource(
+            center=(0, 0, -L / 3),
+            size=(L, L / 2, 0),
+            polarization="Ex",
+            source_time=td.GaussianPulse(
+                freq0=td.C_0,
+                fwidth=10e14,
+            ),
+        )
+        structures = (td.Structure(geometry=td.Sphere(center=(0, 0, 0), radius=1), medium=medium),)
+
+        return td.Simulation(
+            size=(L, L, L),
+            grid_spec=td.GridSpec.uniform(dl=0.01),
+            structures=structures,
+            sources=[source],
+            run_time=1e-12,
+        )
+
+    @pytest.mark.parametrize("eps_comp", ("xyz", "123", "", 5))
+    def test_bad_eps_arg(self, eps_comp):
+        """Tests that an incorrect component raises the proper exception."""
+        with pytest.raises(ValueError, match=f"eps_component '{eps_comp}' is not supported. "):
+            self.make_sim(self.medium_diag).plot_eps(x=0, eps_component=eps_comp)
+
+    @pytest.mark.parametrize(
+        "eps_comp",
+        [
+            None,
+        ]
+        + diag_comps,
+    )
+    def test_plot_anisotropic_medium(self, eps_comp):
+        """Test plotting diagonal components of a diagonally anisotropic medium succeeds or not.
+        diagonal components and ``None`` should succeed.
+        """
+        self.make_sim(self.medium_diag).plot_eps(x=0, eps_component=eps_comp)
+
+    @pytest.mark.parametrize("eps_comp", offdiag_comps)
+    def test_plot_anisotropic_medium_offdiagfail(self, eps_comp):
+        """Tests that plotting off-diagonal components of a diagonally anisotropic medium raises an exception."""
+        with pytest.raises(
+            ValueError,
+            match=f"Plotting component '{eps_comp}' of a diagonally-anisotropic permittivity tensor is not supported",
+        ):
+            self.make_sim(self.medium_diag).plot_eps(x=0, eps_component=eps_comp)
+
+    @pytest.mark.parametrize(
+        "eps_comp1,eps_comp2",
+        (
+            pytest.param("xx", "yy", marks=pytest.mark.xfail),
+            pytest.param("xx", "zz", marks=pytest.mark.xfail),
+            pytest.param("yy", "zz", marks=pytest.mark.xfail),
+        ),
+    )
+    @check_figures_equal(extensions=("png",))
+    def test_plot_anisotropic_medium_diff(self, fig_test, fig_ref, eps_comp1, eps_comp2):
+        """Tests that the plots of different components of an AnisotropicMedium are actually different."""
+        sim = self.make_sim(self.medium_diag)
+
+        ax1 = fig_test.add_subplot()
+        sim.plot_eps(x=0, eps_component=eps_comp1, ax=ax1)
+        ax2 = fig_ref.add_subplot()
+        sim.plot_eps(x=0, eps_component=eps_comp2, ax=ax2)
+
+    @pytest.mark.parametrize(
+        "eps_comp",
+        [
+            None,
+        ]
+        + diag_comps
+        + offdiag_comps,
+    )
+    def test_plot_fully_anisotropic_medium(self, eps_comp):
+        """Test plotting all components of a fully anisotropic medium.
+        All plots should succeed.
+        """
+        sim = self.make_sim(self.medium_fullyani)
+        sim.plot_eps(x=0, eps_component=eps_comp)
+
+    # Test parameters for comparing plots of a FullyAnisotropicMedium
+    fullyani_testplot_diff_params = []
+    for eps_comp1 in allcomps:
+        for eps_comp2 in allcomps:
+            if eps_comp1 == eps_comp2 or eps_comp1[::-1] == eps_comp2:
+                # Same components, or transposed components (eg. xy and yx) should plot the same
+                fullyani_testplot_diff_params.append((eps_comp1, eps_comp2))
+            else:
+                # All other component pairs should plot differently
+                fullyani_testplot_diff_params.append(
+                    pytest.param(eps_comp1, eps_comp2, marks=pytest.mark.xfail)
+                )
+
+    @pytest.mark.parametrize("eps_comp1,eps_comp2", fullyani_testplot_diff_params)
+    @check_figures_equal(extensions=("png",))
+    def test_plot_fully_anisotropic_medium_diff(self, fig_test, fig_ref, eps_comp1, eps_comp2):
+        """Tests that the plots of different components of a FullyAnisotropicMedium are actually different."""
+        sim = self.make_sim(self.medium_fullyani)
+
+        ax1 = fig_test.add_subplot()
+        sim.plot_eps(x=0, eps_component=eps_comp1, ax=ax1)
+        ax2 = fig_ref.add_subplot()
+        sim.plot_eps(x=0, eps_component=eps_comp2, ax=ax2)
+
+    @pytest.mark.parametrize(
+        "eps_comp",
+        [
+            None,
+        ]
+        + diag_comps,
+    )
+    def test_plot_customanisotropic_medium(self, eps_comp, medium_customani):
+        """Test plotting diagonal components of a diagonally anisotropic custom medium.
+        diagonal components and ``None`` should succeed.
+        """
+        self.make_sim(medium_customani).plot_eps(x=0, eps_component=eps_comp)
+
+    @pytest.mark.parametrize("eps_comp", offdiag_comps)
+    def test_plot_customanisotropic_medium_offdiagfail(self, eps_comp, medium_customani):
+        """Tests that plotting off-diagonal components of a diagonally anisotropic custom medium raises an exception."""
+        with pytest.raises(
+            ValueError,
+            match=f"Plotting component '{eps_comp}' of a diagonally-anisotropic permittivity tensor is not supported.",
+        ):
+            self.make_sim(medium_customani).plot_eps(x=0, eps_component=eps_comp)
+
+    @pytest.mark.parametrize(
+        "eps_comp1,eps_comp2",
+        (
+            pytest.param("xx", "yy", marks=pytest.mark.xfail),
+            pytest.param("xx", "zz", marks=pytest.mark.xfail),
+            pytest.param("yy", "zz", marks=pytest.mark.xfail),
+        ),
+    )
+    @check_figures_equal(extensions=("png",))
+    def test_plot_customanisotropic_medium_diff(
+        self, fig_test, fig_ref, eps_comp1, eps_comp2, medium_customani
+    ):
+        """Tests that the plots of different components of an AnisotropicMedium are actually different."""
+        sim = self.make_sim(medium_customani)
+
+        ax1 = fig_test.add_subplot()
+        sim.plot_eps(x=0, eps_component=eps_comp1, ax=ax1)
+        ax2 = fig_ref.add_subplot()
+        sim.plot_eps(x=0, eps_component=eps_comp2, ax=ax2)
 
 
 def test_plot():

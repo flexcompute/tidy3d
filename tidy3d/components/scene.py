@@ -35,7 +35,6 @@ from .data.utils import (
     TetrahedralGridDataset,
     TriangularGridDataset,
     UnstructuredGridDataset,
-    _get_numpy_array,
 )
 from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, merging_geometries_on_plane, traverse_geometries
@@ -56,6 +55,7 @@ from .types import (
     Coordinate,
     InterpMethod,
     LengthUnit,
+    PermittivityComponent,
     Shapely,
     Size,
 )
@@ -767,6 +767,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         grid: Grid = None,
+        eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -798,6 +799,10 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
 
         Returns
         -------
@@ -819,6 +824,7 @@ class Scene(Tidy3dBaseModel):
             vlim=vlim,
             grid=grid,
             property="eps",
+            eps_component=eps_component,
         )
 
     @equal_aspect
@@ -838,6 +844,7 @@ class Scene(Tidy3dBaseModel):
         vlim: Tuple[float, float] = None,
         grid: Grid = None,
         property: Literal["eps", "doping", "N_a", "N_d"] = "eps",
+        eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -872,6 +879,10 @@ class Scene(Tidy3dBaseModel):
         property: Literal["eps", "doping", "N_a", "N_d"] = "eps"
             Indicates the property to plot for the structures. Currently supported properties
             are ["eps", "doping", "N_a", "N_d"]
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
 
         Returns
         -------
@@ -914,7 +925,7 @@ class Scene(Tidy3dBaseModel):
 
         if property_min is None or property_max is None:
             if property == "eps":
-                eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq)
+                eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq, eps_component=eps_component)
                 if property_min is None:
                     property_min = eps_min_sim
 
@@ -965,6 +976,7 @@ class Scene(Tidy3dBaseModel):
                         reverse=reverse,
                         shape=shape,
                         ax=ax,
+                        eps_component=eps_component,
                     )
                 else:
                     # For custom medium, apply pcolormesh clipped by the shape.
@@ -981,6 +993,7 @@ class Scene(Tidy3dBaseModel):
                         shape,
                         ax,
                         grid,
+                        eps_component=eps_component,
                     )
 
         if cbar:
@@ -1013,38 +1026,26 @@ class Scene(Tidy3dBaseModel):
         )
 
     @staticmethod
-    def _eps_bounds(medium_list: list[Medium], freq: float = None) -> Tuple[float, float]:
+    def _eps_bounds(
+        medium_list: list[Medium],
+        freq: float = None,
+        eps_component: Optional[PermittivityComponent] = None,
+    ) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the mediums at frequency "freq"."""
         medium_list = [medium for medium in medium_list if not medium.is_pec]
-        # regular medium
-        eps_list = [
-            np.real(medium.eps_model(freq))
-            for medium in medium_list
-            if not isinstance(medium, AbstractCustomMedium) and not isinstance(medium, Medium2D)
-        ]
+        eps_list = [medium._eps_plot(freq, eps_component) for medium in medium_list]
+        eps_list = [eps for eps in eps_list if eps is not None]
         eps_min = min(eps_list, default=1)
         eps_max = max(eps_list, default=1)
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
-            eps_dataarray = mat.eps_dataarray_freq(freq)
-            eps_min = min(
-                eps_min,
-                min(
-                    np.min(_get_numpy_array(np.real(eps_comp)).ravel())
-                    for eps_comp in eps_dataarray
-                ),
-            )
-            eps_max = max(
-                eps_max,
-                max(
-                    np.max(_get_numpy_array(np.real(eps_comp)).ravel())
-                    for eps_comp in eps_dataarray
-                ),
-            )
+            mat_epsmin, mat_epsmax = mat._eps_bounds(frequency=freq, eps_component=eps_component)
+            eps_min = min(eps_min, mat_epsmin)
+            eps_max = max(eps_max, mat_epsmax)
         return eps_min, eps_max
 
-    def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
+    def eps_bounds(self, freq: float = None, eps_component: str = None) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the scene at frequency "freq".
 
         Parameters
@@ -1052,6 +1053,10 @@ class Scene(Tidy3dBaseModel):
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
             If not specified, evaluates at infinite frequency.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
 
         Returns
         -------
@@ -1060,7 +1065,7 @@ class Scene(Tidy3dBaseModel):
         """
 
         medium_list = [self.medium] + list(self.mediums)
-        return self._eps_bounds(medium_list=medium_list, freq=freq)
+        return self._eps_bounds(medium_list=medium_list, freq=freq, eps_component=eps_component)
 
     def _pcolormesh_shape_custom_medium_structure_eps(
         self,
@@ -1076,6 +1081,7 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         grid: Grid,
+        eps_component: Optional[PermittivityComponent] = None,
     ):
         """
         Plot shape made of custom medium with ``pcolormesh``.
@@ -1083,6 +1089,8 @@ class Scene(Tidy3dBaseModel):
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
+
+        comp2ind = {dim + dim: index for dim, index in zip("xyz", range(3))}
 
         # make grid for eps interpolation
         # we will do this by combining shape bounds and points where custom eps is provided
@@ -1112,18 +1120,23 @@ class Scene(Tidy3dBaseModel):
                             axis=normal_axis_ind, pos=normal_position
                         )
                 else:
-                    eps_mean = (eps_diag[0] + eps_diag[1] + eps_diag[2]) / 3
+                    # Select the permittivity component to plot
+                    if eps_component in comp2ind:
+                        eps = eps_diag[comp2ind[eps_component]]
+                    else:
+                        # default to plotting the mean of the diagonal elements
+                        eps = (eps_diag[0] + eps_diag[1] + eps_diag[2]) / 3
 
-                    if isinstance(eps_mean, TetrahedralGridDataset):
+                    if isinstance(eps, TetrahedralGridDataset):
                         # extract slice if volumetric unstructured data
-                        eps_mean = eps_mean.plane_slice(axis=normal_axis_ind, pos=normal_position)
+                        eps = eps.plane_slice(axis=normal_axis_ind, pos=normal_position)
 
                     if reverse:
-                        eps_mean = eps_min + eps_max - eps_mean
+                        eps = eps_min + eps_max - eps
 
                     # at this point eps_mean is TriangularGridDataset and we just plot it directly
                     # with applying shape mask
-                    eps_mean.plot(
+                    eps.plot(
                         grid=False,
                         ax=ax,
                         cbar=False,
@@ -1189,8 +1202,14 @@ class Scene(Tidy3dBaseModel):
             normal_axis: [normal_position],
         }
         coord_shape = Coords(**coord_dict)
-        # interpolate permittivity and take the average over components
-        eps_shape = np.mean(medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape), axis=0)
+
+        # interpolate permittivity and pick the component to plot
+        eps_shape = medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape)
+        if eps_component in comp2ind:
+            eps_shape = eps_shape[comp2ind[eps_component]]
+        else:
+            eps_shape = np.mean(eps_shape, axis=0)
+
         # remove the normal_axis and take real part
         eps_shape = eps_shape.real.mean(axis=normal_axis_ind)
         # reverse
@@ -1219,6 +1238,7 @@ class Scene(Tidy3dBaseModel):
         eps_max: float,
         reverse: bool = False,
         alpha: float = None,
+        eps_component: Optional[PermittivityComponent] = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot_eps()."""
 
@@ -1238,8 +1258,7 @@ class Scene(Tidy3dBaseModel):
             # 2d material
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
         else:
-            # regular medium
-            eps_medium = medium.eps_model(frequency=freq).real
+            eps_medium = medium._eps_plot(frequency=freq, eps_component=eps_component)
             delta_eps = eps_medium - eps_min
             delta_eps_max = eps_max - eps_min + 1e-5
             eps_fraction = delta_eps / delta_eps_max
@@ -1259,10 +1278,17 @@ class Scene(Tidy3dBaseModel):
         ax: Ax,
         reverse: bool = False,
         alpha: float = None,
+        eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self._get_structure_eps_plot_params(
-            medium=medium, freq=freq, eps_min=eps_min, eps_max=eps_max, alpha=alpha, reverse=reverse
+            medium=medium,
+            freq=freq,
+            eps_min=eps_min,
+            eps_max=eps_max,
+            alpha=alpha,
+            reverse=reverse,
+            eps_component=eps_component,
         )
         ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
