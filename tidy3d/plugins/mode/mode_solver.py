@@ -815,7 +815,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         solver_basis_fields = self._postprocess_solver_fields_inverse(basis_fields)
 
-        solver_fields, n_complex, eps_spec = compute_modes(
+        modes_data = compute_modes(
             eps_cross=self._solver_eps(freq),
             coords=coords,
             freq=freq,
@@ -825,8 +825,12 @@ class ModeSolver(Tidy3dBaseModel):
             solver_basis_fields=solver_basis_fields,
         )
 
+        solver_fields = fields = np.stack((modes_data.E_fields, modes_data.H_fields), axis=0)
         fields = self._postprocess_solver_fields(solver_fields)
-        return n_complex, fields, eps_spec
+
+        n_complex = modes_data.n_eff + 1j * modes_data.k_eff
+
+        return n_complex, fields, modes_data.eps_spec
 
     def _rotate_field_coords(self, field: FIELD) -> FIELD:
         """Move the propagation axis=z to the proper order in the array."""

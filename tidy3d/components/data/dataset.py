@@ -471,17 +471,6 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
             )
         return self.dispersion_raw
 
-    @property
-    def dispersion_new(self) -> ModeDispersionDataArray:
-        """Group index."""
-        if self.dispersion_analytic is None:
-            log.warning(
-                "The dispersion was not computed. To calculate dispersion, pass "
-                "'calculate_group_index = True' in the 'ModeSpec'.",
-                log_once=True,
-            )
-        return self.dispersion_analytic
-
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
         raise DeprecationWarning(
