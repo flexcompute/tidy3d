@@ -1,16 +1,15 @@
 """Mode solver for propagating EM modes."""
 
-from typing import Tuple, Union
+from typing import Tuple
 
 import numpy as np
 import scipy.linalg as linalg
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
-import pydantic.v1 as pd
-
 from ...components.base import Tidy3dBaseModel
-from ...components.types import EpsSpecType, ModeSolverType, Numpy, Literal
+from ...components.mode import SingleFreqModesData
+from ...components.types import EpsSpecType, ModeSolverType, Numpy
 from ...constants import C_0, ETA_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
@@ -25,38 +24,6 @@ TOL_TENSORIAL = 1e-6
 # shift target neff by this value, both rel and abs, whichever results in larger shift
 TARGET_SHIFT = 10 * fp_eps
 
-class EigSolverResults(Tidy3dBaseModel):
-    """A data class to store the modes data for single frequency"""
-    
-    E: np.ndarray = pd.Field(
-        None, title="E field", description="Electric field of the eigenmodes, shape (3, N, num_modes)."
-    )
-
-    H: np.ndarray = pd.Field(
-        None, title="H field", description="Magnetic field of the eigenmodes, shape (3, N, num_modes)."
-    )
-
-    n_eff: np.ndarray = pd.Field(
-        None, title="Mode refractive index", description="Real part of the effective index, shape (num_modes, )."
-    )
-
-    k_eff: np.ndarray = pd.Field(
-        None, title="Mode absorption index", description="Imaginary part of the effective index, shape (num_modes, )."
-    )
-
-    n_group: np.ndarray = pd.Field(
-        None, title="Mode group index", description="Real part of the effective group index, shape (num_modes, )."
-    )
-
-    GVD: np.ndarray = pd.Field(
-        None, title="Group velocity dispersion", description="Group velocity dispersion data, shape (num_modes, )."
-    )
-
-    eps_spec : Literal["diagonal", "tensorial_real", "tensorial_complex"] = pd.Field(
-        None,
-        title="Permittivity characterization on the mode solver's plane",
-    )
-    
 class EigSolver(Tidy3dBaseModel):
     """Interface for computing eigenvalues given permittivity and mode spec.
     It's a collection of static methods.
@@ -193,6 +160,7 @@ class EigSolver(Tidy3dBaseModel):
         kxy = np.cos(angle_theta) ** 2
         kz = np.cos(angle_theta) * np.sin(angle_theta)
         kp_to_k = np.array([kxy * np.sin(angle_phi), kxy * np.cos(angle_phi), kz])
+        kp_correction_factor = np.linalg.norm(kp_to_k)
 
         # Transform epsilon and mu
         jac_e_det = np.linalg.det(np.moveaxis(jac_e, [0, 1], [-2, -1]))
@@ -241,7 +209,7 @@ class EigSolver(Tidy3dBaseModel):
             target = n_max
         else:
             target = mode_spec.target_neff
-        target_neff_p = target / np.linalg.norm(kp_to_k)
+        target_neff_p = target / kp_correction_factor
 
         # shift target_neff slightly to avoid cases where the shiftted matrix is exactly singular
         if abs(TARGET_SHIFT) > abs(target_neff_p * TARGET_SHIFT):
@@ -286,22 +254,43 @@ class EigSolver(Tidy3dBaseModel):
         )
 
         # Transform back to original axes, E = J^T E'
-        E = np.sum(jac_e[..., None] * modes_data.E[:, None, ...], axis=0)
+        E = np.sum(jac_e[..., None] * modes_data.E_vectors[:, None, ...], axis=0)
         if split_curl_scaling is not None:
             E = cls.split_curl_field_postprocess(split_curl_scaling, E)
         E = E.reshape((3, Nx, Ny, 1, num_modes))
-        H = np.sum(jac_h[..., None] * modes_data.H[:, None, ...], axis=0)
+        H = np.sum(jac_h[..., None] * modes_data.H_vectors[:, None, ...], axis=0)
         H = H.reshape((3, Nx, Ny, 1, num_modes))
-        fields = np.stack((E, H), axis=0)
 
-        neff = modes_data.n_eff * np.linalg.norm(kp_to_k)
-        keff = modes_data.k_eff * np.linalg.norm(kp_to_k)
+        neff = modes_data.n_eff * kp_correction_factor
+        keff = modes_data.k_eff * kp_correction_factor
+
+        if modes_data.n_group is not None:
+            nGroup = modes_data.n_group * kp_correction_factor
+        else:
+            nGroup = None
+
+        if modes_data.GVD is not None:
+            newGVD = modes_data.GVD * kp_correction_factor
+        else:
+            newGVD = None
 
         if mode_spec.precision == "single":
             # Recast to single precision which may have changed due to earlier manipulations
-            fields = fields.astype(np.complex64)
+            E = E.astype(np.complex64)
+            H = H.astype(np.complex64)
 
-        return fields, neff + 1j * keff, modes_data.eps_spec
+        modes_data = modes_data.updated_copy(
+            E_vectors = None,
+            H_vectors = None,
+            E_fields = E,
+            H_fields = H,
+            n_eff = neff,
+            k_eff = keff,
+            n_group = nGroup,
+            GVD = newGVD,
+        )
+
+        return modes_data
 
     @classmethod
     def solver_em(
@@ -350,7 +339,7 @@ class EigSolver(Tidy3dBaseModel):
 
         Returns
         -------
-        An object of the EigSolverResults class
+        An object of the SingleFreqModesData class
 
         E : np.ndarray
             Electric field of the eigenmodes, shape (3, N, num_modes).
@@ -418,22 +407,20 @@ class EigSolver(Tidy3dBaseModel):
                 )
 
             if direction == "-":
-                E = solver_result.E
-                H = solver_result.H
+                E = solver_result.E_vectors
+                H = solver_result.H_vectors
                 H[0] *= -1
                 H[1] *= -1
                 E[2] *= -1
-                solver_result = solver_result.updated_copy(E = E, H = H)
+                solver_result = solver_result.updated_copy(E_vectors = E, H_vectors = H)
 
         elif not is_eps_complex:
             eps_spec = "tensorial_real"
             solver_result = cls.solver_tensorial(**kwargs, direction="+")
             if direction == "-":
-                E = solver_result.E
-                H = solver_result.H
-                E = np.conj(solver_result.E)
-                H = -np.conj(solver_result.H)
-                solver_result = solver_result.updated_copy(E = E, H = H)
+                E = np.conj(solver_result.E_vectors)
+                H = -np.conj(solver_result.H_vectors)
+                solver_result = solver_result.updated_copy(E_vectors = E, H_vectors = H)
 
         else:
             eps_spec = "tensorial_complex"
@@ -637,7 +624,7 @@ class EigSolver(Tidy3dBaseModel):
         Hy = h_field[N:, :] / (1j * neff - keff)
         Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex))
         Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
-        
+
         # Bundle up
         E = np.stack((Ex, Ey, Ez), axis=0)
         H = np.stack((Hx, Hy, Hz), axis=0)
@@ -645,9 +632,9 @@ class EigSolver(Tidy3dBaseModel):
         # Return to standard H field units (see CEM notes for H normalization used in solver)
         H *= -1j / ETA_0
 
-        solver_result = EigSolverResults(
-            E = E,
-            H = H,
+        solver_result = SingleFreqModesData(
+            E_vectors = E,
+            H_vectors = H,
             n_eff = neff,
             k_eff = keff,
         )
@@ -782,9 +769,9 @@ class EigSolver(Tidy3dBaseModel):
         # The minus sign here is suspicious, need to check how modes are used in Mode objects
         H *= -1j / ETA_0
 
-        solver_result = EigSolverResults(
-            E = E,
-            H = H,
+        solver_result = SingleFreqModesData(
+            E_vectors = E,
+            H_vectors = H,
             n_eff = neff,
             k_eff = keff,
         )
@@ -885,7 +872,8 @@ class EigSolver(Tidy3dBaseModel):
 
         # Trim small values in single precision case
         if mat_precision == "single":
-            cls.trim_small_values(mat, tol=fp_eps)
+            cls.trim_small_values(mat0, tol=fp_eps)
+            cls.trim_small_values(mat1, tol=fp_eps)
 
         # Casting starting vector to target data type
         vec_init = cls.type_conversion(vec_init, mat_dtype)
@@ -944,7 +932,7 @@ class EigSolver(Tidy3dBaseModel):
                 M=precon,
                 basis_vecs=basis_vecs,
             )
-        
+
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
         # Sort by descending neff
@@ -968,7 +956,7 @@ class EigSolver(Tidy3dBaseModel):
             vals_1[mode_index] = vecs[mode_index].T * mat1 * vecs[mode_index]
 
         # Calculate the first order correction to the neff -> group index
-        
+
         n_group = np.zeros(num_modes)
         for mode_index in range(num_modes):
             n_group[mode_index] = vals_1[mode_index] / 2. / vals_1[mode_index] / (freq * freq)
@@ -983,7 +971,7 @@ class EigSolver(Tidy3dBaseModel):
         Hy = h_field[N:, :] / (1j * neff - keff)
         Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex))
         Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
-        
+
         # Bundle up
         E = np.stack((Ex, Ey, Ez), axis=0)
         H = np.stack((Hx, Hy, Hz), axis=0)
@@ -991,9 +979,9 @@ class EigSolver(Tidy3dBaseModel):
         # Return to standard H field units (see CEM notes for H normalization used in solver)
         H *= -1j / ETA_0
 
-        solver_result = EigSolverResults(
-            E = E,
-            H = H,
+        solver_result = SingleFreqModesData(
+            E_vectors = E,
+            H_vectors = H,
             n_eff = neff,
             k_eff = keff,
             n_group = n_group,

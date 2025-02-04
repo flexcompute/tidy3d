@@ -19,6 +19,8 @@ from ...components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBou
 from ...components.data.data_array import (
     FreqModeDataArray,
     ModeIndexDataArray,
+    GroupIndexDataArray,
+    ModeDispersionDataArray,
     ScalarModeFieldDataArray,
 )
 from ...components.data.monitor_data import ModeSolverData
@@ -370,7 +372,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         # Compute and store the modes at all frequencies
-        n_complex, fields, eps_spec = solver._solve_all_freqs(
+        n_complex, fields, n_group, n_GVD, eps_spec = solver._solve_all_freqs(
             coords=_solver_coords, symmetry=solver.solver_symmetry
         )
 
@@ -383,6 +385,29 @@ class ModeSolver(Tidy3dBaseModel):
             ),
         )
         data_dict = {"n_complex": index_data}
+
+        if n_group is not None:
+            if n_group[0] is not None:
+                n_group_data = GroupIndexDataArray(
+                    np.stack(n_group, axis=0),
+                    coords=dict(
+                        f=list(solver.freqs),
+                        mode_index=np.arange(solver.mode_spec.num_modes),
+                    ),
+                )
+
+                data_dict["n_group_analytic"] = n_group_data
+
+        if n_GVD is not None:
+            if n_GVD[0] is not None:
+                n_GVD_data = ModeDispersionDataArray(
+                    np.stack(n_GVD, axis=0),
+                    coords=dict(
+                        f=list(solver.freqs),
+                        mode_index=np.arange(solver.mode_spec.num_modes),
+                    ),
+                )
+                data_dict["dispersion_analytic"] = n_GVD_data
 
         # Construct the field data on Yee grid
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
@@ -670,15 +695,19 @@ class ModeSolver(Tidy3dBaseModel):
 
         fields = []
         n_complex = []
+        n_group = []
+        n_GVD = []
         eps_spec = []
         for freq in self.freqs:
-            n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
+            n_freq, fields_freq, n_group_freq, GVD_freq, eps_spec_freq = self._solve_single_freq(
                 freq=freq, coords=coords, symmetry=symmetry
             )
             fields.append(fields_freq)
             n_complex.append(n_freq)
+            n_group.append(n_group_freq)
+            n_GVD.append(GVD_freq)
             eps_spec.append(eps_spec_freq)
-        return n_complex, fields, eps_spec
+        return n_complex, fields, n_group, n_GVD, eps_spec
 
     def _solve_all_freqs_relative(
         self,
@@ -731,7 +760,8 @@ class ModeSolver(Tidy3dBaseModel):
         if not LOCAL_SOLVER_IMPORTED:
             raise ImportError(IMPORT_ERROR_MSG)
 
-        solver_fields, n_complex, eps_spec = compute_modes(
+        # solver_fields, n_complex, eps_spec = compute_modes(
+        modes_data = compute_modes(
             eps_cross=self._solver_eps(freq),
             coords=coords,
             freq=freq,
@@ -740,8 +770,11 @@ class ModeSolver(Tidy3dBaseModel):
             direction=self.direction,
         )
 
+        solver_fields = fields = np.stack((modes_data.E_fields, modes_data.H_fields), axis=0)
         fields = self._postprocess_solver_fields(solver_fields)
-        return n_complex, fields, eps_spec
+
+        n_complex = modes_data.n_eff + 1j * modes_data.k_eff
+        return n_complex, fields, modes_data.n_group, modes_data.GVD, modes_data.eps_spec
 
     def _rotate_field_coords_inverse(self, field: FIELD) -> FIELD:
         """Move the propagation axis to the z axis in the array."""

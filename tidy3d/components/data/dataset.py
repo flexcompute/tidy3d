@@ -390,7 +390,20 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         description="Index associated with group velocity of the mode.",
     )
 
+    n_group_analytic: GroupIndexDataArray = pd.Field(
+        None,
+        title="Group Index",
+        description="Index associated with group velocity of the mode.",
+    )
+
     dispersion_raw: ModeDispersionDataArray = pd.Field(
+        None,
+        title="Dispersion",
+        description="Dispersion parameter for the mode.",
+        units=PICOSECOND_PER_NANOMETER_PER_KILOMETER,
+    )
+
+    dispersion_analytic: GroupIndexDataArray = pd.Field(
         None,
         title="Dispersion",
         description="Dispersion parameter for the mode.",
