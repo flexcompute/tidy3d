@@ -13,6 +13,7 @@ API |:computer:|
     rf_material_library
     structures
     sources
+    analytic_beams
     monitors
     mode
     field_projector
@@ -38,6 +39,7 @@ API |:computer:|
 .. include:: /api/mediums.rst
 .. include:: /api/structures.rst
 .. include:: /api/sources.rst
+.. include:: /api/analytic_beams.rst
 .. include:: /api/monitors.rst
 .. include:: /api/mode.rst
 .. include:: /api/field_projector.rst
