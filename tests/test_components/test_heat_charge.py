@@ -39,18 +39,25 @@ class CHARGE_SIMULATION:
             N_c=2.86e19,
             N_v=3.1e19,
             E_g=1.11,
-            mobility=CaugheyThomasMobility(
-                mu_n_min=52.2,
-                mu_n=1471.0,
-                mu_p_min=44.9,
-                mu_p=470.5,
-                exp_t_mu=-2.33,
-                exp_d_n=0.68,
-                exp_d_p=0.719,
+            mobility_n=CaugheyThomasMobility(
+                mu_min=52.2,
+                mu=1471.0,
+                ref_N=9.68e16,
+                exp_N=0.68,
+                exp_1=-0.57,
+                exp_2=-2.33,
+                exp_3=2.4,
+                exp_4=-0.146,
+            ),
+            mobility_p=CaugheyThomasMobility(
+                mu_min=44.9,
+                mu=470.5,
                 ref_N=2.23e17,
-                exp_t_mu_min=-0.57,
-                exp_t_d=2.4,
-                exp_t_d_exp=-0.146,
+                exp_N=0.719,
+                exp_1=-0.57,
+                exp_2=-2.33,
+                exp_3=2.4,
+                exp_4=-0.146,
             ),
             R=[
                 AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
@@ -633,10 +640,10 @@ def test_heat_charge_medium_validation(mediums):
 
 
 def test_constant_mobility():
-    constant_mobility = td.ConstantMobilityModel(mu_n=1500, mu_p=500)
+    constant_mobility = td.ConstantMobilityModel(mu=1500)
 
     with pytest.raises(pd.ValidationError):
-        _ = constant_mobility.updated_copy(mu_p=-1)
+        _ = constant_mobility.updated_copy(mu=-1)
 
 
 def test_heat_charge_structures_creation(structures):
@@ -1344,3 +1351,9 @@ def test_additional_edge_cases():
         sources=[],
         monitors=[],
     )
+
+
+def test_fossum():
+    """Check that fossum model can be defined."""
+
+    _ = td.FossumCarrierLifetime(tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1)

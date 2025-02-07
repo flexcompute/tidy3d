@@ -192,18 +192,25 @@ class SemiconductorMedium(AbstractChargeMedium):
         ...     N_c=2.86e19,
         ...     N_v=3.1e19,
         ...     E_g=1.11,
-        ...     mobility=td.CaugheyThomasMobility(
-        ...         mu_n_min=52.2,
-        ...         mu_n=1471.0,
-        ...         mu_p_min=44.9,
-        ...         mu_p=470.5,
-        ...         exp_t_mu=-2.33,
-        ...         exp_d_n=0.68,
-        ...         exp_d_p=0.719,
+        ...     mobility_n=td.CaugheyThomasMobility(
+        ...         mu_min=52.2,
+        ...         mu=1471.0,
+        ...         ref_N=9.68e16,
+        ...         exp_N=0.68,
+        ...         exp_1=-0.57,
+        ...         exp_2=-2.33,
+        ...         exp_3=2.4,
+        ...         exp_4=-0.146,
+        ...     ),
+        ...     mobility_p=td.CaugheyThomasMobility(
+        ...         mu_min=44.9,
+        ...         mu=470.5,
         ...         ref_N=2.23e17,
-        ...         exp_t_mu_min=-0.57,
-        ...         exp_t_d=2.4,
-        ...         exp_t_d_exp=-0.146,
+        ...         exp_N=0.719,
+        ...         exp_1=-0.57,
+        ...         exp_2=-2.33,
+        ...         exp_3=2.4,
+        ...         exp_4=-0.146,
         ...     ),
         ...     R=([
         ...         td.ShockleyReedHallRecombination(
@@ -270,10 +277,16 @@ class SemiconductorMedium(AbstractChargeMedium):
         units=ELECTRON_VOLT,
     )
 
-    mobility: MobilityModelType = pd.Field(
+    mobility_n: MobilityModelType = pd.Field(
         ...,
-        title="Mobility model",
-        description="Mobility model",
+        title="Mobility model for electrons",
+        description="Mobility model for electrons",
+    )
+
+    mobility_p: MobilityModelType = pd.Field(
+        ...,
+        title="Mobility model for holes",
+        description="Mobility model for holes",
     )
 
     R: Tuple[RecombinationModelType, ...] = pd.Field(

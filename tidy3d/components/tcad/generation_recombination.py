@@ -1,6 +1,65 @@
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import Union
+from tidy3d.constants import PERCMCUBE, SECOND
+
+
+class FossumCarrierLifetime(Tidy3dBaseModel):
+    """
+    Parameters for the Fossum carrier lifetime model
+
+    Notes
+    -----
+
+        This model expresses the carrier lifetime as a function of the temperature and doping concentration.
+
+        .. math::
+
+            \\tau = \\frac{\\tau_{300} \\left( T/300 \\right)^\\alpha_T}{A + B (N/N_0) + C (N/N_0)^\\alpha}
+
+    Example
+    -------
+        >>> import tidy3d as td
+        >>> default_Si = td.FossumCarrierLifetime(
+        ...   tau_300=3.3e-6,
+        ...   alpha_T=-0.5,
+        ...   N0=7.1e15,
+        ...   A=1,
+        ...   B=0,
+        ...   C=1,
+        ...   alpha=1
+        ... )
+
+    References
+    ----------
+
+        Fossum, J. G., and D. S. Lee. "A physical model for the dependence of carrier lifetime on doping density in nondegenerate silicon." Solid-State Electronics 25.8 (1982): 741-747.
+
+    """
+
+    tau_300: pd.PositiveFloat = pd.Field(
+        ..., title="Tau at 300K", description="Carrier lifetime at 300K", units=SECOND
+    )
+
+    alpha_T: float = pd.Field(
+        ..., title="Exponent for thermal dependence", description="Exponent for thermal dependence"
+    )
+
+    N0: pd.PositiveFloat = pd.Field(
+        ..., title="Reference concentration", description="Reference concentration", units=PERCMCUBE
+    )
+
+    A: float = pd.Field(..., title="Constant A", description="Constant A")
+
+    B: float = pd.Field(..., title="Constant B", description="Constant B")
+
+    C: float = pd.Field(..., title="Constant C", description="Constant C")
+
+    alpha: float = pd.Field(..., title="Exponent constant", description="Exponent constant")
+
+
+CarrierLifetimeType = Union[FossumCarrierLifetime]
 
 
 class AugerRecombination(Tidy3dBaseModel):
@@ -98,10 +157,10 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     - This model represents mid-gap traps Shockley-Reed-Hall recombination.
     """
 
-    tau_n: pd.PositiveFloat = pd.Field(
-        ..., title="Electron lifetime", description="Electron lifetime in seconds. TODOMARCCHECK"
+    tau_n: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
+        ..., title="Electron lifetime", description="Electron lifetime", union=SECOND
     )
 
-    tau_p: pd.PositiveFloat = pd.Field(
-        ..., title="Hole lifetime", description="Hole lifetime in seconds. TODOMARCCHECK."
+    tau_p: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
+        ..., title="Hole lifetime", description="Hole lifetime", units=SECOND
     )
