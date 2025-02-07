@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Advanced option `dist_type` that allows `LinearLumpedElement` to be distributed across grid cells in different ways. For example, restricting the network portion to a single cell and using PEC wires to connect to the desired location of the terminals. 
 - New `layer_refinement_specs` field in `GridSpec` that takes a list of `LayerRefinementSpec` for automatic mesh refinement and snapping in layered structures. Structure corners on the cross section perpendicular to layer thickness direction can be automatically identified. Mesh is automatically snapped and refined around those corners.
+- New field `drop_outside_sim` in `MeshOverrideStructure` to specify whether to drop an override structure if it is outside the simulation domain, but it overlaps with the simulation domain when projected to an axis.
 
 ### Changed
 - The coordinate of snapping points in `GridSpec` can take value `None`, so that mesh can be selectively snapped only along certain dimensions.

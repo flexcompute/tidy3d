@@ -923,3 +923,34 @@ def test_override_unshadowed_edge_cases():
     sim = sim.updated_copy(
         grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s])
     )
+
+
+def test_override_outside_sim():
+    """Test the behavior of override structures with different `drop_outside_sim` flag."""
+
+    override_s = td.MeshOverrideStructure(
+        geometry=td.Box(center=(5, 0, 0), size=(0.1, 1, 1)),
+        dl=[0.01, 0.01, 0.01],
+        drop_outside_sim=True,
+    )
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s]),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+    # override structure dropped, taking no effect
+    assert min(sim.grid.sizes.y) > 0.05
+
+    # override structure still takes effect along yz-axis
+    override_s = override_s.updated_copy(drop_outside_sim=False)
+    sim2 = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s])
+    )
+    assert min(sim2.grid.sizes.y) < 0.01
+
+    # but no effect along x-axis
+    assert np.allclose(sim.grid.boundaries.x, sim2.grid.boundaries.x)

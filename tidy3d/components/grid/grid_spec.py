@@ -595,8 +595,16 @@ class AbstractAutoGrid(GridSpec1d):
 
         # New list of structures with symmetry applied
         struct_list = [Structure(geometry=symmetry_domain, medium=structures[0].medium)]
+        rmin_domain, rmax_domain = symmetry_domain.bounds
         for structure in structures[1:]:
-            if symmetry_domain.intersects(structure.geometry):
+            if isinstance(structure, MeshOverrideStructure) and not structure.drop_outside_sim:
+                # check overlapping per axis
+                rmin, rmax = structure.geometry.bounds
+                drop_structure = rmin[axis] > rmax_domain[axis] or rmin_domain[axis] > rmax[axis]
+            else:
+                # check overlapping of the entire structure
+                drop_structure = not symmetry_domain.intersects(structure.geometry)
+            if not drop_structure:
                 struct_list.append(structure)
 
         # parse structures
@@ -899,7 +907,7 @@ class GridRefinement(Tidy3dBaseModel):
         return dl
 
     def override_structure(
-        self, center: CoordinateOptional, grid_size_in_vacuum: float
+        self, center: CoordinateOptional, grid_size_in_vacuum: float, drop_outside_sim: bool
     ) -> MeshOverrideStructure:
         """Generate override structure for mesh refinement.
 
@@ -910,6 +918,8 @@ class GridRefinement(Tidy3dBaseModel):
             applied along that axis.
         grid_size_in_vaccum : float
             Grid step size in vaccum.
+        drop_outside_sim : bool
+            Drop override structures outside simulation domain.
 
         Returns
         -------
@@ -925,7 +935,10 @@ class GridRefinement(Tidy3dBaseModel):
         center_geo = [0 if axis_c is None else axis_c for axis_c in center]
         size_geo = [inf if axis_c is None else dl * self.num_cells for axis_c in center]
         return MeshOverrideStructure(
-            geometry=Box(center=center_geo, size=size_geo), dl=dl_list, shadow=False
+            geometry=Box(center=center_geo, size=size_geo),
+            dl=dl_list,
+            shadow=False,
+            drop_outside_sim=drop_outside_sim,
         )
 
 
@@ -1001,6 +1014,15 @@ class LayerRefinementSpec(Box):
         "corners of geometries specified by ``corner_finder``. ",
     )
 
+    refinement_inside_sim_only: bool = pd.Field(
+        True,
+        title="Apply Refinement Only To Features Inside Simulation Domain",
+        description="If ``True``, only apply mesh refinement to features such as corners inside "
+        "the simulation domain; If ``False``, features outside the domain can take effect "
+        "along the dimensions where the projection of the feature "
+        "and the projection of the simulation domain overlaps.",
+    )
+
     @pd.validator("axis", always=True)
     @skip_if_fields_missing(["size"])
     def _finite_size_along_axis(cls, val, values):
@@ -1020,6 +1042,7 @@ class LayerRefinementSpec(Box):
         corner_finder: CornerFinderSpec = CornerFinderSpec(),
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = GridRefinement(),
+        refinement_inside_sim_only: bool = True,
     ):
         """Constructs a :class:`LayerRefiementSpec` that is unbounded in inplane dimensions from bounds along
         layer thickness dimension.
@@ -1043,6 +1066,8 @@ class LayerRefinementSpec(Box):
             Placing grid snapping point at corners.
         corner_refinement : GridRefinement = GridRefinement()
             Inplane mesh refinement factor around corners.
+        refinement_inside_sim_only : bool = True
+            Apply refinement only to features inside simulation domain.
 
 
         Example
@@ -1063,6 +1088,7 @@ class LayerRefinementSpec(Box):
             corner_finder=corner_finder,
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
+            refinement_inside_sim_only=refinement_inside_sim_only,
         )
 
     @classmethod
@@ -1077,6 +1103,7 @@ class LayerRefinementSpec(Box):
         corner_finder: CornerFinderSpec = CornerFinderSpec(),
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = GridRefinement(),
+        refinement_inside_sim_only: bool = True,
     ):
         """Constructs a :class:`LayerRefiementSpec` from minimum and maximum coordinate bounds.
 
@@ -1102,6 +1129,8 @@ class LayerRefinementSpec(Box):
             Placing grid snapping point at corners.
         corner_refinement : GridRefinement = GridRefinement()
             Inplane mesh refinement factor around corners.
+        refinement_inside_sim_only : bool = True
+            Apply refinement only to features inside simulation domain.
 
 
         Example
@@ -1122,6 +1151,7 @@ class LayerRefinementSpec(Box):
             corner_finder=corner_finder,
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
+            refinement_inside_sim_only=refinement_inside_sim_only,
         )
 
     @classmethod
@@ -1135,6 +1165,7 @@ class LayerRefinementSpec(Box):
         corner_finder: CornerFinderSpec = CornerFinderSpec(),
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = GridRefinement(),
+        refinement_inside_sim_only: bool = True,
     ):
         """Constructs a :class:`LayerRefiementSpec` from the bounding box of a list of structures.
 
@@ -1158,6 +1189,8 @@ class LayerRefinementSpec(Box):
             Placing grid snapping point at corners.
         corner_refinement : GridRefinement = GridRefinement()
             Inplane mesh refinement factor around corners.
+        refinement_inside_sim_only : bool = True
+            Apply refinement only to features inside simulation domain.
 
         """
 
@@ -1178,6 +1211,7 @@ class LayerRefinementSpec(Box):
             corner_finder=corner_finder,
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
+            refinement_inside_sim_only=refinement_inside_sim_only,
         )
 
     @cached_property
@@ -1328,7 +1362,9 @@ class LayerRefinementSpec(Box):
             return []
 
         return [
-            self.corner_refinement.override_structure(corner, grid_size_in_vacuum)
+            self.corner_refinement.override_structure(
+                corner, grid_size_in_vacuum, self.refinement_inside_sim_only
+            )
             for corner in self._corners(structure_list)
         ]
 
@@ -1350,6 +1386,7 @@ class LayerRefinementSpec(Box):
                     ),
                     dl=self._unpop_axis(ax_coord=dl, plane_coord=None),
                     shadow=False,
+                    drop_outside_sim=self.refinement_inside_sim_only,
                 )
             )
 
@@ -1359,6 +1396,7 @@ class LayerRefinementSpec(Box):
                 self.bounds_refinement.override_structure(
                     self._unpop_axis(ax_coord=self.bounds[index][self.axis], plane_coord=None),
                     grid_size_in_vacuum,
+                    drop_outside_sim=self.refinement_inside_sim_only,
                 )
                 for index in range(1 + (self.length_axis > 0))
             ]
@@ -1374,6 +1412,7 @@ class LayerRefinementSpec(Box):
                     geometry=Box.from_bounds(rmin=rmin, rmax=rmax),
                     dl=refinement_structures[0].dl,
                     shadow=False,
+                    drop_outside_sim=self.refinement_inside_sim_only,
                 )
                 refinement_structures = [
                     combined_structure,

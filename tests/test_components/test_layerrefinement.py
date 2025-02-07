@@ -67,7 +67,7 @@ def test_gridrefinement():
     # generate override structures for z-axis
     center = [None, None, 0]
     grid_size_in_vaccum = 1
-    structure = GRID_REFINEMENT.override_structure(center, grid_size_in_vaccum)
+    structure = GRID_REFINEMENT.override_structure(center, grid_size_in_vaccum, True)
     assert not structure.shadow
     for axis in range(2):
         assert structure.dl[axis] is None
@@ -79,7 +79,7 @@ def test_gridrefinement():
     # explicitly define step size in refinement region that is smaller than that of refinement_factor
     dl = 1
     grid_refinement = GRID_REFINEMENT.updated_copy(dl=dl)
-    structure = grid_refinement.override_structure(center, grid_size_in_vaccum)
+    structure = grid_refinement.override_structure(center, grid_size_in_vaccum, True)
     for axis in range(2):
         assert structure.dl[axis] is None
         assert structure.geometry.size[axis] == td.inf
@@ -266,3 +266,59 @@ def test_grid_spec_with_layers():
     )
     sim2 = update_sim_with_newlayer(layer)
     assert len(sim2.grid_spec.all_override_structures(list(sim2.structures), 1.0, sim2.size)) == 2
+
+
+def test_corner_refinement_outside_domain():
+    """Test the behavior of corner refinement if corners are outside the simulation domain."""
+
+    # CPW waveguides that goes through the simulation domain along x-axis, so that the corners
+    # are outside the simulation domain.
+    wg_length = 10
+    wg1 = td.Structure(
+        geometry=td.Box(size=(wg_length, 0.2, 1)),
+        medium=td.PEC,
+    )
+
+    wg2 = td.Structure(
+        geometry=td.Box(size=(wg_length, 0.2, 1), center=(0, 0.25, 0)),
+        medium=td.PEC,
+    )
+
+    wg3 = td.Structure(
+        geometry=td.Box(size=(wg_length, 0.2, 1), center=(0, -0.25, 0)),
+        medium=td.PEC,
+    )
+    structures = [wg1, wg2, wg3]
+
+    # 1) not refined in the gap along y-axis because corners are outside the simulation domain
+    layer = td.LayerRefinementSpec.from_structures(
+        structures,
+        axis=2,
+        corner_refinement=td.GridRefinement(refinement_factor=5),
+        refinement_inside_sim_only=True,
+    )
+
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        structures=structures,
+        grid_spec=td.GridSpec.auto(
+            wavelength=1,
+            layer_refinement_specs=[layer],
+        ),
+        run_time=1e-20,
+    )
+
+    def count_grids_within_gap(sim_t):
+        float_relax = 1.001
+        y = sim_t.grid.boundaries.y
+        y = y[y * float_relax >= 0.1]
+        y = y[y <= 0.15 * float_relax]
+        return len(y)
+
+    # just 2 grids sampling the gap
+    assert count_grids_within_gap(sim) == 2
+
+    # 2) refined if corners outside simulation domain is accounted for.
+    layer = layer.updated_copy(refinement_inside_sim_only=False)
+    sim = sim.updated_copy(grid_spec=td.GridSpec.auto(wavelength=1, layer_refinement_specs=[layer]))
+    assert count_grids_within_gap(sim) > 2

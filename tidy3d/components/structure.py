@@ -682,6 +682,14 @@ class MeshOverrideStructure(AbstractStructure):
         "the bounding box of the structure is disabled.",
     )
 
+    drop_outside_sim: bool = pydantic.Field(
+        True,
+        title="Drop Structure Outside Simulation Domain",
+        description="If ``True``, structure outside the simulation domain is dropped; if ``False``, "
+        "structure takes effect along the dimensions where the projections of the structure "
+        "and that of the simulation domain overlap.",
+    )
+
     @pydantic.validator("geometry")
     def _box_only(cls, val):
         """Ensure this is a box."""
