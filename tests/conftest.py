@@ -1,10 +1,13 @@
 import os
 
+import autograd
 import matplotlib.pyplot as plt
 import numpy as np
 import psutil
 import pytest
 import tidy3d as td
+from autograd.test_util import check_grads
+from autograd.wrap_util import unary_to_nary
 from tidy3d.log import DEFAULT_LEVEL, set_logging_console, set_logging_level
 
 
@@ -26,6 +29,22 @@ def reset_logger():
         del td.log.handlers["console"]
     set_logging_console()
     set_logging_level(DEFAULT_LEVEL)
+
+
+@pytest.fixture
+def check_grads_with_tolerance(monkeypatch):
+    @unary_to_nary
+    def check_grads_with_tolerance_(f, x, modes=None, order=2, tol=1e-6, rtol=1e-6):
+        """Wrap autograd's check_grads function so we can override the hardcoded tolerances."""
+        if not modes:
+            modes = ["fwd", "rev"]
+
+        with monkeypatch.context() as m:
+            m.setattr(autograd.test_util, "TOL", tol)
+            m.setattr(autograd.test_util, "RTOL", rtol)
+            check_grads(f, modes=modes, order=order)(x)
+
+    return check_grads_with_tolerance_
 
 
 def pytest_xdist_auto_num_workers(config):

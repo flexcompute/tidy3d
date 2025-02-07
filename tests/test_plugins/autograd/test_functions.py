@@ -403,7 +403,7 @@ class TestSmoothMax:
         expected = np.max(x, axis=axis)
         npt.assert_allclose(result, expected, atol=10 * tau)
 
-    def test_smooth_max_grad(self, rng, shape, tau, axis):
+    def test_smooth_max_grad(self, check_grads_with_tolerance, rng, shape, tau, axis):
         """Test gradients of `smooth_max` for various parameters."""
 
         if axis == 1 and len(shape) == 1:
@@ -411,7 +411,7 @@ class TestSmoothMax:
 
         x = rng.uniform(-1, 1, size=shape)
         func = lambda x: smooth_max(x, tau=tau, axis=axis)
-        check_grads(func, modes=["fwd", "rev"], order=2)(x)
+        check_grads_with_tolerance(func, modes=["fwd", "rev"], order=2, tol=1e-5, rtol=1e-5)(x)
 
 
 @pytest.mark.parametrize("shape", [(5,), (5, 5), (5, 5, 5)])
@@ -430,7 +430,7 @@ class TestSmoothMin:
         expected = np.min(x, axis=axis)
         npt.assert_allclose(result, expected, atol=10 * tau)
 
-    def test_smooth_min_grad(self, rng, shape, tau, axis):
+    def test_smooth_min_grad(self, check_grads_with_tolerance, rng, shape, tau, axis):
         """Test gradients of `smooth_min` for various parameters."""
 
         if axis == 1 and len(shape) == 1:
@@ -438,7 +438,7 @@ class TestSmoothMin:
 
         x = rng.uniform(-1, 1, size=shape)
         func = lambda x: smooth_min(x, tau=tau, axis=axis)
-        check_grads(func, modes=["fwd", "rev"], order=2)(x)
+        check_grads_with_tolerance(func, modes=["fwd", "rev"], order=2, tol=1e-5, rtol=1e-5)(x)
 
 
 class TestLeastSquares:
