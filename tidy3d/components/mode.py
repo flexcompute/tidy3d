@@ -145,6 +145,14 @@ class ModeSpec(Tidy3dBaseModel):
         f"default of {GROUP_INDEX_STEP} is used.",
     )
 
+    calculate_group_index: bool = pd.Field(
+        False,
+        title="Pertuirbation-based calculationof the group index and the GVD",
+        description="Control the computation of the group index and the group velocity dispersion"
+        "alongside the effective index. If set to 'True', the perturbation theory based alggorithm"
+        " is used for calculation.",
+    )
+
     @pd.validator("bend_axis", always=True)
     @skip_if_fields_missing(["bend_radius"])
     def bend_axis_given(cls, val, values):
