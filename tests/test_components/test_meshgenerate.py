@@ -895,3 +895,31 @@ def test_override_unshadowed_snapping():
     )
     assert sim_shadow.num_cells > sim.num_cells
     assert any(np.isclose(sim_shadow.grid.boundaries.x, 0.5))
+
+
+def test_override_unshadowed_edge_cases():
+    """Test that override structures working appropriately in certain edge cases."""
+
+    override_s = td.MeshOverrideStructure(
+        geometry=td.Box(center=(1.5, 1, 1), size=(4, 1, 1)),
+        dl=[0.07, 0.07, 0.07],
+        shadow=False,
+    )
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s]),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+
+    override_s = td.MeshOverrideStructure(
+        geometry=td.Box(center=(-1.5, 1, 1), size=(4, 1, 1)),
+        dl=[0.07, 0.07, 0.07],
+        shadow=False,
+    )
+    sim = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s])
+    )

@@ -446,7 +446,7 @@ class GradedMesher(Mesher):
 
         # special treatment to unshadowed structure
         skip_unshadowed = False
-        if unshadowed:
+        if unshadowed and indmin > 0:
             grid_size_str = structure_steps[str_ind]
             min_grid_size = min(
                 (structure_steps[ind] for ind in structs[indmin - 1]), default=grid_size_str
@@ -477,7 +477,7 @@ class GradedMesher(Mesher):
 
         # special treatment to unshadowed structure
         skip_unshadowed = False
-        if unshadowed:
+        if unshadowed and indmax < len(structs):
             grid_size_str = structure_steps[str_ind]
             min_grid_size = min(
                 (structure_steps[ind] for ind in structs[indmax]), default=grid_size_str
