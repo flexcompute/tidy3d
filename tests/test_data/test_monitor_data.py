@@ -545,9 +545,10 @@ def test_mode_solver_data_sort():
     data_unsorted = data._reorder_modes(unsorting, phases, None)
 
     # sort back using all starting frequencies
-    data_first = data_unsorted.overlap_sort(track_freq="lowest")
-    data_last = data_unsorted.overlap_sort(track_freq="highest")
-    data_center = data_unsorted.overlap_sort(track_freq="central")
+    overlap_thresh = 0.95
+    data_first = data_unsorted.overlap_sort(track_freq="lowest", overlap_thresh=overlap_thresh)
+    data_last = data_unsorted.overlap_sort(track_freq="highest", overlap_thresh=overlap_thresh)
+    data_center = data_unsorted.overlap_sort(track_freq="central", overlap_thresh=overlap_thresh)
 
     # check that sorted data coincides with original
     for data_sorted in [data_first, data_last, data_center]:
