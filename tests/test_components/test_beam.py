@@ -10,7 +10,7 @@ from tidy3d.components.beam import (
 )
 from tidy3d.components.data.monitor_data import FieldData
 
-FREQS = np.linspace(1e14, 2e14, 10)
+FREQS = np.linspace(1e14, 2e14, 10).tolist()
 
 
 def test_gaussian_beam():
@@ -182,6 +182,35 @@ def test_gaussian_beam_center():
     assert np.allclose(get_center(field_data), (0, 0))
     assert np.allclose(get_center(field_data_angled), (0, 0))
     assert np.all(np.abs(get_center(field_data_angled_distance)) > 1)
+
+
+def test_beam_overlap():
+    """Test that an outer dot can be computed between two beams."""
+    center = (0, 0, 0)
+    size = (10, 10, 0)
+    resolution1 = 150
+    resolution2 = 200
+    waist_radius = 1.0
+    waist_distance = 3.0
+    beam1 = GaussianAnalyticBeam(
+        center=center,
+        size=size,
+        resolution=resolution1,
+        freqs=FREQS,
+        waist_radius=waist_radius,
+        waist_distance=waist_distance,
+    )
+    beam2 = AstigmaticGaussianAnalyticBeam(
+        center=center,
+        size=size,
+        resolution=resolution2,
+        freqs=FREQS,
+        waist_sizes=[waist_radius, waist_radius],
+        waist_distances=[waist_distance, waist_distance],
+    )
+    outer_dot = beam1.field_data.outer_dot(beam2.field_data)
+    # Equivalent beam definition apart from different discretization, leading to a small mismatch
+    assert np.allclose(outer_dot, 1.0, rtol=1e-3)
 
 
 if __name__ == "__main__":

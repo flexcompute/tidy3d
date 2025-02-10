@@ -8,6 +8,7 @@ import autograd.numpy as np
 import pydantic.v1 as pd
 
 from ..constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
+from .base import cached_property
 from .data.data_array import ScalarFieldDataArray
 from .data.monitor_data import FieldData
 from .geometry.base import Box
@@ -111,7 +112,7 @@ class AnalyticBeam(Box):
             name="<<BEAM_DATA>>",
         )
 
-    @property
+    @cached_property
     def field_data(self) -> FieldData:
         """Compute a FieldData for the spatial E and H field amplitudes of an analytically defined
         beam."""
@@ -160,7 +161,7 @@ class AnalyticBeam(Box):
             # Get the current field component
             field_vals = field_vals[comp % 3]
             # Make the ScalarFieldDataArray for the current component
-            coords = dict(x=x, y=y, z=z, f=self.freqs)
+            coords = dict(x=x, y=y, z=z, f=np.array(self.freqs))
             field_data = ScalarFieldDataArray(field_vals, coords=coords)
             scalar_fields[field] = field_data
 
@@ -269,7 +270,7 @@ class PlaneWaveAnalyticBeam(AnalyticBeam):
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
         computed on an unstructured array ``points`` of shape ``(3, ...)``.
         """
-        k0 = 2 * np.pi * self.freqs / C_0 * background_n
+        k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
         if self.fixed_angle:
             k0 *= np.cos(self.angle_theta)
         field = np.exp(1j * np.outer(points[2], k0))
@@ -330,7 +331,7 @@ class GaussianAnalyticBeam(AnalyticBeam):
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
         computed on an unstructured array ``points`` of shape ``(3, ...)``.
         """
-        k0 = 2 * np.pi * self.freqs / C_0 * background_n
+        k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
         x, y, z = points
         w_0 = self.waist_radius
         w_z, inv_r_z, psi_g = self.beam_params(z, k0)
@@ -402,7 +403,7 @@ class AstigmaticGaussianAnalyticBeam(AnalyticBeam):
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
         computed on an unstructured array ``points`` of shape ``(3, ...)``.
         """
-        k0 = 2 * np.pi * self.freqs / C_0 * background_n
+        k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
         x, y, z = points
         w_0, w_z, inv_r_z, psi_g = self.beam_params(z, k0)
         x_2 = x**2
