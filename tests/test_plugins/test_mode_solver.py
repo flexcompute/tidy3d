@@ -1202,3 +1202,45 @@ def test_gauge_robustness():
 
     array[1, -1] = np.nan
     assert ModeSolver._weighted_coord_max(array, ij, ij) == (0, 0)
+
+
+def test_translated_dot():
+    sim_size = (5, 5, 5)
+    lambda0 = 1.55
+    freq0 = td.C_0 / lambda0
+    si = td.material_library["cSi"]["Li1993_293K"]
+    sio2 = td.material_library["SiO2"]["Horiba"]
+    wg = td.Structure(geometry=td.Box(size=(0.22, 0.5, td.inf)), medium=si)
+    mode_spec = td.ModeSpec(num_modes=3)
+    grid_spec = td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=20)
+
+    sim = td.Simulation(
+        size=sim_size, medium=sio2, structures=[wg], grid_spec=grid_spec, run_time=1e-30
+    )
+    mode_plane = td.Box(size=(3, 3, 0))
+    mode_solver = ModeSolver(simulation=sim, plane=mode_plane, mode_spec=mode_spec, freqs=[freq0])
+
+    data = mode_solver.data_raw
+
+    # now create a translated copy
+    vector = (0.5, 0, 0)
+    mode_solver2 = mode_solver.updated_copy(center=vector, path="simulation/structures/0/geometry")
+
+    data2 = mode_solver2.data_raw
+
+    # self-overlaps are close to 1, others are close to 0
+    atol = 1e-2
+
+    # just make sure the mode overlaps in the translated waveguide are the same
+    assert np.allclose(data.dot(data), data2.dot(data2), atol=atol)
+    assert np.allclose(data.outer_dot(data), data2.outer_dot(data2), atol=atol)
+
+    # now translate the data, and check that its overlaps with the modes
+    # of the translated waveguide agree with the self-overlaps of those modes
+    data_translated = data.translated_copy(vector)
+
+    assert np.allclose(data2.dot(data_translated), data2.dot(data2), atol=atol)
+    assert np.allclose(data_translated.dot(data2), data2.dot(data2), atol=atol)
+
+    assert np.allclose(data2.outer_dot(data_translated), data2.outer_dot(data2), atol=atol)
+    assert np.allclose(data_translated.outer_dot(data2), data2.outer_dot(data2), atol=atol)

@@ -246,6 +246,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         """Dictionary of data fields to create data with expanded symmetry."""
 
         update_dict = {}
+        warn_interp = False
         for field_name, scalar_data in self.field_components.items():
             eigenval_fn = self.symmetry_eigenvalues[field_name]
 
@@ -273,8 +274,44 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
 
-                scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
-                scalar_data = scalar_data.assign_coords({dim_name: coords})
+                # using sel vs interp is faster, and should always be fine
+                # if the data is set up correctly such that its colocation
+                # matches the monitor colocation settings. If these do not match,
+                # then we need to interpolate, which is slower.
+                use_sel = (
+                    len(scalar_data.coords[dim_name]) == 1
+                    or coords[-1] in scalar_data.coords[dim_name]
+                )
+                if use_sel:
+                    scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
+                    scalar_data = scalar_data.assign_coords({dim_name: coords})
+                else:
+                    warn_interp = True
+                    no_flip_inds = np.where(coords >= sym_loc)[0]
+                    scalar_data_arrays = []
+                    if len(scalar_data.coords[dim_name]) == 1:
+                        scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
+                    else:
+                        if len(flip_inds) > 0:
+                            scalar_data_flip = scalar_data.interp(
+                                **{dim_name: coords_interp[flip_inds][::-1]},
+                                method="linear",
+                                kwargs={"fill_value": "extrapolate"},
+                                assume_sorted=True,
+                            ).isel({dim_name: slice(None, None, -1)})
+                            scalar_data_flip = scalar_data_flip.assign_coords(
+                                {dim_name: coords[flip_inds]}
+                            )
+                            scalar_data_arrays.append(scalar_data_flip)
+                        if len(no_flip_inds) > 0:
+                            scalar_data_no_flip = scalar_data.interp(
+                                **{dim_name: coords_interp[no_flip_inds]},
+                                method="linear",
+                                kwargs={"fill_value": "extrapolate"},
+                                assume_sorted=True,
+                            )
+                            scalar_data_arrays.append(scalar_data_no_flip)
+                        scalar_data = xr.concat(scalar_data_arrays, dim=dim_name)
 
                 # apply the symmetry eigenvalue (if defined) to the flipped values
                 if eigenval_fn is not None:
@@ -287,6 +324,13 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             update_dict[field_name] = scalar_data
 
         update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
+
+        if warn_interp:
+            log.warning(
+                "Interpolating 'ElectromagneticFieldData'. This may be due to "
+                "mismatch between monitor colocation and data colocation, "
+                "and can lead to performance issues."
+            )
 
         return update_dict
 
@@ -686,9 +730,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Tangential fields for current and other field data
         fields_self = self._colocated_tangential_fields
 
-        fields_other = field_data._colocated_tangential_fields
         if conjugate:
             fields_self = {key: field.conj() for key, field in fields_self.items()}
+
+        fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
 
         # Drop size-1 dimensions in the other data
         fields_other = {key: field.squeeze(drop=True) for key, field in fields_other.items()}
@@ -703,6 +748,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Integrate over plane
         d_area = self._diff_area
         integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
+
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
 
     def _interpolated_tangential_fields(self, coords: ArrayFloat2D) -> Dict[str, DataArray]:
@@ -940,6 +986,46 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 f"Field components {missing_comps} not included in this data object. Use "
                 "the 'fields' argument of a field monitor to select which components are stored."
             )
+
+    def translated_copy(self, vector: Coordinate) -> ElectromagneticFieldData:
+        """Create a copy of the :class:`.ElectromagneticFieldData` with fields translated
+        by the provided vector. Can be used together with ``dot`` or ``outer_dot``
+        to compute overlaps between field data at different locations.
+
+        Parameters
+        ----------
+        vector: :class:`.Coordinate`
+            Translation vector to apply to the field data.
+
+        Returns
+        -------
+        :class:`ElectromagneticFieldData`
+            A data object with the translated fields.
+        """
+        field_kwargs = {}
+        for key, val in self.field_components.items():
+            coords = dict(val.coords)
+            coords["x"] = coords["x"] + vector[0]
+            coords["y"] = coords["y"] + vector[1]
+            coords["z"] = coords["z"] + vector[2]
+            field_kwargs[key] = val.assign_coords(coords)
+
+        symmetry_center = self.symmetry_center
+        if symmetry_center is not None:
+            symmetry_center = tuple([x + y for (x, y) in zip(symmetry_center, vector)])
+        grid_expanded = self.grid_expanded._translated_copy(vector=vector)
+
+        monitor_center = tuple([x + y for (x, y) in zip(self.monitor.center, vector)])
+        monitor = self.monitor.updated_copy(center=monitor_center)
+
+        return self.updated_copy(
+            monitor=monitor,
+            symmetry=self.symmetry,
+            symmetry_center=symmetry_center,
+            grid_expanded=grid_expanded,
+            **self._grid_correction_dict,
+            **field_kwargs,
+        )
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):

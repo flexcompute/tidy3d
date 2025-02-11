@@ -120,20 +120,24 @@ SIM = td.Simulation(
 def get_xyz(
     monitor: td.components.monitor.MonitorType, grid_key: str, symmetry: bool
 ) -> Tuple[List[float], List[float], List[float]]:
-    if symmetry:
-        grid = SIM_SYM.discretize_monitor(monitor)
+    sim = SIM_SYM if symmetry else SIM
+    grid = sim.discretize_monitor(monitor)
+    if monitor.colocate:
+        x, y, z = grid.boundaries.to_list
+    else:
         x, y, z = grid[grid_key].to_list
+    if symmetry:
         x = [_x for _x in x if _x >= 0]
         y = [_y for _y in y if _y >= 0]
         z = [_z for _z in z if _z >= 0]
-    else:
-        grid = SIM.discretize_monitor(monitor)
-        x, y, z = grid[grid_key].to_list
     return x, y, z
 
 
-def make_scalar_field_data_array(grid_key: str, symmetry=True):
-    XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key, symmetry)
+def make_scalar_field_data_array(grid_key: str, symmetry=True, colocate: bool = None):
+    monitor = FIELD_MONITOR
+    if colocate is not None:
+        monitor = monitor.updated_copy(colocate=colocate)
+    XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
     values = (1 + 1j) * np.random.random((len(XS), len(YS), len(ZS), len(FS)))
     return td.ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
 
@@ -144,8 +148,11 @@ def make_scalar_field_time_data_array(grid_key: str, symmetry=True):
     return td.ScalarFieldTimeDataArray(values, coords=dict(x=XS, y=YS, z=ZS, t=TS))
 
 
-def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
-    XS, YS, ZS = get_xyz(MODE_MONITOR_WITH_FIELDS, grid_key, symmetry)
+def make_scalar_mode_field_data_array(grid_key: str, symmetry=True, colocate: bool = None):
+    monitor = MODE_MONITOR_WITH_FIELDS
+    if colocate is not None:
+        monitor = monitor.updated_copy(colocate=colocate)
+    XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
     values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
     return td.ScalarModeFieldDataArray(
