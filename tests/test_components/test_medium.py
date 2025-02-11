@@ -144,22 +144,35 @@ def test_PEC():
 def test_lossy_metal():
     # frequency_range shouldn't be None
     with pytest.raises(pydantic.ValidationError):
-        _ = td.LossyMetalMedium()
+        _ = td.LossyMetalMedium(conductivity=1)
     # frequency_range shouldn't contain non-postive values
     with pytest.raises(pydantic.ValidationError):
-        _ = td.LossyMetalMedium(frequency_range=(0, 10))
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(0, 10))
     with pytest.raises(pydantic.ValidationError):
-        _ = td.LossyMetalMedium(frequency_range=(-10, 10))
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(-10, 10))
 
     # frequency_range should be finite
     with pytest.raises(pydantic.ValidationError):
-        _ = td.LossyMetalMedium(frequency_range=(10, np.inf))
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(10, np.inf))
     with pytest.raises(pydantic.ValidationError):
-        _ = td.LossyMetalMedium(frequency_range=(-np.inf, 10))
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(-np.inf, 10))
+
+    # allow_gain cannot be true
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(allow_gain=True, conductivity=1, frequency_range=(10, 20))
+
+    # conductivity cannot be negative
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=-1, frequency_range=(10, 20))
+
+    # conductivity cannot be 0
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=0, frequency_range=(10, 20))
 
     # default fitting
     mat = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14))
-    model = mat.skin_depth_model
+    model = mat.scaled_surface_impedance_model
+    num_poles = mat.num_poles
 
 
 def test_medium_dispersion():

@@ -23,6 +23,7 @@ from ..constants import (
     C_0,
     CONDUCTIVITY,
     EPSILON_0,
+    ETA_0,
     HBAR,
     HERTZ,
     MICROMETER,
@@ -100,7 +101,7 @@ NONLINEAR_DEFAULT_NUM_ITERS = 5
 # Lossy metal
 LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY = 20
 LOSSY_METAL_SCALED_REAL_PART = 10.0
-LOSSY_METAL_DEFAULT_MAX_POLES = 3
+LOSSY_METAL_DEFAULT_MAX_POLES = 5
 LOSSY_METAL_DEFAULT_TOLERANCE_RMS = 1e-3
 
 
@@ -5027,23 +5028,22 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
 
 
-class SkinDepthFitterParam(Tidy3dBaseModel):
-    """Advanced parameters for fitting complex-valued skin depth ``2j/k`` of a :class:`.LossyMetalMedium`
-    over its frequency bandwidth, where k is the complex-valued wavenumber inside the lossy metal. Real part
-    of this quantity corresponds to the physical skin depth.
+class SurfaceImpedanceFitterParam(Tidy3dBaseModel):
+    """Advanced parameters for fitting surface impedance of a :class:`.LossyMetalMedium`.
+    Internally, the quantity to be fitted is surface impedance divided by ``-1j * \\omega``.
     """
 
     max_num_poles: pd.PositiveInt = pd.Field(
         LOSSY_METAL_DEFAULT_MAX_POLES,
         title="Maximal Number Of Poles",
         description="Maximal number of poles in complex-conjugate pole residue model for "
-        "fitting complex-valued skin depth.",
+        "fitting surface impedance.",
     )
 
     tolerance_rms: pd.NonNegativeFloat = pd.Field(
         LOSSY_METAL_DEFAULT_TOLERANCE_RMS,
         title="Tolerance In Fitting",
-        description="Tolerance in fitting complex-valued skin depth.",
+        description="Tolerance in fitting.",
     )
 
     frequency_sampling_points: pd.PositiveInt = pd.Field(
@@ -5076,6 +5076,16 @@ class LossyMetalMedium(Medium):
 
     """
 
+    allow_gain: Literal[False] = pd.Field(
+        False,
+        title="Allow gain medium",
+        description="Allow the medium to be active. Caution: "
+        "simulations with a gain medium are unstable, and are likely to diverge."
+        "Simulations where 'allow_gain' is set to 'True' will still be charged even if "
+        "diverged. Monitor data up to the divergence point will still be returned and can be "
+        "useful in some cases.",
+    )
+
     permittivity: Literal[1] = pd.Field(
         1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )
@@ -5087,10 +5097,10 @@ class LossyMetalMedium(Medium):
         units=(HERTZ, HERTZ),
     )
 
-    fit_param: SkinDepthFitterParam = pd.Field(
-        SkinDepthFitterParam(),
-        title="Complex-valued Skin Depth Fitting Parameters",
-        description="Parameters for fitting complex-valued dispersive skin depth over "
+    fit_param: SurfaceImpedanceFitterParam = pd.Field(
+        SurfaceImpedanceFitterParam(),
+        title="Fitting Parameters For Surface Impedance",
+        description="Parameters for fitting surface impedance divided by (-1j * omega) over "
         "the frequency range using pole-residue pair model.",
     )
 
@@ -5104,23 +5114,35 @@ class LossyMetalMedium(Medium):
                 raise ValidationError("Values in 'frequency_range' must be positive.")
         return val
 
+    @pd.validator("conductivity", always=True)
+    def _positive_conductivity(cls, val):
+        """Assert conductivity>0."""
+        if val <= 0:
+            raise ValidationError("For lossy metal, 'conductivity' must be positive. ")
+        return val
+
     @cached_property
-    def skin_depth_model(self) -> PoleResidue:
-        """Fitted complex-valued skin depth using pole-residue pair model within ``frequency_range``."""
-        skin_depth = self.complex_skin_depth(self.sampling_frequencies)
-
-        # let's use scaled `skin_depth` in fitting: minimal real part equals ``SCALED_REAL_PART``
-        min_skin_depth_real = np.min(skin_depth.real)
-        if min_skin_depth_real <= 0:
-            raise SetupError("Physical skin depth cannot be non-positive. Something is wrong.")
-
-        scaling_factor = LOSSY_METAL_SCALED_REAL_PART / min_skin_depth_real
-        skin_depth *= scaling_factor
-
+    def scaled_surface_impedance_model(self) -> PoleResidue:
+        """Fitted surface impedance divided by (-j \\omega) using pole-residue pair model within ``frequency_range``."""
         omega_data = self.Hz_to_angular_freq(self.sampling_frequencies)
+        surface_impedance = self.surface_impedance(self.sampling_frequencies)
+        scaled_impedance = surface_impedance / (-1j * omega_data)
+
+        # let's use scaled quantity in fitting: minimal real part equals ``SCALED_REAL_PART``
+        min_real = np.min(scaled_impedance.real)
+        if min_real <= 0:
+            raise SetupError(
+                "The real part of scaled surface impedance must be positive. "
+                "Please create a github issue so that the problem can be investigated. "
+                "In the meantime, make sure the material is passive."
+            )
+
+        scaling_factor = LOSSY_METAL_SCALED_REAL_PART / min_real
+        scaled_impedance *= scaling_factor
+
         (res_inf, poles, residues), error = fit(
             omega_data=omega_data,
-            resp_data=skin_depth,
+            resp_data=scaled_impedance,
             min_num_poles=0,
             max_num_poles=self.fit_param.max_num_poles,
             resp_inf=None,
@@ -5136,14 +5158,13 @@ class LossyMetalMedium(Medium):
     @cached_property
     def num_poles(self) -> int:
         """Number of poles in the fitted model."""
-        return len(self.skin_depth_model.poles)
+        return len(self.scaled_surface_impedance_model.poles)
 
-    def complex_skin_depth(self, frequencies: ArrayFloat1D):
-        """Complex-valued skin_depth defined as ``2j/k`` where ``k`` is the wavenumber inside the metal."""
+    def surface_impedance(self, frequencies: ArrayFloat1D):
+        """Computing surface impedance."""
         # compute complex-valued skin depth
         n, k = self.nk_model(frequencies)
-        wavenumber = 2 * np.pi * frequencies * (n + 1j * k) / C_0
-        return 2j / wavenumber
+        return ETA_0 / (n + 1j * k)
 
     @cached_property
     def sampling_frequencies(self) -> ArrayFloat1D:
@@ -5168,7 +5189,7 @@ class LossyMetalMedium(Medium):
         self,
         ax: Ax = None,
     ) -> Ax:
-        """Make plot of complex-valued skin depth model vs fitted model, at sampling frequencies.
+        """Make plot of complex-valued surface imepdance model vs fitted model, at sampling frequencies.
         Parameters
         ----------
         ax : matplotlib.axes._subplots.Axes = None
@@ -5179,16 +5200,20 @@ class LossyMetalMedium(Medium):
             Matplotlib axis corresponding to plot.
         """
         frequencies = self.sampling_frequencies
-        skin_depth = self.complex_skin_depth(frequencies)
+        surface_impedance = self.surface_impedance(frequencies)
 
-        ax.plot(frequencies, skin_depth.real, "x", label="Real")
-        ax.plot(frequencies, skin_depth.imag, "+", label="Imag")
+        ax.plot(frequencies, surface_impedance.real, "x", label="Real")
+        ax.plot(frequencies, surface_impedance.imag, "+", label="Imag")
 
-        skin_depth_from_model = self.skin_depth_model.eps_model(frequencies)
-        ax.plot(frequencies, skin_depth_from_model.real, label="Real (model)")
-        ax.plot(frequencies, skin_depth_from_model.imag, label="Imag (model)")
+        surface_impedance_model = (
+            -1j
+            * self.Hz_to_angular_freq(frequencies)
+            * self.scaled_surface_impedance_model.eps_model(frequencies)
+        )
+        ax.plot(frequencies, surface_impedance_model.real, label="Real (model)")
+        ax.plot(frequencies, surface_impedance_model.imag, label="Imag (model)")
 
-        ax.set_ylabel("Skin depth")
+        ax.set_ylabel(r"Surface impedance ($\Omega$)")
         ax.set_xlabel("Frequency (Hz)")
         ax.legend()
 

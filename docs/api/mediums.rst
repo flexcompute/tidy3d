@@ -33,7 +33,7 @@ Fitting parameters
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SkinDepthFitterParam
+   tidy3d.SurfaceImpedanceFitterParam
 
 Dispersive Mediums
 ------------------
