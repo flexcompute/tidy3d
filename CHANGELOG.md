@@ -10,10 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Advanced option `dist_type` that allows `LinearLumpedElement` to be distributed across grid cells in different ways. For example, restricting the network portion to a single cell and using PEC wires to connect to the desired location of the terminals. 
 - New `layer_refinement_specs` field in `GridSpec` that takes a list of `LayerRefinementSpec` for automatic mesh refinement and snapping in layered structures. Structure corners on the cross section perpendicular to layer thickness direction can be automatically identified. Mesh is automatically snapped and refined around those corners.
+- `PlaneWaveBeamProfile`, `GaussianBeamProfile` and `AstigmaticGaussianBeamProfile` components to compute field data associated to such beams based on their corresponding analytical expressions, and compute field overlaps with other data.
+- `num_freqs` argument to the `PlaneWave` source.
 
 ### Changed
 - The coordinate of snapping points in `GridSpec` can take value `None`, so that mesh can be selectively snapped only along certain dimensions.
 - Grid snapping for `MeshOverrideStructure` with `shadow=False` is only on if the structure refines the mesh.
+- `num_freqs` is now set to 3 by default for the `PlaneWave`, `GaussianBeam`, and `AnalyticGaussianBeam` sources, which makes the injection more accurate in broadband cases.
+
 ### Fixed
 - Make gauge selection for non-converged modes more robust.
 

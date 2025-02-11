@@ -7,6 +7,6 @@ Analytic Beams
    :toctree: _autosummary/
    :template: module.rst
 
-    tidy3d.PlaneWaveAnalyticBeam
-    tidy3d.GaussianAnalyticBeam
-    tidy3d.AstigmaticGaussianAnalyticBeam
+    tidy3d.PlaneWaveBeamProfile
+    tidy3d.GaussianBeamProfile
+    tidy3d.AstigmaticGaussianBeamProfile
