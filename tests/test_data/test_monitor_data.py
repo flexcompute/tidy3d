@@ -168,9 +168,9 @@ def make_permittivity_data(symmetry: bool = True):
     sim = SIM_SYM if symmetry else SIM
     return PermittivityData(
         monitor=PERMITTIVITY_MONITOR,
-        eps_xx=make_scalar_field_data_array("Ex", symmetry),
-        eps_yy=make_scalar_field_data_array("Ey", symmetry),
-        eps_zz=make_scalar_field_data_array("Ez", symmetry),
+        eps_xx=make_scalar_field_data_array("Ex", symmetry, colocate=False),
+        eps_yy=make_scalar_field_data_array("Ey", symmetry, colocate=False),
+        eps_zz=make_scalar_field_data_array("Ez", symmetry, colocate=False),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(PERMITTIVITY_MONITOR),
@@ -234,7 +234,7 @@ def test_field_data():
     # Compute flux as dot product with itself
     flux2 = np.abs(data_2d.dot(data_2d))
     # Assert result is the same
-    assert np.all(flux1 == flux2)
+    assert np.allclose(flux1, flux2)
 
 
 def test_field_data_to_source():
@@ -267,7 +267,7 @@ def test_mode_solver_data():
     # Compute flux as dot product with itself
     flux2 = np.abs(data.dot(data))
     # Assert result is the same
-    assert np.all(flux1 == flux2)
+    assert np.allclose(flux1, flux2)
     # Compute dot product with a field data
     field_data = make_field_data_2d()
     dot = data.dot(field_data)
@@ -609,6 +609,91 @@ def test_outer_dot():
     dot = mode_data.outer_dot(field_data)
 
     assert len(dot.f) == 2
+
+
+def test_translated_copy():
+    mode_data = make_mode_solver_data()
+    field_data = make_field_data_2d()
+
+    vector = (1, 0, 0)
+    mode_data_translated = mode_data.translated_copy(vector=vector)
+    field_data_translated = field_data.translated_copy(vector=vector)
+
+    field1 = mode_data.symmetry_expanded_copy.Ex.isel(mode_index=0, f=0)
+    field2 = mode_data_translated.symmetry_expanded_copy.Ex.isel(mode_index=0, f=0)
+
+    atol = 1e-10
+
+    assert np.allclose(field1.data, field2.data)
+
+    assert np.allclose(
+        mode_data.dot(mode_data), mode_data_translated.dot(mode_data_translated), atol=atol
+    )
+    assert np.allclose(
+        mode_data.outer_dot(mode_data),
+        mode_data_translated.outer_dot(mode_data_translated),
+        atol=atol,
+    )
+    assert np.allclose(
+        mode_data.dot(field_data), mode_data_translated.dot(field_data_translated), atol=atol
+    )
+    assert np.allclose(
+        mode_data.outer_dot(field_data),
+        mode_data_translated.outer_dot(field_data_translated),
+        atol=atol,
+    )
+    assert np.allclose(
+        field_data.dot(mode_data), field_data_translated.dot(mode_data_translated), atol=atol
+    )
+    assert np.allclose(
+        field_data.outer_dot(mode_data),
+        field_data_translated.outer_dot(mode_data_translated),
+        atol=atol,
+    )
+    assert np.allclose(
+        field_data.dot(field_data), field_data_translated.dot(field_data_translated), atol=atol
+    )
+    assert np.allclose(
+        field_data.outer_dot(field_data),
+        field_data_translated.outer_dot(field_data_translated),
+        atol=atol,
+    )
+
+    assert np.allclose(
+        mode_data.dot(mode_data),
+        mode_data_translated.translated_copy(vector=[-v for v in vector]).dot(mode_data),
+        atol=atol,
+    )
+
+    assert np.allclose(
+        mode_data.outer_dot(mode_data),
+        mode_data_translated.translated_copy(vector=[-v for v in vector]).outer_dot(mode_data),
+        atol=atol,
+    )
+
+    # test warning for mismatch between monitor and field colocation
+    # monitor colocated, data colocated
+    with AssertLogLevel(None):
+        _ = mode_data.symmetry_expanded_copy
+    monitor = mode_data.monitor.updated_copy(colocate=False)
+    grid_expanded = SIM_SYM.discretize_monitor(monitor)
+    mode_data_warn1 = mode_data.updated_copy(monitor=monitor, grid_expanded=grid_expanded)
+    # monitor not colocated, data colocated
+    with AssertLogLevel("WARNING", contains_str="Interpolating"):
+        _ = mode_data_warn1.symmetry_expanded_copy
+    field_kwargs = {}
+    for key in mode_data.field_components.keys():
+        field_kwargs[key] = make_scalar_mode_field_data_array(key, colocate=False)
+    mode_data_warn2 = mode_data.updated_copy(**field_kwargs)
+    # monitor colocated, data not colocated
+    with AssertLogLevel("WARNING", contains_str="Interpolating"):
+        _ = mode_data_warn2.symmetry_expanded_copy
+    # neither colocated
+    mode_data_uncolocated = mode_data_warn2.updated_copy(
+        monitor=monitor, grid_expanded=grid_expanded
+    )
+    with AssertLogLevel(None):
+        _ = mode_data_uncolocated.symmetry_expanded_copy
 
 
 @pytest.mark.parametrize("phase_shift", np.linspace(0, 2 * np.pi, 10))
