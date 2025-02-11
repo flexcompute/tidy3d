@@ -34,6 +34,10 @@ from .base import Source
 CHEB_GRID_WIDTH = 1.5
 # Number of frequencies in a broadband source above which to issue a warning
 WARN_NUM_FREQS = 20
+# For broadband plane waves with constan in-plane k, the Chebyshev grid is truncated at
+# ``CRITICAL_FREQUENCY_FACTOR * f_crit``, where ``f_crit`` is the critical frequency
+# (oblique propagation).
+CRITICAL_FREQUENCY_FACTOR = 1.15
 
 
 class FieldSource(Source, ABC):
@@ -105,6 +109,10 @@ class BroadbandSource(Source, ABC):
     def frequency_grid(self) -> np.ndarray:
         """A Chebyshev grid used to approximate frequency dependence."""
         freq_min, freq_max = self.source_time.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
+        return self._chebyshev_freq_grid(freq_min, freq_max)
+
+    def _chebyshev_freq_grid(self, freq_min, freq_max):
+        """A Chebyshev grid based on a minimum and maximum frequency."""
         freq_avg = 0.5 * (freq_min + freq_max)
         freq_diff = 0.5 * (freq_max - freq_min)
         uni_points = (2 * np.arange(self.num_freqs) + 1) / (2 * self.num_freqs)
@@ -466,7 +474,7 @@ class FixedAngleSpec(AbstractAngularSpec):
     """
 
 
-class PlaneWave(AngledFieldSource, PlanarSource):
+class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     """Uniform current distribution on an infinite extent plane. One element of size must be zero.
 
     Example
@@ -492,10 +500,46 @@ class PlaneWave(AngledFieldSource, PlanarSource):
         discriminator=TYPE_TAG_STR,
     )
 
+    num_freqs: int = pydantic.Field(
+        3,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. Default is 3, which should cover even very broadband sources. For simulations "
+        "which are not very broadband and the source is very large (e.g. metalens simulations), "
+        "decreasing the value to 1 may lead to a speed up in the preprocessing.",
+        ge=1,
+        le=10,
+    )
+
     @cached_property
     def _is_fixed_angle(self) -> bool:
         """Whether the plane wave is at a fixed non-zero angle."""
         return isinstance(self.angular_spec, FixedAngleSpec) and self.angle_theta != 0.0
+
+    @cached_property
+    def frequency_grid(self) -> np.ndarray:
+        """A Chebyshev grid used to approximate frequency dependence."""
+        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
+        if not self._is_fixed_angle:
+            # For frequency-dependent angles (constat in-plane k), truncate minimum frequency at
+            # the critical frequency of glancing incidence
+            f_crit = self.source_time.freq0 * np.sin(self.angle_theta)
+            freq_min = max(freq_min, f_crit * CRITICAL_FREQUENCY_FACTOR)
+        return self._chebyshev_freq_grid(freq_min, freq_max)
+
+    def _post_init_validators(self) -> None:
+        """Error if a broadband plane wave with constant in-plane k is defined such that
+        the source frequency range is entirely below ``f_crit * CRITICAL_FREQUENCY_FACTOR."""
+        if self._is_fixed_angle or self.num_freqs == 1:
+            return
+        freq_min, freq_max = self.source_time.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
+        f_crit = self.source_time.freq0 * np.sin(self.angle_theta)
+        if f_crit * CRITICAL_FREQUENCY_FACTOR > freq_max:
+            raise SetupError(
+                "Broadband plane wave source defined with a bandwidth too close to the critical "
+                "frequency of oblique incidence. Increase the source bandwidth, or disable the "
+                "broadband handling by setting 'num_freqs' to 1."
+            )
 
 
 class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
@@ -546,6 +590,16 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         units=MICROMETER,
     )
 
+    num_freqs: int = pydantic.Field(
+        3,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of injected "
+        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
+        "than 20, is typically sufficient to obtain converged results.",
+        ge=1,
+        le=99,
+    )
+
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     """The simple astigmatic Gaussian distribution allows
@@ -592,6 +646,16 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         "``waist_distances`` are negative, the waist is on the ``+`` side (in front) of "
         "the source plane.",
         units=MICROMETER,
+    )
+
+    num_freqs: int = pydantic.Field(
+        3,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of injected "
+        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
+        "than 20, is typically sufficient to obtain converged results.",
+        ge=1,
+        le=99,
     )
 
 

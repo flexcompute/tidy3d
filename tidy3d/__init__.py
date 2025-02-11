@@ -78,9 +78,9 @@ from .components.bc_placement import (
 
 # analytic beams
 from .components.beam import (
-    AstigmaticGaussianAnalyticBeam,
-    GaussianAnalyticBeam,
-    PlaneWaveAnalyticBeam,
+    AstigmaticGaussianBeamProfile,
+    GaussianBeamProfile,
+    PlaneWaveBeamProfile,
 )
 
 # boundary
@@ -452,9 +452,9 @@ __all__ = [
     "CustomFieldSource",
     "TFSF",
     "CustomCurrentSource",
-    "GaussianAnalyticBeam",
-    "AstigmaticGaussianAnalyticBeam",
-    "PlaneWaveAnalyticBeam",
+    "GaussianBeamProfile",
+    "AstigmaticGaussianBeamProfile",
+    "PlaneWaveBeamProfile",
     "FieldMonitor",
     "FieldTimeMonitor",
     "FluxMonitor",

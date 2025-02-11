@@ -1,12 +1,12 @@
-"""Tests for the various AnalyticBeam components."""
+"""Tests for the various BeamProfile components."""
 
 import numpy as np
 import pydantic.v1 as pd
 import pytest
 from tidy3d.components.beam import (
-    AstigmaticGaussianAnalyticBeam,
-    GaussianAnalyticBeam,
-    PlaneWaveAnalyticBeam,
+    AstigmaticGaussianBeamProfile,
+    GaussianBeamProfile,
+    PlaneWaveBeamProfile,
 )
 from tidy3d.components.data.monitor_data import FieldData
 
@@ -22,7 +22,7 @@ def test_gaussian_beam():
     resolution = 150
     waist_radius = 1.0
     waist_distance = 3.0
-    beam = GaussianAnalyticBeam(
+    beam = GaussianBeamProfile(
         center=center,
         size=size,
         resolution=resolution,
@@ -30,7 +30,6 @@ def test_gaussian_beam():
         waist_radius=waist_radius,
         waist_distance=waist_distance,
     )
-    print(beam)
     field_data = beam.field_data
     assert isinstance(field_data, FieldData)
     assert np.allclose(field_data.flux, 1)
@@ -43,7 +42,7 @@ def test_plane_wave():
     center = (0, 0, 0)
     size = (10, 0, 10)
     resolution = 100
-    beam = PlaneWaveAnalyticBeam(center=center, size=size, resolution=resolution, freqs=FREQS)
+    beam = PlaneWaveBeamProfile(center=center, size=size, resolution=resolution, freqs=FREQS)
     field_data = beam.field_data
     assert isinstance(field_data, FieldData)
     assert np.allclose(field_data.flux, 1)
@@ -57,7 +56,7 @@ def test_astigmatic_gaussian_beam():
     size = (0, 20, 20)
     waist_sizes = (4.0, 2.0)
     waist_distances = (1.0, 2.0)
-    beam = AstigmaticGaussianAnalyticBeam(
+    beam = AstigmaticGaussianBeamProfile(
         center=center,
         size=size,
         freqs=FREQS,
@@ -96,7 +95,7 @@ def test_invalid_beam_size():
     size = (10, 10, 10)
     resolution = 100
     with pytest.raises(pd.ValidationError):
-        GaussianAnalyticBeam(center=center, size=size, resolution=resolution, freqs=FREQS)
+        GaussianBeamProfile(center=center, size=size, resolution=resolution, freqs=FREQS)
 
 
 def test_gaussian_beam_ex_spread_waist_distance():
@@ -109,7 +108,7 @@ def test_gaussian_beam_ex_spread_waist_distance():
     waist_radius = 1.0
     waist_distance_1 = 3.0
     waist_distance_2 = 1.0
-    beam_data_1 = GaussianAnalyticBeam(
+    beam_data_1 = GaussianBeamProfile(
         center=center,
         size=size,
         resolution=resolution,
@@ -117,7 +116,7 @@ def test_gaussian_beam_ex_spread_waist_distance():
         waist_radius=waist_radius,
         waist_distance=waist_distance_1,
     )
-    beam_data_2 = GaussianAnalyticBeam(
+    beam_data_2 = GaussianBeamProfile(
         center=center,
         size=size,
         resolution=resolution,
@@ -141,7 +140,7 @@ def test_gaussian_beam_center():
     waist_radius = 1.0
 
     # Normal beam data should be centered at x=0, y=0
-    beam = GaussianAnalyticBeam(
+    beam = GaussianBeamProfile(
         center=center,
         size=size,
         resolution=resolution,
@@ -192,7 +191,7 @@ def test_beam_overlap():
     resolution2 = 200
     waist_radius = 1.0
     waist_distance = 3.0
-    beam1 = GaussianAnalyticBeam(
+    beam1 = GaussianBeamProfile(
         center=center,
         size=size,
         resolution=resolution1,
@@ -200,7 +199,7 @@ def test_beam_overlap():
         waist_radius=waist_radius,
         waist_distance=waist_distance,
     )
-    beam2 = AstigmaticGaussianAnalyticBeam(
+    beam2 = AstigmaticGaussianBeamProfile(
         center=center,
         size=size,
         resolution=resolution2,
