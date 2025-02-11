@@ -335,7 +335,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
         (function() {
             const TARGET_CLASS = "simulation-viewer";
             const ACTIVE_CLASS = "simulation-viewer-active";
-            const VIEWER_URL = "https://feature-simulation-viewer.d3a9gfg7glllfq.amplifyapp.com/simulation-viewer";
+            const VIEWER_URL = "https://tidy3d.simulation.cloud/simulation-viewer";
 
             class SimulationViewerInjector {
                 constructor() {
