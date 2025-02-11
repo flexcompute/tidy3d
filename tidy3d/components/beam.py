@@ -2,7 +2,7 @@
 astigmatic Gaussian beam."""
 
 from abc import abstractmethod
-from typing import Tuple
+from typing import Optional, Tuple, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -15,13 +15,14 @@ from .geometry.base import Box
 from .grid.grid import Coords, Grid
 from .medium import Medium, MediumType
 from .monitor import FieldMonitor
-from .types import Direction, FreqArray, Literal, Numpy
+from .source.field import FixedAngleSpec, FixedInPlaneKSpec
+from .types import TYPE_TAG_STR, Direction, FreqArray, Literal, Numpy
 from .validators import assert_plane
 
 DEFAULT_RESOLUTION = 200
 
 
-class AnalyticBeam(Box):
+class BeamProfile(Box):
     """Base class for handling analytic beams."""
 
     resolution: float = pd.Field(
@@ -79,12 +80,6 @@ class AnalyticBeam(Box):
         title="Direction",
         description="Specifies propagation in the positive or negative direction of the normal "
         "axis.",
-    )
-
-    fixed_angle: Literal[False] = pd.Field(
-        False,
-        title="Fixed Angle Flag",
-        description="Fixed angle flag. Only used internally when computing source beams.",
     )
 
     _plane_validator = assert_plane()
@@ -178,15 +173,9 @@ class AnalyticBeam(Box):
         self, points: Numpy, background_n: float, field: Literal["E", "H"]
     ) -> Numpy:
         """Analytic beam with all the beam parameters but assuming ``z`` as the normal axis."""
-        angle_theta = self.angle_theta
-        angle_phi = self.angle_phi
 
         # Rotate points to axes where propagation is along z
-        if self.fixed_angle:
-            points_prop_z = points
-        else:
-            points_prop_z = self.rotate_points(points, [0, 0, 1], -angle_phi)
-            points_prop_z = self.rotate_points(points_prop_z, [0, 1, 0], -angle_theta)
+        points_prop_z = self._rotate_points_z(points)
 
         # Reflection at the z = 0 plane for negative direction
         if self.direction == "-":
@@ -214,8 +203,7 @@ class AnalyticBeam(Box):
                 field_vals[:2, :] *= -1
 
         # Rotate the fields back to the original propagation axes
-        field_vals = self.rotate_points(field_vals, [0, 1, 0], angle_theta)
-        field_vals = self.rotate_points(field_vals, [0, 0, 1], angle_phi)
+        field_vals = self._inverse_rotate_field_vals_z(field_vals, background_n)
 
         return field_vals
 
@@ -250,34 +238,115 @@ class AnalyticBeam(Box):
         # Reshape to (3, Nx, Ny, Nz, num_freqs)
         return np.reshape(field_vals, (3, Nx, Ny, Nz, len(self.freqs)))
 
+    def _rotate_points_z(self, points: Numpy) -> Numpy:
+        """Rotate points to new coordinates where z is the propagation axis."""
+        points_prop_z = self.rotate_points(points, [0, 0, 1], -self.angle_phi)
+        points_prop_z = self.rotate_points(points_prop_z, [0, 1, 0], -self.angle_theta)
+        return points_prop_z
 
-class PlaneWaveAnalyticBeam(AnalyticBeam):
+    def _inverse_rotate_field_vals_z(self, field_vals: Numpy, background_n: Numpy) -> Numpy:
+        """Rotate field values from coordinates where z is the propagation axis to angled
+        coordinates."""
+        field_vals = self.rotate_points(field_vals, [0, 1, 0], self.angle_theta)
+        field_vals = self.rotate_points(field_vals, [0, 0, 1], self.angle_phi)
+        return field_vals
+
+
+class PlaneWaveBeamProfile(BeamProfile):
     """Component for constructing plane wave beam data. The normal direction is implicitly
     defined by the ``size`` parameter.
 
     See also :class:`.PlaneWave`.
     """
 
-    fixed_angle: bool = pd.Field(
+    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = pd.Field(
+        FixedAngleSpec(),
+        title="Angular Dependence Specification",
+        description="Specification of plane wave propagation direction dependence on wavelength.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    as_fixed_angle_source: bool = pd.Field(
         False,
         title="Fixed Angle Flag",
-        description="Fixed angle flag. Only used internally when computing source beams.",
+        description="Fixed angle flag. Only used internally when computing source beams for "
+        "injection in an FDTD simulation with fixed angle boudnaries. Use ``angular_spec`` to "
+        "switch between waves with fixed angle and fixed in-plane k.",
     )
+
+    angle_theta_frequency: Optional[float] = pd.Field(
+        None,
+        title="Frequency at Which Angle Theta is Defined",
+        description="Frequency for which ``angle_theta`` is set. This only has an effect for "
+        "fixed in-plane wave-vector beams. If not supplied, the average of the beam ``freqs`` is "
+        "used.",
+    )
+
+    @property
+    def _angle_theta_frequency(self):
+        if not self.angle_theta_frequency:
+            return np.mean(self.freqs)
+        return self.angle_theta_frequency
+
+    def in_plane_k(self, background_n: float):
+        """In-plane wave vector. Only the real part is taken so the beam has no in-plane decay."""
+        k0 = 2 * np.pi * self._angle_theta_frequency / C_0 * background_n
+        k_in_plane = k0.real * np.sin(self.angle_theta)
+        return [k_in_plane * np.cos(self.angle_phi), k_in_plane * np.sin(self.angle_phi)]
 
     def scalar_field(self, points: Numpy, background_n: float) -> Numpy:
         """Scalar field for plane wave.
         Scalar field corresponding to the analytic beam in coordinate system such that the
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
         computed on an unstructured array ``points`` of shape ``(3, ...)``.
+        For the special case of fixed in-plane k, the propagation axis is not actually z. In fact
+        the propagation axis is frequency dependent and the only thing that is constant is the
+        in-plane k, which is why we do not rotate the points in ``self._rotate_points_z``.
         """
+        # Get the z-direction wave-vector magnitude depending on whether we're dealing with a
+        # Bloch boundary or fixed angle plane wave
+        kx, ky = 0, 0
         k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
-        if self.fixed_angle:
-            k0 *= np.cos(self.angle_theta)
-        field = np.exp(1j * np.outer(points[2], k0))
+        if self.as_fixed_angle_source:
+            kz = k0 * np.cos(self.angle_theta)
+        elif isinstance(self.angular_spec, FixedAngleSpec):
+            kz = k0
+        elif isinstance(self.angular_spec, FixedInPlaneKSpec):
+            kx, ky = self.in_plane_k(background_n)
+            kz = np.sqrt(k0**2 - kx**2 - ky**2)
+        field = np.exp(
+            1j * (np.outer(points[2], kz) + np.outer(points[0], kx) + np.outer(points[1], ky))
+        )
         return field
 
+    def _rotate_points_z(self, points: Numpy) -> Numpy:
+        """Rotate points to new coordinates where z is the propagation axis.
+        If we're computing numerical fixed angle or fixed in-plane k, we don't rotate the
+        points, which combines with handling in ``scalar_field`` and"
+        ``_inverse_rotate_field_vals_z."""
+        if self.as_fixed_angle_source or isinstance(self.angular_spec, FixedInPlaneKSpec):
+            return points
+        return super()._rotate_points_z(points)
 
-class GaussianAnalyticBeam(AnalyticBeam):
+    def _inverse_rotate_field_vals_z(self, field_vals: Numpy, background_n: Numpy) -> Numpy:
+        """Rotate field values from coordinates where z is the propagation axis to angled
+        coordinates. Special handling is needed if fixed in-plane k wave."""
+        if isinstance(self.angular_spec, FixedInPlaneKSpec):
+            # in case of bloch bcs, wave angle is frequency dependent
+            k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
+            kx, ky = self.in_plane_k(background_n)
+            k_perp = np.sqrt(kx**2 + ky**2)
+            angle_theta_actual = np.real(np.arcsin(k_perp / k0))
+            for ind in range(len(self.freqs)):
+                field_vals[:, :, ind] = self.rotate_points(
+                    field_vals[:, :, ind], [0, 1, 0], angle_theta_actual[ind]
+                )
+            field_vals = self.rotate_points(field_vals, [0, 0, 1], self.angle_phi)
+            return field_vals
+        return super()._inverse_rotate_field_vals_z(field_vals, background_n)
+
+
+class GaussianBeamProfile(BeamProfile):
     """Component for constructing Gaussian beam data. The normal direction is implicitly
     defined by the ``size`` parameter.
 
@@ -343,7 +412,7 @@ class GaussianAnalyticBeam(AnalyticBeam):
         return scalar_gaussian
 
 
-class AstigmaticGaussianAnalyticBeam(AnalyticBeam):
+class AstigmaticGaussianBeamProfile(BeamProfile):
     """Component for constructing astigmatic Gaussian beam data. The normal direction is implicitly
     defined by the ``size`` parameter.
 
