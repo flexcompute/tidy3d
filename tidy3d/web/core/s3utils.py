@@ -173,12 +173,7 @@ def _get_progress(action: _S3Action):
     )
 
 
-_s3_config = TransferConfig(
-    multipart_threshold=1024 * 25,
-    max_concurrency=50,
-    multipart_chunksize=1024 * 25,
-    use_threads=True,
-)
+_s3_config = TransferConfig()
 
 _s3_sts_tokens: [str, _S3STSToken] = {}
 
