@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `LobeMeasurer` tool in the `microwave` plugin that locates lobes in antenna patterns and calculates lobe measures like half-power beamwidth and sidelobe level.
 - Validation step that raises a `ValueError` when no frequency-domain monitors are present, preventing invalid adjoint runs.
 - Metal surface roughness models: modified Hammerstad, Huray Snowball, and Cannonball-Huray.
+- Support for Fermi-Dirac statistics in Charge solver. This option can be activated when defining the analysis type `IsothermalSteadyChargeDCAnalysis` with `fermi_dirac=True`. This option will provide more accurate results in simulations where very high doping may lead the pseudo-Fermi energy levels to approach either the conduction or the valence energy levels.
 
 ### Changed
 

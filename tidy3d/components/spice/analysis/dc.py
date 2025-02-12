@@ -39,6 +39,14 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         "or when the tolerance criteria has been met.",
     )
 
+    ramp_up_iters: pd.PositiveInt = pd.Field(
+        default=5,
+        title="Ramp-up iterations.",
+        description="In order to help in start up, quantities such as doping "
+        "are ramped up until they reach their specified value. This parameter "
+        "determines how many of this iterations it takes to reach full values.",
+    )
+
 
 class IsothermalSteadyChargeDCAnalysis(Tidy3dBaseModel):
     """
@@ -64,4 +72,13 @@ class IsothermalSteadyChargeDCAnalysis(Tidy3dBaseModel):
         "0 is requested through a voltage source, the charge solver will start at 0 and increase bias "
         "at `convergence_dv` intervals until the required bias is reached. This is, therefore, a "
         "convergence parameter in DC computations.",
+    )
+
+    fermi_dirac: bool = pd.Field(
+        False,
+        title="Fermi-Dirac statistics",
+        description="Determines whether Fermi-Dirac statistics are used. When False, "
+        "Boltzmann statistics will be used. This can provide more accurate results in situations "
+        "where very high doping may lead the pseudo-Fermi energy level to approach "
+        "either the conduction or valence energy bands.",
     )
