@@ -248,8 +248,7 @@ class DataArray(xr.DataArray):
         """Load an DataArray from an hdf5 file with a given path to the group."""
         if ".hdf5" not in fname:
             raise FileError(
-                "DataArray objects must be written to '.hdf5' format. "
-                f"Given filename of {fname}."
+                f"'DataArray' objects must be written to '.hdf5' format. Given filename of {fname}."
             )
         return cls.from_hdf5(fname=fname, group_path=group_path)
 

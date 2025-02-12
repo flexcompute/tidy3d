@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Function `translated_copy` in `ElectromagneticFieldData` to facilitate computing overlaps between field data at different locations.
 - `PlaneWaveBeamProfile`, `GaussianBeamProfile` and `AstigmaticGaussianBeamProfile` components to compute field data associated to such beams based on their corresponding analytical expressions, and compute field overlaps with other data.
 - `num_freqs` argument to the `PlaneWave` source.
+- Support for running multiple adjoint simulations from a single forward simulation in adjoint pipeline depending on monitor configuration.
 
 ### Changed
 - The coordinate of snapping points in `GridSpec` can take value `None`, so that mesh can be selectively snapped only along certain dimensions.
