@@ -151,7 +151,7 @@ def use_emulated_run(monkeypatch):
     import tidy3d
 
     if TEST_MODE in ("pipeline", "speed"):
-        task_id_fwd = "task_fwd"
+        task_name_fwd = "task_fwd"
         AUX_KEY_SIM_FIELDS_KEYS = "sim_fields_keys"
 
         cache = {}
@@ -168,7 +168,7 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_fwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
-            task_id_fwd = task_name
+            task_name_fwd = task_name
             if run_kwargs.get("simulation_type") == "autograd_fwd":
                 sim_original = simulation
                 sim_fields_keys = run_kwargs["sim_fields_keys"]
@@ -186,28 +186,28 @@ def use_emulated_run(monkeypatch):
                 )
 
                 # cache original and fwd data locally for test
-                cache[task_id_fwd] = copy.copy(aux_data)
-                cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS] = sim_fields_keys
+                cache[task_name_fwd] = copy.copy(aux_data)
+                cache[task_name_fwd][AUX_KEY_SIM_FIELDS_KEYS] = sim_fields_keys
                 # return original data only
-                return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_id_fwd
+                return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_name_fwd
             else:
-                return run_emulated(simulation, task_name=task_name), task_id_fwd
+                return run_emulated(simulation, task_name=task_name), task_name_fwd
 
         def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
 
-            task_id_fwd = task_name[:-8]
+            task_name_fwd = "".join(task_name.partition("_adjoint")[:-2])
 
             # run the adjoint sim
             sim_data_adj = run_emulated(simulation, task_name="task_name")
 
             # grab the fwd and original data from the cache
-            aux_data_fwd = cache[task_id_fwd]
+            aux_data_fwd = cache[task_name_fwd]
             sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
             sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
             # get the original traced fields
-            sim_fields_keys = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS]
+            sim_fields_keys = cache[task_name_fwd][AUX_KEY_SIM_FIELDS_KEYS]
 
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
@@ -225,9 +225,9 @@ def use_emulated_run(monkeypatch):
             for task_name, simulation in simulations.items():
                 if sim_fields_keys_dict is not None:
                     run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
-                sim_data_orig, task_id_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
+                sim_data_orig, task_name_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
                 batch_data_orig[task_name] = sim_data_orig
-                task_ids_fwd[task_name] = task_id_fwd
+                task_ids_fwd[task_name] = task_name_fwd
 
             class EmulatedBatchData(web.BatchData):
                 def load_sim_data(self, task_name):
@@ -251,7 +251,6 @@ def use_emulated_run(monkeypatch):
 
         monkeypatch.setattr(webapi, "run", run_emulated)
         monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
-        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d_bwd", emulated_run_bwd)
         monkeypatch.setattr(
             tidy3d.web.api.autograd.autograd, "_run_async_tidy3d", emulated_run_async_fwd
         )
@@ -752,7 +751,7 @@ def test_run_zero_grad(use_emulated_run):
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return 0 * postprocess(sim_data)
 
-    with AssertLogLevel("WARNING", contains_str="no sources"):
+    with AssertLogLevel("WARNING", contains_str="fields are zero"):
         grad = ag.grad(objective)(params0)
 
 
@@ -1678,7 +1677,7 @@ def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn,
         return postprocess_fn(data)
 
     if label == "src_2_freq_2_mon_2":
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(ValueError):
             g = ag.grad(objective)(params0)
     else:
         g = ag.grad(objective)(params0)
