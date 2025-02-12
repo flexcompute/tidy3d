@@ -46,7 +46,8 @@ class AbstractDopingBox(Box):
                 # normal_position = coords[var_name][0]
 
         # if provided coordinates are 3D, check if box is 2D
-        normal_axis = self._normal_dim()
+        if normal_axis is None:
+            normal_axis = self._normal_dim()
 
         if meshgrid:
             X, Y, Z = np.meshgrid(coords["x"], coords["y"], coords["z"], indexing="ij")
