@@ -962,6 +962,7 @@ class TestCharge:
         return td.IsothermalSteadyChargeDCAnalysis(
             temperature=300,
             tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400),
+            fermi_dirac=True,
         )
 
     @pytest.fixture(scope="class")
