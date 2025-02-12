@@ -2896,6 +2896,28 @@ def test_run_time_spec():
     assert sim._run_time > 0
 
 
+def test_run_time_spec_lossy_metal():
+    freq0 = 1e9
+    run_time_spec = td.RunTimeSpec(quality_factor=3.0)
+    src_time = td.GaussianPulse(freq0=freq0, fwidth=freq0 * 0.5)
+    source = td.PlaneWave(
+        center=(0, 0, -0.5e3), size=[td.inf, td.inf, 0], source_time=src_time, direction="+"
+    )
+    box = td.Structure(
+        geometry=td.Box(size=(0.1e3, 0.1e3, 0.1e3)),
+        medium=td.LossyMetalMedium(conductivity=50, frequency_range=(freq0 * 0.5, freq0 * 1.5)),
+    )
+    sim = td.Simulation(
+        run_time=run_time_spec,
+        size=(1e4, 1e4, 2e3),
+        sources=[source],
+        structures=[box],
+    )
+    assert max(sim.get_refractive_indices(freq0)) < 2
+    # if lossymetal is not handled properly, _run_time can approach 1e-6
+    assert sim._run_time < 5e-8
+
+
 def test_validate_low_num_cells_in_mode_objects():
     pulse = td.GaussianPulse(freq0=200e12, fwidth=20e12)
     mode_spec = td.ModeSpec(target_neff=2.0)

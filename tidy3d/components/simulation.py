@@ -4677,12 +4677,20 @@ class Simulation(AbstractYeeGridSimulation):
         return np.prod(self._num_computational_grid_points_dim, dtype=np.int64)
 
     def get_refractive_indices(self, freq: float) -> list[float]:
-        """List of refractive indices in the simulation at a given frequency."""
+        """List of refractive indices in the simulation at a given frequency. For anisotropic medium,
+        highest refractive index among the 3 main diagonal components is selected.
+        """
 
-        eps_values = [structure.medium.eps_model(freq) for structure in self.static_structures]
-        eps_values.append(self.medium.eps_model(freq))
+        eps_diagonal_values = [
+            structure.medium.eps_diagonal_numerical(freq) for structure in self.static_structures
+        ]
+        eps_diagonal_values.append(self.medium.eps_diagonal_numerical(freq))
+        n_diagonal_values = (
+            AbstractMedium.eps_complex_to_nk(eps)[0] for eps in eps_diagonal_values
+        )
 
-        return [AbstractMedium.eps_complex_to_nk(eps)[0] for eps in eps_values]
+        # take the largest value
+        return [max(n_diagonal) for n_diagonal in n_diagonal_values]
 
     @cached_property
     def n_max(self) -> float:

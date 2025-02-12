@@ -17,7 +17,6 @@ from ...constants import C_0, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import Tidy3dBaseModel
-from ..medium import LossyMetalMedium, Medium2D
 from ..structure import MeshOverrideStructure, Structure, StructureType
 from ..types import ArrayFloat1D, Axis, Bound, CoordinateOptional
 
@@ -614,13 +613,7 @@ class GradedMesher(Mesher):
             Minimum requested steps per wavelength.
         """
 
-        # for 2d medium, will always ignore even if not PEC;
-        # later, this will be handled by _grid_corrections_2dmaterials
-        # in simulation.py
-        if isinstance(structure.medium, (Medium2D, LossyMetalMedium)) or structure.medium.is_pec:
-            return wavelength / min_steps_per_wvl
-
-        eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
+        eps_diagonal = structure.medium.eps_diagonal_numerical(C_0 / wavelength)
         n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
         # take max among all directions because perpendicular eps defines wavelength
         max_n_abs = np.max(np.abs(n))

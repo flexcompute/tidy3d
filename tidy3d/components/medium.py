@@ -900,13 +900,35 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        complex
+        Tuple[complex, complex, complex]
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
 
         # This only needs to be overwritten for anisotropic materials
         eps = self.eps_model(frequency)
         return (eps, eps, eps)
+
+    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor for numerical considerations
+        such as meshing and runtime estimation.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            The diagonal elements of relative permittivity tensor relevant for numerical
+            considerations evaluated at ``frequency``.
+        """
+
+        if self.is_pec:
+            # also 1 for lossy metal and Medium2D, but let's handle them in the subclass.
+            return (1.0 + 0j,) * 3
+
+        return self.eps_diagonal(frequency)
 
     def eps_comp(self, row: Axis, col: Axis, frequency: float) -> complex:
         """Single component of the complex-valued permittivity tensor as a function of frequency.
@@ -5184,6 +5206,23 @@ class LossyMetalMedium(Medium):
             self.fit_param.frequency_sampling_points,
         )
 
+    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor for numerical considerations
+        such as meshing and runtime estimation.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            The diagonal elements of relative permittivity tensor relevant for numerical
+            considerations evaluated at ``frequency``.
+        """
+        return (1.0 + 0j,) * 3
+
     @add_ax_if_none
     def plot(
         self,
@@ -6773,6 +6812,23 @@ class Medium2D(AbstractMedium):
         eps_ss = self.ss.eps_model(frequency)
         eps_tt = self.tt.eps_model(frequency)
         return (eps_ss, eps_tt)
+
+    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor for numerical considerations
+        such as meshing and runtime estimation.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            The diagonal elements of relative permittivity tensor relevant for numerical
+            considerations evaluated at ``frequency``.
+        """
+        return (1.0 + 0j,) * 3
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
