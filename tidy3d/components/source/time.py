@@ -8,7 +8,7 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ...constants import HERTZ
+from ...constants import C_0, HERTZ
 from ...exceptions import ValidationError
 from ..data.data_array import TimeDataArray
 from ..data.dataset import TimeDataset
@@ -94,6 +94,48 @@ class Pulse(SourceTime, ABC):
         "pulse in units of 1 / (``2pi * fwidth``).",
         ge=2.5,
     )
+
+    def __init__(
+        self,
+        freq0: float = None,
+        fwidth: float = None,
+        lamb0: float = None,
+        lamb_width: float = None,
+        customize_source_bandwidth: float = 1.0,
+        **kwargs,
+    ):
+        freq_specified = (freq0 is not None) and (fwidth is not None)
+        lambda_specified = (lamb0 is not None) and (lamb_width is not None)
+
+        partial_freq_specified = (freq0 is not None) or (fwidth is not None)
+        partial_lambda_specified = (lamb0 is not None) or (lamb_width is not None)
+
+        if (freq_specified and partial_lambda_specified) or (
+            partial_freq_specified and lambda_specified
+        ):
+            raise ValidationError("Frequency and wavelength specification are conflicting")
+
+        if not (freq_specified or lambda_specified):
+            raise ValidationError("Either frequency or wavelength should be specified")
+
+        if lambda_specified:
+            lambda_bottom = lamb0 - 0.5 * lamb_width
+            lambda_top = lamb0 + 0.5 * lamb_width
+
+            if (lambda_bottom <= 0.0) or (lambda_top <= 0.0):
+                raise ValidationError("Wavelength bounds should be strictly positive")
+
+            freq_bottom = C_0 / lambda_top
+            freq_top = C_0 / lambda_bottom
+
+            freq_mid = 0.5 * (freq_bottom + freq_top)
+            freq_width = freq_top - freq_bottom
+
+            super().__init__(
+                freq0=freq_mid, fwidth=customize_source_bandwidth * freq_width, **kwargs
+            )
+        else:
+            super().__init__(freq0=freq0, fwidth=customize_source_bandwidth * fwidth, **kwargs)
 
     @property
     def twidth(self) -> float:

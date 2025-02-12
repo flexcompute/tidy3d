@@ -6,7 +6,7 @@ import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
 from tidy3d.components.source.field import CHEB_GRID_WIDTH, DirectionalSource
-from tidy3d.exceptions import SetupError
+from tidy3d.exceptions import SetupError, ValidationError
 
 from ..utils import AssertLogLevel
 
@@ -415,3 +415,86 @@ def test_fixed_angle_source():
     )
 
     assert not plane_wave._is_fixed_angle
+
+
+def test_source_wavelength_spec():
+    """Test the ability to specify either wavelength or frequency for the source."""
+    freq0 = 1e14
+    fwidth = 0.2 * freq0
+
+    wl_low = td.C_0 / (freq0 + 0.5 * fwidth)
+    wl_high = td.C_0 / (freq0 - 0.5 * fwidth)
+
+    lamb0 = 0.5 * (wl_low + wl_high)
+    lamb_width = wl_high - wl_low
+    # set by wavelength and make sure the frequencies are correct
+    source_time = td.GaussianPulse(lamb0=lamb0, lamb_width=lamb_width)
+
+    assert np.isclose(source_time.freq0, freq0)
+    assert np.isclose(source_time.fwidth, fwidth)
+
+    # allow customize_source_bandwidth to be used
+    customize_source_bandwidth = 2.0
+    source_time = td.GaussianPulse(
+        lamb0=lamb0, lamb_width=lamb_width, customize_source_bandwidth=customize_source_bandwidth
+    )
+
+    assert np.isclose(source_time.freq0, freq0)
+    assert np.isclose(source_time.fwidth, customize_source_bandwidth * fwidth)
+
+    # ensure conflicting wavelength and frequency specifications are not allowed
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(
+            lamb0=lamb0, lamb_width=lamb_width, freq0=freq0, fwidth=fwidth
+        )
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb0=lamb0, lamb_width=lamb_width, freq0=freq0)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb0=lamb0, lamb_width=lamb_width, fwidth=fwidth)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb0=lamb0, freq0=freq0, fwidth=fwidth)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb_width=lamb_width, freq0=freq0, fwidth=fwidth)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb_width=lamb_width, freq0=freq0)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb0=lamb0, fwidth=fwidth)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb0=lamb0, freq0=freq0)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb_width=lamb_width, fwidth=fwidth)
+
+    # ensure enough information is provided
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(fwidth=fwidth)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(freq0=freq0)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb_width=lamb_width)
+
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(lamb0=lamb0)
+
+    wl_low = td.C_0 / (freq0 + 0.5 * fwidth)
+    wl_high = td.C_0 / (freq0 - 0.5 * fwidth)
+
+    lamb0 = 0.5 * (wl_low + wl_high)
+    lamb_width = 2 * lamb0
+
+    # ensure wavelength specification does not lead to divide by zero error
+    with pytest.raises(ValidationError):
+        source_time = td.GaussianPulse(
+            lamb0=lamb0,
+            lamb_width=lamb_width,
+            customize_source_bandwidth=customize_source_bandwidth,
+        )

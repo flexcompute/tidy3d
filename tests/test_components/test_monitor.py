@@ -398,9 +398,9 @@ def test_monitor_plane():
             td.DiffractionMonitor(size=size, freqs=FREQS, name="de")
 
 
-def _test_freqs_nonempty():
-    with pytest.raises(ValidationError):
-        td.FieldMonitor(size=(1, 1, 1), freqs=[])
+def test_freqs_nonempty():
+    with pytest.raises(pydantic.ValidationError):
+        td.FieldMonitor(size=(1, 1, 1), freqs=[], name="no_freq_monitor")
 
 
 def test_monitor_surfaces_from_volume():
@@ -440,3 +440,19 @@ def test_monitor_surfaces_from_volume():
     # z+ surface
     assert monitor_surfaces[5].center == (center[0], center[1], center[2] + size[2] / 2.0)
     assert monitor_surfaces[5].size == (size[0], size[1], 0.0)
+
+
+def test_monitor_wavelength_spec(rng):
+    N = 15
+
+    wavelengths = 1e-6 * (1 + rng.random(N))
+    expected_freqs = td.C_0 / wavelengths
+
+    field_monitor = td.FieldMonitor(size=(1, 1, 1), lambdas=wavelengths, name="wl_spec")
+
+    assert np.allclose(field_monitor.freqs, expected_freqs)
+
+    with pytest.raises(ValidationError):
+        field_monitor_overspec = td.FieldMonitor(
+            size=(1, 1, 1), freqs=expected_freqs, lambdas=wavelengths, name="freq_wl_spec"
+        )

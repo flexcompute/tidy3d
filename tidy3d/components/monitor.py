@@ -6,7 +6,7 @@ from typing import Tuple, Union
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ..constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
+from ..constants import C_0, HERTZ, MICROMETER, RADIAN, SECOND, inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 from .apodization import ApodizationSpec
@@ -28,6 +28,7 @@ from .types import (
     Literal,
     ObsGridArray,
     Size,
+    WavelengthArray,
 )
 from .validators import assert_plane, validate_freqs_min, validate_freqs_not_empty
 from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR
@@ -98,6 +99,21 @@ class FreqMonitor(Monitor, ABC):
         "to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization "
         "affects the normalization of the frequency-domain fields.",
     )
+
+    def __init__(self, freqs: FreqArray = None, lambdas: WavelengthArray = None, **kwargs):
+        freq_specified = freqs is not None
+        lambda_specified = lambdas is not None
+        if freq_specified and lambda_specified:
+            raise ValidationError("Both wavelengths and freqs should not be specified")
+        elif not (freq_specified or lambda_specified):
+            raise ValidationError("At least one of wavelengths or freqs should be specified")
+        elif lambda_specified:
+            if not (np.count_nonzero(lambdas > 0) == len(lambdas)):
+                raise ValidationError("Wavelengths should be strictly positive")
+            freqs_from_free_space_wavelength = C_0 / lambdas
+            super().__init__(freqs=freqs_from_free_space_wavelength, **kwargs)
+        else:
+            super().__init__(freqs=freqs, **kwargs)
 
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
