@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `fill` and `fill_structures` argument in `td.Simulation.plot_structures()` and `td.Simulation.plot()` respectively to disable fill and plot outlines of structures only.
+- New subpixel averaging option `ContourPathAveraging` applied to dielectric material boundaries.
+
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
 
