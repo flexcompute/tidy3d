@@ -143,7 +143,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         elif isinstance(self.simulation, HeatSimulation):
             return TaskType.HEAT.name
         elif isinstance(self.simulation, HeatChargeSimulation):
-            return TaskType.HEAT.name
+            return TaskType.HEAT_CHARGE.name
         elif isinstance(self.simulation, EMESimulation):
             return TaskType.EME.name
         elif isinstance(self.simulation, ModeSimulation):
