@@ -449,6 +449,18 @@ class CoaxialLumpedResistor(LumpedElement):
         annulus = ClipOperation(operation="difference", geometry_a=disk_out, geometry_b=disk_in)
         return annulus
 
+    @cached_property
+    def geometry(self) -> ClipOperation:
+        """Alias for ``to_geometry`` that ignores the grid and allows :class:`CoaxialLumpedResistor`
+        to behave like a :class:.`Structure`.
+
+        Returns
+        -------
+        ClipOperation
+            The annulus describing the coaxial lumped resistor.
+        """
+        return self.to_geometry()
+
 
 class NetworkConversions(Tidy3dBaseModel):
     """Helper functionality for directly computing complex conductivity and permittivities using

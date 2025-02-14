@@ -211,6 +211,40 @@ def assert_objects_in_sim_bounds(
     return objects_in_sim_bounds
 
 
+def assert_objects_contained_in_sim_bounds(
+    field_name: str, error: bool = True, strict_inequality: bool = False
+):
+    """Makes sure all objects in field are completely inside the simulation bounds."""
+
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    @skip_if_fields_missing(["center", "size"])
+    def objects_contained_in_sim_bounds(cls, val, values):
+        """check for containment of each structure with simulation bounds."""
+        sim_center = values.get("center")
+        sim_size = values.get("size")
+        sim_box = Box(size=sim_size, center=sim_center)
+
+        # Do a strict check, unless simulation is 0D along a dimension
+        strict_ineq = [size != 0 and strict_inequality for size in sim_size]
+
+        with log as consolidated_logger:
+            for position_index, geometric_object in enumerate(val):
+                if not sim_box.contains(geometric_object.geometry, strict_inequality=strict_ineq):
+                    message = (
+                        f"'simulation.{field_name}[{position_index}]' "
+                        "is not completely inside the simulation domain."
+                    )
+                    custom_loc = [field_name, position_index]
+
+                    if error:
+                        raise SetupError(message)
+                    consolidated_logger.warning(message, custom_loc=custom_loc)
+
+        return val
+
+    return objects_contained_in_sim_bounds
+
+
 def enforce_monitor_fields_present():
     """Make sure all of the fields in the monitor are present in the corresponding data."""
 

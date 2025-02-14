@@ -110,6 +110,7 @@ from .types import (
     annotate_type,
 )
 from .validators import (
+    assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
     validate_mode_objects_symmetry,
     validate_mode_plane_radius,
@@ -1432,8 +1433,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Convert lumped elements into structures
         lumped_structures = []
+        strict_ineq = 3 * [True]
         for lumped_element in self.lumped_elements:
-            lumped_structures += lumped_element.to_structures(self.grid)
+            if self.geometry.contains(lumped_element.geometry, strict_inequality=strict_ineq):
+                lumped_structures += lumped_element.to_structures(self.grid)
 
         # Begin volumetric structures grid
         all_structures = list(self.static_structures) + lumped_structures
@@ -2476,6 +2479,9 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     _sources_in_bounds = assert_objects_in_sim_bounds("sources", strict_inequality=True)
+    _lumped_elements_in_bounds = assert_objects_contained_in_sim_bounds(
+        "lumped_elements", error=False, strict_inequality=True
+    )
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
 

@@ -1303,6 +1303,61 @@ def test_sim_structure_extent(box_size, log_level):
         )
 
 
+def test_warn_lumped_elements_outside_sim_bounds():
+    """Test that warning is emitted for lumped elements that are not entirely contained within simulation bounds."""
+
+    sim_center = (0, 0, 0)
+    sim_size = (2, 2, 2)
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=10e9, fwidth=8e9),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    # Lumped element fully contained - should work
+    resistor_in = td.LumpedResistor(
+        size=(0.5, 1, 0),
+        center=(0, 0, 0),
+        voltage_axis=1,
+        resistance=50,
+        name="resistor_inside",
+    )
+    with AssertLogLevel("INFO"):
+        sim_good = td.Simulation(
+            size=sim_size,
+            center=sim_center,
+            sources=[src],
+            run_time=1e-12,
+            lumped_elements=[resistor_in],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+    assert len(sim_good.volumetric_structures) == 1
+
+    # Lumped element outside - should emit warning and not be added
+    resistor_out = td.LumpedResistor(
+        size=(0.5, 1, 0),
+        center=(0, 2, 0),
+        voltage_axis=1,
+        resistance=50,
+        name="resistor_outside",
+    )
+    with AssertLogLevel("WARNING"):
+        sim_bad = sim_good.updated_copy(lumped_elements=[resistor_out])
+    assert len(sim_bad.volumetric_structures) == 0
+
+    # Lumped element extends to boundary and is not strictly inside simulation
+    resistor_edge = td.LumpedResistor(
+        size=(0.5, 1, 0),
+        center=(0, 0.5, 0),
+        voltage_axis=1,
+        resistance=50,
+        name="resistor_edge",
+    )
+    with AssertLogLevel("WARNING"):
+        _ = sim_good.updated_copy(lumped_elements=[resistor_edge])
+    assert len(sim_bad.volumetric_structures) == 0
+
+
 @pytest.mark.parametrize(
     "box_length,absorb_type,log_level",
     [
