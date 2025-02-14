@@ -317,6 +317,45 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return True
 
+    def contains(
+        self, other: Geometry, strict_inequality: Tuple[bool, bool, bool] = [False, False, False]
+    ) -> bool:
+        """Returns ``True`` if the `.bounds` of  ``other`` are contained within the
+        `.bounds` of ``self``.
+
+        Parameters
+        ----------
+        other : :class:`Geometry`
+            Geometry to check containment with.
+        strict_inequality : Tuple[bool, bool, bool] = [False, False, False]
+            For each dimension, defines whether to include equality in the boundaries comparison.
+            If ``False``, equality will be considered as contained. If ``True``, ``other``'s
+            bounds must be strictly within the bounds of ``self``.
+
+        Returns
+        -------
+        bool
+            Whether the rectangular bounding box of ``other`` is contained within the bounding
+            box of ``self``.
+        """
+
+        self_bmin, self_bmax = self.bounds
+        other_bmin, other_bmax = other.bounds
+
+        for smin, omin, smax, omax, strict in zip(
+            self_bmin, other_bmin, self_bmax, other_bmax, strict_inequality
+        ):
+            # are all of other's minimum coordinates greater than self's minimim coordinate?
+            in_minus = omin > smin if strict else omin >= smin
+            # are all of other's maximum coordinates less than self's maximum coordinate?
+            in_plus = omax < smax if strict else omax <= smax
+
+            # if either failed, return False
+            if not all((in_minus, in_plus)):
+                return False
+
+        return True
+
     def intersects_plane(self, x: float = None, y: float = None, z: float = None) -> bool:
         """Whether self intersects plane specified by one non-None value of x,y,z.
 
