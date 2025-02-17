@@ -5,6 +5,7 @@ from __future__ import annotations
 import concurrent
 import os
 import time
+import uuid
 from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -123,6 +124,12 @@ class Job(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
+    batch_id: str = pd.Field(
+        None,
+        title="BatchId",
+        description="The batchId to run as a batch.",
+    )
+
     simulation: SimulationType = pd.Field(
         ...,
         title="simulation",
@@ -190,6 +197,7 @@ class Job(WebContainer):
         "parent_tasks",
         "solver_version",
         "reduce_simulation",
+        "batch_id",
     )
 
     def to_file(self, fname: str) -> None:
@@ -476,6 +484,12 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
+    batch_id: str = pd.Field(
+        f"bat-{uuid.uuid4()}",
+        title="BatchId",
+        description="The batchId to run as a batch.",
+    )
+
     simulations: Dict[TaskName, annotate_type(SimulationType)] = pd.Field(
         ...,
         title="Simulations",
@@ -609,6 +623,7 @@ class Batch(WebContainer):
             job_kwargs["verbose"] = False
             job_kwargs["solver_version"] = self.solver_version
             job_kwargs["reduce_simulation"] = self.reduce_simulation
+            job_kwargs["batch_id"] = self.batch_id
             if self.parent_tasks and task_name in self.parent_tasks:
                 job_kwargs["parent_tasks"] = self.parent_tasks[task_name]
             job = JobType(**job_kwargs)
@@ -644,6 +659,7 @@ class Batch(WebContainer):
     def upload(self) -> None:
         """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
         self._check_folder(self.folder_name)
+
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             futures = [executor.submit(job.upload) for _, job in self.jobs.items()]
 
@@ -687,7 +703,9 @@ class Batch(WebContainer):
         """
         if self.verbose:
             console = get_logging_console()
-            console.log(f"Started working on Batch containing {self.num_jobs} tasks.")
+            console.log(
+                f"Started working on Batch(batch_id={self.batch_id}) containing {self.num_jobs} tasks."
+            )
 
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             for _, job in self.jobs.items():

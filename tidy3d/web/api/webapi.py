@@ -184,6 +184,7 @@ def upload(
     source_required: bool = True,
     solver_version: str = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    batch_id: str = None,
 ) -> TaskId:
     """
     Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -213,6 +214,8 @@ def upload(
         target solver version.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    batch_id: str = None
+        The batchId to run as a batch.
 
     Returns
     -------
@@ -239,7 +242,14 @@ def upload(
     task_type = stub.get_type()
 
     task = SimulationTask.create(
-        task_type, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
+        task_type,
+        task_name,
+        folder_name,
+        callback_url,
+        simulation_type,
+        parent_tasks,
+        "Gz",
+        batch_id,
     )
     if verbose:
         console = get_logging_console()

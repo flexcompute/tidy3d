@@ -198,6 +198,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         simulation_type: str = "tidy3d",
         parent_tasks: List[str] = None,
         file_type: str = "Gz",
+        batch_id: str = None,
     ) -> SimulationTask:
         """Create a new task on the server.
 
@@ -218,6 +219,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             List of related task ids.
         file_type: str
             the simulation file type Json, Hdf5, Gz
+        batch_id: str
+            The batchId to run as a batch.
 
         Returns
         -------
@@ -240,6 +243,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "simulationType": simulation_type,
                 "parentTasks": parent_tasks,
                 "fileType": file_type,
+                "batchId": batch_id,
             },
         )
         return SimulationTask(**resp, taskType=task_type)
