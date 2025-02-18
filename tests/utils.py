@@ -1024,21 +1024,30 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     def make_mode_data(monitor: td.ModeMonitor) -> td.ModeData:
         """make a random ModeData from a ModeMonitor."""
         _ = np.arange(monitor.mode_spec.num_modes)
-        coords_ind = {
-            "f": list(monitor.freqs),
-            "mode_index": np.arange(monitor.mode_spec.num_modes),
-        }
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.arange(monitor.mode_spec.num_modes)
         n_complex = make_data(
-            coords=coords_ind, data_array_type=td.ModeIndexDataArray, is_complex=True
+            coords=index_coords, data_array_type=td.ModeIndexDataArray, is_complex=True
         )
         coords_amps = dict(direction=["+", "-"])
-        coords_amps.update(coords_ind)
+        coords_amps.update(index_coords)
         amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
+        field_cmps = {}
+        if monitor.store_fields_direction is not None:
+            for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+                coords = get_spatial_coords_dict(simulation, monitor, field_name)
+                coords["f"] = list(monitor.freqs)
+                coords["mode_index"] = index_coords["mode_index"]
+                field_cmps[field_name] = make_data(
+                    coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
+                )
         return td.ModeData(
             monitor=monitor,
             n_complex=n_complex,
             amps=amps,
             grid_expanded=simulation.discretize_monitor(monitor),
+            **field_cmps,
         )
 
     def make_flux_data(monitor: td.FluxMonitor) -> td.FluxData:

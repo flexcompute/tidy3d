@@ -13,11 +13,11 @@ from ...constants import OHM
 from ...exceptions import ValidationError
 from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegral2D
 from .path_integrals import (
+    AxisAlignedPathIntegral,
     CurrentIntegralAxisAligned,
     IntegralResultTypes,
     MonitorDataTypes,
     VoltageIntegralAxisAligned,
-    _check_em_field_supported,
 )
 
 VoltageIntegralTypes = Union[VoltageIntegralAxisAligned, CustomVoltageIntegral2D]
@@ -55,7 +55,7 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         :class:`.IntegralResultTypes`
             Result of impedance computation over remaining dimensions (frequency, time, mode indices).
         """
-        _check_em_field_supported(em_field=em_field)
+        AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
 
         # If both voltage and current integrals have been defined then impedance is computed directly
         if self.voltage_integral:

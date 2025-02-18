@@ -43,6 +43,14 @@ SIM_Z = td.Simulation(
             size=(1, 1, 0),
             freqs=FS,
             mode_spec=td.ModeSpec(num_modes=2),
+            name="mode_solver",
+        ),
+        td.ModeMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 0),
+            freqs=FS,
+            mode_spec=td.ModeSpec(num_modes=3),
+            store_fields_direction="+",
             name="mode",
         ),
     ],
@@ -280,7 +288,7 @@ def test_time_monitor_voltage_integral():
 
 
 def test_mode_solver_monitor_voltage_integral():
-    """Check VoltageIntegralAxisAligned runs on mode solver data."""
+    """Check VoltageIntegralAxisAligned runs on ModeData and ModeSolverData."""
     length = 0.5
     size = [0, 0, 0]
     size[1] = length
@@ -291,6 +299,7 @@ def test_mode_solver_monitor_voltage_integral():
         sign="+",
     )
 
+    voltage_integral.compute_voltage(SIM_Z_DATA["mode_solver"])
     voltage_integral.compute_voltage(SIM_Z_DATA["mode"])
 
 
@@ -495,12 +504,14 @@ def test_time_monitor_custom_current_integral():
 
 
 def test_mode_solver_custom_current_integral():
+    """Test that both ModeData and ModeSolverData are allowed types."""
     length = 0.5
     size = [0, 0, 0]
     size[1] = length
     # Make box
     vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
     current_integral = mw.CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    current_integral.compute_current(SIM_Z_DATA["mode_solver"])
     current_integral.compute_current(SIM_Z_DATA["mode"])
 
 
