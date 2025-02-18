@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
 import shapely as shapely
+import xarray as xr
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.data.data_array import (
@@ -18,7 +19,7 @@ from ...components.data.data_array import (
     ScalarModeFieldDataArray,
     TimeDataArray,
 )
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
+from ...components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
 from ...components.geometry.base import Box, Geometry
 from ...components.types import Ax, Axis, Coordinate2D, Direction
 from ...components.validators import assert_line, assert_plane
@@ -33,18 +34,9 @@ from .viz import (
     plot_params_voltage_plus,
 )
 
-MonitorDataTypes = Union[FieldData, FieldTimeData, ModeSolverData]
+MonitorDataTypes = Union[FieldData, FieldTimeData, ModeData, ModeSolverData]
 EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
 IntegralResultTypes = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
-
-
-def _check_em_field_supported(em_field: Any):
-    """Function for validating correct data arrays."""
-    if not isinstance(em_field, (FieldData, FieldTimeData, ModeSolverData)):
-        raise DataError(
-            "'em_field' type not supported. Supported types are "
-            "'FieldData', 'FieldTimeData', 'ModeSolverData'."
-        )
 
 
 class AbstractAxesRH(Tidy3dBaseModel, ABC):
@@ -137,18 +129,7 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
             coords_interp, method=method, kwargs={"fill_value": "extrapolate"}
         )
         result = scalar_field.integrate(coord=coord)
-        if isinstance(scalar_field, ScalarFieldDataArray):
-            return FreqDataArray(data=result.data, coords=result.coords)
-        elif isinstance(scalar_field, ScalarFieldTimeDataArray):
-            return TimeDataArray(data=result.data, coords=result.coords)
-        else:
-            if not isinstance(scalar_field, ScalarModeFieldDataArray):
-                raise TypeError(
-                    f"Unsupported 'scalar_field' type: {type(scalar_field)}. "
-                    "Expected one of 'ScalarFieldDataArray', 'ScalarFieldTimeDataArray', "
-                    "'ScalarModeFieldDataArray'."
-                )
-            return FreqModeDataArray(data=result.data, coords=result.coords)
+        return self._make_result_data_array(result)
 
     def _get_field_along_path(self, scalar_field: EMScalarFieldType) -> EMScalarFieldType:
         """Returns a selection of the input ``scalar_field`` ready for integration."""
@@ -206,6 +187,26 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
         v = [min[1], max[1]]
         return (u, v)
 
+    @staticmethod
+    def _check_monitor_data_supported(em_field: MonitorDataTypes):
+        """Helper for validating that monitor data is supported."""
+        if not isinstance(em_field, (FieldData, FieldTimeData, ModeData, ModeSolverData)):
+            supported_types = list(MonitorDataTypes.__args__)
+            raise DataError(
+                f"'em_field' type {type(em_field)} not supported. Supported types are "
+                f"{supported_types}"
+            )
+
+    @staticmethod
+    def _make_result_data_array(result: xr.DataArray) -> IntegralResultTypes:
+        """Helper for creating the proper result type."""
+        if "t" in result.coords:
+            return TimeDataArray(data=result.data, coords=result.coords)
+        elif "f" in result.coords and "mode_index" in result.coords:
+            return FreqModeDataArray(data=result.data, coords=result.coords)
+        else:
+            return FreqDataArray(data=result.data, coords=result.coords)
+
 
 class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
     """Class for computing the voltage between two points defined by an axis-aligned line."""
@@ -218,12 +219,11 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
 
     def compute_voltage(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
         """Compute voltage along path defined by a line."""
-        _check_em_field_supported(em_field=em_field)
+        self._check_monitor_data_supported(em_field=em_field)
         e_component = "xyz"[self.main_axis]
         field_name = f"E{e_component}"
-        # Validate that the field is present
-        if field_name not in em_field.field_components:
-            raise DataError(f"'field_name' '{field_name}' not found.")
+        # Validate that fields are present
+        em_field._check_fields_stored([field_name])
         e_field = em_field.field_components[field_name]
 
         voltage = self.compute_integral(e_field)
@@ -376,7 +376,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
 
     def compute_current(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
         """Compute current flowing in loop defined by the outer edge of a rectangle."""
-        _check_em_field_supported(em_field=em_field)
+        AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         ax1 = self.remaining_axes[0]
         ax2 = self.remaining_axes[1]
         h_component = "xyz"[ax1]
@@ -384,10 +384,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         h_field_name = f"H{h_component}"
         v_field_name = f"H{v_component}"
         # Validate that fields are present
-        if h_field_name not in em_field.field_components:
-            raise DataError(f"'field_name' '{h_field_name}' not found.")
-        if v_field_name not in em_field.field_components:
-            raise DataError(f"'field_name' '{v_field_name}' not found.")
+        em_field._check_fields_stored([h_field_name, v_field_name])
         h_horizontal = em_field.field_components[h_field_name]
         h_vertical = em_field.field_components[v_field_name]
 

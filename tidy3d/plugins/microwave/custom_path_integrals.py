@@ -10,20 +10,18 @@ import shapely
 import xarray as xr
 
 from ...components.base import cached_property
-from ...components.data.data_array import FreqDataArray, FreqModeDataArray, TimeDataArray
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
 from ...components.geometry.base import Geometry
 from ...components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
 from ...components.viz import add_ax_if_none
 from ...constants import MICROMETER, fp_eps
-from ...exceptions import DataError, SetupError
+from ...exceptions import SetupError
 from .path_integrals import (
     AbstractAxesRH,
+    AxisAlignedPathIntegral,
     CurrentIntegralAxisAligned,
     IntegralResultTypes,
     MonitorDataTypes,
     VoltageIntegralAxisAligned,
-    _check_em_field_supported,
 )
 from .viz import (
     ARROW_CURRENT,
@@ -94,11 +92,9 @@ class CustomPathIntegral2D(AbstractAxesRH):
 
         h_field_name = f"{field}{dim1}"
         v_field_name = f"{field}{dim2}"
+
         # Validate that fields are present
-        if h_field_name not in em_field.field_components:
-            raise DataError(f"'field_name' '{h_field_name}' not found.")
-        if v_field_name not in em_field.field_components:
-            raise DataError(f"'field_name' '{v_field_name}' not found.")
+        em_field._check_fields_stored([h_field_name, v_field_name])
 
         # Select fields lying on the plane
         plane_indexer = {dim3: self.position}
@@ -133,18 +129,7 @@ class CustomPathIntegral2D(AbstractAxesRH):
         # Integrate along the path
         result = integrand.integrate(coord="s")
         result = result.reset_coords(drop=True)
-
-        if isinstance(em_field, FieldData):
-            return FreqDataArray(data=result.data, coords=result.coords)
-        elif isinstance(em_field, FieldTimeData):
-            return TimeDataArray(data=result.data, coords=result.coords)
-        else:
-            if not isinstance(em_field, ModeSolverData):
-                raise TypeError(
-                    f"Unsupported 'em_field' type: {type(em_field)}. "
-                    "Expected one of 'FieldData', 'FieldTimeData', 'ModeSolverData'."
-                )
-            return FreqModeDataArray(data=result.data, coords=result.coords)
+        return AxisAlignedPathIntegral._make_result_data_array(result)
 
     @staticmethod
     def _compute_dl_component(coord_array: xr.DataArray, closed_contour=False) -> np.array:
@@ -270,7 +255,7 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         :class:`.IntegralResultTypes`
             Result of voltage computation over remaining dimensions (frequency, time, mode indices).
         """
-        _check_em_field_supported(em_field=em_field)
+        AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         voltage = -1.0 * self.compute_integral(field="E", em_field=em_field)
         voltage = VoltageIntegralAxisAligned._set_data_array_attributes(voltage)
         return voltage
@@ -343,7 +328,7 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         :class:`.IntegralResultTypes`
             Result of current computation over remaining dimensions (frequency, time, mode indices).
         """
-        _check_em_field_supported(em_field=em_field)
+        AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         current = self.compute_integral(field="H", em_field=em_field)
         current = CurrentIntegralAxisAligned._set_data_array_attributes(current)
         return current
