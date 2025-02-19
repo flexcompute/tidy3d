@@ -6,11 +6,10 @@ from typing import Optional
 
 import numpy as np
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
-from rich.progress import Progress
 
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
-from tidy3d.log import get_logging_console, log
+from tidy3d.log import Progress, get_logging_console, log
 
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
@@ -822,12 +821,11 @@ def fit(
 
     Returns
     -------
-    Tuple[Tuple[float, ArrayComplex1D, ArrayComplex1D], float]
+    tuple[tuple[float, ArrayComplex1D, ArrayComplex1D], float]
         Best fitting result: (dispersive medium parameters, weighted RMS error).
         The dispersive medium parameters have the form (resp_inf, poles, residues)
         and are in the original unscaled units.
     """
-
     if max_num_poles < min_num_poles:
         raise ValidationError(
             "Dispersion fitter cannot have 'max_num_poles' less than 'min_num_poles'."
@@ -866,88 +864,80 @@ def fit(
 
     configs = make_configs()
 
-    with Progress(console=get_logging_console()) as progress:
+    with Progress(
+        console=get_logging_console(), show_progress=init_model.show_progress
+    ) as progress:
         task = progress.add_task(
-            f"Fitting to weighted RMS of {tolerance_rms}...",
+            description=f"Fitting to weighted RMS of {tolerance_rms}...",
             total=len(configs),
             visible=init_model.show_progress,
         )
 
-        while not progress.finished:
-            # try different initial pole configurations
-            for num_poles, relaxed, smooth, logspacing, optimize_eps_inf in configs:
-                model = init_model.updated_copy(
-                    num_poles=num_poles,
-                    relaxed=relaxed,
-                    smooth=smooth,
-                    logspacing=logspacing,
-                    optimize_eps_inf=optimize_eps_inf,
-                )
-                model = _fit_fixed_parameters((min_num_poles, max_num_poles), model)
+        # try different initial pole configurations
+        for num_poles, relaxed, smooth, logspacing, optimize_eps_inf in configs:
+            model = init_model.updated_copy(
+                num_poles=num_poles,
+                relaxed=relaxed,
+                smooth=smooth,
+                logspacing=logspacing,
+                optimize_eps_inf=optimize_eps_inf,
+            )
+            model = _fit_fixed_parameters((min_num_poles, max_num_poles), model)
 
-                if model.rms_error < best_model.rms_error:
-                    log.debug(
-                        f"Fitter: possible improved fit with "
-                        f"rms_error={model.rms_error:.3g} found using "
-                        f"relaxed={model.relaxed}, "
-                        f"smooth={model.smooth}, "
-                        f"logspacing={model.logspacing}, "
-                        f"optimize_eps_inf={model.optimize_eps_inf}, "
-                        f"loss_in_bounds={model.loss_in_bounds}, "
-                        f"passivity_optimized={model.passivity_optimized}, "
-                        f"sellmeier_passivity={model.sellmeier_passivity}."
-                    )
-                    if model.loss_in_bounds and model.sellmeier_passivity:
-                        best_model = model
-                    else:
-                        if (
-                            not warned_about_passivity_num_iters
-                            and model.passivity_num_iters_too_small
-                        ):
-                            warned_about_passivity_num_iters = True
-                            log.warning(
-                                "Did not finish enforcing passivity in dispersion fitter. "
-                                "If the fit is not good enough, consider increasing "
-                                "'AdvancedFastFitterParam.passivity_num_iters'."
-                            )
-                        if (
-                            not warned_about_slsqp_constraint_scale
-                            and model.slsqp_constraint_scale_too_small
-                        ):
-                            warned_about_slsqp_constraint_scale = True
-                            log.warning(
-                                "SLSQP constraint scale may be too small. "
-                                "If the fit is not good enough, consider increasing "
-                                "'AdvancedFastFitterParam.slsqp_constraint_scale'."
-                            )
+            if model.rms_error < best_model.rms_error:
+                log.debug(
+                    f"Fitter: possible improved fit with "
+                    f"rms_error={model.rms_error:.3g} found using "
+                    f"relaxed={model.relaxed}, "
+                    f"smooth={model.smooth}, "
+                    f"logspacing={model.logspacing}, "
+                    f"optimize_eps_inf={model.optimize_eps_inf}, "
+                    f"loss_in_bounds={model.loss_in_bounds}, "
+                    f"passivity_optimized={model.passivity_optimized}, "
+                    f"sellmeier_passivity={model.sellmeier_passivity}."
+                )
+                if model.loss_in_bounds and model.sellmeier_passivity:
+                    best_model = model
+                else:
+                    if not warned_about_passivity_num_iters and model.passivity_num_iters_too_small:
+                        warned_about_passivity_num_iters = True
+                        log.warning(
+                            "Did not finish enforcing passivity in dispersion fitter. "
+                            "If the fit is not good enough, consider increasing "
+                            "'AdvancedFastFitterParam.passivity_num_iters'."
+                        )
+                    if (
+                        not warned_about_slsqp_constraint_scale
+                        and model.slsqp_constraint_scale_too_small
+                    ):
+                        warned_about_slsqp_constraint_scale = True
+                        log.warning(
+                            "SLSQP constraint scale may be too small. "
+                            "If the fit is not good enough, consider increasing "
+                            "'AdvancedFastFitterParam.slsqp_constraint_scale'."
+                        )
+            progress.update(
+                task,
+                advance=1,
+                description=f"Best weighted RMS error so far: {best_model.rms_error:.3g}",
+                refresh=True,
+            )
+
+            # if below tolerance, return
+            if best_model.rms_error < tolerance_rms:
                 progress.update(
                     task,
-                    advance=1,
-                    description=f"Best weighted RMS error so far: {best_model.rms_error:.3g}",
+                    completed=len(configs),
+                    description=f"Best weighted RMS error: {best_model.rms_error:.3g}",
                     refresh=True,
                 )
-
-                # if below tolerance, return
-                if best_model.rms_error < tolerance_rms:
-                    progress.update(
-                        task,
-                        completed=len(configs),
-                        description=f"Best weighted RMS error: {best_model.rms_error:.3g}",
-                        refresh=True,
-                    )
-                    log.info(
-                        "Found optimal fit with weighted RMS error %.3g",
-                        best_model.rms_error,
-                    )
-                    if best_model.show_unweighted_rms:
-                        log.info(
-                            "Unweighted RMS error %.3g",
-                            best_model.unweighted_rms_error,
-                        )
-                    return (
-                        best_model.pole_residue,
-                        best_model.rms_error,
-                    )
+                log.info(f"Found optimal fit with weighted RMS error {best_model.rms_error:.3g}")
+                if best_model.show_unweighted_rms:
+                    log.info(f"Unweighted RMS error {best_model.unweighted_rms_error:.3g}")
+                return (
+                    best_model.pole_residue,
+                    best_model.rms_error,
+                )
 
     # if exited loop, did not reach tolerance (warn)
     progress.update(
@@ -958,16 +948,73 @@ def fit(
     )
 
     log.warning(
-        "Unable to fit with weighted RMS error under 'tolerance_rms' of %.3g", tolerance_rms
+        f"Unable to fit with weighted RMS error under 'tolerance_rms' of {tolerance_rms:.3g}"
     )
-    log.info("Returning best fit with weighted RMS error %.3g", best_model.rms_error)
+    log.info(f"Returning best fit with weighted RMS error {best_model.rms_error:.3g}")
     if best_model.show_unweighted_rms:
-        log.info(
-            "Unweighted RMS error %.3g",
-            best_model.unweighted_rms_error,
-        )
+        log.info(f"Unweighted RMS error {best_model.unweighted_rms_error:.3g}")
 
     return (
         best_model.pole_residue,
         best_model.rms_error,
+    )
+
+
+def constant_loss_tangent_model(
+    eps_real: float,
+    loss_tangent: float,
+    frequency_range: tuple[float, float],
+    max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
+    number_sampling_frequency: PositiveInt = 10,
+    tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
+    scale_factor: float = 1,
+    show_progress: bool = True,
+) -> tuple[tuple[float, ArrayComplex1D, ArrayComplex1D], float]:
+    """Fit a constant loss tangent material model.
+
+    Parameters
+    ----------
+    eps_real : float
+        Real part of permittivity
+    loss_tangent : float
+        Loss tangent.
+    frequency_range : tuple[float, float]
+        Freqquency range for the material to exhibit constant loss tangent response.
+    max_num_poles : PositiveInt, optional
+        Maximum number of poles in the model.
+    number_sampling_frequency : PositiveInt, optional
+        Number of sampling frequencies to compute RMS error for fitting.
+    tolerance_rms : float, optional
+        Weighted RMS error below which the fit is successful and the result is returned.
+    scale_factor : PositiveFloat, optional
+        Factor to rescale frequency by before fitting.
+    show_progress : bool
+        Whether to show a progress bar.
+
+    Returns
+    -------
+    tuple[tuple[float, ArrayComplex1D, ArrayComplex1D], float]
+        Best fitting result: (dispersive medium parameters, weighted RMS error).
+        The dispersive medium parameters have the form (resp_inf, poles, residues)
+        and are in the original unscaled units.
+    """
+    if number_sampling_frequency < 2:
+        frequencies = np.array([np.mean(frequency_range)])
+    else:
+        frequencies = np.linspace(frequency_range[0], frequency_range[1], number_sampling_frequency)
+    eps_real_array = np.ones_like(frequencies) * eps_real
+    loss_tangent_array = np.ones_like(frequencies) * loss_tangent
+
+    omega_data = frequencies * 2 * np.pi
+    eps_complex = eps_real_array * (1 + 1j * loss_tangent_array)
+
+    advanced_param = AdvancedFastFitterParam(show_progress=show_progress)
+
+    return fit(
+        omega_data=omega_data,
+        resp_data=eps_complex,
+        max_num_poles=max_num_poles,
+        tolerance_rms=tolerance_rms,
+        scale_factor=scale_factor,
+        advanced_param=advanced_param,
     )

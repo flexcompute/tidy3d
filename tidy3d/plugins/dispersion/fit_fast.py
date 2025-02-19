@@ -7,9 +7,13 @@ from typing import Optional
 import numpy as np
 from pydantic.v1 import NonNegativeFloat, PositiveInt
 
-from tidy3d.components.dispersion_fitter import AdvancedFastFitterParam, fit
+from tidy3d.components.dispersion_fitter import (
+    AdvancedFastFitterParam,
+    constant_loss_tangent_model,
+    fit,
+)
 from tidy3d.components.medium import PoleResidue
-from tidy3d.constants import C_0, HBAR
+from tidy3d.constants import HBAR
 
 from .fit import DispersionFitter
 
@@ -122,6 +126,7 @@ class FastDispersionFitter(DispersionFitter):
         max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
         number_sampling_frequency: PositiveInt = 10,
         tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
+        show_progress: bool = True,
     ) -> PoleResidue:
         """Fit a constant loss tangent material model.
 
@@ -139,21 +144,27 @@ class FastDispersionFitter(DispersionFitter):
             Number of sampling frequencies to compute RMS error for fitting.
         tolerance_rms : float, optional
             Weighted RMS error below which the fit is successful and the result is returned.
+        show_progress : bool
+            Whether to show a progress bar.
 
         Returns
         -------
         :class:`.PoleResidue
             Best results of multiple fits.
         """
-        if number_sampling_frequency < 2:
-            frequencies = np.array([np.mean(frequency_range)])
-        else:
-            frequencies = np.linspace(
-                frequency_range[0], frequency_range[1], number_sampling_frequency
-            )
-        wvl_um = C_0 / frequencies
-        eps_real_array = np.ones_like(frequencies) * eps_real
-        loss_tangent_array = np.ones_like(frequencies) * loss_tangent
-        fitter = cls.from_loss_tangent(wvl_um, eps_real_array, loss_tangent_array)
-        material, _ = fitter.fit(max_num_poles=max_num_poles, tolerance_rms=tolerance_rms)
-        return material
+        params, _ = constant_loss_tangent_model(
+            eps_real=eps_real,
+            loss_tangent=loss_tangent,
+            frequency_range=frequency_range,
+            max_num_poles=max_num_poles,
+            number_sampling_frequency=number_sampling_frequency,
+            tolerance_rms=tolerance_rms,
+            scale_factor=HBAR,
+            show_progress=show_progress,
+        )
+
+        eps_inf, poles, residues = params
+
+        medium = PoleResidue(eps_inf=eps_inf, poles=list(zip(poles, residues)))
+
+        return medium
