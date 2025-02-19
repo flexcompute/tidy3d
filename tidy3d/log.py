@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Callable, Optional, Union
 
@@ -444,3 +445,33 @@ def get_logging_console() -> Console:
     if "console" not in log.handlers:
         set_logging_console()
     return log.handlers["console"].console
+
+
+class NoOpProgress:
+    """Dummy progress manager that doesn't show any output."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        pass
+
+    def add_task(self, *args, **kwargs):
+        pass
+
+    def update(self, *args, **kwargs):
+        pass
+
+
+@contextmanager
+def Progress(console, show_progress):
+    """Progress manager that wraps ``rich.Progress`` if ``show_progress`` is ``True``,
+    and ``NoOpProgress`` otherwise."""
+    if show_progress:
+        from rich.progress import Progress
+
+        with Progress(console=console) as progress:
+            yield progress
+    else:
+        with NoOpProgress() as progress:
+            yield progress
