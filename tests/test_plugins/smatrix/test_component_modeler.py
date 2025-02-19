@@ -381,6 +381,17 @@ def test_import_smatrix_smatrix():
     from tidy3d.plugins.smatrix.smatrix import ComponentModeler, Port  # noqa: F401
 
 
+def test_to_from_file_empty_batch(tmp_path):
+    modeler = make_component_modeler()
+
+    fname = str(tmp_path) + "/modeler.json"
+
+    modeler.to_file(fname)
+    modeler2 = modeler.from_file(fname)
+
+    assert modeler2.batch_cached is None
+
+
 def test_to_from_file_batch(tmp_path, monkeypatch):
     modeler = make_component_modeler()
     _ = run_component_modeler(monkeypatch, modeler)

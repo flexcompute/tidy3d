@@ -137,14 +137,15 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         """
 
         batch_cached = self._cached_properties.get("batch")
-        jobs_cached = batch_cached._cached_properties.get("jobs")
-        if jobs_cached is not None:
-            jobs = {}
-            for key, job in jobs_cached.items():
-                task_id = job._cached_properties.get("task_id")
-                jobs[key] = job.updated_copy(task_id_cached=task_id)
-            batch_cached = batch_cached.updated_copy(jobs_cached=jobs)
-        self = self.updated_copy(batch_cached=batch_cached)
+        if batch_cached is not None:
+            jobs_cached = batch_cached._cached_properties.get("jobs")
+            if jobs_cached is not None:
+                jobs = {}
+                for key, job in jobs_cached.items():
+                    task_id = job._cached_properties.get("task_id")
+                    jobs[key] = job.updated_copy(task_id_cached=task_id)
+                batch_cached = batch_cached.updated_copy(jobs_cached=jobs)
+            self = self.updated_copy(batch_cached=batch_cached)
         super(AbstractComponentModeler, self).to_file(fname=fname)  # noqa: UP008
 
     @cached_property
