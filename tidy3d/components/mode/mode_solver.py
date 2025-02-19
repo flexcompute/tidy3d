@@ -1784,7 +1784,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         sim_data = self.sim_data
         return sim_data.plot_field(
-            field_monitor_name=MODE_MONITOR_NAME,
+            field_monitor_name=self.data.monitor.name,
             field_name=field_name,
             val=val,
             scale=scale,
@@ -2182,3 +2182,23 @@ class ModeSolver(Tidy3dBaseModel):
             )
         fdtd_sim = self.simulation._to_fdtd_sim()
         return self.updated_copy(simulation=fdtd_sim)
+
+    def _patch_data(self, data: ModeSolverData):
+        """
+        Patch the :class:`.ModeSolver` with the provided data so that
+        it will be used everywhere instead of locally-computed data.
+        This function is available as a workaround while we transition
+        to the new :class:`.ModeSimulation` interface. It is used
+        in the webapi to make functions like ``plot_field`` operate
+        on the data from the remote mode solver rather than data from
+        the local mode solver. It can also be used manually if needed.
+
+        Parameters
+        ----------
+        data : :class:`.ModeSolverData`
+            The mode solver data to be used, typically the result
+            of a remote mode solver run.
+        """
+        self._cached_properties["data_raw"] = data
+        self._cached_properties.pop("data", None)
+        self._cached_properties.pop("sim_data", None)

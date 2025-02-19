@@ -1,10 +1,12 @@
 # Tests webapi and things that depend on it
 
+import matplotlib.pyplot as plt
 import pytest
 import responses
 import tidy3d as td
 from botocore.exceptions import ClientError
 from responses import matchers
+from tidy3d.components.data.dataset import ModeIndexDataArray
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
@@ -33,6 +35,8 @@ FILE_SIZE_GB = 4.0
 
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
+
+f, AX = plt.subplots()
 
 
 def make_mode_sim():
@@ -361,9 +365,10 @@ def mock_job_status(monkeypatch):
 
 
 @responses.activate
-def test_batch(mock_webapi, mock_job_status, tmp_path):
+def test_batch(mock_webapi, mock_job_status, tmp_path, monkeypatch):
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
 
     sims = {TASK_NAME: make_mode_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
@@ -376,7 +381,69 @@ def test_batch(mock_webapi, mock_job_status, tmp_path):
 
 
 @responses.activate
-def test_async(mock_webapi, mock_job_status):
+def test_async(mock_webapi, mock_job_status, monkeypatch):
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+
     sims = {TASK_NAME: make_mode_sim()}
     _ = run_async(sims, folder_name=PROJECT_NAME)
+
+
+@responses.activate
+def test_patch_data(mock_webapi, monkeypatch, tmp_path):
+    """Test that mode solver is patched with remote data after run"""
+
+    def get_sim_and_data():
+        sim = make_mode_sim()
+        data_local = sim.data_raw
+        n_complex_coords = data_local.n_complex.coords
+        n_complex_data = [[1, 1, 1]]
+        n_complex_remote = ModeIndexDataArray(n_complex_data, coords=n_complex_coords)
+        monitor_remote = data_local.monitor.updated_copy(name="MODE_SOLVER_MONITOR")
+        data_remote = data_local.updated_copy(n_complex=n_complex_remote, monitor=monitor_remote)
+        return sim, data_local, data_remote
+
+    def check_patched(result, sim, data_local, data_remote):
+        assert result == data_remote
+        assert result != data_local
+        assert sim.data_raw == data_remote
+        assert sim.data_raw != data_local
+        _ = sim.plot_field("Ex", f=sim.freqs[0], mode_index=0, ax=AX)
+
+    # test web.run
+
+    sim, data_local, data_remote = get_sim_and_data()
+
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: data_remote)
+
+    result = run(
+        sim,
+        task_name=TASK_NAME,
+        folder_name=PROJECT_NAME,
+        path=str(tmp_path / "web_test_tmp.json"),
+    )
+
+    check_patched(result, sim, data_local, data_remote)
+
+    # test Job.run
+
+    sim, data_local, data_remote = get_sim_and_data()
+
+    j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
+
+    result = j.run(path=str(tmp_path / "web_test_tmp.json"))
+
+    check_patched(result, sim, data_local, data_remote)
+
+    # test Batch.run
+
+    sim, data_local, data_remote = get_sim_and_data()
+
+    sims = {TASK_NAME: sim}
+    b = Batch(simulations=sims, folder_name=PROJECT_NAME)
+    result = b.run(path_dir=str(tmp_path))
+
+    check_patched(result[TASK_NAME], sim, data_local, data_remote)
+    assert b.simulations[TASK_NAME].data_raw == data_remote
+    assert b.simulations[TASK_NAME].data_raw != data_local
+    _ = b.simulations[TASK_NAME].plot_field("Ex", f=sim.freqs[0], mode_index=0, ax=AX)
