@@ -12,6 +12,7 @@ from requests import HTTPError
 from rich.progress import Progress
 
 from ...components.medium import AbstractCustomMedium
+from ...components.mode.mode_solver import ModeSolver
 from ...components.mode.simulation import ModeSimulation
 from ...components.types import Literal
 from ...exceptions import WebError
@@ -173,9 +174,12 @@ def run(
         worker_group=worker_group,
     )
     monitor(task_id, verbose=verbose)
-    return load(
+    data = load(
         task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
     )
+    if isinstance(simulation, ModeSolver):
+        simulation._patch_data(data=data)
+    return data
 
 
 @wait_for_connection

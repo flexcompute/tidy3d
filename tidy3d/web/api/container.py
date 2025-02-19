@@ -14,6 +14,7 @@ import pydantic.v1 as pd
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.mode.mode_solver import ModeSolver
 from ...components.types import Literal, annotate_type
 from ...exceptions import DataError
 from ...log import get_logging_console, log
@@ -321,7 +322,10 @@ class Job(WebContainer):
             Object containing simulation results.
         """
         self._check_path_dir(path_dir=path)
-        return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
+        data = web.load(task_id=self.task_id, path=path, verbose=self.verbose)
+        if isinstance(self.simulation, ModeSolver):
+            self.simulation._patch_data(data=data)
+        return data
 
     def delete(self) -> None:
         """Delete server-side data associated with :class:`Job`."""
@@ -944,7 +948,14 @@ class Batch(WebContainer):
             task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             task_ids[task_name] = self.jobs[task_name].task_id
 
-        return BatchData(task_paths=task_paths, task_ids=task_ids, verbose=self.verbose)
+        data = BatchData(task_paths=task_paths, task_ids=task_ids, verbose=self.verbose)
+
+        for task_name, job in self.jobs.items():
+            if isinstance(job.simulation, ModeSolver):
+                job_data = data[task_name]
+                job.simulation._patch_data(data=job_data)
+
+        return data
 
     def delete(self) -> None:
         """Delete server-side data associated with each task in the batch."""
