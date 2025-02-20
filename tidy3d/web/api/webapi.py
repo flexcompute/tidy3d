@@ -63,6 +63,11 @@ def _get_url(task_id: str) -> str:
     return f"{Env.current.website_endpoint}/workbench?taskId={task_id}"
 
 
+def _get_folder_url(folder_id: str) -> str:
+    """Get the URL for a task folder on our server."""
+    return f"{Env.current.website_endpoint}/folders/{folder_id}"
+
+
 @wait_for_connection
 def run(
     simulation: SimulationType,
@@ -262,9 +267,9 @@ def upload(
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
             url = _get_url(task.task_id)
-            console.log(
-                f"View task using web UI at [link={url}]'{url}'[/link] within the folder '{task.folder_name}'."
-            )
+            folder_url = _get_folder_url(task.folder_id)
+            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+            console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
 
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":

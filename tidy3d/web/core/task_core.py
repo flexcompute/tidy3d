@@ -131,7 +131,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         None,
         title="folder_id",
         description="Folder ID number, set when the task is uploaded, leave as None.",
-        alias="projectId",
+        alias="folderId",
     )
     status: Optional[str] = Field(title="status", description="Simulation task status.")
 
@@ -151,7 +151,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         "default",
         title="Folder Name",
         description="Name of the folder associated with this task.",
-        alias="projectName",
+        alias="folderName",
     )
 
     callback_url: str = Field(
@@ -242,7 +242,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "fileType": file_type,
             },
         )
-        return SimulationTask(**resp, taskType=task_type)
+        return SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
 
     @classmethod
     def get(cls, task_id: str, verbose: bool = True) -> SimulationTask:
