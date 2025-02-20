@@ -144,6 +144,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             voltage_axis=self.voltage_axis,
             snap_perimeter_to_grid=self.snap_perimeter_to_grid,
             dist_type=self.dist_type,
+            enable_snapping_points=self.enable_snapping_points,
         )
 
     def to_voltage_monitor(

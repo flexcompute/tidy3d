@@ -157,6 +157,7 @@ def test_grid_spec_with_layers():
     """Test the application of layer_specs to GridSpec."""
 
     thickness = 1e-3
+    lumped_elements = []
     # a PEC thin layer structure
     box1 = td.Box(size=(thickness, 2, 2))
     box2 = td.Box(center=(0, -1, 0), size=(thickness, 1, 1))
@@ -254,7 +255,14 @@ def test_grid_spec_with_layers():
         corner_finder=None,
     )
     sim2 = update_sim_with_newlayer(layer)
-    assert len(sim2.grid_spec.all_override_structures(list(sim2.structures), 1.0, sim2.size)) == 1
+    assert (
+        len(
+            sim2.grid_spec.all_override_structures(
+                list(sim2.structures), 1.0, sim2.size, lumped_elements
+            )
+        )
+        == 1
+    )
 
     # separate when they don't overlap
     layer = LayerRefinementSpec.from_structures(
@@ -265,7 +273,14 @@ def test_grid_spec_with_layers():
         corner_finder=None,
     )
     sim2 = update_sim_with_newlayer(layer)
-    assert len(sim2.grid_spec.all_override_structures(list(sim2.structures), 1.0, sim2.size)) == 2
+    assert (
+        len(
+            sim2.grid_spec.all_override_structures(
+                list(sim2.structures), 1.0, sim2.size, lumped_elements
+            )
+        )
+        == 2
+    )
 
 
 def test_corner_refinement_outside_domain():

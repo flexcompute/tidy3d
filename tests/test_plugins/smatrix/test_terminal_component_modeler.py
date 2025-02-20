@@ -215,7 +215,9 @@ def test_port_snapping(tmp_path):
 
 
 def test_coarse_grid_at_port(monkeypatch, tmp_path):
-    modeler = make_component_modeler(planar_pec=True, path_dir=str(tmp_path), port_refinement=False)
+    modeler = make_component_modeler(
+        planar_pec=True, path_dir=str(tmp_path), port_refinement=False, port_snapping=False
+    )
     # Without port refinement the grid is much too coarse for these port sizes
     with pytest.raises(SetupError):
         _ = run_component_modeler(monkeypatch, modeler)

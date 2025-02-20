@@ -41,10 +41,18 @@ from .microwave.formulas.circuit_parameters import (
     inductance_straight_rectangular_wire,
     total_inductance_colinear_rectangular_wire_segments,
 )
-from .types import TYPE_TAG_STR, Axis, Axis2D, Coordinate, FreqArray, LumpDistType
+from .types import (
+    TYPE_TAG_STR,
+    Axis,
+    Axis2D,
+    Coordinate,
+    CoordinateOptional,
+    FreqArray,
+    LumpDistType,
+)
 from .viz import PlotParams, plot_params_lumped_element
 
-DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 3
+DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 1
 LOSS_FACTOR_INDUCTOR = 1e6
 
 
@@ -66,6 +74,13 @@ class LumpedElement(Tidy3dBaseModel, ABC):
         "A value of ``None`` will turn off mesh refinement suggestions.",
     )
 
+    enable_snapping_points: bool = pd.Field(
+        True,
+        title="Snap Grid To Lumped Element",
+        description="When enabled, snapping points are automatically generated to snap grids to key "
+        "geometric features of the lumped element for more accurate modelling.",
+    )
+
     _name_validator = validate_name_str()
 
     @cached_property
@@ -75,8 +90,11 @@ class LumpedElement(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def to_mesh_overrides(self) -> list[MeshOverrideStructure]:
-        """Creates a suggested :class:`.MeshOverrideStructure` list
-        that could be added to the :class:`.Simulation`"""
+        """Creates a suggested :class:`.MeshOverrideStructure` list."""
+
+    @abstractmethod
+    def to_snapping_points(self) -> list[CoordinateOptional]:
+        """Creates a suggested snapping point list."""
 
     @abstractmethod
     def to_geometry(self) -> Geometry:
@@ -159,49 +177,44 @@ class RectangularLumpedElement(LumpedElement, Box):
         return SnappingSpec(location=snap_location, behavior=snap_behavior)
 
     def to_mesh_overrides(self) -> list[MeshOverrideStructure]:
-        """Creates a suggested :class:`.MeshOverrideStructure` list that could be added to the
-        :class:`.Simulation`.
-
-        Note
-        ----
-
-        An important use case is when a :class:`RectangularLumpedElement` is used with a
-        :class:`.LumpedPort`, where the mesh overrides may be automatically generated
-        depending on ``num_grid_cells``. The port is a flat surface, but when computing the
-        port current, we'll eventually integrate the magnetic field just above or below this
-        surface. The mesh override needs to ensure that the mesh is fine enough not only in
-        plane, but also in the normal direction. In the normal direction, we'll make sure there
+        """Creates a suggested :class:`.MeshOverrideStructure` list for mesh refinement both on the
+        plane of lumped element, and along normal axis. In the normal direction, we'll make sure there
         are at least 2 cell layers above and below whose size is the same as the in-plane cell
-        size in the override region. Also, to ensure that the port itself is aligned with a grid
-        boundary in the normal direction, two separate override regions are defined, one above
-        and one below the analytical port region.
+        size in the override region.
         """
 
-        mesh_overrides = []
-        if self.num_grid_cells:
-            dl = self.size[self.voltage_axis] / self.num_grid_cells
-            override_dl = Geometry.unpop_axis(dl, (dl, dl), axis=self.normal_axis)
-            override_size = list(self.size)
-            override_size[override_size.index(0)] = 2 * override_dl[self.normal_axis]
+        if self.num_grid_cells is None:
+            return []
+        dl = self.size[self.voltage_axis] / self.num_grid_cells
+        override_size = list(self.size)
+        override_size[self.normal_axis] = 4 * dl
+        return [
+            MeshOverrideStructure(
+                geometry=Box(center=self.center, size=override_size),
+                dl=(dl, dl, dl),
+                shadow=False,
+            )
+        ]
 
-            override_center_below = list(self.center)
-            override_center_below[self.normal_axis] -= dl
-            mesh_overrides.append(
-                MeshOverrideStructure(
-                    geometry=Box(center=override_center_below, size=override_size),
-                    dl=override_dl,
+    def to_snapping_points(self) -> list[CoordinateOptional]:
+        """Creates a suggested snapping point list to ensure that the element is aligned with a grid
+        boundary in the normal direction, and the endpoints aligned with grids in the voltage axis.
+        """
+
+        if not self.enable_snapping_points:
+            return []
+        # normal axis
+        snapping_points = [
+            Geometry.unpop_axis(self.center[self.normal_axis], (None, None), axis=self.normal_axis)
+        ]
+        # also snap along voltage axis
+        for bound_coord in self.bounds:
+            snapping_points.append(
+                Geometry.unpop_axis(
+                    bound_coord[self.voltage_axis], (None, None), axis=self.voltage_axis
                 )
             )
-
-            override_center_above = list(self.center)
-            override_center_above[self.normal_axis] += dl
-            mesh_overrides.append(
-                MeshOverrideStructure(
-                    geometry=Box(center=override_center_above, size=override_size),
-                    dl=override_dl,
-                )
-            )
-        return mesh_overrides
+        return snapping_points
 
     def to_geometry(self, grid: Grid = None) -> Box:
         """Converts the :class:`RectangularLumpedElement` object to a :class:`.Box`."""
@@ -355,52 +368,38 @@ class CoaxialLumpedResistor(LumpedElement):
         "the orientation of the circles making up the coaxial lumped element.",
     )
 
+    def to_snapping_points(self) -> list[CoordinateOptional]:
+        """Creates a suggested snapping point list to ensure that the element is aligned with a grid
+        boundary in the normal direction."""
+        if not self.enable_snapping_points:
+            return []
+
+        return [
+            Geometry.unpop_axis(self.center[self.normal_axis], (None, None), axis=self.normal_axis)
+        ]
+
     def to_mesh_overrides(self) -> list[MeshOverrideStructure]:
-        """Creates a suggested :class:`MeshOverrideStructure` list that could be added to the
-        :class:`Simulation`.
-
-        Note
-        ----
-
-        An important use case is when a :class:`CoaxialLumpedResistor` is used with
-        a :class:`CoaxialLumpedPort`, where the mesh overrides may be automatically generated
-        depending on ``num_grid_cells``. The port is a flat surface, but when computing the
-        port current, we'll eventually integrate the magnetic field just above or below this
-        surface. The mesh override needs to ensure that the mesh is fine enough not only in
-        plane, but also in the normal direction. In the normal direction, we'll make sure there
-        are at least 2 cell layers above and below whose size is the same as the in-plane cell
-        size in the override region. Also, to ensure that the port itself is aligned with a grid
-        boundary in the normal direction, two separate override regions are defined, one above
-        and one below the analytical port region.
+        """Creates a suggested :class:`.MeshOverrideStructure` list for mesh refinement both on the
+        plane of lumped element, and along normal axis. In the normal direction, we'll make sure there
+        are at least 2 cell layers above and below whose size is half of the in-plane cell
+        size in the override region.
         """
-        mesh_overrides = []
 
-        if self.num_grid_cells:
-            # Make sure the number of grid cells between inner and outer radius is `self.num_grid_cells`
-            dl = (self.outer_diameter - self.inner_diameter) / self.num_grid_cells / 2
-            override_dl = Geometry.unpop_axis(dl / 2, (dl, dl), axis=self.normal_axis)
-            override_size = Geometry.unpop_axis(
-                dl, (self.outer_diameter, self.outer_diameter), axis=self.normal_axis
+        if self.num_grid_cells is None:
+            return []
+        # Make sure the number of grid cells between inner and outer radius is `self.num_grid_cells`
+        dl = (self.outer_diameter - self.inner_diameter) / self.num_grid_cells / 2
+        override_dl = Geometry.unpop_axis(dl / 2, (dl, dl), axis=self.normal_axis)
+        override_size = Geometry.unpop_axis(
+            dl * 2, (self.outer_diameter, self.outer_diameter), axis=self.normal_axis
+        )
+        return [
+            MeshOverrideStructure(
+                geometry=Box(center=self.center, size=override_size),
+                dl=override_dl,
+                shadow=False,
             )
-
-            override_center_below = list(self.center)
-            override_center_below[self.normal_axis] -= dl / 2
-            mesh_overrides.append(
-                MeshOverrideStructure(
-                    geometry=Box(center=override_center_below, size=override_size),
-                    dl=override_dl,
-                )
-            )
-
-            override_center_above = list(self.center)
-            override_center_above[self.normal_axis] += dl / 2
-            mesh_overrides.append(
-                MeshOverrideStructure(
-                    geometry=Box(center=override_center_above, size=override_size),
-                    dl=override_dl,
-                )
-            )
-        return mesh_overrides
+        ]
 
     @pd.validator("center", always=True)
     def _center_not_inf(cls, val):

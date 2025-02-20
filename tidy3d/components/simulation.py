@@ -744,7 +744,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """
         wavelength = self.grid_spec.get_wavelength(self.sources)
         return self.grid_spec.internal_override_structures(
-            self.scene.all_structures, wavelength, self.geometry.size
+            self.scene.all_structures,
+            wavelength,
+            self.geometry.size,
+            self.lumped_elements,
         )
 
     @cached_property
@@ -756,7 +759,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         List[CoordinateOptional]
             List of snapping points coordinates.
         """
-        return self.grid_spec.internal_snapping_points(self.scene.all_structures)
+        return self.grid_spec.internal_snapping_points(
+            self.scene.all_structures, self.lumped_elements
+        )
 
     @equal_aspect
     @add_ax_if_none
@@ -1093,6 +1098,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             periodic=self._periodic,
             sources=self.sources,
             num_pml_layers=self.num_pml_layers,
+            lumped_elements=self.lumped_elements,
             internal_snapping_points=self.internal_snapping_points,
             internal_override_structures=self.internal_override_structures,
         )
@@ -4586,6 +4592,7 @@ class Simulation(AbstractYeeGridSimulation):
             symmetry=self.symmetry,
             sources=self.sources,
             num_pml_layers=self.num_pml_layers,
+            lumped_elements=self.lumped_elements,
             internal_snapping_points=self.internal_snapping_points,
             internal_override_structures=self.internal_override_structures,
         )

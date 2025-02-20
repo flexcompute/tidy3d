@@ -36,6 +36,13 @@ class AbstractLumpedPort(AbstractTerminalPort):
         "A value of ``None`` will turn off automatic mesh refinement.",
     )
 
+    enable_snapping_points: bool = pd.Field(
+        True,
+        title="Snap Grid To Lumped Port",
+        description="When enabled, snapping points are automatically generated to snap grids to key "
+        "geometric features of the lumped port for more accurate modelling.",
+    )
+
     @cached_property
     def _voltage_monitor_name(self) -> str:
         return f"{self.name}_voltage"

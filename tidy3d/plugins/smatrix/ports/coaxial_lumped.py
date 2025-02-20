@@ -209,6 +209,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             normal_axis=self.injection_axis,
             num_grid_cells=self.num_grid_cells,
             resistance=np.real(self.impedance),
+            enable_snapping_points=self.enable_snapping_points,
             name=f"{self.name}_resistor",
         )
 
