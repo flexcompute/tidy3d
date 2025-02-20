@@ -131,7 +131,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         None,
         title="folder_id",
         description="Folder ID number, set when the task is uploaded, leave as None.",
-        alias="projectId",
+        alias="folderId",
     )
     status: Optional[str] = Field(title="status", description="Simulation task status.")
 
@@ -151,7 +151,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         "default",
         title="Folder Name",
         description="Name of the folder associated with this task.",
-        alias="projectName",
+        alias="folderName",
     )
 
     callback_url: str = Field(
