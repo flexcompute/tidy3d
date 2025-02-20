@@ -25,6 +25,7 @@ def test_lumped_resistor():
 
     # Check conversion to mesh overrides
     _ = resistor.to_mesh_overrides()
+    _ = resistor.to_snapping_points()
 
     # Check conversion to monitor
     freqs = np.linspace(1e9, 50e9, 101)
@@ -60,6 +61,75 @@ def test_lumped_resistor():
         )
 
 
+def test_lumped_resistor_snapping():
+    resistor = td.LumpedResistor(
+        resistance=50.0,
+        center=[0, 0, 0.1],
+        size=[1, 1, 0],
+        voltage_axis=0,
+        name="R",
+        enable_snapping_points=False,
+        num_grid_cells=None,
+    )
+    # a box completely covers the lumped element in xy
+    box = td.Structure(
+        geometry=td.Box(center=(0, 0, -1), size=(1.5, 1.5, 0.2)),
+        medium=td.Medium(permittivity=4),
+    )
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        grid_spec=td.GridSpec.auto(wavelength=1, min_steps_per_wvl=11.1),
+        lumped_elements=[resistor],
+        structures=[box],
+        run_time=1e-19,
+    )
+
+    # snapped version
+    resistor_snapped = resistor.updated_copy(enable_snapping_points=True)
+    sim_snapped = sim.updated_copy(lumped_elements=[resistor_snapped])
+    # whether lumped element is snapped along normal axis
+    assert not any(np.isclose(sim.grid.boundaries.z, 0.1))
+    assert any(np.isclose(sim_snapped.grid.boundaries.z, 0.1))
+
+    # whether lumped element is snapped along voltage axis
+    assert not any(np.isclose(sim.grid.boundaries.x, 0.5))
+    assert any(np.isclose(sim_snapped.grid.boundaries.x, 0.5))
+    assert not any(np.isclose(sim.grid.boundaries.x, -0.5))
+    assert any(np.isclose(sim_snapped.grid.boundaries.x, -0.5))
+
+
+def test_coaxial_lumped_resistor_snapping():
+    resistor = td.CoaxialLumpedResistor(
+        resistance=50.0,
+        center=[0, 0, 0.1],
+        outer_diameter=1,
+        inner_diameter=0.5,
+        normal_axis=2,
+        name="R",
+        enable_snapping_points=False,
+        num_grid_cells=None,
+    )
+    # a box completely covers the lumped element in xy
+    box = td.Structure(
+        geometry=td.Box(center=(0, 0, -1), size=(1.5, 1.5, 0.2)),
+        medium=td.Medium(permittivity=4),
+    )
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        grid_spec=td.GridSpec.auto(wavelength=1, min_steps_per_wvl=11.1),
+        lumped_elements=[resistor],
+        structures=[box],
+        run_time=1e-19,
+    )
+
+    # snapped version
+    resistor_snapped = resistor.updated_copy(enable_snapping_points=True)
+    sim_snapped = sim.updated_copy(lumped_elements=[resistor_snapped])
+    # whether lumped element is snapped along normal axis
+    assert not any(np.isclose(sim.grid.boundaries.z, 0.1))
+    assert any(np.isclose(sim_snapped.grid.boundaries.z, 0.1))
+
+
 def test_coaxial_lumped_resistor():
     resistor = td.CoaxialLumpedResistor(
         resistance=50.0,
@@ -80,6 +150,7 @@ def test_coaxial_lumped_resistor():
 
     # Check conversion to mesh overrides
     _ = resistor.to_mesh_overrides()
+    _ = resistor.to_snapping_points()
 
     # error if inner diameter is larger
     with pytest.raises(pydantic.ValidationError):

@@ -2906,25 +2906,11 @@ def test_suggested_mesh_overrides():
     sim = td.Simulation(
         size=(1, 2, 3),
         run_time=1e-12,
-        grid_spec=td.GridSpec.uniform(dl=0.1),
+        grid_spec=td.GridSpec.auto(wavelength=1),
         lumped_elements=[resistor],
     )
-
-    def update_sim_with_suggested_overrides(sim):
-        suggested_mesh_overrides = sim.suggest_mesh_overrides()
-        assert len(suggested_mesh_overrides) == 2
-        grid_spec = sim.grid_spec.copy(
-            update={
-                "override_structures": list(sim.grid_spec.override_structures)
-                + suggested_mesh_overrides,
-            }
-        )
-
-        return sim.updated_copy(
-            grid_spec=grid_spec,
-        )
-
-    _ = update_sim_with_suggested_overrides(sim)
+    assert len(sim.internal_override_structures) == 1
+    assert len(sim.internal_snapping_points) == 3
 
     coax_resistor = td.CoaxialLumpedResistor(
         resistance=50.0,
@@ -2937,10 +2923,9 @@ def test_suggested_mesh_overrides():
 
     sim = sim.updated_copy(
         lumped_elements=[coax_resistor],
-        grid_spec=td.GridSpec.uniform(dl=0.1),
     )
-
-    _ = update_sim_with_suggested_overrides(sim)
+    assert len(sim.internal_override_structures) == 1
+    assert len(sim.internal_snapping_points) == 1
 
 
 def test_run_time_spec():

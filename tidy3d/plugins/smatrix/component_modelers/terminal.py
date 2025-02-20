@@ -86,35 +86,21 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         sim_dict = {}
 
+        # internal mesh override and snapping points are automatically generated from lumped elements.
         lumped_resistors = [port.to_load() for port in self._lumped_ports]
-        # Create a mesh override for each port in case refinement is needed.
-        # The port is a flat surface, but when computing the port current,
-        # we'll eventually integrate the magnetic field just above and below
-        # this surface, so the mesh override needs to ensure that the mesh
-        # is fine enough not only in plane, but also in the normal direction.
-        # So in the normal direction, we'll make sure there are at least
-        # 2 cell layers above and below whose size is the same as the in-plane
-        # cell size in the override region. Also, to ensure that the port itself
-        # is aligned with a grid boundary in the normal direction, two separate
-        # override regions are defined, one above and one below the analytical
-        # port region.
-        mesh_overrides = []
-        for port, lumped_resistor in zip(self._lumped_ports, lumped_resistors):
-            if port.num_grid_cells:
-                mesh_overrides.extend(lumped_resistor.to_mesh_overrides())
 
-        # also, use the highest frequency in the simulation to define the grid, rather than the
+        # Apply the highest frequency in the simulation to define the grid, rather than the
         # source's central frequency, to ensure an accurate solution over the entire range
         grid_spec = self.simulation.grid_spec.copy(
             update={
                 "wavelength": C_0 / np.max(self.freqs),
-                "override_structures": list(self.simulation.grid_spec.override_structures)
-                + mesh_overrides,
             }
         )
 
         # Make an initial simulation with new grid_spec to determine where LumpedPorts are snapped
-        sim_wo_source = self.simulation.updated_copy(grid_spec=grid_spec)
+        sim_wo_source = self.simulation.updated_copy(
+            grid_spec=grid_spec, lumped_elements=lumped_resistors
+        )
         snap_centers = dict()
         for port in self._lumped_ports:
             port_center_on_axis = port.center[port.injection_axis]

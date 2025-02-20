@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nonlinear models `KerrNonlinearity` and `TwoPhotonAbsorption` now default to using the physical real fields instead of complex fields.
 - Added warning when a lumped element is not completely within the simulation bounds, since now lumped elements will only have an effect on the `Simulation` when they are completely within the simulation bounds.
 - Allow `ModeData` to be passed to path integral computations in the `microwave` plugin.
+- Default number of grid cells refining lumped elements is changed to 1, and some of the generated `MeshOverrideStructure` are replaced by grid snapping points.
 
 ### Fixed
 - Make gauge selection for non-converged modes more robust.

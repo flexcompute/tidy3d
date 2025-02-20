@@ -111,6 +111,7 @@ def make_component_modeler(
     reference_impedance: complex = 50,
     length: float = None,
     port_refinement: bool = True,
+    port_snapping: bool = True,
     grid_spec: td.GridSpec = None,
     **kwargs,
 ):
@@ -142,6 +143,7 @@ def make_component_modeler(
         voltage_axis=2,
         name="lumped_port_1",
         num_grid_cells=port_cells,
+        enable_snapping_points=port_snapping,
         impedance=reference_impedance,
     )
 
@@ -151,6 +153,7 @@ def make_component_modeler(
         voltage_axis=2,
         name="lumped_port_2",
         num_grid_cells=port_cells,
+        enable_snapping_points=port_snapping,
         impedance=reference_impedance,
     )
 
