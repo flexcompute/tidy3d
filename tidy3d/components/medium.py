@@ -623,7 +623,120 @@ class KerrNonlinearity(NonlinearModel):
         return self.use_complex_fields
 
 
-NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
+class FourLevelTwoElectronModel(NonlinearModel):
+    """Model for Kerr nonlinearity which gives an intensity-dependent refractive index
+    of the form :math:`n = n_0 + n_2 I`. The expression for the nonlinear polarization
+    is given below.
+
+    Notes
+    -----
+
+        This model uses real time-domain fields, so :math:`\\n_2` must be real.
+
+        This model is equivalent to a :class:`.NonlinearSusceptibility`; the
+        relation between the parameters is given below.
+
+        .. math::
+
+            P_{NL} = \\varepsilon_0 \\chi_3 |E|^2 E \\\\
+            n_2 = \\frac{3}{4 n_0^2 \\varepsilon_0 c_0} \\chi_3
+
+        In these equations, :math:`n_0` means the real part of the linear
+        refractive index of the medium.
+
+        To simulate nonlinear loss, consider instead using a :class:`.TwoPhotonAbsorption`
+        model, which implements a more physical dispersive loss of the form
+        :math:`\\chi_{TPA} = i \\frac{c_0 n_0 \\beta}{\\omega} I`.
+
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.num_iters` can
+        help with convergence.
+
+        For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+        is applied separately to the real and imaginary parts, so that the above equation
+        holds when both :math:`E` and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        The nonlinearity is only applied to the real-valued fields since they are the
+        physical fields.
+
+        Different field components do not interact nonlinearly. For example,
+        when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+        This approximation is valid when the :math:`E` field is predominantly polarized along one
+        of the ``x``, ``y``, or ``z`` axes.
+
+        .. TODO add links to notebooks here.
+
+    Example
+    -------
+    >>> kerr_model = KerrNonlinearity(n2=1)
+    """
+
+    omega_a: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Resonant Frequency a",
+        description="Angular frequency of the resonance a.",
+        units=f"{HERTZ}",
+    )
+
+    omega_b: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Resonant Frequency b",
+        description="Angular frequency of the resonance b.",
+        units=f"{HERTZ}",
+    )
+
+    gamma_a: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Dephasing Rate a",
+        description="Dephasing rate of the resonance a.",
+        units=f"{HERTZ}",
+    )
+
+    gamma_b: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Dephasing Rate b",
+        description="Dephasing rate of the resonance b.",
+        units=f"{HERTZ}",
+    )
+
+    N_density: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Electron Population Density",
+        descrption="Density of electrons.",
+        units=f"{MICROMETER}^{-3}",
+    )
+
+    tau_30: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Time Constant 3 to 0",
+        description="Time constant for spontaneous decay from level 3 to level 0.",
+        units=f"{SECOND}",
+    )
+
+    tau_32: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Time Constant 3 to 2",
+        description="Time constant for spontaneous decay from level 3 to level 2.",
+        units=f"{SECOND}",
+    )
+
+    tau_21: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Time Constant 2 to 1",
+        description="Time constant for spontaneous decay from level 2 to level 1.",
+        units=f"{SECOND}",
+    )
+
+    tau_10: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Time Constant 1 to 0",
+        description="Time constant for spontaneous decay from level 1 to level 0.",
+        units=f"{SECOND}",
+    )
+
+
+NonlinearModelType = Union[
+    NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity, FourLevelTwoElectronModel
+]
 
 
 class NonlinearSpec(ABC, Tidy3dBaseModel):
@@ -690,6 +803,19 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
                         "with Tidy3D version < 2.8 "
                         "and it must be consistent across the nonlinear "
                         "models in a given 'NonlinearSpec'."
+                    )
+        if use_complex_fields:
+            for model in val:
+                if not isinstance(
+                    model, (NonlinearSusceptibility, KerrNonlinearity, TwoPhotonAbsorption)
+                ):
+                    raise SetupError(
+                        "The setting 'use_complex_fields=False' "
+                        "is only compatible with 'NonlinearSusceptibility', "
+                        "'KerrNonlinearity', and 'TwoPhotonAbsorption' "
+                        "nonlinear models. This option is only available "
+                        "for backwards compatibility with Tidy3D "
+                        "version < 2.8."
                     )
         return val
 
