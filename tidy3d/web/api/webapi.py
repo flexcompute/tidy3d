@@ -262,7 +262,9 @@ def upload(
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
             url = _get_url(task.task_id)
-            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+            console.log(
+                f"View task using web UI at [link={url}]'{url}'[/link] within the folder '{task.folder_name}'."
+            )
 
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
