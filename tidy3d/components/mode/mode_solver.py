@@ -366,11 +366,7 @@ class ModeSolver(Tidy3dBaseModel):
         if self.mode_spec.group_index_step > 0:
             return self._get_data_with_group_index()
 
-        if (
-            self.mode_spec.bend_angle_rotation
-            and self.mode_spec.bend_radius is not None
-            and np.abs(self.mode_spec.angle_theta) > 0
-        ):
+        if self.mode_spec.angle_rotation and np.abs(self.mode_spec.angle_theta) > 0:
             return self.rotated_mode_solver_data
 
         # Compute data on the Yee grid
@@ -398,9 +394,16 @@ class ModeSolver(Tidy3dBaseModel):
 
     @cached_property
     def bend_axis_3d(self) -> Axis:
-        """Transform the 2D bend axis to its corresponding 3D axis."""
+        """Converts the 2D bend axis into its corresponding 3D axis for a bend structure.
+        For a straight waveguide, the rotated axis is equivalent to the bend axis
+        and can be determined using angle_phi."""
         _, idx_plane = self.plane.pop_axis((0, 1, 2), axis=self.normal_axis)
-        return idx_plane[self.mode_spec.bend_axis]
+
+        if self.mode_spec.bend_axis is not None:
+            return idx_plane[self.mode_spec.bend_axis]
+
+        rotation_axis_index = int(abs(np.cos(self.mode_spec.angle_phi)))
+        return idx_plane[rotation_axis_index]
 
     @cached_property
     def rotated_mode_solver_data(self) -> ModeSolverData:
@@ -412,13 +415,18 @@ class ModeSolver(Tidy3dBaseModel):
         )
         solver_ref_data = solver_ref.data_raw
 
-        # The reference data should always be colocated to convert to cylindrical coordinates
+        # The reference data should always be colocated
         n_complex = solver_ref_data.n_complex
         if not solver_ref.colocate:
             solver_ref_data = solver_ref._colocate_data(mode_solver_data=solver_ref_data)
 
-        # Transform the colocated mode solution from cartesian to cylindrical coordinates
-        solver_ref_data_cylindrical = self._car_2_cyn(mode_solver_data=solver_ref_data)
+        # Transform the colocated mode solution from Cartesian to cylindrical coordinates
+        # if a bend structure is simulated. For straight structures, the reference solution
+        # centered at the monitor is used without coordinates transformation.
+        if self.mode_spec.bend_radius is not None:
+            solver_ref_data_cylindrical = self._car_2_cyn(mode_solver_data=solver_ref_data)
+        else:
+            solver_ref_data_straight = self._ref_data_straight(mode_solver_data=solver_ref_data)
 
         try:
             solver = self.reduced_simulation_copy
@@ -431,11 +439,16 @@ class ModeSolver(Tidy3dBaseModel):
             )
 
         # Compute the mode solution by rotating the reference data to the monitor plane
-        rotated_mode_fields = self._mode_rotation(
-            solver_ref_data_cylindrical=solver_ref_data_cylindrical,
-            solver=solver,
-        )
-
+        if self.mode_spec.bend_radius is not None:
+            rotated_mode_fields = self._mode_rotation(
+                solver_ref_data_cylindrical=solver_ref_data_cylindrical,
+                solver=solver,
+            )
+        else:
+            rotated_mode_fields = self._mode_rotation_straight(
+                solver_ref_data=solver_ref_data_straight,
+                solver=solver,
+            )
         # TODO: At a later time, we should ensure that `eps_spec` is automatically returned to
         # to compute the backward propagation mode solution using a mode solver
         # with direction "-".
@@ -479,7 +492,7 @@ class ModeSolver(Tidy3dBaseModel):
         rotated_structures = self._rotate_structures()
         rotated_simulation = self.simulation.updated_copy(structures=rotated_structures)
         rotated_mode_spec = self.mode_spec.updated_copy(
-            bend_angle_rotation=False, angle_theta=0, angle_phi=0
+            angle_rotation=False, angle_theta=0, angle_phi=0
         )
 
         return self.updated_copy(simulation=rotated_simulation, mode_spec=rotated_mode_spec)
@@ -537,6 +550,30 @@ class ModeSolver(Tidy3dBaseModel):
         rotated_bend_center[idx_rotate] -= self.mode_spec.bend_radius
 
         return rotated_bend_center
+
+    def _ref_data_straight(
+        self, mode_solver_data: ModeSolverData
+    ) -> Dict[Union[ScalarModeFieldDataArray, ModeIndexDataArray]]:
+        """Convert reference data to be centered at the monitor center."""
+
+        # Reference solution stored
+        lateral_axis = 3 - self.normal_axis - self.bend_axis_3d
+        axes = ("x", "y", "z")
+        normal_dim = axes[self.normal_axis]
+        lateral_dim = axes[lateral_axis]
+
+        solver_data_straight = {}
+        for name, field in mode_solver_data.field_components.items():
+            solver_data_straight[name] = field.copy()
+            for dim, dim_name in enumerate("xyz"):
+                # Only shift coordinates for normal_dim and lateral_dim
+                if dim_name in (normal_dim, lateral_dim):
+                    coords_shift = field.coords[dim_name] - self.plane.center[dim]
+                    solver_data_straight[name].coords[dim_name] = coords_shift
+
+        solver_data_straight["n_complex"] = mode_solver_data.n_complex
+
+        return solver_data_straight
 
     def _car_2_cyn(
         self, mode_solver_data: ModeSolverData
@@ -628,6 +665,114 @@ class ModeSolver(Tidy3dBaseModel):
         solver_data_cylindrical["n_complex"] = mode_solver_data.n_complex
 
         return solver_data_cylindrical
+
+    def _mode_rotation_straight(
+        self,
+        solver_ref_data: Dict[Union[ModeSolverData]],
+        solver: ModeSolver,
+    ) -> ModeSolverData:
+        """Rotate the mode solver solution from the reference plane
+        to the desired monitor plane."""
+
+        rotated_data_arrays = {}
+        for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
+            if self.colocate is True:
+                # Get colocation coordinates in the solver plane
+                normal_dim, _ = self.plane.pop_axis("xyz", self.normal_axis)
+                colocate_coords = self._get_colocation_coordinates()
+                colocate_coords[normal_dim] = np.atleast_1d(self.plane.center[self.normal_axis])
+                x = colocate_coords["x"]
+                y = colocate_coords["y"]
+                z = colocate_coords["z"]
+                xyz_coords = [x.copy(), y.copy(), z.copy()]
+            else:
+                # Extract coordinate values from the corresponding field component
+                xyz_coords = solver.grid_snapped[field_name].to_list
+                x, y, z = (coord.copy() for coord in xyz_coords)
+
+            lateral_axis = 3 - self.normal_axis - self.bend_axis_3d
+            axes = ("x", "y", "z")
+            normal_dim = axes[self.normal_axis]
+            lateral_dim = axes[lateral_axis]
+            axial_dim = axes[self.bend_axis_3d]
+
+            pts = [coord.copy() for coord in xyz_coords]
+            pts[self.normal_axis] -= self.plane.center[self.normal_axis]
+            pts[lateral_axis] -= self.plane.center[lateral_axis]
+            axial = pts[self.bend_axis_3d]
+
+            f = np.atleast_1d(self.freqs)
+            mode_index = np.arange(self.mode_spec.num_modes)
+
+            k0 = 2 * np.pi * f / C_0
+            n_eff = solver_ref_data["n_complex"].values
+            beta = k0[:, None] * n_eff
+            beta = beta.reshape(1, 1, 1, len(f), len(mode_index))
+
+            # Interpolation coords for amplitude and phase of local fields
+            amp_interp_coors = pts[lateral_axis] * np.cos(self.mode_spec.angle_theta)
+            phase_interp_coors = pts[lateral_axis] * np.sin(self.mode_spec.angle_theta)
+
+            # Initialize output arrays
+            shape = (len(x), len(y), len(z), len(f), len(mode_index))
+            phase_fields = np.zeros(shape, dtype=complex)
+            rotated_field_cmp = np.zeros(shape, dtype=complex)
+
+            phase_shape = [1] * 5
+            phase_shape[lateral_axis] = shape[lateral_axis]
+            phase_interp_coors = phase_interp_coors.reshape(phase_shape)
+
+            sign = 1 if self.normal_axis_2d == 0 else 1
+            if self.direction == "+":
+                phase_fields[...] = np.exp(sign * 1j * phase_interp_coors * beta)
+            else:
+                phase_fields[...] = np.exp(sign * -1j * phase_interp_coors * beta)
+
+            # Interpolate field components
+            local_fields = {}
+            for field in ["E", "H"]:
+                for comp in ["x", "y", "z"]:
+                    data = solver_ref_data[f"{field}{comp}"].interp(
+                        {axial_dim: axial, lateral_dim: amp_interp_coors},
+                        method="linear",
+                        kwargs={"fill_value": "extrapolate"},
+                    )
+
+                    local_fields[f"{field}{comp}"] = phase_fields * data.values
+
+            if field_name == f"E{lateral_dim}":
+                rotated_field_cmp = local_fields[f"E{lateral_dim}"] * np.cos(
+                    self.mode_spec.angle_theta
+                )
+                +local_fields[f"E{normal_dim}"] * np.sin(self.mode_spec.angle_theta)
+            elif field_name == f"E{normal_dim}":
+                rotated_field_cmp = local_fields[f"E{normal_dim}"] * np.sin(
+                    self.mode_spec.angle_theta
+                )
+                -local_fields[f"E{lateral_dim}"] * np.sin(self.mode_spec.angle_theta)
+            elif field_name == f"E{axial_dim}":
+                rotated_field_cmp = local_fields[f"E{axial_dim}"]
+            if field_name == f"H{lateral_dim}":
+                rotated_field_cmp = local_fields[f"H{lateral_dim}"] * np.cos(
+                    self.mode_spec.angle_theta
+                )
+                +local_fields[f"H{normal_dim}"] * np.sin(self.mode_spec.angle_theta)
+            elif field_name == f"H{normal_dim}":
+                rotated_field_cmp = local_fields[f"H{normal_dim}"] * np.sin(
+                    self.mode_spec.angle_theta
+                )
+                -local_fields[f"H{lateral_dim}"] * np.sin(self.mode_spec.angle_theta)
+            elif field_name == f"H{axial_dim}":
+                rotated_field_cmp = local_fields[f"H{axial_dim}"]
+
+            coords = {"x": x, "y": y, "z": z, "f": f, "mode_index": mode_index}
+            rotated_data_arrays[field_name] = ScalarModeFieldDataArray(
+                rotated_field_cmp, coords=coords
+            )
+
+        rotated_data_arrays["n_complex"] = solver_ref_data["n_complex"]
+
+        return rotated_data_arrays
 
     def _mode_rotation(
         self,

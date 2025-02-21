@@ -129,14 +129,14 @@ class ModeSpec(Tidy3dBaseModel):
         "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
     )
 
-    bend_angle_rotation: bool = pd.Field(
+    angle_rotation: bool = pd.Field(
         False,
-        title="Use fields rotation when both bend and angle are defined",
-        description="Defines how modes are computed when both a bend and an angle are defined. "
-        "If `False`, the two coordinate transformations are directly composed. "
-        "If `True`, the structures in the simulation are first rotated to compute a mode solution at "
-        "a reference plane normal to the bend's azimuthal direction. Then, the fields are rotated to align with "
-        "the mode plane, using the `n_eff` calculated at the reference plane. The second option can "
+        title="Use fields rotation when angle_theta is not zero",
+        description="Defines how modes are computed when angle_theta is not zero. "
+        "If 'False', a coordinate transformation is applied through the permittivity and permeability tensors."
+        "If 'True', the structures in the simulation are first rotated to compute a mode solution at "
+        "a reference plane normal to the structure's azimuthal direction. Then, the fields are rotated "
+        "to align with the mode plane, using the `n_eff` calculated at the reference plane. The second option can "
         "produce more accurate results, but more care must be taken, for example, in ensuring that the "
         "original mode plane intersects the correct geometries in the simulation with rotated structures.",
     )

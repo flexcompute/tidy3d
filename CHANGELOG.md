@@ -156,7 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Differential operators `grad` and `value_and_grad` in `tidy3d.plugins.autograd` that behave similarly to the autograd operators but support auxiliary data via `aux_data=True` as well as differentiation w.r.t. `DataArray`.
 - `@scalar_objective` decorator in `tidy3d.plugins.autograd` that wraps objective functions to ensure they return a scalar value and performs additional checks to ensure compatibility of objective functions with autograd. Used by default in `tidy3d.plugins.autograd.value_and_grad` as well as `tidy3d.plugins.autograd.grad`.
 - Autograd support for simulations without adjoint sources in `run` as well as `run_async`, which will not attempt to run the simulation but instead return zero gradients. This can sometimes occur if the objective function gradient does not depend on some simulations, for example when using `min` or `max` in the objective.
-- `bend_angle_rotation` in `ModeSpec` to improve accuracy in some cases when both `bend_radius` and `angle_theta` are defined. This option is disabled by default but it can be tried when very high accuracy is required in `ModeSource` and `ModeMonitor` objects that are placed in bend and angled waveguides.
+- `angle_rotation` in `ModeSpec` to improve accuracy in some cases when `angle_theta` is defined. This option is disabled by default but it can be tried when very high accuracy is required in `ModeSource` and `ModeMonitor` objects that are placed in bend or slanted waveguides with angles.
 
 ### Changed
 - `CustomMedium` design regions require far less data when performing inverse design by reducing adjoint field monitor size for dims with one pixel.
