@@ -145,6 +145,14 @@ class ModeSpec(Tidy3dBaseModel):
         f"default of {GROUP_INDEX_STEP} is used.",
     )
 
+    calculate_group_index: bool = pd.Field(
+        False,
+        title="Perturbation-based calculation of the group index and the GVD",
+        description="Control the computation of the group index and the group velocity dispersion"
+        "alongside the effective index. If set to 'True', the perturbation theory based algorithm"
+        " is used for calculation.",
+    )
+
     @pd.validator("bend_axis", always=True)
     @skip_if_fields_missing(["bend_radius"])
     def bend_axis_given(cls, val, values):
@@ -207,3 +215,43 @@ class ModeSpec(Tidy3dBaseModel):
                 )
 
         return values
+
+class SingleFreqModesData(Tidy3dBaseModel):
+    """A data class to store the modes data for a single frequency"""
+
+    E_vectors: np.ndarray = pd.Field(
+        None, title="E field", description="Electric field of the eigenmodes, shape (3, N, num_modes)."
+    )
+
+    H_vectors: np.ndarray = pd.Field(
+        None, title="H field", description="Magnetic field of the eigenmodes, shape (3, N, num_modes)."
+    )
+
+    E_fields: np.ndarray = pd.Field(
+        None, title="E field", description="Electric field of the eigenmodes, shape (3, Nx, Ny, 1, num_modes)."
+    )
+
+    H_fields: np.ndarray = pd.Field(
+        None, title="H field", description="Magnetic field of the eigenmodes, shape (3, Nx, Ny, 1, num_modes)."
+    )
+
+    n_eff: np.ndarray = pd.Field(
+        None, title="Mode refractive index", description="Real part of the effective index, shape (num_modes, )."
+    )
+
+    k_eff: np.ndarray = pd.Field(
+        None, title="Mode absorption index", description="Imaginary part of the effective index, shape (num_modes, )."
+    )
+
+    n_group: np.ndarray = pd.Field(
+        None, title="Mode group index", description="Real part of the effective group index, shape (num_modes, )."
+    )
+
+    GVD: np.ndarray = pd.Field(
+        None, title="Group velocity dispersion", description="Group velocity dispersion data, shape (num_modes, )."
+    )
+
+    eps_spec : Literal["diagonal", "tensorial_real", "tensorial_complex"] = pd.Field(
+        None,
+        title="Permittivity characterization on the mode solver's plane",
+    )

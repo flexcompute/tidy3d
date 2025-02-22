@@ -8,6 +8,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
 from ...components.base import Tidy3dBaseModel
+from ...components.mode import SingleFreqModesData
 from ...components.types import EpsSpecType, ModeSolverType, Numpy
 from ...constants import C_0, ETA_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
@@ -22,7 +23,6 @@ TOL_EIGS = fp_eps
 TOL_TENSORIAL = 1e-6
 # shift target neff by this value, both rel and abs, whichever results in larger shift
 TARGET_SHIFT = 10 * fp_eps
-
 
 class EigSolver(Tidy3dBaseModel):
     """Interface for computing eigenvalues given permittivity and mode spec.
@@ -160,6 +160,7 @@ class EigSolver(Tidy3dBaseModel):
         kxy = np.cos(angle_theta) ** 2
         kz = np.cos(angle_theta) * np.sin(angle_theta)
         kp_to_k = np.array([kxy * np.sin(angle_phi), kxy * np.cos(angle_phi), kz])
+        kp_correction_factor = np.linalg.norm(kp_to_k)
 
         # Transform epsilon and mu
         jac_e_det = np.linalg.det(np.moveaxis(jac_e, [0, 1], [-2, -1]))
@@ -208,7 +209,7 @@ class EigSolver(Tidy3dBaseModel):
             target = n_max
         else:
             target = mode_spec.target_neff
-        target_neff_p = target / np.linalg.norm(kp_to_k)
+        target_neff_p = target / kp_correction_factor
 
         # shift target_neff slightly to avoid cases where the shiftted matrix is exactly singular
         if abs(TARGET_SHIFT) > abs(target_neff_p * TARGET_SHIFT):
@@ -236,37 +237,60 @@ class EigSolver(Tidy3dBaseModel):
             basis_E = np.sum(jac_e_inv[..., None] * basis_E[:, None, ...], axis=0)
 
         # Solve for the modes
-        E, H, neff, keff, eps_spec = cls.solver_em(
+        modes_data = cls.solver_em(
             Nx,
             Ny,
             eps_tensor,
             mu_tensor,
             der_mats,
             num_modes,
+            freq,
             target_neff_p,
             mode_spec.precision,
             direction,
             enable_incidence_matrices,
             basis_E=basis_E,
+            calculate_group_index = mode_spec.calculate_group_index,
         )
 
         # Transform back to original axes, E = J^T E'
-        E = np.sum(jac_e[..., None] * E[:, None, ...], axis=0)
+        E = np.sum(jac_e[..., None] * modes_data.E_vectors[:, None, ...], axis=0)
         if split_curl_scaling is not None:
             E = cls.split_curl_field_postprocess(split_curl_scaling, E)
         E = E.reshape((3, Nx, Ny, 1, num_modes))
-        H = np.sum(jac_h[..., None] * H[:, None, ...], axis=0)
+        H = np.sum(jac_h[..., None] * modes_data.H_vectors[:, None, ...], axis=0)
         H = H.reshape((3, Nx, Ny, 1, num_modes))
-        fields = np.stack((E, H), axis=0)
 
-        neff = neff * np.linalg.norm(kp_to_k)
-        keff = keff * np.linalg.norm(kp_to_k)
+        neff = modes_data.n_eff * kp_correction_factor
+        keff = modes_data.k_eff * kp_correction_factor
+
+        if modes_data.n_group is not None:
+            nGroup = modes_data.n_group * kp_correction_factor
+        else:
+            nGroup = None
+
+        if modes_data.GVD is not None:
+            newGVD = modes_data.GVD * kp_correction_factor
+        else:
+            newGVD = None
 
         if mode_spec.precision == "single":
             # Recast to single precision which may have changed due to earlier manipulations
-            fields = fields.astype(np.complex64)
+            E = E.astype(np.complex64)
+            H = H.astype(np.complex64)
 
-        return fields, neff + 1j * keff, eps_spec
+        modes_data = modes_data.updated_copy(
+            E_vectors = None,
+            H_vectors = None,
+            E_fields = E,
+            H_fields = H,
+            n_eff = neff,
+            k_eff = keff,
+            n_group = nGroup,
+            GVD = newGVD,
+        )
+
+        return modes_data
 
     @classmethod
     def solver_em(
@@ -277,11 +301,13 @@ class EigSolver(Tidy3dBaseModel):
         mu_tensor,
         der_mats,
         num_modes,
+        freq,
         neff_guess,
         mat_precision,
         direction,
         enable_incidence_matrices,
         basis_E,
+        calculate_group_index,
     ):
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
@@ -300,6 +326,8 @@ class EigSolver(Tidy3dBaseModel):
             The sparce derivative matrices dxf, dxb, dyf, dyb, including the PML.
         num_modes : int
             Number of modes to solve for.
+        freq : float
+            (Hertz) Frequency at which the eigenmodes are computed.
         neff_guess : float
             Initial guess for the effective index.
         mat_precision : Union['single', 'double']
@@ -311,6 +339,8 @@ class EigSolver(Tidy3dBaseModel):
 
         Returns
         -------
+        An object of the SingleFreqModesData class
+
         E : np.ndarray
             Electric field of the eigenmodes, shape (3, N, num_modes).
         H : np.ndarray
@@ -350,6 +380,7 @@ class EigSolver(Tidy3dBaseModel):
             "neff_guess": neff_guess,
             "vec_init": vec_init,
             "mat_precision": mat_precision,
+            "freq": freq,
         }
 
         is_eps_complex = cls.isinstance_complex(eps_tensor)
@@ -362,28 +393,41 @@ class EigSolver(Tidy3dBaseModel):
 
         if not is_tensorial:
             eps_spec = "diagonal"
-            E, H, neff, keff = cls.solver_diagonal(
-                **kwargs,
-                enable_incidence_matrices=enable_incidence_matrices,
-                basis_E=basis_E,
-            )
+            if not calculate_group_index:
+                solver_result = cls.solver_diagonal(
+                    **kwargs,
+                    enable_incidence_matrices=enable_incidence_matrices,
+                    basis_E=basis_E,
+                )
+            else:
+                solver_result = cls.solver_diagonal_extended(
+                    **kwargs,
+                    enable_incidence_matrices=enable_incidence_matrices,
+                    basis_E=basis_E,
+                )
+
             if direction == "-":
+                E = solver_result.E_vectors
+                H = solver_result.H_vectors
                 H[0] *= -1
                 H[1] *= -1
                 E[2] *= -1
+                solver_result = solver_result.updated_copy(E_vectors = E, H_vectors = H)
 
         elif not is_eps_complex:
             eps_spec = "tensorial_real"
-            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction="+")
+            solver_result = cls.solver_tensorial(**kwargs, direction="+")
             if direction == "-":
-                E = np.conj(E)
-                H = -np.conj(H)
+                E = np.conj(solver_result.E_vectors)
+                H = -np.conj(solver_result.H_vectors)
+                solver_result = solver_result.updated_copy(E_vectors = E, H_vectors = H)
 
         else:
             eps_spec = "tensorial_complex"
-            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction=direction)
+            solver_result = cls.solver_tensorial(**kwargs, direction=direction)
 
-        return E, H, neff, keff, eps_spec
+        solver_result = solver_result.updated_copy(eps_spec = eps_spec)
+        return solver_result
 
     @classmethod
     def matrix_data_type(cls, eps, mu, der_mats, mat_precision, is_tensorial):
@@ -426,6 +470,7 @@ class EigSolver(Tidy3dBaseModel):
         mu,
         der_mats,
         num_modes,
+        freq,
         neff_guess,
         vec_init,
         mat_precision,
@@ -560,7 +605,6 @@ class EigSolver(Tidy3dBaseModel):
         neff = neff[sort_inds]
         keff = keff[sort_inds]
 
-        E, H = None, None
         if basis_E is None:
             if enable_preconditioner:
                 vecs = precon * vecs
@@ -588,11 +632,18 @@ class EigSolver(Tidy3dBaseModel):
         # Return to standard H field units (see CEM notes for H normalization used in solver)
         H *= -1j / ETA_0
 
-        return E, H, neff, keff
+        solver_result = SingleFreqModesData(
+            E_vectors = E,
+            H_vectors = H,
+            n_eff = neff,
+            k_eff = keff,
+        )
+
+        return solver_result
 
     @classmethod
     def solver_tensorial(
-        cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision, direction
+        cls, eps, mu, der_mats, num_modes, freq, neff_guess, vec_init, mat_precision, direction
     ):
         """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
 
@@ -718,7 +769,280 @@ class EigSolver(Tidy3dBaseModel):
         # The minus sign here is suspicious, need to check how modes are used in Mode objects
         H *= -1j / ETA_0
 
-        return E, H, neff, keff
+        solver_result = SingleFreqModesData(
+            E_vectors = E,
+            H_vectors = H,
+            n_eff = neff,
+            k_eff = keff,
+        )
+
+        return solver_result
+
+    @classmethod
+    def solver_diagonal_extended(
+        cls,
+        eps,
+        mu,
+        der_mats,
+        num_modes,
+        freq,
+        neff_guess,
+        vec_init,
+        mat_precision,
+        enable_incidence_matrices,
+        basis_E,
+    ):
+        """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
+
+        # code associated with these options is included below in case it's useful in the future
+        enable_preconditioner = False
+        analyze_conditioning = False
+
+        def incidence_matrix_for_pec(eps_vec, threshold=0.9 * np.abs(pec_val)):
+            """Incidence matrix indicating non-PEC entries associated with 'eps_vec'."""
+            nnz = eps_vec[np.abs(eps_vec) < threshold]
+            eps_nz = eps_vec.copy()
+            eps_nz[np.abs(eps_vec) >= threshold] = 0
+            rows = np.arange(0, len(nnz))
+            cols = np.argwhere(eps_nz).flatten()
+            dnz = sp.csr_matrix(([1] * len(nnz), (rows, cols)), shape=(len(rows), len(eps_vec)))
+            return dnz
+
+        mode_solver_type = "diagonal"
+        N = eps.shape[-1]
+
+        # Unpack eps, mu and derivatives
+        eps_xx = eps[0, 0, :]
+        eps_yy = eps[1, 1, :]
+        eps_zz = eps[2, 2, :]
+        mu_xx = mu[0, 0, :]
+        mu_yy = mu[1, 1, :]
+        mu_zz = mu[2, 2, :]
+        dxf, dxb, dyf, dyb = der_mats
+
+        def any_pec(eps_vec, threshold=0.9 * np.abs(pec_val)):
+            """Check if there are any PEC values in the given permittivity array."""
+            return np.any(np.abs(eps_vec) >= threshold)
+
+        if any(any_pec(i) for i in [eps_xx, eps_yy, eps_zz]):
+            enable_preconditioner = True
+
+        # Compute the matrix for diagonalization
+        inv_eps_zz = sp.spdiags(1 / eps_zz, [0], N, N)
+        inv_mu_zz = sp.spdiags(1 / mu_zz, [0], N, N)
+
+        if enable_incidence_matrices:
+            dnz_xx, dnz_yy, dnz_zz = (incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz])
+            dnz = sp.block_diag((dnz_xx, dnz_yy), format="csr")
+            inv_eps_zz = (dnz_zz.T) * dnz_zz * inv_eps_zz * (dnz_zz.T) * dnz_zz
+
+        p0_11 = -dxf.dot(inv_eps_zz).dot(dyb)
+        p0_12 = dxf.dot(inv_eps_zz).dot(dxb) + sp.spdiags(mu_yy, [0], N, N)
+        p0_21 = -dyf.dot(inv_eps_zz).dot(dyb) - sp.spdiags(mu_xx, [0], N, N)
+        p0_22 = dyf.dot(inv_eps_zz).dot(dxb)
+        q0_11 = -dxb.dot(inv_mu_zz).dot(dyf)
+        q0_12 = dxb.dot(inv_mu_zz).dot(dxf) + sp.spdiags(eps_yy, [0], N, N)
+        q0_21 = -dyb.dot(inv_mu_zz).dot(dyf) - sp.spdiags(eps_xx, [0], N, N)
+        q0_22 = dyb.dot(inv_mu_zz).dot(dxf)
+
+        p0_mat = sp.bmat([[p0_11, p0_12], [p0_21, p0_22]])
+        q0_mat = sp.bmat([[q0_11, q0_12], [q0_21, q0_22]])
+        mat0 = p0_mat.dot(q0_mat)
+
+        # first order correction matrix
+
+        p1_11 = 2. * dxf.dot(inv_eps_zz).dot(dyb)
+        p1_12 = -2. * dxf.dot(inv_eps_zz).dot(dxb)
+        p1_21 = 2. * dyf.dot(inv_eps_zz).dot(dyb)
+        p1_22 = -2. * dyf.dot(inv_eps_zz).dot(dxb)
+
+        q1_11 = 2. * dxb.dot(inv_mu_zz).dot(dyf)
+        q1_12 = -2. * dxb.dot(inv_mu_zz).dot(dxf)
+        q1_21 = 2. * dyb.dot(inv_mu_zz).dot(dyf)
+        q1_22 = -2. * dyb.dot(inv_mu_zz).dot(dxf)
+
+        p1_mat = sp.bmat([[p1_11, p1_12], [p1_21, p1_22]])
+        q1_mat = sp.bmat([[q1_11, q1_12], [q1_21, q1_22]])
+        mat1 = p0_mat.dot(q1_mat) + p1_mat.dot(q0_mat)
+
+        alpha = 0.005
+
+        mat_approx = mat0 + alpha * mat1
+
+        # second order correction matrix
+
+        p2_11 = -3. * dxf.dot(inv_eps_zz).dot(dyb)
+        p2_12 = 3. * dxf.dot(inv_eps_zz).dot(dxb)
+        p2_21 = -3. * dyf.dot(inv_eps_zz).dot(dyb)
+        p2_22 = 3. * dyf.dot(inv_eps_zz).dot(dxb)
+
+        q2_11 = -3. * dxb.dot(inv_mu_zz).dot(dyf)
+        q2_12 = 3. * dxb.dot(inv_mu_zz).dot(dxf)
+        q2_21 = -3. * dyb.dot(inv_mu_zz).dot(dyf)
+        q2_22 = 3. * dyb.dot(inv_mu_zz).dot(dxf)
+
+        p2_mat = sp.bmat([[p2_11, p2_12], [p2_21, p2_22]])
+        q2_mat = sp.bmat([[q2_11, q2_12], [q2_21, q2_22]])
+        mat2 = p0_mat.dot(q2_mat) + p1_mat.dot(q1_mat) + p2_mat.dot(q0_mat)
+
+        # Cast matrix to target data type
+        mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=False)
+        mat0 = cls.type_conversion(mat0, mat_dtype)
+        mat1 = cls.type_conversion(mat1, mat_dtype)
+        mat2 = cls.type_conversion(mat2, mat_dtype)
+
+        # Trim small values in single precision case
+        if mat_precision == "single":
+            cls.trim_small_values(mat0, tol=fp_eps)
+            cls.trim_small_values(mat1, tol=fp_eps)
+            cls.trim_small_values(mat2, tol=fp_eps)
+
+        # Casting starting vector to target data type
+        vec_init = cls.type_conversion(vec_init, mat_dtype)
+
+        # Starting eigenvalue guess in target data type
+        eig_guess = cls.type_conversion(np.array([-(neff_guess**2)]), mat_dtype)[0]
+
+        if enable_incidence_matrices:
+            mat0 = dnz * mat0 * dnz.T
+            mat1 = dnz * mat1 * dnz.T
+            mat2 = dnz * mat2 * dnz.T
+            vec_init = dnz * vec_init
+
+        if enable_preconditioner:
+            precon = sp.diags(1 / mat0.diagonal())
+            mat0 = mat0 * precon
+        else:
+            precon = None
+
+        if analyze_conditioning:
+            aca = mat0.conjugate().T * mat0
+            aac = mat0 * mat0.conjugate().T
+            diff = aca - aac
+            print(spl.norm(diff, ord=np.inf), spl.norm(aca, ord=np.inf), spl.norm(aac, ord=np.inf))
+            print(spl.norm(diff, ord="fro"), spl.norm(aca, ord="fro"), spl.norm(aac, ord="fro"))
+
+        # preprocess basis modes
+        basis_vecs = None
+        if basis_E is not None:
+            basis_Ex = basis_E[0, ...]
+            basis_Ey = basis_E[1, ...]
+            basis_vecs = np.concatenate((basis_Ex, basis_Ey), axis=0)
+
+            # if enable_preconditioner:
+            #    basis_vecs = (1 / precon) * basis_vecs
+
+            # if enable_incidence_matrices:
+            #    basis_vecs = dnz * basis_vecs
+
+        # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
+        if basis_E is None:
+            vals, vecs = cls.solver_eigs(
+                mat0,
+                num_modes,
+                vec_init,
+                guess_value=eig_guess,
+                mode_solver_type=mode_solver_type,
+                M=precon,
+            )
+
+            vals_m_approx_s_exact, vecs_m_approx_s_exact = cls.solver_eigs(
+                mat_approx,
+                num_modes,
+                vec_init,
+                guess_value=eig_guess,
+                mode_solver_type=mode_solver_type,
+                M=precon,
+            )
+        else:
+            vals, vecs = cls.solver_eigs_relative(
+                mat0,
+                num_modes,
+                vec_init,
+                guess_value=eig_guess,
+                mode_solver_type=mode_solver_type,
+                M=precon,
+                basis_vecs=basis_vecs,
+            )
+
+        neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
+
+        neff_m_approx_s_exact, keff_m_approx_s_exact = cls.eigs_to_effective_index(vals_m_approx_s_exact, mode_solver_type)
+
+        # Sort by descending neff
+        sort_inds = np.argsort(neff)[::-1]
+        neff = neff[sort_inds]
+        keff = keff[sort_inds]
+
+        # Sort by descending neff
+        sort_inds_m_approx_s_exact = np.argsort(neff_m_approx_s_exact)[::-1]
+        neff_m_approx_s_exact = neff_m_approx_s_exact[sort_inds_m_approx_s_exact]
+        keff_m_approx_s_exact = keff_m_approx_s_exact[sort_inds_m_approx_s_exact]
+
+        if basis_E is None:
+            if enable_preconditioner:
+                vecs = precon * vecs
+
+            if enable_incidence_matrices:
+                vecs = dnz.T * vecs
+
+        vecs = vecs[:, sort_inds]
+
+        vecs_m_approx_s_exact = vecs_m_approx_s_exact[:, sort_inds_m_approx_s_exact]
+
+        # Calculate the first order correction to the eigenvalues
+
+        vals_1 = np.zeros(num_modes)
+        for mode_index in range(num_modes):
+            vals_1[mode_index] = np.real(( (vecs[:, mode_index].conjugate().T) @ (mat1 @ vecs[:, mode_index]) ) / ((vecs[:, mode_index].conjugate().T) @ vecs[:, mode_index]))
+
+        vals_m_approx_s_approx = vals + alpha * vals_1
+
+        neff_m_approx_s_approx, keff_m_approx_s_approx = cls.eigs_to_effective_index(vals_m_approx_s_approx, mode_solver_type)
+
+        delta_vals = (vals_m_approx_s_exact - vals_m_approx_s_approx) / vals_m_approx_s_exact
+
+        n_group_m_approx_s_exact = neff + (neff_m_approx_s_exact - neff)/alpha
+
+        n_group_m_approx_s_approx = neff + (neff_m_approx_s_approx - neff)/alpha
+
+        # Calculate the first order correction to the n_eff -> group index
+
+        n_group_perturbation = np.zeros(num_modes)
+        for mode_index in range(num_modes):
+            n_group_perturbation[mode_index] = neff[mode_index] - vals_1[mode_index] / 2. / neff[mode_index]
+
+        n_group_result = n_group_m_approx_s_approx
+
+        GVD = np.zeros(num_modes)
+
+        # Field components from eigenvectors
+        Ex = vecs[:N, :]
+        Ey = vecs[N:, :]
+
+        # Get the other field components
+        h_field = q0_mat.dot(vecs)
+        Hx = h_field[:N, :] / (1j * neff - keff)
+        Hy = h_field[N:, :] / (1j * neff - keff)
+        Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex))
+        Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
+
+        # Bundle up
+        E = np.stack((Ex, Ey, Ez), axis=0)
+        H = np.stack((Hx, Hy, Hz), axis=0)
+
+        # Return to standard H field units (see CEM notes for H normalization used in solver)
+        H *= -1j / ETA_0
+
+        solver_result = SingleFreqModesData(
+            E_vectors = E,
+            H_vectors = H,
+            n_eff = neff,
+            k_eff = keff,
+            n_group = n_group_result,
+        )
+
+        return solver_result
 
     @classmethod
     def solver_eigs(
