@@ -452,7 +452,7 @@ class CoaxialLumpedResistor(LumpedElement):
     @cached_property
     def geometry(self) -> ClipOperation:
         """Alias for ``to_geometry`` that ignores the grid and allows :class:`CoaxialLumpedResistor`
-        to behave like a :class:.`Structure`.
+        to behave like a :class:`.Structure`.
 
         Returns
         -------
