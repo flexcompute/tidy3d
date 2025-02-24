@@ -3363,33 +3363,52 @@ class DirectivityData(FieldProjectionAngleData):
         return self.copy(update=dict(fields_norm, flux=new_flux))
 
     @staticmethod
-    def _check_valid_pol_basis(pol_basis: PolarizationBasis):
+    def _check_valid_pol_basis(pol_basis: PolarizationBasis, tilt_angle: float):
         if pol_basis != "linear" and pol_basis != "circular":
-            raise ValueError("``pol_basis`` must be either 'linear' or 'circular'")
+            raise ValueError("'pol_basis' must be either 'linear' or 'circular'")
+        if tilt_angle is not None and pol_basis == "circular":
+            raise ValueError("'tilt_angle' is only defined for linear polarization.")
 
-    def partial_radiation_intensity(self, pol_basis: PolarizationBasis = "linear") -> xr.Dataset:
+    def partial_radiation_intensity(
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+    ) -> xr.Dataset:
         """Partial radiation intensity in the frequency domain as a function of angles theta and phi.
         The partial radiation intensities are computed in the ``linear`` or ``circular`` polarization
-        bases. Radiation intensity is measured in units of Watts per unit solid angle.
+        bases. If ``tilt_angle`` is not ``None``, the radiation intensity is computed in the linear
+        polarization basis rotated by ``tilt_angle`` from the theta-axis. Radiation intensity is
+        measured in units of Watts per unit solid angle.
 
         Parameters
         ----------
         pol_basis : PolarizationBasis
             The desired polarization basis used to express partial radiation intensity, either
             ``linear`` or ``circular``.
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
 
         Returns
         -------
         xarray.Dataset
             Dataset containing the partial radiation intensities split into the two polarization states.
         """
-        self._check_valid_pol_basis(pol_basis)
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
         if pol_basis == "linear":
-            E1 = self.Etheta
-            E2 = self.Ephi
-            H1 = self.Htheta
-            H2 = self.Hphi
-            keys = ("Utheta", "Uphi")
+            if tilt_angle is not None:
+                tilt_fields = self.fields_linear_polarization_tilted(tilt_angle)
+                E1 = tilt_fields.Eco
+                E2 = tilt_fields.Ecross
+                H1 = tilt_fields.Hco
+                H2 = tilt_fields.Hcross
+                keys = ("Uco", "Ucross")
+            else:
+                E1 = self.Etheta
+                E2 = self.Ephi
+                H1 = self.Htheta
+                H2 = self.Hphi
+                keys = ("Utheta", "Uphi")
         else:
             E1 = self.fields_circular_polarization.Eright
             E2 = self.fields_circular_polarization.Eleft
@@ -3428,32 +3447,43 @@ class DirectivityData(FieldProjectionAngleData):
         sign = 1.0 if self.monitor.normal_dir == "+" else -1.0
         return FreqDataArray(sign * self.flux.values, dict(f=self.f))
 
-    def partial_directivity(self, pol_basis: PolarizationBasis = "linear") -> xr.Dataset:
+    def partial_directivity(
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+    ) -> xr.Dataset:
         """Directivity in the frequency domain as a function of angles theta and phi.
         The partial directivities are computed in the ``linear`` or ``circular`` polarization
-        bases. Directivity is a dimensionless quantity defined as the ratio
-        of the radiation intensity in a given direction to the average radiation intensity
-        over all directions.
+        bases. If ``tilt_angle`` is not ``None``, the radiation intensity is computed in the linear
+        polarization basis rotated by ``tilt_angle`` from the theta-axis. Directivity is a dimensionless
+        quantity defined as the ratio of the radiation intensity in a given direction to the average
+        radiation intensity over all directions.
 
         Parameters
         ----------
         pol_basis : PolarizationBasis
             The desired polarization basis used to express partial directivity, either
             ``linear`` or ``circular``.
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
 
         Returns
         -------
         ``xarray.Dataset``
             Dataset containing the partial directivities split into the two polarization states.
         """
-        self._check_valid_pol_basis(pol_basis)
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
         if pol_basis == "linear":
-            rename_mapping = {"Utheta": "Dtheta", "Uphi": "Dphi"}
+            if tilt_angle is None:
+                rename_mapping = {"Utheta": "Dtheta", "Uphi": "Dphi"}
+            else:
+                rename_mapping = {"Uco": "Dco", "Ucross": "Dcross"}
         else:
             rename_mapping = {"Uright": "Dright", "Uleft": "Dleft"}
         # Average radiation intensity is total radiated power divided by 4 pi
         avg_radiation_intensity = self.radiated_power / (4 * np.pi)
-        partial_U = self.partial_radiation_intensity(pol_basis=pol_basis)
+        partial_U = self.partial_radiation_intensity(pol_basis=pol_basis, tilt_angle=tilt_angle)
         partial_D = partial_U / avg_radiation_intensity
         return partial_D.rename(rename_mapping)
 
@@ -3484,10 +3514,15 @@ class DirectivityData(FieldProjectionAngleData):
         return FreqDataArray((self.radiated_power / power_in).values, dict(f=self.f))
 
     def calc_partial_gain(
-        self, power_in: FreqDataArray, pol_basis: PolarizationBasis = "linear"
+        self,
+        power_in: FreqDataArray,
+        pol_basis: PolarizationBasis = "linear",
+        tilt_angle: float = None,
     ) -> xr.Dataset:
         """The partial gain figures of merit for antennas. The partial gains are computed
-        in the ``linear`` or ``circular`` polarization bases. Gain is dimensionless.
+        in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
+        the partial directivity is computed in the linear polarization basis rotated by ``tilt_angle``
+        from the theta-axis. Gain is dimensionless.
 
         Parameters
         ----------
@@ -3498,17 +3533,26 @@ class DirectivityData(FieldProjectionAngleData):
             The desired polarization basis used to express partial gain, either
             ``linear`` or ``circular``.
 
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
         Returns
         -------
         ``xarray.Dataset``
             Dataset containing the partial gains split into the two polarization states.
         """
-        self._check_valid_pol_basis(pol_basis)
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
         radiation_efficiency = self.calc_radiation_efficiency(power_in)
-        partial_D = self.partial_directivity(pol_basis=pol_basis)
+        partial_D = self.partial_directivity(pol_basis=pol_basis, tilt_angle=tilt_angle)
         partial_G = radiation_efficiency * partial_D
         if pol_basis == "linear":
-            rename_mapping = {"Dtheta": "Gtheta", "Dphi": "Gphi"}
+            if tilt_angle is None:
+                rename_mapping = {"Dtheta": "Gtheta", "Dphi": "Gphi"}
+            else:
+                rename_mapping = {"Dco": "Gco", "Dcross": "Gcross"}
         else:
             rename_mapping = {"Dright": "Gright", "Dleft": "Gleft"}
         return partial_G.rename(rename_mapping)
@@ -3570,14 +3614,40 @@ class DirectivityData(FieldProjectionAngleData):
         """Electric far field for left-hand circular polarization
         (counterclockwise component) with an angle-based projection grid.
         """
-        return (self.Etheta + 1j * self.Ephi) / np.sqrt(2)
+        return self.fields_circular_polarization.Eleft
 
     @property
     def right_polarization(self) -> FieldProjectionAngleDataArray:
         """Electric far field for right-hand circular polarization
         (clockwise component) with an angle-based projection grid.
         """
-        return (self.Etheta - 1j * self.Ephi) / np.sqrt(2)
+        return self.fields_circular_polarization.Eright
+
+    def fields_linear_polarization_tilted(self, tilt_angle: float) -> xr.Dataset:
+        """Electric and magnetic fields in the linear polarization basis that is rotated
+        at the pole of the radiation sphere by `tilt_angle`.
+
+        Parameters
+        ----------
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            Dataset containing (``Eco``, ``Ecross``, ``Hco``, ``Hcross``)
+        """
+        Eco = np.cos(tilt_angle) * self.Etheta + np.sin(tilt_angle) * self.Ephi
+        Ecross = -np.sin(tilt_angle) * self.Etheta + np.cos(tilt_angle) * self.Ephi
+        Hco = np.cos(tilt_angle) * self.Htheta + np.sin(tilt_angle) * self.Hphi
+        Hcross = -np.sin(tilt_angle) * self.Htheta + np.cos(tilt_angle) * self.Hphi
+
+        keys = ("Eco", "Ecross", "Hco", "Hcross")
+        data_arrays = (Eco, Ecross, Hco, Hcross)
+        return xr.Dataset(dict(zip(keys, data_arrays)))
 
     @property
     def fields_circular_polarization(self) -> xr.Dataset:

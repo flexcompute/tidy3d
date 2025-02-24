@@ -117,9 +117,13 @@ class AntennaMetricsData(DirectivityData):
         reflection_efficiency = self.supplied_power / self.power_incident
         return reflection_efficiency
 
-    def partial_gain(self, pol_basis: PolarizationBasis = "linear") -> xr.Dataset:
+    def partial_gain(
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+    ) -> xr.Dataset:
         """The partial gain figures of merit for antennas. The partial gains are computed
-        in the ``linear`` or ``circular`` polarization bases. Gain is dimensionless.
+        in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
+        the partial directivity is computed in the linear polarization basis rotated by ``tilt_angle``
+        from the theta-axis. Gain is dimensionless.
 
         Parameters
         ----------
@@ -127,15 +131,24 @@ class AntennaMetricsData(DirectivityData):
             The desired polarization basis used to express partial gain, either
             ``linear`` or ``circular``.
 
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
         Returns
         -------
         ``xarray.Dataset``
             Dataset containing the partial gains split into the two polarization states.
         """
-        self._check_valid_pol_basis(pol_basis)
-        partial_D = self.partial_directivity(pol_basis=pol_basis)
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
+        partial_D = self.partial_directivity(pol_basis=pol_basis, tilt_angle=tilt_angle)
         if pol_basis == "linear":
-            rename_mapping = {"Dtheta": "Gtheta", "Dphi": "Gphi"}
+            if tilt_angle is None:
+                rename_mapping = {"Dtheta": "Gtheta", "Dphi": "Gphi"}
+            else:
+                rename_mapping = {"Dco": "Gco", "Dcross": "Gcross"}
         else:
             rename_mapping = {"Dright": "Gright", "Dleft": "Gleft"}
         return self.radiation_efficiency * partial_D.rename(rename_mapping)
@@ -146,9 +159,13 @@ class AntennaMetricsData(DirectivityData):
         partial_G = self.partial_gain()
         return partial_G.Gtheta + partial_G.Gphi
 
-    def partial_realized_gain(self, pol_basis: PolarizationBasis = "linear") -> xr.Dataset:
+    def partial_realized_gain(
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+    ) -> xr.Dataset:
         """The partial realized gain figures of merit for antennas. The partial gains are computed
-        in the ``linear`` or ``circular`` polarization bases. Gain is dimensionless.
+        in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
+        the partial directivity is computed in the linear polarization basis rotated by ``tilt_angle``
+        from the theta-axis. Gain is dimensionless.
 
         Parameters
         ----------
@@ -156,14 +173,20 @@ class AntennaMetricsData(DirectivityData):
             The desired polarization basis used to express partial gain, either
             ``linear`` or ``circular``.
 
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
         Returns
         -------
         ``xarray.Dataset``
             Dataset containing the partial realized gains split into the two polarization states.
         """
-        self._check_valid_pol_basis(pol_basis)
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
         reflection_efficiency = self.reflection_efficiency
-        partial_G = self.partial_gain(pol_basis=pol_basis)
+        partial_G = self.partial_gain(pol_basis=pol_basis, tilt_angle=tilt_angle)
         return reflection_efficiency * partial_G
 
     @property
