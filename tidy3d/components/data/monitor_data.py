@@ -765,14 +765,20 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """
         fields = self._tangential_fields
 
+        # Interpolate if data has more than one coordinate along a dimension
         interp_dict = {"assume_sorted": True}
+        # If single coordinate, just sel "nearest", i.e. just propagate the same data everywhere
+        sel_dict = {"method": "nearest"}
         for dim, cents in zip(self._tangential_dims, coords):
             if cents.size > 0:
-                interp_dict[dim] = cents
+                if list(fields.values())[0].coords[dim].size > 1:
+                    interp_dict[dim] = cents
+                else:
+                    sel_dict[dim] = cents
 
         kwargs = {"bounds_error": False, "fill_value": 0.0}
         for component, field in fields.items():
-            fields[component] = field.interp(kwargs=kwargs, **interp_dict)
+            fields[component] = field.interp(kwargs=kwargs, **interp_dict).sel(**sel_dict)
 
         return fields
 
