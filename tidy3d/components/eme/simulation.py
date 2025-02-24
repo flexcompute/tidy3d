@@ -504,12 +504,12 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     @classmethod
     def from_scene(cls, scene: Scene, **kwargs) -> EMESimulation:
-        """Create an EME simulation from a :class:.`Scene` instance. Must provide additional parameters
+        """Create an EME simulation from a :`.Scene` instance. Must provide additional parameters
         to define a valid EME simulation (for example, ``size``, ``grid_spec``, etc).
 
         Parameters
         ----------
-        scene : :class:.`Scene`
+        scene : :class:`.Scene`
             Scene containing structures information.
         **kwargs
             Other arguments
@@ -1112,12 +1112,12 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         Parameters
         ----------
-        region : :class:.`Box`
+        region : :class:`.Box`
             New simulation domain.
-        grid_spec : :class:.`GridSpec` = None
+        grid_spec : :class:`.GridSpec` = None
             New grid specification. If ``None``, then it is inherited from the original
             simulation. If ``identical``, then the original grid is transferred directly as a
-            :class:.`CustomGrid`. Note that in the latter case the region of the new simulation is
+            :class:`.CustomGrid`. Note that in the latter case the region of the new simulation is
             snapped to the original grid lines.
         eme_grid_spec: :class:`.EMEGridSpec` = None
             New EME grid specification. If ``None``, then it is inherited from the original

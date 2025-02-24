@@ -142,7 +142,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     @requires_vtk
     def plane_slice(self, axis: Axis, pos: float) -> TriangularGridDataset:
-        """Slice data with a plane and return the resulting :class:.`TriangularGridDataset`.
+        """Slice data with a plane and return the resulting :class:`.TriangularGridDataset`.
 
         Parameters
         ----------

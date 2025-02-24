@@ -1492,7 +1492,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         return self._volumetric_structures_grid(self.grid)
 
     def suggest_mesh_overrides(self, **kwargs) -> List[MeshOverrideStructure]:
-        """Generate a :class:.`MeshOverrideStructure` `List` which is automatically generated
+        """Generate a :class:`.MeshOverrideStructure` `List` which is automatically generated
         from structures in the simulation.
         """
         mesh_overrides = []
@@ -1522,15 +1522,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Parameters
         ----------
-        region : :class:.`Box`
+        region : :class:`.Box`
             New simulation domain.
-        boundary_spec : :class:.`BoundarySpec` = None
+        boundary_spec : :class:`.BoundarySpec` = None
             New boundary specification. If ``None``, then it is inherited from the original
             simulation.
-        grid_spec : :class:.`GridSpec` = None
+        grid_spec : :class:`.GridSpec` = None
             New grid specification. If ``None``, then it is inherited from the original
             simulation. If ``identical``, then the original grid is transferred directly as a
-            :class:.`CustomGrid`. Note that in the latter case the region of the new simulation is
+            :class:`.CustomGrid`. Note that in the latter case the region of the new simulation is
             snapped to the original grid lines.
         symmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = None
             New simulation symmetry. If ``None``, then it is inherited from the original

@@ -588,7 +588,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`FieldProjectionAngleData`
+        :class:`.FieldProjectionAngleData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
@@ -667,7 +667,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`FieldProjectionCartesianData`
+        :class:`.FieldProjectionCartesianData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
@@ -750,7 +750,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`FieldProjectionKSpaceData`
+        :class:`.FieldProjectionKSpaceData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)

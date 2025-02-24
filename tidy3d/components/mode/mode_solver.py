@@ -253,7 +253,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`Grid`
+        :class:`.Grid`
             The resulting grid.
         """
 

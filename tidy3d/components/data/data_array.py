@@ -253,7 +253,7 @@ class DataArray(xr.DataArray):
         return cls.from_hdf5(fname=fname, group_path=group_path)
 
     def __hash__(self) -> int:
-        """Generate hash value for a :class:.`DataArray` instance, needed for custom components."""
+        """Generate hash value for a :class:`.DataArray` instance, needed for custom components."""
         import dask
 
         token_str = dask.base.tokenize(self)
