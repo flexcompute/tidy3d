@@ -82,6 +82,18 @@ def test_antenna_parameters():
     assert "Gtheta" in partial_gain_linear
     assert "Gphi" in partial_gain_linear
 
+    # Test partial gain computations in linear basis with tilt angle = 0 matches partial gain in the original basis
+    partial_gain_linear_tilted = antenna_params.partial_gain(pol_basis="linear", tilt_angle=0)
+    assert isinstance(partial_gain_linear_tilted, xr.Dataset)
+    assert "Gco" in partial_gain_linear_tilted
+    assert "Gcross" in partial_gain_linear_tilted
+    assert np.allclose(partial_gain_linear_tilted.Gco, partial_gain_linear.Gtheta)
+    assert np.allclose(partial_gain_linear_tilted.Gcross, partial_gain_linear.Gphi)
+
+    # Test validation of tilt angle that only works with linear basis
+    with pytest.raises(ValueError):
+        antenna_params.partial_gain(pol_basis="circular", tilt_angle=1)
+
     # Test partial gain computations in circular basis
     partial_gain_circular = antenna_params.partial_gain(pol_basis="circular")
     assert isinstance(partial_gain_circular, xr.Dataset)
