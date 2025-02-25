@@ -138,7 +138,7 @@ class DesignRegion(InvdesBaseModel):
 
         # return reshape_parameters  # np.reshape(self.parameters.values, self.size)
 
-    def parameters_to_variables(self, intermediate_idxs=tuple(0), transformations=()):
+    def parameters_to_variables(self, intermediate_idxs=(0,), transformations=()):
         reshape_parameters = [np.reshape(self.parameters.values, self.size)]
 
         for idx, transformation in enumerate(transformations):
