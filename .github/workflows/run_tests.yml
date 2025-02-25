@@ -78,9 +78,28 @@ jobs:
       run: |
         poetry run pytest -rF --tb=short tidy3d
 
-    - name: Run tests
+    - name: Run tests with coverage
       env:
         PYTHONUNBUFFERED: "1"
       run: |
-        poetry run pytest -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        poetry run pytest -rF --tb=short tests
+        poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        poetry run pytest --cov=tidy3d -rF --tb=short tests
+        poetry run coverage report -m
+        TOTAL_COVERAGE=$(poetry run coverage report --format=total)
+        echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
+        echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+    - name: "Create badge"
+      if: ${{ github.ref == 'refs/heads/develop' }}
+      # https://gist.githubusercontent.com/nedbat/8c6980f77988a327348f9b02bbaf67f5
+      uses: schneegans/dynamic-badges-action@v1.7.0
+      with:
+        auth: ${{ secrets.GH_TIDY3D_COVERAGE_GIST }}
+        gistID: 4702549574741e87deaadba436218ebd
+        filename: tidy3d_extension.json
+        label: Coverage
+        message: ${{ env.total }}%
+        minColorRange: 60
+        maxColorRange: 95
+        valColorRange: ${{ env.total }}
+        style: "for-the-badge"
