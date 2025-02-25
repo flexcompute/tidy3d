@@ -79,7 +79,7 @@ class MultiParameter(AbstractParameter):
 
     def update_grad(self, grads, update_fn=accumulate):
         p_start = 0
-        for parameter in enumerate(self.parameters):
+        for parameter in self.parameters:
             p_len = len(parameter)
             parameter.update_grad(grads[p_start : p_start + p_len], update_fn)
 
@@ -88,7 +88,7 @@ class MultiParameter(AbstractParameter):
     def update_values(self, values):
         print("values to update = " + str(values))
         p_start = 0
-        for parameter in enumerate(self.parameters):
+        for parameter in self.parameters:
             p_len = len(parameter)
             parameter.update_values(values[p_start : p_start + p_len])
 
@@ -123,33 +123,44 @@ class DesignRegion(InvdesBaseModel):
         "", title="region name", description="name of region to help identify parameters"
     )
 
-    transformations: typing.Optional[typing.Tuple[typing.Callable, ...]] = pd.Field(
-        (),
-        title="transformations",
-        description="transformations to apply between the parameter and the region data",
-    )
-
     @pd.validator("parameters")
     def validate_parameters(parameters, values):
         return Parameter(values=values["parameter_initialization"](values["size"]))
 
-    def parameters_to_sim(self):
-        reshape_parameters = np.reshape(self.parameters.values, self.size)
+    def parameters_to_sim(self, transformations=()):
+        return self.parameters_to_variables(
+            intermediate_idxs=[len(transformations)], transformations=transformations
+        )[0]
+        # reshape_parameters = np.reshape(self.parameters.values, self.size)
 
-        for transformation in self.transformations:
-            reshape_parameters = transformation(reshape_parameters)
+        # for transformation in transformations:
+        #     reshape_parameters = transformation(reshape_parameters)
 
-        return reshape_parameters  # np.reshape(self.parameters.values, self.size)
+        # return reshape_parameters  # np.reshape(self.parameters.values, self.size)
+
+    def parameters_to_variables(self, intermediate_idxs=tuple(0), transformations=()):
+        reshape_parameters = [np.reshape(self.parameters.values, self.size)]
+
+        for idx, transformation in enumerate(transformations):
+            # reshape_parameters = transformation(reshape_parameters)
+            reshape_parameters.append(transformation(reshape_parameters[idx]))
+
+        filter_parameter_list = [reshape_parameters[idx] for idx in intermediate_idxs]
+        return filter_parameter_list
+
+        # return reshape_parameters  # np.reshape(self.parameters.values, self.size)
 
     def create_region(self, value):
         return self.updated_copy(
             parameter_initialization=lambda p_size: value
         )  # parameters=Parameter(values=value))
 
-    def insert(self, sim, value):
+    def insert(self, sim, value, transformations=()):
         p_size = len(self.parameters)
         new_region = self.create_region(value[0:p_size])
-        new_sim = sim.insert_permittivity(new_region.parameters_to_sim(), sim.permittivity)
+        new_sim = sim.insert_permittivity(
+            new_region.parameters_to_sim(transformations=transformations), sim.permittivity
+        )
         return new_sim
 
     def extract(self, grad):
@@ -159,11 +170,13 @@ class DesignRegion(InvdesBaseModel):
 
 
 class DesignRegion2(DesignRegion):
-    def insert(self, sim, value):
+    def insert(self, sim, value, transformations=()):
         p_size = len(self.parameters)
         new_region = self.create_region(value[0:p_size])
 
-        new_sim = sim.insert_permittivity(sim.permittivity2, new_region.parameters_to_sim())
+        new_sim = sim.insert_permittivity(
+            sim.permittivity2, new_region.parameters_to_sim(transformations=transformations)
+        )
         return new_sim
 
 
@@ -215,6 +228,14 @@ class AbstractObjective(InvdesBaseModel):
         ..., title="region name", description="name of region to help identify parameters"
     )
 
+    transformations: typing.Dict[str, typing.Optional[typing.Tuple[typing.Callable, ...]]] = (
+        pd.Field(
+            {},
+            title="transformations",
+            description="dictionary of transformations to apply between the parameter and the region data for each region",
+        )
+    )
+
     #
     # maybe put transformations here for design regions? tricky because
     # is this where you should know about them? are they fundamental to the objective or
@@ -231,6 +252,26 @@ class AbstractObjective(InvdesBaseModel):
         region_names = (region.name for region in regions)
 
         return dict(zip(region_names, (region.parameters for region in regions)))
+
+    @pd.validator("transformations")
+    def validate_transformations(transformations, values):
+        fill_in_default_transformations = {}
+        regions = values["regions"]
+        region_names = [region.name for region in regions]
+
+        for key in transformations.keys():
+            if key not in region_names:
+                raise ValidationError(
+                    "Unexpected transformation key not associated with any regions!"
+                )
+
+        for region in regions:
+            if region.name in transformations:
+                fill_in_default_transformations[region.name] = transformations[region.name]
+            else:
+                fill_in_default_transformations[region.name] = ()
+
+        return fill_in_default_transformations
 
     def parameters(self):
         return self.parameter_dict
@@ -444,9 +485,13 @@ class EMObjective(AbstractObjective):
         for idx, region in enumerate(self.regions):
             p_increment = len(region.parameters)
             if idx == 0:
-                new_sim = region.insert(self.base_simulation, parameters[p_start:])
+                new_sim = region.insert(
+                    self.base_simulation, parameters[p_start:], self.transformations[region.name]
+                )
             else:
-                new_sim = region.insert(new_sim, parameters[p_start:])
+                new_sim = region.insert(
+                    new_sim, parameters[p_start:], self.transformations[region.name]
+                )
             p_start += p_increment
 
         sim_data = new_sim.run()
@@ -461,15 +506,24 @@ class PenaltyObjective(AbstractObjective):
 
     def call_objective(self, parameters):
         p_start = 0
-        new_regions = []
-        for region in enumerate(self.regions):
+        # new_regions = []
+        parameter_dict = {}
+        for region in self.regions:
             p_increment = len(region.parameters)
-            new_region = region.create_region(parameters[p_start:])
+            # new_region = region.create_region(parameters[p_start:])
 
-            new_regions.append(new_region)
+            parameter_dict[region.name] = region.parameters_to_variables(
+                intermediate_idxs=np.arange(0, len(self.transformations[region.name]) + 1),
+                transformations=self.transformations[region.name],
+            )
+
+            # for transformation in self.transformations:
+
+            # new_regions.append(new_region)
             p_start += p_increment
 
-        return self.objective(new_regions)
+        # print('parameter dict = ' + str(parameter_dict))
+        return self.objective(parameter_dict)
 
 
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
@@ -568,29 +622,43 @@ class Result(InvdesBaseModel):
         super().__init__(
             objective_history={
                 # list((key, tuple(val)) for key, val in objective_history.items())
-                [(key, tuple(val)) for key, val in objective_history.items()]
+                # [(key, tuple(val)) for key, val in objective_history.items()]
+                key: tuple(val)
+                for key, val in objective_history.items()
             },
             figure_of_merit_history={
                 # list((key, tuple(val)) for key, val in figure_of_merit_history.items())
-                [(key, tuple(val)) for key, val in figure_of_merit_history.items()]
+                # [(key, tuple(val)) for key, val in figure_of_merit_history.items()]
+                key: tuple(val)
+                for key, val in figure_of_merit_history.items()
             },
             # metadata_history=dict(list((key, tuple(val)) for key, val in metadata_history.items())),
-            metadata_history={[(key, tuple(val)) for key, val in metadata_history.items()]},
+            metadata_history={
+                # [(key, tuple(val)) for key, val in metadata_history.items()]
+                key: tuple(val)
+                for key, val in metadata_history.items()
+            },
         )
 
     @property
     def history(self) -> typing.Dict[str, typing.Dict[str, list]]:
         objective_history = {
             # list((key, list(val)) for key, val in self.objective_history.items())
-            [(key, list(val)) for key, val in self.objective_history.items()]
+            # [(key, list(val)) for key, val in self.objective_history.items()]
+            key: list(val)
+            for key, val in self.objective_history.items()
         }
         figure_of_merit_history = {
             # list((key, list(val)) for key, val in self.figure_of_merit_history.items())
-            [(key, list(val)) for key, val in self.figure_of_merit_history.items()]
+            # [(key, list(val)) for key, val in self.figure_of_merit_history.items()]
+            key: list(val)
+            for key, val in self.figure_of_merit_history.items()
         }
         metadata_history = {
             # list((key, list(val)) for key, val in self.metadata_history.items())
-            [(key, list(val)) for key, val in self.metadata_history.items()]
+            # [(key, list(val)) for key, val in self.metadata_history.items()]
+            key: list(val)
+            for key, val in self.metadata_history.items()
         }
 
         return dict(
@@ -634,16 +702,46 @@ class OptimizerSpec(InvdesBaseModel):
         return config
 
 
+class TerminationSpec(InvdesBaseModel):
+    @abc.abstractmethod
+    def condition(self, objective_history, figure_of_merit_history, metadata_history):
+        """Termination condition to be implemented based on optimization history and current state."""
+
+
+class FixedIterationTerminationSpec(TerminationSpec):
+    iterations: int = pd.Field(
+        ..., title="iterations", description="fixed number of iterations to run for"
+    )
+
+    def condition(self, objective_history, figure_of_merit_history, metadata_history):
+        return metadata_history["iteration"][-1] >= self.iterations
+
+
 class InverseDesign(InvdesBaseModel):
     #
     # todo: pass optimizer directly to the inverse design
     #
-    optimizer_spec: OptimizerSpec = pd.Field(
-        ..., title="Optimizer specification", description="Construction of optimizer"
+    # optimizer_spec: OptimizerSpec = pd.Field(
+    #     ..., title="Optimizer specification", description="Construction of optimizer"
+    # )
+
+    #
+    # we may want to allow custom control flow at some point but this class is for standard design flows
+    # also may have other design tools come in in custom control flow
+    # we may want to warn if these optimizers are working on a bunch of the same underlying parameters (?)
+    #
+    optimizers: typing.Tuple[AbstractOptimizer, ...] = pd.Field(
+        ...,
+        title="optimizers",
+        description="optimizers to step at each iteration of the optimization",
     )
 
     objectives: typing.Tuple[AbstractObjective, ...] = pd.Field(
         ..., title="objectives", description="objective functions to evaluate"
+    )
+
+    termination_spec: TerminationSpec = pd.Field(
+        ..., title="termination", description="how to determine the optimization is finished"
     )
 
     objective_name_validator = validate_unique_names("objectives")
@@ -662,46 +760,43 @@ class InverseDesign(InvdesBaseModel):
         self,
         checkpoint: Result,
         iteration: int,
-        # this termination condition might be an object and eventually
-        # safely executable code via serialization
-        terminate_condition: typing.Callable,
     ) -> Result:
+        # we may want a way to confirm that the optimization you are re-running belongs to this history trace
+        # also we will want to make this all very easy for people to run optimizations and possibly many of them
+        # and then easily analyze the data and results
+
         history = checkpoint.history
         objective_history = copy.deepcopy(history["objective_history"])
 
         figure_of_merit_history = copy.deepcopy(history["figure_of_merit_history"])
         metadata_history = copy.deepcopy(history["metadata_history"])
 
-        all_region_names = [
-            # list(design_region.name for design_region in obj.regions) for obj in self.objectives
-            [design_region.name for design_region in obj.regions]
-            for obj in self.objectives
-        ]
-        unique_region_names = set(sum(all_region_names, []))
+        # all_region_names = [
+        #     list(design_region.name for design_region in obj.regions) for obj in self.objectives
+        #     # [design_region.name for design_region in obj.regions]
+        #     for obj in self.objectives
+        # ]
+        # unique_region_names = set(sum(all_region_names, []))
 
-        def find(name, parameter_dicts):
-            for parameter_dict in parameter_dicts:
-                if name in parameter_dict.keys():
-                    return parameter_dict[name]
+        #
+        # the MultiParameter allows you to combine multiple parameters into the same optimizer
+        #
 
-        all_parameters = [obj.parameters() for obj in self.objectives]
-        extract_parameters = [find(name, all_parameters) for name in unique_region_names]
+        # def find(name, parameter_dicts):
+        #     for parameter_dict in parameter_dicts:
+        #         if name in parameter_dict.keys():
+        #             return parameter_dict[name]
 
-        # extract_parameters[0].update_grad(extract_parameters[0].values + 1)
-        # print(extract_parameters)
-        opt_parameters = MultiParameter(parameters=extract_parameters)
-        # opt_parameters.zero_grad()
-        # print(extract_parameters)
+        # all_parameters = [obj.parameters() for obj in self.objectives]
+        # extract_parameters = [find(name, all_parameters) for name in unique_region_names]
 
-        optimizer = OptimizerMethods[self.optimizer_spec.method](
-            parameters=opt_parameters,
-            state=GradientAscentOptimizerState(),
-            **self.optimizer_spec.config,
-        )
+        # opt_parameters = MultiParameter(parameters=extract_parameters)
 
-        # optimizer.zero_grad()
-        # print(extract_parameters)
-        # asdf
+        # optimizer = OptimizerMethods[self.optimizer_spec.method](
+        #     parameters=opt_parameters,
+        #     state=GradientAscentOptimizerState(),
+        #     **self.optimizer_spec.config,
+        # )
 
         def do_checkpoint(get_grad=True):
             for objective in self.objectives:
@@ -717,25 +812,28 @@ class InverseDesign(InvdesBaseModel):
 
             metadata_history["iteration"].append(iteration)
 
-        optimizer.zero_grad()
+        def zero_opt(optimizer):
+            optimizer.zero_grad()
+
+        def step_opt(optimizer):
+            optimizer.step()
+
+        def apply_to_opt(func):
+            for optimizer in self.optimizers:
+                func(optimizer)
+
+        # optimizer.zero_grad()
+        apply_to_opt(zero_opt)
         do_checkpoint()
 
-        while not terminate_condition(objective_history, figure_of_merit_history, metadata_history):
-            # print('pre step')
-            # print(optimizer.parameters)
-            optimizer.step()
-            print("post step")
-            # print(optimizer.parameters)
-            for objective in self.objectives:
-                for parameter in objective.parameter_dict.values():
-                    print("grad")
-                    print(parameter.grad)
-                    print("vals")
-                    print(parameter.values)
+        while not self.termination_spec.condition(
+            objective_history, figure_of_merit_history, metadata_history
+        ):
+            apply_to_opt(step_opt)
 
             iteration += 1
 
-            optimizer.zero_grad()
+            apply_to_opt(zero_opt)
             do_checkpoint()
 
         return Result(
@@ -744,7 +842,7 @@ class InverseDesign(InvdesBaseModel):
             metadata_history=metadata_history,
         )
 
-    def run(self, terminate_condition: typing.Callable) -> Result:
+    def run(self) -> Result:
         objective_history = {objective.name: [] for objective in self.objectives}
         figure_of_merit_history = {objective.name: [] for objective in self.objectives}
         metadata_history = {"iteration": []}
@@ -756,5 +854,4 @@ class InverseDesign(InvdesBaseModel):
                 metadata_history=metadata_history,
             ),
             iteration=0,
-            terminate_condition=terminate_condition,
         )
