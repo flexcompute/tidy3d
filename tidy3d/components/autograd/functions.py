@@ -6,7 +6,6 @@ from autograd.extend import defjvp, defvjp, primitive
 from autograd.numpy.numpy_jvps import broadcast
 from autograd.numpy.numpy_vjps import unbroadcast_f
 from numpy.typing import NDArray
-from scipy.interpolate import RegularGridInterpolator
 
 from .types import InterpolationType
 
@@ -127,6 +126,8 @@ def interpn(
     --------
     `scipy.interpolate.interpn <https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interpn.html>`_
     """
+    from scipy.interpolate import RegularGridInterpolator
+
     if method == "nearest":
         interp_fn = _evaluate_nearest
     elif method == "linear":

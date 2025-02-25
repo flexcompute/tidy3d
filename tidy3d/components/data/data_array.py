@@ -6,10 +6,8 @@ from abc import ABC
 from typing import Any, Dict, List, Mapping, Union
 
 import autograd.numpy as anp
-import dask
 import h5py
 import numpy as np
-import pandas
 import xarray as xr
 from autograd.tracer import isbox
 from xarray.core import alignment, missing
@@ -119,7 +117,7 @@ class DataArray(xr.DataArray):
         return val
 
     def _interp_validator(self, field_name: str = None) -> None:
-        """Make sure we can interp()/sel() the data.
+        """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
 
         NOTE
         ----
@@ -129,39 +127,13 @@ class DataArray(xr.DataArray):
         if field_name is None:
             field_name = "DataArray"
 
-        dims = self.coords.dims
-
-        for dim in dims:
-            # in case we encounter some /0 or /NaN we'll ignore the warnings here
-            with np.errstate(divide="ignore", invalid="ignore"):
-                # check that we can interpolate
-                try:
-                    x0 = np.array(self.coords[dim][0])
-                    self.interp({dim: x0}, method="linear")
-                    self.interp({dim: x0}, method="nearest")
-                    # self.interp_like(self.isel({self.dim: 0}))
-                except pandas.errors.InvalidIndexError as e:
-                    raise DataError(
-                        f"'{field_name}.interp()' fails to interpolate along {dim} which is used by the solver. "
-                        "This may be caused, for instance, by duplicated data "
-                        f"in this dimension (you can verify this by running "
-                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
-                        f"and interpolate with the new '{field_name}'). "
-                        "Plase make sure data can be interpolated."
-                    ) from e
-                # in case it can interpolate, try also to sel
-                try:
-                    x0 = np.array(self.coords[dim][0])
-                    self.sel({dim: x0}, method="nearest")
-                except pandas.errors.InvalidIndexError as e:
-                    raise DataError(
-                        f"'{field_name}.sel()' fails to select along {dim} which is used by the solver. "
-                        "This may be caused, for instance, by duplicated data "
-                        f"in this dimension (you can verify this by running "
-                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
-                        f"and run 'sel()' with the new '{field_name}'). "
-                        "Plase make sure 'sel()' can be used on the 'DataArray'."
-                    ) from e
+        for dim, coord in self.coords.items():
+            if coord.to_index().duplicated().any():
+                raise DataError(
+                    f"Field '{field_name}' contains duplicate coordinates in dimension '{dim}'. "
+                    "Duplicates can be removed by running "
+                    f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")'."
+                )
 
     @classmethod
     def assign_coord_attrs(cls, val):
@@ -276,13 +248,14 @@ class DataArray(xr.DataArray):
         """Load an DataArray from an hdf5 file with a given path to the group."""
         if ".hdf5" not in fname:
             raise FileError(
-                "DataArray objects must be written to '.hdf5' format. "
-                f"Given filename of {fname}."
+                f"'DataArray' objects must be written to '.hdf5' format. Given filename of {fname}."
             )
         return cls.from_hdf5(fname=fname, group_path=group_path)
 
     def __hash__(self) -> int:
         """Generate hash value for a :class:.`DataArray` instance, needed for custom components."""
+        import dask
+
         token_str = dask.base.tokenize(self)
         return hash(token_str)
 
@@ -813,6 +786,24 @@ class ScalarModeFieldDataArray(AbstractSpatialDataArray):
     _dims = ("x", "y", "z", "f", "mode_index")
 
 
+class ScalarModeFieldCylindricalDataArray(AbstractSpatialDataArray):
+    """Spatial distribution of a mode in frequency-domain as a function of mode index.
+
+    Example
+    -------
+    >>> rho = [1,2]
+    >>> theta = [2,3,4]
+    >>> axial = [3,4,5,6]
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> coords = dict(rho=rho, theta=theta, axial=axial, f=f, mode_index=mode_index)
+    >>> fd = ScalarModeFieldCylindricalDataArray((1+1j) * np.random.random((2,3,4,2,5)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("rho", "theta", "axial", "f", "mode_index")
+
+
 class FluxDataArray(DataArray):
     """Flux through a surface in the frequency-domain.
 
@@ -1153,6 +1144,22 @@ class ChargeDataArray(DataArray):
     _dims = ("n", "p")
 
 
+class SteadyVoltageDataArray(DataArray):
+    """Steady voltage data array. Data array used with steady state
+    simulations with voltage as dimension.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> intensities = [0, 1, 4]
+    >>> V = [-1, -0.5, 0]
+    >>> voltage_dataarray = td.SteadyVoltageDataArray(data=intensities, coords={"v": V})
+    """
+
+    __slots__ = ()
+    _dims = ("v",)
+
+
 class PointDataArray(DataArray):
     """A two-dimensional array that stores coordinates of a collection of points.
     Dimension ``index`` denotes the index of a point in the collection, and dimension ``axis``
@@ -1212,6 +1219,39 @@ class IndexedDataArray(DataArray):
     _dims = ("index",)
 
 
+class IndexedVoltageDataArray(DataArray):
+    """Stores a two-dimensional array with coordinates ``index`` and ``voltage``, where
+    ``index`` is usually associated with ``PointDataArray`` and ``voltage`` indicates at what
+    bias/DC-voltage the data was obtained with.
+
+    Example
+    -------
+    >>> indexed_array = IndexedVoltageDataArray(
+    ...     (1+1j) * np.random.random((3,2)), coords=dict(index=np.arange(3), voltage=[-1, 1])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "voltage")
+
+
+class SpatialVoltageDataArray(AbstractSpatialDataArray):
+    """Spatial distribution with voltage mapping.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> v = [-1, 1]
+    >>> coords = dict(x=x, y=y, z=z, voltage=v)
+    >>> fd = SpatialVoltageDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z", "voltage")
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
@@ -1240,8 +1280,12 @@ DATA_ARRAY_TYPES = [
     EMEModeIndexDataArray,
     EMEFreqModeDataArray,
     ChargeDataArray,
+    SteadyVoltageDataArray,
     PointDataArray,
     CellDataArray,
     IndexedDataArray,
+    IndexedVoltageDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
+
+IndexedDataArrayTypes = Union[IndexedDataArray, IndexedVoltageDataArray]

@@ -202,7 +202,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         units=MICROMETER,
     )
 
-    length: pydantic.NonNegativeFloat = pydantic.Field(
+    length: TracedSize1D = pydantic.Field(
         ...,
         title="Length",
         description="Defines thickness of cylinder along axis dimension.",
@@ -295,10 +295,14 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # construct equivalent polyslab and compute the derivatives
         polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
 
-        derivative_info_polyslab = derivative_info.updated_copy(paths=[("vertices",)], deep=False)
+        derivative_info_polyslab = derivative_info.updated_copy(
+            paths=[("vertices",), ("slab_bounds", 0), ("slab_bounds", 1)], deep=False
+        )
         vjps_polyslab = polyslab.compute_derivatives(derivative_info_polyslab)
 
         vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
+        vjp_top = vjps_polyslab[("slab_bounds", 0)]
+        vjp_bot = vjps_polyslab[("slab_bounds", 1)]
 
         # transform polyslab vertices derivatives into Cylinder parameter derivatives
         xs_, ys_ = self._points_unit_circle(num_pts_circumference=num_pts_circumference)
@@ -307,32 +311,21 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         vjps = {}
         for path in derivative_info.paths:
-            if path == ("radius",):
+            if path == ("length",):
+                vjps[path] = vjp_top - vjp_bot
+
+            elif path == ("radius",):
                 vjps[path] = vjp_xs + vjp_ys
 
             elif "center" in path:
                 _, center_index = path
-                if center_index == self.axis:
-                    raise NotImplementedError(
-                        "Currently cannot differentiate Cylinder with respect to its 'center' along"
-                        " the axis. If you would like this feature added, please feel free to raise"
-                        " an issue on the tidy3d front end repository."
-                    )
-
                 _, (index_x, index_y) = self.pop_axis((0, 1, 2), axis=self.axis)
                 if center_index == index_x:
                     vjps[path] = np.sum(vjps_vertices_xs)
                 elif center_index == index_y:
                     vjps[path] = np.sum(vjps_vertices_ys)
                 else:
-                    raise ValueError(
-                        "Something unexpected happened. Was asked to differentiate "
-                        f"with respect to 'Cylinder.center[{center_index}]', but this was not "
-                        "detected as being one of the parallel axis with "
-                        f"'Cylinder.axis' of '{self.axis}'. If you received this error, please raise "
-                        "an issue on the tidy3d front end repository with details about how you "
-                        "defined your 'Cylinder' in the objective function."
-                    )
+                    vjps[path] = vjp_top + vjp_bot
 
             else:
                 raise NotImplementedError(

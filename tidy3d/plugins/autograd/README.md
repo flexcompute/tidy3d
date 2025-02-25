@@ -189,7 +189,7 @@ The following components are traceable as inputs to the `td.Simulation`
 | Component Type                                                    | Traceable Attributes                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------- |
 | rectangular prisms                                                | `Box.center`, `Box.size`                                |
-| polyslab (including those with dilation or slanted sidewalls)     | `PolySlab.vertices`                                     |
+| polyslab (including those with dilation or slanted sidewalls)     | `PolySlab.vertices`, `PolySlab.slab_bounds`                          |
 | regular mediums                                                   | `Medium.permittivity`, `Medium.conductivity`            |
 | spatially varying mediums (for topology optimization mainly)      | `CustomMedium.permittivity`, `CustomMedium.eps_dataset` |
 | groups of geometries with the same medium (for faster processing) | `GeometryGroup.geometries`                              |
@@ -210,11 +210,13 @@ The following components are traceable as outputs of the `td.SimulationData`
 We also support the following high-level features:
 
 - To manually set the background permittivity of a structure for purposes of shape optimization, one can set `Structure.background_medium`.
-  This is useful when there is a substrate or multiple overlapping structures as some geometries, such as `PolySlab`, do not automatically detect background permittivity and instead use the `Simulation.medium` by default.
-- Compute gradients for objective functions that rely on multi-frequency data using a single broadband adjoint source.
-- Enable server-side gradient processing by setting `local_gradient=False` in the web functions.
-  This can significantly reduce data storage time.
-  However, exercise caution when using this feature with multi-frequency monitors and large design regions, as it may result in substantial data storage on our servers.
+- Compute gradients for objective functions that rely on multi-frequency data using a single broadband adjoint source. Note that this only works for mode monitors.
+- Enable local gradient processing by setting `local_gradient=True` in the web run functions.
+  This will cause the forward and adjoint field monitor data to be downloaded locally.
+  Can be useful for inspecting these fields, but will cause significantly more data/bandwidth usage.
+- We automatically determine the number of adjoint simulations to run from a given forward simulation to maintain gradient accuracy.
+  Adjoint sources are automatically grouped by either frequency or spatial port (whichever yields fewer adjoint simulations), and all adjoint simulations are run in a single batch (applies to both `run` and `run_async`).
+  The parameter `max_num_adjoint_per_fwd` (default `10`) prevents launching unexpectedly large numbers of adjoint simulations automatically.
 
 We currently have the following restrictions:
 
@@ -222,14 +224,14 @@ We currently have the following restrictions:
   To bypass this restriction, use `GeometryGroup` to group structures with the same medium.
 - `web.run_async` for simulations with tracers does not return a `BatchData` but rather a `dict` mapping task name to `SimulationData`.
   There may be high memory usage with many simulations or a lot of data for each.
-- Tidy3D can handle objective functions over a single simulation under any of the following conditions for the monitors that the objective function output depends on:
-  - Several monitors, all with the same frequency.
-  - One monitor with many frequencies where the data is being extracted out of a single coordinate (e.g., single mode_index or direction will work, multiple will not).
-  If your optimization does not fall into one of these categories, you must split it into separate simulations and run them with `web.run_async`. In all cases, the adjoint simulation bandwidth will be the same as the forward simulation. These limitations allow us to avoid the need to use methods that combine all adjoint sources into one simulation, which have the potential to degrade accuracy and increase the run time and cost significantly. That being said, we plan to offer support for more flexible and general broadband adjoint in the future.
+- Differentiating w.r.t. field monitors will lead to one adjoint simulation _per frequency_ in the monitor, which can cause significant data usage for large monitors.
+- The forward simulation records fields and permittivities within the bounding box of any traced object (e.g., design region) at each unique frequency in the simulation (defined by the monitors).
+  This can cause unnecessary data usage during the forward pass, especially if the monitors contain many frequencies that are not relevant for the objective function (i.e., they are not being differentiated w.r.t.).
+  To avoid this, restrict the frequencies in the monitors only to the ones that are relevant for differentiation during optimization.
 
 ### To be supported soon
 
-Next on our roadmap (targeting 2.8 and 2.9, fall 2024) is to support:
+Next on our roadmap (targeting 2.8 and 2.9, 2025) is to support:
 
 - `TriangleMesh`.
 - `GUI` integration of invdes plugin.

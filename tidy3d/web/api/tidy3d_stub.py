@@ -8,14 +8,18 @@ from typing import Callable, List, Union
 import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
 
+from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
+from tidy3d.components.tcad.simulation.heat import HeatSimulation
+from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
+
 from ... import log
 from ...components.base import _get_valid_extension
 from ...components.data.monitor_data import ModeSolverData
 from ...components.data.sim_data import SimulationData
 from ...components.eme.data.sim_data import EMESimulationData
 from ...components.eme.simulation import EMESimulation
-from ...components.heat.data.sim_data import HeatSimulationData
-from ...components.heat.simulation import HeatSimulation
+from ...components.mode.data.sim_data import ModeSimulationData
+from ...components.mode.simulation import ModeSimulation
 from ...components.simulation import Simulation
 from ...plugins.mode.mode_solver import ModeSolver
 from ..core.file_util import (
@@ -26,8 +30,17 @@ from ..core.file_util import (
 from ..core.stub import TaskStub, TaskStubData
 from ..core.types import TaskType
 
-SimulationType = Union[Simulation, HeatSimulation, EMESimulation]
-SimulationDataType = Union[SimulationData, HeatSimulationData, EMESimulationData]
+SimulationType = Union[
+    Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation, ModeSolver, ModeSimulation
+]
+SimulationDataType = Union[
+    SimulationData,
+    HeatChargeSimulationData,
+    HeatSimulationData,
+    EMESimulationData,
+    ModeSolverData,
+    ModeSimulationData,
+]
 
 
 class Tidy3dStub(BaseModel, TaskStub):
@@ -69,8 +82,12 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = ModeSolver.from_file(file_path)
         elif "HeatSimulation" == type_:
             sim = HeatSimulation.from_file(file_path)
+        elif "HeatChargeSimulation" == type_:
+            sim = HeatChargeSimulation.from_file(file_path)
         elif "EMESimulation" == type_:
             sim = EMESimulation.from_file(file_path)
+        elif "ModeSimulation" == type_:
+            sim = ModeSimulation.from_file(file_path)
 
         return sim
 
@@ -125,8 +142,12 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.MODE_SOLVER.name
         elif isinstance(self.simulation, HeatSimulation):
             return TaskType.HEAT.name
+        elif isinstance(self.simulation, HeatChargeSimulation):
+            return TaskType.HEAT_CHARGE.name
         elif isinstance(self.simulation, EMESimulation):
             return TaskType.EME.name
+        elif isinstance(self.simulation, ModeSimulation):
+            return TaskType.MODE.name
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
@@ -173,8 +194,12 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             sim_data = ModeSolverData.from_file(file_path)
         elif "HeatSimulationData" == type_:
             sim_data = HeatSimulationData.from_file(file_path)
+        elif "HeatChargeSimulationData" == type_:
+            sim_data = HeatChargeSimulationData.from_file(file_path)
         elif "EMESimulationData" == type_:
             sim_data = EMESimulationData.from_file(file_path)
+        elif "ModeSimulationData" == type_:
+            sim_data = ModeSimulationData.from_file(file_path)
 
         return sim_data
 
@@ -229,7 +254,11 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                     "simulation again with a larger 'run_time' duration for more accurate results."
                 )
 
-        if "WARNING" in stub_data.log and not warned_about_warnings:
+        if (
+            not isinstance(stub_data, (ModeSolverData, ModeSimulationData))
+            and "WARNING" in stub_data.log
+            and not warned_about_warnings
+        ):
             log.warning("Warning messages were found in the solver log. " + check_log_msg)
 
         return stub_data

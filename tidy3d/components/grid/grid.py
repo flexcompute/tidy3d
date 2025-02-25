@@ -10,9 +10,9 @@ import pydantic.v1 as pd
 from ...exceptions import SetupError
 from ..base import Tidy3dBaseModel
 from ..data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
-from ..data.dataset import UnstructuredGridDataset, UnstructuredGridDatasetType
+from ..data.utils import UnstructuredGridDataset, UnstructuredGridDatasetType
 from ..geometry.base import Box
-from ..types import ArrayFloat1D, Axis, InterpMethod, Literal
+from ..types import ArrayFloat1D, Axis, Coordinate, InterpMethod, Literal
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D
@@ -625,3 +625,13 @@ class Grid(Tidy3dBaseModel):
                     raise ValueError("Cannot snap grid to box center outside of grid domain.")
                 boundary_dict[dim] = np.array([center, center])
         return self.updated_copy(boundaries=Coords(**boundary_dict))
+
+    def _translated_copy(self, vector: Coordinate) -> Grid:
+        """Translate the grid by a vector. Not officially supported as resulting
+        grid may not be aligned with original Yee grid."""
+        boundaries = Coords(
+            x=self.boundaries.x + vector[0],
+            y=self.boundaries.y + vector[1],
+            z=self.boundaries.z + vector[2],
+        )
+        return self.updated_copy(boundaries=boundaries)

@@ -3,7 +3,7 @@ import numpy as np
 import tidy3d as td
 from tidy3d.plugins.polyslab import ComplexPolySlab
 
-from ..utils import assert_log_level
+from ..utils import AssertLogLevel
 
 
 def test_divide_simple_events():
@@ -29,7 +29,7 @@ def test_divide_simple_events():
                 _ = s.geometry_group
 
 
-def test_many_sub_polyslabs(log_capture):
+def test_many_sub_polyslabs():
     """warn when too many subpolyslabs are generated."""
 
     # generate vertices that can generate at least this number
@@ -46,11 +46,12 @@ def test_many_sub_polyslabs(log_capture):
         sidewall_angle=np.pi / 4,
         reference_plane="bottom",
     )
-    _ = td.Structure(
-        geometry=s.geometry_group,
-        medium=td.Medium(permittivity=2),
-    )
-    assert_log_level(log_capture, "WARNING")
+
+    with AssertLogLevel("WARNING"):
+        _ = td.Structure(
+            geometry=s.geometry_group,
+            medium=td.Medium(permittivity=2),
+        )
 
 
 def test_divide_simulation():

@@ -1,4 +1,4 @@
-HEAT |:fire:|
+Heat |:fire:|
 =============
 
 .. toctree::

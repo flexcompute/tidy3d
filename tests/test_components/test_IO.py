@@ -335,3 +335,14 @@ def test_data_array_to_hdf5(tmp_path):
 
     # pass a file name
     flux.to_hdf5(fname=path, group_path="test")
+
+
+def test_inf_attrs(tmp_path):
+    """But if infinity added to attrs."""
+
+    path = str(tmp_path / "test.json")
+    m = td.Medium(attrs={"a": td.inf})
+    m.to_file(path)
+    m2 = m.from_file(path)
+    m2.to_file(path)
+    m.from_file(path)

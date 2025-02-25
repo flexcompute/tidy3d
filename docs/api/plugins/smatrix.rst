@@ -11,6 +11,7 @@ Scattering Matrix Calculator
    tidy3d.plugins.smatrix.Port
    tidy3d.plugins.smatrix.ModalPortDataArray
    tidy3d.plugins.smatrix.TerminalComponentModeler
+   tidy3d.plugins.smatrix.TerminalPortDataArray
    tidy3d.plugins.smatrix.LumpedPort
-   tidy3d.plugins.smatrix.LumpedPortDataArray
    tidy3d.plugins.smatrix.CoaxialLumpedPort
+   tidy3d.plugins.smatrix.WavePort

@@ -5,10 +5,16 @@ from __future__ import annotations
 import math
 import pathlib
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import autograd.numpy as np
-import matplotlib as mpl
+
+try:
+    import matplotlib as mpl
+except ImportError:
+    pass
+
 import pydantic.v1 as pydantic
 import xarray as xr
 
@@ -30,8 +36,14 @@ from .boundary import (
     PMCBoundary,
     StablePML,
 )
-from .data.data_array import FreqDataArray
-from .data.dataset import CustomSpatialDataType, Dataset
+from .data.data_array import (
+    FreqDataArray,
+    IndexedDataArray,
+)
+from .data.dataset import Dataset
+from .data.unstructured.tetrahedral import TetrahedralGridDataset
+from .data.unstructured.triangular import TriangularGridDataset
+from .data.utils import CustomSpatialDataType
 from .geometry.base import Box, Geometry
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
@@ -45,12 +57,11 @@ from .medium import (
     AbstractPerturbationMedium,
     AnisotropicMedium,
     FullyAnisotropicMedium,
-    KerrNonlinearity,
+    LossyMetalMedium,
     Medium,
     Medium2D,
     MediumType,
     MediumType3D,
-    TwoPhotonAbsorption,
 )
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -61,6 +72,7 @@ from .monitor import (
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     FieldTimeMonitor,
+    FluxMonitor,
     FreqMonitor,
     ModeMonitor,
     Monitor,
@@ -71,23 +83,34 @@ from .monitor import (
 )
 from .run_time_spec import RunTimeSpec
 from .scene import MAX_NUM_MEDIUMS, Scene
-from .source import (
+from .source.base import Source
+from .source.current import CustomCurrentSource
+from .source.field import (
     TFSF,
     AstigmaticGaussianBeam,
-    ContinuousWave,
-    CustomCurrentSource,
     CustomFieldSource,
-    CustomSourceTime,
+    FixedAngleSpec,
     GaussianBeam,
     ModeSource,
     PlaneWave,
-    Source,
-    SourceType,
 )
+from .source.time import ContinuousWave, CustomSourceTime
+from .source.utils import SourceType
 from .structure import MeshOverrideStructure, Structure
 from .subpixel_spec import SubpixelSpec
-from .types import TYPE_TAG_STR, Ax, Axis, FreqBound, InterpMethod, Literal, Symmetry, annotate_type
+from .types import (
+    TYPE_TAG_STR,
+    Ax,
+    Axis,
+    CoordinateOptional,
+    FreqBound,
+    InterpMethod,
+    Literal,
+    Symmetry,
+    annotate_type,
+)
 from .validators import (
+    assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
     validate_mode_objects_symmetry,
     validate_mode_plane_radius,
@@ -142,6 +165,9 @@ NUM_STRUCTURES_WARN_EPSILON = 10_000
 
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = inf
+
+# additional (safety) time step reduction factor for fixed angle simulations
+FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
@@ -440,7 +466,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
+            If not specified, the central frequency of sources in the simulation will be used.
+            If sources have different central frequencies, the relative permittivity will be evaluated
+            at infinite frequency.
         alpha : float = None
             Opacity of the structures being plotted.
             Defaults to the structure default alpha.
@@ -525,7 +553,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         freq : float = None
             Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
+            If not specified, the central frequency of sources in the simulation will be used.
+            If sources have different central frequencies, the relative permittivity will be evaluated
+            at infinite frequency.
         reverse : bool = False
             If ``False``, the highest permittivity is plotted in black.
             If ``True``, it is plotteed in white (suitable for black backgrounds).
@@ -550,7 +580,18 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim, vlim = Scene._get_plot_lims(
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
-
+        if freq is None:
+            freq0s = [source.source_time.freq0 for source in self.sources]
+            if freq0s and all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
+                freq = freq0s[0]
+            else:
+                freq = np.inf
+                log.warning(
+                    "An appropriate frequency could not be determined when plotting the permittivity. "
+                    "The permittivity will be evaluated at infinite frequency. Please supply a value "
+                    "for `freq` to plot at a finite frequency. ",
+                    capture=False,
+                )
         return self.scene.plot_structures_eps(
             freq=freq,
             cbar=cbar,
@@ -605,6 +646,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
         return ax
 
@@ -688,6 +733,31 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         return pml_thicknesses
 
+    @cached_property
+    def internal_override_structures(self) -> List[MeshOverrideStructure]:
+        """Internal mesh override structures. So far, internal override structures all come from `layer_refinement_specs`.
+
+        Returns
+        -------
+        List[MeshOverrideSructure]
+            List of override structures.
+        """
+        wavelength = self.grid_spec.get_wavelength(self.sources)
+        return self.grid_spec.internal_override_structures(
+            self.scene.all_structures, wavelength, self.geometry.size
+        )
+
+    @cached_property
+    def internal_snapping_points(self) -> List[CoordinateOptional]:
+        """Internal snapping points. So far, internal snapping points are generated by `layer_refinement_specs`.
+
+        Returns
+        -------
+        List[CoordinateOptional]
+            List of snapping points coordinates.
+        """
+        return self.grid_spec.internal_snapping_points(self.scene.all_structures)
+
     @equal_aspect
     @add_ax_if_none
     def plot_lumped_elements(
@@ -728,7 +798,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         bounds = self.bounds
         for element in self.lumped_elements:
             kwargs = element.plot_params.include_kwargs(alpha=alpha).to_kwargs()
-            ax = element.to_structure.plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
+            ax = element.to_geometry().plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
@@ -743,6 +813,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        override_structures_alpha: float = 1,
+        snapping_points_alpha: float = 1,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -759,6 +831,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        override_structures_alpha : float = 1
+            Opacity of the override structures.
+        snapping_points_alpha : float = 1
+            Opacity of the snapping points.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
@@ -773,48 +849,95 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """
         kwargs.setdefault("linewidth", 0.2)
         kwargs.setdefault("colors", "black")
+        kwargs.setdefault("colors_internal", "darkmagenta")
+        kwargs.setdefault("dashes", (10, 10))
+        kwargs.setdefault("override_linestyle", ":")
+        kwargs.setdefault("snapping_linestyle", "--")
         cell_boundaries = self.grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis)
-        segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
-        line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
-        segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
-        line_segments_y = mpl.collections.LineCollection(segs_y, **kwargs)
 
-        # Plot grid
-        ax.add_collection(line_segments_x)
-        ax.add_collection(line_segments_y)
+        if self.size[axis_x] > 0:
+            for b in boundaries_x:
+                ax.axvline(x=b, linewidth=kwargs["linewidth"], color=kwargs["colors"])
+
+        if self.size[axis_y] > 0:
+            for b in boundaries_y:
+                ax.axhline(y=b, linewidth=kwargs["linewidth"], color=kwargs["colors"])
 
         # Plot bounding boxes of override structures
-        plot_params = plot_params_override_structures.include_kwargs(
-            linewidth=2 * kwargs["linewidth"], edgecolor=kwargs["colors"]
-        )
-        for structure in self.grid_spec.override_structures:
-            bounds = list(zip(*structure.geometry.bounds))
-            _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
-            xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
-            rect = mpl.patches.Rectangle(
-                xy=(xmin, ymin),
-                width=(xmax - xmin),
-                height=(ymax - ymin),
-                **plot_params.to_kwargs(),
-            )
-            ax.add_patch(rect)
+        plot_params = [
+            plot_params_override_structures.include_kwargs(
+                linewidth=4 * kwargs["linewidth"],
+                edgecolor=kwargs["colors"],
+                alpha=override_structures_alpha,
+            ),
+        ] * 2
+        plot_params[0] = plot_params[0].include_kwargs(edgecolor=kwargs["colors_internal"])
+
+        if self.grid_spec.auto_grid_used:
+            all_override_structures = [
+                self.internal_override_structures,
+                self.grid_spec.external_override_structures,
+            ]
+            for structures, plot_param in zip(all_override_structures, plot_params):
+                for structure in structures:
+                    bounds = list(zip(*structure.geometry.bounds))
+                    _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
+                    xmin, xmax, ymin, ymax = (
+                        self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax)
+                    )
+                    rect = mpl.patches.Rectangle(
+                        xy=(xmin, ymin),
+                        width=(xmax - xmin),
+                        height=(ymax - ymin),
+                        linestyle=kwargs["override_linestyle"],
+                        **plot_param.to_kwargs(),
+                    )
+                    ax.add_patch(rect)
 
         # Plot snapping points
-        for point in self.grid_spec.snapping_points:
-            _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
-            x_point, y_point = (self._evaluate_inf(v) for v in (x_point, y_point))
-            ax.scatter(x_point, y_point, color=plot_params.edgecolor)
+        for points, plot_param in zip(
+            [self.internal_snapping_points, self.grid_spec.snapping_points], plot_params
+        ):
+            for point in points:
+                _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
+                if x_point is None and y_point is None:
+                    continue
+                if x_point is None:
+                    ax.axhline(
+                        y=self._evaluate_inf(y_point),
+                        linewidth=4 * kwargs["linewidth"],
+                        color=plot_param.edgecolor,
+                        alpha=snapping_points_alpha,
+                        linestyle=kwargs["snapping_linestyle"],
+                        dashes=kwargs["dashes"],
+                    )
+                    continue
+                if y_point is None:
+                    ax.axvline(
+                        x=self._evaluate_inf(x_point),
+                        linewidth=4 * kwargs["linewidth"],
+                        color=plot_param.edgecolor,
+                        alpha=snapping_points_alpha,
+                        linestyle=kwargs["snapping_linestyle"],
+                        dashes=kwargs["dashes"],
+                    )
+                    continue
+                x_point, y_point = (self._evaluate_inf(v) for v in (x_point, y_point))
+                ax.scatter(
+                    x_point, y_point, color=plot_param.edgecolor, alpha=snapping_points_alpha
+                )
 
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
-
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     @equal_aspect
@@ -931,7 +1054,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         ax.set_xlim([ulim_minus, ulim_plus])
         ax.set_ylim([vlim_minus, vlim_plus])
-
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
         return ax
 
     # TODO: not yet supported
@@ -959,7 +1085,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Add a simulation Box as the first structure
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.structures
+        structures += self.static_structures
 
         grid = self.grid_spec.make_grid(
             structures=structures,
@@ -967,11 +1093,18 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             periodic=self._periodic,
             sources=self.sources,
             num_pml_layers=self.num_pml_layers,
+            internal_snapping_points=self.internal_snapping_points,
+            internal_override_structures=self.internal_override_structures,
         )
 
         # This would AutoGrid the in-plane directions of the 2D materials
         # return self._grid_corrections_2dmaterials(grid)
         return grid
+
+    @cached_property
+    def static_structures(self) -> list[Structure]:
+        """Structures in simulation with all autograd tracers removed."""
+        return [structure.to_static() for structure in self.structures]
 
     @cached_property
     def num_cells(self) -> int:
@@ -1300,8 +1433,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Convert lumped elements into structures
         lumped_structures = []
+        strict_ineq = 3 * [True]
         for lumped_element in self.lumped_elements:
-            lumped_structures.append(lumped_element.to_structure)
+            if self.geometry.contains(lumped_element.geometry, strict_inequality=strict_ineq):
+                lumped_structures += lumped_element.to_structures(self.grid)
 
         # Begin volumetric structures grid
         all_structures = list(self.static_structures) + lumped_structures
@@ -1328,14 +1463,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             geometry = structure.geometry
 
             # subdivide
-            avg_axis_dl = get_dls(geometry, axis, 1)[0]
-            subdivided_geometries = subdivide(geometry, axis, avg_axis_dl, background_structures)
+            subdivided_geometries = subdivide(geometry, background_structures)
             # Create and add volumetric equivalents
             for subdivided_geometry in subdivided_geometries:
                 # Snap to the grid and create volumetric equivalent
                 snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
                 snapped_center = get_bounds(snapped_geometry, axis)[0]
-                dls = get_dls(get_thickened_geom(snapped_geometry, axis, avg_axis_dl), axis, 2)
+                dls = get_dls(get_thickened_geom(snapped_geometry, axis), axis, 2)
                 adjacent_media = [subdivided_geometry[1].medium, subdivided_geometry[2].medium]
 
                 # Create the new volumetric medium
@@ -1380,6 +1514,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         remove_outside_structures: bool = True,
         remove_outside_custom_mediums: bool = False,
         include_pml_cells: bool = False,
+        validate_geometries: bool = True,
+        deep_copy: bool = True,
         **kwargs,
     ) -> AbstractYeeGridSimulation:
         """Generate a simulation instance containing only the ``region``.
@@ -1413,6 +1549,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         include_pml_cells : bool = False
             Keep PML cells in simulation boundaries. Note that retained PML cells will be converted
             to regular cells, and the simulation domain boundary will be moved accordingly.
+        validate_geometries: bool = True
+            If ``False``, skip validation for the geometries in the resulting simulation object.
+            Simulation validators remain but only use the bounding box of the existing geometries.
+            Used internally.
+        deep_copy: bool = True
+            Recursively copy all nested objects in the generated simulation object.
         **kwargs
             Other arguments passed to new simulation instance.
         """
@@ -1483,11 +1625,24 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # thus, recreate a box instance
         new_box = Box.from_bounds(*new_bounds)
 
-        # inheritance of structures, sources, monitors, and boundary specs
+        # inheritance of structures, lumped elements, sources, monitors, and boundary specs
         if remove_outside_structures:
             new_structures = [strc for strc in self.structures if new_box.intersects(strc.geometry)]
         else:
             new_structures = list(self.structures)
+
+        # If ``validate_geometries=False``, use aux structures whose geometry is replaced by its bounding box
+        # so that other validations are still performed.
+        aux_new_structures = new_structures
+        if not validate_geometries:
+            aux_new_structures = [
+                strc.updated_copy(geometry=strc.geometry.bounding_box, deep=deep_copy)
+                for strc in new_structures
+            ]
+
+        new_lumped_elements = [
+            elem for elem in self.lumped_elements if new_box.intersects(elem.to_geometry())
+        ]
 
         if sources is None:
             sources = [src for src in self.sources if new_box.intersects(src)]
@@ -1545,7 +1700,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                     monitors=[],
                     sources=sources,  # need wavelength in case of auto grid
                     symmetry=symmetry,
-                    structures=new_structures,
+                    structures=aux_new_structures,
+                    deep=deep_copy,
                 )
 
                 # then use its bounds as region for data cut off
@@ -1557,6 +1713,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
             # now cut out custom medium data
             new_structures_reduced_data = []
+            aux_new_structures_reduced_data = []
 
             for structure in new_structures:
                 medium = structure.medium
@@ -1565,18 +1722,37 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                         new_bounds, structure.geometry.bounds
                     )
                     new_medium = medium.sel_inside(bounds=new_structure_bounds)
-                    new_structure = structure.updated_copy(medium=new_medium)
+                    # if skip geometry validation, structure validation is performed in aux structure below
+                    new_structure = structure.updated_copy(
+                        medium=new_medium, deep=deep_copy, validate=validate_geometries
+                    )
                     new_structures_reduced_data.append(new_structure)
+                    if not validate_geometries:
+                        aux_new_structure = new_structure.updated_copy(
+                            geometry=new_structure.geometry.bounding_box,
+                            deep=deep_copy,
+                            validate=True,
+                        )
+                        aux_new_structures_reduced_data.append(aux_new_structure)
                 else:
                     new_structures_reduced_data.append(structure)
+                    if not validate_geometries:
+                        aux_new_structures_reduced_data.append(
+                            structure.updated_copy(
+                                geometry=structure.geometry.bounding_box, deep=deep_copy
+                            )
+                        )
 
             new_structures = new_structures_reduced_data
+            aux_new_structures = new_structures_reduced_data
+            if not validate_geometries:
+                aux_new_structures = aux_new_structures_reduced_data
 
             if isinstance(self.medium, AbstractCustomMedium):
                 new_sim_medium = self.medium.sel_inside(bounds=new_bounds)
 
         # finally, create an updated copy with all modifications
-        new_sim = self.updated_copy(
+        new_sim_dict = dict(
             center=new_box.center,
             size=new_box.size,
             medium=new_sim_medium,
@@ -1585,11 +1761,17 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             monitors=monitors,
             sources=sources,
             symmetry=symmetry,
-            structures=new_structures,
+            structures=aux_new_structures,
+            lumped_elements=new_lumped_elements,
             **kwargs,
         )
 
-        return new_sim
+        if validate_geometries:
+            return self.updated_copy(**new_sim_dict, deep=deep_copy)
+        # 1) Perform validators not directly related to geometries
+        new_sim = self.updated_copy(**new_sim_dict, deep=deep_copy, validate=True)
+        # 2) Assemble the full simulation without validation
+        return new_sim.updated_copy(structures=new_structures, deep=deep_copy, validate=False)
 
 
 class Simulation(AbstractYeeGridSimulation):
@@ -1824,8 +2006,7 @@ class Simulation(AbstractYeeGridSimulation):
     lumped_elements: Tuple[LumpedElementType, ...] = pydantic.Field(
         (),
         title="Lumped Elements",
-        description="Tuple of lumped elements in the simulation. "
-        "Note: only :class:`tidy3d.LumpedResistor` is supported currently.",
+        description="Tuple of lumped elements in the simulation. ",
     )
     """
     Tuple of lumped elements in the simulation.
@@ -1853,8 +2034,11 @@ class Simulation(AbstractYeeGridSimulation):
     See Also
     --------
 
-    `Index <../lumped_elements.html>`_:
+    `Lumped Elements <../lumped_elements.html>`_:
         Available lumped element types.
+
+    **Notebooks:**
+        * `Using lumped elements in Tidy3D simulations <../../notebooks/LinearLumpedElements.html>`_
     """
 
     grid_spec: GridSpec = pydantic.Field(
@@ -2295,6 +2479,9 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     _sources_in_bounds = assert_objects_in_sim_bounds("sources", strict_inequality=True)
+    _lumped_elements_in_bounds = assert_objects_contained_in_sim_bounds(
+        "lumped_elements", error=False, strict_inequality=True
+    )
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
 
@@ -2349,16 +2536,28 @@ class Simulation(AbstractYeeGridSimulation):
                     )
 
                 # check the Bloch boundary + angled plane wave case
-                num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
-                if num_bloch > 0:
-                    cls._check_bloch_vec(
-                        source=source,
-                        source_ind=source_ind,
-                        bloch_vec=boundary[0].bloch_vec,
-                        dim=tan_dir,
-                        medium=medium,
-                        domain_size=size[tan_dir],
-                    )
+                if isinstance(source.angular_spec, FixedAngleSpec):
+                    num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                    if num_bloch > 0:
+                        raise SetupError(
+                            "Fixed angle plane wave sources ('FixedAngleSpec' and 'angle_theta' != 0) do "
+                            f"not require the Bloch boundary along dimension {tan_dir}. "
+                            "Either set the boundary conditions to 'Periodic' to proceed to simulate a plane "
+                            "wave with frequency-independent propagation direction, or switch to "
+                            "'FixedInPlaneKSpec' specification to simulate a plane wave with a fixed "
+                            "in-plane Bloch vector (frequency-dependent propagation direction)."
+                        )
+                else:
+                    num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                    if num_bloch > 0:
+                        cls._check_bloch_vec(
+                            source=source,
+                            source_ind=source_ind,
+                            bloch_vec=boundary[0].bloch_vec,
+                            dim=tan_dir,
+                            medium=medium,
+                            domain_size=size[tan_dir],
+                        )
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -2484,6 +2683,58 @@ class Simulation(AbstractYeeGridSimulation):
             if isinstance(source, TFSF) and not all(sym == 0 for sym in symmetry):
                 raise SetupError("TFSF sources cannot be used with symmetries.")
         return val
+
+    @staticmethod
+    def _get_fixed_angle_sources(sources: Tuple[SourceType, ...]) -> Tuple[SourceType, ...]:
+        """Get list of plane wave sources with ``FixedAngleSpec``."""
+
+        return [
+            source for source in sources if isinstance(source, PlaneWave) and source._is_fixed_angle
+        ]
+
+    @pydantic.root_validator()
+    @skip_if_fields_missing(["sources", "structures", "medium", "monitors"], root=True)
+    def check_fixed_angle_components(cls, values):
+        """Error if a fixed-angle plane wave is combined with other sources
+        or fully anisotropic mediums or gain mediums."""
+
+        fixed_angle_sources = cls._get_fixed_angle_sources(values["sources"])
+
+        if len(fixed_angle_sources) > 0:
+            if len(fixed_angle_sources) > 1:
+                raise SetupError(
+                    "A fixed-angle plane wave source cannot be combined with other sources."
+                )
+
+            structures = values.get("structures")
+            structures = structures or []
+            medium_bg = values.get("medium")
+            mediums = [medium_bg] + [structure.medium for structure in structures]
+
+            if any(med.is_fully_anisotropic for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of 'FullyAnisotropicMedium'."
+                )
+
+            if any(med.is_nonlinear for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of nonlinear materials."
+                )
+
+            if any(med.is_time_modulated for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of time-modulated materials."
+                )
+
+            if any(med.allow_gain for med in mediums):
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of gain materials."
+                )
+
+            if any(isinstance(mnt, TimeMonitor) for mnt in values["monitors"]):
+                raise SetupError("Time monitors cannot be used in fixed-angle simulations.")
+
+        return values
 
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["size", "symmetry"])
@@ -2689,6 +2940,8 @@ class Simulation(AbstractYeeGridSimulation):
 
                     # make sure medium frequency range includes all monitor frequencies
                     fmin_med, fmax_med = medium.frequency_range
+                    sci_fmin_med, sci_fmax_med = cls._scientific_notation(fmin_med, fmax_med)
+
                     if fmin_mon < fmin_med or fmax_mon > fmax_med:
                         if medium_index == 0:
                             medium_str = "The simulation background medium"
@@ -2705,7 +2958,7 @@ class Simulation(AbstractYeeGridSimulation):
                             ]
 
                         consolidated_logger.warning(
-                            f"{medium_str} has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
+                            f"{medium_str} has a frequency range: ({sci_fmin_med}, {sci_fmax_med}) "
                             "(Hz) that does not fully cover the frequencies contained in "
                             f"monitors[{monitor_index}]. "
                             "This can cause inaccuracies in the recorded results.",
@@ -2731,6 +2984,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
+        sci_fmin, sci_fmax = cls._scientific_notation(freq_min, freq_max)
 
         with log as consolidated_logger:
             for monitor_index, monitor in enumerate(val):
@@ -2741,7 +2995,7 @@ class Simulation(AbstractYeeGridSimulation):
                 if freqs.min() < freq_min or freqs.max() > freq_max:
                     consolidated_logger.warning(
                         f"monitors[{monitor_index}] contains frequencies "
-                        f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
+                        f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
                         "(Hz) as defined by the sources.",
                         custom_loc=["monitors", monitor_index, "freqs"],
                     )
@@ -2977,7 +3231,7 @@ class Simulation(AbstractYeeGridSimulation):
         - For a 2D simulation in the x-z plane, ``phi`` should be set to ``0`` or ``pi``.
 
         Note: Exact far field projection is not available yet. Currently, only
-        'far_field_approx = True' is supported.
+        ``far_field_approx = True`` is supported.
         """
 
         if val is None:
@@ -2989,8 +3243,6 @@ class Simulation(AbstractYeeGridSimulation):
         non_zero_dims = sum(1 for size in sim_size if size != 0)
         if non_zero_dims == 3:
             return val
-
-        plane = None
 
         if sim_size[0] == 0:
             plane = "y-z"
@@ -3186,7 +3438,8 @@ class Simulation(AbstractYeeGridSimulation):
                             "indicating an unexpected error. Please create a github issue so "
                             "that the problem can be investigated."
                         )
-                    if isinstance(list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)):
+                    src_medium = list(mediums)[0]
+                    if isinstance(src_medium, (AnisotropicMedium, FullyAnisotropicMedium)):
                         raise SetupError(
                             f"An anisotropic medium is detected on plane intersecting a {source.type} "
                             f"source. Injection of {source.type} into anisotropic media currently is "
@@ -3194,13 +3447,23 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
                     # check if the medium is spatially uniform
-                    if not list(mediums)[0].is_spatially_uniform:
+                    if not src_medium.is_spatially_uniform:
                         consolidated_logger.warning(
                             f"Nonuniform custom medium detected on plane intersecting a {source.type}. "
                             "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
                             custom_loc=["sources", source_id],
                         )
 
+                    if isinstance(source, PlaneWave) and source._is_fixed_angle:
+                        is_lossless_dieletric = (
+                            isinstance(src_medium, Medium) and src_medium.conductivity == 0
+                        )
+
+                        if not is_lossless_dieletric:
+                            raise SetupError(
+                                "A fixed angle plane wave can only be injected into a homogeneous isotropic"
+                                "dispersionless medium."
+                            )
         return val
 
     @pydantic.validator("normalize_index", always=True)
@@ -3324,7 +3587,7 @@ class Simulation(AbstractYeeGridSimulation):
         inside the TFSF box.
         """
         # if the grid is uniform in all directions, there's no need to proceed
-        if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
+        if not (self.grid_spec.snapped_grid_used or self.grid_spec.custom_grid_used):
             return
 
         with log as consolidated_logger:
@@ -3369,30 +3632,12 @@ class Simulation(AbstractYeeGridSimulation):
                 for model in medium._nonlinear_models:
                     model._validate_medium_freqs(medium, freqs)
 
-                    if isinstance(model, TwoPhotonAbsorption):
-                        if np.iscomplex(model.beta):
-                            log.warning(
-                                "Complex values of 'beta' in 'TwoPhotonAbsorption' are deprecated "
-                                "and may be removed in a future version. The implementation with "
-                                "complex 'beta' is as described in the 'TwoPhotonAbsorption' docstring, "
-                                "but the physical interpretation of 'beta' may not be correct if it is complex."
-                            )
+                    if model.complex_fields:
                         log.warning(
-                            "Found a medium with a 'TwoPhotonAbsorption' nonlinearity. "
-                            "This uses a phenomenological model based on complex fields, "
-                            "so care should be taken in interpreting the results. For more "
-                            "information on the model, see the documentation at "
-                            "'https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.TwoPhotonAbsorption.html' or the following reference: "
-                            "'N. Suzuki, \"FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si High-Index-Contrast Waveguides,\" J. Light. Technol. 25, 9 (2007).'."
-                        )
-
-                    if isinstance(model, KerrNonlinearity):
-                        log.warning(
-                            "Found a medium with a 'KerrNonlinearity'. Usually, "
-                            "'NonlinearSusceptibility' is preferred, as it captures "
-                            "additional physical effects by acting on the underlying real fields. "
-                            "The relation between the parameters is "
-                            "'chi3 = (4/3) * eps_0 * c_0 * n0 * Re(n0) * n2'."
+                            "Found a nonlinear model with 'use_complex_fields=True'. "
+                            "For physical simulation results, this should always "
+                            "be 'False'. This option is available only for backwards "
+                            "compatibility and may be removed in a future release."
                         )
 
     """ Pre submit validation (before web.upload()) """
@@ -3571,11 +3816,6 @@ class Simulation(AbstractYeeGridSimulation):
                 )
 
     @cached_property
-    def static_structures(self) -> list[Structure]:
-        """Structures in simulation with all autograd tracers removed."""
-        return [structure.to_static() for structure in self.structures]
-
-    @cached_property
     def monitors_data_size(self) -> Dict[str, float]:
         """Dictionary mapping monitor names to their estimated storage size in bytes."""
         data_size = {}
@@ -3693,15 +3933,17 @@ class Simulation(AbstractYeeGridSimulation):
     def with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
-        # set of indices in the structures needing adjoint monitors
-        structure_indices = {index for (_, index, *_) in sim_fields_keys}
-
-        mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
+        mnts_fld, mnts_eps = self.make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
         return self.copy(update=dict(monitors=monitors))
 
-    def make_adjoint_monitors(self, structure_indices: set[int]) -> tuple[list, list]:
+    def make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
+
+        index_to_keys = defaultdict(list)
+
+        for _, index, *fields in sim_fields_keys:
+            index_to_keys[index].append(fields)
 
         freqs = self.freqs_adjoint
 
@@ -3709,10 +3951,12 @@ class Simulation(AbstractYeeGridSimulation):
         adjoint_monitors_eps = []
 
         # make a field and permittivity monitor for every structure needing one
-        for i in structure_indices:
+        for i, field_keys in index_to_keys.items():
             structure = self.structures[i]
 
-            mnt_fld, mnt_eps = structure.make_adjoint_monitors(freqs=freqs, index=i)
+            mnt_fld, mnt_eps = structure.make_adjoint_monitors(
+                freqs=freqs, index=i, field_keys=field_keys
+            )
 
             adjoint_monitors_fld.append(mnt_fld)
             adjoint_monitors_eps.append(mnt_eps)
@@ -3725,7 +3969,9 @@ class Simulation(AbstractYeeGridSimulation):
 
         freqs = set()
         for mnt in self.monitors:
-            if isinstance(mnt, FreqMonitor):
+            # since we cannot differentiate through the FluxMonitor, we can ignore
+            # the frequencies it is tracking
+            if isinstance(mnt, FreqMonitor) and not isinstance(mnt, FluxMonitor):
                 freqs.update(mnt.freqs)
         freqs = sorted(freqs)
         return freqs
@@ -3744,6 +3990,7 @@ class Simulation(AbstractYeeGridSimulation):
         # contribution from the time of of the source pulses
         if not self.sources:
             source_time = 0.0
+            max_ref_ind = 1
         else:
             source_times = [src.source_time.end_time() for src in self.sources]
             source_times = [x for x in source_times if x is not None]
@@ -3756,15 +4003,16 @@ class Simulation(AbstractYeeGridSimulation):
             source_time_max = np.max(source_times)
             source_time = run_time_spec.source_factor * source_time_max
 
+            # get the maximum refractive index evaluated over each of all the source central frequencies
+            all_ref_inds = [
+                self.get_refractive_indices(src.source_time.freq0) for src in self.sources
+            ]
+            avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
+            max_ref_ind = np.max(avg_ref_inds, initial=1)
+
         # contribution from field decay out of the simulation
         propagation_lengths = np.array(self.bounds[1]) - np.array(self.bounds[0])
         max_propagation_length = np.max(propagation_lengths)
-
-        # get the maximum refractive index evaluated over each of all the source central frequencies
-        all_ref_inds = [self.get_refractive_indices(src.source_time.freq0) for src in self.sources]
-        avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
-        max_ref_ind = np.max(avg_ref_inds)
-
         propagation_time = run_time_spec.quality_factor * max_ref_ind * max_propagation_length / C_0
 
         return source_time + propagation_time
@@ -3814,6 +4062,16 @@ class Simulation(AbstractYeeGridSimulation):
             "Use 'Simulation.scene.background_structure' instead."
         )
         return self.scene.background_structure
+
+    @cached_property
+    def _fixed_angle_sources(self) -> Tuple[SourceType, ...]:
+        """List of plane wave sources with ``FixedAngleSpec``."""
+        return self._get_fixed_angle_sources(self.sources)
+
+    @cached_property
+    def _is_fixed_angle(self) -> bool:
+        """Whether the simulation contains fixed angle sources."""
+        return len(self._fixed_angle_sources) > 0
 
     # candidate for removal in 3.0
     @staticmethod
@@ -4240,13 +4498,28 @@ class Simulation(AbstractYeeGridSimulation):
     """ Discretization """
 
     @cached_property
+    def _dt_fixed_angle_reduction_factor(self) -> float:
+        """Reduction in time step due to plane wave source with ``FixedAngleSpec``."""
+        if self._is_fixed_angle:
+            theta = self._fixed_angle_sources[0].angle_theta
+            return (
+                FIXED_ANGLE_DT_SAFETY_FACTOR
+                * np.sqrt(3)
+                * np.cos(theta) ** 2
+                / np.sqrt(2 + np.cos(theta) ** 2)
+            )
+        return 1
+
+    @cached_property
     def scaled_courant(self) -> float:
         """When conformal mesh is applied, courant number is scaled down depending on `conformal_mesh_spec`."""
 
         mediums = self.scene.mediums
         contain_pec_structures = any(medium.is_pec for medium in mediums)
+        contain_sibc_structures = any(isinstance(medium, LossyMetalMedium) for medium in mediums)
         return self.courant * self._subpixel.courant_ratio(
-            contain_pec_structures=contain_pec_structures
+            contain_pec_structures=contain_pec_structures,
+            contain_sibc_structures=contain_sibc_structures,
         )
 
     @cached_property
@@ -4267,7 +4540,7 @@ class Simulation(AbstractYeeGridSimulation):
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
-        return n_cfl * self.scaled_courant * dl_avg / C_0
+        return self._dt_fixed_angle_reduction_factor * n_cfl * self.scaled_courant * dl_avg / C_0
 
     @cached_property
     def tmesh(self) -> Coords1D:
@@ -4290,13 +4563,12 @@ class Simulation(AbstractYeeGridSimulation):
     @cached_property
     def self_structure(self) -> Structure:
         """The simulation background as a ``Structure``."""
-        geometry = Box(size=(inf, inf, inf), center=self.center)
-        return Structure(geometry=geometry, medium=self.medium)
+        return self.scene.background_structure
 
     @cached_property
     def all_structures(self) -> List[Structure]:
         """List of all structures in the simulation (including the ``Simulation.medium``)."""
-        return [self.self_structure] + list(self.structures)
+        return self.scene.all_structures
 
     def _grid_corrections_2dmaterials(self, grid: Grid) -> Grid:
         """Correct the grid if 2d materials are present, using their volumetric equivalents."""
@@ -4314,6 +4586,8 @@ class Simulation(AbstractYeeGridSimulation):
             symmetry=self.symmetry,
             sources=self.sources,
             num_pml_layers=self.num_pml_layers,
+            internal_snapping_points=self.internal_snapping_points,
+            internal_override_structures=self.internal_override_structures,
         )
 
         # Handle 2D materials if ``AutoGrid`` is used for in-plane directions
@@ -4350,33 +4624,6 @@ class Simulation(AbstractYeeGridSimulation):
                 coords_all[axis] = grid.boundaries.to_list[axis]
 
         return Grid(boundaries=Coords(**dict(zip("xyz", coords_all))))
-
-    @cached_property
-    def grid(self) -> Grid:
-        """FDTD grid spatial locations and information.
-
-        Returns
-        -------
-        :class:`.Grid`
-            :class:`.Grid` storing the spatial locations relevant to the simulation.
-        """
-
-        # Add a simulation Box as the first structure
-        structures = [Structure(geometry=self.geometry, medium=self.medium)]
-
-        structures += self.static_structures
-
-        grid = self.grid_spec.make_grid(
-            structures=structures,
-            symmetry=self.symmetry,
-            periodic=self._periodic,
-            sources=self.sources,
-            num_pml_layers=self.num_pml_layers,
-        )
-
-        # This would AutoGrid the in-plane directions of the 2D materials
-        # return self._grid_corrections_2dmaterials(grid)
-        return grid
 
     @cached_property
     def num_cells(self) -> int:
@@ -4421,12 +4668,20 @@ class Simulation(AbstractYeeGridSimulation):
         return np.prod(self._num_computational_grid_points_dim, dtype=np.int64)
 
     def get_refractive_indices(self, freq: float) -> list[float]:
-        """List of refractive indices in the simulation at a given frequency."""
+        """List of refractive indices in the simulation at a given frequency. For anisotropic medium,
+        highest refractive index among the 3 main diagonal components is selected.
+        """
 
-        eps_values = [structure.medium.eps_model(freq) for structure in self.static_structures]
-        eps_values.append(self.medium.eps_model(freq))
+        eps_diagonal_values = [
+            structure.medium.eps_diagonal_numerical(freq) for structure in self.static_structures
+        ]
+        eps_diagonal_values.append(self.medium.eps_diagonal_numerical(freq))
+        n_diagonal_values = (
+            AbstractMedium.eps_complex_to_nk(eps)[0] for eps in eps_diagonal_values
+        )
 
-        return [AbstractMedium.eps_complex_to_nk(eps)[0] for eps in eps_values]
+        # take the largest value
+        return [max(n_diagonal) for n_diagonal in n_diagonal_values]
 
     @cached_property
     def n_max(self) -> float:
@@ -4444,6 +4699,12 @@ class Simulation(AbstractYeeGridSimulation):
         float
             Minimum wavelength in the material (microns).
         """
+        if len(self.sources) == 0:
+            raise Tidy3dError(
+                "There are no sources present in the simulation. Please "
+                "add sources before querying for the minimum material "
+                "wavelength."
+            )
         freq_max = max(source.source_time.freq0 for source in self.sources)
         wvl_min = C_0 / freq_max
 
@@ -4493,8 +4754,13 @@ class Simulation(AbstractYeeGridSimulation):
         # combined frequency upper bound
         freq_max = max(freq_source_max, freq_monitor_max)
 
+        # in fixed angle simulations both E and H are available at full and half steps
+        fixed_angle_factor = 1
+        if len(self._fixed_angle_sources) > 0:
+            fixed_angle_factor = 2
+
         if freq_max > 0:
-            nyquist_step = int(1 / (2 * freq_max) / self.dt) - 1
+            nyquist_step = int(1 / (2 * freq_max) / self.dt * fixed_angle_factor) - 1
             nyquist_step = max(1, nyquist_step)
         else:
             nyquist_step = 1
@@ -4592,13 +4858,47 @@ class Simulation(AbstractYeeGridSimulation):
             Simulation after application of heat and/or charge data.
         """
 
+        new_carrier_data = {
+            "electron_density": electron_density,
+            "hole_density": hole_density,
+        }
+        for carrier, data in zip(
+            ["electron_density", "hole_density"], [electron_density, hole_density]
+        ):
+            if isinstance(data, TriangularGridDataset) or isinstance(data, TetrahedralGridDataset):
+                if data._num_fields > 1:
+                    raise ValueError(
+                        f"The value entered for '{carrier}' contains multiple field values. "
+                        "Please select one before calling this function. This can be "
+                        "done with, e.g., 'electron_data.sel(voltage=1)'"
+                    )
+                elif len(data.values.dims) > 1:
+                    new_values = IndexedDataArray(
+                        np.array(data.values.data).flatten(),
+                        coords=dict(index=data.values.index.data),
+                    )
+                    if isinstance(data, TetrahedralGridDataset):
+                        new_carrier_data[carrier] = TetrahedralGridDataset(
+                            values=new_values,
+                            cells=data.cells,
+                            points=data.points,
+                        )
+                    elif isinstance(data, TriangularGridDataset):
+                        new_carrier_data[carrier] = TriangularGridDataset(
+                            values=new_values,
+                            cells=data.cells,
+                            points=data.points,
+                            normal_pos=data.normal_pos,
+                            normal_axis=data.normal_axis,
+                        )
+
         sim_dict = self.dict()
         structures = self.structures
         sim_bounds = self.simulation_bounds
         array_dict = {
             "temperature": temperature,
-            "electron_density": electron_density,
-            "hole_density": hole_density,
+            "electron_density": new_carrier_data["electron_density"],
+            "hole_density": new_carrier_data["hole_density"],
         }
 
         # For each structure made of mediums with perturbation models, convert those mediums into

@@ -26,15 +26,10 @@ from .....components.data.monitor_data import (
     MonitorData,
 )
 from .....components.geometry.base import Box
-from .....components.source import (
-    CustomCurrentSource,
-    CustomFieldSource,
-    GaussianPulse,
-    ModeSource,
-    PlaneWave,
-    PointDipole,
-    Source,
-)
+from .....components.source.base import Source
+from .....components.source.current import CustomCurrentSource, PointDipole
+from .....components.source.field import CustomFieldSource, ModeSource, PlaneWave
+from .....components.source.time import GaussianPulse
 from .....constants import C_0, ETA_0, MU_0
 from .....exceptions import AdjointError
 from ..base import JaxObject

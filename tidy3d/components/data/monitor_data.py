@@ -21,6 +21,7 @@ from ..grid.grid import Coords, Grid
 from ..medium import Medium, MediumType
 from ..monitor import (
     DiffractionMonitor,
+    DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
@@ -34,20 +35,25 @@ from ..monitor import (
     MonitorType,
     PermittivityMonitor,
 )
-from ..source import (
+from ..source.base import Source
+from ..source.current import (
     CustomCurrentSource,
+    PointDipole,
+)
+from ..source.field import (
     CustomFieldSource,
-    GaussianPulse,
     ModeSource,
     PlaneWave,
-    PointDipole,
-    Source,
+)
+from ..source.time import (
+    GaussianPulse,
     SourceTimeType,
 )
 from ..types import (
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,
+    EMField,
     EpsSpecType,
     Literal,
     Numpy,
@@ -89,6 +95,7 @@ Coords1D = ArrayFloat1D
 
 # how much to shift the adjoint field source for 0-D axes dimensions
 SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
+AXIAL_RATIO_CAP = 100
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -239,6 +246,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         """Dictionary of data fields to create data with expanded symmetry."""
 
         update_dict = {}
+        warn_interp = False
         for field_name, scalar_data in self.field_components.items():
             eigenval_fn = self.symmetry_eigenvalues[field_name]
 
@@ -266,8 +274,44 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
 
-                scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
-                scalar_data = scalar_data.assign_coords({dim_name: coords})
+                # using sel vs interp is faster, and should always be fine
+                # if the data is set up correctly such that its colocation
+                # matches the monitor colocation settings. If these do not match,
+                # then we need to interpolate, which is slower.
+                use_sel = (
+                    len(scalar_data.coords[dim_name]) == 1
+                    or coords[-1] in scalar_data.coords[dim_name]
+                )
+                if use_sel:
+                    scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
+                    scalar_data = scalar_data.assign_coords({dim_name: coords})
+                else:
+                    warn_interp = True
+                    no_flip_inds = np.where(coords >= sym_loc)[0]
+                    scalar_data_arrays = []
+                    if len(scalar_data.coords[dim_name]) == 1:
+                        scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
+                    else:
+                        if len(flip_inds) > 0:
+                            scalar_data_flip = scalar_data.interp(
+                                **{dim_name: coords_interp[flip_inds][::-1]},
+                                method="linear",
+                                kwargs={"fill_value": "extrapolate"},
+                                assume_sorted=True,
+                            ).isel({dim_name: slice(None, None, -1)})
+                            scalar_data_flip = scalar_data_flip.assign_coords(
+                                {dim_name: coords[flip_inds]}
+                            )
+                            scalar_data_arrays.append(scalar_data_flip)
+                        if len(no_flip_inds) > 0:
+                            scalar_data_no_flip = scalar_data.interp(
+                                **{dim_name: coords_interp[no_flip_inds]},
+                                method="linear",
+                                kwargs={"fill_value": "extrapolate"},
+                                assume_sorted=True,
+                            )
+                            scalar_data_arrays.append(scalar_data_no_flip)
+                        scalar_data = xr.concat(scalar_data_arrays, dim=dim_name)
 
                 # apply the symmetry eigenvalue (if defined) to the flipped values
                 if eigenval_fn is not None:
@@ -280,6 +324,13 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             update_dict[field_name] = scalar_data
 
         update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
+
+        if warn_interp:
+            log.warning(
+                "Interpolating 'ElectromagneticFieldData'. This may be due to "
+                "mismatch between monitor colocation and data colocation, "
+                "and can lead to performance issues."
+            )
 
         return update_dict
 
@@ -570,6 +621,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
+        self._check_fields_stored(["Ex", "Ey", "Ez"])
+
         normal_dim = "xyz"[self.monitor.size.index(0)]
         fields = self._colocated_fields
         components = ("Ex", "Ey", "Ez")
@@ -677,9 +730,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Tangential fields for current and other field data
         fields_self = self._colocated_tangential_fields
 
-        fields_other = field_data._colocated_tangential_fields
         if conjugate:
             fields_self = {key: field.conj() for key, field in fields_self.items()}
+
+        fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
 
         # Drop size-1 dimensions in the other data
         fields_other = {key: field.squeeze(drop=True) for key, field in fields_other.items()}
@@ -694,6 +748,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Integrate over plane
         d_area = self._diff_area
         integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
+
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
 
     def _interpolated_tangential_fields(self, coords: ArrayFloat2D) -> Dict[str, DataArray]:
@@ -922,6 +977,55 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             else:
                 new_data[comp] = np.conj(field)
         return self.copy(update=new_data)
+
+    def _check_fields_stored(self, components: list[str]):
+        """Check that all requested field components are stored in the data."""
+        missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
+        if len(missing_comps) > 0:
+            raise DataError(
+                f"Field components {missing_comps} not included in this data object. Use "
+                "the 'fields' argument of a field monitor to select which components are stored."
+            )
+
+    def translated_copy(self, vector: Coordinate) -> ElectromagneticFieldData:
+        """Create a copy of the :class:`.ElectromagneticFieldData` with fields translated
+        by the provided vector. Can be used together with ``dot`` or ``outer_dot``
+        to compute overlaps between field data at different locations.
+
+        Parameters
+        ----------
+        vector: :class:`.Coordinate`
+            Translation vector to apply to the field data.
+
+        Returns
+        -------
+        :class:`ElectromagneticFieldData`
+            A data object with the translated fields.
+        """
+        field_kwargs = {}
+        for key, val in self.field_components.items():
+            coords = dict(val.coords)
+            coords["x"] = coords["x"] + vector[0]
+            coords["y"] = coords["y"] + vector[1]
+            coords["z"] = coords["z"] + vector[2]
+            field_kwargs[key] = val.assign_coords(coords)
+
+        symmetry_center = self.symmetry_center
+        if symmetry_center is not None:
+            symmetry_center = tuple([x + y for (x, y) in zip(symmetry_center, vector)])
+        grid_expanded = self.grid_expanded._translated_copy(vector=vector)
+
+        monitor_center = tuple([x + y for (x, y) in zip(self.monitor.center, vector)])
+        monitor = self.monitor.updated_copy(center=monitor_center)
+
+        return self.updated_copy(
+            monitor=monitor,
+            symmetry=self.symmetry,
+            symmetry_center=symmetry_center,
+            grid_expanded=grid_expanded,
+            **self._grid_correction_dict,
+            **field_kwargs,
+        )
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
@@ -1385,7 +1489,11 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         newly created data."""
 
         update_dict = dict(self._grid_correction_dict, **self.field_components)
-        update_dict = {key: field.isel(**isel_kwargs) for key, field in update_dict.items()}
+        update_dict = {
+            key: field.isel(**isel_kwargs)
+            for key, field in update_dict.items()
+            if isinstance(field, DataArray)
+        }
         return self._updated(update=update_dict)
 
     def _assign_coords(self, **assign_coords_kwargs):
@@ -1635,12 +1743,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         by popping the normal axis from the list of ``x, y, z``, so e.g. ``x`` and ``z`` for
         propagation in the ``y`` direction.
         """
-        if len(self.field_components) == 0:
-            raise DataError(
-                "Field data not included in this ModeData onbject. Set "
-                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
-                "include the mode field profiles in the corresponding 'ModeData'."
-            )
+        self._check_fields_stored(["Ex", "Ey", "Ez"])
 
         tan_dims = self._tangential_dims
         e_field = self._colocated_propagation_axes_field("E")
@@ -1672,12 +1775,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             are completely transverse (zero electric and magnetic field in the propagation
             direction) have TE fraction and TM fraction both equal to one.
         """
-        if len(self.field_components) == 0:
-            raise DataError(
-                "Field data not included in this ModeData onbject. Set "
-                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
-                "include the mode field profiles in the corresponding 'ModeData'."
-            )
+        self._check_fields_stored(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"])
 
         tan_dims = self._tangential_dims
         e_field = self._colocated_propagation_axes_field("E")
@@ -1744,6 +1842,17 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             drop.append("loss (dB/cm)")
 
         return dataset.drop_vars(drop).to_dataframe()
+
+    def _check_fields_stored(self, components: list[EMField]):
+        """Check that all requested field components are stored in the data."""
+
+        # ModeData can either have all field components or none
+        if len(self.field_components) == 0:
+            raise DataError(
+                "Field data not included in this ModeData object. Set "
+                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
+                "include the mode field profiles in the corresponding 'ModeData'."
+            )
 
     def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitorData``."""
@@ -1893,6 +2002,16 @@ class ModeSolverData(ModeData):
         new_data["monitor"] = mnt.updated_copy(direction=new_dir, store_fields_direction=new_dir)
         return self.copy(update=new_data)
 
+    def _check_fields_stored(self, components: list[str]):
+        """Check that all requested field components are stored in the data."""
+        missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
+        if len(missing_comps) > 0:
+            raise DataError(
+                f"Field components {missing_comps} not included in this ModeSolverData object. Use "
+                "the 'fields' argument of a `ModeSolver` or a `ModeSolverMonitor` to select which "
+                "components are stored."
+            )
+
 
 class FluxData(MonitorData):
     """
@@ -2000,6 +2119,7 @@ ProjMonitorType = Union[
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
+    DirectivityMonitor,
 ]
 
 
@@ -2015,7 +2135,7 @@ class AbstractFieldProjectionData(MonitorData):
 
     Er: ProjFieldType = pd.Field(
         ...,
-        title="Ephi",
+        title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
     Etheta: ProjFieldType = pd.Field(
@@ -2030,7 +2150,7 @@ class AbstractFieldProjectionData(MonitorData):
     )
     Hr: ProjFieldType = pd.Field(
         ...,
-        title="Hphi",
+        title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
     Htheta: ProjFieldType = pd.Field(
@@ -2742,7 +2862,7 @@ class DiffractionData(AbstractFieldProjectionData):
         units=MICROMETER,
     )
 
-    bloch_vecs: Tuple[float, float] = pd.Field(
+    bloch_vecs: Union[Tuple[float, float], Tuple[ArrayFloat1D, ArrayFloat1D]] = pd.Field(
         ...,
         title="Bloch vectors",
         description="Bloch vectors along the local x and y directions in units of "
@@ -2750,20 +2870,24 @@ class DiffractionData(AbstractFieldProjectionData):
     )
 
     @staticmethod
-    def shifted_orders(orders: Tuple[int, ...], bloch_vec: float) -> np.ndarray:
+    def shifted_orders(orders: Tuple[int, ...], bloch_vec: Union[float, np.ndarray]) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
-        return bloch_vec + np.atleast_1d(orders)
+        return bloch_vec + np.atleast_2d(orders).T
 
     @staticmethod
     def reciprocal_coords(
-        orders: np.ndarray, size: float, bloch_vec: float, f: float, medium: MediumType
+        orders: np.ndarray,
+        size: float,
+        bloch_vec: Union[float, np.ndarray],
+        f: float,
+        medium: MediumType,
     ) -> np.ndarray:
         """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
         if size == 0:
             return np.atleast_2d(0)
         epsilon = medium.eps_model(f)
         bloch_array = DiffractionData.shifted_orders(orders, bloch_vec)
-        return bloch_array[:, None] / size * C_0 / f / np.real(np.sqrt(epsilon))
+        return bloch_array / size * C_0 / f / np.real(np.sqrt(epsilon))
 
     @staticmethod
     def compute_angles(
@@ -3013,6 +3137,156 @@ class DiffractionData(AbstractFieldProjectionData):
         return adj_src
 
 
+class DirectivityData(AbstractFieldProjectionData):
+    """
+    Data associated with a :class:`.DirectivityMonitor`.
+
+    Example
+    -------
+    >>> from tidy3d import FluxDataArray, FieldProjectionAngleDataArray
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> r = np.atleast_1d(1e6)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
+    >>> coords_flux = dict(f=f)
+    >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
+    >>> flux_data = FluxDataArray(np.random.random(len(f)), coords=coords_flux)
+    >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
+    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
+    >>> data = DirectivityData(monitor=monitor, flux=flux_data, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field)
+    """
+
+    monitor: DirectivityMonitor = pd.Field(
+        ...,
+        title="Directivity monitor",
+        description="Monitor describing the angle-based projection grid on which to measure directivity data.",
+    )
+
+    flux: FluxDataArray = pd.Field(..., title="Flux", description="Flux values.")
+
+    Er: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Er",
+        description="Spatial distribution of r-component of the electric field.",
+    )
+    Etheta: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Etheta",
+        description="Spatial distribution of the theta-component of the electric field.",
+    )
+    Ephi: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Ephi",
+        description="Spatial distribution of phi-component of the electric field.",
+    )
+    Hr: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Hr",
+        description="Spatial distribution of r-component of the magnetic field.",
+    )
+    Htheta: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Htheta",
+        description="Spatial distribution of theta-component of the magnetic field.",
+    )
+    Hphi: FieldProjectionAngleDataArray = pd.Field(
+        ...,
+        title="Hphi",
+        description="Spatial distribution of phi-component of the magnetic field.",
+    )
+
+    def normalize(
+        self, source_spectrum_fn: Callable[[float], complex]
+    ) -> Union[AbstractFieldProjectionData, FluxData]:
+        """
+        Return a copy of self after normalization is applied using the source
+        spectrum function, for both field components and flux data.
+        """
+
+        fields_norm = {}
+        for field_name, field_data in self.field_components.items():
+            src_amps = source_spectrum_fn(field_data.f)
+            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
+
+        # Normalize flux
+        source_freq_amps = source_spectrum_fn(self.flux.f)
+        source_power = abs(source_freq_amps) ** 2
+        new_flux = (self.flux / source_power).astype(self.flux.dtype)
+
+        return self.copy(update=dict(fields_norm, flux=new_flux))
+
+    @property
+    def directivity(self) -> DataArray:
+        """Directivity in the frequency domain as a function of angles theta and phi.
+        Directivity is a dimensionless quantity defined as the ratio of the radiation
+        intensity in a given direction to the average radiation intensity over all directions."""
+
+        power_theta = 0.5 * np.real(self.Etheta * np.conj(self.Hphi))
+        power_phi = 0.5 * np.real(-self.Ephi * np.conj(self.Htheta))
+        power = power_theta + power_phi
+
+        # Normalize the aligned flux by dividing by (4 * pi * r^2) to adjust the flux for
+        # spherical surface area normalization
+        flux_normed = self.flux / (4 * np.pi * self.monitor.proj_distance**2)
+
+        return power / flux_normed
+
+    @property
+    def axial_ratio(self) -> DataArray:
+        """Axial Ratio (AR) in the frequency domain as a function of angles theta and phi.
+        AR is a dimensionless quantity defined as the ratio of the major axis to the minor
+        axis of the polarization ellipse.
+
+        Note
+        ----
+        The axial ratio computation is based on:
+
+        Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        John Wiley & Sons, Chapter 2.12 (2016).
+        """
+
+        # Calculate the terms of the equation
+        E1_abs_squared = np.abs(self.Etheta) ** 2
+        E2_abs_squared = np.abs(self.Ephi) ** 2
+        E1_squared = self.Etheta**2
+        E2_squared = self.Ephi**2
+
+        # Axial ratio calculations based on equations (2-65) to (2-67)
+        # from Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        # John Wiley & Sons, 2016. These calculations use complex numbers
+        # directly and are equivalent to the referenced equations.
+        AR_numerator = E1_abs_squared + E2_abs_squared + np.abs(E1_squared + E2_squared)
+        AR_denominator = E1_abs_squared + E2_abs_squared - np.abs(E1_squared + E2_squared)
+
+        inds_zero = AR_numerator == 0
+        axial_ratio_inverse = xr.zeros_like(AR_numerator)
+        # Perform the axial ratio inverse calculation where the numerator is non-zero
+        axial_ratio_inverse = axial_ratio_inverse.where(
+            inds_zero, np.sqrt(np.abs(AR_denominator / AR_numerator))
+        )
+
+        # Cap the axial ratio values at 1 / AXIAL_RATIO_CAP
+        axial_ratio_inverse = axial_ratio_inverse.where(
+            axial_ratio_inverse >= 1 / AXIAL_RATIO_CAP, 1 / AXIAL_RATIO_CAP
+        )
+
+        return 1 / axial_ratio_inverse
+
+    @property
+    def left_polarization(self) -> DataArray:
+        "Electric far field for left-hand circular polarization"
+        "(counterclockwise component) with an angle-based projection grid."
+        return (self.Etheta - 1j * self.Ephi) / np.sqrt(2)
+
+    @property
+    def right_polarization(self) -> DataArray:
+        "Electric far field for right-hand circular polarization"
+        "(clockwise component) with an angle-based projection grid."
+        return (self.Etheta + 1j * self.Ephi) / np.sqrt(2)
+
+
 MonitorDataTypes = (
     FieldData,
     FieldTimeData,
@@ -3025,6 +3299,7 @@ MonitorDataTypes = (
     FieldProjectionCartesianData,
     FieldProjectionAngleData,
     DiffractionData,
+    DirectivityData,
 )
 
 MonitorDataType = Union[MonitorDataTypes]

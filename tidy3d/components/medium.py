@@ -15,11 +15,15 @@ import autograd.numpy as np
 import numpy as npo
 import pydantic.v1 as pd
 import xarray as xr
+from scipy import signal
+
+from tidy3d.components.material.tcad.heat import ThermalSpecType
 
 from ..constants import (
     C_0,
     CONDUCTIVITY,
     EPSILON_0,
+    ETA_0,
     HBAR,
     HERTZ,
     MICROMETER,
@@ -38,20 +42,28 @@ from .autograd.types import AutogradFieldMap, TracedFloat, TracedPoleAndResidue,
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import (
-    CustomSpatialDataType,
-    CustomSpatialDataTypeAnnotated,
     ElectromagneticFieldDataset,
     PermittivityDataset,
-    UnstructuredGridDataset,
+)
+from .data.unstructured.base import UnstructuredGridDataset
+from .data.utils import (
+    CustomSpatialDataType,
+    CustomSpatialDataTypeAnnotated,
     _check_same_coordinates,
     _get_numpy_array,
     _ones_like,
     _zeros_like,
 )
 from .data.validators import validate_no_nans
+from .dispersion_fitter import (
+    LOSS_CHECK_MAX,
+    LOSS_CHECK_MIN,
+    LOSS_CHECK_NUM,
+    fit,
+    imag_resp_extrema_locs,
+)
 from .geometry.base import Geometry
 from .grid.grid import Coords, Grid
-from .heat_spec import HeatSpecType
 from .parameter_perturbation import (
     IndexPerturbation,
     ParameterPerturbation,
@@ -69,11 +81,12 @@ from .types import (
     Complex,
     FreqBound,
     InterpMethod,
+    Literal,
     PoleAndResidue,
     TensorReal,
 )
 from .validators import _warn_potential_error, validate_name_str, validate_parameter_perturbation
-from .viz import add_ax_if_none
+from .viz import VisualizationSpec, add_ax_if_none
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -85,11 +98,11 @@ FILL_VALUE = "extrapolate"
 NONLINEAR_MAX_NUM_ITERS = 100
 NONLINEAR_DEFAULT_NUM_ITERS = 5
 
-# Range for checking upper bound of Im[eps], in addition to extrema method.
-# The range is in unit of eV and it's in log scale.
-LOSS_CHECK_MIN = -10
-LOSS_CHECK_MAX = 4
-LOSS_CHECK_NUM = 1000
+# Lossy metal
+LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY = 20
+LOSSY_METAL_SCALED_REAL_PART = 10.0
+LOSSY_METAL_DEFAULT_MAX_POLES = 5
+LOSSY_METAL_DEFAULT_TOLERANCE_RMS = 1e-3
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -205,6 +218,8 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
         freqs: List[pd.PositiveFloat],
     ) -> complex:
         """Get a single value for n0."""
+        if freqs is None:
+            freqs = []
         freqs = np.array(freqs, dtype=float)
         ns, ks = medium.nk_model(freqs)
         nks = ns + 1j * ks
@@ -243,7 +258,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
     @property
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
-        pass
+        return False
 
 
 class NonlinearSusceptibility(NonlinearModel):
@@ -309,11 +324,6 @@ class NonlinearSusceptibility(NonlinearModel):
             )
         return val
 
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        return False
-
 
 class TwoPhotonAbsorption(NonlinearModel):
     """Model for two-photon absorption (TPA) nonlinearity which gives an intensity-dependent
@@ -321,40 +331,59 @@ class TwoPhotonAbsorption(NonlinearModel):
     Also includes free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) effects.
     The expression for the nonlinear polarization is given below.
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        P_{NL} = P_{TPA} + P_{FCA} + P_{FCPD} \\\\
-        P_{TPA} = -\\frac{c_0^2 \\varepsilon_0^2 n_0 \\operatorname{Re}(n_0) \\beta}{2 i \\omega} |E|^2 E \\\\
-        P_{FCA} = -\\frac{c_0 \\varepsilon_0 n_0 \\sigma N_f}{i \\omega} E \\\\
-        \\frac{dN_f}{dt} = \\frac{c_0^2 \\varepsilon_0^2 n_0^2 \\beta}{8 q_e \\hbar \\omega} |E|^4 - \\frac{N_f}{\\tau} \\\\
-        N_e = N_h = N_f \\\\
-        P_{FCPD} = \\varepsilon_0 2 n_0 \\Delta n (N_f) E \\\\
-        \\Delta n (N_f) = (c_e N_e^{e_e} + c_h N_h^{e_h})
+        This model uses real time-domain fields, so :math:`\\beta` must be real.
 
-    Note
-    ----
-    This frequency-domain equation is implemented in the time domain using complex-valued fields.
+        .. math::
 
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
+            P_{NL} = P_{TPA} + P_{FCA} + P_{FCPD} \\\\
+            P_{TPA} = -\\frac{4}{3}\\frac{c_0^2 \\varepsilon_0^2 n_0^2 \\beta}{2 i \\omega} |E|^2 E \\\\
+            P_{FCA} = -\\frac{c_0 \\varepsilon_0 n_0 \\sigma N_f}{i \\omega} E \\\\
+            \\frac{dN_f}{dt} = \\frac{8}{3}\\frac{c_0^2 \\varepsilon_0^2 n_0^2 \\beta}{8 q_e \\hbar \\omega} |E|^4 - \\frac{N_f}{\\tau} \\\\
+            N_e = N_h = N_f \\\\
+            P_{FCPD} = \\varepsilon_0 2 n_0 \\Delta n (N_f) E \\\\
+            \\Delta n (N_f) = (c_e N_e^{e_e} + c_h N_h^{e_h})
 
-    Note
-    ----
-    The implementation is described in::
+        In these equations, :math:`n_0` means the real part of the linear
+        refractive index of the medium.
 
-        N. Suzuki, "FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si
-        High-Index-Contrast Waveguides," J. Light. Technol. 25, 9 (2007).
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.num_iters` can
+        help with convergence.
+
+        For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+        is applied separately to the real and imaginary parts, so that the above equation
+        holds when both :math:`E` and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        The nonlinearity is only applied to the real-valued fields since they are the
+        physical fields.
+
+        Different field components do not interact nonlinearly. For example,
+        when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+        This approximation is valid when the :math:`E` field is predominantly polarized along one
+        of the ``x``, ``y``, or ``z`` axes.
+
+        The implementation is described in::
+
+            N. Suzuki, "FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si
+            High-Index-Contrast Waveguides," J. Light. Technol. 25, 9 (2007).
+
+        .. TODO add links to notebooks here.
 
     Example
     -------
     >>> tpa_model = TwoPhotonAbsorption(beta=1)
     """
+
+    use_complex_fields: bool = pd.Field(
+        False,
+        title="Use complex fields",
+        description="Whether to use the old deprecated complex-fields implementation. "
+        "The default real-field implementation is more physical and is always "
+        "recommended; this option is only available for backwards compatibility "
+        "with Tidy3D version < 2.8 and may be removed in a future release.",
+    )
 
     beta: Union[float, Complex] = pd.Field(
         0,
@@ -416,10 +445,26 @@ class TwoPhotonAbsorption(NonlinearModel):
         "from the simulation sources (as long as these are all equal).",
     )
 
+    @pd.validator("beta", always=True)
+    def _validate_beta_real(cls, val, values):
+        """Check that beta is real and give a useful error if it is not."""
+        use_complex_fields = values.get("use_complex_fields")
+        if use_complex_fields:
+            return val
+        if not np.isreal(val):
+            raise SetupError(
+                "Complex values of 'beta' in 'TwoPhotonAbsorption' are not "
+                "supported; the implementation uses the "
+                "physical real-valued fields."
+            )
+        return val
+
     def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
         """Any validation that depends on knowing the central frequencies of the sources.
         This includes passivity checking, if necessary."""
         n0 = self._get_n0(self.n0, medium, freqs)
+        if freqs is not None:
+            _ = self._get_freq0(self.freq0, freqs)
         beta = self.beta
         if not medium.allow_gain:
             chi_imag = np.real(beta * n0 * np.real(n0))
@@ -444,12 +489,12 @@ class TwoPhotonAbsorption(NonlinearModel):
         """Check that the model is compatible with the medium."""
         # if n0 is specified, we can go ahead and validate passivity
         if self.n0 is not None:
-            self._validate_medium_freqs(medium, [])
+            self._validate_medium_freqs(medium, None)
 
     @property
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
-        return True
+        return self.use_complex_fields
 
 
 class KerrNonlinearity(NonlinearModel):
@@ -457,33 +502,56 @@ class KerrNonlinearity(NonlinearModel):
     of the form :math:`n = n_0 + n_2 I`. The expression for the nonlinear polarization
     is given below.
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        P_{NL} = \\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0) n_2 |E|^2 E
+        This model uses real time-domain fields, so :math:`\\n_2` must be real.
 
-    Note
-    ----
-    The fields in this equation are complex-valued, allowing a direct implementation of the Kerr
-    nonlinearity. In contrast, the model :class:`.NonlinearSusceptibility` implements a
-    chi3 nonlinear susceptibility using real-valued fields, giving rise to Kerr nonlinearity
-    as well as third-harmonic generation and other effects. The relationship between the parameters is given by
-    :math:`n_2 = \\frac{3}{4} \\frac{1}{\\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0)} \\chi_3`. The additional
-    factor of :math:`\\frac{3}{4}` comes from the usage of complex-valued fields for the Kerr
-    nonlinearity and real-valued fields for the nonlinear susceptibility.
+        This model is equivalent to a :class:`.NonlinearSusceptibility`; the
+        relation between the parameters is given below.
 
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
+        .. math::
+
+            P_{NL} = \\varepsilon_0 \\chi_3 |E|^2 E \\\\
+            n_2 = \\frac{3}{4 n_0^2 \\varepsilon_0 c_0} \\chi_3
+
+        In these equations, :math:`n_0` means the real part of the linear
+        refractive index of the medium.
+
+        To simulate nonlinear loss, consider instead using a :class:`.TwoPhotonAbsorption`
+        model, which implements a more physical dispersive loss of the form
+        :math:`\\chi_{TPA} = i \\frac{c_0 n_0 \\beta}{\\omega} I`.
+
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.num_iters` can
+        help with convergence.
+
+        For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+        is applied separately to the real and imaginary parts, so that the above equation
+        holds when both :math:`E` and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        The nonlinearity is only applied to the real-valued fields since they are the
+        physical fields.
+
+        Different field components do not interact nonlinearly. For example,
+        when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+        This approximation is valid when the :math:`E` field is predominantly polarized along one
+        of the ``x``, ``y``, or ``z`` axes.
+
+        .. TODO add links to notebooks here.
 
     Example
     -------
     >>> kerr_model = KerrNonlinearity(n2=1)
     """
+
+    use_complex_fields: bool = pd.Field(
+        False,
+        title="Use complex fields",
+        description="Whether to use the old deprecated complex-fields implementation. "
+        "The default real-field implementation is more physical and is always "
+        "recommended; this option is only available for backwards compatibility "
+        "with Tidy3D version < 2.8 and may be removed in a future release.",
+    )
 
     n2: Complex = pd.Field(
         0,
@@ -500,11 +568,31 @@ class KerrNonlinearity(NonlinearModel):
         "frequencies of the simulation sources (as long as these are all equal).",
     )
 
+    @pd.validator("n2", always=True)
+    def _validate_n2_real(cls, val, values):
+        """Check that n2 is real and give a useful error if it is not."""
+        use_complex_fields = values.get("use_complex_fields")
+        if use_complex_fields:
+            return val
+        if not np.isreal(val):
+            raise SetupError(
+                "Complex values of 'n2' in 'KerrNonlinearity' are not "
+                "supported; the implementation uses the "
+                "physical real-valued fields. "
+                "To simulate nonlinear loss, consider instead using a "
+                "'TwoPhotonAbsorption' model, which implements a "
+                "more physical dispersive loss of the form "
+                "'chi_{TPA} = i (c_0 n_0 beta / omega) I'."
+            )
+        return val
+
     def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
         """Any validation that depends on knowing the central frequencies of the sources.
         This includes passivity checking, if necessary."""
         n0 = self._get_n0(self.n0, medium, freqs)
         n2 = self.n2
+        if not self.use_complex_fields:
+            return
         if not medium.allow_gain:
             chi_imag = np.imag(n2 * n0 * np.real(n0))
             if chi_imag < 0:
@@ -516,6 +604,12 @@ class KerrNonlinearity(NonlinearModel):
                     "gain medium are unstable, and are likely to diverge."
                 )
 
+    def _validate_medium(self, medium: AbstractMedium):
+        """Check that the model is compatible with the medium."""
+        # if n0 is specified, we can go ahead and validate passivity
+        if self.n0 is not None:
+            self._validate_medium_freqs(medium, [])
+
     def _hardcode_medium_freqs(
         self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
     ) -> KerrNonlinearity:
@@ -523,16 +617,10 @@ class KerrNonlinearity(NonlinearModel):
         n0 = self._get_n0(n0=self.n0, medium=medium, freqs=freqs)
         return self.updated_copy(n0=n0)
 
-    def _validate_medium(self, medium: AbstractMedium):
-        """Check that the model is compatible with the medium."""
-        # if n0 is specified, we can go ahead and validate passivity
-        if self.n0 is not None:
-            self._validate_medium_freqs(medium, [])
-
     @property
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
-        return True
+        return self.use_complex_fields
 
 
 NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
@@ -580,6 +668,29 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
                 "were found in a single 'NonlinearSpec'. Please ensure that "
                 "each type of 'NonlinearModel' appears at most once in a single 'NonlinearSpec'."
             )
+        return val
+
+    @pd.validator("models", always=True)
+    def _consistent_old_complex_fields(cls, val):
+        """Ensure that old complex fields implementation is used consistently."""
+        if val is None:
+            return val
+        use_complex_fields = False
+        for model in val:
+            if isinstance(model, (KerrNonlinearity, TwoPhotonAbsorption)):
+                if model.use_complex_fields:
+                    use_complex_fields = True
+                elif use_complex_fields:
+                    # if one model uses complex fields, they all should
+                    raise SetupError(
+                        "Some of the nonlinear models have "
+                        "'use_complex_fields=True' and some have "
+                        "'use_complex_fields=False'. This option "
+                        "is only available for backwards compatibility "
+                        "with Tidy3D version < 2.8 "
+                        "and it must be consistent across the nonlinear "
+                        "models in a given 'NonlinearSpec'."
+                    )
         return val
 
     @pd.validator("num_iters", always=True)
@@ -637,8 +748,14 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         description="Modulation spec applied on top of the base medium properties.",
     )
 
+    viz_spec: Optional[VisualizationSpec] = pd.Field(
+        None,
+        title="Visualization Specification",
+        description="Plotting specification for visualizing medium.",
+    )
+
     @cached_property
-    def _nonlinear_models(self) -> NonlinearSpec:
+    def _nonlinear_models(self) -> List:
         """The nonlinear models in the nonlinear_spec."""
         if self.nonlinear_spec is None:
             return []
@@ -646,7 +763,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             return [self.nonlinear_spec]
         if self.nonlinear_spec.models is None:
             return []
-        return self.nonlinear_spec.models
+        return list(self.nonlinear_spec.models)
 
     @cached_property
     def _nonlinear_num_iters(self) -> pd.PositiveInt:
@@ -711,12 +828,12 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 "Time modulation is not currently supported for the components " "of a 2D medium."
             )
 
-    heat_spec: Optional[HeatSpecType] = pd.Field(
+    heat_spec: Optional[ThermalSpecType] = pd.Field(
         None,
         title="Heat Specification",
-        description="Specification of the medium heat properties. They are used for solving "
-        "the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for "
-        "investigating the influence of heat propagation on the properties of optical systems. "
+        description="DEPRECATED: Use `td.MultiPhysicsMedium`. Specification of the medium heat properties. They are "
+        "used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be"
+        "used for investigating the influence of heat propagation on the properties of optical systems. "
         "Once the temperature distribution in the system is found using ``HeatSimulation`` object, "
         "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
         "models defined into spatially dependent custom mediums. "
@@ -724,6 +841,27 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "``Simulation``.",
         discriminator=TYPE_TAG_STR,
     )
+
+    @property
+    def charge(self):
+        return ValueError(f"A `charge` medium does not exist in this Medium definition: {self}")
+
+    @property
+    def electrical(self):
+        return ValueError(
+            f"An `electrical` medium does not exist in this Medium definition: {self}"
+        )
+
+    @property
+    def heat(self):
+        if self.heat_spec:
+            return self.heat_spec
+        else:
+            return ValueError(f"A `heat` medium does not exist in this Medium definition: {self}")
+
+    @property
+    def optical(self):
+        return ValueError(f"An `optical` medium does not exist in this Medium definition: {self}")
 
     @pd.validator("modulation_spec", always=True)
     @skip_if_fields_missing(["nonlinear_spec"])
@@ -803,6 +941,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
+        # TODO this should be moved out of here into FDTD Simulation Mediums?
         """Complex-valued permittivity as a function of frequency.
 
         Parameters
@@ -859,13 +998,35 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         Returns
         -------
-        complex
+        Tuple[complex, complex, complex]
             The diagonal elements of the relative permittivity tensor evaluated at ``frequency``.
         """
 
         # This only needs to be overwritten for anisotropic materials
         eps = self.eps_model(frequency)
         return (eps, eps, eps)
+
+    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor for numerical considerations
+        such as meshing and runtime estimation.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            The diagonal elements of relative permittivity tensor relevant for numerical
+            considerations evaluated at ``frequency``.
+        """
+
+        if self.is_pec:
+            # also 1 for lossy metal and Medium2D, but let's handle them in the subclass.
+            return (1.0 + 0j,) * 3
+
+        return self.eps_diagonal(frequency)
 
     def eps_comp(self, row: Axis, col: Axis, frequency: float) -> complex:
         """Single component of the complex-valued permittivity tensor as a function of frequency.
@@ -893,6 +1054,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @cached_property
     @abstractmethod
     def n_cfl(self):
+        # TODO this should be moved out of here into FDTD Simulation Mediums?
         """To ensure a stable FDTD simulation, it is essential to select an appropriate
         time step size in accordance with the CFL condition. The maximal time step
         size is inversely proportional to the speed of light in the medium, and thus
@@ -1080,6 +1242,50 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             Complex-valued relative permittivity.
         """
         return eps_real * (1 + 1j * loss_tangent)
+
+    @staticmethod
+    def eV_to_angular_freq(f_eV: float):
+        """Convert frequency in unit of eV to rad/s.
+
+        Parameters
+        ----------
+        f_eV : float
+            Frequency in unit of eV
+        """
+        return f_eV / HBAR
+
+    @staticmethod
+    def angular_freq_to_eV(f_rad: float):
+        """Convert frequency in unit of rad/s to eV.
+
+        Parameters
+        ----------
+        f_rad : float
+            Frequency in unit of rad/s
+        """
+        return f_rad * HBAR
+
+    @staticmethod
+    def angular_freq_to_Hz(f_rad: float):
+        """Convert frequency in unit of rad/s to Hz.
+
+        Parameters
+        ----------
+        f_rad : float
+            Frequency in unit of rad/s
+        """
+        return f_rad / 2 / np.pi
+
+    @staticmethod
+    def Hz_to_angular_freq(f_hz: float):
+        """Convert frequency in unit of Hz to rad/s.
+
+        Parameters
+        ----------
+        f_hz : float
+            Frequency in unit of Hz
+        """
+        return f_hz * 2 * np.pi
 
     @ensure_freq_in_range
     def sigma_model(self, freq: float) -> complex:
@@ -3080,50 +3286,6 @@ class PoleResidue(DispersiveMedium):
         return PoleResidue(eps_inf=eps_inf, poles=list(zip(a_coeffs, c_coeffs)))
 
     @staticmethod
-    def eV_to_angular_freq(f_eV: float):
-        """Convert frequency in unit of eV to rad/s.
-
-        Parameters
-        ----------
-        f_eV : float
-            Frequency in unit of eV
-        """
-        return f_eV / HBAR
-
-    @staticmethod
-    def angular_freq_to_eV(f_rad: float):
-        """Convert frequency in unit of rad/s to eV.
-
-        Parameters
-        ----------
-        f_rad : float
-            Frequency in unit of rad/s
-        """
-        return f_rad * HBAR
-
-    @staticmethod
-    def angular_freq_to_Hz(f_rad: float):
-        """Convert frequency in unit of rad/s to Hz.
-
-        Parameters
-        ----------
-        f_rad : float
-            Frequency in unit of rad/s
-        """
-        return f_rad / 2 / np.pi
-
-    @staticmethod
-    def Hz_to_angular_freq(f_hz: float):
-        """Convert frequency in unit of Hz to rad/s.
-
-        Parameters
-        ----------
-        f_hz : float
-            Frequency in unit of Hz
-        """
-        return f_hz * 2 * np.pi
-
-    @staticmethod
     def imag_ep_extrema(poles: Tuple[PoleAndResidue, ...]) -> ArrayFloat1D:
         """Extrema of Im[eps] in the same unit as poles.
 
@@ -3133,60 +3295,9 @@ class PoleResidue(DispersiveMedium):
             Tuple of complex-valued (``a_i, c_i``) poles for the model.
         """
 
-        def _extrema_loss_freq_finder(areal, aimag, creal, cimag):
-            """For each pole, find frequencies for the extrema of Im[eps]"""
-
-            a_square = areal**2 + aimag**2
-            alpha = creal
-            beta = creal * (areal**2 - aimag**2) + 2 * cimag * areal * aimag
-            mus = 2 * (areal**2 - aimag**2)
-            nus = a_square**2
-
-            numerator = np.array([0])
-            denominator = np.array([1])
-            for i in range(len(creal)):
-                numerator_i = np.array(
-                    [
-                        -alpha[i],
-                        alpha[i] * mus[i] - 3 * beta[i],
-                        3 * alpha[i] * nus[i] - beta[i] * mus[i],
-                        beta[i] * nus[i],
-                    ]
-                )
-                denominator_i = np.array(
-                    [1, 2 * mus[i], 2 * nus[i] + mus[i] ** 2, 2 * mus[i] * nus[i], nus[i] ** 2]
-                )
-                # to avoid divergence, let's renormalize
-                if np.abs(alpha[i]) > 1:
-                    numerator_i /= alpha[i]
-                    denominator_i /= alpha[i]
-
-                # n/d + ni/di = (n*di+d*ni)/(d*di)
-                n_di = np.polymul(numerator, denominator_i)
-                d_ni = np.polymul(denominator, numerator_i)
-                numerator = np.polyadd(n_di, d_ni)
-                denominator = np.polymul(denominator, denominator_i)
-
-            roots = np.sqrt(np.roots(numerator) + 0j)
-            # cutoff to determine if it's a real number
-            r_real = roots.real[np.abs(roots.imag) / (np.abs(roots) + fp_eps) < fp_eps]
-            return r_real[r_real > 0]
-
-        try:
-            poles_a, poles_c = zip(*poles)
-            poles_a = np.array(poles_a)
-            poles_c = np.array(poles_c)
-            extrema_freq = _extrema_loss_freq_finder(
-                poles_a.real, poles_a.imag, poles_c.real, poles_c.imag
-            )
-            return extrema_freq
-        except np.linalg.LinAlgError:
-            log.warning(
-                "'LinAlgError' in computing Im[eps] extrema. "
-                "This can result in inaccurate estimation of lower and upper bound of "
-                "Im[eps]. When used in passivity enforcement, passivity is not guaranteed."
-            )
-            return np.array([])
+        poles_a = [a for (a, _) in poles]
+        poles_c = [c for (_, c) in poles]
+        return imag_resp_extrema_locs(poles=poles_a, residues=poles_c)
 
     def _imag_ep_extrema_with_samples(self) -> ArrayFloat1D:
         """Provide a list of frequencies (in unit of rad/s) to probe the possible lower and
@@ -3267,6 +3378,195 @@ class PoleResidue(DispersiveMedium):
                 derivative_map[field_path] = complex(dJ_dpoles[pole_index][a_or_c])
 
         return derivative_map
+
+    @classmethod
+    def _real_partial_fraction_decomposition(
+        cls, a: np.ndarray, b: np.ndarray, tol: pd.PositiveFloat = 1e-2
+    ) -> tuple[list[tuple[Complex, Complex]], np.ndarray]:
+        """Computes the complex conjugate pole residue pairs given a rational expression with
+        real coefficients.
+
+        Parameters
+        ----------
+
+        a : np.ndarray
+            Coefficients of the numerator polynomial in increasing monomial order.
+        b : np.ndarray
+            Coefficients of the denominator polynomial in increasing monomial order.
+        tol : pd.PositiveFloat
+            Tolerance for pole finding. Two poles are considered equal, if their spacing is less
+            than ``tol``.
+
+        Returns
+        -------
+        tuple[list[tuple[Complex, Complex]], np.ndarray]
+            The list of complex conjugate poles and their associated residues. The second element of the
+            ``tuple`` is an array of coefficients representing any direct polynomial term.
+
+        """
+
+        if a.ndim != 1 or np.any(np.iscomplex(a)):
+            raise ValidationError(
+                "Numerator coefficients must be a one-dimensional array of real numbers."
+            )
+        if b.ndim != 1 or np.any(np.iscomplex(b)):
+            raise ValidationError(
+                "Denominator coefficients must be a one-dimensional array of real numbers."
+            )
+
+        # Compute residues and poles using scipy
+        (r, p, k) = signal.residue(np.flip(a), np.flip(b), tol=tol, rtype="avg")
+
+        # Assuming real coefficients for the polynomials, the poles should be real or come as
+        # complex conjugate pairs
+        r_filtered = []
+        p_filtered = []
+        for res, (idx, pole) in zip(list(r), enumerate(list(p))):
+            # Residue equal to zero interpreted as rational expression was not
+            # in simplest form. So skip this pole.
+            if res == 0:
+                continue
+            # Causal and stability check
+            if np.real(pole) > 0:
+                raise ValidationError("Transfer function is invalid. It is non-causal.")
+            # Check for higher order pole, which come in consecutive order
+            if idx > 0 and p[idx - 1] == pole:
+                raise ValidationError(
+                    "Transfer function is invalid. A higher order pole was detected. Try reducing ``tol``, "
+                    "or ensure that the rational expression does not have repeated poles. "
+                )
+            if np.imag(pole) == 0:
+                r_filtered.append(res / 2)
+                p_filtered.append(pole)
+            else:
+                pair_found = len(np.argwhere(np.array(p) == np.conj(pole))) == 1
+                if not pair_found:
+                    raise ValueError(
+                        "Failed to find complex-conjugate of pole in poles computed by SciPy."
+                    )
+                previously_added = len(np.argwhere(np.array(p_filtered) == np.conj(pole))) == 1
+                if not previously_added:
+                    r_filtered.append(res)
+                    p_filtered.append(pole)
+
+        poles_residues = list(zip(p_filtered, r_filtered))
+        k_increasing_order = np.flip(k)
+        return (poles_residues, k_increasing_order)
+
+    @classmethod
+    def from_admittance_coeffs(
+        cls,
+        a: np.ndarray,
+        b: np.ndarray,
+        eps_inf: pd.PositiveFloat = 1,
+        pole_tol: pd.PositiveFloat = 1e-2,
+    ) -> PoleResidue:
+        """Construct a :class:`.PoleResidue` model from an admittance function defining the
+        relationship between the electric field and the polarization current density in the
+        Laplace domain.
+
+        Parameters
+        ----------
+        a : np.ndarray
+            Coefficients of the numerator polynomial in increasing monomial order.
+        b : np.ndarray
+            Coefficients of the denominator polynomial in increasing monomial order.
+        eps_inf: pd.PositiveFloat
+            The relative permittivity at infinite frequency.
+        pole_tol: pd.PositiveFloat
+            Tolerance for the pole finding algorithm in Hertz. Two poles are considered equal, if their
+            spacing is closer than ``pole_tol`.
+        Returns
+        -------
+        :class:`.PoleResidue`
+            The pole residue equivalent.
+
+        Notes
+        -----
+
+            The supplied admittance function relates the electric field to the polarization current density
+            in the Laplace domain and is equivalent to a frequency-dependent complex conductivity
+            :math:`\\sigma(\\omega)`.
+
+            .. math::
+                J_p(s) = Y(s)E(s)
+
+            .. math::
+                Y(s) = \\frac{a_0 + a_1 s + \\dots + a_M s^M}{b_0 + b_1 s + \\dots + b_N s^N}
+
+            An equivalent :class:`.PoleResidue` medium is constructed using an equivalent frequency-dependent
+            complex permittivity defined as
+
+            .. math::
+                \\epsilon(s) = \\epsilon_\\infty - \\frac{1}{\\epsilon_0 s}
+                \\frac{a_0 + a_1 s + \\dots + a_M s^M}{b_0 + b_1 s + \\dots + b_N s^N}.
+        """
+
+        if a.ndim != 1 or np.any(np.logical_or(np.iscomplex(a), a < 0)):
+            raise ValidationError(
+                "Numerator coefficients must be a one-dimensional array of non-negative real numbers."
+            )
+        if b.ndim != 1 or np.any(np.logical_or(np.iscomplex(b), b < 0)):
+            raise ValidationError(
+                "Denominator coefficients must be a one-dimensional array of non-negative real numbers."
+            )
+
+        # Trim any trailing zeros, so that length corresponds with polynomial order
+        a = np.trim_zeros(a, "b")
+        b = np.trim_zeros(b, "b")
+
+        # Validate that transfer function will result in a proper transfer function, once converted to
+        # the complex permittivity version
+        # Let q equal the order of the numerator polynomial, and p equal the order
+        # of the denominator polynomal. Then, q < p is strictly proper rational transfer function (RTF)
+        # q <= p is a proper RTF, and q > p is an improper RTF.
+        q = len(a) - 1
+        p = len(b) - 1
+
+        if q > p + 1:
+            raise ValidationError(
+                "Transfer function is improper, the order of the numerator polynomial must be at most "
+                "one greater than the order of the denominator polynomial."
+            )
+
+        # Modify the transfer function defining a complex conductivity to match the complex
+        # frequency-dependent portion of the pole residue model
+        # Meaning divide by -j*omega*epsilon (s*epsilon)
+        b = np.concatenate(([0], b * EPSILON_0))
+
+        poles_and_residues, k = cls._real_partial_fraction_decomposition(
+            a=a, b=b, tol=pole_tol * 2 * np.pi
+        )
+
+        # A direct polynomial term of zeroth order is interpreted as an additional contribution to eps_inf.
+        # So we only handle that special case.
+        if len(k) == 1:
+            if np.iscomplex(k[0]) or k[0] < 0:
+                raise ValidationError(
+                    "Transfer function is invalid. Direct polynomial term must be real and positive for "
+                    "conversion to an equivalent 'PoleResidue' medium."
+                )
+            else:
+                # A pure capacitance will translate to an increased permittivity at infinite frequency.
+                eps_inf = eps_inf + k[0]
+
+        pole_residue_from_transfer = PoleResidue(eps_inf=eps_inf, poles=poles_and_residues)
+
+        # Check passivity
+        ang_freqs = PoleResidue._imag_ep_extrema_with_samples(pole_residue_from_transfer)
+        freq_list = PoleResidue.angular_freq_to_Hz(ang_freqs)
+        ep = pole_residue_from_transfer.eps_model(freq_list)
+        # filter `NAN` in case some of freq_list are exactly at the pole frequency
+        ep = ep[~np.isnan(ep)]
+
+        if np.any(np.imag(ep) < -fp_eps):
+            log.warning(
+                "Generated 'PoleResidue' medium is not passive. Please raise an issue on the "
+                "Tidy3d frontend with this message and some information about your "
+                "simulation setup and we will investigate."
+            )
+
+        return pole_residue_from_transfer
 
 
 class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
@@ -4848,7 +5148,218 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
 
 
-IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium]
+class SurfaceImpedanceFitterParam(Tidy3dBaseModel):
+    """Advanced parameters for fitting surface impedance of a :class:`.LossyMetalMedium`.
+    Internally, the quantity to be fitted is surface impedance divided by ``-1j * \\omega``.
+    """
+
+    max_num_poles: pd.PositiveInt = pd.Field(
+        LOSSY_METAL_DEFAULT_MAX_POLES,
+        title="Maximal Number Of Poles",
+        description="Maximal number of poles in complex-conjugate pole residue model for "
+        "fitting surface impedance.",
+    )
+
+    tolerance_rms: pd.NonNegativeFloat = pd.Field(
+        LOSSY_METAL_DEFAULT_TOLERANCE_RMS,
+        title="Tolerance In Fitting",
+        description="Tolerance in fitting.",
+    )
+
+    frequency_sampling_points: pd.PositiveInt = pd.Field(
+        LOSSY_METAL_DEFAULT_SAMPLING_FREQUENCY,
+        title="Number Of Sampling Frequencies",
+        description="Number of sampling frequencies used in fitting.",
+    )
+
+    log_sampling: bool = pd.Field(
+        True,
+        title="Frequencies Sampling In Log Scale",
+        description="Whether to sample frequencies logarithmically (``True``),  "
+        "or linearly (``False``).",
+    )
+
+
+class LossyMetalMedium(Medium):
+    """Lossy metal that can be modeled with a surface impedance boundary condition (SIBC).
+
+    Notes
+    -----
+
+        SIBC is most accurate when the skin depth is much smaller than the structure feature size.
+        If not the case, please use a regular medium instead, or set ``simulation.subpixel.lossy_metal``
+        to ``td.VolumetricAveraging()`` or ``td.Staircasing()``.
+
+    Example
+    -------
+    >>> lossy_metal = LossyMetalMedium(conductivity=10, frequency_range=(9e9, 10e9))
+
+    """
+
+    allow_gain: Literal[False] = pd.Field(
+        False,
+        title="Allow gain medium",
+        description="Allow the medium to be active. Caution: "
+        "simulations with a gain medium are unstable, and are likely to diverge."
+        "Simulations where 'allow_gain' is set to 'True' will still be charged even if "
+        "diverged. Monitor data up to the divergence point will still be returned and can be "
+        "useful in some cases.",
+    )
+
+    permittivity: Literal[1] = pd.Field(
+        1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
+    )
+
+    frequency_range: FreqBound = pd.Field(
+        ...,
+        title="Frequency Range",
+        description="Frequency range of validity for the medium.",
+        units=(HERTZ, HERTZ),
+    )
+
+    fit_param: SurfaceImpedanceFitterParam = pd.Field(
+        SurfaceImpedanceFitterParam(),
+        title="Fitting Parameters For Surface Impedance",
+        description="Parameters for fitting surface impedance divided by (-1j * omega) over "
+        "the frequency range using pole-residue pair model.",
+    )
+
+    @pd.validator("frequency_range")
+    def _validate_frequency_range(cls, val):
+        """Validate that frequency range is finite and non-zero."""
+        for freq in val:
+            if not np.isfinite(freq):
+                raise ValidationError("Values in 'frequency_range' must be finite.")
+            if freq <= 0:
+                raise ValidationError("Values in 'frequency_range' must be positive.")
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _positive_conductivity(cls, val):
+        """Assert conductivity>0."""
+        if val <= 0:
+            raise ValidationError("For lossy metal, 'conductivity' must be positive. ")
+        return val
+
+    @cached_property
+    def scaled_surface_impedance_model(self) -> PoleResidue:
+        """Fitted surface impedance divided by (-j \\omega) using pole-residue pair model within ``frequency_range``."""
+        omega_data = self.Hz_to_angular_freq(self.sampling_frequencies)
+        surface_impedance = self.surface_impedance(self.sampling_frequencies)
+        scaled_impedance = surface_impedance / (-1j * omega_data)
+
+        # let's use scaled quantity in fitting: minimal real part equals ``SCALED_REAL_PART``
+        min_real = np.min(scaled_impedance.real)
+        if min_real <= 0:
+            raise SetupError(
+                "The real part of scaled surface impedance must be positive. "
+                "Please create a github issue so that the problem can be investigated. "
+                "In the meantime, make sure the material is passive."
+            )
+
+        scaling_factor = LOSSY_METAL_SCALED_REAL_PART / min_real
+        scaled_impedance *= scaling_factor
+
+        (res_inf, poles, residues), error = fit(
+            omega_data=omega_data,
+            resp_data=scaled_impedance,
+            min_num_poles=0,
+            max_num_poles=self.fit_param.max_num_poles,
+            resp_inf=None,
+            tolerance_rms=self.fit_param.tolerance_rms,
+            scale_factor=1.0 / np.max(omega_data),
+        )
+
+        res_inf /= scaling_factor
+        residues /= scaling_factor
+
+        return PoleResidue(eps_inf=res_inf, poles=list(zip(poles, residues)))
+
+    @cached_property
+    def num_poles(self) -> int:
+        """Number of poles in the fitted model."""
+        return len(self.scaled_surface_impedance_model.poles)
+
+    def surface_impedance(self, frequencies: ArrayFloat1D):
+        """Computing surface impedance."""
+        # compute complex-valued skin depth
+        n, k = self.nk_model(frequencies)
+        return ETA_0 / (n + 1j * k)
+
+    @cached_property
+    def sampling_frequencies(self) -> ArrayFloat1D:
+        """Sampling frequencies used in fitting."""
+        if self.fit_param.frequency_sampling_points < 2:
+            return np.array([np.mean(self.frequency_range)])
+
+        if self.fit_param.log_sampling:
+            return np.logspace(
+                np.log10(self.frequency_range[0]),
+                np.log10(self.frequency_range[1]),
+                self.fit_param.frequency_sampling_points,
+            )
+        return np.linspace(
+            self.frequency_range[0],
+            self.frequency_range[1],
+            self.fit_param.frequency_sampling_points,
+        )
+
+    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor for numerical considerations
+        such as meshing and runtime estimation.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            The diagonal elements of relative permittivity tensor relevant for numerical
+            considerations evaluated at ``frequency``.
+        """
+        return (1.0 + 0j,) * 3
+
+    @add_ax_if_none
+    def plot(
+        self,
+        ax: Ax = None,
+    ) -> Ax:
+        """Make plot of complex-valued surface imepdance model vs fitted model, at sampling frequencies.
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes = None
+            Axes to plot the data on, if None, a new one is created.
+        Returns
+        -------
+        matplotlib.axis.Axes
+            Matplotlib axis corresponding to plot.
+        """
+        frequencies = self.sampling_frequencies
+        surface_impedance = self.surface_impedance(frequencies)
+
+        ax.plot(frequencies, surface_impedance.real, "x", label="Real")
+        ax.plot(frequencies, surface_impedance.imag, "+", label="Imag")
+
+        surface_impedance_model = (
+            -1j
+            * self.Hz_to_angular_freq(frequencies)
+            * self.scaled_surface_impedance_model.eps_model(frequencies)
+        )
+        ax.plot(frequencies, surface_impedance_model.real, label="Real (model)")
+        ax.plot(frequencies, surface_impedance_model.imag, label="Imag (model)")
+
+        ax.set_ylabel(r"Surface impedance ($\Omega$)")
+        ax.set_xlabel("Frequency (Hz)")
+        ax.legend()
+
+        return ax
+
+
+IsotropicUniformMediumType = Union[
+    Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
+]
 IsotropicCustomMediumType = Union[
     CustomPoleResidue,
     CustomSellmeier,
@@ -6096,6 +6607,7 @@ MediumType3D = Union[
     CustomAnisotropicMedium,
     PerturbationMedium,
     PerturbationPoleResidue,
+    LossyMetalMedium,
 ]
 
 
@@ -6170,7 +6682,7 @@ class Medium2D(AbstractMedium):
                 eps_inf += weight * (med.pole_residue.eps_inf - 1)
             elif isinstance(med, Medium):
                 pole_res = PoleResidue.from_medium(med)
-                eps_inf += weight * (med.eps_model(np.inf) - 1)
+                eps_inf += weight * (med.permittivity - 1)
             elif isinstance(med, PECMedium):
                 # special treatment for PEC
                 return med
@@ -6398,6 +6910,23 @@ class Medium2D(AbstractMedium):
         eps_ss = self.ss.eps_model(frequency)
         eps_tt = self.tt.eps_model(frequency)
         return (eps_ss, eps_tt)
+
+    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+        """Main diagonal of the complex-valued permittivity tensor for numerical considerations
+        such as meshing and runtime estimation.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[complex, complex, complex]
+            The diagonal elements of relative permittivity tensor relevant for numerical
+            considerations evaluated at ``frequency``.
+        """
+        return (1.0 + 0j,) * 3
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:

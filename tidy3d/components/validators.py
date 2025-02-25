@@ -8,7 +8,7 @@ from ..log import log
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .data.dataset import Dataset, FieldDataset
 from .geometry.base import Box
-from .mode import ModeSpec
+from .mode_spec import ModeSpec
 from .types import Tuple
 
 """ Explanation of pydantic validators:
@@ -71,6 +71,21 @@ def assert_plane():
         return val
 
     return is_plane
+
+
+def assert_line_or_plane():
+    """makes sure a field's ``size`` attribute has either 1 or 2 zeros"""
+
+    @pydantic.validator("size", allow_reuse=True, always=True)
+    def is_line_or_plane(cls, val):
+        """Raise validation error if not a line or plane."""
+        if val.count(0.0) == 0 or val.count(0.0) == 3:
+            raise ValidationError(
+                f"'{cls.__name__}' object must be a line or a plane, given size={val}. "
+            )
+        return val
+
+    return is_line_or_plane
 
 
 def assert_volumetric():
@@ -194,6 +209,40 @@ def assert_objects_in_sim_bounds(
         return val
 
     return objects_in_sim_bounds
+
+
+def assert_objects_contained_in_sim_bounds(
+    field_name: str, error: bool = True, strict_inequality: bool = False
+):
+    """Makes sure all objects in field are completely inside the simulation bounds."""
+
+    @pydantic.validator(field_name, allow_reuse=True, always=True)
+    @skip_if_fields_missing(["center", "size"])
+    def objects_contained_in_sim_bounds(cls, val, values):
+        """check for containment of each structure with simulation bounds."""
+        sim_center = values.get("center")
+        sim_size = values.get("size")
+        sim_box = Box(size=sim_size, center=sim_center)
+
+        # Do a strict check, unless simulation is 0D along a dimension
+        strict_ineq = [size != 0 and strict_inequality for size in sim_size]
+
+        with log as consolidated_logger:
+            for position_index, geometric_object in enumerate(val):
+                if not sim_box.contains(geometric_object.geometry, strict_inequality=strict_ineq):
+                    message = (
+                        f"'simulation.{field_name}[{position_index}]' "
+                        "is not completely inside the simulation domain."
+                    )
+                    custom_loc = [field_name, position_index]
+
+                    if error:
+                        raise SetupError(message)
+                    consolidated_logger.warning(message, custom_loc=custom_loc)
+
+        return val
+
+    return objects_contained_in_sim_bounds
 
 
 def enforce_monitor_fields_present():

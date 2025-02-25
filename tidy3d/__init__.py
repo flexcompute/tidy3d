@@ -1,7 +1,69 @@
 """Tidy3d package imports"""
 
-# grid
-# apodization
+from tidy3d.components.material.multi_physics import MultiPhysicsMedium
+from tidy3d.components.material.tcad.charge import (
+    ChargeConductorMedium,
+    ChargeInsulatorMedium,
+    SemiconductorMedium,
+)
+from tidy3d.components.material.tcad.heat import (
+    FluidMedium,
+    FluidSpec,
+    SolidMedium,
+    SolidSpec,
+)
+from tidy3d.components.spice.analysis.dc import (
+    ChargeToleranceSpec,
+    IsothermalSteadyChargeDCAnalysis,
+)
+from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource
+from tidy3d.components.spice.sources.types import VoltageSourceType
+from tidy3d.components.tcad.boundary.specification import (
+    HeatBoundarySpec,
+    HeatChargeBoundarySpec,
+)
+from tidy3d.components.tcad.data.sim_data import (
+    DeviceCharacteristics,
+    HeatChargeSimulationData,
+    HeatSimulationData,
+)
+from tidy3d.components.tcad.data.types import (
+    SteadyCapacitanceData,
+    SteadyFreeCarrierData,
+    SteadyPotentialData,
+    TemperatureData,
+)
+from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
+from tidy3d.components.tcad.generation_recombination import FossumCarrierLifetime
+from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from tidy3d.components.tcad.monitors.charge import (
+    SteadyCapacitanceMonitor,
+    SteadyFreeCarrierMonitor,
+    SteadyPotentialMonitor,
+)
+from tidy3d.components.tcad.monitors.heat import (
+    TemperatureMonitor,
+)
+from tidy3d.components.tcad.simulation.heat import HeatSimulation
+from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
+from tidy3d.components.tcad.types import (
+    AugerRecombination,
+    CaugheyThomasMobility,
+    ConstantMobilityModel,
+    ConvectionBC,
+    CurrentBC,
+    HeatFluxBC,
+    HeatFromElectricSource,
+    HeatSource,
+    InsulatingBC,
+    RadiativeRecombination,
+    ShockleyReedHallRecombination,
+    SlotboomBandGapNarrowing,
+    TemperatureBC,
+    UniformHeatSource,
+    VoltageBC,
+)
+
 from .components.apodization import ApodizationSpec
 
 # boundary placement for other solvers
@@ -12,6 +74,13 @@ from .components.bc_placement import (
     StructureBoundary,
     StructureSimulationBoundary,
     StructureStructureInterface,
+)
+
+# analytic beams
+from .components.beam import (
+    AstigmaticGaussianBeamProfile,
+    GaussianBeamProfile,
+    PlaneWaveBeamProfile,
 )
 
 # boundary
@@ -52,25 +121,28 @@ from .components.data.data_array import (
     FluxTimeDataArray,
     HeatDataArray,
     IndexedDataArray,
+    IndexedVoltageDataArray,
     ModeAmpsDataArray,
     ModeIndexDataArray,
     PointDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
+    ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
     SpatialDataArray,
+    SpatialVoltageDataArray,
+    SteadyVoltageDataArray,
 )
 from .components.data.dataset import (
     FieldDataset,
     FieldTimeDataset,
     ModeSolverDataset,
     PermittivityDataset,
-    TetrahedralGridDataset,
-    TriangularGridDataset,
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
     DiffractionData,
+    DirectivityData,
     FieldData,
     FieldProjectionAngleData,
     FieldProjectionCartesianData,
@@ -83,6 +155,10 @@ from .components.data.monitor_data import (
     PermittivityData,
 )
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from .components.data.utils import (
+    TetrahedralGridDataset,
+    TriangularGridDataset,
+)
 from .components.eme.data.dataset import (
     EMECoefficientDataset,
     EMEFieldDataset,
@@ -120,28 +196,29 @@ from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGrou
 from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
 from .components.geometry.primitives import Cylinder, Sphere
+from .components.grid.corner_finder import CornerFinderSpec
 from .components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
 from .components.grid.grid_spec import (
     AutoGrid,
     CustomGrid,
     CustomGridBoundaries,
+    GridRefinement,
     GridSpec,
+    LayerRefinementSpec,
+    QuasiUniformGrid,
     UniformGrid,
 )
-from .components.heat.boundary import ConvectionBC, HeatBoundarySpec, HeatFluxBC, TemperatureBC
-from .components.heat.data.monitor_data import TemperatureData
-from .components.heat.data.sim_data import HeatSimulationData
-from .components.heat.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
-from .components.heat.monitor import TemperatureMonitor
-from .components.heat.simulation import HeatSimulation
-from .components.heat.source import UniformHeatSource
-
-# heat
-# heat
-from .components.heat_spec import FluidSpec, SolidSpec
 
 # lumped elements
-from .components.lumped_element import CoaxialLumpedResistor, LumpedResistor
+from .components.lumped_element import (
+    AdmittanceNetwork,
+    CoaxialLumpedResistor,
+    LinearLumpedElement,
+    LumpedElement,
+    LumpedResistor,
+    RectangularLumpedElement,
+    RLCNetwork,
+)
 
 # medium
 # for docs
@@ -162,6 +239,7 @@ from .components.medium import (
     FullyAnisotropicMedium,
     KerrNonlinearity,
     Lorentz,
+    LossyMetalMedium,
     Medium,
     Medium2D,
     NonlinearModel,
@@ -172,16 +250,22 @@ from .components.medium import (
     PerturbationPoleResidue,
     PoleResidue,
     Sellmeier,
+    SurfaceImpedanceFitterParam,
     TwoPhotonAbsorption,
     medium_from_nk,
 )
+from .components.mode.data.sim_data import ModeSimulationData
+
+# Mode
+from .components.mode.simulation import ModeSimulation
 
 # modes
-from .components.mode import ModeSpec
+from .components.mode_spec import ModeSpec
 
 # monitors
 from .components.monitor import (
     DiffractionMonitor,
+    DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
@@ -214,23 +298,29 @@ from .components.scene import Scene
 
 # simulation
 from .components.simulation import Simulation
-
-# sources
-from .components.source import (
+from .components.source.base import Source
+from .components.source.current import (
+    CustomCurrentSource,
+    PointDipole,
+    UniformCurrentSource,
+)
+from .components.source.field import (
     TFSF,
     AstigmaticGaussianBeam,
-    ContinuousWave,
-    CustomCurrentSource,
     CustomFieldSource,
-    CustomSourceTime,
+    FixedAngleSpec,
+    FixedInPlaneKSpec,
     GaussianBeam,
-    GaussianPulse,
     ModeSource,
     PlaneWave,
-    PointDipole,
-    Source,
+)
+
+# sources
+from .components.source.time import (
+    ContinuousWave,
+    CustomSourceTime,
+    GaussianPulse,
     SourceTime,
-    UniformCurrentSource,
 )
 
 # structures
@@ -243,6 +333,7 @@ from .components.subpixel_spec import (
     PolarizedAveraging,
     Staircasing,
     SubpixelSpec,
+    SurfaceImpedance,
     VolumetricAveraging,
 )
 
@@ -254,6 +345,7 @@ from .components.time_modulation import (
     SpaceTimeModulation,
 )
 from .components.transformation import RotationAroundAxis
+from .components.viz import VisualizationSpec
 
 # config
 from .config import config
@@ -293,9 +385,13 @@ __all__ = [
     "Coords",
     "GridSpec",
     "UniformGrid",
+    "QuasiUniformGrid",
     "CustomGrid",
     "AutoGrid",
     "CustomGridBoundaries",
+    "LayerRefinementSpec",
+    "GridRefinement",
+    "CornerFinderSpec",
     "Box",
     "Sphere",
     "Cylinder",
@@ -323,6 +419,8 @@ __all__ = [
     "CustomDrude",
     "CustomDebye",
     "CustomAnisotropicMedium",
+    "LossyMetalMedium",
+    "SurfaceImpedanceFitterParam",
     "RotationAroundAxis",
     "PerturbationMedium",
     "PerturbationPoleResidue",
@@ -354,6 +452,9 @@ __all__ = [
     "CustomFieldSource",
     "TFSF",
     "CustomCurrentSource",
+    "GaussianBeamProfile",
+    "AstigmaticGaussianBeamProfile",
+    "PlaneWaveBeamProfile",
     "FieldMonitor",
     "FieldTimeMonitor",
     "FluxMonitor",
@@ -366,13 +467,16 @@ __all__ = [
     "FieldProjectionKSpaceMonitor",
     "FieldProjectionSurface",
     "DiffractionMonitor",
+    "DirectivityMonitor",
     "RunTimeSpec",
     "Simulation",
     "FieldProjector",
     "ScalarFieldDataArray",
     "ScalarModeFieldDataArray",
+    "ScalarModeFieldCylindricalDataArray",
     "ScalarFieldTimeDataArray",
     "SpatialDataArray",
+    "SpatialVoltageDataArray",
     "ModeAmpsDataArray",
     "ModeIndexDataArray",
     "FluxDataArray",
@@ -399,6 +503,7 @@ __all__ = [
     "FieldProjectionCartesianData",
     "FieldProjectionKSpaceData",
     "DiffractionData",
+    "DirectivityData",
     "SimulationData",
     "DATA_TYPE_MAP",
     "BoundarySpec",
@@ -444,27 +549,61 @@ __all__ = [
     "config",
     "__version__",
     "Updater",
-    "LumpedResistor",
+    "AdmittanceNetwork",
     "CoaxialLumpedResistor",
+    "LinearLumpedElement",
+    "LumpedElement",
+    "LumpedResistor",
+    "RectangularLumpedElement",
+    "RLCNetwork",
     "Scene",
     "StructureStructureInterface",
     "StructureBoundary",
     "MediumMediumInterface",
     "StructureSimulationBoundary",
     "SimulationBoundary",
+    "FluidMedium",
     "FluidSpec",
+    "SolidMedium",
     "SolidSpec",
+    "ChargeConductorMedium",
+    "SemiconductorMedium",
+    "ChargeInsulatorMedium",
     "HeatSimulation",
     "HeatSimulationData",
+    "HeatChargeSimulationData",
+    "DeviceCharacteristics",
     "TemperatureBC",
     "ConvectionBC",
     "HeatFluxBC",
     "HeatBoundarySpec",
+    "VoltageBC",
+    "CurrentBC",
+    "InsulatingBC",
     "UniformHeatSource",
+    "HeatSource",
+    "HeatFromElectricSource",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",
     "TemperatureData",
     "TemperatureMonitor",
+    "HeatChargeSimulation",
+    "SteadyPotentialData",
+    "SteadyFreeCarrierData",
+    "SteadyCapacitanceData",
+    "CaugheyThomasMobility",
+    "ConstantMobilityModel",
+    "SlotboomBandGapNarrowing",
+    "ShockleyReedHallRecombination",
+    "FossumCarrierLifetime",
+    "AugerRecombination",
+    "RadiativeRecombination",
+    "ConstantDoping",
+    "GaussianDoping",
+    "HeatChargeBoundarySpec",
+    "SteadyPotentialMonitor",
+    "SteadyFreeCarrierMonitor",
+    "SteadyCapacitanceMonitor",
     "SpaceTimeModulation",
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
@@ -472,6 +611,8 @@ __all__ = [
     "PointDataArray",
     "CellDataArray",
     "IndexedDataArray",
+    "IndexedVoltageDataArray",
+    "SteadyVoltageDataArray",
     "TriangularGridDataset",
     "TetrahedralGridDataset",
     "medium_from_nk",
@@ -481,6 +622,8 @@ __all__ = [
     "PolarizedAveraging",
     "HeuristicPECStaircasing",
     "PECConformal",
+    "SurfaceImpedance",
+    "VisualizationSpec",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",
@@ -508,4 +651,14 @@ __all__ = [
     "EMELengthSweep",
     "EMEModeSweep",
     "EMEFreqSweep",
+    "ModeSimulation",
+    "ModeSimulationData",
+    "FixedAngleSpec",
+    "FixedInPlaneKSpec",
+    "MultiPhysicsMedium",
+    "DCVoltageSource",
+    "DCCurrentSource",
+    "VoltageSourceType",
+    "IsothermalSteadyChargeDCAnalysis",
+    "ChargeToleranceSpec",
 ]

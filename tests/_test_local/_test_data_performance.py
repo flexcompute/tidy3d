@@ -10,7 +10,8 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.source import GaussianPulse, PointDipole
+from tidy3d.components.source.current import PointDipole
+from tidy3d.components.source.time import GaussianPulse
 
 sys.path.append("/users/twhughes/Documents/Flexcompute/tidy3d-core")
 from tidy3d_backend.utils import Profile

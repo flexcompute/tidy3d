@@ -1,8 +1,8 @@
 
 .. currentmodule:: tidy3d
 
-Mediums
-=======
+EM Mediums
+==========
 
 Non-Dispersive Medium
 ---------------------
@@ -14,6 +14,7 @@ Spatially uniform
    :template: module.rst
 
    tidy3d.Medium
+   tidy3d.LossyMetalMedium
    tidy3d.PECMedium
    tidy3d.FullyAnisotropicMedium
 
@@ -24,6 +25,15 @@ Spatially varying
    :template: module.rst
 
    tidy3d.CustomMedium
+
+Fitting parameters
+^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.SurfaceImpedanceFitterParam
 
 Dispersive Mediums
 ------------------
@@ -116,6 +126,7 @@ Material Library
 
 .. toctree::
    material_library
+   rf_material_library
 
 
 Abstract Classes
@@ -126,3 +137,16 @@ Abstract Classes
 
    tidy3d.components.medium.AbstractPerturbationMedium
    tidy3d.components.medium.NonlinearModel
+
+
+Multi-Physics Medium
+====================
+
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   tidy3d.components.material.multi_physics.MultiPhysicsMedium
+
+
+

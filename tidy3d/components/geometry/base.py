@@ -11,7 +11,11 @@ import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 import xarray as xr
-from matplotlib import patches
+
+try:
+    from matplotlib import patches
+except ImportError:
+    pass
 
 from ...constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
 from ...exceptions import (
@@ -36,6 +40,7 @@ from ..types import (
     ClipOperationType,
     Coordinate,
     Coordinate2D,
+    LengthUnit,
     MatrixReal4x4,
     PlanePosition,
     Shapely,
@@ -46,11 +51,13 @@ from ..viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
     PlotParams,
+    VisualizationSpec,
     add_ax_if_none,
     arrow_style,
     equal_aspect,
     plot_params_geometry,
     polygon_patch,
+    set_default_labels_and_title,
 )
 
 POLY_GRID_SIZE = 1e-12
@@ -310,6 +317,45 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return True
 
+    def contains(
+        self, other: Geometry, strict_inequality: Tuple[bool, bool, bool] = [False, False, False]
+    ) -> bool:
+        """Returns ``True`` if the `.bounds` of  ``other`` are contained within the
+        `.bounds` of ``self``.
+
+        Parameters
+        ----------
+        other : :class:`Geometry`
+            Geometry to check containment with.
+        strict_inequality : Tuple[bool, bool, bool] = [False, False, False]
+            For each dimension, defines whether to include equality in the boundaries comparison.
+            If ``False``, equality will be considered as contained. If ``True``, ``other``'s
+            bounds must be strictly within the bounds of ``self``.
+
+        Returns
+        -------
+        bool
+            Whether the rectangular bounding box of ``other`` is contained within the bounding
+            box of ``self``.
+        """
+
+        self_bmin, self_bmax = self.bounds
+        other_bmin, other_bmax = other.bounds
+
+        for smin, omin, smax, omax, strict in zip(
+            self_bmin, other_bmin, self_bmax, other_bmax, strict_inequality
+        ):
+            # are all of other's minimum coordinates greater than self's minimim coordinate?
+            in_minus = omin > smin if strict else omin >= smin
+            # are all of other's maximum coordinates less than self's maximum coordinate?
+            in_plus = omax < smax if strict else omax <= smax
+
+            # if either failed, return False
+            if not all((in_minus, in_plus)):
+                return False
+
+        return True
+
     def intersects_plane(self, x: float = None, y: float = None, z: float = None) -> bool:
         """Whether self intersects plane specified by one non-None value of x,y,z.
 
@@ -366,6 +412,15 @@ class Geometry(Tidy3dBaseModel, ABC):
         rmin2, rmax2 = bounds2
         rmin = tuple(max(v1, v2) for v1, v2 in zip(rmin1, rmin2))
         rmax = tuple(min(v1, v2) for v1, v2 in zip(rmax1, rmax2))
+        return (rmin, rmax)
+
+    @staticmethod
+    def bounds_union(bounds1: Bound, bounds2: Bound) -> Bound:
+        """Return the bounds that are the union of two bounds."""
+        rmin1, rmax1 = bounds1
+        rmin2, rmax2 = bounds2
+        rmin = tuple(min(v1, v2) for v1, v2 in zip(rmin1, rmin2))
+        rmax = tuple(max(v1, v2) for v1, v2 in zip(rmax1, rmax2))
         return (rmin, rmax)
 
     @cached_property
@@ -438,7 +493,14 @@ class Geometry(Tidy3dBaseModel, ABC):
     @equal_aspect
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        plot_length_units: LengthUnit = None,
+        viz_spec: VisualizationSpec = None,
+        **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 
@@ -452,6 +514,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        plot_length_units : LengthUnit = None
+            Specify units to use for axis labels, tick labels, and the title.
+        viz_spec : VisualizationSpec = None
+            Plotting parameters associated with a medium to use instead of defaults.
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -467,16 +533,20 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections_plane(x=x, y=y, z=z)
 
-        plot_params = self.plot_params.include_kwargs(**patch_kwargs)
+        plot_params = self.plot_params
+        if viz_spec is not None:
+            plot_params = plot_params.override_with_viz_spec(viz_spec)
+        plot_params = plot_params.include_kwargs(**patch_kwargs)
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
             ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
 
         # clean up the axis display
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        ax = self.add_ax_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units)
         return ax
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
@@ -523,7 +593,8 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return False
 
-    def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
+    @staticmethod
+    def _get_plot_labels(axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
 
         Parameters
@@ -536,7 +607,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         str, str
             Labels of plot, packaged as ``(xlabel, ylabel)``.
         """
-        _, (xlabel, ylabel) = self.pop_axis("xyz", axis=axis)
+        _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis)
         return xlabel, ylabel
 
     def _get_plot_limits(
@@ -559,8 +630,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
 
-    def add_ax_labels_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER) -> Ax:
-        """Sets the x,y labels based on ``axis`` and the extends based on ``self.bounds``.
+    def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER) -> Ax:
+        """Sets the x,y limits based on ``self.bounds``.
 
         Parameters
         ----------
@@ -576,7 +647,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        xlabel, ylabel = self._get_plot_labels(axis=axis)
         (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer)
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
@@ -584,8 +654,47 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
+        return ax
+
+    @staticmethod
+    def add_ax_labels_and_title(
+        ax: Ax,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        plot_length_units: LengthUnit = None,
+    ) -> Ax:
+        """Sets the axis labels, tick labels, and title based on ``axis``
+        and an optional ``plot_length_units`` argument.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes
+            Matplotlib axes to add labels and limits on.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        plot_length_units : LengthUnit = None
+            When set to a supported ``LengthUnit``, plots will be produced with annotated axes
+            and title with the proper units.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied matplotlib axes.
+        """
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        axis_labels = Box._get_plot_labels(axis)
+        ax = set_default_labels_and_title(
+            axis_labels=axis_labels,
+            axis=axis,
+            position=position,
+            ax=ax,
+            plot_length_units=plot_length_units,
+        )
         return ax
 
     @staticmethod
@@ -684,6 +793,29 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis_label, position = list(xyz_filtered.items())[0]
         axis = "xyz".index(axis_label)
         return axis, position
+
+    @staticmethod
+    def parse_two_xyz_kwargs(**xyz) -> List[Tuple[Axis, float]]:
+        """Turns x,y,z kwargs into indices of axes and the position along each axis.
+
+        Parameters
+        ----------
+        x : float = None
+            Position in x direction, only two of x,y,z can be specified to define line.
+        y : float = None
+            Position in y direction, only two of x,y,z can be specified to define line.
+        z : float = None
+            Position in z direction, only two of x,y,z can be specified to define line.
+
+        Returns
+        -------
+        [(int, float), (int, float)]
+            Index into xyz axis (0,1,2) and position along that axis.
+        """
+        xyz_filtered = {k: v for k, v in xyz.items() if v is not None}
+        assert len(xyz_filtered) == 2, "exactly two kwarg in [x,y,z] must be specified."
+        xyz_list = list(xyz_filtered.items())
+        return [("xyz".index(axis_label), position) for axis_label, position in xyz_list]
 
     @staticmethod
     def rotate_points(points: ArrayFloat3D, axis: Coordinate, angle: float) -> ArrayFloat3D:
@@ -1612,8 +1744,6 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         "along the ``axis`` direction; "
         "and ``-np.pi/2<sidewall_angle<0`` specifies an expanding cross section "
         "along the ``axis`` direction.",
-        gt=-np.pi / 2,
-        lt=np.pi / 2,
         units=RADIAN,
     )
 
@@ -1627,6 +1757,16 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         "E.g. if ``axis=1``, ``bottom`` refers to the negative side of the y-axis, and "
         "``top`` refers to the positive side of the y-axis.",
     )
+
+    @pydantic.validator("sidewall_angle", always=True)
+    def validate_angle(cls, value: float) -> float:
+        lower_bound = -np.pi / 2
+        upper_bound = np.pi / 2
+        if (value <= lower_bound) or (value >= upper_bound):
+            # u03C0 is unicode for pi
+            raise ValidationError(f"Sidewall angle ({value}) must be between -π/2 and π/2 rad.")
+
+        return value
 
     @property
     @abstractmethod
@@ -1831,6 +1971,16 @@ class Box(SimplePlaneIntersection, Centered):
         center = tuple(cls._get_center(pt_min, pt_max) for pt_min, pt_max in zip(rmin, rmax))
         size = tuple((pt_max - pt_min) for pt_min, pt_max in zip(rmin, rmax))
         return cls(center=center, size=size, **kwargs)
+
+    @cached_property
+    def _normal_axis(self) -> Axis:
+        """Axis normal to the Box. Errors if box is not planar."""
+        if self.size.count(0.0) != 1:
+            raise ValidationError(
+                "Tried to get 'normal_axis' of 'Box' that is not planar. "
+                f"Given 'size={self.size}.'"
+            )
+        return self.size.index(0.0)
 
     @classmethod
     def surfaces(cls, size: Size, center: Coordinate, **kwargs):
@@ -2463,7 +2613,7 @@ class Box(SimplePlaneIntersection, Centered):
         def integrate_face(arr: xr.DataArray) -> complex:
             """Interpolate and integrate a scalar field data over the face using bounds."""
 
-            arr_at_face = arr.interp(**{dim_normal: coord_normal_face}, assume_sorted=True)
+            arr_at_face = arr.interp(**{dim_normal: float(coord_normal_face)}, assume_sorted=True)
 
             integral_result = integrate_within_bounds(
                 arr=arr_at_face,
@@ -3214,8 +3364,10 @@ class GeometryGroup(Geometry):
             )
             vjp_dict_geo = geo.compute_derivatives(geo_info)
             grad_vjp_values = list(vjp_dict_geo.values())
+
             if len(grad_vjp_values) != 1:
                 raise AssertionError("Got multiple gradients for single geometry field.")
+
             grad_vjps[field_path] = grad_vjp_values[0]
 
         return grad_vjps

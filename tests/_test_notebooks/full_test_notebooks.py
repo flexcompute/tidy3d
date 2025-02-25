@@ -10,12 +10,17 @@ sys.path.append("tidy3d")
 
 ep = ExecutePreprocessor(timeout=3000, kernel_name="python3")
 
+# Optionally read a list of notebooks that have already been ran
+notebooks_ran = ""
+# with open("notebooks_run_2.8.0rc1.txt") as fhandle:
+#     notebooks_ran = fhandle.read()
+
 # get all notebook files
 NOTEBOOK_DIR = "docs/notebooks/"
 notebook_filenames_all = [
     NOTEBOOK_DIR + f
     for f in os.listdir(NOTEBOOK_DIR)
-    if ".ipynb" in f and f != ".ipynb_checkpoints"
+    if ".ipynb" in f and f != ".ipynb_checkpoints" and f.split("/")[-1] not in notebooks_ran
 ]
 
 # sort alphabetically
@@ -26,13 +31,13 @@ for _, path in enumerate(notebook_filenames_all):
     notebook_base = path.split("/")[-1]
     print(f"'{notebook_base[:-6]}',")
 
+
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = []
 
 skip = [
     # WIP
     "Autograd10YBranchLevelSet",
-    "Autograd13Metasurface",
     # long time (excluding most adjoint)
     "8ChannelDemultiplexer",
     "90BendPolarizationSplitterRotator",
@@ -42,6 +47,8 @@ skip = [
     "ParticleSwarmOptimizedPBS",
     # hang by default
     "AdjointPlugin14PreFab.ipynb",
+    "Autograd23FabricationAwareInvdes",
+    "SimpleModeSolverGUI",
     "WaveguideBendSimulator",
 ]
 
@@ -56,7 +63,7 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """
-as of Sept 04 2024
+as of Dec 12 2024
 '8ChannelDemultiplexer',
 '90BendPolarizationSplitterRotator',
 '90OpticalHybrid',
@@ -82,10 +89,19 @@ as of Sept 04 2024
 'AntiResonantHollowCoreFiber',
 'AutoGrid',
 'Autograd0Quickstart',
+'Autograd10YBranchLevelSet',
+'Autograd12LightExtractor',
+'Autograd13Metasurface',
 'Autograd15Antenna',
 'Autograd16BilayerCoupler',
 'Autograd17BandPassFilter',
+'Autograd18TopologyBend',
+'Autograd19ApodizedCoupler',
 'Autograd1Intro',
+'Autograd20MetalensWaveguideTaper',
+'Autograd21GaPLightExtractor',
+'Autograd22PhotonicCrystal',
+'Autograd23FabricationAwareInvdes',
 'Autograd2GradientChecking',
 'Autograd3InverseDesign',
 'Autograd4MultiObjective',
@@ -96,6 +112,7 @@ as of Sept 04 2024
 'Autograd9WDM',
 'Bandstructure',
 'BatchModeSolver',
+'BayesianOptimizationYJunction',
 'BilayerSiNEdgeCoupler',
 'BilevelPSR',
 'BiosensorGrating',
@@ -103,6 +120,7 @@ as of Sept 04 2024
 'BoundaryConditions',
 'BraggGratings',
 'BroadbandDirectionalCoupler',
+'BroadbandPlaneWaveWithConstantObliqueIncidentAngle',
 'BullseyeCavityPSO',
 'CMOSRGBSensor',
 'CavityFOM',
@@ -141,7 +159,9 @@ as of Sept 04 2024
 'HighQSi',
 'IntegratedVivaldiAntenna',
 'InverseDesign',
+'KerrSidebands',
 'LNOIPolarizationSplitterRotator',
+'LinearLumpedElements',
 'MIMResonator',
 'MMI1x4',
 'MachZehnderModulator',
@@ -155,6 +175,7 @@ as of Sept 04 2024
 'ModeSolver',
 'ModesBentAngled',
 'MultiplexingMMI',
+'MultipoleExpansion',
 'NanobeamCavity',
 'NanostructuredBoronNitride',
 'Near2FarSphereRCS',
@@ -174,6 +195,7 @@ as of Sept 04 2024
 'PolarizationSplitterRotator',
 'Primer',
 'RadiativeCoolingGlass',
+'RadiativeLossesModeSolver',
 'ResonanceFinder',
 'RingResonator',
 'SMatrix',
@@ -182,6 +204,7 @@ as of Sept 04 2024
 'SbendCMAES',
 'ScaleInvariantWaveguide',
 'SelfIntersectingPolyslab',
+'SimpleModeSolverGUI',
 'Simulation',
 'StartHere',
 'StripToSlotConverters',

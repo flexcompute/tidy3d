@@ -1,6 +1,8 @@
 """Provides lowest level, user-facing interface to server."""
 
+import json
 import os
+import tempfile
 import time
 from datetime import datetime, timedelta
 from typing import Callable, Dict, List
@@ -9,10 +11,21 @@ import pytz
 from requests import HTTPError
 from rich.progress import Progress
 
+from ...components.medium import AbstractCustomMedium
+from ...components.mode.mode_solver import ModeSolver
+from ...components.mode.simulation import ModeSimulation
 from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import get_logging_console, log
-from ..core.constants import SIM_FILE_HDF5, TaskId
+from ..core.account import Account
+from ..core.constants import (
+    MODE_DATA_HDF5_GZ,
+    MODE_FILE_HDF5_GZ,
+    SIM_FILE_HDF5,
+    SIM_FILE_HDF5_GZ,
+    SIMULATION_DATA_HDF5_GZ,
+    TaskId,
+)
 from ..core.environment import Env
 from ..core.task_core import Folder, SimulationTask
 from ..core.task_info import ChargeType, TaskInfo
@@ -34,10 +47,17 @@ SIM_FILE_JSON = "simulation.json"
 GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
 
 # if a solver is in beta stage, cost is subject to change
-BETA_TASK_TYPES = ["HEAT", "EME"]
+BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE"]
 
 # map task_type to solver name for display
-SOLVER_NAME = {"FDTD": "FDTD", "HEAT": "Heat", "MODE_SOLVER": "Mode", "EME": "EME"}
+SOLVER_NAME = {
+    "FDTD": "FDTD",
+    "MODE_SOLVER": "Mode",
+    "MODE": "Mode",
+    "EME": "EME",
+    "HEAT": "Heat",
+    "HEAT_CHARGE": "HeatCharge",
+}
 
 
 def _get_url(task_id: str) -> str:
@@ -59,6 +79,7 @@ def run(
     worker_group: str = None,
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -89,6 +110,8 @@ def run(
         target solver version.
     worker_group: str = None
         worker group
+    reduce_simulation : Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
 
     Returns
     -------
@@ -143,6 +166,8 @@ def run(
         progress_callback=progress_callback_upload,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
+        solver_version=solver_version,
+        reduce_simulation=reduce_simulation,
     )
     start(
         task_id,
@@ -150,9 +175,12 @@ def run(
         worker_group=worker_group,
     )
     monitor(task_id, verbose=verbose)
-    return load(
+    data = load(
         task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
     )
+    if isinstance(simulation, ModeSolver):
+        simulation._patch_data(data=data)
+    return data
 
 
 @wait_for_connection
@@ -166,6 +194,8 @@ def upload(
     simulation_type: str = "tidy3d",
     parent_tasks: List[str] = None,
     source_required: bool = True,
+    solver_version: str = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> TaskId:
     """
     Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -191,6 +221,10 @@ def upload(
         List of related task ids.
     source_required: bool = True
         If ``True``, simulations without sources will raise an error before being uploaded.
+    solver_version: str = None
+        target solver version.
+    reduce_simulation: Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
 
     Returns
     -------
@@ -210,6 +244,7 @@ def upload(
         It will not run until you explicitly tell it to do so with :meth:`tidy3d.web.api.webapi.start`.
 
     """
+
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
@@ -234,11 +269,73 @@ def upload(
             url = _get_url(task.task_id)
             console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
 
-    task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
+    remote_sim_file = SIM_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_sim_file = MODE_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER" or task_type == "MODE":
+        simulation = get_reduced_simulation(simulation, reduce_simulation)
+
+    task.upload_simulation(
+        stub=stub,
+        verbose=verbose,
+        progress_callback=progress_callback,
+        remote_sim_file=remote_sim_file,
+    )
+    estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
 
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
     return task.task_id
+
+
+def get_reduced_simulation(simulation, reduce_simulation):
+    """
+    Adjust the given simulation object based on the reduce_simulation parameter. Currently only
+    implemented for the mode solver.
+
+    Parameters
+    ----------
+    simulation : Simulation
+        The simulation object to be potentially reduced.
+    reduce_simulation : Literal["auto", True, False]
+        Determines whether to reduce the simulation. If "auto", the function will decide based on
+        the presence of custom mediums in the simulation.
+
+    Returns
+    -------
+    Simulation
+        The potentially reduced simulation object.
+    """
+
+    """
+    TODO: This only works for the mode solver, which is also why `simulation.simulation.scene` is
+    used below. After refactor to use the new ModeSimulation, it should be possible to put the call
+    to this function outside of the MODE_SOLVER check in the upload function. We could implement
+    dummy `reduced_simulation_copy` methods for the other solvers or also implement reductions
+    there. Note that if we do the latter we may want to also modify the warning below to only
+    happen if there are custom media *and* they extend beyond the simulation domain.
+    """
+
+    if reduce_simulation == "auto":
+        if isinstance(simulation, ModeSimulation):
+            sim_mediums = simulation.scene.mediums
+        else:
+            sim_mediums = simulation.simulation.scene.mediums
+        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
+        reduce_simulation = contains_custom
+
+        if reduce_simulation:
+            log.warning(
+                f"The {type(simulation)} object contains custom mediums. It will be "
+                "automatically restricted to the solver domain to reduce data for uploading. "
+                "To force uploading the original object use 'reduce_simulation=False'."
+                " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
+                " silence this warning."
+            )
+
+    if reduce_simulation:
+        return simulation.reduced_simulation_copy
+    return simulation
 
 
 @wait_for_connection
@@ -327,10 +424,19 @@ def get_status(task_id) -> str:
     if status == "visualize":
         return "success"
     if status == "error":
-        raise WebError(
-            f"Error running task {task_id}! Use 'web.download_log('{task_id}')' to "
-            "download and examine the solver log, and/or contact customer support for help."
-        )
+        try:
+            # Try to obtain the error message
+            task = SimulationTask(taskId=task_id)
+            with tempfile.NamedTemporaryFile(suffix=".json") as tmp_file:
+                task.get_error_json(to_file=tmp_file.name)
+                with open(tmp_file.name) as f:
+                    error_content = json.load(f)
+                    error_msg = error_content["msg"]
+        except Exception:
+            # If the error message could not be obtained, raise a generic error message
+            error_msg = "Error message could not be obtained, please contact customer support."
+
+        raise WebError(f"Error running task {task_id}! {error_msg}")
     return status
 
 
@@ -367,7 +473,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     task_type = task_info.taskType
 
-    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")
+    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort", "aborted")
 
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
@@ -387,11 +493,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             )
         else:
             est_flex_unit = task_info.estFlexUnit
-            if est_flex_unit is not None and est_flex_unit > 0:
-                console.log(
-                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)'"
-                    f" to get the billed FlexCredit cost after a simulation run."
-                )
         return est_flex_unit
 
     def monitor_preprocess() -> None:
@@ -474,6 +575,10 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 perc_done, _ = get_run_info(task_id)
                 new_description = "solver progress"
                 progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
+        else:
+            while get_status(task_id) == "running":
+                perc_done, _ = get_run_info(task_id)
+                time.sleep(1.0)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
@@ -525,8 +630,21 @@ def download(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
+
+    task_info = get_info(task_id)
+    task_type = task_info.taskType
+
+    remote_data_file = SIMULATION_DATA_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_data_file = MODE_DATA_HDF5_GZ
+
     task = SimulationTask(taskId=task_id)
-    task.get_sim_data_hdf5(path, verbose=verbose, progress_callback=progress_callback)
+    task.get_sim_data_hdf5(
+        path,
+        verbose=verbose,
+        progress_callback=progress_callback,
+        remote_data_file=remote_data_file,
+    )
 
 
 @wait_for_connection
@@ -569,8 +687,17 @@ def download_hdf5(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
+    task_info = get_info(task_id)
+    task_type = task_info.taskType
+
+    remote_sim_file = SIM_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_sim_file = MODE_FILE_HDF5_GZ
+
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
+    task.get_simulation_hdf5(
+        path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
+    )
 
 
 @wait_for_connection
@@ -866,11 +993,8 @@ def estimate_cost(task_id: str, verbose: bool = True, solver_version: str = None
                 console.log(f"  {fc_post:1.3f} FlexCredit of the total cost from post-processing.")
         return task_info.estFlexUnit
 
-    log.warning(
-        "Could not get estimated cost! It will be reported during a simulation run in the "
-        "preprocessing step."
-    )
-    return None
+    # Something went wrong
+    raise WebError("Could not get estimated cost!")
 
 
 @wait_for_connection
@@ -939,6 +1063,38 @@ def real_cost(task_id: str, verbose=True) -> float:
                     "decrease the estimated, and correspondingly the billed cost of such tasks."
                 )
     return flex_unit
+
+
+@wait_for_connection
+def account(verbose=True) -> Account:
+    account_info = Account.get()
+    if verbose and account_info:
+        console = get_logging_console()
+        credit = account_info.credit
+        credit_expiration = account_info.credit_expiration
+        cycle_type = account_info.allowance_cycle_type
+        cycle_amount = account_info.allowance_current_cycle_amount
+        cycle_end_date = account_info.allowance_current_cycle_end_date
+        free_simulation_counts = account_info.daily_free_simulation_counts
+
+        message = ""
+        if credit is not None:
+            message += f"Current FlexCredit balance: {credit:.2f}"
+            if credit_expiration is not None:
+                message += (
+                    f" and expiration date: {credit_expiration.strftime('%Y-%m-%d %H:%M:%S')}. "
+                )
+            else:
+                message += ". "
+        if cycle_type is not None and cycle_amount is not None and cycle_end_date is not None:
+            cycle_end = cycle_end_date.strftime("%Y-%m-%d %H:%M:%S")
+            message += f"{cycle_type} FlexCredit balance: {cycle_amount:.2f} and expiration date: {cycle_end}. "
+        if free_simulation_counts is not None:
+            message += f"Remaining daily free simulations: {free_simulation_counts}."
+
+        console.log(message)
+
+    return account_info
 
 
 @wait_for_connection

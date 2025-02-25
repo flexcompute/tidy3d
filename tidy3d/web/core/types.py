@@ -51,4 +51,6 @@ class TaskType(str, Enum):
     FDTD = "FDTD"
     MODE_SOLVER = "MODE_SOLVER"
     HEAT = "HEAT"
+    HEAT_CHARGE = "HEAT_CHARGE"
     EME = "EME"
+    MODE = "MODE"

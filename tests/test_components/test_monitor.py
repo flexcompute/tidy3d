@@ -6,7 +6,7 @@ import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
-from ..utils import assert_log_level
+from ..utils import AssertLogLevel
 
 
 def test_stop_start():
@@ -25,11 +25,13 @@ time_sampling_tests = [
 
 
 @pytest.mark.parametrize("interval, start, stop, log_desired", time_sampling_tests)
-def test_monitor_interval_warn(log_capture, interval, start, stop, log_desired):
+def test_monitor_interval_warn(interval, start, stop, log_desired):
     """Assert time monitor interval warning handled as expected."""
 
-    mnt = td.FluxTimeMonitor(size=(1, 1, 0), name="f", interval=interval, stop=stop, start=start)
-    assert_log_level(log_capture, log_desired)
+    with AssertLogLevel(log_desired):
+        mnt = td.FluxTimeMonitor(
+            size=(1, 1, 0), name="f", interval=interval, stop=stop, start=start
+        )
 
     # make sure it got set to either 1 (undefined) or the specified value
     mnt_interval = interval if interval else 1
@@ -246,17 +248,17 @@ def test_monitor_freqs_empty():
         )
 
 
-def test_monitor_colocate(log_capture):
+def test_monitor_colocate():
     """test default colocate value, and warning if not set"""
 
-    monitor = td.FieldMonitor(
-        size=(td.inf, td.inf, td.inf),
-        freqs=np.linspace(1e12, 200e12, 1001),
-        name="test",
-        interval_space=(1, 2, 3),
-    )
-    assert monitor.colocate is True
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        monitor = td.FieldMonitor(
+            size=(td.inf, td.inf, td.inf),
+            freqs=np.linspace(1e12, 200e12, 1001),
+            name="test",
+            interval_space=(1, 2, 3),
+        )
+        assert monitor.colocate is True
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
@@ -271,29 +273,29 @@ def test_monitor_colocate(log_capture):
 @pytest.mark.parametrize(
     "freqs, log_level", [(np.arange(1, 2500), "WARNING"), (np.arange(1, 100), None)]
 )
-def test_monitor_num_freqs(log_capture, freqs, log_level):
+def test_monitor_num_freqs(freqs, log_level):
     """test default colocate value, and warning if not set"""
 
-    td.FieldMonitor(
-        size=(td.inf, td.inf, td.inf),
-        freqs=freqs * 1e12,
-        name="test",
-        colocate=True,
-    )
-    assert_log_level(log_capture, log_level)
+    with AssertLogLevel(log_level):
+        td.FieldMonitor(
+            size=(td.inf, td.inf, td.inf),
+            freqs=freqs * 1e12,
+            name="test",
+            colocate=True,
+        )
 
 
 @pytest.mark.parametrize("num_modes, log_level", [(101, "WARNING"), (100, None)])
-def test_monitor_num_modes(log_capture, num_modes, log_level):
+def test_monitor_num_modes(num_modes, log_level):
     """test default colocate value, and warning if not set"""
 
-    td.ModeMonitor(
-        size=(td.inf, 0, td.inf),
-        freqs=np.linspace(1e14, 2e14, 100),
-        name="test",
-        mode_spec=td.ModeSpec(num_modes=num_modes),
-    )
-    assert_log_level(log_capture, log_level)
+    with AssertLogLevel(log_level):
+        td.ModeMonitor(
+            size=(td.inf, 0, td.inf),
+            freqs=np.linspace(1e14, 2e14, 100),
+            name="test",
+            mode_spec=td.ModeSpec(num_modes=num_modes),
+        )
 
 
 def test_mode_bend_radius():
@@ -343,6 +345,10 @@ def test_monitor():
     size = (1, 2, 3)
     center = (1, 2, 3)
 
+    pd = np.atleast_1d(40000)
+    thetas = np.linspace(0, 2 * np.pi, 100)
+    phis = np.linspace(0, np.pi, 100)
+
     m1 = td.FieldMonitor(size=size, center=center, freqs=FREQS, name="test_monitor")
     _ = td.FieldMonitor.surfaces(size=size, center=center, freqs=FREQS, name="test_monitor")
     m2 = td.FieldTimeMonitor(size=size, center=center, name="test_mon")
@@ -351,21 +357,29 @@ def test_monitor():
     m5 = td.ModeMonitor(
         size=(1, 1, 0), center=center, mode_spec=td.ModeSpec(), freqs=FREQS, name="test_mon"
     )
-    m6 = td.ModeSolverMonitor(
+    m6 = td.ModeMonitor(size=(1, 1, 0), center=center, freqs=FREQS, name="test_mon")
+    m7 = td.ModeSolverMonitor(
         size=(1, 1, 0),
         center=center,
-        mode_spec=td.ModeSpec(),
         freqs=FREQS,
         name="test_mon",
         direction="-",
     )
-    m7 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
+    m8 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
+    m9 = td.DirectivityMonitor(
+        size=size,
+        center=center,
+        theta=thetas,
+        phi=phis,
+        proj_distance=pd,
+        freqs=FREQS,
+        name="directivity",
+    )
+    m10 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
 
     tmesh = np.linspace(0, 1, 10)
 
-    for m in [m1, m2, m3, m4, m5, m6, m7]:
-        # m.plot(y=2)
-        # plt.close()
+    for m in [m1, m2, m3, m4, m5, m6, m7, m8, m9, m10]:
         m.storage_size(num_cells=100, tmesh=tmesh)
 
     for m in [m2, m4]:

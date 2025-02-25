@@ -10,6 +10,7 @@ import pydantic.v1 as pd
 
 from ..constants import RADIAN
 from ..exceptions import ValidationError
+from .autograd import TracedFloat
 from .base import Tidy3dBaseModel, cached_property
 from .types import ArrayFloat2D, Axis, Coordinate, TensorReal
 
@@ -79,7 +80,7 @@ class RotationAroundAxis(AbstractRotation):
         "indicating x, y, or z.",
     )
 
-    angle: float = pd.Field(
+    angle: TracedFloat = pd.Field(
         0.0,
         title="Angle of Rotation",
         description="Angle of rotation in radians.",
@@ -120,13 +121,8 @@ class RotationAroundAxis(AbstractRotation):
         n = self.axis / norm
         c = np.cos(self.angle)
         s = np.sin(self.angle)
-        R = np.zeros((3, 3))
-        tan_dim = [[1, 2], [2, 0], [0, 1]]
-
-        for dim in range(3):
-            R[dim, dim] = c + n[dim] ** 2 * (1 - c)
-            R[dim, tan_dim[dim][0]] = n[dim] * n[tan_dim[dim][0]] * (1 - c) - n[tan_dim[dim][1]] * s
-            R[dim, tan_dim[dim][1]] = n[dim] * n[tan_dim[dim][1]] * (1 - c) + n[tan_dim[dim][0]] * s
+        K = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
+        R = np.eye(3) + s * K + (1 - c) * K @ K
 
         return R
 

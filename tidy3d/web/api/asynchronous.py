@@ -1,6 +1,6 @@
 """Interface to run several jobs in batch using simplified syntax."""
 
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from ...log import log
 from .container import DEFAULT_DATA_DIR, Batch, BatchData
@@ -16,6 +16,7 @@ def run_async(
     verbose: bool = True,
     simulation_type: str = "tidy3d",
     parent_tasks: Dict[str, List[str]] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -37,6 +38,8 @@ def run_async(
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
+    reduce_simulation: Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
 
     Returns
     ------
@@ -71,6 +74,7 @@ def run_async(
         verbose=verbose,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
+        reduce_simulation=reduce_simulation,
     )
 
     batch_data = batch.run(path_dir=path_dir)

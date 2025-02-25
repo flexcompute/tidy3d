@@ -1,6 +1,6 @@
 .. currentmodule:: tidy3d
 
-Thermal Boundary Conditions
+Boundary Conditions
 -----------------------------
 
 Specifications
@@ -11,6 +11,7 @@ Specifications
    :template: module.rst
 
    tidy3d.HeatBoundarySpec
+   tidy3d.HeatChargeBoundarySpec
 
 
 Types

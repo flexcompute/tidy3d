@@ -4,7 +4,7 @@ Output Data
 -------------
 
 
-Heat Simulation Data
+Simulation Data
 ^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
@@ -12,6 +12,7 @@ Heat Simulation Data
    :template: module.rst
 
    tidy3d.HeatSimulationData
+   tidy3d.HeatChargeSimulationData
 
 
 Monitor Data
