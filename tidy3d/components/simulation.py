@@ -2731,14 +2731,8 @@ class Simulation(AbstractYeeGridSimulation):
             # log.info("No sources in simulation.")
             return val
 
-        freq_range_min = (
-            min((freq_range[0] for freq_range in source_ranges), default=0.0)
-            * MIN_MONITOR_FREQUENCY_RANGE_PARAMETER
-        )
-        freq_range_max = (
-            max((freq_range[1] for freq_range in source_ranges), default=0.0)
-            * MAX_MONITOR_FREQUENCY_RANGE_PARAMETER
-        )
+        freq_range_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
+        freq_range_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
 
         with log as consolidated_logger:
             for monitor_index, monitor in enumerate(val):
@@ -2749,7 +2743,6 @@ class Simulation(AbstractYeeGridSimulation):
                 if freqs.min() < freq_range_min or freqs.max() > freq_range_max:
                     consolidated_logger.warning(
                         f"monitors[{monitor_index}] contains frequencies "
-                        f"outside of the simulation frequency range ({freq_range_min:2e}, {freq_range_max:2e})"
                         f"outside of the simulation frequency range ({freq_range_min:2e}, {freq_range_max:2e})"
                         "(Hz) as defined by the sources.",
                         custom_loc=["monitors", monitor_index, "freqs"],
@@ -3602,7 +3595,7 @@ class Simulation(AbstractYeeGridSimulation):
             freqs = np.array(monitor.freqs)
             if freqs.min() < freq_range_min or freqs.max() > freq_range_max:
                 raise SetupError(
-                    f"Time monitor '{monitor.name}' contains frequencies "
+                    f"Frequency-domain monitor '{monitor.name}' contains frequencies "
                     f"outside of the simulation frequency range ({freq_range_min:2e}, {freq_range_max:2e})"
                     "(Hz) as defined by the sources."
                 )

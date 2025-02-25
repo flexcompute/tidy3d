@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Added checking of the monitor frequencies to be within the range that is specified by the sources.
+
 ## [2.7.9] - 2025-01-22
 
 ### Fixed
