@@ -325,16 +325,16 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("fwidth, log_level", [(0.1e12, "WARNING"), (2e12, "INFO")])
-def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
+@pytest.mark.parametrize("monitor_freq, log_level", [(5e10, "WARNING"), (2e12, "INFO"), (5e13, "WARNING")])
+def test_monitor_simulation_frequency_range(log_capture, monitor_freq, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=fwidth),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=0.1e12),
         size=(0, 0, 0),
         polarization="Ex",
     )
-    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5e12])
+    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[monitor_freq])
     _ = td.Simulation(
         size=(1, 1, 1),
         monitors=[mnt],
@@ -343,7 +343,6 @@ def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
     assert_log_level(log_capture, log_level)
-
 
 def test_validate_bloch_with_symmetry():
     with pytest.raises(pydantic.ValidationError):
