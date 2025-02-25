@@ -346,6 +346,7 @@ def test_monitor_simulation_frequency_range(log_capture, monitor_freq, log_level
     )
     assert_log_level(log_capture, log_level)
 
+
 def test_validate_bloch_with_symmetry():
     with pytest.raises(pydantic.ValidationError):
         td.Simulation(
