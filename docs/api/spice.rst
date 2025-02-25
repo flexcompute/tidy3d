@@ -20,4 +20,4 @@ Analysis
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.SteadyChargeDCAnalysis
+   tidy3d.IsothermalSteadyChargeDCAnalysis
