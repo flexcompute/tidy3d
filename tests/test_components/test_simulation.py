@@ -325,7 +325,9 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("monitor_freq, log_level", [(5e10, "WARNING"), (2e12, "INFO"), (5e13, "WARNING")])
+@pytest.mark.parametrize(
+    "monitor_freq, log_level", [(5e10, "WARNING"), (2e12, "INFO"), (5e13, "WARNING")]
+)
 def test_monitor_simulation_frequency_range(log_capture, monitor_freq, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
