@@ -174,19 +174,21 @@ class BeamProfile(Box):
     ) -> Numpy:
         """Analytic beam with all the beam parameters but assuming ``z`` as the normal axis."""
 
+        # Add a frequency dimension to points
+        points = np.repeat(points[:, :, np.newaxis], len(self.freqs), axis=2)
+
         # Rotate points to axes where propagation is along z
-        points_prop_z = self._rotate_points_z(points)
+        points_prop_z = self._rotate_points_z(points, background_n)
 
         # Reflection at the z = 0 plane for negative direction
         if self.direction == "-":
-            points_prop_z[2, :] *= -1
+            points_prop_z[2, ...] *= -1
 
         # Get fields polarized along x and propagating along z
         scalar_field = self.scalar_field(points_prop_z, background_n)
 
         # Set the correct field component based on the scalar field values
-        field_shape = tuple(list(points.shape) + [len(self.freqs)])
-        field_vals = np.zeros(field_shape, dtype=np.complex128)
+        field_vals = np.zeros(points.shape, dtype=np.complex128)
         if field == "E":
             field_vals[0, ...] = scalar_field
         else:
@@ -238,7 +240,7 @@ class BeamProfile(Box):
         # Reshape to (3, Nx, Ny, Nz, num_freqs)
         return np.reshape(field_vals, (3, Nx, Ny, Nz, len(self.freqs)))
 
-    def _rotate_points_z(self, points: Numpy) -> Numpy:
+    def _rotate_points_z(self, points: Numpy, background_n: Numpy) -> Numpy:
         """Rotate points to new coordinates where z is the propagation axis."""
         points_prop_z = self.rotate_points(points, [0, 0, 1], -self.angle_phi)
         points_prop_z = self.rotate_points(points_prop_z, [0, 1, 0], -self.angle_theta)
@@ -298,48 +300,47 @@ class PlaneWaveBeamProfile(BeamProfile):
         """Scalar field for plane wave.
         Scalar field corresponding to the analytic beam in coordinate system such that the
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
-        computed on an unstructured array ``points`` of shape ``(3, ...)``.
-        For the special case of fixed in-plane k, the propagation axis is not actually z. In fact
-        the propagation axis is frequency dependent and the only thing that is constant is the
-        in-plane k, which is why we do not rotate the points in ``self._rotate_points_z``.
+        computed on an unstructured array ``points`` of shape ``(3, N_points, N_freqs)``.
+        For the special case of fixed in-plane k, the propagation axis is different at every
+        frequency, and the points a frquency-dependent rotation has been applied to the
+        ``points`` in ``self._rotate_points_z``.
         """
-        # Get the z-direction wave-vector magnitude depending on whether we're dealing with a
-        # Bloch boundary or fixed angle plane wave
-        kx, ky = 0, 0
-        k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
-        if self.as_fixed_angle_source:
-            kz = k0 * np.cos(self.angle_theta)
-        elif isinstance(self.angular_spec, FixedAngleSpec):
-            kz = k0
-        elif isinstance(self.angular_spec, FixedInPlaneKSpec):
-            kx, ky = self.in_plane_k(background_n)
-            kz = np.sqrt(k0**2 - kx**2 - ky**2)
-        field = np.exp(
-            1j * (np.outer(points[2], kz) + np.outer(points[0], kx) + np.outer(points[1], ky))
-        )
-        return field
 
-    def _rotate_points_z(self, points: Numpy) -> Numpy:
-        """Rotate points to new coordinates where z is the propagation axis.
-        If we're computing numerical fixed angle or fixed in-plane k, we don't rotate the
-        points, which combines with handling in ``scalar_field`` and"
-        ``_inverse_rotate_field_vals_z."""
-        if self.as_fixed_angle_source or isinstance(self.angular_spec, FixedInPlaneKSpec):
+        kz = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
+        if self.as_fixed_angle_source:
+            kz *= np.cos(self.angle_theta)
+        return np.exp(1j * points[2] * kz)
+
+    def _angle_theta_actual(self, background_n: Numpy) -> Numpy:
+        """Compute the frequency-dependent actual propagation angle theta."""
+        k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
+        kx, ky = self.in_plane_k(background_n)
+        k_perp = np.sqrt(kx**2 + ky**2)
+        return np.real(np.arcsin(k_perp / k0))
+
+    def _rotate_points_z(self, points: Numpy, background_n: Numpy) -> Numpy:
+        """Rotate points to new coordinates where z is the propagation axis."""
+        if self.as_fixed_angle_source:
+            # For fixed-angle, we do not rotate the points
             return points
-        return super()._rotate_points_z(points)
+        elif isinstance(self.angular_spec, FixedInPlaneKSpec):
+            # For fixed in-plane k, the rotation is angle-dependent
+            points = self.rotate_points(points, [0, 0, 1], -self.angle_phi)
+            angle_theta_actual = self._angle_theta_actual(background_n=background_n)
+            for ind, theta_actual in enumerate(angle_theta_actual):
+                points[:, :, ind] = self.rotate_points(points[:, :, ind], [0, 1, 0], -theta_actual)
+            return points
+        return super()._rotate_points_z(points, background_n)
 
     def _inverse_rotate_field_vals_z(self, field_vals: Numpy, background_n: Numpy) -> Numpy:
         """Rotate field values from coordinates where z is the propagation axis to angled
         coordinates. Special handling is needed if fixed in-plane k wave."""
         if isinstance(self.angular_spec, FixedInPlaneKSpec):
-            # in case of bloch bcs, wave angle is frequency dependent
-            k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
-            kx, ky = self.in_plane_k(background_n)
-            k_perp = np.sqrt(kx**2 + ky**2)
-            angle_theta_actual = np.real(np.arcsin(k_perp / k0))
-            for ind in range(len(self.freqs)):
+            # For fixed in-plane k, the rotation is angle-dependent
+            angle_theta_actual = self._angle_theta_actual(background_n=background_n)
+            for ind, theta_actual in enumerate(angle_theta_actual):
                 field_vals[:, :, ind] = self.rotate_points(
-                    field_vals[:, :, ind], [0, 1, 0], angle_theta_actual[ind]
+                    field_vals[:, :, ind], [0, 1, 0], theta_actual
                 )
             field_vals = self.rotate_points(field_vals, [0, 0, 1], self.angle_phi)
             return field_vals
@@ -385,13 +386,13 @@ class GaussianBeamProfile(BeamProfile):
 
         w_0, z_0 = self.waist_radius, self.waist_distance
         z_r = w_0**2 * k0 / 2  # shape k0
-        w_z = w_0 * np.sqrt(1 + np.outer(z + z_0, 1 / z_r) ** 2)  # shape (Np, Nk0)
+        w_z = w_0 * np.sqrt(1 + ((z + z_0) / z_r) ** 2)  # shape (Np, Nk0)
         # inv_r_z shape (Np, Nk0)
-        inv_r_z = (z + z_0)[:, None] / ((z + z_0)[:, None] ** 2 + z_r[None, :] ** 2)
+        inv_r_z = (z + z_0) / ((z + z_0) ** 2 + z_r**2)
         # we choose gauge such that psi_g = 0 at z = 0 (beam plane)
         # this is needed for a proper interpolation between different frequencies
         # psi_g shape (Np, Nk0)
-        psi_g = np.arctan(np.outer(z + z_0, 1 / z_r)) - np.arctan(np.outer(z_0, 1 / z_r))
+        psi_g = np.arctan((z + z_0) / z_r) - np.arctan(z_0 / z_r)
         return w_z, inv_r_z, psi_g
 
     def scalar_field(self, points: Numpy, background_n: float) -> Numpy:
@@ -406,8 +407,8 @@ class GaussianBeamProfile(BeamProfile):
         w_z, inv_r_z, psi_g = self.beam_params(z, k0)
         r_2 = x**2 + y**2
         scalar_gaussian = w_0 / w_z
-        scalar_gaussian *= np.exp(-r_2[:, None] / w_z**2)
-        scalar_gaussian *= np.exp(1j * (np.outer(z, k0) + np.outer(r_2, k0) / 2 * inv_r_z - psi_g))
+        scalar_gaussian *= np.exp(-r_2 / w_z**2)
+        scalar_gaussian *= np.exp(1j * (z * k0 + r_2 * k0 / 2 * inv_r_z - psi_g))
 
         return scalar_gaussian
 
@@ -453,14 +454,14 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         z_r = [w**2 * k0 / 2 for w in w_xy]  # shape (2, Nk0)
         w_z, w_0, inv_r_z, psi_g = [], [], [], []  # final shape (2, Np, Nk0) after loop below
         for w, z_i, z_ri in zip(w_xy, z_xy, z_r):
-            w_z.append(w * np.sqrt(1 + np.outer(z + z_i, 1 / z_ri) ** 2))
-            w_0.append(w * np.sqrt(1 + np.outer(z_i, 1 / z_ri) ** 2))
-            inv_r_z.append((z + z_i)[:, None] / ((z + z_i)[:, None] ** 2 + z_ri[None, :] ** 2))
+            w_z.append(w * np.sqrt(1 + ((z + z_i) / z_ri) ** 2))
+            w_0.append(w * np.sqrt(1 + (z_i / z_ri) ** 2))
+            inv_r_z.append((z + z_i) / ((z + z_i) ** 2 + z_ri**2))
             # we choose gauge such that psi_g = 0 at z = 0 (beam plane)
             # this is needed for a proper interpolation between different frequencies
             # psi_g shape (Np, Nk0)
-            psi_g_1 = np.arctan(np.outer((z + z_i), 1 / z_ri)) / 2
-            psi_g_2 = np.arctan(np.outer((z_i), 1 / z_ri)) / 2
+            psi_g_1 = np.arctan((z + z_i) / z_ri) / 2
+            psi_g_2 = np.arctan(z_i / z_ri) / 2
             psi_g.append(psi_g_1 - psi_g_2)
 
         return w_0, w_z, inv_r_z, psi_g
@@ -478,9 +479,9 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         x_2 = x**2
         y_2 = y**2
 
-        q_term1_inv = 1j * np.outer(x_2, k0) / 2 * inv_r_z[0] - x_2[:, None] / w_z[0] ** 2
-        q_term2_inv = 1j * np.outer(y_2, k0) / 2 * inv_r_z[1] - y_2[:, None] / w_z[1] ** 2
-        angle_term = q_term1_inv + q_term2_inv + 1j * (np.outer(z, k0) - psi_g[0] - psi_g[1])
+        q_term1_inv = 1j * x_2 * k0 / 2 * inv_r_z[0] - x_2 / w_z[0] ** 2
+        q_term2_inv = 1j * y_2 * k0 / 2 * inv_r_z[1] - y_2 / w_z[1] ** 2
+        angle_term = q_term1_inv + q_term2_inv + 1j * (z * k0 - psi_g[0] - psi_g[1])
         scalar_gaussian = np.exp(angle_term)
 
         ampl = np.sqrt(w_0[0] * w_0[1] / w_z[0] / w_z[1])
