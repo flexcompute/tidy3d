@@ -61,6 +61,7 @@ pylint = { version = "*", optional = true }
 pytest = { version = ">=8.1", optional = true }
 pytest-timeout = { version = "*", optional = true }
 pytest-xdist = "^3.6.1"
+pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
 
@@ -156,6 +157,7 @@ dev = [
   'pytest-timeout',
   'pytest-xdist',
   'pytest-env',
+  'pytest-cov',
   'rtree',
   'ruff',
   'sax',
@@ -267,7 +269,7 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules -n auto --dist worksteal"
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal"
 env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
