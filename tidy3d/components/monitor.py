@@ -13,7 +13,7 @@ from .apodization import ApodizationSpec
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .base_sim.monitor import AbstractMonitor
 from .medium import MediumType
-from .mode import ModeSpec
+from .mode_spec import ModeSpec
 from .types import (
     ArrayFloat1D,
     Ax,
@@ -60,9 +60,15 @@ class Monitor(AbstractMonitor):
         True,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
-        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
-        "and is hard-coded for other monitors depending on their specific function.",
+        "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
+        "monitors depending on their specific function.",
     )
+
+    @property
+    def _to_solver_monitor(self):
+        """Monitor definition that will be used to define the field recording during the time
+        stepping."""
+        return self
 
     @abstractmethod
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -279,7 +285,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
     """:class:`Monitor` that records mode-related data."""
 
     mode_spec: ModeSpec = pydantic.Field(
-        ...,
+        ModeSpec(),
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
@@ -288,6 +294,13 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         None,
         title="Store Fields",
         description="Propagation direction for the mode field profiles stored from mode solving.",
+    )
+
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate Fields",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
+        "primal grid nodes).",
     )
 
     def plot(
@@ -666,13 +679,11 @@ class ModeMonitor(AbstractModeMonitor):
         * `ModalSourcesMonitors <../../notebooks/ModalSourcesMonitors.html>`_
     """
 
-    colocate: Literal[False] = pydantic.Field(
-        False,
-        title="Colocate Fields",
-        description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
-        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
-        "and is hard-coded for other monitors depending on their specific function.",
-    )
+    @property
+    def _to_solver_monitor(self):
+        """Monitor definition that will be used to define the field recording during the time
+        stepping."""
+        return self.updated_copy(colocate=False)
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
@@ -707,11 +718,12 @@ class ModeSolverMonitor(AbstractModeMonitor):
         "dimension.",
     )
 
-    colocate: bool = pydantic.Field(
-        True,
-        title="Colocate Fields",
-        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
-        "primal grid nodes).",
+    fields: Tuple[EMField, ...] = pydantic.Field(
+        ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
+        title="Field Components",
+        description="Collection of field components to store in the monitor. Note that some "
+        "methods like ``flux``, ``dot`` require all tangential field components, while others "
+        "like ``mode_area`` require all E-field components.",
     )
 
     @pydantic.root_validator(skip_on_failure=True)
@@ -1087,6 +1099,36 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 6
 
 
+class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
+    """
+    :class:`Monitor` that records the radiation characteristics of antennas in the frequency domain
+    at specified observation angles.
+
+    Note
+    ----
+    For directivity, the computation is based on the ratio of the radiation
+    intensity in a given direction to the average radiation intensity
+    over all directions:
+
+        Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        John Wiley & Sons, Chapter 2.6 (2016).
+
+    For axial ratio, the computation is based on:
+
+        Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        John Wiley & Sons, Chapter 2.12 (2016).
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # stores 1 complex number per pair of angles, per frequency,
+        # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
+        # stores 1 real number per frequency for flux
+        return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(
+            self.freqs
+        ) * 6 + BYTES_REAL * len(self.freqs)
+
+
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them on a Cartesian observation plane.
@@ -1383,8 +1425,8 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         False,
         title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
-        "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
-        "and is hard-coded for other monitors depending on their specific function.",
+        "primal grid). Can be toggled for field recording monitors and is hard-coded for other "
+        "monitors depending on their specific function.",
     )
 
     @pydantic.validator("size", always=True)
@@ -1420,4 +1462,5 @@ MonitorType = Union[
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
+    DirectivityMonitor,
 ]

@@ -9,7 +9,7 @@ import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
-from ..utils import AssertLogLevel, assert_log_level
+from ..utils import AssertLogLevel
 
 MEDIUM = td.Medium()
 ANIS_MEDIUM = td.AnisotropicMedium(xx=MEDIUM, yy=MEDIUM, zz=MEDIUM)
@@ -83,14 +83,14 @@ def test_medium_conversions():
     assert np.isclose(k, k_)
 
 
-def test_lorentz_medium_conversions(log_capture):
+def test_lorentz_medium_conversions():
     freq = 3.0
 
     # lossless, eps_r > 1
     eps_complex = 2 + 0j
     n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
-    medium = td.Lorentz.from_nk(n, k, freq)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        medium = td.Lorentz.from_nk(n, k, freq)
     eps_model = medium.eps_model(freq)
     assert np.isclose(eps_complex, eps_model)
 
@@ -111,8 +111,8 @@ def test_lorentz_medium_conversions(log_capture):
     # lossy, eps_r > 1
     eps_complex = 1.5 + 2j
     n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
-    medium = td.Lorentz.from_nk(n, k, freq)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        medium = td.Lorentz.from_nk(n, k, freq)
     eps_model = medium.eps_model(freq)
     assert np.isclose(eps_complex, eps_model)
 
@@ -139,6 +139,40 @@ def test_medium_from_nk():
 
 def test_PEC():
     _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
+
+
+def test_lossy_metal():
+    # frequency_range shouldn't be None
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=1)
+    # frequency_range shouldn't contain non-postive values
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(0, 10))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(-10, 10))
+
+    # frequency_range should be finite
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(10, np.inf))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=1, frequency_range=(-np.inf, 10))
+
+    # allow_gain cannot be true
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(allow_gain=True, conductivity=1, frequency_range=(10, 20))
+
+    # conductivity cannot be negative
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=-1, frequency_range=(10, 20))
+
+    # conductivity cannot be 0
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LossyMetalMedium(conductivity=0, frequency_range=(10, 20))
+
+    # default fitting
+    mat = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14))
+    model = mat.scaled_surface_impedance_model
+    num_poles = mat.num_poles
 
 
 def test_medium_dispersion():
@@ -353,7 +387,7 @@ def test_n_cfl():
     assert material.n_cfl == 2
 
 
-def test_gain_medium(log_capture):
+def test_gain_medium():
     """Test passive and gain medium validations."""
     # non-dispersive
     with pytest.raises(pydantic.ValidationError):
@@ -390,14 +424,14 @@ def test_gain_medium(log_capture):
 
     # anisotropic medium, warn allow_gain is ignored
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=True)
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
 
 
-def test_medium2d(log_capture):
+def test_medium2d():
     sigma = 0.45
     thickness = 0.01
     cond_med = td.Medium(conductivity=sigma)
@@ -426,13 +460,9 @@ def test_medium2d(log_capture):
     # this should also not warn, since it could be used for override structure
     td.Structure(medium=medium3d, geometry=td.Box(size=(1, 0, 1)))
 
-    # no warnings so far
-    assert_log_level(log_capture, None)
-
-    # this should give warning
-    _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
+    with AssertLogLevel("WARNING"):
+        _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
     plt.close()
-    assert_log_level(log_capture, "WARNING")
 
     with pytest.raises(pydantic.ValidationError):
         _ = td.Medium2D(ss=td.PECMedium(), tt=td.Medium())
@@ -549,7 +579,7 @@ def test_fully_anisotropic_media():
         )
 
 
-def test_nonlinear_medium(log_capture):
+def test_nonlinear_medium():
     med = td.Medium(
         nonlinear_spec=td.NonlinearSpec(
             models=[
@@ -561,9 +591,21 @@ def test_nonlinear_medium(log_capture):
         )
     )
 
+    assert med._nonlinear_num_iters == 20
+    assert td.Medium()._nonlinear_num_iters == 0
+    assert td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))._nonlinear_num_iters == 1
+    assert (
+        td.Medium(
+            nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=2)
+        )._nonlinear_num_iters
+        == 2
+    )
+    assert td.Medium()._nonlinear_models == []
+    assert td.Medium(nonlinear_spec=td.NonlinearSpec())._nonlinear_models == []
+
     # warn about deprecated api
-    med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
 
     # don't use deprecated numiters
     with pytest.raises(ValidationError):
@@ -604,11 +646,15 @@ def test_nonlinear_medium(log_capture):
     # active materials
     with pytest.raises(ValidationError):
         med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)])
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1, freq0=1)])
         )
 
     with pytest.raises(ValidationError):
-        med = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=-1j, n0=1)]))
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[td.KerrNonlinearity(n2=-1j, n0=1, use_complex_fields=True)]
+            )
+        )
 
     # automatic detection of n0 and freq0
     n0 = 2
@@ -632,26 +678,6 @@ def test_nonlinear_medium(log_capture):
     assert n0 == nonlinear_spec.models[0]._get_n0(n0=None, medium=medium, freqs=[freq0])
     assert freq0 == nonlinear_spec.models[0]._get_freq0(freq0=None, freqs=[freq0])
 
-    # two photon absorption is phenomenological
-    with AssertLogLevel(log_capture, "WARNING", contains_str="phenomenological"):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
-            allow_gain=True,
-        )
-        sim.updated_copy(medium=med, path="structures/0")
-
-    # complex parameters
-    with AssertLogLevel(log_capture, "WARNING", contains_str="preferred"):
-        med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(
-                models=[
-                    td.KerrNonlinearity(n2=-1 + 1j, n0=1),
-                ],
-                num_iters=20,
-            )
-        )
-        sim.updated_copy(medium=med, path="structures/0")
-
     # subsection with nonlinear materials needs to hardcode source info
     sim2 = sim.updated_copy(center=(-4, -4, -4), path="sources/0")
     sim2 = sim2.updated_copy(
@@ -666,12 +692,26 @@ def test_nonlinear_medium(log_capture):
     source2 = source.updated_copy(source_time=source_time2)
     with pytest.raises(SetupError):
         sim.updated_copy(sources=[source, source2])
+    with pytest.raises(SetupError):
+        sim.updated_copy(sources=[])
 
     # but if we provided it, it's ok
     nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1, n0=1)])
     structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
     sim = sim.updated_copy(structures=[structure])
     assert 1 == nonlinear_spec.models[0]._get_n0(n0=1, medium=medium, freqs=[1, 2])
+
+    nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1)])
+    structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
+    sim = sim.updated_copy(structures=[structure])
+    with pytest.raises(SetupError):
+        sim = sim.updated_copy(structures=[structure], sources=[source, source2])
+    with pytest.raises(SetupError):
+        sim = sim.updated_copy(structures=[structure], sources=[])
+    nonlinear_spec = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, n0=1, freq0=1)])
+    structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
+    sim = sim.updated_copy(structures=[structure])
+    assert 1 == nonlinear_spec.models[0]._get_freq0(freq0=1, freqs=[1, 2])
 
     # active materials with automatic detection of n0
     nonlinear_spec_active = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1)])
@@ -697,97 +737,40 @@ def test_nonlinear_medium(log_capture):
     with pytest.raises(ValidationError):
         td.Medium2D(ss=modulated, tt=modulated)
 
+    # some parameters must be real now, unless we use old implementation
+    _ = td.TwoPhotonAbsorption(beta=1j, use_complex_fields=True)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.TwoPhotonAbsorption(beta=1j)
+    _ = td.KerrNonlinearity(n2=1j, use_complex_fields=True)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.KerrNonlinearity(n2=1j)
 
-def test_lumped_resistor():
-    resistor = td.LumpedResistor(
-        resistance=50.0,
-        center=[0, 0, 0],
-        size=[2, 0, 3],
-        voltage_axis=0,
-        name="R",
+    # consistent complex fields
+    _ = td.NonlinearSpec(
+        models=[
+            td.TwoPhotonAbsorption(beta=1, use_complex_fields=True),
+            td.KerrNonlinearity(n2=1, use_complex_fields=True),
+        ]
     )
-    _ = resistor._sheet_conductance
-    normal_axis = resistor.normal_axis
-    assert normal_axis == 1
-
-    # Check conversion to geometry
-    _ = resistor.to_structure
-
-    # Check conversion to mesh overrides
-    _ = resistor.to_mesh_overrides()
-
-    # error if voltage axis is not in plane with the resistor
     with pytest.raises(pydantic.ValidationError):
-        _ = td.LumpedResistor(
-            resistance=50.0,
-            center=[0, 0, 0],
-            size=[2, 0, 3],
-            voltage_axis=1,
-            name="R",
+        _ = td.NonlinearSpec(
+            models=[
+                td.TwoPhotonAbsorption(beta=1, use_complex_fields=True),
+                td.KerrNonlinearity(n2=1, use_complex_fields=False),
+            ]
         )
 
-    # error if not planar
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.LumpedResistor(
-            resistance=50.0,
-            center=[0, 0, 0],
-            size=[0, 0, 3],
-            voltage_axis=2,
-            name="R",
+    # warn if using old implementation
+    with AssertLogLevel("WARNING", contains_str="use_complex_fields"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[td.KerrNonlinearity(n2=1, use_complex_fields=True)]
+            )
         )
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.LumpedResistor(
-            resistance=50.0,
-            center=[0, 0, 0],
-            size=[2, 1, 3],
-            voltage_axis=2,
-            name="R",
-        )
+        _ = sim.updated_copy(medium=med, path="structures/0")
 
 
-def test_coaxial_lumped_resistor():
-    resistor = td.CoaxialLumpedResistor(
-        resistance=50.0,
-        center=[0, 0, 0],
-        outer_diameter=3,
-        inner_diameter=1,
-        normal_axis=1,
-        name="R",
-    )
-
-    _ = resistor._sheet_conductance
-    normal_axis = resistor.normal_axis
-    assert normal_axis == 1
-
-    # Check conversion to geometry
-    _ = resistor.to_structure
-
-    # Check conversion to mesh overrides
-    _ = resistor.to_mesh_overrides()
-
-    # error if inner diameter is larger
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.CoaxialLumpedResistor(
-            resistance=50.0,
-            center=[0, 0, 0],
-            outer_diameter=3,
-            inner_diameter=4,
-            normal_axis=1,
-            name="R",
-        )
-
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.CoaxialLumpedResistor(
-            resistance=50.0,
-            center=[0, 0, np.inf],
-            outer_diameter=3,
-            inner_diameter=1,
-            normal_axis=1,
-            name="R",
-        )
-
-
-def test_custom_medium(log_capture):
+def test_custom_medium():
     Nx, Ny, Nz, Nf = 4, 3, 1, 1
     X = np.linspace(-1, 1, Nx)
     Y = np.linspace(-1, 1, Ny)
@@ -812,8 +795,8 @@ def test_custom_medium(log_capture):
         )
         _ = td.CustomMedium(eps_dataset=eps_xyz_dataset, interp_method="nearest")
 
-    create_mediums(n_dataset=n_dataset)
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        create_mediums(n_dataset=n_dataset)
 
     with pytest.raises(pydantic.ValidationError):
         # repeat some entries so data cannot be interpolated
@@ -821,3 +804,99 @@ def test_custom_medium(log_capture):
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
         n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
         create_mediums(n_dataset=n_dataset2)
+
+
+def test_medium_from_admittance_coeffs():
+    """Test that ``from_admittance_coeffs`` produces same PoleResidue model as
+    conversions from Drude and Lorentz models. Also test some special cases."""
+    freqs = np.linspace(0.01, 1, 1001)
+    twopi = 2 * np.pi
+    m_DR = td.Drude(eps_inf=1.0, coeffs=[(1.5, 3)])
+    # test from transfer function using Drude model
+    f1 = m_DR.coeffs[0][0]
+    d1 = m_DR.coeffs[0][1]
+    # admittance function in Laplace domain (a/b) modeling Drude differential equation is:
+    a = np.array([0, td.EPSILON_0 * (twopi * f1) ** 2, 0])
+    b = np.array([0, twopi * d1, 1])
+
+    m_transfer = td.PoleResidue.from_admittance_coeffs(a, b)
+    assert np.allclose(
+        m_transfer.eps_model(freqs),
+        m_DR.eps_model(freqs),
+    )
+
+    # test from transfer function using Lorentz model
+    m_L = td.Lorentz(eps_inf=1.0, coeffs=[(1.5, 3, 5)])
+    deps = m_L.coeffs[0][0]
+    f1 = m_L.coeffs[0][1]
+    d1 = m_L.coeffs[0][2]
+    # admittance function in Laplace domain (a/b) modeling Lorentz differential equation is:
+    a = np.array([0, td.EPSILON_0 * (twopi * f1) ** 2 * deps, 0])
+    b = np.array([(twopi * f1) ** 2, 2 * twopi * d1, 1])
+
+    m_transfer = td.PoleResidue.from_admittance_coeffs(a, b)
+    assert np.allclose(
+        m_transfer.eps_model(freqs),
+        m_L.eps_model(freqs),
+    )
+
+    # Example network Taflove Sec 15.9.6
+    L1 = 1e-9
+    L2 = 1.5e-9
+    C1 = 0.2e-12
+    C2 = 0.2e-12
+    R1 = 10
+    R2 = 250
+    R3 = 50
+    # Admittance transfer function for circuit
+    a = [1, C1 * R1 + C1 * R2 + C2 * R2, C1 * C2 * R1 * R2 + C1 * L2, C1 * C2 * L2 * R2, 0]
+    b = [
+        R1 + R2 + R3,
+        C1 * R1 * R3 + C1 * R2 * R3 + C2 * R1 * R2 + C2 * R2 * R3 + L1 + L2,
+        C1 * C2 * R1 * R2 * R3
+        + C1 * L1 * R1
+        + C1 * L1 * R2
+        + C1 * L2 * R3
+        + C2 * L1 * R2
+        + C2 * L2 * R2,
+        C1 * C2 * L1 * R1 * R2 + C1 * C2 * L2 * R2 * R3 + C1 * L1 * L2,
+        C1 * C2 * L1 * L2 * R2,
+    ]
+
+    # Should be no warnings due to passivity
+    # (although numerically there is a small negative part at high frequencies)
+    with AssertLogLevel(None):
+        m_transfer = td.PoleResidue.from_admittance_coeffs(np.array(a), np.array(b))
+
+    # test corner case of an admittance function representing a pure capacitance
+    C = 1e-12  # 1 pF capacitor
+    a = np.array([0, C])
+    b = np.array([1, 0])
+    m_transfer = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    assert len(m_transfer.poles) == 0
+    assert np.isclose(1 + C / td.EPSILON_0, m_transfer.eps_inf)
+
+    #### Test validation of inputs
+    # Test improper admittance function resulting in a negative direct polynomial part
+    a = np.array([0, -C])
+    b = np.array([1, 0])
+    with pytest.raises(ValidationError):
+        _ = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    # Test improper admittance function with numerator order too large
+    a = np.array([0, 1, 2])
+    b = np.array([1, 0])
+    with pytest.raises(ValidationError):
+        _ = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    # Test transfer function that will result in a higher order pole
+    a = np.array([1])
+    b = np.array([0, 2])
+    with pytest.raises(ValidationError):
+        _ = td.PoleResidue.from_admittance_coeffs(a, b)
+
+    # Test transfer function that will result in a higher order pole, but is not in simplest form
+    a = np.array([0, 1])
+    b = np.array([0, 2])
+    _ = td.PoleResidue.from_admittance_coeffs(a, b)

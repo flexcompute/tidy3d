@@ -320,18 +320,18 @@ class FieldProjector(Tidy3dBaseModel):
         wavelength = C_0 / frequency / index_n
 
         _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
-
+        coord_list = sim_data.simulation.grid.boundaries.to_list
         for idx in idx_uv:
             # pick sample points on the monitor and handle the possibility of an "infinite" monitor
+            # Fields within PML regions are included, to match the server-side computation.
             start = np.maximum(
                 surface.monitor.center[idx] - surface.monitor.size[idx] / 2.0,
-                sim_data.simulation.center[idx] - sim_data.simulation.size[idx] / 2.0,
+                coord_list[idx][0],
             )
             stop = np.minimum(
                 surface.monitor.center[idx] + surface.monitor.size[idx] / 2.0,
-                sim_data.simulation.center[idx] + sim_data.simulation.size[idx] / 2.0,
+                coord_list[idx][-1],
             )
-
             if pts_per_wavelength is None:
                 points = sim_data.simulation.grid.boundaries.to_list[idx]
                 points[np.argwhere(points < start)] = start
@@ -588,7 +588,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`FieldProjectionAngleData`
+        :class:`.FieldProjectionAngleData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
@@ -667,7 +667,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`FieldProjectionCartesianData`
+        :class:`.FieldProjectionCartesianData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)
@@ -750,7 +750,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:.`FieldProjectionKSpaceData`
+        :class:`.FieldProjectionKSpaceData`
             Data structure with ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi``.
         """
         freqs = np.atleast_1d(self.frequencies)

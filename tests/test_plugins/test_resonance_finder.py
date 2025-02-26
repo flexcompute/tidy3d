@@ -27,7 +27,7 @@ def check_resonances(freqs, decays, amplitudes, phases, resonances):
     decays = decays[inds]
     amplitudes = amplitudes[inds]
     phases = phases[inds]
-    assert len(freqs) == resonances.dims["freq"]
+    assert len(freqs) == resonances.sizes["freq"]
 
     complex_amplitudes = amplitudes * np.exp(1j * phases)
 

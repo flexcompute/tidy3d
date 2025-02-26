@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Literal, Optional, Tuple, Union
 
-import matplotlib as mpl
+try:
+    import matplotlib as mpl
+except ImportError:
+    pass
 import numpy as np
 import pydantic.v1 as pd
 
@@ -19,7 +22,8 @@ from ..medium import FullyAnisotropicMedium
 from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor, MonitorType
 from ..scene import Scene
 from ..simulation import AbstractYeeGridSimulation, Simulation
-from ..source import GaussianPulse, PointDipole
+from ..source.current import PointDipole
+from ..source.time import GaussianPulse
 from ..structure import Structure
 from ..types import Ax, Axis, FreqArray, Symmetry, annotate_type
 from ..validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
@@ -500,12 +504,12 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     @classmethod
     def from_scene(cls, scene: Scene, **kwargs) -> EMESimulation:
-        """Create an EME simulation from a :class:.`Scene` instance. Must provide additional parameters
+        """Create an EME simulation from a :`.Scene` instance. Must provide additional parameters
         to define a valid EME simulation (for example, ``size``, ``grid_spec``, etc).
 
         Parameters
         ----------
-        scene : :class:.`Scene`
+        scene : :class:`.Scene`
             Scene containing structures information.
         **kwargs
             Other arguments
@@ -1108,12 +1112,12 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         Parameters
         ----------
-        region : :class:.`Box`
+        region : :class:`.Box`
             New simulation domain.
-        grid_spec : :class:.`GridSpec` = None
+        grid_spec : :class:`.GridSpec` = None
             New grid specification. If ``None``, then it is inherited from the original
             simulation. If ``identical``, then the original grid is transferred directly as a
-            :class:.`CustomGrid`. Note that in the latter case the region of the new simulation is
+            :class:`.CustomGrid`. Note that in the latter case the region of the new simulation is
             snapped to the original grid lines.
         eme_grid_spec: :class:`.EMEGridSpec` = None
             New EME grid specification. If ``None``, then it is inherited from the original

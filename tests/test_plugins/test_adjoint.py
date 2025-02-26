@@ -58,7 +58,7 @@ from tidy3d.web.api.container import BatchData
 from xarray import DataArray
 
 from ..test_components.test_custom import CUSTOM_MEDIUM
-from ..utils import AssertLogLevel, assert_log_level, run_async_emulated, run_emulated
+from ..utils import AssertLogLevel, run_async_emulated, run_emulated
 
 TMP_PATH = None
 FWD_SIM_DATA_FILE = "adjoint_grad_data_fwd.hdf5"
@@ -948,7 +948,7 @@ def test_jax_sim_data(use_emulated_run):
         _ = sim_data[mnt_name]
 
 
-def test_intersect_structures(log_capture):
+def test_intersect_structures():
     """Test validators for structures touching and intersecting."""
 
     SIZE_X = 1.0
@@ -978,8 +978,8 @@ def test_intersect_structures(log_capture):
     _ = make_sim_intersect(spacing=+OVERLAP)
 
     # shouldnt error, just warn because of touching but not intersecting
-    _ = make_sim_intersect(spacing=0.0)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        _ = make_sim_intersect(spacing=0.0)
 
 
 def test_structure_overlaps():
@@ -1667,15 +1667,15 @@ def test_adjoint_utils(strict_binarize):
 @pytest.mark.parametrize(
     "input_size_y, log_level_expected", [(13, None), (12, "WARNING"), (11, "WARNING"), (14, None)]
 )
-def test_adjoint_filter_sizes(log_capture, input_size_y, log_level_expected):
+def test_adjoint_filter_sizes(input_size_y, log_level_expected):
     """Warn if filter size along a dim is smaller than radius."""
 
     signal_in = np.ones((266, input_size_y))
 
     _filter = ConicFilter(radius=0.08, design_region_dl=0.015)
-    _filter.evaluate(signal_in)
 
-    assert_log_level(log_capture, log_level_expected)
+    with AssertLogLevel(log_level_expected):
+        _filter.evaluate(signal_in)
 
 
 def test_sim_data_plot_field(use_emulated_run):
@@ -1793,7 +1793,7 @@ def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time
 
 @pytest.mark.parametrize("has_adj_src, log_level_expected", [(True, None), (False, "WARNING")])
 def test_no_adjoint_sources(
-    monkeypatch, use_emulated_run, tmp_path, log_capture, has_adj_src, log_level_expected
+    monkeypatch, use_emulated_run, tmp_path, has_adj_src, log_level_expected
 ):
     """Make sure warning (not error) if no adjoint sources."""
 
@@ -1826,13 +1826,13 @@ def test_no_adjoint_sources(
     data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     # check whether we got a warning for no sources?
-    with AssertLogLevel(log_capture, log_level_expected, contains_str="No adjoint sources"):
+    with AssertLogLevel(log_level_expected, contains_str="No adjoint sources"):
         data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
 
     jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
 
 
-def test_nonlinear_warn(log_capture):
+def test_nonlinear_warn():
     """Test that simulations warn if nonlinearity is used."""
 
     struct = JaxStructure(
@@ -1845,17 +1845,19 @@ def test_nonlinear_warn(log_capture):
         medium=td.Medium(permittivity=2.0),
     )
 
-    sim_base = JaxSimulation(
-        size=(10, 10, 0),
-        run_time=SIM_RUN_TIME,
-        grid_spec=td.GridSpec(wavelength=1.0),
-        monitors=(),
-        structures=(struct_static,),
-        output_monitors=(),
-        input_structures=(struct,),
-        sources=[src],
-        boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
-    )
+    # no nonlinearity (no warning)
+    with AssertLogLevel(None):
+        sim_base = JaxSimulation(
+            size=(10, 10, 0),
+            run_time=SIM_RUN_TIME,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            monitors=(),
+            structures=(struct_static,),
+            output_monitors=(),
+            input_structures=(struct,),
+            sources=[src],
+            boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
+        )
 
     # make the nonlinear objects to add to the JaxSimulation one by one
     nl_model = td.NonlinearSusceptibility(chi3=1)
@@ -1863,19 +1865,16 @@ def test_nonlinear_warn(log_capture):
     struct_static_nl = struct_static.updated_copy(medium=nl_medium)
     input_struct_nl = JaxStructureStaticMedium(geometry=struct.geometry, medium=nl_medium)
 
-    # no nonlinearity (no warning)
-    assert_log_level(log_capture, None)
-
     # nonlinear simulation.medium (error)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         sim_base.updated_copy(medium=nl_medium)
 
     # nonlinear structure (warn)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         sim_base.updated_copy(structures=[struct_static_nl])
 
     # nonlinear input_structure (warn)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         sim_base.updated_copy(input_structures=[input_struct_nl])
 
 
@@ -1901,16 +1900,17 @@ def try_tracer_import() -> None:
 
 
 @pytest.mark.usefixtures("hide_jax")
-def test_jax_tracer_import_fail(tmp_path, log_capture):
+def test_jax_tracer_import_fail(tmp_path):
     """Make sure if import error with JVPTracer, a warning is logged and module still imports."""
-    try_tracer_import()
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        try_tracer_import()
 
 
-def test_jax_tracer_import_pass(tmp_path, log_capture):
+def test_jax_tracer_import_pass(tmp_path):
     """Make sure if no import error with JVPTracer, nothing is logged and module imports."""
     try_tracer_import()
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        try_tracer_import()
 
 
 def test_inf_IO(tmp_path):
@@ -1924,7 +1924,7 @@ def test_inf_IO(tmp_path):
 
 
 @pytest.mark.parametrize("sidewall_angle, log_expected", ([0.0, None], [0.1, "WARNING"]))
-def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):
+def test_sidewall_angle_validator(sidewall_angle, log_expected):
     """Test that the sidewall angle warning works as expected."""
 
     jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=VERTICES, slab_bounds=(-1, 1))
@@ -1933,7 +1933,7 @@ def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):
     for entry in td.log._static_cache:
         if msg in entry:
             return
-    with AssertLogLevel(log_capture, log_expected, contains_str="sidewall"):
+    with AssertLogLevel(log_expected, contains_str="sidewall"):
         jax_polyslab1.updated_copy(sidewall_angle=sidewall_angle)
 
 
@@ -1950,26 +1950,26 @@ def test_package_flux():
     assert res_multi == da_multi
 
 
-def test_vertices_warning(log_capture):
+def test_vertices_warning():
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
 
     polyslab = sim.input_structures[3].geometry
 
     radius_penalty = RadiusPenalty(min_radius=0.2, wrap=True)
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         radius_penalty.evaluate(polyslab.vertices)
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         radius_penalty.evaluate(np.array(jax.lax.stop_gradient(polyslab.vertices)))
 
     def f(vertices):
         return radius_penalty.evaluate(vertices)
 
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         jax.grad(f)(np.random.random((5, 2)))
 
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         jax.grad(f)(np.random.random((5, 2)).tolist())
 
 

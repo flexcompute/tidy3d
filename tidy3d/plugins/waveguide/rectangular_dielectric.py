@@ -14,9 +14,10 @@ from ...components.geometry.base import Box
 from ...components.geometry.polyslab import PolySlab
 from ...components.grid.grid_spec import GridSpec
 from ...components.medium import Medium, MediumType
-from ...components.mode import ModeSpec
+from ...components.mode_spec import ModeSpec
 from ...components.simulation import Simulation
-from ...components.source import GaussianPulse, ModeSource
+from ...components.source.field import ModeSource
+from ...components.source.time import GaussianPulse
 from ...components.structure import Structure
 from ...components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D
 from ...components.viz import add_ax_if_none
@@ -213,6 +214,19 @@ class RectangularDielectric(Tidy3dBaseModel):
         val = numpy.array(val, ndmin=1)
         if any(val < 0):
             raise ValidationError("Values may not be negative.")
+        return val
+
+    @pydantic.validator("core_medium", "clad_medium", "box_medium")
+    def _check_non_metallic(cls, val, values):
+        if val is None:
+            return val
+        media = val if isinstance(val, tuple) else (val,)
+        freqs = C_0 / values["wavelength"]
+        if any(medium.eps_model(f).real < 1 for medium in media for f in freqs):
+            raise ValidationError(
+                "'RectangularDielectric' can only be used with dielectric media. "
+                "Found a conductor with real permittivity < 1."
+            )
         return val
 
     @pydantic.validator("gap", always=True)

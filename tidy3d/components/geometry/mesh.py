@@ -97,10 +97,22 @@ class TriangleMesh(base.Geometry, ABC):
         if not mesh.is_winding_consistent:
             log.warning(
                 "The provided mesh does not have consistent winding (face orientations). "
-                "This can lead to incorrect permittivity distributions. "
+                "This can lead to incorrect permittivity distributions, "
+                "and can also cause problems with plotting and mesh validation. "
                 "You can try 'TriangleMesh.fix_winding', which attempts to repair the mesh. "
                 "Otherwise, the mesh may require manual repair. You can use a "
                 "'PermittivityMonitor' to check if the permittivity distribution is correct. "
+            )
+        if not mesh.is_volume:
+            log.warning(
+                "The provided mesh does not represent a valid volume, possibly due to "
+                "incorrect normal vector orientation. "
+                "This can lead to incorrect permittivity distributions, "
+                "and can also cause problems with plotting and mesh validation. "
+                "You can try 'TriangleMesh.fix_normals', "
+                "which attempts to fix the normals to be consistent and outward-facing. "
+                "Otherwise, the mesh may require manual repair. You can use a "
+                "'PermittivityMonitor' to check if the permittivity distribution is correct."
             )
 
         return val
@@ -121,6 +133,15 @@ class TriangleMesh(base.Geometry, ABC):
 
         mesh = TriangleMesh._triangles_to_trimesh(self.mesh_dataset.surface_mesh)
         trimesh.repair.fill_holes(mesh)
+        return TriangleMesh.from_trimesh(mesh)
+
+    @verify_packages_import(["trimesh"])
+    def fix_normals(self) -> TriangleMesh:
+        """Try to fix normals to be consistent and outward-facing."""
+        import trimesh
+
+        mesh = TriangleMesh._triangles_to_trimesh(self.mesh_dataset.surface_mesh)
+        trimesh.repair.fix_normals(mesh)
         return TriangleMesh.from_trimesh(mesh)
 
     @classmethod

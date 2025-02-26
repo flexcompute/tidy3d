@@ -16,8 +16,8 @@ from ..core.constants import HEADER_APIKEY, KEY_APIKEY
 from ..core.environment import Env
 from .develop.index import develop
 
-if not os.path.exists(TIDY3D_DIR):
-    os.mkdir(TIDY3D_DIR)
+# Prevent race condition on threads
+os.makedirs(TIDY3D_DIR, exist_ok=True)
 
 
 def get_description():

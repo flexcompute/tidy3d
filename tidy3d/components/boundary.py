@@ -13,7 +13,7 @@ from ..exceptions import DataError, SetupError
 from ..log import log
 from .base import Tidy3dBaseModel, cached_property
 from .medium import Medium
-from .source import TFSF, GaussianBeam, ModeSource, PlaneWave
+from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
 from .types import TYPE_TAG_STR, Axis, Complex
 
 MIN_NUM_PML_LAYERS = 6

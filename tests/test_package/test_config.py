@@ -12,7 +12,7 @@ def test_logging_level():
     # default level
     assert td.log.handlers["console"].level == _level_value[DEFAULT_LEVEL]
 
-    # check etting all levels
+    # check setting all levels
     for key, val in _level_value.items():
         td.config.logging_level = key
         assert td.log.handlers["console"].level == val

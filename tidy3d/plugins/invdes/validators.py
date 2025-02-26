@@ -33,6 +33,13 @@ def check_pixel_size(sim_field_name: str):
 
     def check_pixel_size_sim(sim: td.Simulation, pixel_size: float, index: int = None) -> None:
         """Check a pixel size compared to the simulation min wvl in material."""
+        if not sim.sources:
+            td.log.warning(
+                "Cannot validate pixel size in design region: simulation has no sources. "
+                "Please ensure the pixel size is appropriate for your target wavelength."
+            )
+            return
+
         if pixel_size > PIXEL_SIZE_WARNING_THRESHOLD * sim.wvl_mat_min:
             sim_string = f"simulations[{index}]" if index else "the simulation"
 

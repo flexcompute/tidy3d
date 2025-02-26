@@ -8,7 +8,7 @@ import tidy3d as td
 from tidy3d.components.grid.mesher import GradedMesher
 from tidy3d.constants import fp_eps
 
-from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import AssertLogLevel, cartesian_to_unstructured
 
 np.random.seed(4)
 
@@ -650,7 +650,7 @@ def test_mesher_timeout():
     _ = sim.grid
 
 
-def test_small_structure_size(log_capture):
+def test_small_structure_size():
     """Test that a warning is raised if a structure size is small during the auto meshing"""
     box_size = 0.03
     medium = td.Medium(permittivity=4)
@@ -660,40 +660,39 @@ def test_small_structure_size(log_capture):
         size=(0, 0, 0),
         polarization="Ex",
     )
-    sim = td.Simulation(
-        size=(10, 10, 10),
-        sources=[src],
-        structures=[box],
-        run_time=1e-12,
-        grid_spec=td.GridSpec.auto(wavelength=1),
-    )
 
     # Warning raised as structure is too thin
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        sim = td.Simulation(
+            size=(10, 10, 10),
+            sources=[src],
+            structures=[box],
+            run_time=1e-12,
+            grid_spec=td.GridSpec.auto(wavelength=1),
+        )
 
     # Warning not raised if structure is higher index
-    log_capture.clear()
     box2 = box.updated_copy(medium=td.Medium(permittivity=300))
-    sim.updated_copy(structures=[box2])
-    assert len(log_capture) == 0
+    with AssertLogLevel(None):
+        sim.updated_copy(structures=[box2])
 
     # Warning not raised if structure is covered by an override structure
-    log_capture.clear()
     override = td.MeshOverrideStructure(geometry=box.geometry, dl=(box_size, td.inf, td.inf))
-    sim3 = sim.updated_copy(grid_spec=sim.grid_spec.updated_copy(override_structures=[override]))
-    assert len(log_capture) == 0
+    with AssertLogLevel(None):
+        sim3 = sim.updated_copy(
+            grid_spec=sim.grid_spec.updated_copy(override_structures=[override])
+        )
     # Also check that the structure boundaries are in the grid
     ind_mid_cell = int(sim3.grid.num_cells[0] // 2)
     bounds = [-box_size / 2, box_size / 2]
     assert np.allclose(bounds, sim3.grid.boundaries.x[ind_mid_cell : ind_mid_cell + 2])
 
     # Test that the error coming from two thin slabs on top of each other is resolved
-    log_capture.clear()
     box3 = td.Structure(
         geometry=td.Box(center=(box_size, 0, 0), size=(box_size, td.inf, td.inf)), medium=medium
     )
-    sim.updated_copy(structures=[box3, box])
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        sim.updated_copy(structures=[box3, box])
 
 
 def test_shapely_strtree_warnings():
@@ -705,6 +704,7 @@ def test_shapely_strtree_warnings():
             wavelength=1.0,
             min_steps_per_wvl=6,
             dl_min=1.0,
+            dl_max=td.inf,
         )
 
 
@@ -799,3 +799,158 @@ def test_anisotropic_material_meshing(unstructured, z):
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_diag.grid.sizes.to_list[dim])
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_diag_custom.grid.sizes.to_list[dim])
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_full.grid.sizes.to_list[dim])
+
+
+def test_override_are_box():
+    with AssertLogLevel(None):
+        override_fine = td.MeshOverrideStructure(
+            geometry=td.Box(size=(1, 1, 1)),
+            dl=[1, 2, 3],
+        )
+
+    with AssertLogLevel("WARNING", contains_str="Box"):
+        override_not_box = td.MeshOverrideStructure(
+            geometry=td.Sphere(center=(0, 0, 0), radius=0.5),
+            dl=[1, 2, 3],
+        )
+
+    assert isinstance(
+        override_not_box.geometry, td.Box
+    ), "Sphere override structure was not converted to Box"
+
+
+def test_override_unshadowed():
+    """Test that when an override structure completely covers a structure of smaller grid size, it overrides
+    the grid size with `shadow=True`; but not with `shadow=False`.
+    """
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+
+    # override structure of same geometry and shadow = True will override even it has larger grid size
+    override_structure = td.MeshOverrideStructure(
+        geometry=BOX1.geometry,
+        dl=[
+            0.2,
+        ]
+        * 3,
+        shadow=True,
+    )
+    sim_shadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    sizes = sim_shadow.grid.sizes.to_list[2]
+    assert sizes[len(sizes) // 2] > 0.19
+
+    # now shadow = False
+    override_structure = override_structure.updated_copy(shadow=False)
+    sim_unshadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    sizes = sim_unshadow.grid.sizes.to_list[2]
+    assert sizes[len(sizes) // 2] < 0.1
+
+
+def test_override_unshadowed_snapping():
+    """Test that an unshadowed override structure won't snap to grid if it doesn't reduce grid size in the overriding
+    region.
+    """
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+
+    # override structure takes no effect (including bounding box snapping) if its grid size is
+    # larger than the existing ones in the overriding region.
+    override_structure = td.MeshOverrideStructure(
+        geometry=td.Box(size=(1, 1, 1)),
+        dl=[0.2, 0.2, 0.2],
+        shadow=False,
+    )
+    sim_shadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    assert sim_shadow.num_cells == sim.num_cells
+    assert not any(np.isclose(sim_shadow.grid.boundaries.x, 0.5))
+
+    # override structure takes effect if its grid size is smaller
+    override_structure = td.MeshOverrideStructure(
+        geometry=td.Box(size=(1, 1, 1)),
+        dl=[0.07, 0.07, 0.07],
+        shadow=False,
+    )
+    sim_shadow = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_structure])
+    )
+    assert sim_shadow.num_cells > sim.num_cells
+    assert any(np.isclose(sim_shadow.grid.boundaries.x, 0.5))
+
+
+def test_override_unshadowed_edge_cases():
+    """Test that override structures working appropriately in certain edge cases."""
+
+    override_s = td.MeshOverrideStructure(
+        geometry=td.Box(center=(1.5, 1, 1), size=(4, 1, 1)),
+        dl=[0.07, 0.07, 0.07],
+        shadow=False,
+    )
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s]),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+
+    override_s = td.MeshOverrideStructure(
+        geometry=td.Box(center=(-1.5, 1, 1), size=(4, 1, 1)),
+        dl=[0.07, 0.07, 0.07],
+        shadow=False,
+    )
+    sim = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s])
+    )
+
+
+def test_override_outside_sim():
+    """Test the behavior of override structures with different `drop_outside_sim` flag."""
+
+    override_s = td.MeshOverrideStructure(
+        geometry=td.Box(center=(5, 0, 0), size=(0.1, 1, 1)),
+        dl=[0.01, 0.01, 0.01],
+        drop_outside_sim=True,
+    )
+
+    sim = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s]),
+        run_time=1e-13,
+        structures=[
+            BOX1,
+        ],
+    )
+    # override structure dropped, taking no effect
+    assert min(sim.grid.sizes.y) > 0.05
+
+    # override structure still takes effect along yz-axis
+    override_s = override_s.updated_copy(drop_outside_sim=False)
+    sim2 = sim.updated_copy(
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH, override_structures=[override_s])
+    )
+    assert min(sim2.grid.sizes.y) < 0.01
+
+    # but no effect along x-axis
+    assert np.allclose(sim.grid.boundaries.x, sim2.grid.boundaries.x)

@@ -14,7 +14,7 @@ from pydantic.v1 import Extra, Field, parse_obj_as
 
 from . import http_util
 from .cache import FOLDER_CACHE
-from .constants import SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5, SIMULATION_DATA_HDF5_GZ
+from .constants import SIM_ERROR_FILE, SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5_GZ
 from .core_config import get_logger_console
 from .environment import Env
 from .exceptions import WebError
@@ -292,7 +292,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
 
@@ -326,6 +326,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         stub: TaskStub,
         verbose: bool = True,
         progress_callback: Callable[[float], None] = None,
+        remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
 
@@ -352,7 +353,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             upload_file(
                 self.task_id,
                 file_name,
-                SIM_FILE_HDF5_GZ,
+                remote_sim_file,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
@@ -457,14 +458,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return resp
 
     def get_sim_data_hdf5(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self,
+        to_file: str,
+        verbose: bool = True,
+        progress_callback: Callable[[float], None] = None,
+        remote_data_file: str = SIMULATION_DATA_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation data file from Server.
 
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
@@ -482,7 +487,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         try:
             file = download_gz_file(
                 resource_id=self.task_id,
-                remote_filename=SIMULATION_DATA_HDF5_GZ,
+                remote_filename=remote_data_file,
                 to_file=to_file,
                 verbose=verbose,
                 progress_callback=progress_callback,
@@ -490,13 +495,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         except ClientError:
             if verbose:
                 console = get_logger_console()
-                console.log(f"Unable to download '{SIMULATION_DATA_HDF5_GZ}'.")
+                console.log(f"Unable to download '{remote_data_file}'.")
 
         if not file:
             try:
                 file = download_file(
                     resource_id=self.task_id,
-                    remote_filename=SIMULATION_DATA_HDF5,
+                    remote_filename=remote_data_file[:-3],
                     to_file=to_file,
                     verbose=verbose,
                     progress_callback=progress_callback,
@@ -510,14 +515,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return file
 
     def get_simulation_hdf5(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self,
+        to_file: str,
+        verbose: bool = True,
+        progress_callback: Callable[[float], None] = None,
+        remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation.hdf5 file from Server.
 
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
@@ -533,7 +542,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         return download_gz_file(
             resource_id=self.task_id,
-            remote_filename=SIM_FILE_HDF5_GZ,
+            remote_filename=remote_sim_file,
             to_file=to_file,
             verbose=verbose,
             progress_callback=progress_callback,
@@ -567,7 +576,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         Parameters
         ----------
         to_file: str
-            save file to path.
+            Save file to path.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
@@ -588,6 +597,31 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             to_file=to_file,
             verbose=verbose,
             progress_callback=progress_callback,
+        )
+
+    def get_error_json(self, to_file: str, verbose: bool = True) -> pathlib.Path:
+        """Get error json file for a :class:`.Simulation` from server.
+
+        Parameters
+        ----------
+        to_file: str
+            Save file to path.
+        verbose: bool = True
+            Whether to display progress bars.
+
+        Returns
+        -------
+        path: pathlib.Path
+            Path to saved file.
+        """
+        if not self.task_id:
+            raise WebError("Expected field 'task_id' is unset.")
+
+        return download_file(
+            self.task_id,
+            SIM_ERROR_FILE,
+            to_file=to_file,
+            verbose=verbose,
         )
 
     def abort(self):

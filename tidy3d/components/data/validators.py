@@ -5,7 +5,7 @@ import pydantic.v1 as pd
 
 from ...exceptions import ValidationError
 from .data_array import DataArray
-from .dataset import AbstractFieldDataset
+from .dataset import AbstractFieldDataset, ScalarFieldDataArray
 
 
 # this can't go in validators.py because that file imports dataset.py
@@ -59,3 +59,17 @@ def validate_no_nans(field_name: str):
         return val
 
     return no_nans
+
+
+def validate_can_interpolate(field_name: str):
+    """Make sure the data in 'field_name' can be interpolated."""
+
+    @pd.validator(field_name, always=True, allow_reuse=True)
+    def check_fields_interpolate(cls, val: AbstractFieldDataset) -> AbstractFieldDataset:
+        if isinstance(val, AbstractFieldDataset):
+            for name, data in val.field_components.items():
+                if isinstance(data, ScalarFieldDataArray):
+                    data._interp_validator(name)
+        return val
+
+    return check_fields_interpolate

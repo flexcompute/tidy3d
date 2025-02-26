@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from enum import Enum
 from math import isclose
-from typing import Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
+import pydantic as pydantic
 
-from ...exceptions import Tidy3dError
-from ..types import ArrayFloat2D, Axis, MatrixReal4x4, PlanePosition, Shapely
+from ...constants import fp_eps
+from ...exceptions import SetupError, Tidy3dError
+from ..base import Tidy3dBaseModel
+from ..geometry.base import Box
+from ..grid.grid import Grid
+from ..types import ArrayFloat2D, Axis, Coordinate, MatrixReal4x4, PlanePosition, Shapely
 from . import base, mesh, polyslab, primitives
 
 GeometryType = Union[
@@ -22,6 +28,81 @@ GeometryType = Union[
     polyslab.ComplexPolySlabBase,
     mesh.TriangleMesh,
 ]
+
+
+def merging_geometries_on_plane(
+    geometries: List[GeometryType],
+    plane: Box,
+    property_list: List[Any],
+) -> List[Tuple[Any, Shapely]]:
+    """Compute list of shapes on plane. Overlaps are removed or merged depending on
+    provided property_list.
+
+    Parameters
+    ----------
+    geometries : List[GeometryType]
+        List of structures to filter on the plane.
+    plane : Box
+        Plane specification.
+    property_list : List = None
+        Property value for each structure.
+
+    Returns
+    -------
+    List[Tuple[Any, shapely]]
+        List of shapes and their property value on the plane after merging.
+    """
+
+    if len(geometries) != len(property_list):
+        raise SetupError(
+            "Number of provided property values is not equal to the number of geometries."
+        )
+
+    shapes = []
+    for geo, prop in zip(geometries, property_list):
+        # get list of Shapely shapes that intersect at the plane
+        shapes_plane = plane.intersections_with(geo)
+
+        # Append each of them and their property information to the list of shapes
+        for shape in shapes_plane:
+            shapes.append((prop, shape, shape.bounds))
+
+    background_shapes = []
+    for prop, shape, bounds in shapes:
+        minx, miny, maxx, maxy = bounds
+
+        # loop through background_shapes (note: all background are non-intersecting or merged)
+        for index, (_prop, _shape, _bounds) in enumerate(background_shapes):
+            _minx, _miny, _maxx, _maxy = _bounds
+
+            # do a bounding box check to see if any intersection to do anything about
+            if minx > _maxx or _minx > maxx or miny > _maxy or _miny > maxy:
+                continue
+
+            # look more closely to see if intersected.
+            if shape.disjoint(_shape):
+                continue
+
+            # different prop, remove intersection from background shape
+            if prop != _prop:
+                diff_shape = (_shape - shape).buffer(0).normalize()
+                # mark background shape for removal if nothing left
+                if diff_shape.is_empty or len(diff_shape.bounds) == 0:
+                    background_shapes[index] = None
+                background_shapes[index] = (_prop, diff_shape, diff_shape.bounds)
+            # same prop, unionize shapes and mark background shape for removal
+            else:
+                shape = (shape | _shape).buffer(0).normalize()
+                background_shapes[index] = None
+
+        # after doing this with all background shapes, add this shape to the background
+        background_shapes.append((prop, shape, shape.bounds))
+
+        # remove any existing background shapes that have been marked as 'None'
+        background_shapes = [b for b in background_shapes if b is not None]
+
+    # filter out any remaining None or empty shapes (shapes with area completely removed)
+    return [(prop, shape) for (prop, shape, _) in background_shapes if shape]
 
 
 def flatten_groups(
@@ -231,3 +312,169 @@ def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixR
     elif isinstance(geometry, base.ClipOperation):
         validate_no_transformed_polyslabs(geometry.geometry_a, transform)
         validate_no_transformed_polyslabs(geometry.geometry_b, transform)
+
+
+class SnapLocation(Enum):
+    """Describes different methods for defining the snapping locations."""
+
+    Boundary = 1
+    """
+    Choose the boundaries of Yee cells.
+    """
+    Center = 2
+    """
+    Choose the center of Yee cells.
+    """
+
+
+class SnapBehavior(Enum):
+    """Describes different methods for snapping intervals, which are defined by two endpoints."""
+
+    Closest = 1
+    """
+    Snaps the interval's endpoints to the closest grid point.
+    """
+    Expand = 2
+    """
+    Snaps the interval's endpoints to the closest grid points,
+    while guaranteeing that the snapping location will never move endpoints inwards.
+    """
+    Contract = 3
+    """
+    Snaps the interval's endpoints to the closest grid points,
+    while guaranteeing that the snapping location will never move endpoints outwards.
+    """
+    Off = 4
+    """
+    Do not use snapping.
+    """
+
+
+class SnappingSpec(Tidy3dBaseModel):
+    """Specifies how to apply grid snapping along each dimension."""
+
+    location: tuple[SnapLocation, SnapLocation, SnapLocation] = pydantic.Field(
+        ...,
+        title="Location",
+        description="Describes which positions in the grid will be considered for snapping.",
+    )
+
+    behavior: tuple[SnapBehavior, SnapBehavior, SnapBehavior] = pydantic.Field(
+        ...,
+        title="Behavior",
+        description="Describes how snapping positions will be chosen.",
+    )
+
+
+def get_closest_value(test: float, coords: np.ArrayLike, upper_bound_idx: int) -> float:
+    """Helper to choose the closest value in an array to a given test value,
+    using the index of the upper bound. The ``upper_bound_idx`` corresponds to the first value in
+    the ``coords`` array which is greater than or equal to the test value.
+    """
+    # Handle corner cases first
+    if upper_bound_idx == 0:
+        return coords[upper_bound_idx]
+    if upper_bound_idx == len(coords):
+        return coords[upper_bound_idx - 1]
+    # General case
+    lower_bound = coords[upper_bound_idx - 1]
+    upper_bound = coords[upper_bound_idx]
+    dlower = abs(test - lower_bound)
+    dupper = abs(test - upper_bound)
+    return lower_bound if dlower < dupper else upper_bound
+
+
+def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps) -> Box:
+    """Snaps a :class:`.Box` to the grid, so that the boundaries of the box are aligned with grid centers or boundaries.
+    The way in which each dimension of the `box` is snapped to the grid is controlled by ``snap_spec``.
+    """
+
+    def get_lower_bound(
+        test: float, coords: np.ArrayLike, upper_bound_idx: int, rel_tol: float
+    ) -> float:
+        """Helper to choose the lower bound in an array for a given test value,
+        using the index of the upper bound. If the test value is close to the upper
+        bound, it assumes they are equal, and in that case the upper bound is returned.
+        """
+        if upper_bound_idx == len(coords):
+            return coords[upper_bound_idx - 1]
+        if upper_bound_idx == 0 or isclose(coords[upper_bound_idx], test, rel_tol=rel_tol):
+            return coords[upper_bound_idx]
+        return coords[upper_bound_idx - 1]
+
+    def get_upper_bound(
+        test: float, coords: np.ArrayLike, upper_bound_idx: int, rel_tol: float
+    ) -> float:
+        """Helper to choose the upper bound in an array for a given test value,
+        using the index of the upper bound. If the test value is close to the lower
+        bound, it assumes they are equal, and in that case the lower bound is returned.
+        """
+        if upper_bound_idx == len(coords):
+            return coords[upper_bound_idx - 1]
+        if upper_bound_idx > 0 and isclose(coords[upper_bound_idx - 1], test, rel_tol=rel_tol):
+            return coords[upper_bound_idx - 1]
+        return coords[upper_bound_idx]
+
+    def find_snapping_locations(
+        interval_min: float, interval_max: float, coords: np.ndarray, snap_type: SnapBehavior
+    ) -> tuple[float, float]:
+        """Helper that snaps a supplied interval [interval_min, interval_max] to a
+        sorted array representing coordinate values.
+        """
+        # Locate the interval that includes the min and max
+        min_upper_bound_idx = np.searchsorted(coords, interval_min, side="left")
+        max_upper_bound_idx = np.searchsorted(coords, interval_max, side="left")
+        if snap_type == SnapBehavior.Closest:
+            min_snap = get_closest_value(interval_min, coords, min_upper_bound_idx)
+            max_snap = get_closest_value(interval_max, coords, max_upper_bound_idx)
+        elif snap_type == SnapBehavior.Expand:
+            min_snap = get_lower_bound(interval_min, coords, min_upper_bound_idx, rel_tol=rtol)
+            max_snap = get_upper_bound(interval_max, coords, max_upper_bound_idx, rel_tol=rtol)
+        else:  # SnapType.Contract
+            min_snap = get_upper_bound(interval_min, coords, min_upper_bound_idx, rel_tol=rtol)
+            max_snap = get_lower_bound(interval_max, coords, max_upper_bound_idx, rel_tol=rtol)
+        return (min_snap, max_snap)
+
+    # Iterate over each axis and apply the specified snapping behavior.
+    min_b, max_b = (list(f) for f in box.bounds)
+    grid_bounds = grid.boundaries.to_list
+    grid_centers = grid.centers.to_list
+    for axis in range(3):
+        snap_location = snap_spec.location[axis]
+        snap_type = snap_spec.behavior[axis]
+        if snap_type == SnapBehavior.Off:
+            continue
+        if snap_location == SnapLocation.Boundary:
+            snap_coords = np.array(grid_bounds[axis])
+        elif snap_location == SnapLocation.Center:
+            snap_coords = np.array(grid_centers[axis])
+
+        box_min = min_b[axis]
+        box_max = max_b[axis]
+
+        (new_min, new_max) = find_snapping_locations(box_min, box_max, snap_coords, snap_type)
+        min_b[axis] = new_min
+        max_b[axis] = new_max
+    return Box.from_bounds(min_b, max_b)
+
+
+def snap_point_to_grid(
+    grid: Grid, point: Coordinate, snap_location: tuple[SnapLocation, SnapLocation, SnapLocation]
+) -> Coordinate:
+    """Snaps a :class:`.Coordinate` to the grid, so that it is coincident with grid centers or boundaries.
+    The way in which each dimension of the ``point`` is snapped to the grid is controlled by ``snap_location``.
+    """
+    grid_bounds = grid.boundaries.to_list
+    grid_centers = grid.centers.to_list
+    snapped_point = 3 * [0]
+    for axis in range(3):
+        if snap_location[axis] == SnapLocation.Boundary:
+            snap_coords = np.array(grid_bounds[axis])
+        elif snap_location[axis] == SnapLocation.Center:
+            snap_coords = np.array(grid_centers[axis])
+
+        # Locate the interval that includes the test point
+        min_upper_bound_idx = np.searchsorted(snap_coords, point[axis], side="left")
+        snapped_point[axis] = get_closest_value(point[axis], snap_coords, min_upper_bound_idx)
+
+    return tuple(snapped_point)

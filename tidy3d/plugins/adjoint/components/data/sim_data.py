@@ -11,7 +11,8 @@ from jax.tree_util import register_pytree_node_class
 
 from .....components.data.monitor_data import FieldData, MonitorDataType, PermittivityData
 from .....components.data.sim_data import SimulationData
-from .....components.source import GaussianPulse, PointDipole
+from .....components.source.current import PointDipole
+from .....components.source.time import GaussianPulse
 from .....log import log
 from ..base import JaxObject
 from ..simulation import JaxInfo, JaxSimulation

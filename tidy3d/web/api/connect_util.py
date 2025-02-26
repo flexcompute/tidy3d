@@ -14,7 +14,7 @@ from ...log import log
 # number of seconds to keep re-trying connection before erroring
 CONNECTION_RETRY_TIME = 180
 # time between checking task status
-REFRESH_TIME = 0.3
+REFRESH_TIME = 2
 
 
 def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RETRY_TIME):

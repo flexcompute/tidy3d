@@ -17,9 +17,8 @@ from ...constants import C_0, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import Tidy3dBaseModel
-from ..medium import AnisotropicMedium, Medium2D, PECMedium
 from ..structure import MeshOverrideStructure, Structure, StructureType
-from ..types import ArrayFloat1D, Axis, Bound, Coordinate
+from ..types import ArrayFloat1D, Axis, Bound, CoordinateOptional
 
 _ROOTS_TOL = 1e-10
 
@@ -40,16 +39,18 @@ class Mesher(Tidy3dBaseModel, ABC):
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
         dl_min: pd.NonNegativeFloat,
+        dl_max: pd.NonNegativeFloat,
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
     @abstractmethod
     def insert_snapping_points(
         self,
+        dl_min: pd.NonNegativeFloat,
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
-        snapping_points: List[Coordinate],
+        snapping_points: List[CoordinateOptional],
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Insert snapping_points to the intervals."""
 
@@ -64,6 +65,26 @@ class Mesher(Tidy3dBaseModel, ABC):
         """Create grid steps in multiple connecting intervals."""
 
     @staticmethod
+    def structure_step(
+        structure: Structure,
+        wavelength: float,
+        min_steps_per_wvl: float,
+    ) -> ArrayFloat1D:
+        """Get the minimum mesh required in a :class:`.Structure`. Special media are set to index of 1,
+        which would usually make the medium ignored in the meshing, while the structure geometry
+        would still be used to place grid boundaries.
+
+        Parameters
+        ----------
+        structure : :class:`.Structure`
+            A regular structure
+        wavelength : float
+            Wavelength to use for the step size and for dispersive media epsilon.
+        min_steps_per_wvl : float
+            Minimum requested steps per wavelength.
+        """
+
+    @staticmethod
     def make_shapely_box(bbox: Bound) -> shapely_box:
         """Make a shapely box out of bounds."""
         return shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
@@ -75,22 +96,25 @@ class GradedMesher(Mesher):
 
     def insert_snapping_points(
         self,
+        dl_min: pd.NonNegativeFloat,
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
-        snapping_points: List[Coordinate],
+        snapping_points: List[CoordinateOptional],
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Insert snapping_points to the intervals.
 
         Parameters
         ----------
+        dl_min: pd.NonNegativeFloat
+            Lower bound of grid size.
         axis : Axis
             Axis index along which to operate.
         interval_coords : ArrayFloat1D
             Coordinate of interval boundaries.
         max_dl_list : ArrayFloat1D
             Maximal allowed step size of each interval generated from `parse_structures`.
-        snapping_points : List[Coordinate]
+        snapping_points : List[CoordinateOptional]
             A set of points that enforce grid boundaries to pass through them.
 
         Returns
@@ -98,34 +122,57 @@ class GradedMesher(Mesher):
         interval_coords : Array
             An array of coordinates, where the first element is the simulation min boundary, the
             last element is the simulation max boundary, and the intermediate coordinates are all
-            locations with a fixpoint or a structure has a bounding box edge along the specified axis.
-            The boundaries are filtered such that no interval is smaller than the smallest
-            of the ``max_steps``.
+            locations with a snapping_point or a structure has a bounding box edge along the
+            specified axis. The boundaries are filtered such that no interval is smaller than the
+            smallest of the ``max_steps``.
         max_steps : array_like
             An array of size ``interval_coords.size - 1`` giving the maximum grid step required in
             each ``interval_coords[i]:interval_coords[i+1]`` interval, depending on the materials
             in that interval, the supplied wavelength, and the minimum required step per wavelength.
 
         """
-        # Don't do anything for a 2D-like simulation, or no fix points
+        # Don't do anything for a 2D-like simulation, or no snapping points
         if interval_coords.size == 1 or len(snapping_points) < 1:
             return interval_coords, max_dl_list
 
-        min_step = np.amin(max_dl_list) * 0.5
+        # If the user has set dl_min, use that as the min_step
+        if dl_min != 0.0:
+            min_step = dl_min
+        else:
+            min_step = np.amin(max_dl_list) / 2
+
         for point in snapping_points:
             new_coord = point[axis]
+            if new_coord is None:
+                continue
             # Skip if the point is outside the domain
             if new_coord >= interval_coords[-1] or new_coord <= interval_coords[0]:
                 continue
             # search insertion location
             ind = np.searchsorted(interval_coords, new_coord, side="left")
-            # Skip snapping_points if the distance to the existing interval boundarires are
+            d_1 = abs(new_coord - interval_coords[ind - 1])
+            d_2 = abs(new_coord - interval_coords[ind])
+            # Skip snapping_points if the distances to existing interval boundaries are
             # smaller than `min_step` defined above.
-            if abs(new_coord - interval_coords[ind]) < min_step:
+            if d_1 < min_step and d_2 < min_step:
                 continue
-            if abs(new_coord - interval_coords[ind - 1]) < min_step:
+            # or, if the snapping point is near the first interval boundary,
+            # give priority to the snapping_point and replace
+            elif d_1 < min_step:
+                # Don't replace if the boundary is the simulation boundary
+                if ind == 0:
+                    continue
+                interval_coords[ind - 1] = new_coord
                 continue
-            # insertion
+            # or, if the snapping point is near the second interval boundary,
+            # give priority to the snapping_point and replace
+            elif d_2 < min_step:
+                # Don't replace if the boundary is the simulation boundary
+                if ind == len(interval_coords) - 1:
+                    continue
+                interval_coords[ind] = new_coord
+                continue
+            # otherwise add the snapping point directly since there is sufficient space
             interval_coords = np.insert(interval_coords, ind, new_coord)
             max_dl_list = np.insert(max_dl_list, ind - 1, max_dl_list[ind - 1])
         return interval_coords, max_dl_list
@@ -137,6 +184,7 @@ class GradedMesher(Mesher):
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
         dl_min: pd.NonNegativeFloat,
+        dl_max: pd.NonNegativeFloat,
     ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
@@ -155,6 +203,8 @@ class GradedMesher(Mesher):
             Minimum requested steps per wavelength.
         dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
+        dl_max: pd.NonNegativeFloat
+            Upper bound of grid size.
 
         Returns
         -------
@@ -179,25 +229,31 @@ class GradedMesher(Mesher):
         # structures.
         structures_effective = self.filter_structures_effective_dl(structures, axis)
 
-        # Special attention needs to be paid to enforced overrideStructures.
-        # They shouldn't be overridden by other structures;
-        # for overlapping enforced structures, the grid size of the overlapped
-        # region is determined by the last enforced structure. We take two
-        # steps to implement the feature:
+        # Special attention needs to be paid to enforced or unshadowed overrideStructures.
+        # 1) enforced structures shouldn't be overridden by other structures; for overlapping enforced
+        #    structures, the grid size of the overlapped region is determined by the last enforced structure.
+        # 2) unshadowed structures don't override other structures based on the structure list order,
+        #    but by grid size; additionally, unshadowed structures won't add new intervals if they
+        #    don't reduce grid size in the intervals.
+        #  We take two steps to implement the feature:
         # 1) reorder structure list so that enforce = True structures are shifted to
-        #    the end of the last.
+        #    the end of the last, and unshadowed structures to the begining (but after simulation structure).
         # 2) in each interval, the maximal grid size is:
         #    a) no enforced structure: min(grid size of each structure).
         #    b) with enforced structure: grid size of the last override structure.
 
-        # reorder structure list to place enforced ones to the end
-        num_unenforced, structures_ordered = self.reorder_structures_enforced_to_end(
-            structures_effective
-        )
+        # reorder structure list
+        num_unenforced, structures_ordered = self.reorder_structures(structures_effective)
+
+        # no containment check for unshadowed structures
+        skip_containment = [
+            isinstance(structure, MeshOverrideStructure) and not structure.shadow
+            for structure in structures_ordered
+        ]
 
         # Required maximum steps in every structure
         structure_steps = self.structure_steps(
-            structures_ordered, wavelength, min_steps_per_wvl, dl_min, axis
+            structures_ordered, wavelength, min_steps_per_wvl, dl_min, dl_max, axis
         )
         # Smallest of the maximum steps
         min_step = MIN_STEP_SCALE * np.amin(structure_steps)
@@ -242,17 +298,22 @@ class GradedMesher(Mesher):
                 if bbox is None:
                     # Structure has been removed because it is completely contained
                     continue
-                bbox_2d = self.make_shapely_box(bbox)
 
-                # List of structure indexes that may intersect the current structure in 2D
-                try:
-                    query_inds = tree.query_items(bbox_2d)
-                except AttributeError:
-                    query_inds = tree.query(bbox_2d)
+                query_inds = []
+                if not skip_containment[str_ind]:
+                    bbox_2d = self.make_shapely_box(bbox)
+
+                    # List of structure indexes that may intersect the current structure in 2D
+                    try:
+                        query_inds = tree.query_items(bbox_2d)
+                    except AttributeError:
+                        query_inds = tree.query(bbox_2d)
 
                 # Remove all lower structures that the current structure completely contains
                 inds_lower = [
-                    ind for ind in query_inds if ind < str_ind and struct_bbox[ind] is not None
+                    ind
+                    for ind in query_inds
+                    if ind < str_ind and struct_bbox[ind] is not None and not skip_containment[ind]
                 ]
                 query_bbox = [struct_bbox[ind] for ind in inds_lower]
                 bbox_contains_inds = self.contains_3d(bbox, query_bbox)
@@ -260,15 +321,27 @@ class GradedMesher(Mesher):
                     struct_bbox[inds_lower[ind]] = None
 
                 # List of structure bboxes that contain the current structure in 2D
-                inds_upper = [ind for ind in query_inds if ind > str_ind]
-                query_bbox = [
-                    struct_bbox[ind] for ind in inds_upper if struct_bbox[ind] is not None
-                ]
-                bbox_contained_2d = self.contained_2d(bbox, query_bbox)
+                bbox_contained_2d = []
+                if not skip_containment[str_ind]:
+                    inds_upper = [ind for ind in query_inds if ind > str_ind]
+                    query_bbox = [
+                        struct_bbox[ind]
+                        for ind in inds_upper
+                        if struct_bbox[ind] is not None and not skip_containment[ind]
+                    ]
+                    bbox_contained_2d = self.contained_2d(bbox, query_bbox)
 
                 # Handle insertion of the current structure bounds in the intervals
                 # The intervals list is modified in-place
-                too_small = self.insert_bbox(intervals, str_ind, bbox, bbox_contained_2d, min_step)
+                too_small = self.insert_bbox(
+                    intervals,
+                    str_ind,
+                    bbox,
+                    bbox_contained_2d,
+                    min_step,
+                    structure_steps,
+                    skip_containment[str_ind],
+                )
                 if too_small and (bbox[1, 2] - bbox[0, 2]) > 0:
                     # If the structure is too small (but not 0D), issue a warning
                     log.warning(
@@ -314,11 +387,14 @@ class GradedMesher(Mesher):
         str_bbox: ArrayFloat1D,
         bbox_contained_2d: List[ArrayFloat1D],
         min_step: float,
+        structure_steps: ArrayFloat1D,
+        unshadowed: bool,
     ) -> Dict[str, List]:
         """Figure out where to place the bounding box coordinates of current structure.
         For both the left and the right bounds of the structure along the meshing direction,
-        we check if they are not too close to an already existing coordinate, and if the
-        structure is not completely covered by another structure at that location.
+        we check if they are not too close to an already existing coordinate, if the
+        structure is not completely covered by another structure at that location, and if
+        the structure is unshadowed and it refines grid size,
         Only then we add that boundary to the list of interval coordinates.
         We also don't add the bounds if ``str_ind==0``, since the domain bounds have already
         been added to the interval coords at the start.
@@ -338,6 +414,10 @@ class GradedMesher(Mesher):
             List of 3D bounding boxes that contain the current structure in 2D.
         min_step : float
             Absolute minimum interval size to impose.
+        structure_steps : ArrayFloat1D
+            Maximal grid size in each structure.
+        unshadowed : Bool
+            Whether the current structure is unshadowed.
 
         Returns
         -------
@@ -363,9 +443,21 @@ class GradedMesher(Mesher):
         is_close_r = self.is_close(bound_coord, coords, indmin, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
 
+        # special treatment to unshadowed structure
+        skip_unshadowed = False
+        if unshadowed and indmin > 0:
+            grid_size_str = structure_steps[str_ind]
+            min_grid_size = min(
+                (structure_steps[ind] for ind in structs[indmin - 1]), default=grid_size_str
+            )
+            if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
+                skip_unshadowed = True
+
         # Decide on whether coordinate should be inserted or indmin modified
-        if is_close_l:
-            # Don't insert coordinate but decrease indmin
+        if is_close_l or skip_unshadowed:
+            # Don't insert coordinate but decrease indmin.
+            # Note that for `skip_unshadowed`, it makes no difference to decrease indmin or not, as it will not
+            # decrease grid size in this interval.
             indmin -= 1
         elif not is_close_r and not is_contained and str_ind > 0:
             # Add current structure bounding box coordinates
@@ -382,8 +474,18 @@ class GradedMesher(Mesher):
         is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
 
+        # special treatment to unshadowed structure
+        skip_unshadowed = False
+        if unshadowed and indmax < len(structs):
+            grid_size_str = structure_steps[str_ind]
+            min_grid_size = min(
+                (structure_steps[ind] for ind in structs[indmax]), default=grid_size_str
+            )
+            if not (isclose(grid_size_str, min_grid_size) or grid_size_str < min_grid_size):
+                skip_unshadowed = True
+
         # Decide on whether coordinate should be inserted or indmax modified
-        if is_close_r:
+        if is_close_r or skip_unshadowed:
             # Don't insert coordinate but increase indmax
             indmax += 1
         elif not is_close_l and not is_contained and str_ind > 0:
@@ -405,11 +507,14 @@ class GradedMesher(Mesher):
         return indmin >= indmax
 
     @staticmethod
-    def reorder_structures_enforced_to_end(
+    def reorder_structures(
         structures: List[StructureType],
     ) -> Tuple[int, List[StructureType]]:
-        """Reorder structure list so that MeshOverrideStructures with ``enforce=True``
-        are shifted to the end of list.
+        """Reorder structure list to order as follows:
+        1). simulation structure `str[0]` remains as the first structure;
+        2). MeshOverrideStructures with ``shadow=False``;
+        3). Structures other than 1),2),4);
+        4). MeshOverrideStructures with ``enforce=True``.
 
         Parameters
         ----------
@@ -423,21 +528,40 @@ class GradedMesher(Mesher):
 
         """
 
-        # boolean list for enforced unenforced structures
+        # boolean list for enforced structures
         enforced_list = [
             isinstance(structure, MeshOverrideStructure) and structure.enforce
             for structure in structures
         ]
-
-        # if no enforced structure, a quick return here
-        if not any(enforced_list):
+        # boolean list for unshadowed structures
+        unshadowed_list = [
+            isinstance(structure, MeshOverrideStructure) and not structure.shadow
+            for structure in structures
+        ]
+        # if no special structure, a quick return here
+        if not (any(enforced_list) or any(unshadowed_list)):
             return len(structures), structures
 
         # filter structures
         structures_enforced = list(compress(structures, enforced_list))
-        structures_others = list(compress(structures, [not enforced for enforced in enforced_list]))
+        structures_unshadowed = list(compress(structures, unshadowed_list))
+        structures_others = list(
+            compress(
+                structures,
+                [
+                    not (enforced or unshadowed)
+                    for unshadowed, enforced in zip(unshadowed_list, enforced_list)
+                ],
+            )
+        )
 
-        return len(structures_others), structures_others + structures_enforced
+        ordered_structures = (
+            [structures_others[0]]
+            + structures_unshadowed
+            + structures_others[1:]
+            + structures_enforced
+        )
+        return len(structures_others) + len(structures_unshadowed), ordered_structures
 
     @staticmethod
     def filter_structures_effective_dl(
@@ -470,11 +594,40 @@ class GradedMesher(Mesher):
         return structures_filtered
 
     @staticmethod
+    def structure_step(
+        structure: Structure,
+        wavelength: float,
+        min_steps_per_wvl: float,
+    ) -> ArrayFloat1D:
+        """Get the minimum mesh required in a :class:`.Structure`. Special media are set to index of 1,
+        which would usually make the medium ignored in the meshing, while the structure geometry
+        would still be used to place grid boundaries.
+
+        Parameters
+        ----------
+        structure : :class:`.Structure`
+            A regular structure
+        wavelength : float
+            Wavelength to use for the step size and for dispersive media epsilon.
+        min_steps_per_wvl : float
+            Minimum requested steps per wavelength.
+        """
+
+        eps_diagonal = structure.medium.eps_diagonal_numerical(C_0 / wavelength)
+        n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
+        # take max among all directions because perpendicular eps defines wavelength
+        max_n_abs = np.max(np.abs(n))
+        max_k_abs = np.max(np.abs(k))
+        index = np.max([max_n_abs, max_k_abs])
+        return wavelength / index / min_steps_per_wvl
+
+    @staticmethod
     def structure_steps(
         structures: List[StructureType],
         wavelength: float,
         min_steps_per_wvl: float,
         dl_min: pd.NonNegativeFloat,
+        dl_max: pd.NonNegativeFloat,
         axis: Axis,
     ) -> ArrayFloat1D:
         """Get the minimum mesh required in each structure. Special media are set to index of 1,
@@ -491,33 +644,22 @@ class GradedMesher(Mesher):
             Minimum requested steps per wavelength.
         dl_min: pd.NonNegativeFloat
             Lower bound of grid size.
+        dl_max: pd.NonNegativeFloat
+            Upper bound of grid size.
         axis : Axis
             Axis index along which to operate.
         """
         min_steps = []
         for structure in structures:
             if isinstance(structure, Structure):
-                if isinstance(structure.medium, (PECMedium, Medium2D)) or (
-                    isinstance(structure.medium, AnisotropicMedium)
-                    and structure.medium.is_comp_pec(axis)
-                ):
-                    # for 2d medium, will always ignore even if not PEC;
-                    # later, this will be handled by _grid_corrections_2dmaterials
-                    # in simulation.py
-                    index = 1.0
-                else:
-                    eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
-                    n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
-
-                    # take max among all directions because perpendicular eps defines wavelength
-                    max_n_abs = np.max(np.abs(n))
-                    max_k_abs = np.max(np.abs(k))
-                    index = np.max([max_n_abs, max_k_abs])
-
-                min_steps.append(max(dl_min, wavelength / index / min_steps_per_wvl))
+                min_steps.append(
+                    GradedMesher.structure_step(structure, wavelength, min_steps_per_wvl)
+                )
             elif isinstance(structure, MeshOverrideStructure):
-                min_steps.append(max(dl_min, structure.dl[axis]))
-        return np.array(min_steps)
+                min_steps.append(structure.dl[axis])
+        min_steps = np.array(min_steps)
+        min_steps = np.where(min_steps > dl_max, dl_max, min_steps)
+        return np.where(min_steps < dl_min, dl_min, min_steps)
 
     @staticmethod
     def rotate_structure_bounds(structures: List[StructureType], axis: Axis) -> List[ArrayFloat1D]:
@@ -628,7 +770,9 @@ class GradedMesher(Mesher):
         coords_filter = [interval_coords[0]]
         steps_filter = []
         for coord_ind, coord in enumerate(interval_coords[1:]):
-            if coord - coords_filter[-1] >= min_step:
+            if coord - coords_filter[-1] >= min_step or (
+                coord_ind == len(interval_coords) - 2 and not isclose(coord, coords_filter[-1])
+            ):
                 coords_filter.append(coord)
                 steps_filter.append(max_steps[coord_ind])
 

@@ -4,17 +4,28 @@ from __future__ import annotations
 
 from functools import wraps
 from html import escape
-from typing import Any
+from typing import Any, Dict, Optional
 
-import matplotlib.pyplot as plt
 import pydantic.v1 as pd
-from matplotlib.patches import ArrowStyle, PathPatch
-from matplotlib.path import Path
+
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as ticker
+    from matplotlib.colors import is_color_like
+    from matplotlib.patches import ArrowStyle, PathPatch
+    from matplotlib.path import Path
+
+    # default arrow style
+    arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
+except ImportError:
+    arrow_style = None
+
 from numpy import array, concatenate, inf, ones
 
-from ..exceptions import SetupError
+from ..constants import UnitScaling
+from ..exceptions import SetupError, Tidy3dKeyError
 from .base import Tidy3dBaseModel
-from .types import Ax
+from .types import Ax, Axis, LengthUnit
 
 """ Constants """
 
@@ -73,18 +84,15 @@ def equal_aspect(plot):
 """ plot parameters """
 
 
-class PlotParams(Tidy3dBaseModel):
-    """Stores plotting parameters / specifications for a given model."""
+class AbstractPlotParams(Tidy3dBaseModel):
+    """Abstract class for storing plotting parameters.
+    Corresponds with select properties of ``matplotlib.artist.Artist``.
+    """
 
     alpha: Any = pd.Field(1.0, title="Opacity")
-    edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
-    facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
-    fill: bool = pd.Field(True, title="Is Filled")
-    hatch: str = pd.Field(None, title="Hatch Style")
     zorder: float = pd.Field(None, title="Display Order")
-    linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
-    def include_kwargs(self, **kwargs) -> PlotParams:
+    def include_kwargs(self, **kwargs) -> AbstractPlotParams:
         """Update the plot params with supplied kwargs."""
         update_dict = {
             key: value
@@ -93,12 +101,42 @@ class PlotParams(Tidy3dBaseModel):
         }
         return self.copy(update=update_dict)
 
+    def override_with_viz_spec(self, viz_spec) -> AbstractPlotParams:
+        """Override plot params with supplied VisualizationSpec."""
+        return self.include_kwargs(**dict(viz_spec))
+
     def to_kwargs(self) -> dict:
         """Export the plot parameters as kwargs dict that can be supplied to plot function."""
         kwarg_dict = self.dict()
         for ignore_key in ("type", "attrs"):
             kwarg_dict.pop(ignore_key)
         return kwarg_dict
+
+
+class PathPlotParams(AbstractPlotParams):
+    """Stores plotting parameters / specifications for a path.
+    Corresponds with select properties of ``matplotlib.lines.Line2D``.
+    """
+
+    color: Any = pd.Field(None, title="Color", alias="c")
+    linewidth: pd.NonNegativeFloat = pd.Field(2, title="Line Width", alias="lw")
+    linestyle: str = pd.Field("--", title="Line Style", alias="ls")
+    marker: Any = pd.Field("o", title="Marker Style")
+    markeredgecolor: Any = pd.Field(None, title="Marker Edge Color", alias="mec")
+    markerfacecolor: Any = pd.Field(None, title="Marker Face Color", alias="mfc")
+    markersize: pd.NonNegativeFloat = pd.Field(10, title="Marker Size", alias="ms")
+
+
+class PlotParams(AbstractPlotParams):
+    """Stores plotting parameters / specifications for a given model.
+    Corresponds with select properties of ``matplotlib.patches.Patch``.
+    """
+
+    edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
+    facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
+    fill: bool = pd.Field(True, title="Is Filled")
+    hatch: str = pd.Field(None, title="Hatch Style")
+    linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
 
 # defaults for different tidy3d objects
@@ -136,8 +174,45 @@ MEDIUM_CMAP = [
 STRUCTURE_EPS_CMAP = "gist_yarg"
 STRUCTURE_HEAT_COND_CMAP = "gist_yarg"
 
-# default arrow style
-arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
+
+def is_valid_color(value: str) -> str:
+    if not is_color_like(value):
+        raise pd.ValidationError(f"{value} is not a valid plotting color")
+
+    return value
+
+
+class VisualizationSpec(Tidy3dBaseModel):
+    """Defines specification for visualization when used with plotting functions."""
+
+    facecolor: str = pd.Field(
+        "",
+        title="Face color",
+        description="Color applied to the faces in visualization.",
+    )
+
+    edgecolor: Optional[str] = pd.Field(
+        "",
+        title="Edge color",
+        description="Color applied to the edges in visualization.",
+    )
+
+    alpha: Optional[pd.confloat(ge=0.0, le=1.0)] = pd.Field(
+        1.0,
+        title="Opacity",
+        description="Opacity/alpha value in plotting between 0 and 1.",
+    )
+
+    @pd.validator("facecolor", always=True)
+    def validate_color(value: str) -> str:
+        return is_valid_color(value)
+
+    @pd.validator("edgecolor", always=True)
+    def validate_and_copy_color(value: str, values: Dict[str, Any]) -> str:
+        if (value == "") and "facecolor" in values:
+            return is_valid_color(values["facecolor"])
+
+        return is_valid_color(value)
 
 
 """=================================================================================================
@@ -260,7 +335,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
         (function() {
             const TARGET_CLASS = "simulation-viewer";
             const ACTIVE_CLASS = "simulation-viewer-active";
-            const VIEWER_URL = "https://feature-simulation-viewer.d3a9gfg7glllfq.amplifyapp.com/simulation-viewer";
+            const VIEWER_URL = "https://tidy3d.simulation.cloud/simulation-viewer";
 
             class SimulationViewerInjector {
                 constructor() {
@@ -343,3 +418,39 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     """
 
     return display(HTML(html_code))
+
+
+def set_default_labels_and_title(
+    axis_labels: tuple[str, str],
+    axis: Axis,
+    position: float,
+    ax: Ax,
+    plot_length_units: LengthUnit = None,
+) -> Ax:
+    """Adds axis labels and title to plots involving spatial dimensions.
+    When the ``plot_length_units`` are specified, the plot axes are scaled, and
+    the title and axis labels include the desired units.
+    """
+    xlabel = axis_labels[0]
+    ylabel = axis_labels[1]
+    if plot_length_units is not None:
+        if plot_length_units not in UnitScaling:
+            raise Tidy3dKeyError(
+                f"Provided units '{plot_length_units}' are not supported. "
+                f"Please choose one of '{LengthUnit}'."
+            )
+        ax.set_xlabel(f"{xlabel} ({plot_length_units})")
+        ax.set_ylabel(f"{ylabel} ({plot_length_units})")
+        # Formatter to help plot in arbitrary units
+        scale_factor = UnitScaling[plot_length_units]
+        formatter = ticker.FuncFormatter(lambda y, _: f"{y * scale_factor:.2f}")
+        ax.xaxis.set_major_formatter(formatter)
+        ax.yaxis.set_major_formatter(formatter)
+        ax.set_title(
+            f"cross section at {'xyz'[axis]}={position * scale_factor:.2f} ({plot_length_units})"
+        )
+    else:
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+    return ax

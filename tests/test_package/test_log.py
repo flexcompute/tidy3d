@@ -9,7 +9,7 @@ import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
 
-from ..utils import AssertLogLevel, assert_log_level
+from ..utils import AssertLogLevel
 
 
 def test_log():
@@ -272,27 +272,21 @@ def test_log_suppression():
     td.config.log_suppression = True
 
 
-def test_assert_log_level(log_capture):
+def test_assert_log_level():
     """Test features of the assert_log_level"""
 
     # log was captured
-    with AssertLogLevel(log_capture, "WARNING", contains_str="ABC"):
+    with AssertLogLevel("WARNING", contains_str="ABC"):
         td.log.warning("ABC")
 
-    # string was not matched (manually clear because not sure any other way using context manager)
-    td.log.warning("ABC")
-    with pytest.raises(AssertionError):
-        assert_log_level(log_capture, "WARNING", contains_str="DEF")
-    log_capture.clear()
+    # Test when log message doesn't contain expected string
+    with pytest.raises(AssertionError), AssertLogLevel("WARNING", contains_str="DEF"):
+        td.log.warning("ABC")
 
-    # string was matched at the wrong level
-    td.log.info("ABC")
-    with pytest.raises(AssertionError):
-        assert_log_level(log_capture, "WARNING", contains_str="ABC")
-    log_capture.clear()
+    # Test when log message is at incorrect level
+    with pytest.raises(AssertionError), AssertLogLevel("WARNING", contains_str="ABC"):
+        td.log.info("ABC")  # Should fail since INFO < WARNING
 
-    # log exceeds expected level
-    td.log.warning("ABC")
-    with pytest.raises(AssertionError):
-        assert_log_level(log_capture, "INFO")
-    log_capture.clear()
+    # Test when log level is higher than expected
+    with pytest.raises(AssertionError), AssertLogLevel("INFO"):
+        td.log.warning("ABC")  # Should fail since WARNING > INFO
