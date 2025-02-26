@@ -158,6 +158,8 @@ WARN_MONITOR_DATA_SIZE_GB = 10
 MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
 MAX_SIMULATION_DATA_SIZE_GB = 50
 WARN_MODE_NUM_CELLS = 1e5
+MIN_MONITOR_FREQUENCY_RANGE_PARAMETER = 0.1
+MAX_MONITOR_FREQUENCY_RANGE_PARAMETER = 10
 
 # number of grid cells at which we warn about slow Simulation.epsilon()
 NUM_CELLS_WARN_EPSILON = 100_000_000
@@ -3001,7 +3003,7 @@ class Simulation(AbstractYeeGridSimulation):
                 freqs = np.array(monitor.freqs)
                 if freqs.min() < freq_min or freqs.max() > freq_max:
                     consolidated_logger.warning(
-                        f"monitors[{monitor_index}] contains frequencies "
+                        f"'monitors[{monitor_index}]' contains frequencies "
                         f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
                         "(Hz) as defined by the sources.",
                         custom_loc=["monitors", monitor_index, "freqs"],
@@ -3666,6 +3668,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_tfsf_structure_intersections()
         self._warn_time_monitors_outside_run_time()
         self._validate_time_monitors_num_steps()
+        self._validate_freq_monitors_freq_range()
         _ = self.volumetric_structures
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
@@ -3820,6 +3823,34 @@ class Simulation(AbstractYeeGridSimulation):
                     "the monitor is not zero-dimensional. Change the geometry to a point monitor, "
                     "or use 'start', 'stop', and 'interval' to reduce the number of time steps "
                     "at which the monitor stores data."
+                )
+
+    def _validate_freq_monitors_freq_range(self) -> None:
+        """Rise the error if any DFT monitors have frequencies outside of the simulation frequency range."""
+        source_ranges = [source.source_time.frequency_range() for source in self.sources]
+        if not source_ranges:
+            return
+
+        freq_min = (
+            min((freq_range[0] for freq_range in source_ranges), default=0.0)
+            * MIN_MONITOR_FREQUENCY_RANGE_PARAMETER
+        )
+        freq_max = (
+            max((freq_range[1] for freq_range in source_ranges), default=0.0)
+            * MAX_MONITOR_FREQUENCY_RANGE_PARAMETER
+        )
+        sci_fmin, sci_fmax = self._scientific_notation(freq_min, freq_max)
+
+        for monitor in self.monitors:
+            if not isinstance(monitor, FreqMonitor):
+                continue
+
+            freqs = np.array(monitor.freqs)
+            if freqs.min() < freq_min or freqs.max() > freq_max:
+                raise SetupError(
+                    f"Frequency monitor '{monitor.name}' contains frequencies "
+                    f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
+                    "(Hz) as defined by the sources."
                 )
 
     @cached_property
