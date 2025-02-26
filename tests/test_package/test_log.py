@@ -76,7 +76,8 @@ def test_logging_warning_capture():
     mode_mnt = td.ModeMonitor(
         center=(0, 0, 0),
         size=(domain_size, 0, domain_size),
-        freqs=list(freqs) + [0.1e6],
+        # additional frequency is outside the source range, but is inside the allowed validator range
+        freqs=list(freqs) + [0.1 * f0],
         mode_spec=td.ModeSpec(num_modes=3),
         name="mode",
     )

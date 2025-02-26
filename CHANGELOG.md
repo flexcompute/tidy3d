@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ability to the `TerminalComponentModeler` that enables the computation of antenna parameters and figures of merit, such as gain, radiation efficiency, and reflection efficiency. When there are multiple ports in the `TerminalComponentModeler`, these antenna parameters may be calculated with user-specified port excitation magnitudes and phases.
 - `RectangularAntennaArrayCalculator` class to compute the array factor and far-field radiation patterns for rectangular phased antenna arrays.
 - Extended the number of quantities provided by the `DirectivityData`, which now includes more parameters of interest like radiation intensity and gain. In addition, antenna parameters can be decomposed into contributions from individual polarization components according to a specified polarization basis, either `linear` or `circular`. The linear polarization basis can be optionally rotated by `tilt_angle` from the theta-axis.
+- Added validation for the monitors frequency range to be consistent with the frequency range defined for the sources.
 
 ### Changed
 - The coordinate of snapping points in `GridSpec` can take value `None`, so that mesh can be selectively snapped only along certain dimensions.

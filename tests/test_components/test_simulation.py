@@ -67,7 +67,7 @@ def test_sim_init():
             ),
         ],
         monitors=[
-            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e12, 2e12], name="point"),
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e14, 2e14], name="point"),
             td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
         symmetry=(0, 1, -1),
@@ -324,16 +324,18 @@ def test_monitor_medium_frequency_range(freq, log_level):
         )
 
 
-@pytest.mark.parametrize("fwidth, log_level", [(0.1e12, "WARNING"), (2e12, "INFO")])
-def test_monitor_simulation_frequency_range(fwidth, log_level):
+@pytest.mark.parametrize(
+    "monitor_freq, log_level", [(5e10, "WARNING"), (2e12, "INFO"), (5e13, "WARNING")]
+)
+def test_monitor_simulation_frequency_range(monitor_freq, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=fwidth),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=0.1e12),
         size=(0, 0, 0),
         polarization="Ex",
     )
-    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5e12])
+    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[monitor_freq])
 
     with AssertLogLevel(log_level):
         _ = td.Simulation(
@@ -343,6 +345,48 @@ def test_monitor_simulation_frequency_range(fwidth, log_level):
             run_time=1e-12,
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
+
+
+def test_validate_monitor_simulation_frequency_range():
+    # monitor frequency outside of the simulation's frequency range should throw an error
+
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=0.1e12),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+
+    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[2e12])
+    s = td.Simulation(
+        size=(1, 1, 1),
+        monitors=[mnt],
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+    s._validate_freq_monitors_freq_range()
+
+    with pytest.raises(SetupError):
+        mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[5e10])
+        s = td.Simulation(
+            size=(1, 1, 1),
+            monitors=[mnt],
+            sources=[src],
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+        s._validate_freq_monitors_freq_range()
+
+    with pytest.raises(SetupError):
+        mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[5e13])
+        s = td.Simulation(
+            size=(1, 1, 1),
+            monitors=[mnt],
+            sources=[src],
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+        s._validate_freq_monitors_freq_range()
 
 
 def test_validate_bloch_with_symmetry():
