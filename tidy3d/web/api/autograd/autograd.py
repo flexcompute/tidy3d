@@ -861,8 +861,19 @@ def setup_adj(
     # immediately filter out any data_vjps with all 0's in the data
     data_fields_vjp = {key: get_static(value) for key, value in data_fields_vjp.items()}
 
+    # start with the full simulation data structure and either zero out the fields
+    # that have no tracer data for them or insert the tracer data
+    full_sim_data_dict = sim_data_orig.strip_traced_fields(
+        include_untraced_data_arrays=True, starting_path=("data",)
+    )
+    for path in full_sim_data_dict.keys():
+        if path in data_fields_vjp:
+            full_sim_data_dict[path] = data_fields_vjp[path]
+        else:
+            full_sim_data_dict[path] *= 0
+
     # insert the raw VJP data into the .data of the original SimulationData
-    sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
+    sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=full_sim_data_dict)
 
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())

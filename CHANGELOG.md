@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In web api, mode solver is patched with remote data so that certain methods like `plot_field` show remote data.
 - Fixed common cross-referencing typo in docstrings.
 - Added `viz_spec` property to `AbstractStructure` to fix error when plotting structures that have no `medium`.
+- Fixed invalid adjoint source creation by disallowing sources made from non-traced fields.
 
 ## [2.8.0rc2] - 2025-01-28
 
