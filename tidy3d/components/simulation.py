@@ -67,6 +67,7 @@ from .monitor import (
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
     DiffractionMonitor,
+    DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
@@ -3326,13 +3327,13 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["medium", "structures"])
-    def diffraction_monitor_medium(cls, val, values):
-        """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
+    def diffraction_and_directivity_monitor_medium(cls, val, values):
+        """If any :class:`.DiffractionMonitor` or  :class:`.DirectivityMonitor` exists, ensure it does not lie in a lossy medium."""
         monitors = val
         structures = values.get("structures")
         medium = values.get("medium")
         for monitor in monitors:
-            if isinstance(monitor, DiffractionMonitor):
+            if isinstance(monitor, (DiffractionMonitor, DirectivityMonitor)):
                 medium_set = Scene.intersecting_media(monitor, structures)
                 medium = medium_set.pop() if medium_set else medium
                 freqs = np.array(monitor.freqs)
@@ -3340,7 +3341,7 @@ class Simulation(AbstractYeeGridSimulation):
                     freqs = 0.5 * (np.min(freqs) + np.max(freqs))
                 _, index_k = medium.nk_model(frequency=freqs)
                 if not np.all(index_k == 0):
-                    raise SetupError("Diffraction monitors must not lie in a lossy medium.")
+                    raise SetupError(f"'{monitor.type}' must not lie in a lossy medium.")
         return val
 
     @pydantic.validator("grid_spec", always=True)
