@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for running multiple adjoint simulations from a single forward simulation in adjoint pipeline depending on monitor configuration.
 - Ability to directly create `DirectivityData` from an `xarrray.Dataset` containing electromagnetic fields, where the flux is calculated by integrating the fields over the surface of a sphere.
 - Ability to the `TerminalComponentModeler` that enables the computation of antenna parameters and figures of merit, such as gain, radiation efficiency, and reflection efficiency. When there are multiple ports in the `TerminalComponentModeler`, these antenna parameters may be calculated with user-specified port excitation magnitudes and phases.
+- `RectangularAntennaArrayCalculator` class to compute the array factor and far-field radiation patterns for rectangular phased antenna arrays.
 
 ### Changed
 - The coordinate of snapping points in `GridSpec` can take value `None`, so that mesh can be selectively snapped only along certain dimensions.

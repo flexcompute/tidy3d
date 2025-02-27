@@ -1,6 +1,9 @@
 """Imports from microwave plugin."""
 
 from . import models
+from .array_factor import (
+    RectangularAntennaArrayCalculator,
+)
 from .auto_path_integrals import path_integrals_from_lumped_element
 from .custom_path_integrals import (
     CustomCurrentIntegral2D,
@@ -28,4 +31,5 @@ __all__ = [
     "models",
     "path_integrals_from_lumped_element",
     "rf_material_library",
+    "RectangularAntennaArrayCalculator",
 ]
