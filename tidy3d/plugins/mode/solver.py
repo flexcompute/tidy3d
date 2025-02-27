@@ -24,6 +24,7 @@ TOL_TENSORIAL = 1e-6
 # shift target neff by this value, both rel and abs, whichever results in larger shift
 TARGET_SHIFT = 10 * fp_eps
 
+
 class EigSolver(Tidy3dBaseModel):
     """Interface for computing eigenvalues given permittivity and mode spec.
     It's a collection of static methods.
@@ -250,7 +251,7 @@ class EigSolver(Tidy3dBaseModel):
             direction,
             enable_incidence_matrices,
             basis_E=basis_E,
-            calculate_group_index = mode_spec.calculate_group_index,
+            calculate_group_index=mode_spec.calculate_group_index,
         )
 
         # Transform back to original axes, E = J^T E'
@@ -280,14 +281,14 @@ class EigSolver(Tidy3dBaseModel):
             H = H.astype(np.complex64)
 
         modes_data = modes_data.updated_copy(
-            E_vectors = None,
-            H_vectors = None,
-            E_fields = E,
-            H_fields = H,
-            n_eff = neff,
-            k_eff = keff,
-            n_group = nGroup,
-            GVD = newGVD,
+            E_vectors=None,
+            H_vectors=None,
+            E_fields=E,
+            H_fields=H,
+            n_eff=neff,
+            k_eff=keff,
+            n_group=nGroup,
+            GVD=newGVD,
         )
 
         return modes_data
@@ -412,7 +413,7 @@ class EigSolver(Tidy3dBaseModel):
                 H[0] *= -1
                 H[1] *= -1
                 E[2] *= -1
-                solver_result = solver_result.updated_copy(E_vectors = E, H_vectors = H)
+                solver_result = solver_result.updated_copy(E_vectors=E, H_vectors=H)
 
         elif not is_eps_complex:
             eps_spec = "tensorial_real"
@@ -420,13 +421,13 @@ class EigSolver(Tidy3dBaseModel):
             if direction == "-":
                 E = np.conj(solver_result.E_vectors)
                 H = -np.conj(solver_result.H_vectors)
-                solver_result = solver_result.updated_copy(E_vectors = E, H_vectors = H)
+                solver_result = solver_result.updated_copy(E_vectors=E, H_vectors=H)
 
         else:
             eps_spec = "tensorial_complex"
             solver_result = cls.solver_tensorial(**kwargs, direction=direction)
 
-        solver_result = solver_result.updated_copy(eps_spec = eps_spec)
+        solver_result = solver_result.updated_copy(eps_spec=eps_spec)
         return solver_result
 
     @classmethod
@@ -633,10 +634,10 @@ class EigSolver(Tidy3dBaseModel):
         H *= -1j / ETA_0
 
         solver_result = SingleFreqModesData(
-            E_vectors = E,
-            H_vectors = H,
-            n_eff = neff,
-            k_eff = keff,
+            E_vectors=E,
+            H_vectors=H,
+            n_eff=neff,
+            k_eff=keff,
         )
 
         return solver_result
@@ -770,10 +771,10 @@ class EigSolver(Tidy3dBaseModel):
         H *= -1j / ETA_0
 
         solver_result = SingleFreqModesData(
-            E_vectors = E,
-            H_vectors = H,
-            n_eff = neff,
-            k_eff = keff,
+            E_vectors=E,
+            H_vectors=H,
+            n_eff=neff,
+            k_eff=keff,
         )
 
         return solver_result
@@ -851,15 +852,15 @@ class EigSolver(Tidy3dBaseModel):
 
         # first order correction matrix
 
-        p1_11 = 2. * dxf.dot(inv_eps_zz).dot(dyb)
-        p1_12 = -2. * dxf.dot(inv_eps_zz).dot(dxb)
-        p1_21 = 2. * dyf.dot(inv_eps_zz).dot(dyb)
-        p1_22 = -2. * dyf.dot(inv_eps_zz).dot(dxb)
+        p1_11 = 2.0 * dxf.dot(inv_eps_zz).dot(dyb)
+        p1_12 = -2.0 * dxf.dot(inv_eps_zz).dot(dxb)
+        p1_21 = 2.0 * dyf.dot(inv_eps_zz).dot(dyb)
+        p1_22 = -2.0 * dyf.dot(inv_eps_zz).dot(dxb)
 
-        q1_11 = 2. * dxb.dot(inv_mu_zz).dot(dyf)
-        q1_12 = -2. * dxb.dot(inv_mu_zz).dot(dxf)
-        q1_21 = 2. * dyb.dot(inv_mu_zz).dot(dyf)
-        q1_22 = -2. * dyb.dot(inv_mu_zz).dot(dxf)
+        q1_11 = 2.0 * dxb.dot(inv_mu_zz).dot(dyf)
+        q1_12 = -2.0 * dxb.dot(inv_mu_zz).dot(dxf)
+        q1_21 = 2.0 * dyb.dot(inv_mu_zz).dot(dyf)
+        q1_22 = -2.0 * dyb.dot(inv_mu_zz).dot(dxf)
 
         p1_mat = sp.bmat([[p1_11, p1_12], [p1_21, p1_22]])
         q1_mat = sp.bmat([[q1_11, q1_12], [q1_21, q1_22]])
@@ -871,15 +872,15 @@ class EigSolver(Tidy3dBaseModel):
 
         # second order correction matrix
 
-        p2_11 = -3. * dxf.dot(inv_eps_zz).dot(dyb)
-        p2_12 = 3. * dxf.dot(inv_eps_zz).dot(dxb)
-        p2_21 = -3. * dyf.dot(inv_eps_zz).dot(dyb)
-        p2_22 = 3. * dyf.dot(inv_eps_zz).dot(dxb)
+        p2_11 = -3.0 * dxf.dot(inv_eps_zz).dot(dyb)
+        p2_12 = 3.0 * dxf.dot(inv_eps_zz).dot(dxb)
+        p2_21 = -3.0 * dyf.dot(inv_eps_zz).dot(dyb)
+        p2_22 = 3.0 * dyf.dot(inv_eps_zz).dot(dxb)
 
-        q2_11 = -3. * dxb.dot(inv_mu_zz).dot(dyf)
-        q2_12 = 3. * dxb.dot(inv_mu_zz).dot(dxf)
-        q2_21 = -3. * dyb.dot(inv_mu_zz).dot(dyf)
-        q2_22 = 3. * dyb.dot(inv_mu_zz).dot(dxf)
+        q2_11 = -3.0 * dxb.dot(inv_mu_zz).dot(dyf)
+        q2_12 = 3.0 * dxb.dot(inv_mu_zz).dot(dxf)
+        q2_21 = -3.0 * dyb.dot(inv_mu_zz).dot(dyf)
+        q2_22 = 3.0 * dyb.dot(inv_mu_zz).dot(dxf)
 
         p2_mat = sp.bmat([[p2_11, p2_12], [p2_21, p2_22]])
         q2_mat = sp.bmat([[q2_11, q2_12], [q2_21, q2_22]])
@@ -938,8 +939,10 @@ class EigSolver(Tidy3dBaseModel):
         # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
         if basis_E is None:
             vals, vecs = cls.solver_eigs(
-                mat0,
-                num_modes,
+                mat0.toarray(),
+                2 * N,
+                # mat0,
+                # num_modes,
                 vec_init,
                 guess_value=eig_guess,
                 mode_solver_type=mode_solver_type,
@@ -967,12 +970,15 @@ class EigSolver(Tidy3dBaseModel):
 
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
-        neff_m_approx_s_exact, keff_m_approx_s_exact = cls.eigs_to_effective_index(vals_m_approx_s_exact, mode_solver_type)
+        neff_m_approx_s_exact, keff_m_approx_s_exact = cls.eigs_to_effective_index(
+            vals_m_approx_s_exact, mode_solver_type
+        )
 
         # Sort by descending neff
         sort_inds = np.argsort(neff)[::-1]
         neff = neff[sort_inds]
         keff = keff[sort_inds]
+        vals = vals[sort_inds]
 
         # Sort by descending neff
         sort_inds_m_approx_s_exact = np.argsort(neff_m_approx_s_exact)[::-1]
@@ -988,33 +994,76 @@ class EigSolver(Tidy3dBaseModel):
 
         vecs = vecs[:, sort_inds]
 
+        # Take only num_modes
+        ind = np.argmin(np.abs(neff_guess - neff))
+        neff = neff[ind : ind + num_modes]
+        keff = keff[ind : ind + num_modes]
+
         vecs_m_approx_s_exact = vecs_m_approx_s_exact[:, sort_inds_m_approx_s_exact]
 
         # Calculate the first order correction to the eigenvalues
 
         vals_1 = np.zeros(num_modes)
         for mode_index in range(num_modes):
-            vals_1[mode_index] = np.real(( (vecs[:, mode_index].conjugate().T) @ (mat1 @ vecs[:, mode_index]) ) / ((vecs[:, mode_index].conjugate().T) @ vecs[:, mode_index]))
+            vals_1[mode_index] = np.real(
+                ((vecs[:, mode_index].conjugate().T) @ (mat1 @ vecs[:, mode_index]))
+                / ((vecs[:, mode_index].conjugate().T) @ vecs[:, mode_index])
+            )
+
+        print(vecs.shape)
+        # sym_diff = mat0 @ mat0.T - mat0.T @ mat0
+        # print(max(sym_diff.max(), abs(sym_diff.min())))
+
+        # # Attempt to solve the Sylvester equation for P
+        # n = mat0.shape[0]
+        # I = sp.eye(n)  # Identity matrix
+        # try:
+        #     P = solve_sylvester(mat0.T, -mat0, I)  # Solve M^T P - P M = 0
+        #     print("P-matrix exists:\n", P)
+        # except:
+        #     print("No solution for P found.")
+
+        # # Compute the dot product of vecs.T and vecs
+        # imat = sp.bmat([[sp.diags(np.zeros((N,))), sp.eye(N)], [sp.eye(N), sp.diags(np.zeros((N,)))]])
+        # dot_product = vecs.T @ imat @ q0_mat @ vecs
+
+        # # Plot the result
+        # plt.imshow(np.log(np.abs(dot_product)), cmap='viridis', vmin=-20, vmax=2)
+        # plt.colorbar(label='Magnitude')
+        # plt.title('Dot Product of vecs.T and vecs')
+        # plt.xlabel('Mode Index')
+        # plt.ylabel('Mode Index')
+        # plt.show()
+        # raise
+
+        vals_1 = np.diag(np.linalg.inv(vecs) @ mat1 @ vecs)
+        vals = vals[ind : ind + num_modes]
+        vals_1 = vals_1[ind : ind + num_modes]
+        vecs = vecs[:, ind : ind + num_modes]
 
         vals_m_approx_s_approx = vals + alpha * vals_1
 
-        neff_m_approx_s_approx, keff_m_approx_s_approx = cls.eigs_to_effective_index(vals_m_approx_s_approx, mode_solver_type)
+        neff_m_approx_s_approx, keff_m_approx_s_approx = cls.eigs_to_effective_index(
+            vals_m_approx_s_approx, mode_solver_type
+        )
 
-        delta_vals = (vals_m_approx_s_exact - vals_m_approx_s_approx) / vals_m_approx_s_exact
+        # delta_vals = (vals_m_approx_s_exact - vals_m_approx_s_approx) / vals_m_approx_s_exact
 
-        n_group_m_approx_s_exact = neff + (neff_m_approx_s_exact - neff)/alpha
+        # n_group_m_approx_s_exact = neff + (neff_m_approx_s_exact - neff) / alpha
 
-        n_group_m_approx_s_approx = neff + (neff_m_approx_s_approx - neff)/alpha
+        n_group_m_approx_s_approx = neff + (neff_m_approx_s_approx - neff) / alpha
 
         # Calculate the first order correction to the n_eff -> group index
 
         n_group_perturbation = np.zeros(num_modes)
         for mode_index in range(num_modes):
-            n_group_perturbation[mode_index] = neff[mode_index] - vals_1[mode_index] / 2. / neff[mode_index]
+            n_group_perturbation[mode_index] = (
+                neff[mode_index] - vals_1[mode_index] / 2.0 / neff[mode_index]
+            )
 
         n_group_result = n_group_m_approx_s_approx
 
-        GVD = np.zeros(num_modes)
+        # GVD = np.zeros(num_modes)
 
         # Field components from eigenvectors
         Ex = vecs[:N, :]
@@ -1035,11 +1084,11 @@ class EigSolver(Tidy3dBaseModel):
         H *= -1j / ETA_0
 
         solver_result = SingleFreqModesData(
-            E_vectors = E,
-            H_vectors = H,
-            n_eff = neff,
-            k_eff = keff,
-            n_group = n_group_result,
+            E_vectors=E,
+            H_vectors=H,
+            n_eff=neff,
+            k_eff=keff,
+            n_group=n_group_result,
         )
 
         return solver_result
