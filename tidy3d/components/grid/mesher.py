@@ -764,13 +764,13 @@ class GradedMesher(Mesher):
         """Filter intervals that are smaller than the absolute smallest of the ``max_steps``."""
 
         # Re-compute minimum step in case some high-index structures were completely covered
-        min_step = np.amin(max_steps)
+        min_step_check = MIN_STEP_SCALE * np.amin(max_steps)
 
         # Filter interval coordinates and max_steps
         coords_filter = [interval_coords[0]]
         steps_filter = []
         for coord_ind, coord in enumerate(interval_coords[1:]):
-            if coord - coords_filter[-1] >= min_step or (
+            if coord - coords_filter[-1] >= min_step_check or (
                 coord_ind == len(interval_coords) - 2 and not isclose(coord, coords_filter[-1])
             ):
                 coords_filter.append(coord)
