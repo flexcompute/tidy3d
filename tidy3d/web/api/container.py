@@ -725,11 +725,11 @@ class Batch(WebContainer):
             # right-align status
             task_part = f"{task_name:<{max_name_length}}"
 
-            if "error" in status or "diverge" in status:
+            if "error" in status or "diverge" in status or "aborted" in status:
                 status_part = f"→ [red]{status:<{status_width}}"
             elif status == "success":
                 status_part = f"→ [green]{status:<{status_width}}"
-            elif status == "queued" or status == "queued_solver":
+            elif status == "queued" or status == "queued_solver" or status == "aborting":
                 status_part = f"→ [yellow]{status:<{status_width}}"
             elif status in ["preprocess", "postprocess", "running"]:
                 status_part = f"→ [blue]{status:<{status_width}}"
@@ -747,8 +747,18 @@ class Batch(WebContainer):
             "postprocess",
             "visualize",
             "success",
+            "aborting",
         ]
-        end_statuses = ("success", "error", "errored", "diverged", "diverge", "deleted", "draft")
+        end_statuses = (
+            "success",
+            "error",
+            "errored",
+            "diverged",
+            "diverge",
+            "deleted",
+            "draft",
+            "aborted",
+        )
 
         max_task_name = max(len(task_name) for task_name in self.jobs.keys())
         max_name_length = min(30, max(max_task_name, 15))
