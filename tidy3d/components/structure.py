@@ -110,6 +110,10 @@ class AbstractStructure(Tidy3dBaseModel):
         validate_no_transformed_polyslabs(val)
         return val
 
+    @property
+    def viz_spec(self):
+        return None
+
     @equal_aspect
     @add_ax_if_none
     def plot(
@@ -137,9 +141,7 @@ class AbstractStructure(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        return self.geometry.plot(
-            x=x, y=y, z=z, ax=ax, viz_spec=self.medium.viz_spec, **patch_kwargs
-        )
+        return self.geometry.plot(x=x, y=y, z=z, ax=ax, viz_spec=self.viz_spec, **patch_kwargs)
 
 
 class Structure(AbstractStructure):
@@ -186,6 +188,10 @@ class Structure(AbstractStructure):
         description="Defines the electromagnetic properties of the structure's medium.",
         discriminator=TYPE_TAG_STR,
     )
+
+    @property
+    def viz_spec(self):
+        return self.medium.viz_spec
 
     def eps_diagonal(self, frequency: float, coords: Coords) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
