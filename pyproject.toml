@@ -77,7 +77,7 @@ jax = { version = ">=0.4.26", extras = [
 ], source = "jaxsource", optional = true }
 
 # design
-bayesian-optimization = { version = "*", optional = true }
+bayesian-optimization = { version = "<2", optional = true }
 pygad = { version = "3.3.1", optional = true }
 pyswarms = { version = "*", optional = true }
 
