@@ -147,6 +147,20 @@ def test_plot_from_structure():
     plt.close()
 
 
+def test_plot_from_simulation():
+    """
+    Tests visualization of structures that do not have a medium with a viz_spec.
+    """
+    refine_geometry = td.Box(size=(2, 2, 2), center=(0, 0, 0))
+    refine_box = td.MeshOverrideStructure(
+        geometry=refine_geometry,
+        dl=[0.01, 0.01, 0.01],
+    )
+
+    refine_box.plot(z=0)
+    plt.close()
+
+
 def plot_with_viz_spec(alpha, facecolor, edgecolor=None, use_viz_spec=True):
     """
     Helper function for locally testing different visualization specs in structures through
