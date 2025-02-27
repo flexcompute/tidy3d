@@ -1023,18 +1023,24 @@ class EigSolver(Tidy3dBaseModel):
         # except:
         #     print("No solution for P found.")
 
-        # # Compute the dot product of vecs.T and vecs
-        # imat = sp.bmat([[sp.diags(np.zeros((N,))), sp.eye(N)], [sp.eye(N), sp.diags(np.zeros((N,)))]])
-        # dot_product = vecs.T @ imat @ q0_mat @ vecs
+        import matplotlib.pyplot as plt
 
-        # # Plot the result
-        # plt.imshow(np.log(np.abs(dot_product)), cmap='viridis', vmin=-20, vmax=2)
-        # plt.colorbar(label='Magnitude')
-        # plt.title('Dot Product of vecs.T and vecs')
-        # plt.xlabel('Mode Index')
-        # plt.ylabel('Mode Index')
-        # plt.show()
-        # raise
+        # Compute the dot product of vecs.T and vecs
+        imat = sp.bmat(
+            [[sp.diags(np.zeros((N,))), sp.eye(N)], [-sp.eye(N), sp.diags(np.zeros((N,)))]]
+        )
+        dot_product = vecs.T @ (q0_mat.T @ imat - imat @ q0_mat) @ vecs
+        dot_product /= np.diag(dot_product)
+        print(dot_product)
+
+        # Plot the result
+        plt.imshow((np.abs(dot_product)), cmap="viridis")
+        plt.colorbar(label="Magnitude")
+        plt.title("Dot Product of vecs.T and vecs")
+        plt.xlabel("Mode Index")
+        plt.ylabel("Mode Index")
+        plt.show()
+        raise
 
         vals_1 = np.diag(np.linalg.inv(vecs) @ mat1 @ vecs)
         vals = vals[ind : ind + num_modes]
