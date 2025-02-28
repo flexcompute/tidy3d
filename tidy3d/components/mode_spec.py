@@ -136,7 +136,7 @@ class ModeSpec(Tidy3dBaseModel):
         "If 'False', a coordinate transformation is applied through the permittivity and permeability tensors."
         "If 'True', the structures in the simulation are first rotated to compute a mode solution at "
         "a reference plane normal to the structure's azimuthal direction. Then, the fields are rotated "
-        "to align with the mode plane, using the `n_eff` calculated at the reference plane. The second option can "
+        "to align with the mode plane, using the 'n_eff' calculated at the reference plane. The second option can "
         "produce more accurate results, but more care must be taken, for example, in ensuring that the "
         "original mode plane intersects the correct geometries in the simulation with rotated structures.",
     )
