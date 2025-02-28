@@ -14,3 +14,4 @@ Microwave
    tidy3d.plugins.microwave.CustomVoltageIntegral2D
    tidy3d.plugins.microwave.CustomCurrentIntegral2D
    tidy3d.plugins.microwave.ImpedanceCalculator
+   tidy3d.plugins.microwave.RectangularAntennaArrayCalculator
