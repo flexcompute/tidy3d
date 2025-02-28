@@ -33,11 +33,19 @@ for _, path in enumerate(notebook_filenames_all):
 
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = []
+run_only = [
+    "Autograd0Quickstart",
+    "Autograd10YBranchLevelSet",
+    "Autograd12LightExtractor",
+    "HeatSolver",
+    "ThermallyTunedRingResonator",
+    "ThermoOpticDopedModulator",
+    "VortexMetasurface",
+    "ChargeSolver",
+    "MetalHeaterPhaseShifter",
+]
 
 skip = [
-    # WIP
-    "Autograd10YBranchLevelSet",
     # long time (excluding most adjoint)
     "8ChannelDemultiplexer",
     "90BendPolarizationSplitterRotator",
