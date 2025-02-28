@@ -751,7 +751,7 @@ def test_run_zero_grad(use_emulated_run):
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return 0 * postprocess(sim_data)
 
-    with AssertLogLevel("WARNING", contains_str="fields are zero"):
+    with AssertLogLevel("WARNING", contains_str="no sources"):
         grad = ag.grad(objective)(params0)
 
 
