@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -388,6 +388,43 @@ class Grid(Tidy3dBaseModel):
         >>> Nx, Ny, Nz = grid.num_cells
         """
         return [len(self.boundaries.dict()[dim]) - 1 for dim in "xyz"]
+
+    @property
+    def min_size(self) -> float:
+        """Return minimal cells size in all dimensions.
+
+        Returns
+        -------
+        float
+            Minimal cells size in all dimensions.
+        """
+        return float(min(min(sizes) for sizes in self.sizes.to_list))
+
+    @property
+    def max_size(self) -> float:
+        """Return maximal cells size in all dimensions.
+
+        Returns
+        -------
+        float
+            Maximal cells size in all dimensions.
+        """
+        return float(max(max(sizes) for sizes in self.sizes.to_list))
+
+    @property
+    def info(self) -> Dict:
+        """Dictionary collecting various properties of the grids."""
+        num_cells = self.num_cells
+        total_cells = int(np.prod(num_cells))
+        return {
+            "Nx": num_cells[0],
+            "Ny": num_cells[1],
+            "Nz": num_cells[2],
+            "grid_points": total_cells,
+            "min_grid_size": self.min_size,
+            "max_grid_size": self.max_size,
+            "computational_complexity": total_cells / self.min_size,
+        }
 
     @property
     def _primal_steps(self) -> Coords:

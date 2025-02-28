@@ -1127,6 +1127,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
 
+    @cached_property
+    def grid_info(self) -> Dict:
+        """Dictionary collecting various properties of the grids in the simulation."""
+        return self.grid.info
+
     def _subgrid(self, span_inds: np.ndarray, grid: Grid = None):
         """Take a subgrid of the simulation grid with cell span defined by ``span_inds`` along the
         three dimensions. Optionally, a grid different from the simulation grid can be provided.
