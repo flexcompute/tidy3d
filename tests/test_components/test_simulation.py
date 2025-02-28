@@ -105,6 +105,7 @@ def test_sim_init():
     _ = sim.num_cells
     sim.discretize(m)
     sim.epsilon(m)
+    _ = sim.grid_info
 
 
 def test_num_cells():
