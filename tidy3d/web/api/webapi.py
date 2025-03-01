@@ -886,7 +886,7 @@ def abort(task_id: TaskId):
 
     task = SimulationTask.get(task_id)
     if not task:
-        raise WebError(f"{task_id} is not found.")
+        raise ValueError("Task not found.")
     else:
         task.abort()
         return TaskInfo(**{"taskId": task.task_id, **task.dict()})
