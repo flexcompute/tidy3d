@@ -939,10 +939,10 @@ class EigSolver(Tidy3dBaseModel):
         # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
         if basis_E is None:
             vals, vecs = cls.solver_eigs(
-                mat0.toarray(),
-                2 * N,
-                # mat0,
-                # num_modes,
+                # mat0.toarray(),
+                # 2 * N,
+                mat0,
+                num_modes,
                 vec_init,
                 guess_value=eig_guess,
                 mode_solver_type=mode_solver_type,
@@ -1023,26 +1023,28 @@ class EigSolver(Tidy3dBaseModel):
         # except:
         #     print("No solution for P found.")
 
-        import matplotlib.pyplot as plt
-
         # Compute the dot product of vecs.T and vecs
         imat = sp.bmat(
             [[sp.diags(np.zeros((N,))), sp.eye(N)], [-sp.eye(N), sp.diags(np.zeros((N,)))]]
         )
         dot_product = vecs.T @ (q0_mat.T @ imat - imat @ q0_mat) @ vecs
         dot_product /= np.diag(dot_product)
-        print(dot_product)
 
         # Plot the result
-        plt.imshow((np.abs(dot_product)), cmap="viridis")
-        plt.colorbar(label="Magnitude")
-        plt.title("Dot Product of vecs.T and vecs")
-        plt.xlabel("Mode Index")
-        plt.ylabel("Mode Index")
-        plt.show()
-        raise
+        # plt.imshow((np.abs(dot_product)), cmap="viridis")
+        # plt.colorbar(label="Magnitude")
+        # plt.title("Dot Product of vecs.T and vecs")
+        # plt.xlabel("Mode Index")
+        # plt.ylabel("Mode Index")
+        # plt.show()
+        # raise
 
-        vals_1 = np.diag(np.linalg.inv(vecs) @ mat1 @ vecs)
+        vecs_inv = vecs.T @ (q0_mat.T @ imat - imat @ q0_mat)
+        vecs_inv *= 1 / np.diag(np.abs(vecs_inv @ vecs))[:, None]
+        vals_1 = np.diag(vecs_inv @ mat1 @ vecs)
+
+        # vals_1 = np.diag(np.linalg.inv(vecs) @ mat1 @ vecs)
+
         vals = vals[ind : ind + num_modes]
         vals_1 = vals_1[ind : ind + num_modes]
         vecs = vecs[:, ind : ind + num_modes]
@@ -1070,6 +1072,9 @@ class EigSolver(Tidy3dBaseModel):
         n_group_result = n_group_m_approx_s_approx
 
         # GVD = np.zeros(num_modes)
+        GVD = -2 * vals_1 / 2.0 / neff / (2 * np.pi * freq)
+        GVD *= -2 * np.pi * (freq / C_0) ** 2 * 1e6
+        print(GVD)
 
         # Field components from eigenvectors
         Ex = vecs[:N, :]
@@ -1095,6 +1100,7 @@ class EigSolver(Tidy3dBaseModel):
             n_eff=neff,
             k_eff=keff,
             n_group=n_group_result,
+            GVD=GVD,
         )
 
         return solver_result
