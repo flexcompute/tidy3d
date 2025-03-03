@@ -1806,7 +1806,7 @@
                 "precision": "auto",
                 "bend_radius": null,
                 "bend_axis": null,
-                "bend_angle_rotation": false,
+                "angle_rotation": false,
                 "track_freq": "central",
                 "group_index_step": false,
                 "type": "ModeSpec"
@@ -2325,7 +2325,7 @@
                 "precision": "auto",
                 "bend_radius": null,
                 "bend_axis": null,
-                "bend_angle_rotation": false,
+                "angle_rotation": false,
                 "track_freq": "central",
                 "group_index_step": false,
                 "type": "ModeSpec"
