@@ -3258,6 +3258,12 @@ class Simulation(AbstractYeeGridSimulation):
                         f"Monitor '{monitor.name}' is not supported in 1D simulations."
                     )
 
+                if not monitor.far_field_approx:
+                    raise SetupError(
+                        f"Exact far-field projection for 2D simulations is not yet available for Monitor '{monitor.name}'. "
+                        "Currently, only 'far_field_approx = True' is supported."
+                    )
+
                 if isinstance(monitor, FieldProjectionAngleMonitor):
                     config = {
                         "y-z": {"valid_value": [np.pi / 2, 3 * np.pi / 2], "coord": "phi"},
