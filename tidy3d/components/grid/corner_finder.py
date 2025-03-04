@@ -132,6 +132,9 @@ class CornerFinderSpec(Tidy3dBaseModel):
         unit_next = normalize(vs_next - vs_orig)
         unit_previous = normalize(vs_previous - vs_orig)
         # angle
-        angle = np.arccos(np.sum(unit_next * unit_previous, axis=-1))
+        inner_product = np.sum(unit_next * unit_previous, axis=-1)
+        inner_product = np.where(inner_product > 1, 1, inner_product)
+        inner_product = np.where(inner_product < -1, -1, inner_product)
+        angle = np.arccos(inner_product)
         ind_filter = angle <= np.pi - self.angle_threshold
         return vs_orig[ind_filter]
