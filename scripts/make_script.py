@@ -29,7 +29,10 @@ def parse_arguments(args):
     )
 
     parser.add_argument(
-        "script_file", type=str, default="simulation.py", help="path to the .py script to write to."
+        "script_file",
+        type=str,
+        default="simulation.py",
+        help="path to the .py script to write to.",
     )
 
     return parser.parse_args(args)
@@ -69,14 +72,16 @@ def main(args):
     sim_string = re.sub(pattern, "(", sim_string)
 
     # write sim_string to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, mode="w+", suffix=".py") as temp_file:
+    with tempfile.NamedTemporaryFile(
+        delete=False, mode="w+", suffix=".py", encoding="utf-8"
+    ) as temp_file:
         temp_file.write(sim_string)
         temp_file_path = temp_file.name
     try:
         # run ruff to format the temporary file
         subprocess.run(["ruff", "format", temp_file_path], check=True)
         # read the formatted content back
-        with open(temp_file_path) as temp_file:
+        with open(temp_file_path, encoding="utf-8") as temp_file:
             sim_string = temp_file.read()
     except subprocess.CalledProcessError:
         raise RuntimeError(
@@ -87,7 +92,7 @@ def main(args):
         # remove the temporary file
         os.remove(temp_file_path)
 
-    with open(out_file, "w+") as f:
+    with open(out_file, "w+", encoding="utf-8") as f:
         f.write(sim_string)
 
 

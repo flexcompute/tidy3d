@@ -10,6 +10,8 @@ Attributes:
     Q_e (float): funamental charge [C]
 """
 
+from types import MappingProxyType
+
 import numpy as np
 
 # fundamental constants (https://physics.nist.gov)
@@ -164,7 +166,22 @@ Picosecond per (nanometer kilometer).
 
 OHM = "ohm"
 """
-SI unit of resistance..
+SI unit of resistance.
+"""
+
+FARAD = "farad"
+"""
+SI unit of capacitance.
+"""
+
+HENRY = "henry"
+"""
+SI unit of inductance.
+"""
+
+AMP = "A"
+"""
+SI unit of electric current.
 """
 
 THERMAL_CONDUCTIVITY = "W/(um*K)"
@@ -192,6 +209,10 @@ HEAT_TRANSFER_COEFF = "W/(um^2*K)"
 Watts per (square micrometer Kelvin).
 """
 
+CURRENT_DENSITY = "A/um^2"
+"""
+Amperes per square micrometer
+"""
 
 LARGE_NUMBER = 1e10
 """
@@ -208,3 +229,15 @@ GLANCING_CUTOFF = 0.1
 """
 if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning.
 """
+
+UnitScaling = MappingProxyType(
+    {
+        "nm": 1e3,
+        "μm": 1e0,
+        "um": 1e0,
+        "mm": 1e-3,
+        "cm": 1e-4,
+        "m": 1e-6,
+    }
+)
+"""Immutable dictionary for converting a unit specification to a scaling factor."""

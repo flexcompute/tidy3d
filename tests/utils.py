@@ -1,3 +1,4 @@
+import dataclasses
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
@@ -829,6 +830,15 @@ SIM_FULL = td.Simulation(
             theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
             far_field_approx=False,
         ),
+        td.DirectivityMonitor(
+            center=(0, 0, 0),
+            size=(0, 2, 2),
+            freqs=[250e12, 300e12],
+            name="directivity",
+            custom_origin=(1, 2, 3),
+            phi=[0, np.pi / 6],
+            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
+        ),
         td.DiffractionMonitor(
             size=(0, td.inf, td.inf),
             center=(0, 0, 0),
@@ -836,6 +846,26 @@ SIM_FULL = td.Simulation(
             freqs=[1e14, 2e14],
         ),
     ),
+    lumped_elements=[
+        td.LumpedResistor(
+            center=(2, 2, 0), size=(0.2, 0.2, 0), name="Resistor", resistance=42, voltage_axis=0
+        ),
+        td.CoaxialLumpedResistor(
+            center=(3, 2, 0),
+            outer_diameter=2.0,
+            inner_diameter=0.2,
+            name="Coax Resistor",
+            resistance=42,
+            normal_axis=0,
+        ),
+        td.LinearLumpedElement(
+            center=(1, 2, 0),
+            size=(0.2, 0.2, 0),
+            name="LCParallel",
+            network=td.RLCNetwork(inductance=1e-9, capacitance=10e-12, network_topology="parallel"),
+            voltage_axis=0,
+        ),
+    ],
     symmetry=(0, 0, 0),
     boundary_spec=td.BoundarySpec(
         x=td.Boundary(plus=td.PML(num_layers=20), minus=td.Absorber(num_layers=100)),
@@ -994,21 +1024,30 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     def make_mode_data(monitor: td.ModeMonitor) -> td.ModeData:
         """make a random ModeData from a ModeMonitor."""
         _ = np.arange(monitor.mode_spec.num_modes)
-        coords_ind = {
-            "f": list(monitor.freqs),
-            "mode_index": np.arange(monitor.mode_spec.num_modes),
-        }
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.arange(monitor.mode_spec.num_modes)
         n_complex = make_data(
-            coords=coords_ind, data_array_type=td.ModeIndexDataArray, is_complex=True
+            coords=index_coords, data_array_type=td.ModeIndexDataArray, is_complex=True
         )
         coords_amps = dict(direction=["+", "-"])
-        coords_amps.update(coords_ind)
+        coords_amps.update(index_coords)
         amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
+        field_cmps = {}
+        if monitor.store_fields_direction is not None:
+            for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+                coords = get_spatial_coords_dict(simulation, monitor, field_name)
+                coords["f"] = list(monitor.freqs)
+                coords["mode_index"] = index_coords["mode_index"]
+                field_cmps[field_name] = make_data(
+                    coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
+                )
         return td.ModeData(
             monitor=monitor,
             n_complex=n_complex,
             amps=amps,
             grid_expanded=simulation.discretize_monitor(monitor),
+            **field_cmps,
         )
 
     def make_flux_data(monitor: td.FluxMonitor) -> td.FluxData:
@@ -1018,6 +1057,31 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         flux = make_data(coords=coords, data_array_type=td.FluxDataArray, is_complex=False)
         return td.FluxData(monitor=monitor, flux=flux)
 
+    def make_directivity_data(monitor: td.DirectivityMonitor) -> td.DirectivityData:
+        """make a random DirectivityData from a DirectivityMonitor."""
+
+        f = list(monitor.freqs)
+        r = np.atleast_1d(monitor.proj_distance)
+        theta = list(monitor.theta)
+        phi = list(monitor.phi)
+        fluxcoords = dict(f=f)
+        fluxdata = make_data(coords=fluxcoords, data_array_type=td.FluxDataArray, is_complex=False)
+        coords = dict(r=r, theta=theta, phi=phi, f=f)
+        scalar_field = make_data(
+            coords=coords, data_array_type=td.FieldProjectionAngleDataArray, is_complex=True
+        )
+        return td.DirectivityData(
+            monitor=monitor,
+            flux=fluxdata,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
         td.FieldTimeMonitor: make_field_time_data,
@@ -1026,6 +1090,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.PermittivityMonitor: make_eps_data,
         td.DiffractionMonitor: make_diff_data,
         td.FluxMonitor: make_flux_data,
+        td.DirectivityMonitor: make_directivity_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
@@ -1143,28 +1208,48 @@ def assert_log_level(
             )
 
 
-@pd.dataclasses.dataclass
+class AssertLogLevelHandler:
+    """Log handler used to store log records during assertion."""
+
+    def __init__(self):
+        self.records = []
+
+    def handle(self, level, level_name, message):
+        self.records.append((level, message))
+
+
+@dataclasses.dataclass
 class AssertLogLevel:
     """Context manager to check log level for records logged within its context."""
 
-    records: Any
     log_level_expected: Union[str, None]
     contains_str: str = None
 
-    def __enter__(self):
-        # record number of records going into this context
-        self.num_records_before = len(self.records)
+    @property
+    def records(self):
+        """Get the records from the handler."""
+        return self.handler.records if hasattr(self, "handler") else []
 
+    @property
+    def num_records(self):
+        """Get the number of records."""
+        return len(self.records)
+
+    def __enter__(self):
+        # Create and register handler
+        self.handler = AssertLogLevelHandler()
+        td.log.handlers["assert_log_level"] = self.handler
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        # only check NEW records recorded since __enter__
-        records_check = self.records[self.num_records_before :]
+        # Check the records and clean up
         assert_log_level(
-            records=records_check,
+            records=self.records,
             log_level_expected=self.log_level_expected,
             contains_str=self.contains_str,
         )
+        # Remove handler
+        del td.log.handlers["assert_log_level"]
 
 
 def get_test_root_dir():

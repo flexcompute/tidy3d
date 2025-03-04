@@ -63,6 +63,7 @@ jobs:
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           fetch-tags: true
 
+
       - name: Push corresponding reference to mirror repo if a tag
         if: contains(github.ref, 'refs/tags/')
         run: |

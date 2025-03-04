@@ -1,12 +1,12 @@
-# Parameter Sweep Plugin
+# Design Plugin
 
 ## Basics
 
-The parameter sweep plugin `tidy3d.plugins.design` is a wrapper designed to make it simple and convenient for `tidy3d` users to define their parameter scans.
+The `Design` plugin `tidy3d.plugins.design` is a wrapper designed to make it simple and convenient for `Tidy3D` users to define parameter scans and optimizations.
 
-In short, users define the dimensions of their design design, as well as the method they wish to explore the design space. These specifications are combined in a `DesignSpace` object.
+In short, users define the dimensions of their design, as well as the method used to explore the design space. These specifications are combined in a `DesignSpace` object.
 
-Then, the user passes a function that defines the input / output relationship they wish to explore. The function arguments correspond to the dimensions defined in the `DesignSpace` and the function outputs can be anything.
+The user then passes a function that defines the input / output relationship they wish to explore. The function arguments correspond to the dimensions defined in the `DesignSpace` and the function outputs can be anything.
 
 The result is stored as a `Result` object, which can be easily converted to a `pandas.DataFrame` for analysis, post processing, or visualization. The columns in this `DataFrame` correspond to the function inputs and outputs and each datapoint corresponds to a row in this `DataFrame`.
 
@@ -18,9 +18,9 @@ import tidy3d.plugins.design as tdd
 
 ##  Function
 
-The first step in using the parameter sweep is to write the design design as a function that we would like to explore. This function could ideally involve a `tidy3d` simulation, but actually does not have to.
+The first step in using the `Design` plugin is to write the design as a function that can be explored. This function typically involves a `Tidy3D` simulation, but actually does not have to.
 
-For a concrete example, say we are analyzing a system comprised of a set of `n` spheres, each with radius `r`. We could write a function to compute the transmission through this system as follows (with some pseudo-code used for brevity).
+Say we are analyzing a system comprised of a set of `n` spheres, each with radius `r`. We could write a function to compute the transmission through this system as follows (with some pseudo-code used for brevity).
 
 ```py
 def transmission(n: int, r: float) -> float:
@@ -48,11 +48,11 @@ def transmission_split(n: int, r: float) -> float:
 	return post(data=data)
 ```
 
-As we'll see, putting it in this form will be useful although it is not necessary.
+Putting it in this form is useful as it allows the `Design` plugin to automate parallelization through `Batch` objects, although it is not necessary.
 
 ##  Parameters
 
-Now, we could query our transmission function directly to construct a parameter scan, but it would be more convenient to simply **define** our parameter scan as a specification and have the `tidy3d` wrapper do the accounting for us.
+Now, we could query our transmission function directly to construct a parameter scan, but it would be more convenient to simply **define** our parameter scan as a specification and have the `Tidy3D` wrapper do the accounting for us.
 
 The first step is to define the design "parameters" (or dimensions), which also serve as inputs to our function defined earlier.
 
@@ -79,7 +79,7 @@ By defining our design parameters like this, we are mainly specifying what type,
 
 ##  Method
 
-Now that we've defined our parameters, we also need to define the procedure that we should use to query the design space we've defined. One approach is to randomly sample points within the design bounds, another is to perform a grid search to uniformly scan the bounds. There are also more complex methods, such as Bayesian Optimization, which are not implemented yet.
+Now that we've defined our parameters, we also need to define the procedure that we should use to query the design space we've defined. One approach is to randomly sample points within the design bounds, another is to perform a grid search to uniformly scan the bounds. There are also more complex methods, such as Bayesian Optimization or genetic algorithms.
 
 For this example, let's define a random sampling of the design parameters with 20 points.
 
@@ -95,15 +95,9 @@ With the design parameters and our method defined, we can combine everything int
 design_space = tdd.DesignSpace(parameters=[param_n, param_r], method=method)
 ```
 
-Note, we haven't told the `DesignSpace` anything about our function. For that, it has two methods `.run()` and `.run_batch()`, which accept our function.
-
-`DesignSpace.run(f)` samples the design parameters according to the `method` and then evaluates each point one by one. Note that it has to be sequential because of the generality of this approach, in short `f` could be anything so we don't make any assumptions about whether it can be parallelized.
-
-On the other hand, `DesignSpace.run_batch(f_pre, f_post)` accepts our pre and post processing functions and assumes that a simulation is run in between. Because of this, this method can safely construct a `web.Batch` under the hood and run the tasks in parallel, stitching together the final results.
-
 ## Results
 
-The `DesignSpace.run()` and `DesignSpace.run_batch()` functions described before both return a `Result` object, which is basically a dataset containing the function inputs, outputs, source code, and any task ID information corresponding to each data point. Note that task ID can only be gathered if using `run_batch` because in the more general `run()` function, `tidy3d` can't know which tasks were involved in each data point.
+The `DesignSpace.run()` function returns a `Result` object, which is basically a dataset containing the function inputs, outputs, source code, and any task ID information corresponding to each data point.
 
 The `Results` can be converted to a `pandas.DataFrame` where each row is a separate data point and each column is either an input or output for a function. It also contains various methods for plotting and managing the data.
 

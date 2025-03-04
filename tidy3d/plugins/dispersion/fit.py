@@ -476,17 +476,20 @@ class DispersionFitter(Tidy3dBaseModel):
         medium: PoleResidue = None,
         wvl_um: ArrayFloat1D = None,
         ax: Ax = None,
+        dual_axis: bool = False,
     ) -> Ax:
         """Make plot of model vs data, at a set of wavelengths (if supplied).
 
         Parameters
         ----------
         medium : :class:`.PoleResidue` = None
-            medium containing model to plot against data
+            Medium containing model to plot against data.
         wvl_um : ArrayFloat1D = None
             Wavelengths to evaluate model at for plot in micrometers.
         ax : matplotlib.axes._subplots.Axes = None
             Axes to plot the data on, if None, a new one is created.
+        dual_axis : bool = False
+            Whether to plot the imaginary part (k) on a secondary y-axis.
 
         Returns
         -------
@@ -494,22 +497,62 @@ class DispersionFitter(Tidy3dBaseModel):
             Matplotlib axis corresponding to plot.
         """
 
-        ax.plot(self.wvl_um, self.n_data, "x", label="n (data)")
-        if self.lossy:
-            ax.plot(self.wvl_um, self.k_data, "+", label="k (data)")
+        if dual_axis:
+            ax2 = ax.twinx()
+        else:
+            ax2 = None
 
+        line1 = ax.plot(self.wvl_um, self.n_data, "x", label="n (data)", color="blue")
+        line2 = None
+        if self.lossy:
+            if dual_axis:
+                line2 = ax2.plot(self.wvl_um, self.k_data, "+", label="k (data)", color="red")
+            else:
+                line2 = ax.plot(self.wvl_um, self.k_data, "+", label="k (data)", color="red")
+
+        line3 = None
+        line4 = None
         if medium:
             if wvl_um is None:
                 wvl_um = C_0 / self.freqs
             eps_model = medium.eps_model(C_0 / wvl_um)
             n_model, k_model = AbstractMedium.eps_complex_to_nk(eps_model)
-            ax.plot(wvl_um, n_model, label="n (model)")
-            if self.lossy:
-                ax.plot(wvl_um, k_model, label="k (model)")
 
-        ax.set_ylabel("n, k")
+            line3 = ax.plot(wvl_um, n_model, label="n (model)", color="green")
+            if self.lossy:
+                if dual_axis:
+                    line4 = ax2.plot(wvl_um, k_model, label="k (model)", color="orange")
+                else:
+                    line4 = ax.plot(wvl_um, k_model, label="k (model)", color="orange")
+
         ax.set_xlabel("Wavelength ($\\mu m$)")
-        ax.legend()
+
+        if dual_axis:
+            ax.set_ylabel("n", color="blue")
+            ax2.set_ylabel("k", color="red")
+            ax.tick_params(axis="y", labelcolor="blue")
+            ax2.tick_params(axis="y", labelcolor="red")
+        else:
+            if self.lossy:
+                ax.set_ylabel("n, k")
+            else:
+                ax.set_ylabel("n")
+            ax.tick_params(axis="y", labelcolor="black")
+
+        lines = []
+        labels = []
+        if self.lossy:
+            lines = line1 + (line2 if line2 else [])
+            if medium:
+                lines += line3 + (line4 if line4 else [])
+        else:
+            lines = line1
+            if medium:
+                lines += line3
+
+        labels = [line.get_label() for line in lines]
+        if lines:
+            ax.legend(lines, labels)
 
         return ax
 

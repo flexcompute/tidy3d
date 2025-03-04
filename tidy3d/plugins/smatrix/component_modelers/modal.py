@@ -13,7 +13,8 @@ from ....components.base import cached_property
 from ....components.data.sim_data import SimulationData
 from ....components.monitor import ModeMonitor
 from ....components.simulation import Simulation
-from ....components.source import GaussianPulse, ModeSource
+from ....components.source.field import ModeSource
+from ....components.source.time import GaussianPulse
 from ....components.types import Ax, Complex
 from ....components.viz import add_ax_if_none, equal_aspect
 from ....exceptions import SetupError
@@ -93,7 +94,7 @@ class ComponentModeler(AbstractComponentModeler):
 
     @cached_property
     def sim_dict(self) -> Dict[str, Simulation]:
-        """Generate all the :class:`Simulation` objects for the S matrix calculation."""
+        """Generate all the :class:`.Simulation` objects for the S matrix calculation."""
 
         sim_dict = {}
         mode_monitors = [self.to_monitor(port=port) for port in self.ports]
@@ -198,45 +199,6 @@ class ComponentModeler(AbstractComponentModeler):
             **kwargs,
         )
 
-    def _shift_value_signed(self, port: Port) -> float:
-        """How far (signed) to shift the source from the monitor."""
-
-        # get the grid boundaries and sizes along port normal from the simulation
-        normal_axis = port.size.index(0.0)
-        grid = self.simulation.grid
-        grid_boundaries = grid.boundaries.to_list[normal_axis]
-        grid_centers = grid.centers.to_list[normal_axis]
-
-        # get the index of the grid cell where the port lies
-        port_position = port.center[normal_axis]
-        port_pos_gt_grid_bounds = np.argwhere(port_position > grid_boundaries)
-
-        # no port index can be determined
-        if len(port_pos_gt_grid_bounds) == 0:
-            raise SetupError(f"Port position '{port_position}' outside of simulation bounds.")
-        port_index = port_pos_gt_grid_bounds[-1]
-
-        # shift the port to the left
-        if port.direction == "+":
-            shifted_index = port_index - 2
-            if shifted_index < 0:
-                raise SetupError(
-                    f"Port {port.name} normal is too close to boundary "
-                    f"on -{'xyz'[normal_axis]} side."
-                )
-
-        # shift the port to the right
-        else:
-            shifted_index = port_index + 2
-            if shifted_index >= len(grid_centers):
-                raise SetupError(
-                    f"Port {port.name} normal is too close to boundary "
-                    f"on +{'xyz'[normal_axis]} side."
-                )
-
-        new_pos = grid_centers[shifted_index]
-        return new_pos - port_position
-
     def shift_port(self, port: Port) -> Port:
         """Generate a new port shifted by the shift amount in normal direction."""
 
@@ -249,7 +211,7 @@ class ComponentModeler(AbstractComponentModeler):
     @equal_aspect
     @add_ax_if_none
     def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
-        """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
+        """Plot a :class:`.Simulation` with all sources added for each port, for troubleshooting."""
 
         plot_sources = []
         for port_source in self.ports:
@@ -263,7 +225,7 @@ class ComponentModeler(AbstractComponentModeler):
     def plot_sim_eps(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plot permittivity of the :class:`Simulation` with all sources added for each port."""
+        """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
 
         plot_sources = []
         for port_source in self.ports:
@@ -299,8 +261,12 @@ class ComponentModeler(AbstractComponentModeler):
 
         return max_mode_index_out, max_mode_index_in
 
-    def _construct_smatrix(self, batch_data: BatchData) -> ModalPortDataArray:
-        """Post process `BatchData` to generate scattering matrix."""
+    def _construct_smatrix(self) -> ModalPortDataArray:
+        """Post process :class:`.BatchData` to generate scattering matrix."""
+        return self._internal_construct_smatrix(batch_data=self.batch_data)
+
+    def _internal_construct_smatrix(self, batch_data: BatchData) -> ModalPortDataArray:
+        """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
         max_mode_index_out, max_mode_index_in = self.max_mode_index
         num_modes_out = max_mode_index_out + 1

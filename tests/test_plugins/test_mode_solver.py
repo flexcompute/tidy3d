@@ -7,14 +7,14 @@ import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import ModeSolverData
-from tidy3d.exceptions import SetupError
+from tidy3d.components.mode.derivatives import create_sfactor_b, create_sfactor_f
+from tidy3d.components.mode.solver import compute_modes
+from tidy3d.exceptions import DataError, SetupError
 from tidy3d.plugins.mode import ModeSolver
-from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
-from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.web.core.environment import Env
 
-from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import AssertLogLevel, cartesian_to_unstructured
 
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
 WAVEGUIDE = td.Structure(geometry=td.Box(size=(1.5, 100, 1)), medium=WG_MEDIUM)
@@ -178,6 +178,7 @@ def test_compute_modes():
         freq=td.C_0 / 1.0,
         mode_spec=mode_spec,
         direction="-",
+        precision="single",
     )
 
 
@@ -295,7 +296,7 @@ def test_mode_solver_validation():
 
 
 @pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, None)))
-def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
+def test_mode_solver_group_index_warning(group_index_step, log_level):
     """Test mode solver setups issuing warnings."""
 
     simulation = td.Simulation(
@@ -303,10 +304,12 @@ def test_mode_solver_group_index_warning(group_index_step, log_level, log_captur
         grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
     )
-    mode_spec = td.ModeSpec(
-        num_modes=1,
-        group_index_step=group_index_step,
-    )
+
+    with AssertLogLevel(log_level):
+        mode_spec = td.ModeSpec(
+            num_modes=1,
+            group_index_step=group_index_step,
+        )
 
     _ = ModeSolver(
         simulation=simulation,
@@ -315,7 +318,39 @@ def test_mode_solver_group_index_warning(group_index_step, log_level, log_captur
         freqs=[1e12],
         direction="+",
     )
-    assert_log_level(log_capture, log_level)
+
+
+def test_mode_solver_fields():
+    """Test that fields can be excluded and that errors are raised in methods that need them."""
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        run_time=1e-12,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=1,
+    )
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[1e12],
+        direction="+",
+        fields=["Ex", "Hz"],
+    )
+    mode_data = ms.solve()
+    components = mode_data.field_components.keys()
+    for comp in ["Ex", "Hz"]:
+        assert comp in components
+    for comp in ["Ey", "Ez", "Hx", "Hy"]:
+        assert comp not in components
+
+    with pytest.raises(DataError):
+        mode_data.dot(mode_data)
+    with pytest.raises(DataError):
+        mode_data.mode_area
+    with pytest.raises(DataError):
+        mode_data.pol_fraction
 
 
 @pytest.mark.parametrize("local", [True, False])
@@ -373,7 +408,7 @@ def test_mode_solver_simple(mock_remote_api, local):
 
 
 @responses.activate
-def test_mode_solver_remote_after_local(mock_remote_api):
+def test_mode_solver_remote_after_local(mock_remote_api, tmp_path):
     """Test that running a remote solver after a local one modifies the stored data. This is to
     catch a bug if ``_cached_properties["data"]`` is inadvertently used."""
 
@@ -401,7 +436,9 @@ def test_mode_solver_remote_after_local(mock_remote_api):
         direction="-",
     )
     data_local = ms.data
-    data_remote = msweb.run(ms)
+
+    data_remote = msweb.run(ms, results_file=tmp_path / "ms_remote.hdf5")
+
     assert np.all(data_local.n_eff != data_remote.n_eff)
 
 
@@ -447,7 +484,9 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
             freqs=[freq0],
             direction="+",
         )
-        modes = ms.solve() if local else msweb.run(ms)
+        modes = (
+            ms.solve() if local else msweb.run(ms, results_file=tmp_path / "ms_custom_medium.hdf5")
+        )
         n_eff.append(modes.n_eff.values)
 
         if local:
@@ -645,6 +684,58 @@ def test_mode_solver_angle_bend():
     _ = ms.to_monitor(freqs=np.array([1.0, 2.0]) * 1e12, name="mode_mnt")
 
 
+def test_mode_bend_radius():
+    """Test that the bend radius is correctly applied to the center of the mode plane in the case
+    of an auto-grid that is not symmetric w.r.t. that center, and that nominally identical
+    waveguides produce the same modes when the bend center if shifted away from the mode plane
+    center, after a post-processing transformation to correct for that."""
+
+    simulation = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        # grid_spec=td.GridSpec.uniform(dl=0.04),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+    )
+    mode_spec1 = td.ModeSpec(
+        num_modes=3,
+        bend_radius=5,
+        bend_axis=1,
+    )
+
+    # plane centered on the waveguide center
+    plane1 = td.Box(center=(0, 0, 0), size=(3, 0, 2))
+
+    # plane centered away from the waveguide center
+    plane2 = td.Box(center=(0.5, 0, 0), size=(4, 0, 2))
+    # mode spec with a radius such that the radius w.r.t. the waveguide center should be the same
+    mode_spec2 = mode_spec1.updated_copy(bend_radius=5.5)
+
+    ms1 = ModeSolver(
+        simulation=simulation,
+        plane=plane1,
+        mode_spec=mode_spec1,
+        freqs=[td.C_0 / 1.0],
+    )
+    ms2 = ms1.updated_copy(plane=plane2, mode_spec=mode_spec2)
+    data1 = ms1.solve()
+    data2 = ms2.solve()
+
+    print(data1.n_complex)
+    print(data2.n_complex * 5 / 5.5)
+
+    # Plot fields
+    # _, ax = plt.subplots(3, 2)
+    # for mode_index in range(3):
+    #     ms1.plot_field("Ex", ax=ax[mode_index, 0], mode_index=mode_index)
+    #     ms2.plot_field("Ex", ax=ax[mode_index, 1], mode_index=mode_index)
+    # plt.show()
+
+    # The mode field dependence is E0 * exp(1j * n * R * k0 * phi) so to switch from one radius
+    # to another we have n' * R' = n * R -> n' = n * R / R'
+    assert np.allclose(data1.n_complex, data2.n_complex * 5.5 / 5.0)
+
+
 def test_mode_solver_2D():
     """Run mode solver in 2D simulations."""
     mode_spec = td.ModeSpec(
@@ -709,7 +800,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, log_capture, local):
+def test_group_index(mock_remote_api, local, tmp_path):
     """Test group index and dispersion calculation"""
 
     simulation = td.Simulation(
@@ -745,19 +836,16 @@ def test_group_index(mock_remote_api, log_capture, local):
         freqs=freqs,
         direction="-",
     )
-    modes = ms.solve() if local else msweb.run(ms)
+
+    modes = ms.solve() if local else msweb.run(ms, results_file=tmp_path / "ms_remote.hdf5")
+
     if local:
-        assert modes.n_group is None
-        assert len(log_capture) == 1
-        assert modes.dispersion is None
-        assert len(log_capture) == 2
-        for log_msg in log_capture:
-            assert log_msg[0] == 30
-            assert "ModeSpec" in log_msg[1]
-        _ = modes.n_group
-        assert len(log_capture) == 2
-        _ = modes.dispersion
-        assert len(log_capture) == 2
+        with AssertLogLevel("WARNING", contains_str="ModeSpec") as ctx:
+            assert modes.n_group is None
+            assert ctx.num_records == 1
+        with AssertLogLevel("WARNING", contains_str="ModeSpec") as ctx:
+            assert modes.dispersion is None
+            assert ctx.num_records == 1
         check_ms_reduction(ms)
 
     # Group index calculated
@@ -1036,7 +1124,7 @@ def test_modes_eme_sim(mock_remote_api, local):
     _ = solver.reduced_simulation_copy
 
 
-def test_mode_bend_radius():
+def test_mode_small_bend_radius_fail():
     """Test that small bend radius fails."""
 
     with pytest.raises(ValueError):
@@ -1045,3 +1133,114 @@ def test_mode_bend_radius():
             freqs=np.linspace(1e14, 2e14, 100),
             mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=0),
         )
+
+
+def make_high_order_mode_solver(sign, dim=3):
+    waveguide = td.Structure(
+        geometry=td.Box(size=(td.inf, 0.6, 0.2)),
+        medium=td.Medium(permittivity=3.47**2),
+    )
+
+    refine_box = td.MeshOverrideStructure(
+        geometry=td.Box(center=(0, sign * 0.3, 0), size=(td.inf, 0.1, 0.3)),
+        dl=[None, 0.02, 0.02],
+    )
+
+    pml = td.Boundary(plus=td.PML(), minus=td.PML())
+    periodic = td.Boundary(plus=td.Periodic(), minus=td.Periodic())
+
+    sim = td.Simulation(
+        size=(10, 2.5, 1.5 if dim == 3 else 0),
+        grid_spec=td.GridSpec.auto(
+            min_steps_per_wvl=20, wavelength=1.55, override_structures=[refine_box]
+        ),
+        structures=[waveguide],
+        medium=td.Medium(permittivity=1.44**2),
+        boundary_spec=td.BoundarySpec(x=pml, y=pml, z=pml if dim == 3 else periodic),
+        run_time=1e-12,
+    )
+
+    plane = td.Box(center=(0, 0, 0), size=(0, 2.5, 1.5))
+    freq0 = td.C_0 / 1.55
+    num_modes = 3
+
+    mode_spec = td.ModeSpec(
+        num_modes=num_modes,
+        target_neff=3.47,
+        group_index_step=False,
+    )
+
+    return ModeSolver(
+        simulation=sim,
+        plane=plane,
+        mode_spec=mode_spec,
+        freqs=[freq0],
+    )
+
+
+def test_high_order_mode_normalization():
+    # 3D simulation
+    ms1 = make_high_order_mode_solver(1)
+    ms2 = make_high_order_mode_solver(-1)
+    overlap = ms1.data.outer_dot(ms2.data).isel(mode_index_0=2, mode_index_1=2).values.item()
+    assert abs(1 - overlap) < 1e-3
+
+    # 2D simulation
+    ms1 = make_high_order_mode_solver(1, 2)
+    values = ms1.data.Ez.isel(mode_index=2).values.squeeze().real
+    assert (values[: values.size // 3] > 0).all()
+
+    ms2 = make_high_order_mode_solver(-1, 2)
+    values = ms2.data.Ez.isel(mode_index=2).values.squeeze().real
+    assert (values[: values.size // 3] > 0).all()
+
+
+def test_gauge_robustness():
+    array = np.zeros((5, 5), dtype=float)
+    ij = np.arange(5)
+    assert ModeSolver._weighted_coord_max(array, ij, ij) == (0, 0)
+
+    array[1, -1] = np.nan
+    assert ModeSolver._weighted_coord_max(array, ij, ij) == (0, 0)
+
+
+def test_translated_dot():
+    sim_size = (5, 5, 5)
+    lambda0 = 1.55
+    freq0 = td.C_0 / lambda0
+    si = td.material_library["cSi"]["Li1993_293K"]
+    sio2 = td.material_library["SiO2"]["Horiba"]
+    wg = td.Structure(geometry=td.Box(size=(0.22, 0.5, td.inf)), medium=si)
+    mode_spec = td.ModeSpec(num_modes=3)
+    grid_spec = td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=20)
+
+    sim = td.Simulation(
+        size=sim_size, medium=sio2, structures=[wg], grid_spec=grid_spec, run_time=1e-30
+    )
+    mode_plane = td.Box(size=(3, 3, 0))
+    mode_solver = ModeSolver(simulation=sim, plane=mode_plane, mode_spec=mode_spec, freqs=[freq0])
+
+    data = mode_solver.data_raw
+
+    # now create a translated copy
+    vector = (0.5, 0, 0)
+    mode_solver2 = mode_solver.updated_copy(center=vector, path="simulation/structures/0/geometry")
+
+    data2 = mode_solver2.data_raw
+
+    # self-overlaps are close to 1, others are close to 0
+    atol = 1e-2
+
+    # just make sure the mode overlaps in the translated waveguide are the same
+    assert np.allclose(data.dot(data), data2.dot(data2), atol=atol)
+    assert np.allclose(data.outer_dot(data), data2.outer_dot(data2), atol=atol)
+
+    # now translate the data, and check that its overlaps with the modes
+    # of the translated waveguide agree with the self-overlaps of those modes
+    data_translated = data.translated_copy(vector)
+
+    assert np.allclose(data2.dot(data_translated), data2.dot(data2), atol=atol)
+    assert np.allclose(data_translated.dot(data2), data2.dot(data2), atol=atol)
+
+    assert np.allclose(data2.outer_dot(data_translated), data2.outer_dot(data2), atol=atol)
+    assert np.allclose(data_translated.outer_dot(data2), data2.outer_dot(data2), atol=atol)

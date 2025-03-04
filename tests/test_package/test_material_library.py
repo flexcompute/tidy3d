@@ -2,6 +2,7 @@ import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
+from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.material_library.material_library import (
     MaterialItem,
     MaterialItemUniaxial,
@@ -12,19 +13,19 @@ from tidy3d.material_library.material_library import (
     material_library,
 )
 
-from ..utils import assert_log_level
+from ..utils import AssertLogLevel
 
 
-def test_warning_default_variant_switching(log_capture):
+def test_warning_default_variant_switching():
     """Issue warning for switching default medium variant."""
 
     # no warning for most materials with no default change
-    _ = td.material_library["cSi"].medium
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(None):
+        _ = td.material_library["cSi"].medium
 
     # issue warning for SiO2
-    _ = td.material_library["SiO2"].medium
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel("WARNING"):
+        _ = td.material_library["SiO2"].medium
 
 
 def test_VariantItem():
@@ -61,29 +62,30 @@ def test_library():
         if isinstance(material, type):
             continue
         for variant_name, variant in material.variants.items():
-            if not isinstance(variant, VariantItemUniaxial):
-                if variant.medium.frequency_range:
-                    fmin, fmax = variant.medium.frequency_range
-                else:
-                    fmin, fmax = 100e12, 300e12
-                freqs = np.linspace(fmin, fmax, 10011)
-                # two ways of access
-                eps_complex1 = variant.medium.eps_model(freqs)
-                eps_complex2 = material_library[material_name][variant_name].eps_model(freqs)
-                assert np.allclose(eps_complex1, eps_complex2)
-            else:
-                for optical_axis in range(3):
-                    if variant.medium(optical_axis).frequency_range:
-                        fmin, fmax = variant.medium(optical_axis).frequency_range
+            if not isinstance(variant.medium, MultiPhysicsMedium):
+                if not isinstance(variant, VariantItemUniaxial):
+                    if variant.medium.frequency_range:
+                        fmin, fmax = variant.medium.frequency_range
                     else:
                         fmin, fmax = 100e12, 300e12
                     freqs = np.linspace(fmin, fmax, 10011)
                     # two ways of access
-                    eps_complex1 = variant.medium(optical_axis).eps_model(freqs)
-                    eps_complex2 = material_library[material_name][variant_name](
-                        optical_axis
-                    ).eps_model(freqs)
+                    eps_complex1 = variant.medium.eps_model(freqs)
+                    eps_complex2 = material_library[material_name][variant_name].eps_model(freqs)
                     assert np.allclose(eps_complex1, eps_complex2)
+                else:
+                    for optical_axis in range(3):
+                        if variant.medium(optical_axis).frequency_range:
+                            fmin, fmax = variant.medium(optical_axis).frequency_range
+                        else:
+                            fmin, fmax = 100e12, 300e12
+                        freqs = np.linspace(fmin, fmax, 10011)
+                        # two ways of access
+                        eps_complex1 = variant.medium(optical_axis).eps_model(freqs)
+                        eps_complex2 = material_library[material_name][variant_name](
+                            optical_axis
+                        ).eps_model(freqs)
+                        assert np.allclose(eps_complex1, eps_complex2)
 
 
 def test_test_export(tmp_path):

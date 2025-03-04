@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.7.9"
+version = "2.8.0"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -55,10 +55,14 @@ coverage = { version = "*", optional = true }
 dill = { version = "*", optional = true }
 ipython = { version = "*", optional = true }
 memory_profiler = { version = "*", optional = true }
+psutil = { version = "*", optional = true }
 pre-commit = { version = "*", optional = true }
 pylint = { version = "*", optional = true }
 pytest = { version = ">=8.1", optional = true }
 pytest-timeout = { version = "*", optional = true }
+pytest-xdist = "^3.6.1"
+pytest-cov = "^6.0.0"
+pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
 
 # gdspy
@@ -73,10 +77,15 @@ jax = { version = ">=0.4.26", extras = [
   "cpu",
 ], source = "jaxsource", optional = true }
 
+# design
+bayesian-optimization = { version = "<2", optional = true }
+pygad = { version = "3.3.1", optional = true }
+pyswarms = { version = "*", optional = true }
+
 # pytorch
 torch = [
-    { version = "^2.1.0", source = "PyPI", platform = "darwin", optional = true },
-    { version = "^2.1.0", source = "torch-cpu", platform = "!=darwin", optional = true },
+    { version = "^2.2.0", source = "PyPI", platform = "darwin", optional = true },
+    { version = "^2.2.0", source = "torch-cpu", platform = "!=darwin", optional = true },
 ]
 
 # scikit-rf
@@ -110,18 +119,17 @@ signac = { version = "*", optional = true }
 flax = { version = ">=0.8.2", optional = true }
 sax = { version = "^0.11", optional = true }
 vtk = { version = ">=9.2.6", optional = true }
-pyswarms = { version = "*", optional = true }
 sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
 
 [tool.poetry.extras]
 dev = [
+  'bayesian-optimization',
   'bump-my-version',
   "coverage",
   'dill',
   'divparams',
-  'flax',
   'gdspy',
   'gdstk',
   'grcwa',
@@ -134,6 +142,7 @@ dev = [
   'jupyter',
   'myst-parser',
   'memory_profiler',
+  'psutil',
   'nbconvert',
   'nbdime',
   'nbsphinx',
@@ -141,10 +150,14 @@ dev = [
   'optax',
   'pre-commit',
   'pydata-sphinx-theme',
+  'pygad',
   'pylint',
   'pyswarms',
   'pytest',
   'pytest-timeout',
+  'pytest-xdist',
+  'pytest-env',
+  'pytest-cov',
   'rtree',
   'ruff',
   'sax',
@@ -239,7 +252,6 @@ select = [
   "C",      # flake8-comprehensions
   "B",      # flake8-bugbear
   "UP",
-  "S101",   # do not use asserts
   "NPY201", # numpy 2.* compatibility check
 ]
 ignore = [
@@ -257,7 +269,8 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules"
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal"
+env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
   "tests/_test_local",
@@ -273,7 +286,7 @@ testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
 
 [tool.bumpversion]
-current_version = "2.7.9"
+current_version = "2.8.0"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.

@@ -1,6 +1,6 @@
 .. currentmodule:: tidy3d
 
-Material Thermal Specification
+Material Thermal
 -------------------------------
 
 .. autosummary::

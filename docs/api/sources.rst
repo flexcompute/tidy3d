@@ -32,3 +32,14 @@ Source Time Dependence
    tidy3d.GaussianPulse
    tidy3d.ContinuousWave
    tidy3d.CustomSourceTime
+
+
+Angled Plane Wave Specifications
+--------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.FixedInPlaneK
+   tidy3d.FixedAngle

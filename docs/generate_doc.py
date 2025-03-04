@@ -9,6 +9,7 @@ from tidy3d.material_library.material_library import (
     MaterialItem2D,
     MaterialItemUniaxial,
 )
+from tidy3d.plugins.microwave import rf_material_library as rf_lib
 
 LOW_LOSS_THRESHOLD = 2e-5
 
@@ -227,8 +228,177 @@ def generate_material_library_doc():
                     f.write("\n")
 
 
+def generate_rf_material_library_doc():
+    # Display unit for "Valid range" in table as 'GHz'
+    unit = "GHz"
+
+    # doc file path
+    fname = "./api/rf_material_library.rst"
+
+    def num2str(num):
+        if np.isinf(num):
+            return " "
+        else:
+            return str(round(num, 2))
+
+    with open(fname, "w") as f:
+        # Write file header
+        header = (
+            "****************\n"
+            "RF Material Library\n"
+            "****************\n\n"
+            ".. currentmodule:: tidy3d\n\n"
+            "The RF material library is a dictionary containing various dispersive models for real-world RF materials. To use the materials in the library, import it first by:\n\n"
+            ">>> from tidy3d.plugins.microwave import rf_material_library\n\n"
+            "The key of the dictionary is the abbreviated material name.\n\n"
+            'Note: some materials have multiple variant models, in which case the second key is the "variant" name.\n\n'
+            'To import a material "mat" of variant "var":\n\n'
+            ">>> medium = rf_material_library['mat']['var']\n\n"
+            "For example, Rogers3010 laminate can be loaded as:\n\n"
+            ">>> Rogers3010 = rf_material_library['RO3010']['design']\n\n"
+            "You can also import the default variant of a material by:\n\n"
+            ">>> medium = rf_material_library['mat'].medium\n\n"
+            "It is often useful to see the full list of variants for a given medium:\n\n"
+            ">>> print(rf_material_library['mat'].variants.keys())\n\n"
+            "To access the details of a variant, including material model and references, use the following command:\n\n"
+            ">>> rf_material_library['mat'].variants['var']\n\n\n"
+        )
+        f.write(header)
+        for abbr, mat in sorted(
+            rf_lib.items(), key=lambda item: item[0].lower()
+        ):  # iterate materials sorted by material abbreviation
+            title = mat.name + ' ("' + abbr + '")'
+            f.write(title + "\n")
+            f.write("=" * len(title) + "\n\n")
+
+            # Place holders
+            ref_list = []  # references
+            code_string = ""  # example code
+
+            # Initialize table
+            columns = ["variant", "range", "model", "ref"]  # column key
+            name = {  # column label
+                "variant": "Variant",
+                "range": "Valid for",
+                "model": "Model Info",
+                "ref": "Reference",
+            }
+            rows = []  # rows of contents
+            width = {}  # column width
+            for col in columns:
+                width[col] = len(name[col]) + 2
+
+            for varname, var in sorted(
+                mat.variants.items(), key=lambda item: item[0].lower()
+            ):  # iterate variants sorted by variant name
+                # Initialize row
+                row = {}
+
+                # Variant name
+                row["variant"] = "``'" + varname + "'``"
+                if varname == mat.default:
+                    row["variant"] += " (default)"
+
+                # Load medium
+                medium = var.medium
+
+                # Pole number
+                row["model"] = str(len(medium.poles)) + "-pole"
+                # Lossy (based on model)
+                nonzero = np.sum(np.abs(np.array(medium.poles).real))
+                if nonzero:
+                    if medium.loss_upper_bound < LOW_LOSS_THRESHOLD:
+                        row["model"] += ", low loss"
+                    else:
+                        row["model"] += ", lossy"
+                else:
+                    row["model"] += ", lossless"
+
+                # Valid range
+                if medium.frequency_range is None:
+                    row["range"] = "Not specified"
+                else:
+                    freq = np.array(medium.frequency_range) / 1e9  # GHz
+                    unit_disp = unit
+
+                    row["range"] = num2str(min(freq)) + " - " + num2str(max(freq)) + " " + unit_disp
+
+                # Reference
+                if var.reference is not None:
+                    row["ref"] = ""
+                    for ref in var.reference:
+                        if ref in ref_list:
+                            row["ref"] += "[" + num2str(ref_list.index(ref) + 1) + "]"
+                        else:
+                            row["ref"] += "[" + num2str(len(ref_list) + 1) + "]"
+                            ref_list.append(ref)
+
+                # Data
+                if var.data_url is not None:
+                    row["ref"] += " `[data] <" + var.data_url + ">`__"
+
+                # Update table contents
+                rows.append(row)
+
+                # Update table column width
+                for col in columns:
+                    if width[col] < len(row[col]):
+                        width[col] = len(row[col])
+
+                # Update example code
+                code_string += (
+                    ">>> medium = material_library['" + abbr + "']['" + varname + "']\n\n"
+                )
+
+            # Write table
+            tab = "   "
+            divider = tab + " ".join("=" * width[col] for col in columns) + "\n"
+            f.write(".. table::\n")
+            f.write(tab + ":widths: auto\n\n")
+            f.write(divider)
+            f.write(
+                tab
+                + " ".join(name[col] + " " * (width[col] - len(name[col])) for col in columns)
+                + "\n"
+            )
+            f.write(divider)
+            for row in rows:
+                f.write(
+                    tab
+                    + " ".join(row[col] + " " * (width[col] - len(row[col])) for col in columns)
+                    + "\n"
+                )
+            f.write(divider)
+            f.write("\n")
+
+            # Write code example
+            if len(code_string) != 0:
+                f.write("Examples:\n\n")
+                f.write(code_string)
+
+            # Extract reference from database
+            ref_string = ""
+            for ref in ref_list:
+                if ref.journal is not None:
+                    ref_string += "#. \\" + ref.journal
+                if ref.datasheet_title is not None:
+                    ref_string += "#. \\" + ref.datasheet_title
+                for link in ["doi", "url"]:
+                    value = getattr(ref, link)
+                    if value is not None:
+                        ref_string += " `[" + link + "] <" + value + ">`__"
+                ref_string += "\n"
+
+            # Write references
+            if len(ref_string) != 0:
+                f.write("References:\n\n")
+                f.write(ref_string)
+                f.write("\n")
+
+
 def main():
     generate_material_library_doc()
+    generate_rf_material_library_doc()
 
 
 if __name__ == "__main__":

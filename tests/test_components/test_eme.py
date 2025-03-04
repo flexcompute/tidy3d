@@ -86,12 +86,12 @@ def make_eme_sim():
     return sim
 
 
-def test_sim_version_update(log_capture):
+def test_sim_version_update():
     sim = make_eme_sim()
     sim_dict = sim.dict()
     sim_dict["version"] = "ancient_version"
 
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         sim_new = td.EMESimulation.parse_obj(sim_dict)
 
     assert sim_new.version == td.__version__
@@ -280,7 +280,7 @@ def test_eme_monitor():
     )
 
 
-def test_eme_simulation(log_capture):
+def test_eme_simulation():
     sim = make_eme_sim()
     _ = sim.plot(x=0, ax=AX)
     _ = sim.plot(y=0, ax=AX)
@@ -324,7 +324,7 @@ def test_eme_simulation(log_capture):
 
     # test warning for not providing wavelength in autogrid
     grid_spec = td.GridSpec.auto(min_steps_per_wvl=20)
-    with AssertLogLevel(log_capture, "INFO"):
+    with AssertLogLevel("INFO"):
         sim = sim.updated_copy(grid_spec=grid_spec)
     # multiple freqs are ok, but not for autogrid
     _ = sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[1e10] + list(sim.freqs))
@@ -373,7 +373,7 @@ def test_eme_simulation(log_capture):
     modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
     modulated = td.Medium(permittivity=2, modulation_spec=modulation_spec)
     struct = sim.structures[0].updated_copy(medium=modulated)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.EMESimulation(
             size=sim.size,
             monitors=sim.monitors,
@@ -388,7 +388,7 @@ def test_eme_simulation(log_capture):
         permittivity=2, nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)])
     )
     struct = sim.structures[0].updated_copy(medium=nonlinear)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         _ = td.EMESimulation(
             size=sim.size,
             monitors=sim.monitors,
@@ -442,7 +442,7 @@ def test_eme_simulation(log_capture):
     with pytest.raises(SetupError):
         sim_bad.validate_pre_upload()
     sim_bad = sim.updated_copy(size=(500, 500, 3), monitors=[])
-    with AssertLogLevel(log_capture, "WARNING", "slow-down"):
+    with AssertLogLevel("WARNING", "slow-down"):
         sim_bad.validate_pre_upload()
 
     sim_bad = sim.updated_copy(
@@ -464,7 +464,7 @@ def test_eme_simulation(log_capture):
         freqs=list(1e14 * np.linspace(1, 2, 5)),
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
-    with AssertLogLevel(log_capture, "WARNING", contains_str="estimated storage"):
+    with AssertLogLevel("WARNING", contains_str="estimated storage"):
         sim_bad.validate_pre_upload()
     sim_bad = sim.updated_copy(
         size=(10, 10, 10),
@@ -550,7 +550,7 @@ def test_eme_simulation(log_capture):
         _ = sim.updated_copy(sweep_spec=td.EMEModeSweep(num_modes=list(np.arange(150, 200))))
 
     # don't warn in these two cases
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         sim_good = sim.updated_copy(
             constraint="passive",
             eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=40)),
@@ -568,7 +568,7 @@ def test_eme_simulation(log_capture):
         constraint="passive",
         eme_grid_spec=td.EMEUniformGrid(num_cells=1, mode_spec=td.EMEModeSpec(num_modes=60)),
     )
-    with AssertLogLevel(log_capture, "WARNING", contains_str="constraint"):
+    with AssertLogLevel("WARNING", contains_str="constraint"):
         sim_bad.validate_pre_upload()
 
     _ = sim.port_modes_monitor

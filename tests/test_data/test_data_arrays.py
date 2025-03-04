@@ -43,6 +43,9 @@ FS = np.linspace(1e14, 2e14, 5)
 TS = np.linspace(0, 1e-12, 4)
 MODE_INDICES = np.arange(0, 4)
 DIRECTIONS = ["+", "-"]
+PHIS = np.linspace(0, 2 * np.pi, 100)
+THETAS = np.linspace(0, np.pi, 100)
+PD = np.atleast_1d(4000)
 
 FIELD_MONITOR = td.FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
 FIELD_TIME_MONITOR = td.FieldTimeMonitor(
@@ -65,6 +68,14 @@ DIFFRACTION_MONITOR = td.DiffractionMonitor(
     freqs=FS,
     name="diffraction",
 )
+DIRECTIVITY_MONITOR = td.DirectivityMonitor(
+    size=(1.5, td.inf, 1.5),
+    freqs=FS,
+    name="directivity",
+    phi=list(PHIS),
+    theta=list(THETAS),
+    proj_distance=PD,
+)
 
 MONITORS = [
     FIELD_MONITOR,
@@ -75,6 +86,7 @@ MONITORS = [
     FLUX_MONITOR,
     FLUX_TIME_MONITOR,
     DIFFRACTION_MONITOR,
+    DIRECTIVITY_MONITOR,
 ]
 
 GRID_SPEC = td.GridSpec(wavelength=2.0)
@@ -108,20 +120,24 @@ SIM = td.Simulation(
 def get_xyz(
     monitor: td.components.monitor.MonitorType, grid_key: str, symmetry: bool
 ) -> Tuple[List[float], List[float], List[float]]:
-    if symmetry:
-        grid = SIM_SYM.discretize_monitor(monitor)
+    sim = SIM_SYM if symmetry else SIM
+    grid = sim.discretize_monitor(monitor)
+    if monitor.colocate:
+        x, y, z = grid.boundaries.to_list
+    else:
         x, y, z = grid[grid_key].to_list
+    if symmetry:
         x = [_x for _x in x if _x >= 0]
         y = [_y for _y in y if _y >= 0]
         z = [_z for _z in z if _z >= 0]
-    else:
-        grid = SIM.discretize_monitor(monitor)
-        x, y, z = grid[grid_key].to_list
     return x, y, z
 
 
-def make_scalar_field_data_array(grid_key: str, symmetry=True):
-    XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key, symmetry)
+def make_scalar_field_data_array(grid_key: str, symmetry=True, colocate: bool = None):
+    monitor = FIELD_MONITOR
+    if colocate is not None:
+        monitor = monitor.updated_copy(colocate=colocate)
+    XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
     values = (1 + 1j) * np.random.random((len(XS), len(YS), len(ZS), len(FS)))
     return td.ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
 
@@ -132,8 +148,11 @@ def make_scalar_field_time_data_array(grid_key: str, symmetry=True):
     return td.ScalarFieldTimeDataArray(values, coords=dict(x=XS, y=YS, z=ZS, t=TS))
 
 
-def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
-    XS, YS, ZS = get_xyz(MODE_MONITOR_WITH_FIELDS, grid_key, symmetry)
+def make_scalar_mode_field_data_array(grid_key: str, symmetry=True, colocate: bool = None):
+    monitor = MODE_MONITOR_WITH_FIELDS
+    if colocate is not None:
+        monitor = monitor.updated_copy(colocate=colocate)
+    XS, YS, ZS = get_xyz(monitor, grid_key, symmetry)
     values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
     return td.ScalarModeFieldDataArray(
@@ -170,6 +189,11 @@ def make_mode_amps_data_array():
 def make_mode_index_data_array():
     values = (1 + 0.1j) * np.random.random((len(FS), len(MODE_INDICES)))
     return td.ModeIndexDataArray(values, coords=dict(f=FS, mode_index=MODE_INDICES))
+
+
+def make_far_field_data_array():
+    values = (1 + 1j) * np.random.random((len(PD), len(THETAS), len(PHIS), len(FS)))
+    return td.FieldProjectionAngleDataArray(values, coords=dict(r=PD, theta=THETAS, phi=PHIS, f=FS))
 
 
 def make_flux_data_array():
@@ -239,6 +263,11 @@ def test_flux_time_data_array():
     data = data.interp(t=1e-13)
 
 
+def test_far_field_data_array():
+    data = make_far_field_data_array()
+    data = data.sel(f=1e14, phi=0)
+
+
 def test_diffraction_data_array():
     _, _, data = make_diffraction_data_array()
     data = data.interp(f=1.5e14)
@@ -275,6 +304,12 @@ def test_abs():
 def test_heat_data_array():
     T = [0, 1e-12, 2e-12]
     _ = td.HeatDataArray((1 + 1j) * np.random.random((3,)), coords=dict(T=T))
+
+
+def test_steady_voltage_data_array():
+    intensities = [0.0, 1, 4]
+    V = [-1, -0.5, 0]
+    _ = td.SteadyVoltageDataArray(data=intensities, coords={"v": V})
 
 
 def test_charge_data_array():

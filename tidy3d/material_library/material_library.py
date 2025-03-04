@@ -1,9 +1,19 @@
 """Holds dispersive models for several commonly used optical materials."""
 
 import json
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pydantic.v1 as pd
+
+from tidy3d.components.material.multi_physics import MultiPhysicsMedium
+from tidy3d.components.material.tcad.charge import SemiconductorMedium
+from tidy3d.components.tcad.types import (
+    AugerRecombination,
+    CaugheyThomasMobility,
+    RadiativeRecombination,
+    ShockleyReedHallRecombination,
+    SlotboomBandGapNarrowing,
+)
 
 from ..components.base import Tidy3dBaseModel
 from ..components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
@@ -64,7 +74,7 @@ class AbstractVariantItem(Tidy3dBaseModel):
 class VariantItem(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a material."""
 
-    medium: PoleResidue = pd.Field(
+    medium: Union[PoleResidue, MultiPhysicsMedium] = pd.Field(
         ...,
         title="Material dispersion model",
         description="A dispersive medium described by the pole-residue pair model.",
@@ -137,7 +147,9 @@ class VariantItemUniaxial(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of an uniaxial material."""
 
     ordinary: PoleResidue = pd.Field(
-        ..., title="Ordinary Component", description="Medium describing the ordinary component."
+        ...,
+        title="Ordinary Component",
+        description="Medium describing the ordinary component.",
     )
 
     extraordinary: PoleResidue = pd.Field(
@@ -355,7 +367,10 @@ AlAs_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-287141547671268.06 - 1j * 6859562349716031.0), (0.0 + 1j * 2.4978200955702556e16))
+            (
+                (-287141547671268.06 - 1j * 6859562349716031.0),
+                (0.0 + 1j * 2.4978200955702556e16),
+            )
         ],
         frequency_range=(0.0, 725396772681578.0),
     ),
@@ -380,7 +395,10 @@ AlGaN_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-96473482947754.08 - 1j * 1.0968686723518324e16), (0.0 + 1j * 1.974516343551917e16))
+            (
+                (-96473482947754.08 - 1j * 1.0968686723518324e16),
+                (0.0 + 1j * 1.974516343551917e16),
+            )
         ],
         frequency_range=(145079354536315.6, 967195696908770.8),
     ),
@@ -400,7 +418,10 @@ AlxOy_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-654044636362332.8 - 1j * 1.9535949662203744e16), (0.0 + 1j * 2.123004231270711e16))
+            (
+                (-654044636362332.8 - 1j * 1.9535949662203744e16),
+                (0.0 + 1j * 2.123004231270711e16),
+            )
         ],
         frequency_range=(145079354536315.6, 1450793545363156.0),
     ),
@@ -420,8 +441,14 @@ Au_Olmon2012evaporated = VariantItem(
     medium=PoleResidue(
         eps_inf=5.632132676065586,
         poles=(
-            ((-208702733035001.06 - 205285605362650.1j), (-5278287093117479 + 1877992342820785.5j)),
-            ((-5802337384288.284 - 6750566414892.662j), (4391102400709820 + 6.164348337888482e18j)),
+            (
+                (-208702733035001.06 - 205285605362650.1j),
+                (-5278287093117479 + 1877992342820785.5j),
+            ),
+            (
+                (-5802337384288.284 - 6750566414892.662j),
+                (4391102400709820 + 6.164348337888482e18j),
+            ),
             (
                 (-56597670698540.76 - 8080114483410.944j),
                 (895004078070708.5 + 5.346045584373232e18j),
@@ -442,7 +469,10 @@ Au_Olmon2012stripped = VariantItem(
                 (-909376873.6996255 - 4596858854036.634j),
                 (6.746525460331022e16 + 5.926266046979877e18j),
             ),
-            ((-2211438487782.0527 + 0j), (5.660718217037341e17 + 6.245539733887402e18j)),
+            (
+                (-2211438487782.0527 + 0j),
+                (5.660718217037341e17 + 6.245539733887402e18j),
+            ),
             (
                 (-102715947550852.86 - 10649989484.773024j),
                 (-6.333331223161453e17 + 5.199295820846523e18j),
@@ -896,7 +926,10 @@ GeOx_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-351710414211103.44 - 1j * 2.4646085673376252e16), (0.0 + 1j * 2.02755336442934e16))
+            (
+                (-351710414211103.44 - 1j * 2.4646085673376252e16),
+                (0.0 + 1j * 2.02755336442934e16),
+            )
         ],
         frequency_range=(145079354536315.6, 967195696908770.8),
     ),
@@ -916,7 +949,10 @@ HMDS_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-379816861999031.8 - 1j * 1.8227252520914852e16), (0.0 + 1j * 1.0029341899480378e16))
+            (
+                (-379816861999031.8 - 1j * 1.8227252520914852e16),
+                (0.0 + 1j * 1.0029341899480378e16),
+            )
         ],
         frequency_range=(362698386340789.0, 1571693007476752.5),
     ),
@@ -927,7 +963,10 @@ HfO2_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-2278901171994190.5 - 1j * 1.4098114301144558e16), (0.0 + 1j * 1.3743164680834702e16))
+            (
+                (-2278901171994190.5 - 1j * 1.4098114301144558e16),
+                (0.0 + 1j * 1.3743164680834702e16),
+            )
         ],
         frequency_range=(362698386340789.0, 1450793545363156.0),
     ),
@@ -938,7 +977,10 @@ ITO_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-483886682186766.56 - 1j * 1.031968022520672e16), (0.0 + 1j * 1.292796190658882e16))
+            (
+                (-483886682186766.56 - 1j * 1.031968022520672e16),
+                (0.0 + 1j * 1.292796190658882e16),
+            )
         ],
         frequency_range=(362698386340789.0, 1450793545363156.0),
     ),
@@ -953,8 +995,14 @@ InAs_Palik = VariantItem(
                 (-110738420632975.47 - 4797247857720928j),
                 (61433546381780.16 + 1.3356669256010974e16j),
             ),
-            ((-89906741691385.8 - 2141190071662963j), (25362746938200.98 - 13367622759633.719j)),
-            ((-716541564870285.5 - 2211195587846909.2j), (164186583366674.1 + 57657881084640.46j)),
+            (
+                (-89906741691385.8 - 2141190071662963j),
+                (25362746938200.98 - 13367622759633.719j),
+            ),
+            (
+                (-716541564870285.5 - 2211195587846909.2j),
+                (164186583366674.1 + 57657881084640.46j),
+            ),
         ),
         frequency_range=(214137470000000.0, 545077196363636.3),
     ),
@@ -1094,7 +1142,6 @@ MoSe2_Li2014 = VariantItem2D(
     reference=[material_refs["Li2014"]],
 )
 
-
 Ni_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
@@ -1107,8 +1154,14 @@ Ni_JohnsonChristy1972 = VariantItem(
                 (-1298720752173337.8 - 2121335877180779j),
                 (1083033754695040 + 1.0925578521887692e16j),
             ),
-            ((-1819477367096665 - 586975596758.178j), (3506055897617337 + 1.561199088683625e18j)),
-            ((-2001079540362000.8 - 6914798333407941j), (999447311644327.9 + 8623994636438280j)),
+            (
+                (-1819477367096665 - 586975596758.178j),
+                (3506055897617337 + 1.561199088683625e18j),
+            ),
+            (
+                (-2001079540362000.8 - 6914798333407941j),
+                (999447311644327.9 + 8623994636438280j),
+            ),
             (
                 (-3956384974540.076 - 12646403210723.701j),
                 (8260543758347535 + 3.3147262955373885e18j),
@@ -1214,7 +1267,10 @@ Pd_JohnsonChristy1972 = VariantItem(
                 (-27947601188212.62 - 1j * 88012749128378.45),
                 (-116820857784644.19 + 1j * 4.431305747926611e17),
             ),
-            ((-42421241831450.59 + 1j * 0.0), (2.0926917440899536e16 - 1j * 2.322604734166214e17)),
+            (
+                (-42421241831450.59 + 1j * 0.0),
+                (2.0926917440899536e16 - 1j * 2.322604734166214e17),
+            ),
             (
                 (-1156114791888924.0 - 1j * 459830394883492.75),
                 (-2205692318269041.5 + 1j * 5.882192811019071e16),
@@ -1341,7 +1397,10 @@ Si3N4_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-1357465464784539.5 - 1j * 4646140872332419.0), (0.0 + 1j * 1.103606337254506e16))
+            (
+                (-1357465464784539.5 - 1j * 4646140872332419.0),
+                (0.0 + 1j * 1.103606337254506e16),
+            )
         ],
         frequency_range=(362698386340789.0, 1329894083249559.8),
     ),
@@ -1365,7 +1424,10 @@ Si3N4_Luke2015 = VariantItem(
 Si3N4_Luke2015_PMLStable = VariantItem(
     medium=PoleResidue(
         eps_inf=3.031225983820944,
-        poles=((-7534484687295489j, 3530332266482328j), (-4550924050946271j, 7233481618.869821j)),
+        poles=(
+            (-7534484687295489j, 3530332266482328j),
+            (-4550924050946271j, 7233481618.869821j),
+        ),
         frequency_range=(152024573088740.38, 724311326723836.8),
     ),
     reference=[material_refs["Luke2015"]],
@@ -1396,7 +1458,12 @@ SiC_Horiba = VariantItem(
 SiN_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=2.32,
-        poles=[((-302334222151229.3 - 1j * 9863009385232968.0), (0.0 + 1j * 6244215164693547.0))],
+        poles=[
+            (
+                (-302334222151229.3 - 1j * 9863009385232968.0),
+                (0.0 + 1j * 6244215164693547.0),
+            )
+        ],
         frequency_range=(145079354536315.6, 1450793545363156.0),
     ),
     reference=[material_refs["Horiba"]],
@@ -1406,7 +1473,10 @@ SiO2_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-75963372399806.36 - 1j * 1.823105111824081e16), (0.0 + 1j * 1.0209565875622414e16))
+            (
+                (-75963372399806.36 - 1j * 1.823105111824081e16),
+                (0.0 + 1j * 1.0209565875622414e16),
+            )
         ],
         frequency_range=(169259246959034.88, 1208994621135963.5),
     ),
@@ -1474,7 +1544,10 @@ Ta2O5_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-618341851334423.8 - 1j * 1.205777404193952e16), (0.0 + 1j * 1.8938176054079756e16))
+            (
+                (-618341851334423.8 - 1j * 1.205777404193952e16),
+                (0.0 + 1j * 1.8938176054079756e16),
+            )
         ],
         frequency_range=(181349193170394.5, 967195696908770.8),
     ),
@@ -1667,7 +1740,10 @@ ZrO2_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=1.0,
         poles=[
-            ((-97233116671752.14 - 1j * 1.446765717253359e16), (0.0 + 1j * 2.0465425413547396e16))
+            (
+                (-97233116671752.14 - 1j * 1.446765717253359e16),
+                (0.0 + 1j * 2.0465425413547396e16),
+            )
         ],
         frequency_range=(362698386340789.0, 725396772681578.0),
     ),
@@ -1678,7 +1754,10 @@ aSi_Horiba = VariantItem(
     medium=PoleResidue(
         eps_inf=3.109,
         poles=[
-            ((-1458496750076282.0 - 1j * 5789844327200831.0), (0.0 + 1j * 4.485863370051096e16))
+            (
+                (-1458496750076282.0 - 1j * 5789844327200831.0),
+                (0.0 + 1j * 4.485863370051096e16),
+            )
         ],
         frequency_range=(362698386340789.0, 1450793545363156.0),
     ),
@@ -1799,6 +1878,53 @@ cSi_PalikLossless = VariantItem(
     reference=[material_refs["Palik_Lossless"]],
 )
 
+cSi_MultiPhysics = VariantItem(
+    medium=MultiPhysicsMedium(
+        optical=cSi_Green2008.medium,
+        charge=SemiconductorMedium(
+            permittivity=11.7,
+            N_c=2.86e19,
+            N_v=3.1e19,
+            E_g=1.11,
+            mobility_n=CaugheyThomasMobility(
+                mu_min=52.2,
+                mu=1471.0,
+                ref_N=9.68e16,
+                exp_N=0.68,
+                exp_1=-0.57,
+                exp_2=-2.33,
+                exp_3=2.4,
+                exp_4=-0.146,
+            ),
+            mobility_p=CaugheyThomasMobility(
+                mu_min=44.9,
+                mu=470.5,
+                ref_N=2.23e17,
+                exp_N=0.719,
+                exp_1=-0.57,
+                exp_2=-2.33,
+                exp_3=2.4,
+                exp_4=-0.146,
+            ),
+            R=[
+                ShockleyReedHallRecombination(tau_n=3.3e-6, tau_p=4e-6),
+                RadiativeRecombination(r_const=1.6e-14),
+                AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
+            ],
+            delta_E_g=SlotboomBandGapNarrowing(
+                v1=6.92 * 1e-3,
+                n2=1.3e17,
+                c2=0.5,
+                min_N=1e15,
+            ),
+            N_a=0,
+            N_d=0,
+        ),
+    ),
+    reference=[material_refs["Green2008"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
+    "main/Si/Green-2008.yml",
+)
 
 material_library = dict(
     Ag=MaterialItem(
@@ -2237,6 +2363,7 @@ material_library = dict(
             Li1993_293K=cSi_Li1993_293K,
             Green2008=cSi_Green2008,
             Green2008_Lossless=cSi_Green2008Lossless,
+            Si_MultiPhysics=cSi_MultiPhysics,
         ),
         default="Green2008",
     ),

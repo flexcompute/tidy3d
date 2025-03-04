@@ -11,14 +11,16 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Optional, Tuple
 
 import pydantic.v1 as pd
-from rich.progress import Progress
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.types import annotate_type
+from ...components.mode.mode_solver import ModeSolver
+from ...components.types import Literal, annotate_type
 from ...exceptions import DataError
 from ...log import get_logging_console, log
 from ..api import webapi as web
 from ..core.constants import TaskId, TaskName
+from ..core.task_core import Folder
 from ..core.task_info import RunInfo, TaskInfo
 from .tidy3d_stub import SimulationDataType, SimulationType
 
@@ -31,6 +33,18 @@ BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
 
 class WebContainer(Tidy3dBaseModel, ABC):
     """Base class for :class:`Job` and :class:`Batch`, technically not used"""
+
+    @staticmethod
+    def _check_path_dir(path_dir: str) -> None:
+        """Make sure ``path_dir`` exists and create one if not."""
+        location = os.path.dirname(path_dir)
+        if len(location) > 0 and not os.path.exists(location):
+            os.makedirs(location, exist_ok=True)
+
+    @staticmethod
+    def _check_folder(folder_name: str) -> None:
+        """Make sure ``folder_name`` exists on the web UI and create it if not."""
+        Folder.get(folder_name, create=True)
 
 
 class Job(WebContainer):
@@ -161,6 +175,12 @@ class Job(WebContainer):
         "fields that were not used to create the task will cause errors.",
     )
 
+    reduce_simulation: Literal["auto", True, False] = pd.Field(
+        "auto",
+        title="Reduce Simulation",
+        description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
+    )
+
     _upload_fields = (
         "simulation",
         "task_name",
@@ -169,6 +189,8 @@ class Job(WebContainer):
         "verbose",
         "simulation_type",
         "parent_tasks",
+        "solver_version",
+        "reduce_simulation",
     )
 
     def to_file(self, fname: str) -> None:
@@ -212,13 +234,13 @@ class Job(WebContainer):
         """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
         if self.task_id_cached:
             return self.task_id_cached
+        self._check_folder(self.folder_name)
         return self._upload()
 
     def _upload(self) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
-        self_dict = self.dict()
-        upload_kwargs = {key: self_dict.get(key) for key in self._upload_fields}
+        upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
         task_id = web.upload(**upload_kwargs)
         return task_id
 
@@ -283,6 +305,7 @@ class Job(WebContainer):
         ----
         To load the data after download, use :meth:`Job.load`.
         """
+        self._check_path_dir(path_dir=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
     def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
@@ -298,7 +321,11 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-        return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
+        self._check_path_dir(path_dir=path)
+        data = web.load(task_id=self.task_id, path=path, verbose=self.verbose)
+        if isinstance(self.simulation, ModeSolver):
+            self.simulation._patch_data(data=data)
+        return data
 
     def delete(self) -> None:
         """Delete server-side data associated with :class:`Job`."""
@@ -505,6 +532,12 @@ class Batch(WebContainer):
         "number of threads available on the system.",
     )
 
+    reduce_simulation: Literal["auto", True, False] = pd.Field(
+        "auto",
+        title="Reduce Simulation",
+        description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
+    )
+
     jobs_cached: Dict[TaskName, Job] = pd.Field(
         None,
         title="Jobs (Cached)",
@@ -515,13 +548,6 @@ class Batch(WebContainer):
     )
 
     _job_type = Job
-
-    @staticmethod
-    def _check_path_dir(path_dir: str) -> None:
-        """Make sure ``path_dir`` exists and create one if not."""
-
-        if not os.path.exists(path_dir):
-            os.makedirs(path_dir, exist_ok=True)
 
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
@@ -586,6 +612,7 @@ class Batch(WebContainer):
             job_kwargs["simulation"] = simulation
             job_kwargs["verbose"] = False
             job_kwargs["solver_version"] = self.solver_version
+            job_kwargs["reduce_simulation"] = self.reduce_simulation
             if self.parent_tasks and task_name in self.parent_tasks:
                 job_kwargs["parent_tasks"] = self.parent_tasks[task_name]
             job = JobType(**job_kwargs)
@@ -620,19 +647,26 @@ class Batch(WebContainer):
 
     def upload(self) -> None:
         """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
-
+        self._check_folder(self.folder_name)
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             futures = [executor.submit(job.upload) for _, job in self.jobs.items()]
 
             # progressbar (number of tasks uploaded)
             if self.verbose:
                 console = get_logging_console()
-                with Progress(console=console) as progress:
-                    pbar_message = f"Uploading data for {self.num_jobs} tasks."
-                    pbar = progress.add_task(pbar_message, total=self.num_jobs - 1)
+                progress_columns = (
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    TimeElapsedColumn(),
+                )
+                with Progress(*progress_columns, console=console, transient=False) as progress:
+                    pbar_message = f"Uploading data for {self.num_jobs} tasks"
+                    pbar = progress.add_task(pbar_message, total=self.num_jobs)
+                    completed = 0
                     for _ in concurrent.futures.as_completed(futures):
-                        progress.update(pbar, advance=1)
-                    progress.update(pbar, completed=self.num_jobs - 1, refresh=True)
+                        completed += 1
+                        progress.update(pbar, completed=completed)
 
     def get_info(self) -> Dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
@@ -678,22 +712,31 @@ class Batch(WebContainer):
         return run_info_dict
 
     def monitor(self) -> None:
-        """Monitor progress of each of the running tasks.
+        """Monitor progress of each of the running tasks."""
 
-        Note
-        ----
-        To loop through the data of completed simulations, can call :meth:`Batch.items`.
-        """
-
-        def pbar_description(task_name: str, status: str) -> str:
+        def pbar_description(
+            task_name: str, status: str, max_name_length: int, status_width: int
+        ) -> str:
             """Make a progressbar description based on the status."""
-            description = f"{task_name}: status = {status}"
+            # if task name too long, truncate and add ...
+            if len(task_name) > max_name_length - 3:  # -3 to leave room for ...
+                task_name = task_name[: (max_name_length - 3)] + "..."
 
-            # if something went wrong, make it red
-            if "error" in status or "diverge" in status:
-                description = f"[red]{description}"
+            # right-align status
+            task_part = f"{task_name:<{max_name_length}}"
 
-            return description
+            if "error" in status or "diverge" in status or "aborted" in status:
+                status_part = f"→ [red]{status:<{status_width}}"
+            elif status == "success":
+                status_part = f"→ [green]{status:<{status_width}}"
+            elif status == "queued" or status == "queued_solver" or status == "aborting":
+                status_part = f"→ [yellow]{status:<{status_width}}"
+            elif status in ["preprocess", "postprocess", "running"]:
+                status_part = f"→ [blue]{status:<{status_width}}"
+            else:
+                status_part = f"→ {status:<{status_width}}"
+
+            return f"{task_part} {status_part}"
 
         run_statuses = [
             "draft",
@@ -704,8 +747,24 @@ class Batch(WebContainer):
             "postprocess",
             "visualize",
             "success",
+            "aborting",
         ]
-        end_statuses = ("success", "error", "errored", "diverged", "diverge", "deleted", "draft")
+        end_statuses = (
+            "success",
+            "error",
+            "errored",
+            "diverged",
+            "diverge",
+            "deleted",
+            "draft",
+            "aborted",
+        )
+
+        max_task_name = max(len(task_name) for task_name in self.jobs.keys())
+        max_name_length = min(30, max(max_task_name, 15))
+        status_width = max(
+            max(len(status) for status in run_statuses), max(len(status) for status in end_statuses)
+        )
 
         if self.verbose:
             console = get_logging_console()
@@ -716,45 +775,64 @@ class Batch(WebContainer):
                 "get the billed FlexCredit cost after the Batch has completed."
             )
 
-            with Progress(console=console) as progress:
-                # create progressbars
+            progress_columns = (
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(bar_width=25),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+            )
+
+            with Progress(*progress_columns, console=console, transient=False) as progress:
+                # create progress bars
                 pbar_tasks = {}
                 for task_name, job in self.jobs.items():
                     status = job.status
-                    description = pbar_description(task_name, status)
+                    description = pbar_description(task_name, status, max_name_length, status_width)
                     completed = run_statuses.index(status) if status in run_statuses else 0
                     pbar = progress.add_task(
-                        description,
-                        total=len(run_statuses) - 1,
-                        completed=completed,
+                        description, total=len(run_statuses) - 1, completed=completed
                     )
                     pbar_tasks[task_name] = pbar
 
                 while any(job.status not in end_statuses for job in self.jobs.values()):
+                    updates = []
                     for task_name, job in self.jobs.items():
-                        pbar = pbar_tasks[task_name]
                         status = job.status
-                        description = pbar_description(task_name, status)
-
                         if status in run_statuses:
-                            completed = run_statuses.index(status)
-                            progress.update(pbar, description=description, completed=completed)
+                            updates.append(
+                                (
+                                    pbar_tasks[task_name],
+                                    pbar_description(
+                                        task_name, status, max_name_length, status_width
+                                    ),
+                                    run_statuses.index(status),
+                                )
+                            )
 
+                    for pbar, description, completed in updates:
+                        progress.update(
+                            pbar, description=description, completed=completed, refresh=False
+                        )
+
+                    progress.refresh()
                     time.sleep(BATCH_MONITOR_PROGRESS_REFRESH_TIME)
 
-                # set all to 100% completed (if error or diverge, will be red)
+                updates = []
                 for task_name, job in self.jobs.items():
-                    pbar = pbar_tasks[task_name]
-                    status = job.status
-                    description = pbar_description(task_name, status)
-
-                    progress.update(
-                        pbar,
-                        description=description,
-                        completed=len(run_statuses) - 1,
-                        refresh=True,
+                    updates.append(
+                        (
+                            pbar_tasks[task_name],
+                            pbar_description(task_name, job.status, max_name_length, status_width),
+                            len(run_statuses) - 1,
+                        )
                     )
 
+                for pbar, description, completed in updates:
+                    progress.update(
+                        pbar, description=description, completed=completed, refresh=False
+                    )
+
+                progress.refresh()
                 console.log("Batch complete.")
 
         else:
@@ -812,7 +890,7 @@ class Batch(WebContainer):
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
-
+        self._check_path_dir(path_dir=path_dir)
         self.to_file(self._batch_path(path_dir=path_dir))
 
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
@@ -825,22 +903,27 @@ class Batch(WebContainer):
                     continue
 
                 def fn(job=job, job_path=job_path) -> None:
-                    """Function to submit by executor, local variables bound by making kwargs."""
                     return job.download(path=job_path)
 
                 fns.append(fn)
 
             futures = [executor.submit(fn) for fn in fns]
 
-            # progressbar (number of eligible tasks downloaded)
             if self.verbose:
                 console = get_logging_console()
-                with Progress(console=console) as progress:
-                    pbar_message = f"Downloading data for {len(fns)} tasks."
-                    pbar = progress.add_task(pbar_message, total=len(fns) - 1)
+                progress_columns = (
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    TimeElapsedColumn(),
+                )
+                with Progress(*progress_columns, console=console, transient=False) as progress:
+                    pbar_message = f"Downloading data for {len(fns)} tasks"
+                    pbar = progress.add_task(pbar_message, total=len(fns))
+                    completed = 0
                     for _ in concurrent.futures.as_completed(futures):
-                        progress.update(pbar, advance=1)
-                    progress.update(pbar, completed=len(fns) - 1, refresh=True)
+                        completed += 1
+                        progress.update(pbar, completed=completed)
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Download results and load them into :class:`.BatchData` object.
@@ -859,7 +942,7 @@ class Batch(WebContainer):
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
-
+        self._check_path_dir(path_dir=path_dir)
         self.to_file(self._batch_path(path_dir=path_dir))
 
         if self.jobs is None:
@@ -875,7 +958,14 @@ class Batch(WebContainer):
             task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
             task_ids[task_name] = self.jobs[task_name].task_id
 
-        return BatchData(task_paths=task_paths, task_ids=task_ids, verbose=self.verbose)
+        data = BatchData(task_paths=task_paths, task_ids=task_ids, verbose=self.verbose)
+
+        for task_name, job in self.jobs.items():
+            if isinstance(job.simulation, ModeSolver):
+                job_data = data[task_name]
+                job.simulation._patch_data(data=job_data)
+
+        return data
 
     def delete(self) -> None:
         """Delete server-side data associated with each task in the batch."""

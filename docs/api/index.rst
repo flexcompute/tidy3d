@@ -10,8 +10,10 @@ API |:computer:|
     geometry
     mediums
     material_library
+    rf_material_library
     structures
     sources
+    analytic_beams
     monitors
     mode
     field_projector
@@ -25,7 +27,9 @@ API |:computer:|
     heat/index
     charge/index
     eme/index
+    microwave/index
     plugins/index
+    spice
     constants
     abstract_base
     abstract_models
@@ -36,6 +40,7 @@ API |:computer:|
 .. include:: /api/mediums.rst
 .. include:: /api/structures.rst
 .. include:: /api/sources.rst
+.. include:: /api/analytic_beams.rst
 .. include:: /api/monitors.rst
 .. include:: /api/mode.rst
 .. include:: /api/field_projector.rst
@@ -49,6 +54,7 @@ API |:computer:|
 .. include:: /api/heat/index.rst
 .. include:: /api/charge/index.rst
 .. include:: /api/eme/index.rst
+.. include:: /api/microwave/index.rst
 .. include:: /api/plugins/index.rst
 .. include:: /api/constants.rst
 .. include:: /api/abstract_base.rst

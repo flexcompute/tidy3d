@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -10,9 +10,9 @@ import pydantic.v1 as pd
 from ...exceptions import SetupError
 from ..base import Tidy3dBaseModel
 from ..data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
-from ..data.dataset import UnstructuredGridDataset, UnstructuredGridDatasetType
+from ..data.utils import UnstructuredGridDataset, UnstructuredGridDatasetType
 from ..geometry.base import Box
-from ..types import ArrayFloat1D, Axis, InterpMethod, Literal
+from ..types import ArrayFloat1D, Axis, Coordinate, InterpMethod, Literal
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D
@@ -390,6 +390,43 @@ class Grid(Tidy3dBaseModel):
         return [len(self.boundaries.dict()[dim]) - 1 for dim in "xyz"]
 
     @property
+    def min_size(self) -> float:
+        """Return minimal cells size in all dimensions.
+
+        Returns
+        -------
+        float
+            Minimal cells size in all dimensions.
+        """
+        return float(min(min(sizes) for sizes in self.sizes.to_list))
+
+    @property
+    def max_size(self) -> float:
+        """Return maximal cells size in all dimensions.
+
+        Returns
+        -------
+        float
+            Maximal cells size in all dimensions.
+        """
+        return float(max(max(sizes) for sizes in self.sizes.to_list))
+
+    @property
+    def info(self) -> Dict:
+        """Dictionary collecting various properties of the grids."""
+        num_cells = self.num_cells
+        total_cells = int(np.prod(num_cells))
+        return {
+            "Nx": num_cells[0],
+            "Ny": num_cells[1],
+            "Nz": num_cells[2],
+            "grid_points": total_cells,
+            "min_grid_size": self.min_size,
+            "max_grid_size": self.max_size,
+            "computational_complexity": total_cells / self.min_size,
+        }
+
+    @property
     def _primal_steps(self) -> Coords:
         """Return primal steps of the cells in the :class:`Grid`.
 
@@ -625,3 +662,13 @@ class Grid(Tidy3dBaseModel):
                     raise ValueError("Cannot snap grid to box center outside of grid domain.")
                 boundary_dict[dim] = np.array([center, center])
         return self.updated_copy(boundaries=Coords(**boundary_dict))
+
+    def _translated_copy(self, vector: Coordinate) -> Grid:
+        """Translate the grid by a vector. Not officially supported as resulting
+        grid may not be aligned with original Yee grid."""
+        boundaries = Coords(
+            x=self.boundaries.x + vector[0],
+            y=self.boundaries.y + vector[1],
+            z=self.boundaries.z + vector[2],
+        )
+        return self.updated_copy(boundaries=boundaries)

@@ -13,7 +13,7 @@ from ...exceptions import SetupError, ValidationError
 from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ..geometry.base import Box
 from ..grid.grid import Coords1D
-from ..mode import ModeSpec
+from ..mode_spec import ModeSpec
 from ..types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
 
 # grid limits
@@ -50,14 +50,6 @@ class EMEModeSpec(ModeSpec):
         "'ModeSolverMonitor' and 'sim_data.smatrix_in_basis' to achieve off-normal "
         "injection in EME.",
         units=RADIAN,
-    )
-
-    precision: Literal["single"] = pd.Field(
-        "single",
-        title="single or double precision in mode solver",
-        description="The solver will be faster and using less memory under "
-        "single precision, but more accurate under double precision. Only single precision is "
-        "currently supported in EME.",
     )
 
     # this method is not supported because not all ModeSpec features are supported
@@ -239,11 +231,11 @@ class EMEExplicitGrid(EMEGridSpec):
         sim_rmin = center[axis] - size[axis] / 2
         sim_rmax = center[axis] + size[axis] / 2
         if len(self.boundaries) > 0:
-            if self.boundaries[0] < sim_rmin - fp_eps:
+            if sim_rmin - self.boundaries[0] > fp_eps:
                 raise ValidationError(
                     "The first item in 'boundaries' is outside the simulation domain."
                 )
-            if self.boundaries[-1] > sim_rmax + fp_eps:
+            if self.boundaries[-1] - sim_rmax > fp_eps:
                 raise ValidationError(
                     "The last item in 'boundaries' is outside the simulation domain."
                 )
@@ -332,11 +324,11 @@ class EMECompositeGrid(EMEGridSpec):
         bounds = []
         sim_rmin = center[axis] - size[axis] / 2
         sim_rmax = center[axis] + size[axis] / 2
-        if self.subgrid_boundaries[0] < sim_rmin - fp_eps:
+        if sim_rmin - self.subgrid_boundaries[0] > fp_eps:
             raise ValidationError(
                 "The first item in 'subgrid_boundaries' is outside the simulation domain."
             )
-        if self.subgrid_boundaries[-1] > sim_rmax + fp_eps:
+        if self.subgrid_boundaries[-1] - sim_rmax > fp_eps:
             raise ValidationError(
                 "The last item in 'subgrid_boundaries' is outside the simulation domain."
             )
@@ -446,7 +438,7 @@ class EMEGrid(Box):
                 "so that there is one mode spec per EME cell."
             )
         rmin = boundaries[0]
-        if rmin < sim_rmin - fp_eps:
+        if sim_rmin - rmin > fp_eps:
             raise ValidationError(
                 "The first item in 'boundaries' is outside the simulation domain."
             )
@@ -454,7 +446,7 @@ class EMEGrid(Box):
             if rmax < rmin:
                 raise ValidationError("The 'subgrid_boundaries' must be increasing.")
             rmin = rmax
-        if rmax > sim_rmax + fp_eps:
+        if rmax - sim_rmax > fp_eps:
             raise ValidationError("The last item in 'boundaries' is outside the simulation domain.")
         return val
 

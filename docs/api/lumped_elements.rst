@@ -1,6 +1,6 @@
 .. currentmodule:: tidy3d
 
-Lumped elements
+Lumped Elements
 ===============
 
 Passive elements
@@ -11,3 +11,6 @@ Passive elements
 
    tidy3d.LumpedResistor
    tidy3d.CoaxialLumpedResistor
+   tidy3d.RLCNetwork
+   tidy3d.AdmittanceNetwork
+   tidy3d.LinearLumpedElement

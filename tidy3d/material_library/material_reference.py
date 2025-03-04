@@ -19,6 +19,16 @@ class ReferenceData(Tidy3dBaseModel):
         title="URL link",
         description="Some reference can be accessed through a url link to its pdf etc.",
     )
+    manufacturer: str = pd.Field(
+        None,
+        title="Manufacturer",
+        description="Name of the manufacturer, e.g., Rogers, Arlon.",
+    )
+    datasheet_title: str = pd.Field(
+        None,
+        title="Datasheet Title",
+        description="Title of the datasheet.",
+    )
 
 
 material_refs = dict(

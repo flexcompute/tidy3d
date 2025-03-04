@@ -22,6 +22,7 @@ Monitor Types
    tidy3d.FieldProjectionAngleMonitor
    tidy3d.FieldProjectionKSpaceMonitor
    tidy3d.DiffractionMonitor
+   tidy3d.DirectivityMonitor
 
 Apodization Specification
 -------------------------

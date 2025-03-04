@@ -1,15 +1,19 @@
 """Defines 'types' that various fields can be"""
 
-from typing import Tuple, Union
+from typing import (
+    Literal,  # We support py3.9+, so direct typing import is fine.
+    Optional,
+    Tuple,
+    Union,
+)
 
-# Literal only available in python 3.8 + so try import otherwise use extensions
-try:
-    from typing import Literal
-except ImportError:
-    from typing_extensions import Literal
 import autograd.numpy as np
 import pydantic.v1 as pydantic
-from matplotlib.axes import Axes
+
+try:
+    from matplotlib.axes import Axes
+except ImportError:
+    Axes = None
 from shapely.geometry.base import BaseGeometry
 from typing_extensions import Annotated
 
@@ -185,6 +189,7 @@ ScalarSymmetry = Literal[0, 1]
 Size1D = pydantic.NonNegativeFloat
 Size = Tuple[Size1D, Size1D, Size1D]
 Coordinate = Tuple[float, float, float]
+CoordinateOptional = Tuple[Optional[float], Optional[float], Optional[float]]
 Coordinate2D = Tuple[float, float]
 Bound = Tuple[Coordinate, Coordinate]
 GridSize = Union[pydantic.PositiveFloat, Tuple[pydantic.PositiveFloat, ...]]
@@ -194,7 +199,7 @@ Shapely = BaseGeometry
 PlanePosition = Literal["bottom", "middle", "top"]
 ClipOperationType = Literal["union", "intersection", "difference", "symmetric_difference"]
 BoxSurface = Literal["x-", "x+", "y-", "y+", "z-", "z+"]
-
+LengthUnit = Literal["nm", "μm", "um", "mm", "cm", "m"]
 
 """ medium """
 
@@ -221,6 +226,7 @@ EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = Union[Tuple[float, ...], ArrayFloat1D]
 ObsGridArray = Union[Tuple[float, ...], ArrayFloat1D]
+PolarizationBasis = Literal["linear", "circular"]
 
 """ plotting """
 
@@ -239,3 +245,7 @@ EpsSpecType = Literal["diagonal", "tensorial_real", "tensorial_complex"]
 """ mode tracking """
 
 TrackFreq = Literal["central", "lowest", "highest"]
+
+""" lumped elements"""
+
+LumpDistType = Literal["off", "laterally_only", "on"]

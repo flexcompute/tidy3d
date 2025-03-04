@@ -20,6 +20,7 @@ from autograd.test_util import check_grads
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import is_tidy_box
 from tidy3d.components.data.data_array import DataArray
+from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.utils import FieldMap
 
@@ -40,7 +41,7 @@ TEST_POLYSLAB_SPEED = False
 
 # whether to run numerical gradient tests, off by default because it runs real simulations
 RUN_NUMERICAL = False
-_NUMERICAL_COMBINATION = ("size_element", "mode")
+_NUMERICAL_COMBINATION = ("polyslab", "mode")
 
 TEST_MODES = ("pipeline", "adjoint", "speed")
 TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
@@ -70,6 +71,7 @@ FWIDTH = FREQ0 / 10
 LZ = 7.0 * WVL
 
 IS_3D = False
+POLYSLAB_AXIS = 2
 
 # angle of the measurement waveguide
 ROT_ANGLE_WG = 0 * np.pi / 4
@@ -78,7 +80,7 @@ ROT_ANGLE_WG = 0 * np.pi / 4
 MODE_FIELD_SPC = 0.75
 MODE_FLD_MNT_SPC = MODE_FIELD_SPC * WVL
 
-LX = 0.5 * WVL if IS_3D else 0.0
+LX = 3.5 * WVL if IS_3D else 0.0
 PML_X = True if IS_3D else False
 
 # shape of the custom medium
@@ -86,7 +88,7 @@ DA_SHAPE_X = 1 if IS_3D else 1
 DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
 
 # number of vertices in the polyslab
-NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 110
+NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 25
 
 PNT_DIPOLE = td.PointDipole(
     center=(0, 0, -LZ / 2 + WVL),
@@ -107,6 +109,7 @@ PLANE_WAVE = td.PlaneWave(
         fwidth=FWIDTH,
         amplitude=1.0,
     ),
+    pol_angle=0,
 )
 
 # sim that we add traced structures and monitors to
@@ -133,7 +136,7 @@ SIM_BASE = td.Simulation(
             name="extraneous",
         )
     ],
-    boundary_spec=td.BoundarySpec.pml(x=False, y=True, z=True),
+    boundary_spec=td.BoundarySpec.pml(x=PML_X, y=True, z=True),
     grid_spec=td.GridSpec.uniform(dl=0.01 * td.C_0 / FREQ0),
 )
 
@@ -148,7 +151,7 @@ def use_emulated_run(monkeypatch):
     import tidy3d
 
     if TEST_MODE in ("pipeline", "speed"):
-        task_id_fwd = "task_fwd"
+        task_name_fwd = "task_fwd"
         AUX_KEY_SIM_FIELDS_KEYS = "sim_fields_keys"
 
         cache = {}
@@ -165,7 +168,7 @@ def use_emulated_run(monkeypatch):
 
         def emulated_run_fwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d``."""
-            task_id_fwd = task_name
+            task_name_fwd = task_name
             if run_kwargs.get("simulation_type") == "autograd_fwd":
                 sim_original = simulation
                 sim_fields_keys = run_kwargs["sim_fields_keys"]
@@ -183,28 +186,28 @@ def use_emulated_run(monkeypatch):
                 )
 
                 # cache original and fwd data locally for test
-                cache[task_id_fwd] = copy.copy(aux_data)
-                cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS] = sim_fields_keys
+                cache[task_name_fwd] = copy.copy(aux_data)
+                cache[task_name_fwd][AUX_KEY_SIM_FIELDS_KEYS] = sim_fields_keys
                 # return original data only
-                return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_id_fwd
+                return aux_data[AUX_KEY_SIM_DATA_ORIGINAL], task_name_fwd
             else:
-                return run_emulated(simulation, task_name=task_name), task_id_fwd
+                return run_emulated(simulation, task_name=task_name), task_name_fwd
 
         def emulated_run_bwd(simulation, task_name, **run_kwargs) -> td.SimulationData:
             """What gets called instead of ``web/api/autograd/autograd.py::_run_tidy3d_bwd``."""
 
-            task_id_fwd = task_name[:-8]
+            task_name_fwd = "".join(task_name.partition("_adjoint")[:-2])
 
             # run the adjoint sim
             sim_data_adj = run_emulated(simulation, task_name="task_name")
 
             # grab the fwd and original data from the cache
-            aux_data_fwd = cache[task_id_fwd]
+            aux_data_fwd = cache[task_name_fwd]
             sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
             sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
             # get the original traced fields
-            sim_fields_keys = cache[task_id_fwd][AUX_KEY_SIM_FIELDS_KEYS]
+            sim_fields_keys = cache[task_name_fwd][AUX_KEY_SIM_FIELDS_KEYS]
 
             # postprocess (compute adjoint gradients)
             traced_fields_vjp = postprocess_adj(
@@ -222,9 +225,9 @@ def use_emulated_run(monkeypatch):
             for task_name, simulation in simulations.items():
                 if sim_fields_keys_dict is not None:
                     run_kwargs["sim_fields_keys"] = sim_fields_keys_dict[task_name]
-                sim_data_orig, task_id_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
+                sim_data_orig, task_name_fwd = emulated_run_fwd(simulation, task_name, **run_kwargs)
                 batch_data_orig[task_name] = sim_data_orig
-                task_ids_fwd[task_name] = task_id_fwd
+                task_ids_fwd[task_name] = task_name_fwd
 
             class EmulatedBatchData(web.BatchData):
                 def load_sim_data(self, task_name):
@@ -248,7 +251,6 @@ def use_emulated_run(monkeypatch):
 
         monkeypatch.setattr(webapi, "run", run_emulated)
         monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
-        monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d_bwd", emulated_run_bwd)
         monkeypatch.setattr(
             tidy3d.web.api.autograd.autograd, "_run_async_tidy3d", emulated_run_async_fwd
         )
@@ -348,19 +350,30 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     matrix = np.random.random((N_PARAMS,)) - 0.5
     params_01 = 0.5 * (anp.tanh(matrix @ params / 3) + 1)
 
-    radii = 1.0 + 0.5 * params_01
+    free_param = "vertices" if POLYSLAB_AXIS == 0 else "slab_bounds"
+
+    if free_param == "vertices":
+        radii = 0.5 + 0.5 * params_01
+        slab_bounds = (-0.5, 0.5)
+    elif free_param == "slab_bounds":
+        radii = 1.0
+        shift = 0.1 * params_01
+        slab_bounds = (-0.5 + shift, 0.5 + shift)
+        # slab_bounds = (-0.5 + shift, 0.5)
+        # slab_bounds = (-0.5, 0.5 + shift)
 
     phis = 2 * anp.pi * anp.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
     xs = radii * anp.cos(phis)
     ys = radii * anp.sin(phis)
     vertices = anp.stack((xs, ys), axis=-1)
+
     polyslab = td.Structure(
         geometry=td.PolySlab(
             vertices=vertices,
-            slab_bounds=(-0.5, 0.5),
-            axis=0,
-            sidewall_angle=0.01,
-            dilation=0.01,
+            slab_bounds=slab_bounds,
+            axis=POLYSLAB_AXIS,
+            sidewall_angle=0.00,
+            dilation=0.00,
         ),
         medium=med,
     )
@@ -374,6 +387,31 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
                 size_element.geometry,
             ],
         ),
+        medium=td.Medium(permittivity=eps, conductivity=conductivity),
+    )
+
+    # complex polyslab
+    polyslab_combined = ComplexPolySlab(
+        vertices=(
+            (-eps, 0),
+            (-eps, eps),
+            (0, eps / 10),
+            (eps, eps),
+            (eps, 0),
+        ),
+        slab_bounds=(-0.5, 0.5),
+        axis=1,
+        sidewall_angle=np.pi / 100,
+    )
+
+    polyslab_geometries = []
+    for sub_polyslab in polyslab_combined.sub_polyslabs:
+        polyslab_geometries.append(sub_polyslab)
+
+    assert len(polyslab_geometries) >= 2, "need more polyslabs for a proper test of ComplexPolySlab"
+
+    complex_polyslab_geo_group = td.Structure(
+        geometry=td.GeometryGroup(geometries=polyslab_geometries),
         medium=td.Medium(permittivity=eps, conductivity=conductivity),
     )
 
@@ -430,6 +468,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         custom_med_vec=custom_med_vec,
         polyslab=polyslab,
         geo_group=geo_group,
+        complex_polyslab=complex_polyslab_geo_group,
         pole_res=pole_res,
         custom_pole_res=custom_pole_res,
         cylinder=cylinder,
@@ -524,6 +563,7 @@ structure_keys_ = (
     "custom_med",
     "custom_med_vec",
     "polyslab",
+    "complex_polyslab",
     "geo_group",
     "pole_res",
     "custom_pole_res",
@@ -548,7 +588,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("size_element", "mode")]
+# args = [("polyslab", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
@@ -581,7 +621,7 @@ def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
             structures.append(structures_traced_dict[structure_key])
 
         sim = SIM_BASE
-        if "diff" in monitor_dict:
+        if "diff" in monitor_keys:
             sim = sim.updated_copy(boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=True))
         sim = sim.updated_copy(structures=structures, monitors=monitors)
 
@@ -633,7 +673,8 @@ def test_autograd_numerical(structure_key, monitor_key):
         sim = make_sim(*args)
         if PLOT_SIM:
             plot_sim(sim, plot_eps=True)
-        data = web.run(sim, task_name="autograd_test_numerical", verbose=False)
+
+        data = web.run(sim, task_name="autograd_test_numerical", verbose=False, local_gradient=True)
         value = postprocess(data)
         return value
 
@@ -642,7 +683,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
     # numerical gradients
-    delta = 1e-3
+    delta = 1e-1
     sims_numerical = {}
 
     params_num = np.zeros((N_PARAMS, N_PARAMS))
@@ -691,7 +732,7 @@ def test_autograd_numerical(structure_key, monitor_key):
     print(f"avg(diff(objectives)) = {diff_objectives_num:.4f}")
 
 
-def test_run_zero_grad(use_emulated_run, log_capture):
+def test_run_zero_grad(use_emulated_run):
     """Test warning if no adjoint sim is run (no adjoint sources).
 
     This checks the case where a simulation is still part of the computational
@@ -710,7 +751,7 @@ def test_run_zero_grad(use_emulated_run, log_capture):
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return 0 * postprocess(sim_data)
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="no sources"):
+    with AssertLogLevel("WARNING", contains_str="no sources"):
         grad = ag.grad(objective)(params0)
 
 
@@ -771,7 +812,7 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_async_some_zero_grad(use_emulated_run, log_capture, structure_key, monitor_key):
+def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_key):
     """Test objective where only some simulations in batch have adjoint sources."""
 
     fn_dict = get_functions(structure_key, monitor_key)
@@ -788,13 +829,12 @@ def test_autograd_async_some_zero_grad(use_emulated_run, log_capture, structure_
             values.append(postprocess(sim_data))
         return min(values)
 
-    # with AssertLogLevel(log_capture, "DEBUG", contains_str="no sources"):
     val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0"
 
 
-def test_autograd_async_all_zero_grad(use_emulated_run, log_capture):
+def test_autograd_async_all_zero_grad(use_emulated_run):
     """Test objective where no simulation in batch has adjoint sources."""
 
     fn_dict = get_functions(args[0][0], args[0][1])
@@ -811,7 +851,7 @@ def test_autograd_async_all_zero_grad(use_emulated_run, log_capture):
             values.append(postprocess(sim_data))
         return 0 * sum(values)
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="contains adjoint sources"):
+    with AssertLogLevel("WARNING", contains_str="contains adjoint sources"):
         grad = ag.grad(objective)(params0)
 
 
@@ -854,22 +894,22 @@ def test_autograd_speed_num_structures(use_emulated_run):
 def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
-    t = 1.0
+    t0 = 1.0
     axis = 0
 
-    num_pts = 89
+    num_pts = 819
 
     monitor, postprocess = make_monitors()[monitor_key]
 
-    def make_cylinder(radius, x0, y0):
+    def make_cylinder(radius, x0, y0, t):
         return td.Cylinder(
             center=td.Cylinder.unpop_axis(0.0, (x0, y0), axis=axis),
             radius=radius,
             length=t,
             axis=axis,
-        )  # .to_polyslab(num_pts)
+        ).to_polyslab(num_pts)
 
-    def make_polyslab(radius, x0, y0):
+    def make_polyslab(radius, x0, y0, t):
         phis = anp.linspace(0, 2 * np.pi, num_pts + 1)[:-1]
 
         xs = radius * anp.cos(phis) + x0
@@ -889,7 +929,7 @@ def test_autograd_polyslab_cylinder(use_emulated_run, monitor_key):
 
         return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
 
-    p0 = [1.0, 0.0, 0.0]
+    p0 = [1.0, 0.0, 0.0, t0]
 
     def objective_polyslab(params):
         """Objective function."""
@@ -988,7 +1028,7 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
-def test_sim_traced_override_structures(log_capture):
+def test_sim_traced_override_structures():
     """Make sure that sims with traced override structures are handled properly."""
 
     def f(x):
@@ -999,7 +1039,7 @@ def test_sim_traced_override_structures(log_capture):
         sim = SIM_FULL.updated_copy(override_structures=[override_structure], path="grid_spec")
         return sim.grid_spec.override_structures[0].geometry.size[2]
 
-    with AssertLogLevel(log_capture, "WARNING", contains_str="override structures"):
+    with AssertLogLevel("WARNING", contains_str="override structures"):
         ag.grad(f)(1.0)
 
 
@@ -1020,7 +1060,7 @@ def test_sim_fields_io(structure_key, tmp_path):
         assert np.all(data == autograd_field_map[path])
 
 
-def test_web_incompatible_inputs(log_capture, monkeypatch):
+def test_web_incompatible_inputs(monkeypatch):
     """Test what happens when bad inputs passed to web.run()."""
 
     def catch(*args, **kwargs):
@@ -1055,7 +1095,7 @@ def test_web_incompatible_inputs(log_capture, monkeypatch):
         td.web.run_async([SIM_BASE])
 
 
-def test_too_many_traced_structures(monkeypatch, log_capture, use_emulated_run):
+def test_too_many_traced_structures(monkeypatch, use_emulated_run):
     """More traced structures than allowed."""
 
     from tidy3d.web.api.autograd.autograd import MAX_NUM_TRACED_STRUCTURES
@@ -1299,6 +1339,9 @@ def test_pole_residue(monkeypatch):
         eps_out=1.0,
         frequency=freq,
         bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
     grads_computed = pr.compute_derivatives(derivative_info=info)
@@ -1378,6 +1421,9 @@ def test_custom_pole_residue(monkeypatch):
         eps_out=1.0,
         frequency=freq,
         bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
     grads_computed = pr.compute_derivatives(derivative_info=info)
@@ -1520,7 +1566,7 @@ def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.
     return ag.grad(objective)(params)
 
 
-def check_1_src_single(log_capture, structure_key):
+def check_1_src_single(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 1 adjoint sources."""
         amps = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1529,7 +1575,7 @@ def check_1_src_single(log_capture, structure_key):
     return postprocess
 
 
-def check_2_src_single(log_capture, structure_key):
+def check_2_src_single(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
         amps = get_amps(sim_data, "single").sel(mode_index=0)
@@ -1538,7 +1584,7 @@ def check_2_src_single(log_capture, structure_key):
     return postprocess
 
 
-def check_1_src_multi(log_capture, structure_key):
+def check_1_src_multi(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 1 adjoint sources."""
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
@@ -1547,7 +1593,7 @@ def check_1_src_multi(log_capture, structure_key):
     return postprocess
 
 
-def check_2_src_multi(log_capture, structure_key):
+def check_2_src_multi(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
         amps = get_amps(sim_data, "multi").sel(mode_index=0, f=FREQ1)
@@ -1556,7 +1602,7 @@ def check_2_src_multi(log_capture, structure_key):
     return postprocess
 
 
-def check_2_src_both(log_capture, structure_key):
+def check_2_src_both(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
         amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1566,7 +1612,7 @@ def check_2_src_both(log_capture, structure_key):
     return postprocess
 
 
-def check_1_multisrc(log_capture, structure_key):
+def check_1_multisrc(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should raise ValueError because diff sources, diff freqs."""
         amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1576,7 +1622,7 @@ def check_1_multisrc(log_capture, structure_key):
     return postprocess
 
 
-def check_2_multisrc(log_capture, structure_key):
+def check_2_multisrc(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should raise ValueError because diff sources, diff freqs."""
         amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
@@ -1586,7 +1632,7 @@ def check_2_multisrc(log_capture, structure_key):
     return postprocess
 
 
-def check_1_src_broadband(log_capture, structure_key):
+def check_1_src_broadband(structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 1 broadband adjoint sources with many freqs."""
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
@@ -1611,9 +1657,7 @@ checks = list(MULT_FREQ_TEST_CASES.items())
 
 @pytest.mark.parametrize("label, check_fn", checks)
 @pytest.mark.parametrize("structure_key", ("custom_med",))
-def test_multi_freq_edge_cases(
-    log_capture, use_emulated_run, structure_key, label, check_fn, monkeypatch
-):
+def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn, monkeypatch):
     # test multi-frequency adjoint handling
 
     import tidy3d.components.data.sim_data as sd
@@ -1621,7 +1665,7 @@ def test_multi_freq_edge_cases(
     monkeypatch.setattr(sd, "RESIDUAL_CUTOFF_ADJOINT", 1)
     reload(td)
 
-    postprocess_fn = check_fn(structure_key=structure_key, log_capture=log_capture)
+    postprocess_fn = check_fn(structure_key=structure_key)
 
     def objective(params):
         structure_traced = make_structures(params)[structure_key]
@@ -1633,7 +1677,7 @@ def test_multi_freq_edge_cases(
         return postprocess_fn(data)
 
     if label == "src_2_freq_2_mon_2":
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(ValueError):
             g = ag.grad(objective)(params0)
     else:
         g = ag.grad(objective)(params0)
@@ -1685,14 +1729,17 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
     assert not np.any(np.isclose(grad_multi, 0))
 
 
-def test_error_flux(use_emulated_run, log_capture):
+def test_error_flux(use_emulated_run):
     """Make sure proper error raised if differentiating w.r.t. FluxData."""
 
     def objective(params):
         structure_traced = make_structures(params)["medium"]
         sim = SIM_BASE.updated_copy(
             structures=[structure_traced],
-            monitors=[td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="flux")],
+            monitors=[
+                td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="flux"),
+                td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
+            ],
         )
         data = run(sim, task_name="flux_error")
         return anp.sum(data["flux"].flux.values)
@@ -1703,7 +1750,7 @@ def test_error_flux(use_emulated_run, log_capture):
         g = ag.grad(objective)(params0)
 
 
-def test_extraneous_field(use_emulated_run, log_capture):
+def test_extraneous_field(use_emulated_run):
     """Make sure this doesnt fail."""
 
     def objective(params):
@@ -1728,7 +1775,7 @@ def test_extraneous_field(use_emulated_run, log_capture):
     g = ag.grad(objective)(params0)
 
 
-def test_background_medium(log_capture):
+def test_background_medium():
     geo = td.Box(size=(1, 1, 1), center=(0, 0, 0))
     med = td.Medium(permittivity=2.0)
 
@@ -1766,7 +1813,7 @@ def test_background_medium(log_capture):
     )
 
     # background permittivity (deprecated)
-    with AssertLogLevel(log_capture, "WARNING", contains_str="deprecated"):
+    with AssertLogLevel("WARNING", contains_str="deprecated"):
         s_warn = td.Structure(
             geometry=geo,
             medium=med,
@@ -1822,3 +1869,159 @@ class TestDataArrayGrads:
         b = 1.0
         check_grads(lambda x: objective(x, b), modes=["fwd", "rev"], order=2)(a)
         check_grads(lambda x: objective(a, x), modes=["fwd", "rev"], order=2)(b)
+
+
+@pytest.fixture
+def polyslab() -> td.PolySlab:
+    """Creates a PolySlab instance for testing affine transformations."""
+    vertices = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
+    axis = 1  # 0 for x, 1 for y, 2 for z
+    slab_bounds = (-1.0, 1.0)
+
+    return td.PolySlab(vertices=vertices, axis=axis, slab_bounds=slab_bounds)
+
+
+@pytest.mark.parametrize(
+    "x, y, z",
+    [
+        (0.0, 0.0, 0.0),  # No translation (edge case)
+        (0.1, 0.2, 0.3),  # Small positive values
+        (-0.1, -0.2, -0.3),  # Small negative values
+        (1e-5, 1e-5, 1e-5),  # Near-zero translation
+        (10.0, 10.0, 10.0),  # Large values
+    ],
+)
+def test_polyslab_translated_grad(polyslab: td.PolySlab, x: float, y: float, z: float) -> None:
+    """Checks the differentiability of the translation operation of PolySlab."""
+    poly = polyslab
+
+    def translated_grad_with_vertices(x: float, y: float, z: float) -> anp.ndarray:
+        """Computes the translated vertices of a PolySlab object."""
+        new_poly = poly.translated(x, y, z)
+        return new_poly.vertices
+
+    def translated_grad_with_slab_bounds(x: float, y: float, z: float) -> anp.ndarray:
+        """Computes the translated slab bounds of a PolySlab object."""
+        new_poly = poly.translated(x, y, z)
+        return anp.array([new_poly.slab_bounds[0], new_poly.slab_bounds[1]])
+
+    if poly.axis == 0:
+        check_grads(lambda x: translated_grad_with_slab_bounds(x, y, z), modes=["rev"])(x)
+    else:
+        check_grads(lambda x: translated_grad_with_vertices(x, y, z), modes=["rev"])(x)
+
+    if poly.axis == 1:
+        check_grads(lambda y: translated_grad_with_slab_bounds(x, y, z), modes=["rev"])(y)
+    else:
+        check_grads(lambda y: translated_grad_with_vertices(x, y, z), modes=["rev"])(y)
+
+    if poly.axis == 2:
+        check_grads(lambda z: translated_grad_with_slab_bounds(x, y, z), modes=["rev"])(z)
+    else:
+        check_grads(lambda z: translated_grad_with_vertices(x, y, z), modes=["rev"])(z)
+
+
+@pytest.mark.parametrize(
+    "x, y, z, expect_exception",
+    [
+        (0.0, 0.0, 0.0, True),  # No scaling
+        (0.1, 0.2, 0.3, False),  # Small positive values
+        (-0.1, 0.2, -0.3, False),  # Reflect along x and z axes
+        (0.1, -0.2, 0.3, True),  # Flips slab bounds (pydantic validation to fail)
+        (1e-5, 1e-5, 1e-5, True),  # Near-zero scaling (polygon almost collapses to a 1D curve)
+        (10.0, 10.0, 10.0, False),  # Large values
+    ],
+)
+def test_polyslab_scaled_grad(
+    polyslab: td.PolySlab, x: float, y: float, z: float, expect_exception: bool
+) -> None:
+    """Checks the differentiability of the scaling operation of PolySlab."""
+    poly = polyslab
+
+    def scaled_grad_with_vertices(x: float, y: float, z: float) -> anp.ndarray:
+        """Computes the scaled vertices of a PolySlab object."""
+        new_poly = poly.scaled(x, y, z)
+        return new_poly.vertices
+
+    def scaled_grad_with_slab_bounds(x: float, y: float, z: float) -> anp.ndarray:
+        """Computes the scaled slab bounds of a PolySlab object."""
+        new_poly = poly.scaled(x, y, z)
+        return anp.array([new_poly.slab_bounds[0], new_poly.slab_bounds[1]])
+
+    if expect_exception:
+        with pytest.raises(ValueError, match=".*"):
+            check_grads(lambda x: scaled_grad_with_vertices(x, y, z), modes=["rev"])(x)
+            check_grads(lambda y: scaled_grad_with_vertices(x, y, z), modes=["rev"])(y)
+            check_grads(lambda z: scaled_grad_with_vertices(x, y, z), modes=["rev"])(z)
+    else:
+        if poly.axis == 0:
+            check_grads(lambda x: scaled_grad_with_slab_bounds(x, y, z), modes=["rev"])(x)
+        else:
+            check_grads(lambda x: scaled_grad_with_vertices(x, y, z), modes=["rev"])(x)
+
+        if poly.axis == 1:
+            check_grads(lambda y: scaled_grad_with_slab_bounds(x, y, z), modes=["rev"])(y)
+        else:
+            check_grads(lambda y: scaled_grad_with_vertices(x, y, z), modes=["rev"])(y)
+
+        if poly.axis == 2:
+            check_grads(lambda z: scaled_grad_with_slab_bounds(x, y, z), modes=["rev"])(z)
+        else:
+            check_grads(lambda z: scaled_grad_with_vertices(x, y, z), modes=["rev"])(z)
+
+
+@pytest.mark.parametrize(
+    "theta, axis",
+    [
+        (0.0, 0),  # No rotation around x-axis
+        (np.pi / 6, 1),  # Small rotation around y-axis
+        (-np.pi / 4, 2),  # Rotation around z-axis
+        (np.pi / 4, 1),  # 90-degree rotation around y-axis
+        (np.pi, 1),  # 180-degree rotation around y-axis
+    ],
+)
+def test_polyslab_rotated_grad(polyslab: td.PolySlab, theta: float, axis: int) -> None:
+    """Checks the differentiability of the rotation operation of PolySlab."""
+    poly = polyslab
+    expect_exception = axis != poly.axis  # Rotation about different axis will fail
+
+    def rotated_grad(angle: float, axis: int) -> np.ndarray:
+        """Computes the rotated vertices of a PolySlab object."""
+        return poly.rotated(angle, axis).vertices
+
+    if expect_exception:
+        with pytest.raises(
+            AttributeError, match=".*'Transformed' object has no attribute 'vertices'.*"
+        ):
+            rotated_grad(theta, axis)
+    else:
+        check_grads(lambda theta: rotated_grad(theta, axis), modes=["rev"])(theta)
+
+
+def test_flux_monitor_freq_exclusion(use_emulated_run):
+    """Checks if we are excluding flux monitor frequencies from the adjoint frequencies since
+    we cannot differentiate through flux data."""
+
+    monitors_just_field = [
+        td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field")
+    ]
+
+    monitors_with_flux = [
+        td.FieldMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
+        td.FluxMonitor(
+            size=(1, 1, 0), center=(0, 0, 0), freqs=[FREQ0 - FWIDTH, FREQ0 + FWIDTH], name="flux"
+        ),
+    ]
+
+    def objective_with_monitors(monitors):
+        def objective(params):
+            structure_traced = make_structures(params)["medium"]
+            sim = SIM_BASE.updated_copy(structures=[structure_traced], monitors=monitors)
+            data = run(sim, task_name="adjoint_freq_test")
+            assert data.simulation.freqs_adjoint == [FREQ0]
+            return anp.sum(data["field"].flux.values)
+
+        return objective
+
+    grad_no_flux_monitors = ag.grad(objective_with_monitors(monitors_just_field))(params0)
+    grad_with_flux_monitors = ag.grad(objective_with_monitors(monitors_with_flux))(params0)

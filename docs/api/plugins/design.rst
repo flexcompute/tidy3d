@@ -18,7 +18,8 @@ Design Space Exploration
    tidy3d.plugins.design.method.Method
    tidy3d.plugins.design.MethodGrid
    tidy3d.plugins.design.MethodMonteCarlo
-   tidy3d.plugins.design.MethodRandomCustom
-   tidy3d.plugins.design.MethodRandom
+   tidy3d.plugins.design.MethodBayOpt
+   tidy3d.plugins.design.MethodGenAlg
+   tidy3d.plugins.design.MethodParticleSwarm
    tidy3d.plugins.design.DesignSpace
    tidy3d.plugins.design.Result

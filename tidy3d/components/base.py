@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 import os
 import pathlib
 import tempfile
@@ -216,13 +217,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "by calling ``obj.json()``.",
     )
 
-    def copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
-        """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
+    def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
+        """Copy a Tidy3dBaseModel.  With ``deep=True`` and ``validate=True`` as default."""
         kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
-        return self.validate(new_copy.dict())
+        if validate:
+            return self.validate(new_copy.dict())
+        # cached property is cleared automatically when validation is on, but it
+        # needs to be manually cleared when validation is off
+        new_copy._cached_properties = {}
+        return new_copy
 
-    def updated_copy(self, path: str = None, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def updated_copy(
+        self, path: str = None, deep: bool = True, validate: bool = True, **kwargs
+    ) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
         Note
@@ -237,7 +245,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         if not path:
-            return self._updated_copy(**kwargs, deep=deep)
+            return self._updated_copy(**kwargs, deep=deep, validate=validate)
 
         path_components = path.split("/")
 
@@ -269,18 +277,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             sub_path = "/".join(path_components[2:])
 
             sub_component_list[index] = sub_component.updated_copy(
-                path=sub_path, deep=deep, **kwargs
+                path=sub_path, deep=deep, validate=validate, **kwargs
             )
             new_component = tuple(sub_component_list)
         else:
             sub_path = "/".join(path_components[1:])
-            new_component = sub_component.updated_copy(path=sub_path, deep=deep, **kwargs)
+            new_component = sub_component.updated_copy(
+                path=sub_path, deep=deep, validate=validate, **kwargs
+            )
 
-        return self._updated_copy(deep=deep, **{field_name: new_component})
+        return self._updated_copy(deep=deep, validate=validate, **{field_name: new_component})
 
-    def _updated_copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
-        return self.copy(update=kwargs, deep=deep)
+        return self.copy(update=kwargs, deep=deep, validate=validate)
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -929,7 +939,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
             json_string = json_string.replace("-Infinity", tmp_string)
+            json_string = json_string.replace('""-Infinity""', tmp_string)
             json_string = json_string.replace("Infinity", '"Infinity"')
+            json_string = json_string.replace('""Infinity""', '"Infinity"')
             return json_string.replace(tmp_string, '"-Infinity"')
 
         json_string = self.json(indent=indent, exclude_unset=exclude_unset, **kwargs)
@@ -1150,3 +1162,40 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         fields[hash_].append((key, index))
 
         return fields
+
+    @staticmethod
+    def _scientific_notation(
+        min_val: float, max_val: float, min_digits: int = 4
+    ) -> Tuple[str, str]:
+        """
+        Convert numbers to scientific notation, displaying only digits up to the point of difference,
+        with a minimum number of significant digits specified by `min_digits`.
+        """
+
+        def to_sci(value: float, exponent: int, precision: int) -> str:
+            normalized_value = value / (10**exponent)
+            return f"{normalized_value:.{precision}f}e{exponent}"
+
+        if min_val == 0 or max_val == 0:
+            return f"{min_val:.0e}", f"{max_val:.0e}"
+
+        exponent_min = math.floor(math.log10(abs(min_val)))
+        exponent_max = math.floor(math.log10(abs(max_val)))
+
+        common_exponent = min(exponent_min, exponent_max)
+        normalized_min = min_val / (10**common_exponent)
+        normalized_max = max_val / (10**common_exponent)
+
+        if normalized_min == normalized_max:
+            precision = min_digits
+        else:
+            precision = 0
+            while round(normalized_min, precision) == round(normalized_max, precision):
+                precision += 1
+
+        precision = max(precision, min_digits)
+
+        sci_min = to_sci(min_val, common_exponent, precision)
+        sci_max = to_sci(max_val, common_exponent, precision)
+
+        return sci_min, sci_max

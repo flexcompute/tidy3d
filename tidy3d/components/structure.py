@@ -14,14 +14,17 @@ from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
 from ..log import log
 from .autograd.derivative_utils import DerivativeInfo
-from .autograd.types import AutogradFieldMap, Box
+from .autograd.types import AutogradFieldMap
+from .autograd.types import Box as AutogradBox
 from .autograd.utils import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .data.data_array import ScalarFieldDataArray
+from .geometry.base import Box, Geometry
 from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
-from .medium import AbstractCustomMedium, CustomMedium, Medium, Medium2D, MediumType
+from .material.types import StructureMediumType
+from .medium import AbstractCustomMedium, CustomMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
 from .types import TYPE_TAG_STR, Ax, Axis
 from .validators import validate_name_str
@@ -63,7 +66,7 @@ class AbstractStructure(Tidy3dBaseModel):
         "when performing shape optimization with autograd.",
     )
 
-    background_medium: MediumType = pydantic.Field(
+    background_medium: StructureMediumType = pydantic.Field(
         None,
         title="Background Medium",
         description="Medium used for the background of this structure "
@@ -107,6 +110,10 @@ class AbstractStructure(Tidy3dBaseModel):
         validate_no_transformed_polyslabs(val)
         return val
 
+    @property
+    def viz_spec(self):
+        return None
+
     @equal_aspect
     @add_ax_if_none
     def plot(
@@ -134,7 +141,7 @@ class AbstractStructure(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        return self.geometry.plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
+        return self.geometry.plot(x=x, y=y, z=z, ax=ax, viz_spec=self.viz_spec, **patch_kwargs)
 
 
 class Structure(AbstractStructure):
@@ -175,12 +182,16 @@ class Structure(AbstractStructure):
     * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
 
-    medium: MediumType = pydantic.Field(
+    medium: StructureMediumType = pydantic.Field(
         ...,
         title="Medium",
         description="Defines the electromagnetic properties of the structure's medium.",
         discriminator=TYPE_TAG_STR,
     )
+
+    @property
+    def viz_spec(self):
+        return self.medium.viz_spec
 
     def eps_diagonal(self, frequency: float, coords: Coords) -> Tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
@@ -245,7 +256,7 @@ class Structure(AbstractStructure):
         return monitor_name_map[data_type]
 
     def make_adjoint_monitors(
-        self, freqs: list[float], index: int
+        self, freqs: list[float], index: int, field_keys: list[str]
     ) -> (FieldMonitor, PermittivityMonitor):
         """Generate the field and permittivity monitor for this structure."""
 
@@ -254,11 +265,15 @@ class Structure(AbstractStructure):
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
 
-        size = [get_static(x) for x in box.size]  # TODO: expand slightly?
+        size = [get_static(x) for x in box.size]
         center = [get_static(x) for x in box.center]
 
         # polyslab only needs fields at the midpoint along axis
-        if isinstance(geometry, PolySlab) and not isinstance(self.medium, AbstractCustomMedium):
+        if (
+            isinstance(geometry, PolySlab)
+            and not isinstance(self.medium, AbstractCustomMedium)
+            and field_keys == [("vertices",)]
+        ):
             size[geometry.axis] = 0
 
         mnt_fld = FieldMonitor(
@@ -576,7 +591,7 @@ class Structure(AbstractStructure):
 
         rmin, rmax = geometry.bounds
 
-        if not isinstance(eps_data, (np.ndarray, Box, list, tuple)):
+        if not isinstance(eps_data, (np.ndarray, AutogradBox, list, tuple)):
             raise ValueError("Must supply array-like object for 'eps_data'.")
 
         eps_data = anp.array(eps_data)
@@ -657,12 +672,48 @@ class MeshOverrideStructure(AbstractStructure):
 
     enforce: bool = pydantic.Field(
         False,
-        title="Enforce grid size",
+        title="Enforce Grid Size",
         description="If ``True``, enforce the grid size setup inside the structure "
         "even if the structure is inside a structure of smaller grid size. In the intersection "
         "region of multiple structures of ``enforce=True``, grid size is decided by "
         "the last added structure of ``enforce=True``.",
     )
+
+    shadow: bool = pydantic.Field(
+        True,
+        title="Grid Size Choice In Structure Overlapping Region",
+        description="In structure intersection region, grid size is decided by the latter added "
+        "structure in the structure list when ``shadow=True``; or the structure of smaller grid size "
+        "when ``shadow=False``. If ``shadow=False``, and the structure doesn't refine the mesh, grid snapping to "
+        "the bounding box of the structure is disabled.",
+    )
+
+    drop_outside_sim: bool = pydantic.Field(
+        True,
+        title="Drop Structure Outside Simulation Domain",
+        description="If ``True``, structure outside the simulation domain is dropped; if ``False``, "
+        "structure takes effect along the dimensions where the projections of the structure "
+        "and that of the simulation domain overlap.",
+    )
+
+    @pydantic.validator("geometry")
+    def _box_only(cls, val):
+        """Ensure this is a box."""
+        if isinstance(val, Geometry):
+            if not isinstance(val, Box):
+                log.warning(
+                    "Override structures should be 'Box' as of 'tidy3d' version 2.8. "
+                    f"Given type of '{type(val)}, using '{type(val)}.bounding_box' instead."
+                )
+                return val.bounding_box
+        return val
+
+    @pydantic.validator("shadow")
+    def _unshadowed_cannot_be_enforced(cls, val, values):
+        """Unshadowed structure cannot be enforced."""
+        if not val and values["enforce"]:
+            raise SetupError("A structure cannot be simultaneously enforced and unshadowed.")
+        return val
 
 
 StructureType = Union[Structure, MeshOverrideStructure]

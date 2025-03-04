@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC
+from math import isclose
 from typing import Any, Callable, Dict, List, Tuple, Union
 
 import autograd.numpy as np
@@ -21,6 +22,7 @@ from ..grid.grid import Coords, Grid
 from ..medium import Medium, MediumType
 from ..monitor import (
     DiffractionMonitor,
+    DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
@@ -34,23 +36,29 @@ from ..monitor import (
     MonitorType,
     PermittivityMonitor,
 )
-from ..source import (
+from ..source.base import Source
+from ..source.current import (
     CustomCurrentSource,
+    PointDipole,
+)
+from ..source.field import (
     CustomFieldSource,
-    GaussianPulse,
     ModeSource,
     PlaneWave,
-    PointDipole,
-    Source,
+)
+from ..source.time import (
+    GaussianPulse,
     SourceTimeType,
 )
 from ..types import (
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,
+    EMField,
     EpsSpecType,
     Literal,
     Numpy,
+    PolarizationBasis,
     Size,
     Symmetry,
     TrackFreq,
@@ -89,6 +97,9 @@ Coords1D = ArrayFloat1D
 
 # how much to shift the adjoint field source for 0-D axes dimensions
 SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
+AXIAL_RATIO_CAP = 100
+# At this sampling rate, the computed area of a sphere is within ~1% of the true value.
+MIN_ANGULAR_SAMPLES_SPHERE = 10
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -111,6 +122,31 @@ class MonitorData(AbstractMonitorData, ABC):
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Dataset:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
+
+    def scale_fields_by_freq_array(
+        self, freq_array: FreqDataArray, method: str = None
+    ) -> MonitorData:
+        """Scale fields in :class:`.MonitorData` by an array of values stored in a :class:`.FreqDataArray`.
+
+        Parameters
+        ----------
+        freq_array : FreqDataArray
+            Array containing the scaling factors in the frequency domain.
+        method : str = None
+            Interpolation method to use when selecting frequency values. If None, uses default xarray
+            method. Passed to xarray's sel() method.
+
+        Returns
+        -------
+        :class:`.MonitorData`
+            A new instance of :class:`.MonitorData` with scaled field values.
+        """
+
+        # Reuse the normalize method, so we need the inverse of the scaling amplitude
+        def amplitude_fn(freq: list[float]) -> complex:
+            return 1.0 / freq_array.sel(f=freq, method=method).values
+
+        return self.normalize(amplitude_fn)
 
     def _updated(self, update: Dict) -> MonitorData:
         """Similar to ``updated_copy``, but does not actually copy components, for speed.
@@ -239,6 +275,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         """Dictionary of data fields to create data with expanded symmetry."""
 
         update_dict = {}
+        warn_interp = False
         for field_name, scalar_data in self.field_components.items():
             eigenval_fn = self.symmetry_eigenvalues[field_name]
 
@@ -266,8 +303,44 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
 
-                scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
-                scalar_data = scalar_data.assign_coords({dim_name: coords})
+                # using sel vs interp is faster, and should always be fine
+                # if the data is set up correctly such that its colocation
+                # matches the monitor colocation settings. If these do not match,
+                # then we need to interpolate, which is slower.
+                use_sel = (
+                    len(scalar_data.coords[dim_name]) == 1
+                    or coords[-1] in scalar_data.coords[dim_name]
+                )
+                if use_sel:
+                    scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
+                    scalar_data = scalar_data.assign_coords({dim_name: coords})
+                else:
+                    warn_interp = True
+                    no_flip_inds = np.where(coords >= sym_loc)[0]
+                    scalar_data_arrays = []
+                    if len(scalar_data.coords[dim_name]) == 1:
+                        scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
+                    else:
+                        if len(flip_inds) > 0:
+                            scalar_data_flip = scalar_data.interp(
+                                **{dim_name: coords_interp[flip_inds][::-1]},
+                                method="linear",
+                                kwargs={"fill_value": "extrapolate"},
+                                assume_sorted=True,
+                            ).isel({dim_name: slice(None, None, -1)})
+                            scalar_data_flip = scalar_data_flip.assign_coords(
+                                {dim_name: coords[flip_inds]}
+                            )
+                            scalar_data_arrays.append(scalar_data_flip)
+                        if len(no_flip_inds) > 0:
+                            scalar_data_no_flip = scalar_data.interp(
+                                **{dim_name: coords_interp[no_flip_inds]},
+                                method="linear",
+                                kwargs={"fill_value": "extrapolate"},
+                                assume_sorted=True,
+                            )
+                            scalar_data_arrays.append(scalar_data_no_flip)
+                        scalar_data = xr.concat(scalar_data_arrays, dim=dim_name)
 
                 # apply the symmetry eigenvalue (if defined) to the flipped values
                 if eigenval_fn is not None:
@@ -280,6 +353,13 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             update_dict[field_name] = scalar_data
 
         update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
+
+        if warn_interp:
+            log.warning(
+                "Interpolating 'ElectromagneticFieldData'. This may be due to "
+                "mismatch between monitor colocation and data colocation, "
+                "and can lead to performance issues."
+            )
 
         return update_dict
 
@@ -570,6 +650,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
+        self._check_fields_stored(["Ex", "Ey", "Ez"])
+
         normal_dim = "xyz"[self.monitor.size.index(0)]
         fields = self._colocated_fields
         components = ("Ex", "Ey", "Ez")
@@ -677,9 +759,10 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Tangential fields for current and other field data
         fields_self = self._colocated_tangential_fields
 
-        fields_other = field_data._colocated_tangential_fields
         if conjugate:
             fields_self = {key: field.conj() for key, field in fields_self.items()}
+
+        fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
 
         # Drop size-1 dimensions in the other data
         fields_other = {key: field.squeeze(drop=True) for key, field in fields_other.items()}
@@ -694,6 +777,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Integrate over plane
         d_area = self._diff_area
         integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
+
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
 
     def _interpolated_tangential_fields(self, coords: ArrayFloat2D) -> Dict[str, DataArray]:
@@ -710,14 +794,20 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         """
         fields = self._tangential_fields
 
+        # Interpolate if data has more than one coordinate along a dimension
         interp_dict = {"assume_sorted": True}
+        # If single coordinate, just sel "nearest", i.e. just propagate the same data everywhere
+        sel_dict = {"method": "nearest"}
         for dim, cents in zip(self._tangential_dims, coords):
             if cents.size > 0:
-                interp_dict[dim] = cents
+                if list(fields.values())[0].coords[dim].size > 1:
+                    interp_dict[dim] = cents
+                else:
+                    sel_dict[dim] = cents
 
         kwargs = {"bounds_error": False, "fill_value": 0.0}
         for component, field in fields.items():
-            fields[component] = field.interp(kwargs=kwargs, **interp_dict)
+            fields[component] = field.interp(kwargs=kwargs, **interp_dict).sel(**sel_dict)
 
         return fields
 
@@ -922,6 +1012,55 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             else:
                 new_data[comp] = np.conj(field)
         return self.copy(update=new_data)
+
+    def _check_fields_stored(self, components: list[str]):
+        """Check that all requested field components are stored in the data."""
+        missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
+        if len(missing_comps) > 0:
+            raise DataError(
+                f"Field components {missing_comps} not included in this data object. Use "
+                "the 'fields' argument of a field monitor to select which components are stored."
+            )
+
+    def translated_copy(self, vector: Coordinate) -> ElectromagneticFieldData:
+        """Create a copy of the :class:`.ElectromagneticFieldData` with fields translated
+        by the provided vector. Can be used together with ``dot`` or ``outer_dot``
+        to compute overlaps between field data at different locations.
+
+        Parameters
+        ----------
+        vector: :class:`.Coordinate`
+            Translation vector to apply to the field data.
+
+        Returns
+        -------
+        :class:`ElectromagneticFieldData`
+            A data object with the translated fields.
+        """
+        field_kwargs = {}
+        for key, val in self.field_components.items():
+            coords = dict(val.coords)
+            coords["x"] = coords["x"] + vector[0]
+            coords["y"] = coords["y"] + vector[1]
+            coords["z"] = coords["z"] + vector[2]
+            field_kwargs[key] = val.assign_coords(coords)
+
+        symmetry_center = self.symmetry_center
+        if symmetry_center is not None:
+            symmetry_center = tuple([x + y for (x, y) in zip(symmetry_center, vector)])
+        grid_expanded = self.grid_expanded._translated_copy(vector=vector)
+
+        monitor_center = tuple([x + y for (x, y) in zip(self.monitor.center, vector)])
+        monitor = self.monitor.updated_copy(center=monitor_center)
+
+        return self.updated_copy(
+            monitor=monitor,
+            symmetry=self.symmetry,
+            symmetry_center=symmetry_center,
+            grid_expanded=grid_expanded,
+            **self._grid_correction_dict,
+            **field_kwargs,
+        )
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
@@ -1385,7 +1524,11 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         newly created data."""
 
         update_dict = dict(self._grid_correction_dict, **self.field_components)
-        update_dict = {key: field.isel(**isel_kwargs) for key, field in update_dict.items()}
+        update_dict = {
+            key: field.isel(**isel_kwargs)
+            for key, field in update_dict.items()
+            if isinstance(field, DataArray)
+        }
         return self._updated(update=update_dict)
 
     def _assign_coords(self, **assign_coords_kwargs):
@@ -1635,12 +1778,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         by popping the normal axis from the list of ``x, y, z``, so e.g. ``x`` and ``z`` for
         propagation in the ``y`` direction.
         """
-        if len(self.field_components) == 0:
-            raise DataError(
-                "Field data not included in this ModeData onbject. Set "
-                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
-                "include the mode field profiles in the corresponding 'ModeData'."
-            )
+        self._check_fields_stored(["Ex", "Ey", "Ez"])
 
         tan_dims = self._tangential_dims
         e_field = self._colocated_propagation_axes_field("E")
@@ -1672,12 +1810,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             are completely transverse (zero electric and magnetic field in the propagation
             direction) have TE fraction and TM fraction both equal to one.
         """
-        if len(self.field_components) == 0:
-            raise DataError(
-                "Field data not included in this ModeData onbject. Set "
-                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
-                "include the mode field profiles in the corresponding 'ModeData'."
-            )
+        self._check_fields_stored(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"])
 
         tan_dims = self._tangential_dims
         e_field = self._colocated_propagation_axes_field("E")
@@ -1744,6 +1877,17 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             drop.append("loss (dB/cm)")
 
         return dataset.drop_vars(drop).to_dataframe()
+
+    def _check_fields_stored(self, components: list[EMField]):
+        """Check that all requested field components are stored in the data."""
+
+        # ModeData can either have all field components or none
+        if len(self.field_components) == 0:
+            raise DataError(
+                "Field data not included in this ModeData object. Set "
+                "'ModeMonitor.store_fields_direction' to the desired propagation direction to "
+                "include the mode field profiles in the corresponding 'ModeData'."
+            )
 
     def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitorData``."""
@@ -1893,6 +2037,16 @@ class ModeSolverData(ModeData):
         new_data["monitor"] = mnt.updated_copy(direction=new_dir, store_fields_direction=new_dir)
         return self.copy(update=new_data)
 
+    def _check_fields_stored(self, components: list[str]):
+        """Check that all requested field components are stored in the data."""
+        missing_comps = [comp for comp in components if comp not in self.field_components.keys()]
+        if len(missing_comps) > 0:
+            raise DataError(
+                f"Field components {missing_comps} not included in this ModeSolverData object. Use "
+                "the 'fields' argument of a `ModeSolver` or a `ModeSolverMonitor` to select which "
+                "components are stored."
+            )
+
 
 class FluxData(MonitorData):
     """
@@ -2000,6 +2154,7 @@ ProjMonitorType = Union[
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
+    DirectivityMonitor,
 ]
 
 
@@ -2015,7 +2170,7 @@ class AbstractFieldProjectionData(MonitorData):
 
     Er: ProjFieldType = pd.Field(
         ...,
-        title="Ephi",
+        title="Er",
         description="Spatial distribution of r-component of the electric field.",
     )
     Etheta: ProjFieldType = pd.Field(
@@ -2030,7 +2185,7 @@ class AbstractFieldProjectionData(MonitorData):
     )
     Hr: ProjFieldType = pd.Field(
         ...,
-        title="Hphi",
+        title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
     )
     Htheta: ProjFieldType = pd.Field(
@@ -2392,6 +2547,94 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         # compute updated fields and their coordinates
         return self.make_renormalized_data(phase, proj_distance)
 
+    @property
+    def tangential_dims(self) -> list[str]:
+        """Tangential dimensions to a spherical surface in the spherical coordinate system."""
+        tangential_dims = ["theta", "phi"]
+        return tangential_dims
+
+    @staticmethod
+    def _check_coords_sorted(coord: np.ndarray, name: str):
+        """Helper for checking whether an array is sorted and raises an exception if it is not."""
+        is_sorted = np.all(np.diff(coord) >= 0)
+        if not is_sorted:
+            raise ValueError(f"{name} was not provided as a sorted array.")
+
+    def _check_integration_suitability(self):
+        """Checks whether the sampling of ``theta`` and ``phi`` is suitable for
+        integrating over a spherical surface."""
+        if (
+            len(self.theta) < MIN_ANGULAR_SAMPLES_SPHERE
+            or len(self.phi) < 2 * MIN_ANGULAR_SAMPLES_SPHERE
+        ):
+            raise ValueError(
+                "There are not enough sampling points along `theta` or `phi` for accurate integration. "
+                f"Currently, {len(self.theta)} samples for `theta` and {len(self.phi)} samples for `phi`. "
+                f"Consider using, at the very least, {MIN_ANGULAR_SAMPLES_SPHERE} samples for `theta` and "
+                f"{2*MIN_ANGULAR_SAMPLES_SPHERE} samples for `phi`."
+            )
+        self._check_coords_sorted(self.theta, "theta")
+        self._check_coords_sorted(self.phi, "phi")
+        if not isclose(self.theta[0], 0) or not isclose(self.theta[-1], np.pi):
+            raise ValueError(
+                "Chosen limits for `theta` are not appropriate for integration. "
+                "`theta` must range from 0 to π."
+            )
+        if not isclose(self.phi[0], 0) or not isclose(self.phi[-1], 2 * np.pi):
+            raise ValueError(
+                "Chosen limits for `phi` are not appropriate for integration. "
+                "`phi` must range from 0 to 2π."
+            )
+
+    def flux_from_projected_fields(self) -> FluxDataArray:
+        """Flux calculated by integrating the projected fields on a spherical surface.
+
+        Returns
+        -------
+        :class:`.FluxDataArray`
+            Flux in the frequency domain.
+        """
+        self._check_integration_suitability()
+        d_solid_angle = np.sin(self.Etheta.theta)
+        integrand = (self.power * d_solid_angle).sel(r=self.monitor.proj_distance)
+        flux = self.monitor.proj_distance**2 * integrand.integrate(self.tangential_dims)
+        return FluxDataArray(flux)
+
+    @staticmethod
+    def get_phi_slice(
+        field_array: FieldProjectionAngleDataArray, phi: float, symmetric: bool = False
+    ) -> FieldProjectionAngleDataArray:
+        """Get a planar slice of the :class:`.FieldProjectionAngleDataArray` along a given phi angle.
+        Extends theta range from [0, π] to [0, 2π] to create a full slice.
+
+        Parameters
+        ----------
+        field_array : :class:`.FieldProjectionAngleDataArray`
+            Field array to slice.
+        phi : float
+            Angle phi in radians to slice at.
+        symmetric : bool = False
+            If True, uses same data for both halves. If False, takes opposite phi angle
+            for back half.
+
+        Returns
+        -------
+        :class:`.FieldProjectionAngleDataArray`
+            2D slice with theta going from 0 to 2π.
+        """
+        slice_phi = field_array.sel(phi=phi, method="nearest")
+        slice_phi = slice_phi.where(slice_phi.theta < np.pi)
+        if symmetric:
+            slice_opposite_phi = field_array.sel(phi=phi, method="nearest")
+        else:
+            slice_opposite_phi = field_array.sel(phi=phi + np.pi, method="nearest")
+        slice_opposite_phi = slice_opposite_phi.where(slice_opposite_phi.theta > 0)
+        slice_opposite_phi = slice_opposite_phi.assign_coords(
+            theta=(2 * np.pi - slice_opposite_phi.theta)
+        )
+        data_array = xr.concat((slice_phi, slice_opposite_phi), dim="theta").sortby("theta")
+        return FieldProjectionAngleDataArray(data_array)
+
 
 class FieldProjectionCartesianData(AbstractFieldProjectionData):
     """Data associated with a :class:`.FieldProjectionCartesianMonitor`: components of
@@ -2501,7 +2744,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
 
     @cached_property
     def flux(self) -> FluxDataArray:
-        """Flux for projecteded field data corresponding to a Cartesian field projection monitor."""
+        """Flux for projected field data corresponding to a Cartesian field projection monitor."""
         flux = self.poynting.integrate(self.tangential_dims)
         return FluxDataArray(flux)
 
@@ -2742,7 +2985,7 @@ class DiffractionData(AbstractFieldProjectionData):
         units=MICROMETER,
     )
 
-    bloch_vecs: Tuple[float, float] = pd.Field(
+    bloch_vecs: Union[Tuple[float, float], Tuple[ArrayFloat1D, ArrayFloat1D]] = pd.Field(
         ...,
         title="Bloch vectors",
         description="Bloch vectors along the local x and y directions in units of "
@@ -2750,20 +2993,24 @@ class DiffractionData(AbstractFieldProjectionData):
     )
 
     @staticmethod
-    def shifted_orders(orders: Tuple[int, ...], bloch_vec: float) -> np.ndarray:
+    def shifted_orders(orders: Tuple[int, ...], bloch_vec: Union[float, np.ndarray]) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
-        return bloch_vec + np.atleast_1d(orders)
+        return bloch_vec + np.atleast_2d(orders).T
 
     @staticmethod
     def reciprocal_coords(
-        orders: np.ndarray, size: float, bloch_vec: float, f: float, medium: MediumType
+        orders: np.ndarray,
+        size: float,
+        bloch_vec: Union[float, np.ndarray],
+        f: float,
+        medium: MediumType,
     ) -> np.ndarray:
         """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
         if size == 0:
             return np.atleast_2d(0)
         epsilon = medium.eps_model(f)
         bloch_array = DiffractionData.shifted_orders(orders, bloch_vec)
-        return bloch_array[:, None] / size * C_0 / f / np.real(np.sqrt(epsilon))
+        return bloch_array / size * C_0 / f / np.real(np.sqrt(epsilon))
 
     @staticmethod
     def compute_angles(
@@ -3013,6 +3260,422 @@ class DiffractionData(AbstractFieldProjectionData):
         return adj_src
 
 
+class DirectivityData(FieldProjectionAngleData):
+    """
+    Data associated with a :class:`.DirectivityMonitor`.
+
+    Example
+    -------
+    >>> from tidy3d import FluxDataArray, FieldProjectionAngleDataArray
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> r = np.atleast_1d(1e6)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
+    >>> coords_flux = dict(f=f)
+    >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
+    >>> flux_data = FluxDataArray(np.random.random(len(f)), coords=coords_flux)
+    >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
+    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
+    >>> data = DirectivityData(monitor=monitor, flux=flux_data, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces)
+    """
+
+    monitor: DirectivityMonitor = pd.Field(
+        ...,
+        title="Monitor",
+        description="Monitor describing the angle-based projection grid on which to measure directivity data.",
+    )
+
+    flux: FluxDataArray = pd.Field(
+        ...,
+        title="Flux",
+        description="Flux values that are either computed from fields recorded on the "
+        "projection surfaces or by integrating the projected fields over a spherical surface.",
+    )
+
+    @staticmethod
+    def from_spherical_field_dataset(
+        monitor: DirectivityMonitor,
+        field_dataset: xr.Dataset,
+    ) -> DirectivityData:
+        """Creates a :class:`.DirectivityData` instance from a spherical field dataset.
+
+        Parameters
+        ----------
+        monitor : :class:`.DirectivityMonitor`
+            Monitor defining measurement parameters.
+        field_dataset : ``xr.Dataset``
+            Dataset containing spherical field components (Er, Etheta, etc.).
+            Must sample the entire spherical surface to compute flux correctly.
+
+        Returns
+        -------
+        :class:`.DirectivityData`
+            New :class:`.DirectivityData` instance with computed flux from spherical field integration.
+        """
+        f = list(monitor.freqs)
+        flux = FluxDataArray(np.zeros(len(f)), coords=dict(f=f))
+        dir_data = DirectivityData(
+            monitor=monitor,
+            flux=flux,
+            Er=field_dataset.Er,
+            Etheta=field_dataset.Etheta,
+            Ephi=field_dataset.Ephi,
+            Hr=field_dataset.Hr,
+            Htheta=field_dataset.Htheta,
+            Hphi=field_dataset.Hphi,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+        flux = dir_data.flux_from_projected_fields()
+        return dir_data.updated_copy(flux=flux)
+
+    def __add__(self, other: DirectivityData) -> DirectivityData:
+        """Form the superposition of two :class:`.DirectivityData`. Flux is recomputed by
+        integrating the projected fields over a sphere.
+
+        Note
+        ----
+        Intended use is for combining fields from different simulations that were recorded
+        using the same ``monitor``. The returned :class:`.DirectivityData` takes the ``monitor``
+        from ``self``.
+        """
+        fields_dataset = self.fields_spherical + other.fields_spherical
+        combined_data = DirectivityData.from_spherical_field_dataset(self.monitor, fields_dataset)
+        return combined_data
+
+    def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> DirectivityData:
+        """
+        Return a copy of self after normalization is applied using the source
+        spectrum function, for both field components and flux data.
+        """
+
+        fields_norm = {}
+        for field_name, field_data in self.field_components.items():
+            src_amps = source_spectrum_fn(field_data.f)
+            fields_norm[field_name] = (field_data / src_amps).astype(field_data.dtype)
+
+        # Normalize flux
+        source_freq_amps = source_spectrum_fn(self.flux.f)
+        source_power = abs(source_freq_amps) ** 2
+        new_flux = (self.flux / source_power).astype(self.flux.dtype)
+
+        return self.copy(update=dict(fields_norm, flux=new_flux))
+
+    @staticmethod
+    def _check_valid_pol_basis(pol_basis: PolarizationBasis, tilt_angle: float):
+        if pol_basis != "linear" and pol_basis != "circular":
+            raise ValueError("'pol_basis' must be either 'linear' or 'circular'")
+        if tilt_angle is not None and pol_basis == "circular":
+            raise ValueError("'tilt_angle' is only defined for linear polarization.")
+
+    def partial_radiation_intensity(
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+    ) -> xr.Dataset:
+        """Partial radiation intensity in the frequency domain as a function of angles theta and phi.
+        The partial radiation intensities are computed in the ``linear`` or ``circular`` polarization
+        bases. If ``tilt_angle`` is not ``None``, the radiation intensity is computed in the linear
+        polarization basis rotated by ``tilt_angle`` from the theta-axis. Radiation intensity is
+        measured in units of Watts per unit solid angle.
+
+        Parameters
+        ----------
+        pol_basis : PolarizationBasis
+            The desired polarization basis used to express partial radiation intensity, either
+            ``linear`` or ``circular``.
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing the partial radiation intensities split into the two polarization states.
+        """
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
+        if pol_basis == "linear":
+            if tilt_angle is not None:
+                tilt_fields = self.fields_linear_polarization_tilted(tilt_angle)
+                E1 = tilt_fields.Eco
+                E2 = tilt_fields.Ecross
+                H1 = tilt_fields.Hco
+                H2 = tilt_fields.Hcross
+                keys = ("Uco", "Ucross")
+            else:
+                E1 = self.Etheta
+                E2 = self.Ephi
+                H1 = self.Htheta
+                H2 = self.Hphi
+                keys = ("Utheta", "Uphi")
+        else:
+            E1 = self.fields_circular_polarization.Eright
+            E2 = self.fields_circular_polarization.Eleft
+            # needs extra -1 to counteract -1 in cross product below
+            H1 = -1.0 * self.fields_circular_polarization.Hleft
+            H2 = self.fields_circular_polarization.Hright
+            keys = ("Uright", "Uleft")
+
+        U_1 = (self.monitor.proj_distance**2) * 0.5 * np.real(E1 * np.conj(H2))
+        U_2 = (self.monitor.proj_distance**2) * 0.5 * np.real(-E2 * np.conj(H1))
+
+        data_arrays = (U_1, U_2)
+        return xr.Dataset(dict(zip(keys, data_arrays)))
+
+    @property
+    def radiation_intensity(self) -> FieldProjectionAngleDataArray:
+        """Radiation intensity in the frequency domain as a function of angles theta and phi.
+        Radiation intensity is measured in units of Watts per unit solid angle.
+        """
+        # Calls partial radiation intensity using default linear polarization basis
+        partial_U = self.partial_radiation_intensity()
+        return partial_U.Utheta + partial_U.Uphi
+
+    @property
+    def radiated_power(self) -> FreqDataArray:
+        """Total radiated power in the frequency domain with units of Watts."""
+        # If this data was created using FieldProjectionAngleData, the sign
+        # will already be correct. Also will be correct if monitor size is all nonzero.
+        # TODO fix this sign issue in the backend if possible
+        if (
+            isinstance(self.monitor, FieldProjectionAngleMonitor)
+            or self.monitor.size.count(0.0) == 0
+        ):
+            return FreqDataArray(self.flux.values, dict(f=self.f))
+        # The monitor could be planar and directed downward
+        sign = 1.0 if self.monitor.normal_dir == "+" else -1.0
+        return FreqDataArray(sign * self.flux.values, dict(f=self.f))
+
+    def partial_directivity(
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+    ) -> xr.Dataset:
+        """Directivity in the frequency domain as a function of angles theta and phi.
+        The partial directivities are computed in the ``linear`` or ``circular`` polarization
+        bases. If ``tilt_angle`` is not ``None``, the radiation intensity is computed in the linear
+        polarization basis rotated by ``tilt_angle`` from the theta-axis. Directivity is a dimensionless
+        quantity defined as the ratio of the radiation intensity in a given direction to the average
+        radiation intensity over all directions.
+
+        Parameters
+        ----------
+        pol_basis : PolarizationBasis
+            The desired polarization basis used to express partial directivity, either
+            ``linear`` or ``circular``.
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            Dataset containing the partial directivities split into the two polarization states.
+        """
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
+        if pol_basis == "linear":
+            if tilt_angle is None:
+                rename_mapping = {"Utheta": "Dtheta", "Uphi": "Dphi"}
+            else:
+                rename_mapping = {"Uco": "Dco", "Ucross": "Dcross"}
+        else:
+            rename_mapping = {"Uright": "Dright", "Uleft": "Dleft"}
+        # Average radiation intensity is total radiated power divided by 4 pi
+        avg_radiation_intensity = self.radiated_power / (4 * np.pi)
+        partial_U = self.partial_radiation_intensity(pol_basis=pol_basis, tilt_angle=tilt_angle)
+        partial_D = partial_U / avg_radiation_intensity
+        return partial_D.rename(rename_mapping)
+
+    @property
+    def directivity(self) -> FieldProjectionAngleDataArray:
+        """Directivity in the frequency domain as a function of angles theta and phi.
+        Directivity is a dimensionless quantity defined as the ratio of the radiation
+        intensity in a given direction to the average radiation intensity over all directions.
+        """
+        # Calls partial directivity using default linear polarization basis
+        partial_D = self.partial_directivity()
+        return FieldProjectionAngleDataArray(partial_D.Dtheta + partial_D.Dphi)
+
+    def calc_radiation_efficiency(self, power_in: FreqDataArray) -> FreqDataArray:
+        """Calculate radiation efficiency as the ratio of radiated power to input power.
+
+        Parameters
+        ----------
+        power_in : FreqDataArray
+            Power supplied to the radiating element in the frequency domain, in units of Watts.
+
+        Returns
+        -------
+        FreqDataArray
+            Radiation efficiency (dimensionless) in the frequency domain, computed as
+            radiated_power / power_in.
+        """
+        return FreqDataArray((self.radiated_power / power_in).values, dict(f=self.f))
+
+    def calc_partial_gain(
+        self,
+        power_in: FreqDataArray,
+        pol_basis: PolarizationBasis = "linear",
+        tilt_angle: float = None,
+    ) -> xr.Dataset:
+        """The partial gain figures of merit for antennas. The partial gains are computed
+        in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
+        the partial directivity is computed in the linear polarization basis rotated by ``tilt_angle``
+        from the theta-axis. Gain is dimensionless.
+
+        Parameters
+        ----------
+        power_in : FreqDataArray
+            Power, in units of Watts, supplied to the radiating element in the frequency domain.
+
+        pol_basis : PolarizationBasis
+            The desired polarization basis used to express partial gain, either
+            ``linear`` or ``circular``.
+
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            Dataset containing the partial gains split into the two polarization states.
+        """
+        self._check_valid_pol_basis(pol_basis, tilt_angle)
+        radiation_efficiency = self.calc_radiation_efficiency(power_in)
+        partial_D = self.partial_directivity(pol_basis=pol_basis, tilt_angle=tilt_angle)
+        partial_G = radiation_efficiency * partial_D
+        if pol_basis == "linear":
+            if tilt_angle is None:
+                rename_mapping = {"Dtheta": "Gtheta", "Dphi": "Gphi"}
+            else:
+                rename_mapping = {"Dco": "Gco", "Dcross": "Gcross"}
+        else:
+            rename_mapping = {"Dright": "Gright", "Dleft": "Gleft"}
+        return partial_G.rename(rename_mapping)
+
+    def calc_gain(self, power_in: FreqDataArray) -> FieldProjectionAngleDataArray:
+        """The gain figure of merit for antennas. Gain is dimensionless.
+
+        Parameters
+        ----------
+        power_in : FreqDataArray
+            Power, in units of Watts, supplied to the radiating element in the frequency domain.
+        """
+        partial_G = self.calc_partial_gain(power_in)
+        return FieldProjectionAngleDataArray(partial_G.Gtheta + partial_G.Gphi)
+
+    @property
+    def axial_ratio(self) -> FieldProjectionAngleDataArray:
+        """Axial Ratio (AR) in the frequency domain as a function of angles theta and phi.
+        AR is a dimensionless quantity defined as the ratio of the major axis to the minor
+        axis of the polarization ellipse.
+
+        Note
+        ----
+        The axial ratio computation is based on:
+
+        Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        John Wiley & Sons, Chapter 2.12 (2016).
+        """
+
+        # Calculate the terms of the equation
+        E1_abs_squared = np.abs(self.Etheta) ** 2
+        E2_abs_squared = np.abs(self.Ephi) ** 2
+        E1_squared = self.Etheta**2
+        E2_squared = self.Ephi**2
+
+        # Axial ratio calculations based on equations (2-65) to (2-67)
+        # from Balanis, Constantine A., "Antenna Theory: Analysis and Design,"
+        # John Wiley & Sons, 2016. These calculations use complex numbers
+        # directly and are equivalent to the referenced equations.
+        AR_numerator = E1_abs_squared + E2_abs_squared + np.abs(E1_squared + E2_squared)
+        AR_denominator = E1_abs_squared + E2_abs_squared - np.abs(E1_squared + E2_squared)
+
+        inds_zero = AR_numerator == 0
+        axial_ratio_inverse = xr.zeros_like(AR_numerator)
+        # Perform the axial ratio inverse calculation where the numerator is non-zero
+        axial_ratio_inverse = axial_ratio_inverse.where(
+            inds_zero, np.sqrt(np.abs(AR_denominator / AR_numerator))
+        )
+
+        # Cap the axial ratio values at 1 / AXIAL_RATIO_CAP
+        axial_ratio_inverse = axial_ratio_inverse.where(
+            axial_ratio_inverse >= 1 / AXIAL_RATIO_CAP, 1 / AXIAL_RATIO_CAP
+        )
+
+        return 1 / axial_ratio_inverse
+
+    @property
+    def left_polarization(self) -> FieldProjectionAngleDataArray:
+        """Electric far field for left-hand circular polarization
+        (counterclockwise component) with an angle-based projection grid.
+        """
+        return self.fields_circular_polarization.Eleft
+
+    @property
+    def right_polarization(self) -> FieldProjectionAngleDataArray:
+        """Electric far field for right-hand circular polarization
+        (clockwise component) with an angle-based projection grid.
+        """
+        return self.fields_circular_polarization.Eright
+
+    def fields_linear_polarization_tilted(self, tilt_angle: float) -> xr.Dataset:
+        """Electric and magnetic fields in the linear polarization basis that is rotated
+        at the pole of the radiation sphere by `tilt_angle`.
+
+        Parameters
+        ----------
+        tilt_angle : float
+            The angle by which the co-polar vector is rotated from the theta-axis.
+            At ``tilt_angle`` = 0, the co-polar vector coincides with the theta-axis and the cross-polar
+            vector coincides with the phi-axis; while at ``tilt_angle = pi/2``, the co-polar vector
+            coincides with the phi-axis.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            Dataset containing (``Eco``, ``Ecross``, ``Hco``, ``Hcross``)
+        """
+        Eco = np.cos(tilt_angle) * self.Etheta + np.sin(tilt_angle) * self.Ephi
+        Ecross = -np.sin(tilt_angle) * self.Etheta + np.cos(tilt_angle) * self.Ephi
+        Hco = np.cos(tilt_angle) * self.Htheta + np.sin(tilt_angle) * self.Hphi
+        Hcross = -np.sin(tilt_angle) * self.Htheta + np.cos(tilt_angle) * self.Hphi
+
+        keys = ("Eco", "Ecross", "Hco", "Hcross")
+        data_arrays = (Eco, Ecross, Hco, Hcross)
+        return xr.Dataset(dict(zip(keys, data_arrays)))
+
+    @property
+    def fields_circular_polarization(self) -> xr.Dataset:
+        """Electric and magnetic fields in the circular polarization basis.
+
+        Note
+        ----
+        Uses IEEE handedness convention for polarization state, which means right-handed circularly
+        polarization is associated with a clockwise rotation of the electric field vector from the
+        point of the view of the source. However, we use the physics convention for time evolution
+        of time-harmonic fields, which modifies the computation when compared to engineering references.
+
+        Returns
+        -------
+        ``xarray.Dataset``
+            xarray dataset containing (``Eleft``, ``Eright``, ``Hleft``, ``Hright``)
+            in Spherical coordinates.
+        """
+        Eleft = (self.Etheta + 1j * self.Ephi) / np.sqrt(2.0)
+        Eright = (self.Etheta - 1j * self.Ephi) / np.sqrt(2.0)
+        Hleft = (self.Hphi - 1j * self.Htheta) / np.sqrt(2.0)
+        Hright = (self.Hphi + 1j * self.Htheta) / np.sqrt(2.0)
+
+        keys = ("Eleft", "Eright", "Hleft", "Hright")
+        data_arrays = (Eleft, Eright, Hleft, Hright)
+        return xr.Dataset(dict(zip(keys, data_arrays)))
+
+
 MonitorDataTypes = (
     FieldData,
     FieldTimeData,
@@ -3025,6 +3688,7 @@ MonitorDataTypes = (
     FieldProjectionCartesianData,
     FieldProjectionAngleData,
     DiffractionData,
+    DirectivityData,
 )
 
 MonitorDataType = Union[MonitorDataTypes]

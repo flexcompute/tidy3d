@@ -14,6 +14,7 @@ from .api.autograd.autograd import run, run_async
 from .api.container import Batch, BatchData, Job
 from .api.webapi import (
     abort,
+    account,
     delete,
     delete_old,
     download,
@@ -61,4 +62,5 @@ __all__ = [
     "configure",
     "run_async",
     "test",
+    "account",
 ]

@@ -1,5 +1,6 @@
 """Tests Geometry objects."""
 
+import math
 import warnings
 
 import gdspy
@@ -13,8 +14,16 @@ import tidy3d as td
 import trimesh
 from tidy3d.components.geometry.base import Planar
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
-from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
-from tidy3d.constants import LARGE_NUMBER
+from tidy3d.components.geometry.utils import (
+    SnapBehavior,
+    SnapLocation,
+    SnappingSpec,
+    flatten_groups,
+    snap_box_to_grid,
+    traverse_geometries,
+)
+from tidy3d.components.geometry.utils_2d import subdivide
+from tidy3d.constants import LARGE_NUMBER, fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 
 from ..utils import AssertLogLevel
@@ -78,6 +87,11 @@ _, AX = plt.subplots()
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_plot(component):
     _ = component.plot(z=0, ax=AX)
+    plt.close()
+
+
+def test_plot_with_units():
+    _ = BOX.plot(z=0, ax=AX, plot_length_units="nm")
     plt.close()
 
 
@@ -458,16 +472,44 @@ def test_transforms():
     assert (geo.inside(*xyz) == (False, True, False, True, False)).all()
     assert len(geo.intersections_plane(x=0)) == 2
     assert len(geo.intersections_plane(z=0)) == 1
-    geo = geo.translated(-2, 0, 0).rotated(-np.pi * 0.4, 1)
+    geo = geo.translated(-2, 0, 0).rotated(-np.pi * 0.4, 1).scaled(0.99)
     assert (geo.inside(*xyz) == (True, False, True, False, True)).all()
     assert len(geo.intersections_plane(x=0)) == 1
     assert len(geo.intersections_plane(z=0)) == 3
 
 
+def test_polyslab_transforms():
+    # More tests on PolySlab tranforms matching direct Transformed
+    xyz = np.meshgrid(np.linspace(-3, 3, 10), np.linspace(-3, 3, 10), np.linspace(-3, 3, 10))
+    xyz = [c.flatten() for c in xyz]
+    geo = geo = td.PolySlab(
+        vertices=[(2, -1), (-1, 1), (4, 1), (-1, 2), (4, 2), (1, 3), (5, 3), (5, -1)],
+        slab_bounds=(-1, 1),
+        axis=1,
+    )
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.translation(-0.4, 0.5, 0.1))
+    geo = geo.translated(-0.4, 0.5, 0.1)
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.scaling(0.7, 0.6, 1.5))
+    geo = geo.scaled(0.7, 0.6, 1.5)
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.rotation(0.3, (0, -0.2, 0)))
+    geo = geo.rotated(0.3, (0, -0.2, 0))
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+
+
 def test_general_rotation():
+    # Magnitude of axis direction does not matter
     assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(0.1, [2, 0, 0]))
     assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(0.2, [0, 3, 0]))
     assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(0.3, [0, 0, 4]))
+    # Negative axis direction means negative angle
+    assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(-0.1, [-2, 0, 0]))
+    assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(-0.2, [0, -3, 0]))
+    assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(-0.3, [0, 0, -4]))
 
 
 def test_flattening():
@@ -824,7 +866,7 @@ def test_to_gds(geometry, tmp_path):
     assert len(cell.polygons) == 0
 
 
-def test_custom_surface_geometry(tmp_path, log_capture):
+def test_custom_surface_geometry(tmp_path):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
@@ -873,27 +915,36 @@ def test_custom_surface_geometry(tmp_path, log_capture):
 
     # test inconsistent winding
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
-    faces = np.array([[2, 1, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    faces = np.array([[2, 3, 1], [0, 2, 3], [0, 3, 1], [0, 1, 2]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING", contains_str="face orientations"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         geom = geom.fix_winding()
 
     # test non-watertight mesh
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING", contains_str="watertight"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
-    with AssertLogLevel(log_capture, None):
+    with AssertLogLevel(None):
         geom = geom.fill_holes()
+
+    # test inward normals
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    faces = np.array([[2, 1, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    tetrahedron = trimesh.Trimesh(vertices, faces)
+    with AssertLogLevel("WARNING", contains_str="outward"):
+        geom = td.TriangleMesh.from_trimesh(tetrahedron)
+    with AssertLogLevel(None):
+        geom = geom.fix_normals()
 
     # test zero area triangles
     vertices = np.array([[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     tetrahedron = trimesh.Trimesh(vertices, faces)
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel("WARNING"):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
     assert all(np.array(geom.trimesh.area_faces) > AREA_SIZE_THRESHOLD)
 
@@ -984,6 +1035,60 @@ def test_update_from_bounds():
     for geom2d in geometries:
         with pytest.raises(NotImplementedError):
             geom_update = geom2d._update_from_bounds(bounds=new_bounds, axis=axis)
+
+
+def test_subdivide():
+    # Test the functionality that subdivides structures with Medium2D into partitions,
+    # where each partition is paired with homogeneous medium above and below
+    box = td.Box(size=(1, 1, 0))
+    overlap_box = td.Box(size=(2, 0.5, 0), center=(0.5, 0, 0))
+    # These overlapping boxes have their left edge coincident, and the second box has a smaller left edge.
+    # This results in an invalid geometry for MultiPolygon which must be fixed by applying a union
+    # operation in ``subdivide``. This should fix other types of invalid geometries as well.
+    overlapping_boxes = td.GeometryGroup(geometries=(box, overlap_box))
+
+    background_structure = td.Structure(medium=td.Medium(), geometry=td.Box(size=(10, 10, 10)))
+    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure])
+    assert len(subdivisions) == 1
+
+    # Test that when a small sliver is created during subdivide
+    # it gets correctly removed before creating the Polyslab
+    box_sliver = td.Structure(
+        medium=td.Medium(), geometry=td.Box(size=(1, 1, 1), center=(1 - fp_eps, 0, 0))
+    )
+    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure, box_sliver])
+
+
+@pytest.mark.parametrize("snap_location", [SnapLocation.Boundary, SnapLocation.Center])
+@pytest.mark.parametrize(
+    "snap_behavior",
+    [SnapBehavior.Off, SnapBehavior.Closest, SnapBehavior.Expand, SnapBehavior.Contract],
+)
+def test_snap_box_to_grid(snap_location, snap_behavior):
+    """ "Test that all combinations of SnappingSpec correctly modify a test box without error."""
+    snap_spec = SnappingSpec(location=[snap_location] * 3, behavior=[snap_behavior] * 3)
+    box = td.Box(center=(0, 0, 0), size=(0.2, 0.23, 0.1))
+
+    xyz = np.linspace(0, 1, 11)
+    coords = td.Coords(x=xyz, y=xyz, z=xyz)
+    grid = td.Grid(boundaries=coords)
+    new_box = snap_box_to_grid(grid, box, snap_spec)
+    if snap_behavior != SnapBehavior.Off:
+        # The box must have changed location
+        assert not np.allclose(new_box.bounds, box.bounds)
+
+    # Test box that is bigger than the grid.
+    # Also test a corner case, where the box boundary and grid are approximately equal.
+    box = td.Box(center=(0.5, 0.200000001, 0), size=(1.1, 0.2, 0.1))
+    new_box = snap_box_to_grid(grid, box, snap_spec)
+
+    if snap_behavior != SnapBehavior.Off and snap_location == SnapLocation.Boundary:
+        # Check that the box boundary slightly off from 0.1 was correctly snapped to 0.1
+        assert math.isclose(new_box.bounds[0][1], xyz[1])
+        # Check that the box boundary slightly off from 0.3 was correctly snapped to 0.3
+        assert math.isclose(new_box.bounds[1][1], xyz[3])
+        # Check that the box boundary outside the grid was snapped to the smallest grid coordinate
+        assert math.isclose(new_box.bounds[0][2], xyz[0])
 
 
 def test_triangulation_with_collinear_vertices():
