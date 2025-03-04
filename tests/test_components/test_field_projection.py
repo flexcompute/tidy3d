@@ -1,6 +1,7 @@
 """Test near field to far field transformations."""
 
 import numpy as np
+import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
 from tidy3d.components.field_projection import FieldProjector
@@ -595,6 +596,50 @@ def test_2d_proj_clientside():
 
     for plane in planes:
         make_2d_proj(plane)
+
+
+def test_2d_sim_with_proj_monitors_near():
+    """Creates near-field projection monitors by modifying proj_distance and far_field_approx."""
+    center = [0, 0, 0]
+    freqs = 1e13
+    monitor_size = (0, 2, td.inf)
+    plane = "xy"
+    f0 = 1e13
+    sim_size = (5, 5, 0)
+    # boundary conditions
+    boundary_conds = td.BoundarySpec(
+        x=td.Boundary.pml(),
+        y=td.Boundary.pml(),
+        z=td.Boundary.periodic(),
+    )
+
+    monitors = make_2d_proj_monitors(center, monitor_size, freqs, plane)
+
+    # Modify only proj_distance and far_field_approx
+    proj_monitors_near = [
+        monitor.__class__(
+            proj_distance=R_FAR / 50,  # Adjust projection distance
+            far_field_approx=False,  # Disable far-field approximation
+            **{
+                k: v
+                for k, v in monitor.__dict__.items()
+                if k not in ["proj_distance", "far_field_approx"]
+            },
+        )
+        for monitor in monitors
+    ]
+
+    with pytest.raises(
+        pydantic.ValidationError,
+        match="Exact far-field projection for 2D simulations is not yet available",
+    ):
+        _ = td.Simulation(
+            size=sim_size,
+            grid_spec=td.GridSpec.auto(wavelength=td.C_0 / f0),
+            boundary_spec=boundary_conds,
+            monitors=proj_monitors_near,
+            run_time=1e-12,
+        )
 
 
 @pytest.mark.parametrize(
