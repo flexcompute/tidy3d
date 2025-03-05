@@ -21,6 +21,7 @@ from ..base_sim.data.monitor_data import AbstractMonitorData
 from ..grid.grid import Coords, Grid
 from ..medium import Medium, MediumType
 from ..monitor import (
+    AuxFieldTimeMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
     FieldMonitor,
@@ -85,6 +86,7 @@ from .data_array import (
 )
 from .dataset import (
     AbstractFieldDataset,
+    AuxFieldTimeDataset,
     Dataset,
     ElectromagneticFieldDataset,
     FieldDataset,
@@ -196,7 +198,9 @@ class MonitorData(AbstractMonitorData, ABC):
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     """Collection of scalar fields with some symmetry properties."""
 
-    monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeMonitor]
+    monitor: Union[
+        FieldMonitor, FieldTimeMonitor, AuxFieldTimeMonitor, PermittivityMonitor, ModeMonitor
+    ]
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
@@ -1293,6 +1297,41 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
             # Reverse time coordinates
             new_data[comp] = new_data[comp].assign_coords({"t": field.t[::-1]}).sortby("t")
         return self.copy(update=new_data)
+
+
+class AuxFieldTimeData(AuxFieldTimeDataset, AbstractFieldData):
+    """
+    Data associated with a :class:`.AuxFieldTimeMonitor`: scalar components of aux fields.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+    Example
+    -------
+    >>> from tidy3d import ScalarFieldTimeDataArray
+    >>> x = [-1,1,3]
+    >>> y = [-2,0,2,4]
+    >>> z = [-3,-1,1,3,5]
+    >>> t = [0, 1e-12, 2e-12]
+    >>> coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], t=t)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
+    >>> scalar_field = ScalarFieldTimeDataArray(np.random.random((2,3,4,3)), coords=coords)
+    >>> monitor = AuxFieldTimeMonitor(
+    ...     size=(2,4,6), interval=100, name='field', fields=['Nfx'], colocate=True
+    ... )
+    >>> data = AuxFieldTimeData(monitor=monitor, Nfx=scalar_field, grid_expanded=grid)
+    """
+
+    monitor: AuxFieldTimeMonitor = pd.Field(
+        ...,
+        title="Monitor",
+        description="Time-domain auxiliary field monitor associated with the data.",
+    )
+
+    _contains_monitor_fields = enforce_monitor_fields_present()
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):
@@ -3651,6 +3690,7 @@ MonitorDataTypes = (
     ModeData,
     FluxData,
     FluxTimeData,
+    AuxFieldTimeData,
     FieldProjectionKSpaceData,
     FieldProjectionCartesianData,
     FieldProjectionAngleData,

@@ -16,6 +16,7 @@ from .medium import MediumType
 from .mode_spec import ModeSpec
 from .types import (
     ArrayFloat1D,
+    AuxField,
     Ax,
     Axis,
     Bound,
@@ -270,6 +271,51 @@ class AbstractFieldMonitor(Monitor, ABC):
         return solver_data_size
 
 
+class AbstractAuxFieldMonitor(Monitor, ABC):
+    """:class:`.Monitor` that records auxiliary fields as a function of x,y,z.
+
+    Auxiliary fields are used in certain nonlinear material models.
+    :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
+    free-carrier density."""
+
+    fields: Tuple[AuxField, ...] = pydantic.Field(
+        (),
+        title="Aux Field Components",
+        description="Collection of auxiliary field components to store in the monitor. "
+        "Auxiliary fields which are not present in the simulation will be zero.",
+    )
+
+    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals between monitor recordings. If equal to 1, "
+            "there will be no downsampling. If greater than 1, the step will be applied, but the "
+            "first and last point of the monitor grid are always included.",
+        )
+    )
+
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate Fields",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
+        "primal grid nodes).",
+    )
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        final_data_size = self.storage_size(num_cells=num_cells, tmesh=tmesh)
+        if len(self.fields) == 0:
+            return 0
+
+        # internally solver stores all aux field components
+        field_components_factor = 3
+
+        # take out the stored field components factor and use the solver factor instead
+        solver_data_size = final_data_size / len(self.fields) * field_components_factor
+        return solver_data_size
+
+
 class PlanarMonitor(Monitor, ABC):
     """:class:`Monitor` that has a planar geometry."""
 
@@ -448,6 +494,33 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
         * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
         * `Creating FDTD animations <../../notebooks/AnimationTutorial.html>`_.
 
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # stores 1 real number per grid cell, per time step, per field
+        num_steps = self.num_steps(tmesh)
+        return BYTES_REAL * num_steps * num_cells * len(self.fields)
+
+
+class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
+    """:class:`.Monitor` that records auxiliary fields in the time domain.
+
+    Auxiliary fields are used in certain nonlinear material models.
+    :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
+    free-carrier density.
+
+    Example
+    -------
+    >>> monitor = AuxFieldTimeMonitor(
+    ...     center=(1,2,3),
+    ...     size=(0,0,0),
+    ...     fields=['Nfx'],
+    ...     start=1e-13,
+    ...     stop=5e-13,
+    ...     interval=2,
+    ...     colocate=True,
+    ...     name='aux_monitor')
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -1453,6 +1526,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 MonitorType = Union[
     FieldMonitor,
     FieldTimeMonitor,
+    AuxFieldTimeMonitor,
     PermittivityMonitor,
     FluxMonitor,
     FluxTimeMonitor,

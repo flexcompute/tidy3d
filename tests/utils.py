@@ -787,6 +787,9 @@ SIM_FULL = td.Simulation(
             size=(0, 0, 0), center=(0, 0, 0), fields=["Ex"], freqs=[1.5e14, 2e14], name="field"
         ),
         td.FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
+        td.AuxFieldTimeMonitor(
+            size=(0, 0, 0), center=(0, 0, 0), fields=("Nfx",), name="aux_field_time", interval=100
+        ),
         td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
         td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
         td.PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),

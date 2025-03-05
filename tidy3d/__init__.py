@@ -274,6 +274,7 @@ from .components.mode_spec import ModeSpec
 
 # monitors
 from .components.monitor import (
+    AuxFieldTimeMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
     FieldMonitor,
@@ -472,6 +473,7 @@ __all__ = [
     "PlaneWaveBeamProfile",
     "FieldMonitor",
     "FieldTimeMonitor",
+    "AuxFieldTimeMonitor",
     "FluxMonitor",
     "FluxTimeMonitor",
     "ModeMonitor",
@@ -508,6 +510,7 @@ __all__ = [
     "ModeSolverDataset",
     "FieldData",
     "FieldTimeData",
+    "AuxFieldTimeData",
     "PermittivityData",
     "FluxData",
     "FluxTimeData",

@@ -376,6 +376,7 @@ def test_monitor():
         name="directivity",
     )
     m10 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
+    m11 = td.AuxFieldTimeMonitor(size=size, center=center, name="aux_field_time", fields=("Nfx",))
 
     tmesh = np.linspace(0, 1, 10)
 

@@ -30,6 +30,7 @@ SOURCES = [
     ),
 ]
 FIELDS = ("Ex", "Ey", "Ez", "Hx", "Hz")
+AUX_FIELDS = ("Nfz",)
 INTERVAL = 2
 ORDERS_X = list(range(-1, 2))
 ORDERS_Y = list(range(-2, 3))
@@ -50,6 +51,9 @@ PD = np.atleast_1d(4000)
 FIELD_MONITOR = td.FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
 FIELD_TIME_MONITOR = td.FieldTimeMonitor(
     size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL
+)
+AUX_FIELD_TIME_MONITOR = td.AuxFieldTimeMonitor(
+    size=SIZE_3D, fields=AUX_FIELDS, name="aux_field_time", interval=INTERVAL
 )
 FIELD_MONITOR_2D = td.FieldMonitor(size=SIZE_2D, fields=FIELDS, name="field_2d", freqs=FREQS)
 FIELD_TIME_MONITOR_2D = td.FieldTimeMonitor(
@@ -80,6 +84,7 @@ DIRECTIVITY_MONITOR = td.DirectivityMonitor(
 MONITORS = [
     FIELD_MONITOR,
     FIELD_TIME_MONITOR,
+    AUX_FIELD_TIME_MONITOR,
     MODE_MONITOR_WITH_FIELDS,
     PERMITTIVITY_MONITOR,
     MODE_MONITOR,
