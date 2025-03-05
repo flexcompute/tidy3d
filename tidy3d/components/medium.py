@@ -263,6 +263,11 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
         """Whether the model uses complex fields."""
         return False
 
+    @property
+    def aux_fields(self) -> List[str]:
+        """List of available aux fields in this model."""
+        return []
+
 
 class NonlinearSusceptibility(NonlinearModel):
     """Model for an instantaneous nonlinear chi3 susceptibility.
@@ -499,6 +504,13 @@ class TwoPhotonAbsorption(NonlinearModel):
         """Whether the model uses complex fields."""
         return self.use_complex_fields
 
+    @property
+    def aux_fields(self) -> List[str]:
+        """List of available aux fields in this model."""
+        if self.tau == 0:
+            return []
+        return ["Nfx", "Nfy", "Nfz"]
+
 
 class KerrNonlinearity(NonlinearModel):
     """Model for Kerr nonlinearity which gives an intensity-dependent refractive index
@@ -715,6 +727,14 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
             new_model = model._hardcode_medium_freqs(medium=medium, freqs=freqs)
             new_models.append(new_model)
         return self.updated_copy(models=new_models)
+
+    @property
+    def aux_fields(self) -> List[str]:
+        """List of available aux fields in all present models."""
+        fields = []
+        for model in self.models:
+            fields += model.aux_fields
+        return fields
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):

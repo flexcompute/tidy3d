@@ -229,6 +229,7 @@ FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = Union[Tuple[float, ...], ArrayFloat1D]
 ObsGridArray = Union[Tuple[float, ...], ArrayFloat1D]
 PolarizationBasis = Literal["linear", "circular"]
+AuxField = Literal["Nfx", "Nfy", "Nfz"]
 
 """ plotting """
 

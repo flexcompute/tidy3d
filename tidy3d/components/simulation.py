@@ -66,6 +66,7 @@ from .medium import (
 from .monitor import (
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
+    AuxFieldTimeMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
     FieldMonitor,
@@ -3723,6 +3724,26 @@ class Simulation(AbstractYeeGridSimulation):
                             "compatibility and may be removed in a future release."
                         )
 
+        for i, monitor in enumerate(self.monitors):
+            if isinstance(monitor, AuxFieldTimeMonitor):
+                for aux_field in monitor.fields:
+                    if aux_field not in self.aux_fields:
+                        log.warning(
+                            f"Monitor at 'monitors[{i}]' stores field '{aux_field}', "
+                            "which is not used by any of the nonlinear models present "
+                            "in the mediums in the simulation. The resulting data "
+                            "will be zero."
+                        )
+
+    @cached_property
+    def aux_fields(self) -> List[str]:
+        """All aux fields available in the simulation."""
+        fields = []
+        for medium in self.scene.mediums:
+            if medium.nonlinear_spec is not None:
+                fields += medium.nonlinear_spec.aux_fields
+        return fields
+
     """ Pre submit validation (before web.upload()) """
 
     def validate_pre_upload(self, source_required: bool = True) -> None:
@@ -3887,7 +3908,10 @@ class Simulation(AbstractYeeGridSimulation):
     def _validate_time_monitors_num_steps(self) -> None:
         """Raise an error if non-0D time monitors have too many time steps."""
         for monitor in self.monitors:
-            if not isinstance(monitor, FieldTimeMonitor) or len(monitor.zero_dims) == 3:
+            if (
+                not isinstance(monitor, (FieldTimeMonitor, AuxFieldTimeMonitor))
+                or len(monitor.zero_dims) == 3
+            ):
                 continue
             num_time_steps = monitor.num_steps(self.tmesh)
             if num_time_steps > MAX_TIME_MONITOR_STEPS:

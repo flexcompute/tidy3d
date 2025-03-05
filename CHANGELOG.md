@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New subpixel averaging option `ContourPathAveraging` applied to dielectric material boundaries.
 - A property `interior_angle` in `PolySlab` that stores angles formed inside polygon by two adjacent edges.
 - `eps_component` argument in `td.Simulation.plot_eps()` to optionally select a specific permittivity component to plot (eg. `"xx"`).
+- Monitor `AuxFieldTimeMonitor` for aux fields like the free carrier density in `TwoPhotonAbsorption`.
 
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
