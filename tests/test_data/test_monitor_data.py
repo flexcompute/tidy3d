@@ -11,6 +11,7 @@ from tidy3d.components.data.data_array import (
     FreqModeDataArray,
 )
 from tidy3d.components.data.monitor_data import (
+    AuxFieldTimeData,
     DiffractionData,
     DirectivityData,
     FieldData,
@@ -24,6 +25,7 @@ from tidy3d.exceptions import DataError
 
 from ..utils import AssertLogLevel
 from .test_data_arrays import (
+    AUX_FIELD_TIME_MONITOR,
     DIFFRACTION_MONITOR,
     DIRECTIVITY_MONITOR,
     FIELD_MONITOR,
@@ -117,6 +119,17 @@ def make_field_time_data_2d(symmetry: bool = True):
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(FIELD_TIME_MONITOR_2D),
+    )
+
+
+def make_aux_field_time_data(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
+    return AuxFieldTimeData(
+        monitor=AUX_FIELD_TIME_MONITOR,
+        Nfz=make_scalar_field_time_data_array("Ez", symmetry),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize_monitor(AUX_FIELD_TIME_MONITOR),
     )
 
 

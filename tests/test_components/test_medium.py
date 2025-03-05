@@ -797,6 +797,29 @@ def test_nonlinear_medium():
         )
         _ = sim.updated_copy(medium=med, path="structures/0")
 
+    grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=1)
+    sim = sim.updated_copy(grid_spec=grid_spec)
+    aux_fields = ("Nfz",)
+    with AssertLogLevel(None):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, tau=1)])
+        )
+        monitor = td.AuxFieldTimeMonitor(
+            interval=1, size=(0, 0, 0), name="aux_field_time", fields=aux_fields
+        )
+        sim = sim.updated_copy(medium=med, path="structures/0")
+        sim = sim.updated_copy(monitors=[monitor])
+
+    with AssertLogLevel("WARNING", contains_str="stores field"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, tau=0)])
+        )
+        _ = sim.updated_copy(medium=med, path="structures/0")
+
+    with AssertLogLevel("WARNING", contains_str="stores field"):
+        med = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)]))
+        _ = sim.updated_copy(medium=med, path="structures/0")
+
 
 def test_custom_medium():
     Nx, Ny, Nz, Nf = 4, 3, 1, 1

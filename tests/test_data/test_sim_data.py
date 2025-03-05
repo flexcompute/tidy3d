@@ -15,6 +15,7 @@ from tidy3d.exceptions import DataError, Tidy3dKeyError
 from ..utils import get_nested_shape
 from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
 from .test_monitor_data import (
+    make_aux_field_time_data,
     make_diffraction_data,
     make_directivity_data,
     make_field_data,
@@ -32,6 +33,8 @@ FIELD_SYM = make_field_data()
 FIELD = make_field_data(symmetry=False)
 FIELD_TIME_SYM = make_field_time_data()
 FIELD_TIME = make_field_time_data(symmetry=False)
+AUX_FIELD_TIME_SYM = make_aux_field_time_data()
+AUX_FIELD_TIME = make_aux_field_time_data(symmetry=False)
 PERMITTIVITY_SYM = make_permittivity_data()
 PERMITTIVITY = make_permittivity_data(symmetry=False)
 MODE = make_mode_data()
@@ -45,6 +48,7 @@ DIRECTIVITY = make_directivity_data()
 MONITOR_DATA = (
     FIELD,
     FIELD_TIME,
+    AUX_FIELD_TIME,
     MODE_SOLVER,
     PERMITTIVITY,
     MODE,
@@ -56,6 +60,7 @@ MONITOR_DATA = (
 MONITOR_DATA_SYM = (
     FIELD_SYM,
     FIELD_TIME_SYM,
+    AUX_FIELD_TIME_SYM,
     MODE_SOLVER,
     PERMITTIVITY_SYM,
     MODE,
