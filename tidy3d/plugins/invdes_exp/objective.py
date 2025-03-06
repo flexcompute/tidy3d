@@ -1,4 +1,5 @@
 import abc
+import numbers
 import typing
 import uuid
 
@@ -209,21 +210,27 @@ class AbstractObjective(InvdesBaseModel):
     def __add__(self, other):
         if isinstance(other, AbstractObjective):
             return create_multiobjective(objectives=(self, other), combine=SumSpec())
-        elif isinstance(other, float):
-            return self.copy(update=dict(offset=other), deep=False)
+        elif isinstance(other, numbers.Number):
+            return self.copy(update=dict(offset=self.offset + float(other)), deep=False)
         else:
             raise TypeError("Unsupported types for operation (+)")
 
     def __mul__(self, other):
         if isinstance(other, AbstractObjective):
             return create_multiobjective(objectives=(self, other), combine=ProductSpec())
-        elif isinstance(other, float):
-            return self.copy(update=dict(scale=other), deep=False)
+        elif isinstance(other, numbers.Number):
+            return self.copy(update=dict(scale=self.scale * float(other)), deep=False)
         else:
             raise TypeError("Unsupported types for operation (+)")
 
     __radd__ = __add__
     __rmul__ = __mul__
+
+    def __sub__(self, other):
+        return self + (-1.0 * other)
+
+    def __rsub__(self, other):
+        return (-1.0 * self) + other
 
 
 class MultiObjective(AbstractObjective):
