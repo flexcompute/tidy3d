@@ -4,8 +4,6 @@ import typing
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types import ArrayLike
-
 from .base import InvdesBaseModel
 from .parameter import AbstractParameter
 
@@ -59,11 +57,21 @@ class GradientAscentOptimizer(AbstractOptimizer):
 
 
 class AdamOptimizerState(AbstractOptimizerState):
-    m: ArrayLike = pd.Field(..., title="m")
+    # m: NDArray = pd.Field(..., title="m")
+
+    # t: NDArray = pd.Field(..., title="t")
+
+    # v: NDArray = pd.Field(..., title="v")
+
+    m: float = pd.Field(..., title="m")
 
     t: int = pd.Field(..., title="t")
 
-    v: ArrayLike = pd.Field(..., title="v")
+    v: float = pd.Field(..., title="v")
+
+    # @pd.validator("t")
+    # def validate_t(t, values):
+    #     if not (t.dtype == np.long):
 
     def create_initial_state(parameters):
         """initial state of the optimizer"""
