@@ -20,8 +20,10 @@ from autograd.test_util import check_grads
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import is_tidy_box
 from tidy3d.components.data.data_array import DataArray
+from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
+from tidy3d.web.api.autograd.autograd import MAX_NUM_TRACED_STRUCTURES
 from tidy3d.web.api.autograd.utils import FieldMap
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
@@ -971,11 +973,8 @@ def test_autograd_server(use_emulated_run, structure_key, monitor_key):
         value = postprocess(data)
         return value
 
-        val, grad = ag.value_and_grad(objective)(params0)
-        print(val, grad)
-        assert anp.all(grad != 0.0), "some gradients are 0"
-
     val, grad = ag.value_and_grad(objective)(params0)
+    assert np.all(np.abs(grad) > 0), "some gradients are 0"
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
@@ -996,11 +995,8 @@ def test_autograd_async_server(use_emulated_run, structure_key, monitor_key):
             value = value + postprocess(sim_data)
         return value
 
-        val, grad = ag.value_and_grad(objective)(params0)
-        print(val, grad)
-        assert anp.all(grad != 0.0), "some gradients are 0"
-
     val, grad = ag.value_and_grad(objective)(params0)
+    assert np.all(np.abs(grad) > 0), "some gradients are 0"
 
 
 @pytest.mark.parametrize("structure_key", ("custom_med",))
@@ -1098,8 +1094,6 @@ def test_web_incompatible_inputs(monkeypatch):
 def test_too_many_traced_structures(monkeypatch, use_emulated_run):
     """More traced structures than allowed."""
 
-    from tidy3d.web.api.autograd.autograd import MAX_NUM_TRACED_STRUCTURES
-
     monitor_key = "mode"
     structure_key = "size_element"
     monitor, postprocess = make_monitors()[monitor_key]
@@ -1118,6 +1112,27 @@ def test_too_many_traced_structures(monkeypatch, use_emulated_run):
         return value
 
     with pytest.raises(ValueError):
+        ag.grad(objective)(params0)
+
+
+def test_no_freq_adjoint(monkeypatch, use_emulated_run):
+    """No frequency adjoint."""
+
+    def objective(args):
+        structures_traced_dict = make_structures(args)
+        structures = list(SIM_BASE.structures)
+
+        for structure_key in structure_keys_:
+            structures.append(structures_traced_dict[structure_key])
+
+        sim = SIM_BASE.updated_copy(
+            structures=structures,
+            monitors=[td.FieldTimeMonitor(size=(0, 0, 0), name="time_monitor_only")],
+        )
+        # doesn't need to be a valid objective since this should error when calling web.run
+        return web.run(sim, task_name="autograd_test", verbose=False)
+
+    with pytest.raises(AdjointError, match="No frequency-domain data"):
         ag.grad(objective)(params0)
 
 
@@ -1949,7 +1964,7 @@ def test_polyslab_scaled_grad(
         return anp.array([new_poly.slab_bounds[0], new_poly.slab_bounds[1]])
 
     if expect_exception:
-        with pytest.raises(ValueError, match=".*"):
+        with pytest.raises(ValueError):
             check_grads(lambda x: scaled_grad_with_vertices(x, y, z), modes=["rev"])(x)
             check_grads(lambda y: scaled_grad_with_vertices(x, y, z), modes=["rev"])(y)
             check_grads(lambda z: scaled_grad_with_vertices(x, y, z), modes=["rev"])(z)

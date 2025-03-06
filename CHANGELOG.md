@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - New `LobeMeasurer` tool in the `microwave` plugin that locates lobes in antenna patterns and calculates lobe measures like half-power beamwidth and sidelobe level.
+- Validation step that raises a `ValueError` when no frequency-domain monitors are present, preventing invalid adjoint runs.
 
 ### Changed
 
