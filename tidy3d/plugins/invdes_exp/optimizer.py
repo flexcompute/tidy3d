@@ -7,12 +7,7 @@ import pydantic.v1 as pd
 from .base import InvdesBaseModel
 from .parameter import AbstractParameter
 
-
-class AbstractOptimizerState(pd.BaseModel, abc.ABC):
-    """abstract optimizer state"""
-
-    class Config:
-        allow_mutation = True
+OptimizerState = typing.Dict[str, typing.Any]
 
 
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
@@ -20,7 +15,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         None, title="parameters", description="Parameters we are optimizing"
     )
 
-    state: AbstractOptimizerState = pd.Field(
+    state: OptimizerState = pd.Field(
         None, title="optimizer state", description="State for restarting optimizer"
     )
 
@@ -35,6 +30,17 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     @pd.validator("bounds")
     def validate_bounds(bounds, values):
         return sorted(bounds)
+
+    @staticmethod
+    def create_optimizer_state(parameters) -> OptimizerState:
+        return {}
+
+    @pd.validator("state")
+    def validate_state(cls, state, values):
+        if not state:
+            return cls.create_optimizer_state(values["parameters"])
+
+        return state
 
     def apply_bounds(self, updated_values):
         if self.bounds is not None:
@@ -54,29 +60,6 @@ class GradientAscentOptimizer(AbstractOptimizer):
     def step(self):
         updated_values = self.parameters.values + self.learning_rate * self.parameters.grad
         self.parameters.update_values(self.apply_bounds(updated_values))
-
-
-class AdamOptimizerState(AbstractOptimizerState):
-    # m: NDArray = pd.Field(..., title="m")
-
-    # t: NDArray = pd.Field(..., title="t")
-
-    # v: NDArray = pd.Field(..., title="v")
-
-    m: float = pd.Field(..., title="m")
-
-    t: int = pd.Field(..., title="t")
-
-    v: float = pd.Field(..., title="v")
-
-    # @pd.validator("t")
-    # def validate_t(t, values):
-    #     if not (t.dtype == np.long):
-
-    def create_initial_state(parameters):
-        """initial state of the optimizer"""
-        zeros = np.zeros_like(parameters)
-        return AdamOptimizerState(m=zeros, v=zeros, t=0)
 
 
 class AdamOptimizer(AbstractOptimizer):
@@ -102,26 +85,16 @@ class AdamOptimizer(AbstractOptimizer):
         description="Epsilon parameter in the Adam optimization method.",
     )
 
-    state: AdamOptimizerState = pd.Field(
-        None, title="state", description="state for Adam optimizer"
-    )
-
-    bounds: typing.Tuple[float, float] = pd.Field(
-        None, title="bounds", description="bounds for optimization variable"
-    )
-
-    @pd.validator("state")
-    def validate_state(state, values):
-        if state is None:
-            return AdamOptimizerState.create_initial_state(values["parameters"].values)
-
-        return state
+    @staticmethod
+    def create_optimizer_state(parameters) -> OptimizerState:
+        zeros = np.zeros_like(parameters.values)
+        return {"m": zeros, "v": zeros, "t": 0}
 
     def step(self):
         # get state
-        m = np.array(self.state.m)
-        v = np.array(self.state.v)
-        t = int(self.state.t)
+        m = np.array(self.state["m"])
+        v = np.array(self.state["v"])
+        t = int(self.state["t"])
 
         # update time step
         t = t + 1
@@ -140,4 +113,4 @@ class AdamOptimizer(AbstractOptimizer):
 
         self.parameters.update_values(self.apply_bounds(updated_values))
 
-        self.state.__dict__.update(m=m, v=v, t=t)
+        self.state.update(m=m, v=v, t=t)

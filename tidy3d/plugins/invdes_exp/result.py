@@ -3,7 +3,7 @@ import typing
 import pydantic.v1 as pd
 
 from .base import InvdesBaseModel
-from .optimizer import AbstractOptimizerState
+from .optimizer import OptimizerState
 from .region import AbstractDesignRegion
 
 
@@ -16,7 +16,7 @@ class Result(InvdesBaseModel):
         ..., title="region history", desription="history of regions through the optimization"
     )
 
-    optimizer_history: typing.Tuple[typing.Tuple[AbstractOptimizerState, ...], ...] = pd.Field(
+    optimizer_history: typing.Tuple[typing.Tuple[OptimizerState, ...], ...] = pd.Field(
         ...,
         title="optimizer history",
         desription="history of optimizer states through the optimization",
