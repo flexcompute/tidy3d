@@ -17,16 +17,16 @@ from .transformation import TransformationType
 from .utils import check_unique_string_list, validate_unique_strings
 
 
-def create_multiobjective(objectives, combine):  # , name=None):
+def create_multiobjective(objectives, combine):
     if np.all(
         [
             isinstance(objective, EMObjective) or isinstance(objective, MultiEMObjective)
             for objective in objectives
         ]
     ):
-        return MultiEMObjective(objectives=objectives, combine=combine)  # , name=name)
+        return MultiEMObjective(objectives=objectives, combine=combine)
     else:
-        return MultiObjective(objectives=objectives, combine=combine)  # , name=name)
+        return MultiObjective(objectives=objectives, combine=combine)
 
 
 def rename_objective(objective, name):
@@ -59,7 +59,6 @@ class ProductSpec(CombinationSpec):
         return np.prod(x)
 
 
-# we should do smooth versions of these as well
 class MaxSpec(CombinationSpec):
     def apply(self, x: typing.Tuple[float, ...]):
         return np.max(x)
@@ -75,30 +74,26 @@ class AbstractObjective(InvdesBaseModel):
         None, title="regions", description="Design region references involved in this simulation"
     )
 
-    parameter_dict: dict = pd.Field(
+    parameters: dict = pd.Field(
         {},
-        title="parameter dictionary",
+        title="parameters",
         description="Viewpoint into parameters for optimizer",
         init=False,
     )
 
-    name: str = pd.Field(
+    name: typing.Optional[str] = pd.Field(
         "_default_objective_name_",
         title="objective name",
         description="name of objective to help identify this objective",
     )
 
-    transformations: typing.Dict[str, typing.Optional[typing.Tuple[TransformationType, ...]]] = (
+    transformations: typing.Optional[typing.Dict[str, typing.Tuple[TransformationType, ...]]] = (
         pd.Field(
             {},
             title="transformations",
             description="dictionary of transformations to apply between the parameter and the region data for each region",
         )
     )
-
-    @property
-    def has_auxiliary_data(self):
-        return False
 
     scale: float = pd.Field(
         1.0, title="scale", description="scaling value to apply to objective value"
@@ -119,8 +114,8 @@ class AbstractObjective(InvdesBaseModel):
 
         return regions
 
-    @pd.validator("parameter_dict")
-    def validate_parameter_dict(parameter_dict, values):
+    @pd.validator("parameters")
+    def validate_parameters(parameters, values):
         regions = values["regions"]
         region_names = (region.name for region in regions)
 
@@ -146,8 +141,9 @@ class AbstractObjective(InvdesBaseModel):
 
         return fill_in_default_transformations
 
-    def parameters(self):
-        return self.parameter_dict
+    @property
+    def has_auxiliary_data(self):
+        return False
 
     def combine_parameters(self):
         k = [list(region.parameters.values) for region in self.regions]
@@ -192,7 +188,6 @@ class AbstractObjective(InvdesBaseModel):
 
         p = self.combine_parameters()
 
-        # val_and_grad_f = ag.value_and_grad(f)
         val_and_grad_f = value_and_grad(f, has_aux=self.has_auxiliary_data)
 
         if self.has_auxiliary_data:
@@ -398,10 +393,6 @@ class EMObjective(AbstractObjective):
         None, title="simulation identifier", description="name for tracking simulation being run"
     )
 
-    # def __init__(self, **kwargs):
-    #     super().__init__(**kwargs)
-    #     self._identifier = str(uuid.uuid4())
-
     @pd.validator("simulation_identifier")
     def validate_simulation_identifier(simulation_identifier, values):
         if not simulation_identifier:
@@ -413,14 +404,6 @@ class EMObjective(AbstractObjective):
         simulation_dict = {}
         self.compile_simulations(parameters, simulation_dict)
 
-        #
-        # maybe we want to put into a folder remotely and maybe a folder locally too
-        #
-        # sim_data = web.run(simulation_dict[self.name],
-
-        # if task_name is None:
-        #     task_name = f"obj_{hash(self)}_sim"
-
         if "task_name" not in kwargs:
             kwargs["task_name"] = f"{self.name}_sim"
         if "path" not in kwargs:
@@ -428,9 +411,6 @@ class EMObjective(AbstractObjective):
 
         sim_data = web.run(
             simulation_dict[self.simulation_identifier],
-            # task_name=f"{self.name}_sim",
-            # task_name=task_name,
-            # path=f"{self.name}_sim_data.hdf5",
             local_gradient=False,
             **kwargs,
         )
@@ -453,10 +433,6 @@ class EMObjective(AbstractObjective):
         all_structures = list(self.base_simulation.structures) + region_structures
         new_sim = self.base_simulation.copy(update=dict(structures=all_structures))
 
-        #
-        # this is a problem because each objective in the multiobjective needs to have a unique name for this to work
-        # especially because the transformations may not be unique....
-        #
         if self.simulation_identifier not in simulation_dict:
             simulation_dict[self.simulation_identifier] = new_sim
 

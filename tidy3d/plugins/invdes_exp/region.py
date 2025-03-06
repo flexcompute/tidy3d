@@ -29,7 +29,7 @@ class AbstractDesignRegion(InvdesBaseModel, abc.ABC):
     )
 
     name: str = pd.Field(
-        "", title="region name", description="name of region to help identify parameters"
+        ..., title="region name", description="name of region to help identify parameters"
     )
 
     tracked: bool = pd.Field(

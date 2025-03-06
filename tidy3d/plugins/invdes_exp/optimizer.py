@@ -27,6 +27,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         None, title="bounds", description="bounds for optimization variable"
     )
 
+    maximize: bool = pd.Field(True, title="maximize", description="whether to minimize or maximize")
+
     @pd.validator("bounds")
     def validate_bounds(bounds, values):
         return sorted(bounds)
@@ -42,9 +44,14 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
         return state
 
+    def apply_direction_to_gradient(self, gradient):
+        gradient_sign = 1.0 if self.maximize else (-1.0)
+        return gradient_sign * gradient
+
     def apply_bounds(self, updated_values):
         if self.bounds is not None:
-            updated_values = np.maximum(np.minimum(self.bounds[1], updated_values), self.bounds[0])
+            updated_values = np.clip(updated_values, a_min=self.bounds[0], a_max=self.bounds[1])
+            # updated_values = np.maximum(np.minimum(self.bounds[1], updated_values), self.bounds[0])
 
         return updated_values
 
@@ -58,7 +65,10 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
 class GradientAscentOptimizer(AbstractOptimizer):
     def step(self):
-        updated_values = self.parameters.values + self.learning_rate * self.parameters.grad
+        updated_values = (
+            self.parameters.values
+            + self.learning_rate * self.apply_direction_to_gradient(self.parameters.grad)
+        )
         self.parameters.update_values(self.apply_bounds(updated_values))
 
 
@@ -99,7 +109,7 @@ class AdamOptimizer(AbstractOptimizer):
         # update time step
         t = t + 1
 
-        gradient = -self.parameters.grad
+        gradient = self.apply_direction_to_gradient(-self.parameters.grad)
         # update moment variables
         m = self.beta1 * m + (1 - self.beta1) * gradient
         v = self.beta2 * v + (1 - self.beta2) * (gradient**2)

@@ -26,12 +26,12 @@ class AbstractTransformation(InvdesBaseModel, abc.ABC):
 
 
 class RescaleTransformation(AbstractTransformation):
-    eps_bounds: typing.Tuple[float, ...] = pd.Field(
-        ..., title="eps bounds", description="permittivity bounds to scale between"
+    bounds: typing.Tuple[float, ...] = pd.Field(
+        ..., title="bounds bounds", description="bounds to scale between"
     )
 
     def evaluate(self, spatial_data: anp.ndarray, **kwargs) -> anp.ndarray:
-        return rescale(spatial_data, self.eps_bounds[0], self.eps_bounds[1])
+        return rescale(spatial_data, self.bounds[0], self.bounds[1])
 
 
 #
