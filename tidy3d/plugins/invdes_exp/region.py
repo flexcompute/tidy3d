@@ -1,5 +1,3 @@
-# container for specification fully defining the inverse design problem
-
 import abc
 import typing
 
@@ -108,7 +106,7 @@ class AbstractDesignRegion(InvdesBaseModel, abc.ABC):
 
     @abc.abstractmethod
     def insert(self, sim, value, transformations=()) -> typing.Tuple[td.Structure, ...]:
-        """Create a structure from this region that can be imported into td.Simulation"""
+        """Create a list of structures from this region that can be imported into td.Simulation"""
 
     def extract(self, grad):
         p_size = len(self.parameters)

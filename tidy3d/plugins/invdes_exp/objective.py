@@ -37,7 +37,6 @@ def rename_objective(objective, name):
     return get_type(**objective_dict)
 
 
-# is this the right place for these to be? or their own file?
 class CombinationSpec(InvdesBaseModel, abc.ABC):
     placeholder: float = pd.Field(
         1.0,
