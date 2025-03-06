@@ -16,6 +16,7 @@ from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.types import Literal
 
+from ....exceptions import AdjointError
 from ...core.s3utils import download_file, upload_file
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
@@ -61,16 +62,21 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
     if not traced_fields:
         return False
 
+    # if no frequency-domain data (e.g. only field time monitors), raise an error
+    if not simulation.freqs_adjoint:
+        raise AdjointError(
+            "No frequency-domain data found in simulation, but found traced structures. "
+            "For an autograd run, you must have at least one frequency-domain monitor."
+        )
+
     # if too many structures, raise an error
     structure_indices = {i for key, i, *_ in traced_fields.keys() if key == "structures"}
     num_traced_structures = len(structure_indices)
     if num_traced_structures > MAX_NUM_TRACED_STRUCTURES:
-        msg = (
+        raise AdjointError(
             f"Autograd support is currently limited to {MAX_NUM_TRACED_STRUCTURES} structures with "
             f"traced fields. Found {num_traced_structures} structures with traced fields."
         )
-        td.log.error(msg)
-        raise ValueError(msg)
 
     return True
 
@@ -435,7 +441,6 @@ def _run_primitive(
             sim_original=sim_original,
             aux_data=aux_data,
         )
-
     else:
         sim_combined.validate_pre_upload()
         sim_original = sim_original.updated_copy(simulation_type="autograd_fwd", deep=False)
@@ -469,17 +474,17 @@ def _run_async_primitive(
 ) -> dict[str, AutogradFieldMap]:
     task_names = sim_fields_dict.keys()
 
-    if local_gradient:
-        sims_combined = {}
-        for task_name in task_names:
-            sim_fields = sim_fields_dict[task_name]
-            sim_original = sims_original[task_name]
-            sims_combined[task_name] = setup_fwd(
-                sim_fields=sim_fields,
-                sim_original=sim_original,
-                local_gradient=local_gradient,
-            )
+    sims_combined = {}
+    for task_name in task_names:
+        sim_fields = sim_fields_dict[task_name]
+        sim_original = sims_original[task_name]
+        sims_combined[task_name] = setup_fwd(
+            sim_fields=sim_fields,
+            sim_original=sim_original,
+            local_gradient=local_gradient,
+        )
 
+    if local_gradient:
         batch_data_combined, _ = _run_async_tidy3d(sims_combined, **run_async_kwargs)
 
         field_map_fwd_dict = {}
@@ -493,6 +498,8 @@ def _run_async_primitive(
                 aux_data=aux_data,
             )
     else:
+        for sim in sims_combined.values():
+            sim.validate_pre_upload()
         run_async_kwargs["simulation_type"] = "autograd_fwd"
         run_async_kwargs["sim_fields_keys_dict"] = {}
         for task_name, sim_fields in sim_fields_dict.items():
@@ -912,15 +919,13 @@ def setup_adj(
         plt.show()
 
     if len(sims_adj) > max_num_adjoint_per_fwd:
-        msg = (
+        raise AdjointError(
             f"Number of adjoint simulations ({len(sims_adj)}) exceeds the maximum allowed "
             f"({max_num_adjoint_per_fwd}) per forward simulation. This typically means that "
             "there are many frequencies and monitors in the simulation that are being differentiated "
             "w.r.t. in the objective function. To proceed, please double-check the simulation "
             "setup, increase the 'max_num_adjoint_per_fwd' parameter in the run function, and re-run."
         )
-        td.log.error(msg)
-        raise ValueError(msg)
 
     return sims_adj
 
