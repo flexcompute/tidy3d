@@ -7,6 +7,9 @@ Material Thermal
    :toctree: ../_autosummary/
    :template: module.rst
 
+   tidy3d.FluidMedium
+   tidy3d.SolidMedium
+
    tidy3d.FluidSpec
    tidy3d.SolidSpec
 
