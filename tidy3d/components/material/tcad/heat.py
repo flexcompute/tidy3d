@@ -49,7 +49,7 @@ class FluidMedium(AbstractHeatMedium):
 
     Example
     -------
-    >>> solid = FluidSpec()
+    >>> solid = FluidMedium()
     """
 
 
@@ -62,7 +62,7 @@ class SolidMedium(AbstractHeatMedium):
 
     Example
     -------
-    >>> solid = SolidSpec(
+    >>> solid = SolidMedium(
     ...     capacity=2,
     ...     conductivity=3,
     ... )
