@@ -61,6 +61,12 @@ class FilterProject(AbstractTransformation):
         units=td.constants.MICROMETER,
     )
 
+    design_region_dl: float = pd.Field(
+        ...,
+        title="design region spacing",
+        desription="distance between adjacent design region points",
+    )
+
     beta: float = pd.Field(
         1.0,
         ge=1.0,
@@ -81,10 +87,10 @@ class FilterProject(AbstractTransformation):
         "If ``True``, the values are snapped to the min and max values after projection.",
     )
 
-    def evaluate(self, spatial_data: anp.ndarray, design_region_dl: float, **kwargs) -> anp.ndarray:
+    def evaluate(self, spatial_data: anp.ndarray) -> anp.ndarray:
         """Evaluate this transformation on spatial data, given some grid size in the region."""
         filt_proj = make_filter_and_project(
-            self.radius, design_region_dl, beta=self.beta, eta=self.eta
+            self.radius, self.design_region_dl, beta=self.beta, eta=self.eta
         )
         data_projected = filt_proj(spatial_data)
 

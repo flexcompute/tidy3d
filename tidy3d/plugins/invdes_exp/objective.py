@@ -175,17 +175,14 @@ class AbstractObjective(InvdesBaseModel):
 
     def compute_grad(self, **kwargs):
         def f(p):
-            def apply_scale_and_offset(val):
-                return self.scale * val + self.offset
-
             if self.has_auxiliary_data:
                 obj_val, aux_data = self.call_objective(p, **kwargs)
 
-                return (apply_scale_and_offset(obj_val), aux_data)
+                return (obj_val, aux_data)
 
             obj_val = self.call_objective(p, **kwargs)
 
-            return apply_scale_and_offset(obj_val)
+            return obj_val
 
         p = self.combine_parameters()
 
@@ -221,7 +218,7 @@ class AbstractObjective(InvdesBaseModel):
         elif isinstance(other, numbers.Number):
             return self.copy(update=dict(scale=self.scale * float(other)), deep=False)
         else:
-            raise TypeError("Unsupported types for operation (+)")
+            raise TypeError("Unsupported types for operation (*)")
 
     __radd__ = __add__
     __rmul__ = __mul__
@@ -363,7 +360,7 @@ class MultiEMObjective(MultiObjective):
 
             value_by_objective.append(apply_objective)
 
-        return self.combine.apply(value_by_objective), aux_objective_data
+        return self.scale * self.combine.apply(value_by_objective) + self.offset, aux_objective_data
 
     def call_objective(self, parameters, **kwargs):
         simulation_dict = {}
@@ -422,7 +419,7 @@ class EMObjective(AbstractObjective):
             **kwargs,
         )
 
-        return self.objective(sim_data)
+        return self.scale * self.objective(sim_data) + self.offset
 
     def compile_simulation_identifiers(self, simulation_identifier_list):
         return simulation_identifier_list.append(self.simulation_identifier)
@@ -444,7 +441,9 @@ class EMObjective(AbstractObjective):
             simulation_dict[self.simulation_identifier] = new_sim
 
     def apply_objective(self, simulation_dict):
-        return self.objective(simulation_dict[self.simulation_identifier])
+        return (
+            self.scale * self.objective(simulation_dict[self.simulation_identifier]) + self.offset
+        )
 
 
 class PenaltyObjective(AbstractObjective):
@@ -467,4 +466,4 @@ class PenaltyObjective(AbstractObjective):
 
             p_start += p_increment
 
-        return self.objective(parameter_dict)
+        return self.scale * self.objective(parameter_dict) + self.offset
