@@ -15,6 +15,7 @@ from tidy3d.exceptions import ValidationError
 
 from .base import InvdesBaseModel
 from .initialization import InitializationSpecType, UniformInitializationSpec
+from .optimization_spec import OptimizationSpecType
 from .penalty import PenaltyType
 from .transformation import TransformationType
 
@@ -68,6 +69,11 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         title="Initialization Specification",
         description="Specification of how to initialize the parameters in the design region.",
         discriminator=TYPE_TAG_STR,
+    )
+
+    optimization_spec: OptimizationSpecType = pd.Field(
+        title="Optimization Spec",
+        description="specifices how this design region will be optimized by the Optimizer",
     )
 
     def _post_init_validators(self):

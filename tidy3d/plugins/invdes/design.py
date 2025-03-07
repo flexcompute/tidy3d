@@ -25,10 +25,10 @@ PostProcessFnType = typing.Callable[[td.SimulationData], float]
 class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     """Container for an inverse design problem."""
 
-    design_region: DesignRegionType = pd.Field(
+    design_regions: list[DesignRegionType] = pd.Field(
         ...,
-        title="Design Region",
-        description="Region within which we will optimize the simulation.",
+        title="Design Regions",
+        description="Regions within which we will optimize the simulation.",
     )
 
     task_name: str = pd.Field(
