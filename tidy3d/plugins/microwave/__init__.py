@@ -11,6 +11,7 @@ from .custom_path_integrals import (
     CustomVoltageIntegral2D,
 )
 from .impedance_calculator import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
+from .lobe_measurer import LobeMeasurer
 from .path_integrals import (
     AxisAlignedPathIntegral,
     CurrentIntegralAxisAligned,
@@ -32,4 +33,5 @@ __all__ = [
     "path_integrals_from_lumped_element",
     "rf_material_library",
     "RectangularAntennaArrayCalculator",
+    "LobeMeasurer",
 ]

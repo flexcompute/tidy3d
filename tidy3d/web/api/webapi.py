@@ -885,9 +885,16 @@ def abort(task_id: TaskId):
     """
 
     task = SimulationTask.get(task_id)
-    # task = SimulationTask(taskId=task_id)
-    task.abort()
-    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    if not task:
+        raise ValueError("Task not found.")
+    else:
+        task.abort()
+        console = get_logging_console()
+        url = _get_url(task.task_id)
+        console.log(
+            f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+        )
+        return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 @wait_for_connection

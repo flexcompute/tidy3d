@@ -1425,6 +1425,7 @@
                         {
                             "attrs": {},
                             "type": "TwoPhotonAbsorption",
+                            "use_complex_fields": false,
                             "beta": 1.0,
                             "tau": 1.0,
                             "sigma": 1.0,
@@ -1438,6 +1439,7 @@
                         {
                             "attrs": {},
                             "type": "KerrNonlinearity",
+                            "use_complex_fields": false,
                             "n2": {
                                 "real": 1.0,
                                 "imag": 0.0
@@ -1806,7 +1808,7 @@
                 "precision": "auto",
                 "bend_radius": null,
                 "bend_axis": null,
-                "bend_angle_rotation": false,
+                "angle_rotation": false,
                 "track_freq": "central",
                 "group_index_step": false,
                 "type": "ModeSpec"
@@ -1837,6 +1839,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
+            "num_freqs": 3,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -1870,7 +1873,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 1,
+            "num_freqs": 3,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -1902,7 +1905,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 1,
+            "num_freqs": 3,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -2325,7 +2328,7 @@
                 "precision": "auto",
                 "bend_radius": null,
                 "bend_axis": null,
-                "bend_angle_rotation": false,
+                "angle_rotation": false,
                 "track_freq": "central",
                 "group_index_step": false,
                 "type": "ModeSpec"
@@ -3101,9 +3104,10 @@
             }
         ],
         "snapping_points": [],
+        "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.8.0rc2",
+    "version": "2.8.0",
     "plot_length_units": "\u03bcm",
     "lumped_elements": [
         {
@@ -3120,10 +3124,55 @@
                 0.0
             ],
             "name": "Resistor",
-            "num_grid_cells": 3,
+            "num_grid_cells": 1,
+            "enable_snapping_points": true,
             "voltage_axis": 0,
             "snap_perimeter_to_grid": true,
             "resistance": 42.0
+        },
+        {
+            "attrs": {},
+            "name": "Coax Resistor",
+            "num_grid_cells": 1,
+            "enable_snapping_points": true,
+            "type": "CoaxialLumpedResistor",
+            "resistance": 42.0,
+            "center": [
+                3.0,
+                2.0,
+                0.0
+            ],
+            "outer_diameter": 2.0,
+            "inner_diameter": 0.2,
+            "normal_axis": 0
+        },
+        {
+            "attrs": {},
+            "type": "LinearLumpedElement",
+            "center": [
+                1.0,
+                2.0,
+                0.0
+            ],
+            "size": [
+                0.2,
+                0.2,
+                0.0
+            ],
+            "name": "LCParallel",
+            "num_grid_cells": 1,
+            "enable_snapping_points": true,
+            "voltage_axis": 0,
+            "snap_perimeter_to_grid": true,
+            "network": {
+                "attrs": {},
+                "resistance": null,
+                "capacitance": 1e-11,
+                "inductance": 1e-09,
+                "network_topology": "parallel",
+                "type": "RLCNetwork"
+            },
+            "dist_type": "on"
         }
     ],
     "subpixel": false,

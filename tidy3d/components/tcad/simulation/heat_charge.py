@@ -29,7 +29,7 @@ from tidy3d.components.material.tcad.charge import (
     SemiconductorMedium,
 )
 from tidy3d.components.material.tcad.heat import (
-    SolidSpec,
+    SolidMedium,
 )
 from tidy3d.components.material.types import MultiPhysicsMedium, StructureMediumType
 from tidy3d.components.medium import Medium
@@ -354,7 +354,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 # for planar objects we could do a rigorous check
                 medium_set = Scene.intersecting_media(obj, total_structures)
                 crosses_solid = any(
-                    isinstance(medium.heat_spec, SolidSpec) for medium in medium_set
+                    isinstance(medium.heat_spec, SolidMedium) for medium in medium_set
                 )
                 crosses_elec_spec = any(
                     any([isinstance(medium.charge, medium_i)] for medium_i in valid_electric_medium)
@@ -366,7 +366,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 crosses_solid = any(
                     obj.intersects(structure.geometry)
                     for structure in total_structures
-                    if isinstance(structure.medium.heat_spec, SolidSpec)
+                    if isinstance(structure.medium.heat_spec, SolidMedium)
                 )
                 crosses_elec_spec = any(
                     obj.intersects(structure.geometry)
@@ -1592,7 +1592,7 @@ class HeatChargeSimulation(AbstractSimulation):
         ...     structures=[box],
         ...     medium=Medium(
         ...         permittivity=3,
-        ...         heat_spec=SolidSpec(
+        ...         heat_spec=SolidMedium(
         ...             conductivity=1, capacity=1,
         ...         ),
         ...     ),
