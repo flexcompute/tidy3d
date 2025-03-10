@@ -15,19 +15,11 @@ from tidy3d.plugins.autograd import value_and_grad
 from .base import InvdesBaseModel
 from .region import DesignRegionType
 from .transformation import TransformationType
-from .utils import check_unique_string_list, validate_unique_strings
+from .utils import check_unique_list, validate_unique_strings
 
 
 def create_multiobjective(objectives, combine):
-    if np.all(
-        [
-            isinstance(objective, EMObjective) or isinstance(objective, MultiEMObjective)
-            for objective in objectives
-        ]
-    ):
-        return MultiEMObjective(objectives=objectives, combine=combine)
-    else:
-        return MultiObjective(objectives=objectives, combine=combine)
+    return MultiObjective(objectives=objectives, combine=combine)
 
 
 def rename_objective(objective, name):
@@ -102,6 +94,19 @@ class AbstractObjective(InvdesBaseModel):
     offset: float = pd.Field(
         0.0, title="offset", description="offset value to apply to objective value"
     )
+
+    identifier: typing.Optional[str] = pd.Field(
+        None,
+        title="simulation identifier",
+        description="string identifier for tracking objective being run",
+    )
+
+    @pd.validator("identifier")
+    def validate_identifier(identifier, values):
+        if not identifier:
+            return str(uuid.uuid4())
+
+        return identifier
 
     region_name_validator = validate_unique_strings("regions", lambda region: region.name)
 
@@ -200,6 +205,9 @@ class AbstractObjective(InvdesBaseModel):
         for region in self.regions:
             p_start += region.extract(grad[p_start:])
 
+    def apply_objective(self, batch_dict):
+        return self.scale * self.objective(batch_dict[self.typed_identifier]) + self.offset
+
     @abc.abstractmethod
     def call_objective(self, parameters):
         """Evaluate objective"""
@@ -239,6 +247,10 @@ class MultiObjective(AbstractObjective):
         None, title="combine", description="A way to combine the objective values together"
     )
 
+    def compile_identifiers(self, identifier_list):
+        for objective in self.objectives:
+            objective.compile_identifiers(identifier_list)
+
     @pd.root_validator(pre=True)
     def validate_objectives(cls, values):
         regions = []
@@ -255,6 +267,21 @@ class MultiObjective(AbstractObjective):
         values["regions"] = set_regions
 
         return values
+
+    @pd.validator("objectives")
+    def validate_objective_identifiers(objectives, values):
+        identifier_list = []
+
+        for objective in objectives:
+            objective.compile_identifiers(identifier_list)
+
+        if not check_unique_list(identifier_list):
+            raise ValidationError(
+                "Objective identifiers in a MultiObjective should not conflict. If you"
+                "don't specify objective identifiers, they will be made unique automatically."
+            )
+
+        return objectives
 
     @property
     def has_auxiliary_data(self):
@@ -296,48 +323,7 @@ class MultiObjective(AbstractObjective):
 
             objective.apply_grad(extract_grad)
 
-    def call_objective(self, parameters, **kwargs):
-        parameter_start_location_by_region = self.parameter_start_location_by_region(parameters)
-
-        value_by_objective = []
-        aux_objective_data = []
-        for objective in self.objectives:
-            choices = self.choices(objective, parameter_start_location_by_region, parameters)
-            extract_parameters = parameters[choices.nonzero()]
-
-            if objective.has_auxiliary_data:
-                call_objective, aux_data = objective.call_objective(extract_parameters, **kwargs)
-                aux_objective_data.append(aux_data)
-            else:
-                call_objective = objective.call_objective(extract_parameters, **kwargs)
-                aux_objective_data.append(getval(call_objective))
-
-            value_by_objective.append(call_objective)
-
-        return self.combine.apply(value_by_objective), aux_objective_data
-
-
-class MultiEMObjective(MultiObjective):
-    @pd.validator("objectives")
-    def validate_em_objectives(objectives, values):
-        simulation_identifier_list = []
-
-        for objective in objectives:
-            objective.compile_simulation_identifiers(simulation_identifier_list)
-
-        if not check_unique_string_list(simulation_identifier_list):
-            raise ValidationError(
-                "EM simulation identifiers in a MultiEMObjective should not conflict. If you"
-                "don't specify objective names for each EM simulation, they will be made unique automatically."
-            )
-
-        return objectives
-
-    def compile_simulation_identifiers(self, simulation_identifier_list):
-        for objective in self.objectives:
-            objective.compile_simulation_identifiers(simulation_identifier_list)
-
-    def compile_simulations(self, parameters, simulation_dict):
+    def compile(self, parameters, batch_dict):
         parameter_start_location_by_region = self.parameter_start_location_by_region(parameters)
 
         for objective in self.objectives:
@@ -345,17 +331,17 @@ class MultiEMObjective(MultiObjective):
 
             extract_parameters = parameters[choices.nonzero()]
 
-            objective.compile_simulations(extract_parameters, simulation_dict)
+            objective.compile(extract_parameters, batch_dict)
 
-    def apply_objective(self, simulation_data_dict):
+    def apply_objective(self, batch_dict):
         value_by_objective = []
         aux_objective_data = []
         for objective in self.objectives:
             if objective.has_auxiliary_data:
-                apply_objective, aux_data = objective.apply_objective(simulation_data_dict)
+                apply_objective, aux_data = objective.apply_objective(batch_dict)
                 aux_objective_data.append(aux_data)
             else:
-                apply_objective = objective.apply_objective(simulation_data_dict)
+                apply_objective = objective.apply_objective(batch_dict)
                 aux_objective_data.append(getval(apply_objective))
 
             value_by_objective.append(apply_objective)
@@ -363,20 +349,32 @@ class MultiEMObjective(MultiObjective):
         return self.scale * self.combine.apply(value_by_objective) + self.offset, aux_objective_data
 
     def call_objective(self, parameters, **kwargs):
+        batch_dict = {}
+
+        self.compile(parameters, batch_dict)
+
         simulation_dict = {}
+        for key, val in batch_dict.items():
+            if key[1] == "em":
+                simulation_dict[key[0]] = val
 
-        self.compile_simulations(parameters, simulation_dict)
+        simulation_data_dict = web.run_async(simulation_dict, local_gradient=False, **kwargs)
 
-        sim_data_all = web.run_async(simulation_dict, local_gradient=False, **kwargs)
+        batch_data_dict = {}
+        for key in batch_dict:
+            if key[1] == "em":
+                batch_data_dict[key] = simulation_data_dict[key[0]]
+            else:
+                batch_data_dict[key] = batch_dict[key]
 
         value_by_objective = []
         aux_objective_data = []
         for objective in self.objectives:
             if objective.has_auxiliary_data:
-                apply_objective, aux_data = objective.apply_objective(sim_data_all)
+                apply_objective, aux_data = objective.apply_objective(batch_data_dict)
                 aux_objective_data.append(aux_data)
             else:
-                apply_objective = objective.apply_objective(sim_data_all)
+                apply_objective = objective.apply_objective(batch_data_dict)
                 aux_objective_data.append(getval(apply_objective))
 
             value_by_objective.append(apply_objective)
@@ -393,20 +391,13 @@ class EMObjective(AbstractObjective):
         None, title="base simulation", description="Underlying simulation to be run"
     )
 
-    simulation_identifier: typing.Optional[str] = pd.Field(
-        None, title="simulation identifier", description="name for tracking simulation being run"
-    )
-
-    @pd.validator("simulation_identifier")
-    def validate_simulation_identifier(simulation_identifier, values):
-        if not simulation_identifier:
-            return str(uuid.uuid4())
-
-        return simulation_identifier
+    @property
+    def typed_identifier(self):
+        return (self.identifier, "em")
 
     def call_objective(self, parameters, **kwargs):
-        simulation_dict = {}
-        self.compile_simulations(parameters, simulation_dict)
+        batch_dict = {}
+        self.compile(parameters, batch_dict)
 
         if "task_name" not in kwargs:
             kwargs["task_name"] = f"{self.name}_sim"
@@ -414,17 +405,17 @@ class EMObjective(AbstractObjective):
             kwargs["path"] = f"{self.name}_sim_data.hdf5"
 
         sim_data = web.run(
-            simulation_dict[self.simulation_identifier],
+            batch_dict[self.typed_identifier],
             local_gradient=False,
             **kwargs,
         )
 
         return self.scale * self.objective(sim_data) + self.offset
 
-    def compile_simulation_identifiers(self, simulation_identifier_list):
-        return simulation_identifier_list.append(self.simulation_identifier)
+    def compile_identifiers(self, identifier_list):
+        return identifier_list.append(self.typed_identifier)
 
-    def compile_simulations(self, parameters, simulation_dict):
+    def compile(self, parameters, batch_dict):
         p_start = 0
         region_structures = []
         for region in self.regions:
@@ -437,13 +428,11 @@ class EMObjective(AbstractObjective):
         all_structures = list(self.base_simulation.structures) + region_structures
         new_sim = self.base_simulation.copy(update=dict(structures=all_structures))
 
-        if self.simulation_identifier not in simulation_dict:
-            simulation_dict[self.simulation_identifier] = new_sim
+        if self.typed_identifier not in batch_dict:
+            batch_dict[self.typed_identifier] = new_sim
 
-    def apply_objective(self, simulation_dict):
-        return (
-            self.scale * self.objective(simulation_dict[self.simulation_identifier]) + self.offset
-        )
+    def apply_objective(self, batch_dict):
+        return self.scale * self.objective(batch_dict[self.typed_identifier]) + self.offset
 
 
 class PenaltyObjective(AbstractObjective):
@@ -451,9 +440,21 @@ class PenaltyObjective(AbstractObjective):
         None, title="objective", description="Computes objective function based on design region"
     )
 
+    @property
+    def typed_identifier(self):
+        return (self.identifier, "penalty")
+
     def call_objective(self, parameters, **kwargs):
+        batch_dict = {}
+        self.compile(parameters, batch_dict)
+
+        return self.scale * self.objective(batch_dict[self.typed_identifier]) + self.offset
+
+    def compile_identifiers(self, identifier_list):
+        return identifier_list.append(self.typed_identifier)
+
+    def compile(self, parameters, batch_dict):
         p_start = 0
-        # new_regions = []
         parameter_dict = {}
         for region in self.regions:
             p_increment = len(region.parameters)
@@ -466,4 +467,4 @@ class PenaltyObjective(AbstractObjective):
 
             p_start += p_increment
 
-        return self.scale * self.objective(parameter_dict) + self.offset
+        batch_dict[self.typed_identifier] = parameter_dict

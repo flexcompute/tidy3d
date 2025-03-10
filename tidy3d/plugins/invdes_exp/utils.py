@@ -77,7 +77,7 @@ def get_phase(arr: xr.DataArray) -> anp.ndarray:
     return anp.angle(arr)
 
 
-def check_unique_string_list(string_list):
+def check_unique_list(string_list):
     return len(string_list) == len(set(string_list))
 
 
@@ -85,7 +85,7 @@ def validate_unique_strings(prop_name, accessor):
     @pd.validator(prop_name, allow_reuse=True)
     def validate_string_list(named_objects, values):
         names = [accessor(named_object) for named_object in named_objects]
-        if not check_unique_string_list(names):
+        if not check_unique_list(names):
             raise ValidationError(f"{prop_name} conflicts")
 
         return named_objects
