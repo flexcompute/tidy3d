@@ -65,7 +65,7 @@ class InverseDesign(InvdesBaseModel):
 
         region_dict = {}
         for name in all_region_names:
-            region_dict[name] = self.access_region_by_name(name).untrack().copy(deep=True)
+            region_dict[name] = self.access_region_by_name(name).copy(deep=True)
 
         return region_dict
 

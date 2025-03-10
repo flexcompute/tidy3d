@@ -5,7 +5,6 @@ import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.exceptions import Tidy3dError
 
 from .base import InvdesBaseModel
 from .initialization import InitializationSpecType
@@ -31,46 +30,6 @@ class AbstractDesignRegion(InvdesBaseModel, abc.ABC):
     name: str = pd.Field(
         ..., title="region name", description="name of region to help identify parameters"
     )
-
-    tracked: bool = pd.Field(
-        True,
-        title="tracked",
-        description="indicator of this design region is tracked. Only"
-        "tracked regions can be used in objectives.",
-    )
-
-    def untrack(self):
-        return self.updated_copy(deep=True, tracked=False, parameter_initialization=None)
-
-    def copy(self, deep: bool = True, validate: bool = True, **kwargs):
-        tracked_in_update = False
-        if "update" in kwargs:
-            tracked_in_update = "tracked" in kwargs["update"]
-
-        if (self.tracked and not tracked_in_update) or (
-            tracked_in_update and kwargs["update"]["tracked"]
-        ):
-            raise Tidy3dError(
-                "We can't copy a tracked region. Please call untrack() on the region first."
-            )
-
-        return super().copy(deep=deep, validate=validate, **kwargs)
-
-    def updated_copy(self, path: str = None, deep: bool = True, validate: bool = True, **kwargs):
-        tracked_in_kwargs = "tracked" in kwargs
-
-        if (self.tracked and not tracked_in_kwargs) or (tracked_in_kwargs and kwargs["tracked"]):
-            raise Tidy3dError(
-                "We can't copy a tracked region. Please call untrack() on the region first."
-            )
-
-        return super().updated_copy(path=path, deep=deep, validate=validate, **kwargs)
-
-    def __copy__(self):
-        return self.copy(deep=False)
-
-    def __deepcopy__(self, memo):
-        return self.copy(deep=True)
 
     @pd.validator("parameters")
     def validate_parameters(parameters, values):
@@ -100,9 +59,7 @@ class AbstractDesignRegion(InvdesBaseModel, abc.ABC):
         return filter_parameter_list
 
     def create_region(self, value):
-        return self.updated_copy(
-            parameters=Parameter(values=value), parameter_initialization=None, tracked=False
-        )
+        return self.updated_copy(parameters=Parameter(values=value), parameter_initialization=None)
 
     @abc.abstractmethod
     def insert(self, sim, value, transformations=()) -> typing.Tuple[td.Structure, ...]:

@@ -110,16 +110,6 @@ class AbstractObjective(InvdesBaseModel):
 
     region_name_validator = validate_unique_strings("regions", lambda region: region.name)
 
-    @pd.validator("regions")
-    def validate_regions(regions, values):
-        for region in regions:
-            if not region.tracked:
-                raise ValidationError(
-                    "Only regions that are being tracked can be used in objectives."
-                )
-
-        return regions
-
     @pd.validator("parameters")
     def validate_parameters(parameters, values):
         regions = values["regions"]
@@ -435,7 +425,7 @@ class EMObjective(AbstractObjective):
         return self.scale * self.objective(batch_dict[self.typed_identifier]) + self.offset
 
 
-class PenaltyObjective(AbstractObjective):
+class Penalty(AbstractObjective):
     objective: typing.Callable = pd.Field(
         None, title="objective", description="Computes objective function based on design region"
     )
