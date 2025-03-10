@@ -1226,9 +1226,11 @@ class LayerRefinementSpec(Box):
         return self.center[self.axis]
 
     @cached_property
-    def _is_inplane_unbounded(self) -> bool:
-        """Whether the layer is unbounded in any of the inplane dimensions."""
-        return np.isinf(self.size[(self.axis + 1) % 3]) or np.isinf(self.size[(self.axis + 2) % 3])
+    def _is_inplane_bounded(self) -> bool:
+        """Whether the layer is bounded in at least one of the inplane dimensions."""
+        return np.isfinite(self.size[(self.axis + 1) % 3]) or np.isfinite(
+            self.size[(self.axis + 2) % 3]
+        )
 
     def _unpop_axis(self, ax_coord: float, plane_coord: Any) -> CoordinateOptional:
         """Combine coordinate along axis with identical coordinates on the plane tangential to the axis.
@@ -1321,14 +1323,14 @@ class LayerRefinementSpec(Box):
 
         # filter structures outside the layer
         structures_intersect = structure_list
-        if not self._is_inplane_unbounded:
+        if self._is_inplane_bounded:
             structures_intersect = [s for s in structure_list if self.intersects(s.geometry)]
         inplane_points = self.corner_finder.corners(
             self.axis, self.center_axis, structures_intersect
         )
 
         # filter corners outside the inplane bounds
-        if not self._is_inplane_unbounded:
+        if self._is_inplane_bounded:
             inplane_points = [point for point in inplane_points if self._inplane_inside(point)]
 
         # convert 2d points to 3d

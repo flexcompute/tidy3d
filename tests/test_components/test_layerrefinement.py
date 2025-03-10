@@ -101,18 +101,19 @@ def test_layerrefinement():
         assert layer.size[axis] == 1
         assert layer.size[(axis + 1) % 3] == td.inf
         assert layer.size[(axis + 2) % 3] == td.inf
-        assert layer._is_inplane_unbounded
+        assert not layer._is_inplane_bounded
 
     layer = LayerRefinementSpec.from_bounds(axis=axis, rmin=(0, 0, 0), rmax=(1, 2, 3))
     layer = LayerRefinementSpec.from_bounds(rmin=(0, 0, 0), rmax=(1, 2, 3))
     assert layer.axis == 0
     assert np.isclose(layer.length_axis, 1)
     assert np.isclose(layer.center_axis, 0.5)
-    assert not layer._is_inplane_unbounded
+    assert layer._is_inplane_bounded
 
     # from structures
     structures = [td.Structure(geometry=td.Box(size=(td.inf, 2, 3)), medium=td.Medium())]
     layer = LayerRefinementSpec.from_structures(structures)
+    assert layer._is_inplane_bounded
     assert layer.axis == 1
 
     with pytest.raises(pydantic.ValidationError):
@@ -134,6 +135,7 @@ def test_layerrefinement():
 def test_layerrefinement_inplane_inside():
     # inplane inside
     layer = LayerRefinementSpec.from_layer_bounds(axis=2, bounds=(0, 1))
+    assert not layer._is_inplane_bounded
     assert layer._inplane_inside([3e3, 4e4])
     layer = LayerRefinementSpec(axis=1, size=(1, 0, 1))
     assert layer._inplane_inside([0, 0])
