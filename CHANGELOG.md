@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Bug in `LayerRefinementSpec` that refines grids outside the layer region when one in-plane dimension is of size infinity.
 
 ## [2.8.0] - 2025-03-04
 
