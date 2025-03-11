@@ -641,6 +641,20 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return values
 
+    def get_cell_values(self, **kwargs):
+        """This function returns the cell values for the fields stored in the UnstructuredGridDataset.
+        If multiple fields are stored per point, like in an IndexedVoltageDataArray, cell values
+        will be provided for each of the fields unless a selection argument is provided, e.g., voltage=0.2
+        """
+
+        values = self.values.sel(**kwargs)
+
+        return values[self.cells].mean(dim="vertex_index").values
+
+    @abstractmethod
+    def get_cell_volumes(self):
+        """Get the volumes associated to each cell."""
+
     """ Grid operations """
 
     @requires_vtk
