@@ -11,6 +11,8 @@ from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import ValidationError
 
+from ..geometry.base import Box
+
 
 class UnstructuredGrid(Tidy3dBaseModel, ABC):
     """Abstract unstructured grid."""
@@ -124,6 +126,19 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         title="Structures Without Refinement",
         description="List of structures for which ``dl_interface`` will not be enforced. "
         "``dl_bulk`` is used instead.",
+    )
+
+    refinement_region: Box = pd.Field(
+        (),
+        title="Refinement region definition",
+        description="Refinement region",
+    )
+
+    dl_refinement_region: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Refinement region definition",
+        description="Refinement region",
+        units=MICROMETER,
     )
 
     @pd.validator("distance_bulk", always=True)
