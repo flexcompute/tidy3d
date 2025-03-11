@@ -94,3 +94,9 @@ class MultiParameter(AbstractParameter):
     def zero_grad(self):
         for parameter in self.parameters:
             parameter.zero_grad()
+
+
+ParameterType = typing.Union[
+    Parameter,
+    MultiParameter,
+]

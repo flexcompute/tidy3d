@@ -7,9 +7,9 @@ import pydantic.v1 as pd
 from tidy3d.exceptions import Tidy3dError, ValidationError
 
 from .base import InvdesBaseModel
-from .objective import AbstractObjective
-from .optimizer import AbstractOptimizer
-from .region import AbstractDesignRegion
+from .objective import ObjectiveType
+from .optimizer import OptimizerType
+from .region import DesignRegionType
 from .result import Result
 
 
@@ -28,18 +28,19 @@ class FixedIterationTerminationSpec(TerminationSpec):
         return metadata_history["iteration"][-1] >= self.iterations
 
 
+TerminationSpecType = typing.Union[FixedIterationTerminationSpec]
+
+
 class InverseDesign(InvdesBaseModel):
-    optimizers: typing.Tuple[AbstractOptimizer, ...] = pd.Field(
+    optimizers: typing.Tuple[OptimizerType, ...] = pd.Field(
         ...,
         title="optimizers",
         description="optimizers to step at each iteration of the optimization",
     )
 
-    objective: AbstractObjective = pd.Field(
-        ..., title="objective", description="objective to evaluate"
-    )
+    objective: ObjectiveType = pd.Field(..., title="objective", description="objective to evaluate")
 
-    termination: typing.Union[pd.StrictInt, TerminationSpec] = pd.Field(
+    termination: typing.Union[pd.StrictInt, TerminationSpecType] = pd.Field(
         ..., title="termination", description="how to determine the optimization is finished"
     )
 
@@ -71,7 +72,7 @@ class InverseDesign(InvdesBaseModel):
 
         raise Tidy3dError("Region does not exist in any of the objectives.")
 
-    def retrive_unique_region_copies(self) -> typing.Dict[str, AbstractDesignRegion]:
+    def retrive_unique_region_copies(self) -> typing.Dict[str, DesignRegionType]:
         all_region_names = [design_region.name for design_region in self.objective.regions]
 
         region_dict = {}

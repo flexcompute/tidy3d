@@ -5,13 +5,13 @@ import numpy as np
 import pydantic.v1 as pd
 
 from .base import InvdesBaseModel
-from .parameter import AbstractParameter
+from .parameter import ParameterType
 
 OptimizerState = typing.Dict[str, typing.Any]
 
 
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
-    parameters: AbstractParameter = pd.Field(
+    parameters: ParameterType = pd.Field(
         None, title="parameters", description="Parameters we are optimizing"
     )
 
@@ -124,3 +124,6 @@ class AdamOptimizer(AbstractOptimizer):
         self.parameters.update_values(self.apply_bounds(updated_values))
 
         self.state.update(m=m, v=v, t=t)
+
+
+OptimizerType = typing.Union[GradientAscentOptimizer, AdamOptimizer]

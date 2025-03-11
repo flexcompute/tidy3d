@@ -449,10 +449,7 @@ class EMObjective(AbstractObjective):
 
 class Penalty(AbstractObjective):
     metric: PenaltyType = pd.Field(
-        None,
-        title="metric",
-        description="Computes metric function based on design regions.",
-        discriminator=TYPE_TAG_STR,
+        None, title="metric", description="Computes metric function based on design regions."
     )
 
     @property
@@ -483,3 +480,6 @@ class Penalty(AbstractObjective):
             p_start += p_increment
 
         batch_dict[self.typed_identifier] = parameter_dict
+
+
+ObjectiveType = typing.Union[EMObjective, MultiObjective, Penalty]
