@@ -4,7 +4,7 @@ import typing
 
 import pydantic.v1 as pd
 
-from tidy3d.exceptions import Tidy3dError
+from tidy3d.exceptions import Tidy3dError, ValidationError
 
 from .base import InvdesBaseModel
 from .objective import AbstractObjective
@@ -20,7 +20,7 @@ class TerminationSpec(InvdesBaseModel):
 
 
 class FixedIterationTerminationSpec(TerminationSpec):
-    iterations: int = pd.Field(
+    iterations: pd.PositiveInt = pd.Field(
         ..., title="iterations", description="fixed number of iterations to run for"
     )
 
@@ -39,9 +39,23 @@ class InverseDesign(InvdesBaseModel):
         ..., title="objective", description="objective to evaluate"
     )
 
-    termination_spec: TerminationSpec = pd.Field(
+    termination: typing.Union[pd.StrictInt, TerminationSpec] = pd.Field(
         ..., title="termination", description="how to determine the optimization is finished"
     )
+
+    @pd.validator("termination")
+    def validate_termination_spec(termination, values):
+        print(type(termination))
+        print(termination)
+        # asdf
+        if isinstance(termination, int):
+            if termination <= 0:
+                raise ValidationError(
+                    "When specifying number of iterations, it should be a strictly positive integer."
+                )
+            return FixedIterationTerminationSpec(iterations=termination)
+
+        return termination
 
     def zero_grad(self):
         for objective in self.objectives:
@@ -115,9 +129,7 @@ class InverseDesign(InvdesBaseModel):
         apply_to_opt(zero_opt)
         do_checkpoint()
 
-        while not self.termination_spec.condition(
-            objective_history, region_history, metadata_history
-        ):
+        while not self.termination.condition(objective_history, region_history, metadata_history):
             apply_to_opt(step_opt)
 
             iteration += 1

@@ -394,8 +394,8 @@ EMMetricType = typing.Union[typing.ForwardRef("ExpressionType"), EMCustomMetric]
 class EMObjective(AbstractObjective):
     metric: EMMetricType = pd.Field(
         None,
-        title="objective",
-        description="Computes objective function based on simulation data",
+        title="metric",
+        description="Computes metric function based on simulation data",
         discriminator=TYPE_TAG_STR,
     )
 
