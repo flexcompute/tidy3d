@@ -9,10 +9,12 @@ from autograd.tracer import getval
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import ValidationError
 from tidy3d.plugins.autograd import value_and_grad
 
 from .base import InvdesBaseModel
+from .penalty import PenaltyType
 from .region import DesignRegionType
 from .transformation import TransformationType
 from .utils import check_unique_list, validate_unique_strings
@@ -196,7 +198,7 @@ class AbstractObjective(InvdesBaseModel):
             p_start += region.extract(grad[p_start:])
 
     def apply_objective(self, batch_dict):
-        return self.scale * self.objective(batch_dict[self.typed_identifier]) + self.offset
+        return self.scale * self.metric(batch_dict[self.typed_identifier]) + self.offset
 
     @abc.abstractmethod
     def call_objective(self, parameters):
@@ -267,7 +269,7 @@ class MultiObjective(AbstractObjective):
 
         if not check_unique_list(identifier_list):
             raise ValidationError(
-                "Objective identifiers in a MultiObjective should not conflict. If you"
+                "Objective identifiers in a MultiObjective should not conflict. If you "
                 "don't specify objective identifiers, they will be made unique automatically."
             )
 
@@ -372,9 +374,28 @@ class MultiObjective(AbstractObjective):
         return self.combine.apply(value_by_objective), aux_objective_data
 
 
+class EMCustomMetric(InvdesBaseModel):
+    eval_fn: typing.Callable = pd.Field(
+        ..., title="eval_fn", description="custom evaluation function for penalty"
+    )
+
+    def evaluate(self, sim_data) -> float:
+        """Evaluate this penalty."""
+        return self.eval_fn(sim_data)
+
+    def __call__(self, sim_data) -> float:
+        return self.evaluate(sim_data)
+
+
+EMMetricType = typing.Union[typing.ForwardRef("ExpressionType"), EMCustomMetric]
+
+
 class EMObjective(AbstractObjective):
-    objective: typing.Callable = pd.Field(
-        None, title="objective", description="Computes objective function based on simulation data"
+    metric: EMMetricType = pd.Field(
+        None,
+        title="objective",
+        description="Computes objective function based on simulation data",
+        discriminator=TYPE_TAG_STR,
     )
 
     base_simulation: td.Simulation = pd.Field(
@@ -400,7 +421,7 @@ class EMObjective(AbstractObjective):
             **kwargs,
         )
 
-        return self.scale * self.objective(sim_data) + self.offset
+        return self.scale * self.metric(sim_data) + self.offset
 
     def compile_identifiers(self, identifier_list):
         return identifier_list.append(self.typed_identifier)
@@ -422,12 +443,15 @@ class EMObjective(AbstractObjective):
             batch_dict[self.typed_identifier] = new_sim
 
     def apply_objective(self, batch_dict):
-        return self.scale * self.objective(batch_dict[self.typed_identifier]) + self.offset
+        return self.scale * self.metric(batch_dict[self.typed_identifier]) + self.offset
 
 
 class Penalty(AbstractObjective):
-    objective: typing.Callable = pd.Field(
-        None, title="objective", description="Computes objective function based on design region"
+    metric: PenaltyType = pd.Field(
+        None,
+        title="metric",
+        description="Computes metric function based on design regions.",
+        discriminator=TYPE_TAG_STR,
     )
 
     @property
@@ -438,7 +462,7 @@ class Penalty(AbstractObjective):
         batch_dict = {}
         self.compile(parameters, batch_dict)
 
-        return self.scale * self.objective(batch_dict[self.typed_identifier]) + self.offset
+        return self.scale * self.metric(batch_dict[self.typed_identifier]) + self.offset
 
     def compile_identifiers(self, identifier_list):
         return identifier_list.append(self.typed_identifier)

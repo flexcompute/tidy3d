@@ -12,6 +12,7 @@ from .initialization import (
 )
 from .objective import (
     CombinationSpec,
+    EMCustomMetric,
     EMObjective,
     MaxSpec,
     MinSpec,
@@ -24,6 +25,7 @@ from .objective import (
 )
 from .optimizer import AdamOptimizer, GradientAscentOptimizer
 from .parameter import MultiParameter
+from .penalty import BinarizationPenalty, CustomPenalty, ErosionDilationPenalty
 from .region import TopologyDesignRegion
 from .result import Result
 from .transformation import FilterProject, RescaleTransformation
@@ -33,9 +35,13 @@ __all__ = (
     "FilterProject",
     "RescaleTransformation",
     "MultiParameter",
+    "EMCustomMetric",
     "EMObjective",
     "Penalty",
     "MultiObjective",
+    "BinarizationPenalty",
+    "CustomPenalty",
+    "ErosionDilationPenalty",
     "TopologyDesignRegion",
     "GradientAscentOptimizer",
     "AdamOptimizer",
