@@ -45,9 +45,6 @@ class InverseDesign(InvdesBaseModel):
 
     @pd.validator("termination")
     def validate_termination_spec(termination, values):
-        print(type(termination))
-        print(termination)
-        # asdf
         if isinstance(termination, int):
             if termination <= 0:
                 raise ValidationError(
