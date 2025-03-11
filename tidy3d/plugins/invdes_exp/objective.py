@@ -12,6 +12,7 @@ import tidy3d.web as web
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import ValidationError
 from tidy3d.plugins.autograd import value_and_grad
+from tidy3d.plugins.expressions.types import ExpressionType  # noqa
 
 from .base import InvdesBaseModel
 from .penalty import PenaltyType
