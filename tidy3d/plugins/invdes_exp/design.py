@@ -77,7 +77,11 @@ class InverseDesign(InvdesBaseModel):
 
         region_dict = {}
         for name in all_region_names:
-            region_dict[name] = self.access_region_by_name(name).copy(deep=True)
+            # This may need a different solution to not have this region reinitialize it's parameters on a copy.
+            # If we set it to None right now, then the parameters are preserved and not reinitialized
+            region_dict[name] = self.access_region_by_name(name).updated_copy(
+                deep=True, parameter_initialization=None
+            )
 
         return region_dict
 
