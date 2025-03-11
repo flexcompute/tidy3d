@@ -62,6 +62,25 @@ class UniformUnstructuredGrid(UnstructuredGrid):
     )
 
 
+class GridRefinementRegion(Box):
+    """Refinement region for the unstructured mesh. The cell size are inforces to be constant inside the region."""
+
+    dl_internal: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Internal mesh cell size",
+        description="Mesh cell size inside the refinement region",
+        units=MICROMETER,
+    )
+
+    transition_thickness: pd.NonNegativeFloat = pd.Field(
+        ...,
+        title="Interface Distance",
+        description="Thickness of a transition layer outside the box where the mesh cell size changes from the"
+        "internal size to the external one.",
+        units=MICROMETER,
+    )
+
+
 class DistanceUnstructuredGrid(UnstructuredGrid):
     """Adaptive grid based on distance to material interfaces. Currently not recommended for larger
     simulations.
@@ -128,17 +147,10 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         "``dl_bulk`` is used instead.",
     )
 
-    refinement_region: Box = pd.Field(
+    refinement_regions: Tuple[GridRefinementRegion, ...] = pd.Field(
         (),
-        title="Refinement region definition",
-        description="Refinement region",
-    )
-
-    dl_refinement_region: pd.PositiveFloat = pd.Field(
-        ...,
-        title="Refinement region definition",
-        description="Refinement region",
-        units=MICROMETER,
+        title="Refinement regions",
+        description="List of regions for which the mesh refinement will be applied",
     )
 
     @pd.validator("distance_bulk", always=True)
