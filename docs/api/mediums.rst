@@ -27,7 +27,7 @@ To get started with predefined materials, see our `Material Collection <material
 
 .. image:: /_static/img/mediums_overview.png
    :align: center
-   :width: 80%
+   :width: 100%
    :class: mt-3
 
 
@@ -116,59 +116,25 @@ and then evaluate the complex-valued permittivity at 200 THz in the second line.
    sim_data = web.run(simulation, task_name='lecture01_dipole', path='data/data_dipole.hdf5')
 
 
-
-
-   # define the boxes
-   epsilon_box = 3
-   center_offset_box = 1.6
-   size_box = 1.8
-   medium=td.Medium(permittivity=epsilon_box,name='medium')
-
-   box_top = td.Structure(
-      geometry=td.Box(
-         center=(0, 0, center_offset_box),
-         size=(size_box, size_box, size_box)),
-      medium=medium,
-      name='box top',
-   )
-
-   bot_bot_r = td.Structure(
-      geometry=td.Box(
-         center=(+center_offset_box, 0, -center_offset_box),
-         size=(size_box, size_box, size_box)),
-      medium=medium,
-      name='box bottom right',
-   )
-
-   bot_bot_l = td.Structure(
-      geometry=td.Box(
-         center=(-center_offset_box, 0, -center_offset_box),
-         size=(size_box, size_box, size_box)),
-      medium=medium,
-      name='box bottom left',
-   )
-
-
-
 !Explain the attributes.!
+The :class:`tidy3d.Medium` class inherits from the :class:`tidy3d.AbstractMedium` class (see :ref:`AbstractMedium <abstract-medium>`).
 
-allow_gain (bool = False) – Allow the medium to be active. Caution: simulations with a gain medium are unstable, 
+`allow_gain (bool = False)` – Allow the medium to be active. Caution: simulations with a gain medium are unstable,
 and are likely to diverge.Simulations where ‘allow_gain’ is set to ‘True’ will still be charged even if diverged.
 Monitor data up to the divergence point will still be returned and can be useful in some cases.
 
-nonlinear_spec (Union[NonlinearSpec, NonlinearSusceptibility] = None) – Nonlinear spec applied on top of the base medium properties.
+`nonlinear_spec (Union[NonlinearSpec, NonlinearSusceptibility] = None)` – Nonlinear spec applied on top of the base medium properties.
 
-modulation_spec (Optional[ModulationSpec] = None) – Modulation spec applied on top of the base medium properties.
+`modulation_spec (Optional[ModulationSpec] = None)` – Modulation spec applied on top of the base medium properties.
 
-viz_spec (Optional[VisualizationSpec] = None) – Plotting specification for visualizing medium.
+`viz_spec (Optional[VisualizationSpec] = None)` – Plotting specification for visualizing medium.
 
-permittivity (Union[ConstrainedFloatValue, Box] = 1.0) – [units = None (relative permittivity)]. Relative permittivity.
+`permittivity (Union[ConstrainedFloatValue, Box] = 1.0)` – [units = None (relative permittivity)]. Relative permittivity.
 
-conductivity (Union[float, Box] = 0.0) – [units = S/um]. Electric conductivity.
+`conductivity (Union[float, Box] = 0.0)` – [units = S/um]. Electric conductivity.
 Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.
 
 !Explain the methods.!
-
 
 
 Lossy Metal Medium
@@ -199,22 +165,69 @@ This approach greatly reduces computational cost while still capturing the essen
    If this condition is not met, use a regular medium instead,
    or set ``simulation.subpixel.lossy_metal`` to ``td.VolumetricAveraging()`` or ``td.Staircasing()``.
 
-!Give and discuss simple example:!
+You can define a lossy metal medium with a conductivity of 10 S/m and a frequency range of 9-10 GHz as such:
 
 .. code-block:: python
 
    lossy_metal = LossyMetalMedium(conductivity=10, frequency_range=(9e9, 10e9))
 
-Perfect Electric Conductor (PEC) Medium
-"""""""""""""""""""""""""""""""""""""""
+!Complete Example!
+
+!Arguments!
 
 
+!Methods!
+
+
+Perfect Electric Conductor (PEC)
+""""""""""""""""""""""""""""""""
+A PEC is an idealized material with infinite conductivity, i.e. it offers no resistance to electric current.
+In such a conductor, electromagnetic fields cannot penetrate, and the tangential component of the electric field
+at the conductor’s surface must be zero.
+
+Although real metals at optical frequencies are not perfect conductors, PECs are still widely used in FDTD simulations for a few key reasons:
+
++ **Boundary Conditions:** In FDTD, a PEC boundary condition enforces zero tangential electric field on the boundary, 
+  causing perfect reflection of incident waves. This simplifies simulations by eliminating the need to model
+  the fields inside highly conductive regions.  
++ **Reflectors/Waveguides:** PEC boundaries are used to approximate perfect mirrors or to represent the walls of waveguides and cavities, 
+  where negligible penetration of the field is a good approximation.
++ **Computational Efficiency:** By treating a surface as a PEC,
+  one avoids the fine spatial discretization required to resolve skin depths in real metals, especially at high frequencies, 
+  thereby reducing computational cost.
+
+! give an example of a PEC!
+
+.. code-block:: python
+
+
+!Arguments!
+
+!Methods!
 
 Fully Anisotropic Medium
 """"""""""""""""""""""""
+For many practical applications, parameters like the permittivity and conductivity are assumed to be isotropic,
+meaning they have the same value in all directions.
+In more complex scenarios however, materials can be anisotropic, with their electromagnetic response varying with direction.
+
+The :class:`tidy3d.FullyAnisotropicMedium` class allows for the specification of a fully anisotropic medium,
+including all 9 components of the permittivity and conductivity tensors.
+
+The provided permittivity tensor and the symmetric part of the conductivity tensor must have coinciding main directions.
+A non-symmetric conductivity tensor can be used to model magneto-optic effects.
+
+.. note::
+
+   Dispersive properties and subpixel averaging are currently not supported for fully anisotropic materials.
 
 
+.. note::
 
+   Simulations involving fully anisotropic materials are computationally more intensive, thus, 
+   they take longer time to complete. This increase strongly depends on the filling fraction of the simulation
+   domain by fully anisotropic materials, varying approximately in the range from 1.5 to 5.
+   The cost of running a simulation is adjusted correspondingly.
 
 
 For more information on non-dispersive mediums, see:
@@ -230,7 +243,7 @@ For more information on non-dispersive mediums, see:
 
 Spatially Varying
 ^^^^^^^^^^^^^^^^^
-Here, although ε and μ are constant in frequency, their values can change from one location to another.
+Here, although :math:`\epsilon` and :math:`\mu` are constant in frequency, their values can change from one location to another.
 This is used to model inhomogeneous materials where different regions have different constants.
 
 .. autosummary::
@@ -241,7 +254,7 @@ This is used to model inhomogeneous materials where different regions have diffe
 
 Fitting Parameters
 ^^^^^^^^^^^^^^^^^^
-In some cases, even for non-dispersive models, one might adjust ε and μ (or related parameters) to better fit experimental data.
+In some cases, even for non-dispersive models, one might adjust :math:`\epsilon` and :math:`\mu` (or related parameters) to better fit experimental data.
 These "fitting parameters" are tuned to match the actual behavior of the material under study.
 
 .. autosummary::
@@ -415,84 +428,83 @@ The medium specificatins allow you to add properties to an existing medium, nota
 
 Nonlinear
 ^^^^^^^^^
-!Why are nonlinearities important?!
-
+Nonlinear effects in optics and photonics arise when a material’s response to an electromagnetic field
+depends on the field’s intensity rather than simply being proportional to it.
+This leads to phenomena such as frequency mixing, harmonic generation, self-focusing,
+and optical switching—capabilities that are not possible in strictly linear media.
 
 .. image:: /_static/img/SHG_BBO.png
    :align: right
    :width: 40%
    :class: mt-3
 
-The image on the right shows second harmonic generation (SHG) in a Beta Barium Borate (BBO) crystal, 
+For example, the image on the right shows second harmonic generation (SHG) in a Beta Barium Borate (BBO) crystal, 
 a commonly used nonlinear optical material. The red waves represent the fundamental light at frequency :math:`\omega` entering (and partially exiting) the crystal,
 and the blue wave denotes the second harmonic light at frequency :math:`2\omega` that is generated inside the crystal.
 BBO is favored for SHG because it has a relatively large second-order nonlinear susceptibility (:math:`\chi^{(2)}`) and a wide transparency range,
 allowing efficient frequency conversion from the fundamental to the second harmonic.
 
 
-
-In nonlinear FDTD simulations, the dielectric permittivity—typically represented as a 3×3 tensor—can itself be modified by the electric field. 
+In nonlinear FDTD simulations, the dielectric permittivity can itself be modified by the electric field. 
 In general, the change in permittivity can be expressed as a power series in the electric field components:
 
 .. math::
 
    \Delta\epsilon_{ij} = \sum_k \chi^{(2)}_{ijk} E_k + \sum_{k,\ell} \chi^{(3)}_{ijk\ell} E_k E_\ell + \cdots
 
+
 Here, :math:`\Delta\epsilon_{ij}` represents the change in the tensor element at position :math:`i,j`,
 while the :math:`\chi` terms are the nonlinear susceptibilities.
 The first-order nonlinear term (with :math:`\chi^{(2)}`) corresponds to the Pockels effect,
 which describes a linear response of the material polarization to the electric field,
-whereas the second term (with :math:`\chi^{(3)}`) represents the Kerr effect, describing a quadratic response.
-
-If these susceptibility tensors are frequency-independent, the nonlinearity is considered instantaneous,
-that is, the material’s response depends only on the current electric field.
-More generally, if the susceptibilities depend on frequency, :math:`\Delta\epsilon`
-would involve a temporal convolution reflecting the material’s memory of past fields—a feature that can significantly complicate FDTD simulations.
-
-Tidy3D supports instantaneous, isotropic nonlinearities. In this case, the nonlinear susceptibilities simplify to
-
-.. math::
-
-   \chi^{(2)}_{ijk} = \chi^{(2)} \cdot \delta_{ij}\delta_{jk} \quad \text{and} \quad \chi^{(3)}_{ijk\ell} = \chi^{(3)} \cdot \delta_{ij}\delta_{k\ell},
-
-where :math:`\delta_{ij}` is the Kronecker delta. With these simplifications, the displacement field :math:`\mathbf{D}` is given by
-
-.. math::
-
-   \mathbf{D} = \left(\epsilon_\infty(\mathbf{x}) + \chi^{(2)}(\mathbf{x}) \cdot \mathrm{diag}(\mathbf{E}) + \chi^{(3)}(\mathbf{x}) \cdot |\mathbf{E}|^2\right)\mathbf{E} + \mathbf{P}.
-
-In this expression, :math:`\mathrm{diag}(\mathbf{E})` represents the 3×3 diagonal matrix
-whose diagonal elements are the components of the electric field :math:`\mathbf{E}`,
-and :math:`|\mathbf{E}|^2` is the squared magnitude of the electric field.
-
-This formulation is particularly useful in FDTD simulations because it allows the nonlinear contributions
-to be directly incorporated into the time-stepping update equations.
-By explicitly updating the electric field with these additional nonlinear terms,
-one can efficiently model phenomena such as harmonic generation, self-focusing,
-and intensity-dependent refractive index changes. Moreover,
-while instantaneous models are computationally simpler,
-including the possibility of dispersive (frequency-dependent) nonlinearity often requires storing field history
-or employing auxiliary differential equations, which can increase the complexity and computational cost of the simulation.
+whereas the second term (with :math:`\chi^{(3)}`) represents the Kerr effect, describing a quadratic (hence nonlinear) response.
 
 Nonlinear Specifications
 """"""""""""""""""""""""
+The :class:`tidy3d.NonlinearSpec` class is an abstract specification for adding nonlinearities to a medium.
 
-Nonlinear Susceptibility
-""""""""""""""""""""""""
+.. note::
+
+   The nonlinear constitutive relation is solved iteratively; it may not converge for strong nonlinearities. Increasing num_iters can help with convergence.
+
+Example:
+
+.. code-block:: python
+
+   nonlinear_susceptibility = NonlinearSusceptibility(chi3=1)
+   nonlinear_spec = NonlinearSpec(models=[nonlinear_susceptibility])
+   medium = Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
+
+
+NonlinearSusceptibility
+"""""""""""""""""""""""
+!Merge this explanation with the KerrNonlinearity section.!
+
 
 Kerr Nonlinearity
 """""""""""""""""
-Model for Kerr nonlinearity which gives an intensity-dependent refractive index of the form 
+As mentioned above, Kerr nonlinearity is a phenomenon where the refractive index :math:`n` of a material changes with the intensity of light passing through it. 
+
+For an isotropic and instantaneous medium, the dominant nonlinear effect is captured by the third-order term.
+Because the electric field’s intensity :math:`I` is proportional to :math:`|\mathbf{E}|^2`, the refractive index :math:`n` can be written as:
 
 .. math::
 
-   n(\mathbf{E}) = n_0 + n_2 |\mathbf{E}|^2
+   n = n_0 + n_2 I = n_0 + n_2 |\mathbf{E}|^2,
+
+where :math:`n_0` is the linear refractive index, :math:`n_2` is the Kerr coefficient, representing how strongly the refractive index changes with intensity,
+and :math:`I \propto |\mathbf{E}|^2` is the light intensity.
+
+This expression shows that as the intensity increases, the refractive index changes accordingly.
+For a positive :math:`n_2`, the material exhibits self-focusing,
+where the central part of a beam (with higher intensity) has a higher refractive index, causing the beam to focus.
+Conversely, if :math:`n_2` is negative, the beam can self-defocus.
 
 The expression for the nonlinear polarization is given below.
 
-This model uses real time-domain fields, so :math:`n_2` must be real.
+Since this model uses real time-domain fields, :math:`n_2` must be real.
 
-This model is equivalent to a NonlinearSusceptibility; the relation between the parameters is given below.
+This model is equivalent to a :class:`tidy3d.NonlinearSusceptibility`; the relation between the parameters is given below.
 
 .. math::
 
@@ -502,7 +514,7 @@ This model is equivalent to a NonlinearSusceptibility; the relation between the 
  
 In these equations, :math:`n_0` means the real part of the linear refractive index of the medium.
 
-To simulate nonlinear loss, consider instead using a TwoPhotonAbsorption model,
+To simulate nonlinear loss, consider instead using a :class:`tidy3d.TwoPhotonAbsorption` model,
 which implements a more physical dispersive loss of the form :math:`\chi_{TPA} = i \frac{c_0 n_0 \beta}{\omega} I`.
 
 The nonlinear constitutive relation is solved iteratively; it may not converge for strong nonlinearities. 
@@ -522,9 +534,47 @@ This approximation is valid when the field is predominantly polarized along one 
 
 Two-Photon Absorption
 """""""""""""""""""""
+Two-photon absorption (TPA)is a process where two photons, each with roughly half the energy required for an electronic transition, 
+are absorbed simultaneously to excite a material. This process is nonlinear, its probability increases with the square of the light intensity,
+and is crucial in advanced optical applications like high-resolution microscopy and the study of nonlinear optical phenomena.
 
-Two-Photon Absorption
-"""""""""""""""""""""
+Tidy3D provides this :class:`tidy3d.TwoPhotonAbsorption` class for the two-photon absorption nonlinearity
+which gives an intensity-dependent absorption of the form 
+
+.. math::
+
+   \alpha(\mathbf{E}) = \alpha + \beta |\mathbf{E}|^2.
+
+Also includes free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) effects. The expression for the nonlinear polarization is given below.
+
+
+This model uses real time-domain fields, so :math:`\beta` must be real.
+
+.. math::
+
+   \begin{split}P_{NL} = P_{TPA} + P_{FCA} + P_{FCPD} \\
+   P_{TPA} = -\frac{4}{3}\frac{c_0^2 \varepsilon_0^2 n_0^2 \beta}{2 i \omega} |E|^2 E \\
+   P_{FCA} = -\frac{c_0 \varepsilon_0 n_0 \sigma N_f}{i \omega} E \\
+   \frac{dN_f}{dt} = \frac{8}{3}\frac{c_0^2 \varepsilon_0^2 n_0^2 \beta}{8 q_e \hbar \omega} |E|^4 - \frac{N_f}{\tau} \\
+   N_e = N_h = N_f \\
+   P_{FCPD} = \varepsilon_0 2 n_0 \Delta n (N_f) E \\
+   \Delta n (N_f) = (c_e N_e^{e_e} + c_h N_h^{e_h})\end{split}
+
+The nonlinear constitutive relation is solved iteratively; it may not converge for strong nonlinearities. Increasing tidy3d.NonlinearSpec.num_iters can help with convergence.
+
+For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity is applied separately to the real and imaginary parts, so that the above equation holds when both 
+ and 
+ are replaced by their real or imaginary parts. The nonlinearity is only applied to the real-valued fields since they are the physical fields.
+
+Different field components do not interact nonlinearly. For example, when calculating 
+, we approximate 
+. This approximation is valid when the 
+ field is predominantly polarized along one of the x, y, or z axes.
+
+The implementation is described in:
+
+N. Suzuki, "FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si
+High-Index-Contrast Waveguides," J. Light. Technol. 25, 9 (2007).
 
 
 For more information on medium specifications, see:
@@ -568,6 +618,8 @@ For more information on time modulation, see:
    tidy3d.ContinuousWaveTimeModulation
    tidy3d.SpaceModulation
 
+.. _abstract-medium:
+
 Abstract Classes
 ----------------
 Many of the mediums inherit from the abstract classes :class:`tidy3d.components.medium.AbstractPerturbationMedium` and :class:`tidy3d.components.medium.NonlinearModel`.
@@ -576,6 +628,7 @@ For more information regarding these abstract classes, see:
 .. autosummary::
    :toctree: _autosummary/
 
+   tidy3d.components.medium.AbstractMedium
    tidy3d.components.medium.AbstractPerturbationMedium
    tidy3d.components.medium.NonlinearModel
 
