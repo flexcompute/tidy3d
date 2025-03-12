@@ -295,6 +295,7 @@ from .components.parameter_perturbation import (
     IndexPerturbation,
     LinearChargePerturbation,
     LinearHeatPerturbation,
+    NedeljkovicSorefMashanovich,
     ParameterPerturbation,
     PermittivityPerturbation,
 )
@@ -437,6 +438,7 @@ __all__ = [
     "RotationAroundAxis",
     "PerturbationMedium",
     "PerturbationPoleResidue",
+    "NedeljkovicSorefMashanovich",
     "ParameterPerturbation",
     "LinearHeatPerturbation",
     "CustomHeatPerturbation",
