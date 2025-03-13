@@ -372,6 +372,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
@@ -390,6 +391,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
 
         Returns
         -------
@@ -399,7 +402,7 @@ class Scene(Tidy3dBaseModel):
 
         hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures)
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
@@ -413,6 +416,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        fill: bool = True,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -430,6 +434,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        fill : bool = True
+            Whether to fill structures with color or just draw outlines.
 
         Returns
         -------
@@ -443,7 +449,13 @@ class Scene(Tidy3dBaseModel):
         medium_map = self.medium_map
         for medium, shape in medium_shapes:
             mat_index = medium_map[medium]
-            ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
+            ax = self._plot_shape_structure(
+                medium=medium,
+                mat_index=mat_index,
+                shape=shape,
+                ax=ax,
+                fill=fill,
+            )
 
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -456,15 +468,27 @@ class Scene(Tidy3dBaseModel):
         return ax
 
     def _plot_shape_structure(
-        self, medium: MultiPhysicsMediumType3D, mat_index: int, shape: Shapely, ax: Ax
+        self,
+        medium: MultiPhysicsMediumType3D,
+        mat_index: int,
+        shape: Shapely,
+        ax: Ax,
+        fill: bool = True,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
-        plot_params_struct = self._get_structure_plot_params(medium=medium, mat_index=mat_index)
+        plot_params_struct = self._get_structure_plot_params(
+            medium=medium,
+            mat_index=mat_index,
+            fill=fill,
+        )
         ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
         return ax
 
     def _get_structure_plot_params(
-        self, mat_index: int, medium: MultiPhysicsMediumType3D
+        self,
+        mat_index: int,
+        medium: MultiPhysicsMediumType3D,
+        fill: bool = True,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot()."""
 
@@ -507,6 +531,11 @@ class Scene(Tidy3dBaseModel):
             if hasattr(medium, "viz_spec"):
                 if medium.viz_spec is not None:
                     plot_params = plot_params.override_with_viz_spec(medium.viz_spec)
+
+        if not fill:
+            plot_params = plot_params.copy(update={"fill": False})
+            if plot_params.linewidth == 0:
+                plot_params = plot_params.copy(update={"linewidth": 1})
 
         return plot_params
 

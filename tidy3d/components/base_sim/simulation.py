@@ -228,6 +228,7 @@ class AbstractSimulation(Box, ABC):
         monitor_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -250,7 +251,8 @@ class AbstractSimulation(Box, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -261,7 +263,9 @@ class AbstractSimulation(Box, ABC):
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
 
-        ax = self.scene.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.scene.plot_structures(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures
+        )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = Scene._set_plot_bounds(
@@ -492,6 +496,7 @@ class AbstractSimulation(Box, ABC):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        fill: bool = True,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -509,7 +514,8 @@ class AbstractSimulation(Box, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
+        fill : bool = True
+            Whether to fill structures with color or just draw outlines.
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -520,7 +526,9 @@ class AbstractSimulation(Box, ABC):
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
 
-        return self.scene.plot_structures(x=x, y=y, z=z, ax=ax, hlim=hlim_new, vlim=vlim_new)
+        return self.scene.plot_structures(
+            x=x, y=y, z=z, ax=ax, hlim=hlim_new, vlim=vlim_new, fill=fill
+        )
 
     @equal_aspect
     @add_ax_if_none

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `fill` and `fill_structures` argument in `td.Simulation.plot_structures()` and `td.Simulation.plot()` respectively to disable fill and plot outlines of structures only.
+
 ## [2.8.1] - 2025-03-20
 
 ### Added
