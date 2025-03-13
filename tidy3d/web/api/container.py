@@ -34,12 +34,13 @@ BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
 class WebContainer(Tidy3dBaseModel, ABC):
     """Base class for :class:`Job` and :class:`Batch`, technically not used"""
 
+    from abc import abstractmethod
+
     @staticmethod
-    def _check_path_dir(path_dir: str) -> None:
-        """Make sure ``path_dir`` exists and create one if not."""
-        location = os.path.dirname(path_dir)
-        if len(location) > 0 and not os.path.exists(location):
-            os.makedirs(location, exist_ok=True)
+    @abstractmethod
+    def _check_path_dir(path: str) -> None:
+        """Make sure local output directory exists and create it if not."""
+        pass
 
     @staticmethod
     def _check_folder(folder_name: str) -> None:
@@ -205,7 +206,6 @@ class Job(WebContainer):
         -------
         >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
         """
-
         task_id_cached = self._cached_properties.get("task_id")
         self = self.updated_copy(task_id_cached=task_id_cached)
         super(Job, self).to_file(fname=fname)  # noqa: UP008
@@ -223,7 +223,6 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-
         self.upload()
         self.start()
         self.monitor()
@@ -305,7 +304,7 @@ class Job(WebContainer):
         ----
         To load the data after download, use :meth:`Job.load`.
         """
-        self._check_path_dir(path_dir=path)
+        self._check_path_dir(path=path)
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
     def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
@@ -321,7 +320,7 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-        self._check_path_dir(path_dir=path)
+        self._check_path_dir(path=path)
         data = web.load(task_id=self.task_id, path=path, verbose=self.verbose)
         if isinstance(self.simulation, ModeSolver):
             self.simulation._patch_data(data=data)
@@ -365,6 +364,19 @@ class Job(WebContainer):
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
         return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
+
+    @staticmethod
+    def _check_path_dir(path: str) -> None:
+        """Make sure parent directory of ``path`` exists and create it if not.
+
+        Parameters
+        ----------
+        path : str
+            Path to file to be created (including filename).
+        """
+        parent_dir = os.path.dirname(path)
+        if len(parent_dir) > 0 and not os.path.exists(parent_dir):
+            os.makedirs(parent_dir, exist_ok=True)
 
 
 class BatchData(Tidy3dBaseModel, Mapping):
@@ -1030,3 +1042,15 @@ class Batch(WebContainer):
                 console.log("Could not get estimated batch cost!")
 
         return batch_cost
+
+    @staticmethod
+    def _check_path_dir(path_dir: str) -> None:
+        """Make sure ``path_dir`` exists and create it if not.
+
+        Parameters
+        ----------
+        path_dir : str
+            Directory path where files will be saved.
+        """
+        if len(path_dir) > 0 and not os.path.exists(path_dir):
+            os.makedirs(path_dir, exist_ok=True)
