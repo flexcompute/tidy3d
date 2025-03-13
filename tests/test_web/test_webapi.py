@@ -1,5 +1,6 @@
 # Tests webapi and things that depend on it
 
+
 import numpy as np
 import pytest
 import responses
@@ -562,6 +563,34 @@ def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path):
     b2.run(path_dir=str(tmp_path))
     _ = b2.get_info()
     assert b2.real_cost() == FLEX_UNIT * len(sims)
+
+
+@responses.activate
+def test_create_output_dirs(mock_webapi, tmp_path, monkeypatch):
+    """Test that Job and Batch create output directories if they don't exist."""
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    non_existent_dirs_job = tmp_path / "new/nested/folders/job"
+    output_file_job = non_existent_dirs_job / "output.hdf5"
+
+    assert not non_existent_dirs_job.exists()
+
+    sim = make_sim()
+    job = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
+    job.run(path=str(output_file_job))
+
+    assert non_existent_dirs_job.exists()
+    assert non_existent_dirs_job.is_dir()
+
+    non_existent_dirs_batch = tmp_path / "new/nested/folders/batch"
+
+    assert not non_existent_dirs_batch.exists()
+
+    sims = {TASK_NAME: make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
+    batch.run(path_dir=str(non_existent_dirs_batch))
+
+    assert non_existent_dirs_batch.exists()
+    assert non_existent_dirs_batch.is_dir()
 
 
 """ Async """
