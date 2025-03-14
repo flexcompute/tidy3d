@@ -813,6 +813,83 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     assert anp.all(grad != 0.0), "some gradients are 0"
 
 
+class TestTupleGrads:
+    center0 = (0.0, 0.0, 0.0)
+    size0 = (0.5, 1.0, 1.5)
+
+    @staticmethod
+    def make_simulation(center: tuple, size: tuple) -> td.Simulation:
+        wavelength = 1.0
+        freq0 = td.C_0 / wavelength
+
+        src = td.PointDipole(
+            center=(-1.4, 0, 0),
+            source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10),
+            polarization="Ex",
+        )
+
+        mnt = td.FieldMonitor(
+            size=(0, 0, 1),
+            center=(1.4, 0, 0),
+            freqs=[freq0, freq0 + freq0 / 50],
+            name="fields",
+        )
+
+        scatterer = td.Structure(
+            geometry=td.Box(center=center, size=size),
+            medium=td.Medium(permittivity=3.0),
+        )
+
+        return td.Simulation(
+            size=(3, 3, 3),
+            run_time=2e-13,
+            structures=[scatterer],
+            sources=[src],
+            monitors=[mnt],
+            boundary_spec=td.BoundarySpec.all_sides(td.PML()),
+            grid_spec=td.GridSpec.auto(min_steps_per_wvl=30),
+        )
+
+    @pytest.mark.parametrize("run_async", [False, True])
+    @pytest.mark.parametrize("zero", [False, True])
+    @pytest.mark.parametrize("local_gradient", [False, True])
+    def test_zero_grad_tuple(self, use_emulated_run, run_async, zero, local_gradient, tmp_path):
+        """Checks that tuple gradients don't return empty tuples"""
+
+        def obj(center: tuple, size: tuple) -> float:
+            sim = self.make_simulation(center=center, size=size)
+            if run_async:
+                batch_data = web.run_async(
+                    {"lossy_test_async": sim},
+                    path_dir=tmp_path,
+                    local_gradient=local_gradient,
+                )
+                sim_data = list(batch_data.values())[0]
+            else:
+                sim_data = web.run(
+                    sim,
+                    task_name="lossy_test",
+                    local_gradient=local_gradient,
+                )
+            objval = anp.mean(sim_data["fields"].intensity.data).item()
+            if zero:
+                objval *= 0
+            return objval
+
+        d_power = ag.value_and_grad(obj, argnum=(0, 1))
+        val, (dp_dcenter, dp_dsize) = d_power(self.center0, self.size0)
+
+        assert len(dp_dcenter) == 3
+        assert len(dp_dsize) == 3
+
+        if zero:
+            assert np.allclose(dp_dcenter, 0)
+            assert np.allclose(dp_dsize, 0)
+        else:
+            assert not np.allclose(dp_dcenter, 0)
+            assert not np.allclose(dp_dsize, 0)
+
+
 @pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_key):
     """Test objective where only some simulations in batch have adjoint sources."""
