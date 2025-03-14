@@ -14,6 +14,7 @@ from tidy3d.components import simulation
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
+from tidy3d.plugins.mode import ModeSolver
 
 from ..utils import (
     SIM_FULL,
@@ -2749,7 +2750,11 @@ def test_sim_subsection(unstructured, nz):
     sim_red = SIM_FULL.subsection(
         region=region, boundary_spec=td.BoundarySpec.all_sides(td.Periodic())
     )
-    sim_red = SIM_FULL.subsection(region=region, sources=[], grid_spec=td.GridSpec.uniform(dl=20))
+    sim_red = SIM_FULL.subsection(
+        region=region,
+        sources=[],
+        grid_spec=td.GridSpec.uniform(dl=20),
+    )
     assert len(sim_red.sources) == 0
     sim_red = SIM_FULL.subsection(region=region, monitors=[])
     assert len(sim_red.monitors) == 0
@@ -3288,6 +3293,87 @@ def test_validate_sources_monitors_in_bounds():
             run_time=1e-12,
             grid_spec=td.GridSpec(wavelength=1.0),
             monitors=[mode_monitor],
+        )
+
+
+def test_mode_pml_warning():
+    sim_size = (3, 3, 3)
+    lambda0 = 1.55
+    freq0 = td.C_0 / lambda0
+    si = td.material_library["cSi"]["Li1993_293K"]
+    sio2 = td.material_library["SiO2"]["Horiba"]
+    wg = td.Structure(geometry=td.Box(size=(0.22, 0.5, td.inf)), medium=si)
+    mode_plane = td.Box(size=(2, 2, 0))
+    mode_spec = td.ModeSpec(num_pml=(22, 22))
+    grid_spec = td.GridSpec.auto(wavelength=lambda0, min_steps_per_wvl=30)
+    symmetry = (0, 0, 0)
+    with AssertLogLevel(None):
+        sim = td.Simulation(
+            size=sim_size,
+            medium=sio2,
+            structures=[wg],
+            grid_spec=grid_spec,
+            run_time=1e-30,
+            monitors=[
+                td.ModeSolverMonitor(
+                    size=(2, 2, 0),
+                    name="mode",
+                    freqs=[freq0],
+                    mode_spec=mode_spec.updated_copy(num_pml=(10, 10)),
+                )
+            ],
+            symmetry=symmetry,
+        )
+    with AssertLogLevel("WARNING", contains_str="covers more than"):
+        sim = td.Simulation(
+            size=sim_size,
+            medium=sio2,
+            structures=[wg],
+            grid_spec=grid_spec,
+            run_time=1e-30,
+            monitors=[
+                td.ModeSolverMonitor(
+                    size=(2, 2, 0), name="mode", freqs=[freq0], mode_spec=mode_spec
+                )
+            ],
+            symmetry=symmetry,
+        )
+    with AssertLogLevel("WARNING", contains_str="covers more than"):
+        sim = td.Simulation(
+            size=sim_size,
+            medium=sio2,
+            structures=[wg],
+            grid_spec=grid_spec,
+            run_time=1e-30,
+            sources=[
+                td.ModeSource(
+                    size=(2, 2, 0),
+                    direction="+",
+                    source_time=td.GaussianPulse(freq0=freq0, fwidth=0.1 * freq0),
+                    mode_spec=mode_spec,
+                )
+            ],
+            symmetry=symmetry,
+        )
+    with AssertLogLevel("WARNING", contains_str="covers more than"):
+        mode_solver = ModeSolver(
+            simulation=sim, plane=mode_plane, mode_spec=mode_spec, freqs=[freq0]
+        )
+        size = mode_solver._mode_plane_size(simulation=sim, plane=mode_plane)
+        size_no_pml = mode_solver._mode_plane_size_no_pml(
+            simulation=sim, plane=mode_plane, mode_spec=mode_spec
+        )
+        for i in [0, 1]:
+            assert size_no_pml[i] / size[i] < 0.5
+    with AssertLogLevel("WARNING", contains_str="covers more than"):
+        mode_sim = td.ModeSimulation(
+            size=sim_size,
+            medium=sio2,
+            structures=[wg],
+            grid_spec=grid_spec,
+            plane=mode_plane,
+            mode_spec=mode_spec,
+            freqs=[freq0],
         )
 
 
