@@ -1250,7 +1250,7 @@ class PolySlab(base.Planar):
             return np.stack((-vys, vxs), axis=0)
 
         def cross(u, v):
-            return np.cross(u, v, axis=0)
+            return u[0] * v[1] - u[1] * v[0]
 
         def normalize(v):
             return v / np.linalg.norm(v, axis=0)
