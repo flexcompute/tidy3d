@@ -1213,13 +1213,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         return num_layers
 
-    def _snap_zero_dim(self, grid: Grid):
+    def _snap_zero_dim(self, grid: Grid, skip_axis: Axis = None):
         """Snap a grid to the simulation center along any dimension along which simulation is
         effectively 0D, defined as having a single pixel. This is more general than just checking
         size = 0."""
         size_snapped = [
             size if num_cells > 1 else 0 for num_cells, size in zip(self.grid.num_cells, self.size)
         ]
+        if skip_axis is not None:
+            size_snapped[skip_axis] = self.size[skip_axis]
         return grid.snap_to_box_zero_dim(Box(center=self.center, size=size_snapped))
 
     def _discretize_grid(self, box: Box, grid: Grid, extend: bool = False) -> Grid:
@@ -1235,7 +1237,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         span_inds = grid.discretize_inds(box=box, extend=extend)
         return self._subgrid(span_inds=span_inds, grid=grid)
 
-    def _discretize_inds_monitor(self, monitor: Monitor):
+    def _discretize_inds_monitor(self, monitor: Union[Monitor, Box], colocate: bool = None):
         """Start and stopping indexes for the cells where data needs to be recorded to fully cover
         a ``monitor``. This is used during the solver run. The final grid on which a monitor data
         lives is computed in ``discretize_monitor``, with the difference being that 0-sized
@@ -1258,7 +1260,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # We always need to expand on the right.
         span_inds[:, 1] += 1
         # Non-colocating monitors also need to expand on the left.
-        if not monitor.colocate:
+        if colocate is None:
+            colocate = monitor.colocate
+        if not colocate:
             span_inds[:, 0] -= 1
         return span_inds
 
@@ -3570,6 +3574,30 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_nonlinear_specs()
         self._validate_custom_source_time()
         self._validate_mode_object_bends()
+        self._warn_mode_object_pml()
+
+    def _warn_mode_object_pml(self) -> None:
+        """Warn if any mode objects have large pml."""
+        from .mode.mode_solver import ModeSolver
+
+        for imnt, monitor in enumerate(self.monitors):
+            if isinstance(monitor, AbstractModeMonitor):
+                warn_str = f"'monitors[{imnt}]'"
+                ModeSolver._warn_thick_pml(
+                    simulation=self,
+                    plane=monitor.geometry,
+                    mode_spec=monitor.mode_spec,
+                    warn_str=warn_str,
+                )
+        for isrc, source in enumerate(self.sources):
+            if isinstance(source, ModeSource):
+                warn_str = f"'sources[{isrc}]'"
+                ModeSolver._warn_thick_pml(
+                    simulation=self,
+                    plane=source.geometry,
+                    mode_spec=source.mode_spec,
+                    warn_str=warn_str,
+                )
 
     def _validate_mode_object_bends(self) -> None:
         """Error if any mode sources or monitors with bends have a radius that is too small."""
