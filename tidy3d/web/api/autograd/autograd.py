@@ -648,7 +648,10 @@ def _run_bwd(
                 "simulation's output. If this is unexpected, please review your "
                 "setup or contact customer support for assistance."
             )
-            return {k: 0 * v for k, v in sim_fields_original.items()}
+            return {
+                k: (type(v)(0 * x for x in v) if isinstance(v, (list, tuple)) else 0 * v)
+                for k, v in sim_fields_original.items()
+            }
 
         # Run adjoint simulations in batch
         task_names_adj = [f"{task_name}_adjoint_{i}" for i in range(len(sims_adj))]
@@ -670,17 +673,16 @@ def _run_bwd(
             )
             td.log.info("Completed local batch adjoint simulations")
 
-            # sum partial derivatives from each adjoint simulation
+            # Process results from local gradient computation
+            vjp_fields_dict = {}
             for task_name_adj, sim_data_adj in batch_data_adj.items():
                 td.log.info(f"Processing VJP contribution from {task_name_adj}")
-                vjp_fields = postprocess_adj(
+                vjp_fields_dict[task_name_adj] = postprocess_adj(
                     sim_data_adj=sim_data_adj,
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
                 )
-                for k, v in vjp_fields.items():
-                    vjp_traced_fields[k] = vjp_traced_fields.get(k, 0) + v
         else:
             td.log.info("Starting server-side batch of adjoint simulations ...")
 
@@ -699,15 +701,24 @@ def _run_bwd(
                 tname_adj: sim.updated_copy(simulation_type="autograd_bwd", deep=False)
                 for tname_adj, sim in sims_adj_dict.items()
             }
-            vjp_traced_fields_dict = _run_async_tidy3d_bwd(
+            vjp_fields_dict = _run_async_tidy3d_bwd(
                 simulations=sims_adj_dict,
                 **run_kwargs,
             )
             td.log.info("Completed server-side batch of adjoint simulations.")
 
-            for fields in vjp_traced_fields_dict.values():
-                for k, v in fields.items():
-                    vjp_traced_fields[k] = vjp_traced_fields.get(k, 0) + v
+        # Accumulate gradients from all adjoint simulations
+        for task_name_adj, vjp_fields in vjp_fields_dict.items():
+            td.log.info(f"Processing VJP contribution from {task_name_adj}")
+            for k, v in vjp_fields.items():
+                if k in vjp_traced_fields:
+                    val = vjp_traced_fields[k]
+                    if isinstance(val, (list, tuple)) and isinstance(v, (list, tuple)):
+                        vjp_traced_fields[k] = type(val)(x + y for x, y in zip(val, v))
+                    else:
+                        vjp_traced_fields[k] += v
+                else:
+                    vjp_traced_fields[k] = v
 
         td.log.debug(f"Computed gradients for {len(vjp_traced_fields)} fields")
         return vjp_traced_fields
@@ -765,7 +776,8 @@ def _run_async_bwd(
             if not sims_adj:
                 td.log.debug(f"Adjoint simulation for task '{task_name}' contains no sources.")
                 sim_fields_vjp_dict[task_name] = {
-                    k: 0 * v for k, v in sim_fields_original_dict[task_name].items()
+                    k: (type(v)(0 * x for x in v) if isinstance(v, (list, tuple)) else 0 * v)
+                    for k, v in sim_fields_original_dict[task_name].items()
                 }
                 continue
 
@@ -781,6 +793,9 @@ def _run_async_bwd(
             )
             return sim_fields_vjp_dict
 
+        # Dictionary to store VJP results from all adjoint simulations
+        vjp_results = {}
+
         if local_gradient:
             # Run all adjoint simulations in a single batch
             path_dir = Path(run_async_kwargs.pop("path_dir"))
@@ -791,7 +806,7 @@ def _run_async_bwd(
                 all_sims_adj, path_dir=str(path_dir_adj), **run_async_kwargs
             )
 
-            # Process results for each original task
+            # Process results for each adjoint task
             for adj_task_name, sim_data_adj in batch_data_adj.items():
                 task_name = task_name_mapping[adj_task_name]
                 sim_data_orig = sim_data_orig_dict[task_name]
@@ -799,20 +814,12 @@ def _run_async_bwd(
                 sim_fields_keys = sim_fields_keys_dict[task_name]
 
                 # Compute VJP contribution
-                sim_fields_vjp = postprocess_adj(
+                vjp_results[adj_task_name] = postprocess_adj(
                     sim_data_adj=sim_data_adj,
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
                 )
-
-                # Sum contributions for each original task
-                if task_name in sim_fields_vjp_dict:
-                    for k, v in sim_fields_vjp.items():
-                        sim_fields_vjp_dict[task_name][k] += v
-                else:
-                    sim_fields_vjp_dict[task_name] = sim_fields_vjp
-
         else:
             # Set up parent tasks mapping for all adjoint simulations
             parent_tasks = {}
@@ -830,19 +837,27 @@ def _run_async_bwd(
             }
 
             # Run all adjoint simulations in a single batch
-            sim_fields_vjp_dict_adj = _run_async_tidy3d_bwd(
+            vjp_results = _run_async_tidy3d_bwd(
                 simulations=all_sims_adj,
                 **run_async_kwargs,
             )
 
-            # Combine results for each original task
-            for adj_task_name, fields in sim_fields_vjp_dict_adj.items():
-                task_name = task_name_mapping[adj_task_name]
-                if task_name in sim_fields_vjp_dict:
-                    for k, v in fields.items():
+        # Accumulate gradients from all adjoint simulations
+        for adj_task_name, vjp_fields in vjp_results.items():
+            task_name = task_name_mapping[adj_task_name]
+
+            if task_name not in sim_fields_vjp_dict:
+                sim_fields_vjp_dict[task_name] = {}
+
+            for k, v in vjp_fields.items():
+                if k in sim_fields_vjp_dict[task_name]:
+                    val = sim_fields_vjp_dict[task_name][k]
+                    if isinstance(val, (list, tuple)) and isinstance(v, (list, tuple)):
+                        sim_fields_vjp_dict[task_name][k] = type(val)(x + y for x, y in zip(val, v))
+                    else:
                         sim_fields_vjp_dict[task_name][k] += v
                 else:
-                    sim_fields_vjp_dict[task_name] = fields
+                    sim_fields_vjp_dict[task_name][k] = v
 
         return sim_fields_vjp_dict
 
