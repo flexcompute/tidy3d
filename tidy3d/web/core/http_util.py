@@ -140,10 +140,12 @@ def http_interceptor(func):
         if not resp.text:
             return None
         result = resp.json()
-        warning = result.get("warning")
-        if warning:
-            log = get_logger()
-            log.warning(warning)
+
+        if isinstance(result, dict):
+            warning = result.get("warning")
+            if warning:
+                log = get_logger()
+                log.warning(warning)
 
         return result.get("data") if "data" in result else result
 
