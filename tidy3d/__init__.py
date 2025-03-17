@@ -186,7 +186,7 @@ from .components.eme.monitor import (
 
 # EME
 from .components.eme.simulation import EMESimulation
-from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep
+from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMEPeriodicitySweep
 
 # field projection
 from .components.field_projection import FieldProjector
@@ -665,6 +665,7 @@ __all__ = [
     "EMELengthSweep",
     "EMEModeSweep",
     "EMEFreqSweep",
+    "EMEPeriodicitySweep",
     "ModeSimulation",
     "ModeSimulationData",
     "FixedAngleSpec",

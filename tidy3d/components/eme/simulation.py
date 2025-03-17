@@ -11,6 +11,7 @@ except ImportError:
 import numpy as np
 import pydantic.v1 as pd
 
+from ...constants import C_0
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import cached_property
@@ -22,15 +23,18 @@ from ..medium import FullyAnisotropicMedium
 from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor, MonitorType
 from ..scene import Scene
 from ..simulation import AbstractYeeGridSimulation, Simulation
-from ..source.current import PointDipole
-from ..source.time import GaussianPulse
-from ..structure import Structure
 from ..types import Ax, Axis, FreqArray, Symmetry, annotate_type
 from ..validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
 from ..viz import add_ax_if_none, equal_aspect
 from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGrid, EMEGridSpec, EMEGridSpecType
-from .monitor import EMEFieldMonitor, EMEModeSolverMonitor, EMEMonitor, EMEMonitorType
-from .sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMESweepSpecType
+from .monitor import (
+    EMECoefficientMonitor,
+    EMEFieldMonitor,
+    EMEModeSolverMonitor,
+    EMEMonitor,
+    EMEMonitorType,
+)
+from .sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMEPeriodicitySweep, EMESweepSpecType
 
 # maximum numbers of simulation parameters
 MAX_GRID_CELLS = 20e9
@@ -41,7 +45,8 @@ WARN_MODE_NUM_CELLS = 1e5
 
 
 # eme specific simulation parameters
-MAX_NUM_FREQS = 20
+WARN_NUM_FREQS = 100
+MAX_NUM_FREQS = 500
 MAX_NUM_SWEEP = 100
 
 
@@ -51,6 +56,21 @@ WARN_CONSTRAINT_NUM_MODES = 50
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time
 RUN_TIME = 1e-30
+
+EME_SIM_YEE_SIM_SHARED_ATTRS = [
+    "center",
+    "size",
+    "medium",
+    "structures",
+    "symmetry",
+    "boundary_spec",
+    "version",
+    "plot_length_units",
+    "lumped_elements",
+    "subpixel",
+    "simulation_type",
+    "post_norm",
+]
 
 
 class EMESimulation(AbstractYeeGridSimulation):
@@ -562,6 +582,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         _ = self.grid
         _ = self.eme_grid
         _ = self.mode_solver_monitors
+        _ = self._cell_index_pairs
         self._validate_too_close_to_edges()
         self._validate_sweep_spec()
         self._validate_symmetry()
@@ -699,10 +720,22 @@ class EMESimulation(AbstractYeeGridSimulation):
                         f"scaled frequencies {scaled_freqs}; the minimum allowed is "
                         f"{MIN_FREQUENCY:.0e} Hz."
                     )
+        elif isinstance(self.sweep_spec, EMEPeriodicitySweep):
+            for i, monitor in enumerate(self.monitors):
+                if isinstance(monitor, EMEFieldMonitor):
+                    raise SetupError(
+                        f"Monitor at 'monitors[{i}]' is an 'EMEFieldMonitor', "
+                        "which is not compatible with 'EMEPeriodicitySweep'."
+                    )
+                elif isinstance(monitor, EMECoefficientMonitor):
+                    raise SetupError(
+                        f"Monitor at 'monitors[{i}]' is an 'EMECoefficientMonitor', "
+                        "which is not compatible with 'EMEPeriodicitySweep'."
+                    )
 
     def _validate_monitor_setup(self):
         """Check monitor setup."""
-        for monitor in self.monitors:
+        for i, monitor in enumerate(self.monitors):
             if isinstance(monitor, EMEMonitor):
                 _ = self._monitor_eme_cell_indices(monitor=monitor)
             if (
@@ -752,6 +785,15 @@ class EMESimulation(AbstractYeeGridSimulation):
                     "max number of modes of the two EME ports, which is "
                     f"'mode_spec.num_modes={self.max_port_modes}'."
                 )
+            if isinstance(monitor, EMEFieldMonitor):
+                if not np.array_equal(
+                    self.eme_grid_spec.virtual_cell_indices, self.eme_grid_spec.real_cell_indices
+                ):
+                    raise SetupError(
+                        f"Monitor at 'monitors[{i}]' is an 'EMEFieldMonitor', "
+                        "which is not compatible with periodic repetition "
+                        "('num_reps != 1' in any 'EMEGridSpec'.)"
+                    )
 
     def _validate_sources_and_boundary(self):
         """Disallow sources and boundary."""
@@ -787,6 +829,13 @@ class EMESimulation(AbstractYeeGridSimulation):
             raise SetupError(
                 f"Simulation has {num_freqs:.2e} frequencies, "
                 f"a maximum of {MAX_NUM_FREQS:.2e} are allowed. Mode solving "
+                f"is repeated at each frequency, so EME simulations with too many frequencies "
+                f"can be slower and more expensive than FDTD simulations. "
+                f"Consider using an 'EMEFreqSweep' instead for a faster approximate solution."
+            )
+        if num_freqs > WARN_NUM_FREQS:
+            log.warning(
+                f"Simulation has {num_freqs:.2e} frequencies. Mode solving "
                 f"is repeated at each frequency, so EME simulations with too many frequencies "
                 f"can be slower and more expensive than FDTD simulations. "
                 f"Consider using an 'EMEFreqSweep' instead for a faster approximate solution."
@@ -1014,39 +1063,7 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         # TODO: add option (true by default) to make Yee grid conformal to EME grid
 
-        # Add a simulation Box as the first structure
-        structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.structures
-
-        # make source for autogrid if needed
-        freqs = self.freqs
-        grid_spec = self.grid_spec
-        sources = []
-        if grid_spec.auto_grid_used and grid_spec.wavelength is None:
-            if not np.all(np.isclose(freqs, freqs[0])):
-                raise SetupError(
-                    "Multiple 'sim.freqs' are supplied. Please supply "
-                    "a 'wavelength' value for 'grid_spec' to control automatic "
-                    "grid generation."
-                )
-            plane = self.eme_grid.mode_planes[0]
-            sources.append(
-                PointDipole(
-                    center=plane.center,
-                    source_time=GaussianPulse(freq0=freqs[0], fwidth=0.1 * freqs[0]),
-                    polarization="Ez",
-                )
-            )
-
-        grid = self.grid_spec.make_grid(
-            structures=structures,
-            symmetry=self.symmetry,
-            periodic=self._periodic,
-            sources=sources,
-            num_pml_layers=self.num_pml_layers,
-        )
-
-        return grid
+        return self._as_fdtd_sim.grid
 
     def _monitor_num_transverse_cells(self, monitor: Monitor) -> int:
         """Total number of cells transverse to propagation axis
@@ -1064,35 +1081,37 @@ class EMESimulation(AbstractYeeGridSimulation):
 
         return num_transverse_cells_in_monitor(monitor)
 
+    @cached_property
+    def _as_fdtd_sim(self) -> Simulation:
+        """Convert :class:`.EMESimulation` to :class:`.Simulation`.
+        This should only be used to obtain the same material properties
+        for mode solving or related purposes; the sources and monitors of the
+        resulting simulation are not meaningful."""
+        return self._to_fdtd_sim()
+
     def _to_fdtd_sim(self) -> Simulation:
         """Convert :class:`.EMESimulation` to :class:`.Simulation`.
         This should only be used to obtain the same material properties
         for mode solving or related purposes; the sources and monitors of the
         resulting simulation are not meaningful."""
 
-        # source to silence warnings
-        plane = self.eme_grid.mode_planes[0]
-        freq0 = self.freqs[0]
-        source_time = GaussianPulse(freq0=freq0, fwidth=0.1 * freq0)
-        source = PointDipole(
-            center=plane.center,
-            source_time=source_time,
-            polarization="Ez",
-        )
+        grid_spec = self.grid_spec
+        if grid_spec.auto_grid_used and grid_spec.wavelength is None:
+            min_wvl = C_0 / np.max(self.freqs)
+            log.info(
+                f"Auto meshing using wavelength {min_wvl:1.4f} defined from "
+                "largest of 'EMESimulation.freqs'."
+            )
+            grid_spec = grid_spec.updated_copy(wavelength=min_wvl)
+
         # copy over all FDTD monitors too
         monitors = [monitor for monitor in self.monitors if not isinstance(monitor, EMEMonitor)]
+
+        kwargs = {key: getattr(self, key) for key in EME_SIM_YEE_SIM_SHARED_ATTRS}
         return Simulation(
-            center=self.center,
-            size=self.size,
-            medium=self.medium,
-            structures=self.structures,
-            symmetry=self.symmetry,
-            grid_spec=self.grid_spec,
-            boundary_spec=self.boundary_spec,
-            version=self.version,
-            subpixel=self.subpixel,
+            **kwargs,
             run_time=RUN_TIME,
-            sources=[source],
+            grid_spec=grid_spec,
             monitors=monitors,
         )
 
@@ -1175,3 +1194,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         new_sim = new_sim.updated_copy(eme_grid_spec=eme_grid_spec)
 
         return new_sim
+
+    @property
+    def _cell_index_pairs(self) -> List[pd.NonNegativeInt]:
+        """All the pairs of adjacent EME cells needed, taken over all sweep indices."""
+        pairs = set()
+        if isinstance(self.sweep_spec, EMEPeriodicitySweep):
+            for num_reps in self.sweep_spec.num_reps:
+                eme_grid_spec = self.eme_grid_spec._updated_copy_num_reps(num_reps=num_reps)
+                pairs = pairs | set(eme_grid_spec._cell_index_pairs)
+        else:
+            pairs = set(self.eme_grid_spec._cell_index_pairs)
+        return list(pairs)
