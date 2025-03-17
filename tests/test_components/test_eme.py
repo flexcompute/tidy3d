@@ -324,19 +324,14 @@ def test_eme_simulation():
 
     # test warning for not providing wavelength in autogrid
     grid_spec = td.GridSpec.auto(min_steps_per_wvl=20)
-    with AssertLogLevel("INFO"):
+    with AssertLogLevel("INFO", contains_str="wavelength"):
         sim = sim.updated_copy(grid_spec=grid_spec)
     # multiple freqs are ok, but not for autogrid
     _ = sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[1e10] + list(sim.freqs))
-    with pytest.raises(SetupError):
-        _ = td.EMESimulation(
-            size=sim.size,
+    with AssertLogLevel("INFO", contains_str="wavelength"):
+        _ = sim.updated_copy(
             freqs=list(sim.freqs) + [1e10],
-            monitors=sim.monitors,
-            structures=sim.structures,
             grid_spec=grid_spec,
-            axis=sim.axis,
-            eme_grid_spec=sim.eme_grid_spec,
         )
 
     # test port offsets
@@ -385,7 +380,7 @@ def test_eme_simulation():
         )
     # warn for nonlinear
     nonlinear = td.Medium(
-        permittivity=2, nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)])
+        permittivity=2, nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1)])
     )
     struct = sim.structures[0].updated_copy(medium=nonlinear)
     with AssertLogLevel("WARNING"):
@@ -450,6 +445,11 @@ def test_eme_simulation():
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
     with pytest.raises(SetupError):
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(
+        freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 100)),
+    )
+    with AssertLogLevel("WARNING", contains_str="expensive"):
         sim_bad.validate_pre_upload()
     large_monitor = sim.monitors[2].updated_copy(size=(td.inf, td.inf, td.inf))
     _ = sim.updated_copy(
@@ -1248,3 +1248,120 @@ def test_eme_sim_subsection():
     region = td.Box(size=(2, 2, 0))
     with pytest.raises(pd.ValidationError):
         subsection = eme_sim.subsection(region=region)
+
+
+def test_eme_periodicity():
+    # give the middle subgrid a name
+    sim = make_eme_sim()
+    sim = sim.updated_copy(name="a", path="eme_grid_spec/subgrids/1")
+
+    # directly give it num_reps
+    # can't have field monitor
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
+
+    # EMEPeriodicitySweep validation
+    with pytest.raises(pd.ValidationError):
+        _ = td.EMEPeriodicitySweep(num_reps=[{"a": n} for n in range(150000, 150003)])
+    sweep_spec = td.EMEPeriodicitySweep(num_reps=[{"a": n} for n in range(1, 4)])
+    # still can't have field monitor
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(sweep_spec=sweep_spec)
+
+    # remove the field monitor, now it passes
+    desired_cell_index_pairs = set([(i, i + 1) for i in range(6)] + [(5, 1)])
+    with AssertLogLevel(None):
+        sim = sim.updated_copy(
+            monitors=[m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor)]
+        )
+        sim2 = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
+        assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
+    # sweep can't have coeff monitor
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(sweep_spec=sweep_spec)
+    # remove coeff monitor too, now it passes
+    with AssertLogLevel(None):
+        sim = sim.updated_copy(
+            monitors=[m for m in sim.monitors if not isinstance(m, td.EMECoefficientMonitor)]
+        )
+        sim2 = sim.updated_copy(sweep_spec=sweep_spec)
+        assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
+
+
+def test_eme_grid_from_structures():
+    sim = make_eme_sim()
+    eme_grid_spec = td.EMEExplicitGrid.from_structures(
+        structures=sim.structures, axis=2, mode_spec=td.EMEModeSpec(num_modes=1)
+    )
+    sim = sim.updated_copy(eme_grid_spec=eme_grid_spec)
+    eme_grid_spec = td.EMECompositeGrid.from_structure_groups(
+        structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+        axis=2,
+        mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+        names=[None, "wg", None],
+        num_reps=[1, 2, 1],
+    )
+    sim = sim.updated_copy(eme_grid_spec=eme_grid_spec, monitors=[])
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[],
+            axis=2,
+            mode_specs=[],
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 2,
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg"],
+            num_reps=[1, 2, 1],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg", None],
+            num_reps=[1, 2],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[
+                [],
+                [td.Box(center=(0, 0, 0), size=(1, 1, 1))],
+                [td.Box(center=(0, 0, 3), size=(1, 1, 1))],
+            ],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )
+    _ = td.EMECompositeGrid.from_structure_groups(
+        structure_groups=[
+            [],
+            [td.Box(center=(0, 0, 0), size=(1, 1, 1))],
+            [td.Box(center=(0, 0, 1), size=(1, 1, 1))],
+        ],
+        axis=2,
+        mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+        names=[None, "wg", None],
+        num_reps=[1, 2, 1],
+    )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [], [td.Box(center=(0, 0, 3), size=(1, 1, 1))]],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )

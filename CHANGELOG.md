@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Ability to select payment option when submitting jobs from the Python client.
+- Periodic repetition of EME subgrids via `num_reps` or `EMEPeriodicitySweep`.
+- Methods `EMEExplicitGrid.from_structures` and `EMECompositeGrid.from_structure_groups` to place EME cell boundaries at structure bounds.
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
+- Auto grid in EME simulations with multiple `freqs` provided uses the largest instead of raising an error.
 
 ### Fixed
 - Fixed `reverse` property of `td.Scene.plot_structures_property()` to also reverse the colorbar.

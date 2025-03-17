@@ -268,7 +268,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         if grid_spec.auto_grid_used and grid_spec.wavelength is None:
             min_wvl = C_0 / np.max(self.freqs)
             log.info(
-                "Auto meshing using wavelength {min_wvl:1.4f} defined from "
+                f"Auto meshing using wavelength {min_wvl:1.4f} defined from "
                 "largest of 'ModeSimulation.freqs'."
             )
             grid_spec = grid_spec.updated_copy(wavelength=min_wvl)

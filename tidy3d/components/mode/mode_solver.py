@@ -2419,7 +2419,7 @@ class ModeSolver(Tidy3dBaseModel):
         # because we can't take planar subsection of an EME simulation.
         # eventually, we will convert to ModeSimulation
         if isinstance(self.simulation, EMESimulation):
-            return self.to_fdtd_mode_solver().reduced_simulation_copy
+            return self.as_fdtd_mode_solver.reduced_simulation_copy
 
         # we preserve extra cells along the normal direction to ensure there is enough data for
         # subpixel
@@ -2489,8 +2489,16 @@ class ModeSolver(Tidy3dBaseModel):
                 "The method 'to_fdtd_mode_solver' is only needed "
                 "when the 'simulation' is an 'EMESimulation'."
             )
-        fdtd_sim = self.simulation._to_fdtd_sim()
+        fdtd_sim = self.simulation._as_fdtd_sim
         return self.updated_copy(simulation=fdtd_sim)
+
+    @cached_property
+    def as_fdtd_mode_solver(self) -> ModeSolver:
+        """Construct a new :class:`.ModeSolver` by converting ``simulation``
+        from a :class:`.EMESimulation` to an FDTD :class:`.Simulation`.
+        Only used as a workaround until :class:`.EMESimulation` is natively supported in the
+        :class:`.ModeSolver` webapi."""
+        return self.to_fdtd_mode_solver()
 
     def _patch_data(self, data: ModeSolverData):
         """
