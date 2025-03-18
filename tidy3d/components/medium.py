@@ -27,6 +27,7 @@ from ..constants import (
     HBAR,
     HERTZ,
     MICROMETER,
+    MU_0,
     PERMITTIVITY,
     RADPERSEC,
     SECOND,
@@ -73,6 +74,7 @@ from .time_modulation import ModulationSpec
 from .transformation import RotationType
 from .types import (
     TYPE_TAG_STR,
+    ArrayComplex1D,
     ArrayComplex3D,
     ArrayFloat1D,
     Ax,
@@ -5180,6 +5182,206 @@ class SurfaceImpedanceFitterParam(Tidy3dBaseModel):
     )
 
 
+class AbstractSurfaceRoughness(Tidy3dBaseModel):
+    """Abstract class for modeling surface roughness of lossy metal."""
+
+    @abstractmethod
+    def roughness_correction_factor(
+        self, frequency: ArrayFloat1D, skin_depths: ArrayFloat1D
+    ) -> ArrayComplex1D:
+        """Complex-valued roughness correction factor applied to surface impedance.
+
+        Notes
+        -----
+            The roughness correction factor should be causal. It is multiplied to the
+            surface impedance of the lossy metal to account for the effects of surface roughness.
+
+        Parameters
+        ----------
+        frequency : ArrayFloat1D
+            Frequency to evaluate roughness correction factor at (Hz).
+        skin_depths : ArrayFloat1D
+            Skin depths of the lossy metal that is frequency-dependent.
+
+        Returns
+        -------
+        ArrayComplex1D
+            The causal roughness correction factor evaluated at ``frequency``.
+        """
+
+
+class HammerstadSurfaceRoughness(AbstractSurfaceRoughness):
+    """Modified Hammerstad surface roughness model. It's a popular model that works well
+    under 5 GHz for surface roughness below 2 micrometer RMS.
+
+    Note
+    ----
+
+        The power loss compared to smooth surface is described by:
+
+        .. math::
+
+            1 + (RF-1) \\frac{2}{\\pi}\\arctan(1.4\\frac{R_q^2}{\\delta^2})
+
+        where :math:`\\delta` is skin depth, :math:`R_q` the RMS peak-to-vally height, and RF
+        roughness factor.
+
+    Note
+    ----
+    This model is based on:
+
+        Y. Shlepnev, C. Nwachukwu, "Roughness characterization for interconnect analysis",
+        2011 IEEE International Symposium on Electromagnetic Compatibility,
+        (DOI: 10.1109/ISEMC.2011.6038367), 2011.
+
+        V. Dmitriev-Zdorov, B. Simonovich, I. Kochikov, "A Causal Conductor Roughness Model
+        and its Effect on Transmission Line Characteristics", Signal Integrity Journal, 2018.
+    """
+
+    rq: pd.PositiveFloat = pd.Field(
+        ...,
+        title="RMS Peak-to-Valley Height",
+        description="RMS peak-to-valley height (Rq) of the surface roughness.",
+        units=MICROMETER,
+    )
+
+    roughness_factor: float = pd.Field(
+        2.0,
+        title="Roughness Factor",
+        description="Expected maximal increase in conductor losses due to roughness effect. "
+        "Value 2 gives the classic Hammerstad equation.",
+        gt=1.0,
+    )
+
+    def roughness_correction_factor(
+        self, frequency: ArrayFloat1D, skin_depths: ArrayFloat1D
+    ) -> ArrayComplex1D:
+        """Complex-valued roughness correction factor applied to surface impedance.
+
+        Notes
+        -----
+            The roughness correction factor should be causal. It is multiplied to the
+            surface impedance of the lossy metal to account for the effects of surface roughness.
+
+        Parameters
+        ----------
+        frequency : ArrayFloat1D
+            Frequency to evaluate roughness correction factor at (Hz).
+        skin_depths : ArrayFloat1D
+            Skin depths of the lossy metal that is frequency-dependent.
+
+        Returns
+        -------
+        ArrayComplex1D
+            The causal roughness correction factor evaluated at ``frequency``.
+        """
+        normalized_laplace = -1.4j * (self.rq / skin_depths) ** 2
+        sqrt_normalized_laplace = np.sqrt(normalized_laplace)
+        causal_response = np.log(
+            1 + 2 * sqrt_normalized_laplace / (1 + normalized_laplace)
+        ) + 2 * np.arctan(sqrt_normalized_laplace)
+        return 1 + (self.roughness_factor - 1) / np.pi * causal_response
+
+
+class HuraySurfaceRoughness(AbstractSurfaceRoughness):
+    """Huray surface roughness model.
+
+    Note
+    ----
+
+        The power loss compared to smooth surface is described by:
+
+        .. math::
+
+            \\frac{A_{matte}}{A_{flat}} + \\frac{3}{2}\\sum_i f_i/[1+\\frac{\\delta}{r_i}+\\frac{\\delta^2}{2r_i^2}]
+
+        where :math:`\\delta` is skin depth, :math:`r_i` the radius of sphere,
+        :math:`\\frac{A_{matte}}{A_{flat}}` the relative area of the matte compared to flat surface,
+        and :math:`f_i=N_i4\\pi r_i^2/A_{flat}` the ratio of total sphere
+        surface area (number of spheres :math:`N_i` times the individual sphere surface area)
+        to the flat surface area.
+
+    Note
+    ----
+    This model is based on:
+
+        J. Eric Bracken, "A Causal Huray Model for Surface Roughness", DesignCon, 2012.
+    """
+
+    relative_area: pd.PositiveFloat = pd.Field(
+        1,
+        title="Relative Area",
+        description="Relative area of the matte base compared to a flat surface",
+    )
+
+    coeffs: Tuple[Tuple[pd.PositiveFloat, pd.PositiveFloat], ...] = pd.Field(
+        ...,
+        title="Coefficients for surface ratio and sphere radius",
+        description="List of (:math:`f_i, r_i`) values for model, where :math:`f_i` is "
+        "the ratio of total sphere surface area to the flat surface area, and :math:`r_i` "
+        "the radius of the sphere.",
+        units=(None, MICROMETER),
+    )
+
+    @classmethod
+    def from_cannonball_huray(cls, radius: float) -> HuraySurfaceRoughness:
+        """Construct a Cannonball-Huray model.
+
+        Note
+        ----
+
+            The power loss compared to smooth surface is described by:
+
+            .. math::
+
+                1 + \\frac{7\\pi}{3} \\frac{1}{1+\\frac{\\delta}{r}+\\frac{\\delta^2}{2r^2}}
+
+        Parameters
+        ----------
+        radius : float
+            Radius of the sphere.
+
+        Returns
+        -------
+        HuraySurfaceRoughness
+            The Huray surface roughness model.
+        """
+        return cls(relative_area=1, coeffs=[(14.0 / 9 * np.pi, radius)])
+
+    def roughness_correction_factor(
+        self, frequency: ArrayFloat1D, skin_depths: ArrayFloat1D
+    ) -> ArrayComplex1D:
+        """Complex-valued roughness correction factor applied to surface impedance.
+
+        Notes
+        -----
+            The roughness correction factor should be causal. It is multiplied to the
+            surface impedance of the lossy metal to account for the effects of surface roughness.
+
+        Parameters
+        ----------
+        frequency : ArrayFloat1D
+            Frequency to evaluate roughness correction factor at (Hz).
+        skin_depths : ArrayFloat1D
+            Skin depths of the lossy metal that is frequency-dependent.
+
+        Returns
+        -------
+        ArrayComplex1D
+            The causal roughness correction factor evaluated at ``frequency``.
+        """
+
+        correction = self.relative_area
+        for f, r in self.coeffs:
+            normalized_laplace = -2j * (r / skin_depths) ** 2
+            sqrt_normalized_laplace = np.sqrt(normalized_laplace)
+            correction += 1.5 * f / (1 + 1 / sqrt_normalized_laplace)
+        return correction
+
+
+SurfaceRoughnessType = Union[HammerstadSurfaceRoughness, HuraySurfaceRoughness]
+
+
 class LossyMetalMedium(Medium):
     """Lossy metal that can be modeled with a surface impedance boundary condition (SIBC).
 
@@ -5208,6 +5410,14 @@ class LossyMetalMedium(Medium):
 
     permittivity: Literal[1] = pd.Field(
         1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
+    )
+
+    roughness: SurfaceRoughnessType = pd.Field(
+        None,
+        title="Surface Roughness Model",
+        description="Surface roughness model that applies a frequency-dependent scaling "
+        "factor to surface impedance.",
+        discriminator=TYPE_TAG_STR,
     )
 
     frequency_range: FreqBound = pd.Field(
@@ -5242,8 +5452,9 @@ class LossyMetalMedium(Medium):
         return val
 
     @cached_property
-    def scaled_surface_impedance_model(self) -> PoleResidue:
-        """Fitted surface impedance divided by (-j \\omega) using pole-residue pair model within ``frequency_range``."""
+    def _fitting_result(self) -> Tuple[PoleResidue, float]:
+        """Fitted scaled surface impedance and residue."""
+
         omega_data = self.Hz_to_angular_freq(self.sampling_frequencies)
         surface_impedance = self.surface_impedance(self.sampling_frequencies)
         scaled_impedance = surface_impedance / (-1j * omega_data)
@@ -5272,8 +5483,12 @@ class LossyMetalMedium(Medium):
 
         res_inf /= scaling_factor
         residues /= scaling_factor
+        return PoleResidue(eps_inf=res_inf, poles=list(zip(poles, residues))), error
 
-        return PoleResidue(eps_inf=res_inf, poles=list(zip(poles, residues)))
+    @cached_property
+    def scaled_surface_impedance_model(self) -> PoleResidue:
+        """Fitted surface impedance divided by (-j \\omega) using pole-residue pair model within ``frequency_range``."""
+        return self._fitting_result[0]
 
     @cached_property
     def num_poles(self) -> int:
@@ -5281,10 +5496,17 @@ class LossyMetalMedium(Medium):
         return len(self.scaled_surface_impedance_model.poles)
 
     def surface_impedance(self, frequencies: ArrayFloat1D):
-        """Computing surface impedance."""
+        """Computing surface impedance including surface roughness effects."""
         # compute complex-valued skin depth
         n, k = self.nk_model(frequencies)
-        return ETA_0 / (n + 1j * k)
+
+        # with surface roughness effects
+        correction = 1.0
+        if self.roughness is not None:
+            skin_depths = 1 / np.sqrt(np.pi * frequencies * MU_0 * self.conductivity)
+            correction = self.roughness.roughness_correction_factor(frequencies, skin_depths)
+
+        return correction * ETA_0 / (n + 1j * k)
 
     @cached_property
     def sampling_frequencies(self) -> ArrayFloat1D:

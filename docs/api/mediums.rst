@@ -26,14 +26,16 @@ Spatially varying
 
    tidy3d.CustomMedium
 
-Fitting parameters
-^^^^^^^^^^^^^^^^^^
+Lossy Metal parameters
+^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: _autosummary/
    :template: module.rst
 
    tidy3d.SurfaceImpedanceFitterParam
+   tidy3d.HammerstadSurfaceRoughness
+   tidy3d.HuraySurfaceRoughness
 
 Dispersive Mediums
 ------------------

@@ -175,6 +175,34 @@ def test_lossy_metal():
     num_poles = mat.num_poles
 
 
+def test_lossy_metal_surface_roughness():
+    mat_orig = td.LossyMetalMedium(
+        conductivity=41.0,
+        frequency_range=(1e9, 10e9),
+    )
+    skin_depth = 1.1
+    frequency = 1e12
+
+    # Hammerstad
+    rq = 0.5
+    mat = mat_orig.updated_copy(roughness=td.HammerstadSurfaceRoughness(rq=rq))
+    # verify power loss correction factor compared to analytical formula
+    complex_factor = mat.roughness.roughness_correction_factor(frequency, skin_depth)
+    power_factor = 1 + 2 / np.pi * np.arctan(1.4 * (rq / skin_depth) ** 2)
+    assert np.isclose(np.real(complex_factor) + np.imag(complex_factor), power_factor)
+    _, residue = mat._fitting_result
+    assert residue < 1e-2  # small enough residue indicating causality
+
+    # Huray
+    mat = mat_orig.updated_copy(roughness=td.HuraySurfaceRoughness.from_cannonball_huray(rq))
+    # verify power loss correction factor compared to analytical formula
+    complex_factor = mat.roughness.roughness_correction_factor(frequency, skin_depth)
+    power_factor = 1 + 7 / 3 * np.pi / (1 + skin_depth / rq + (skin_depth / rq) ** 2 / 2)
+    assert np.isclose(np.real(complex_factor) + np.imag(complex_factor), power_factor)
+    _, residue = mat._fitting_result
+    assert residue < 1e-2  # small enough residue indicates causality
+
+
 def test_medium_dispersion():
     # construct media
     m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
