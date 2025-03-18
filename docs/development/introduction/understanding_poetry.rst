@@ -17,7 +17,7 @@ Effectively, it is a command line utility (similar to ``pip``) that is a bit mor
 Why do we want to use it
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1. To improve our dependency management, which is used to be all over the place. We have several ``requirements.txt`` files that get imported into ``setup.py`` and parsed depending on the extra arguments passed to ``pip install``. ``Poetry`` handles this much more elegantly through a ``pyproject.toml`` file that defines the dependency configuration very explicitly in a simple data format.
+1. To improve our dependency management, which used to be all over the place. We have several ``requirements.txt`` files that get imported into ``setup.py`` and parsed depending on the extra arguments passed to ``pip install``. ``Poetry`` handles this much more elegantly through a ``pyproject.toml`` file that defines the dependency configuration very explicitly in a simple data format.
 2. Reproducible development virtual environments means that everyone is using the exact same dependencies, without conflicts. This also improves our packaging and release flow.
 
 How to install it?
