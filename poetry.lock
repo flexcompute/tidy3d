@@ -390,8 +390,8 @@ files = [
 jmespath = ">=0.7.1,<2.0.0"
 python-dateutil = ">=2.1,<3.0.0"
 urllib3 = [
-    {version = ">=1.25.4,<1.27", markers = "python_version < \"3.10\""},
     {version = ">=1.25.4,<2.2.0 || >2.2.0,<3", markers = "python_version >= \"3.10\""},
+    {version = ">=1.25.4,<1.27", markers = "python_version < \"3.10\""},
 ]
 
 [package.extras]
@@ -1072,7 +1072,7 @@ files = [
 [package.dependencies]
 fsspec = {version = "*", optional = true, markers = "extra == \"epath\""}
 importlib_resources = {version = "*", optional = true, markers = "extra == \"epath\""}
-typing_extensions = {version = "*", optional = true, markers = "extra == \"epy\""}
+typing_extensions = {version = "*", optional = true, markers = "extra == \"epath\" or extra == \"epy\""}
 zipp = {version = "*", optional = true, markers = "extra == \"epath\""}
 
 [package.extras]
@@ -1199,9 +1199,9 @@ files = [
 jax = ">=0.4.27"
 msgpack = "*"
 numpy = [
-    {version = ">=1.22", markers = "python_version < \"3.11\""},
     {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
     {version = ">=1.23.2", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
+    {version = ">=1.22", markers = "python_version < \"3.11\""},
 ]
 optax = "*"
 orbax-checkpoint = "*"
@@ -1819,14 +1819,14 @@ importlib-metadata = {version = ">=4.6", markers = "python_version < \"3.10\""}
 jaxlib = ">=0.4.27,<=0.4.30"
 ml-dtypes = ">=0.2.0"
 numpy = [
-    {version = ">=1.22", markers = "python_version < \"3.11\""},
     {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
     {version = ">=1.23.2", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
+    {version = ">=1.22", markers = "python_version < \"3.11\""},
 ]
 opt-einsum = "*"
 scipy = [
-    {version = ">=1.9", markers = "python_version < \"3.12\""},
     {version = ">=1.11.1", markers = "python_version >= \"3.12\""},
+    {version = ">=1.9", markers = "python_version < \"3.12\""},
 ]
 
 [package.extras]
@@ -1876,8 +1876,8 @@ files = [
 ml-dtypes = ">=0.2.0"
 numpy = ">=1.22"
 scipy = [
-    {version = ">=1.9", markers = "python_version < \"3.12\""},
     {version = ">=1.11.1", markers = "python_version >= \"3.12\""},
+    {version = ">=1.9", markers = "python_version < \"3.12\""},
 ]
 
 [package.source]
@@ -2788,10 +2788,10 @@ files = [
 
 [package.dependencies]
 numpy = [
-    {version = ">=1.21", markers = "python_version < \"3.10\""},
-    {version = ">=1.21.2", markers = "python_version >= \"3.10\" and python_version < \"3.11\""},
     {version = ">=1.26.0", markers = "python_version >= \"3.12\" and python_version < \"3.13\""},
     {version = ">=1.23.3", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
+    {version = ">=1.21.2", markers = "python_version >= \"3.10\" and python_version < \"3.11\""},
+    {version = ">=1.21", markers = "python_version < \"3.10\""},
 ]
 
 [package.extras]
@@ -3592,9 +3592,9 @@ files = [
 
 [package.dependencies]
 numpy = [
-    {version = ">=1.22.4", markers = "python_version < \"3.11\""},
     {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
     {version = ">=1.23.2", markers = "python_version == \"3.11\""},
+    {version = ">=1.22.4", markers = "python_version < \"3.11\""},
 ]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
@@ -4193,9 +4193,9 @@ files = [
 astroid = ">=3.3.8,<=3.4.0-dev0"
 colorama = {version = ">=0.4.5", markers = "sys_platform == \"win32\""}
 dill = [
-    {version = ">=0.2", markers = "python_version < \"3.11\""},
     {version = ">=0.3.7", markers = "python_version >= \"3.12\""},
     {version = ">=0.3.6", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
+    {version = ">=0.2", markers = "python_version < \"3.11\""},
 ]
 isort = ">=4.2.5,<5.13.0 || >5.13.0,<7"
 mccabe = ">=0.6,<0.8"
@@ -6238,11 +6238,14 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 type = ["pytest-mypy"]
 
 [extras]
+adjoint = ["jax", "jaxlib"]
+design = ["bayesian-optimization", "pygad", "pyswarms"]
 dev = ["bayesian-optimization", "bump-my-version", "cma", "coverage", "devsim", "dill", "gdspy", "gdstk", "grcwa", "ipython", "ipython", "jax", "jaxlib", "jinja2", "jupyter", "memory_profiler", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "psutil", "pydata-sphinx-theme", "pygad", "pylint", "pyswarms", "pytest", "pytest-cov", "pytest-env", "pytest-timeout", "pytest-xdist", "rtree", "ruff", "sax", "scikit-rf", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "torch", "torch", "tox", "trimesh", "vtk"]
 docs = ["cma", "devsim", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "myst-parser", "nbconvert", "nbdime", "nbsphinx", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-favicon", "sphinx-notfound-page", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
-jax = ["jax", "jaxlib"]
+heatcharge = ["devsim", "trimesh", "vtk"]
+pytorch = ["torch", "torch"]
 ruff = ["ruff"]
 scikit-rf = ["scikit-rf"]
 trimesh = ["networkx", "rtree", "trimesh"]
@@ -6251,4 +6254,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0.0"
-content-hash = "c3970d189d03c2096dd344ded8bf3fda706634943f771c32f274e9ed1dc9a71e"
+content-hash = "f674de7bbb51d492ef99839fa8198914aef2f8efd95bff8217067791705605f4"

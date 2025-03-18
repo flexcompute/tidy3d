@@ -245,7 +245,8 @@ class MethodBayOpt(MethodOptimize, ABC):
             from bayes_opt import BayesianOptimization, UtilityFunction
         except ImportError:
             raise ImportError(
-                "Cannot run Bayesian optimization as 'bayes_opt' module not found. Please check installation or run 'pip install bayesian-optimization'."
+                "Cannot run Bayesian optimization as 'bayes_opt' module not found. "
+                "Please check installation or run 'pip install bayesian-optimization==1.5.1'."
             )
 
         # Identify non-numeric params and define boundaries for Bay-opt
