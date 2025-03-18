@@ -171,6 +171,63 @@ Some users or systems may require a more specialized installation, which we will
 
         See the development installation `instructions <../development/index.html>`_. You can install ``tidy3d`` within reproducible environment guaranteed by the developers using the ``poetry.lock`` installation and the ``poetry`` toolchain.
 
+Optional Dependencies
+=====================
+
+Tidy3D provides several optional dependency groups that you can install based on your specific needs.
+
+Installing Optional Core Dependencies
+-------------------------------------
+
+Tidy3D has several optional dependencies that provide additional functionality. You can install these using the following syntax:
+
+.. code-block:: bash
+
+    pip install "tidy3d[dependency_group]"
+
+Where ``dependency_group`` is one of the following:
+
+- ``gdspy``: Adds support for GDS export using `gdspy <https://github.com/heitzmann/gdspy>`_.
+- ``gdstk``: Adds support for GDS export using `gdstk <https://github.com/heitzmann/gdstk>`_.
+- ``trimesh``: Support for more complex mesh handling and manipulation.
+- ``vtk``: Support for working with unstructured data.
+- ``heatcharge``: Additional dependencies for heat & charge solvers.
+
+For example, to install Tidy3D with trimesh support:
+
+.. code-block:: bash
+
+    pip install "tidy3d[trimesh]"
+
+Installing Plugin Dependencies
+------------------------------
+
+Tidy3D also offers plugins that require additional dependencies:
+
+- ``design``: Design space exploration and optimization.
+- ``pytorch``: A PyTorch wrapper for objective functions defined using autograd.
+- ``adjoint``: Adjoint optimization using JAX (deprecated in favor of native autorad support in Tidy3D)
+
+For example, to install the design plugin dependencies:
+
+.. code-block:: bash
+
+    pip install "tidy3d[design]"
+
+Multiple dependency groups can be installed simultaneously:
+
+.. code-block:: bash
+
+    pip install "tidy3d[design,trimesh]"
+
+Developer Installation
+----------------------
+
+For developers and those who want to install all optional dependencies:
+
+.. code-block:: bash
+
+    pip install "tidy3d[dev]"
 
 Next Steps
 ==========
