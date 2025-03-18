@@ -101,4 +101,4 @@ More Resources on Testing
 
 A useful explanation for those curious to learn more about the reasoning behind these decisions:
 
-`https://www.youtube.com/watch?v=DhUpxWjOhME <https://www.youtube.com/watch?v=DhUpxWjOhME>`
+`Automated Testing in Python <https://www.youtube.com/watch?v=DhUpxWjOhME>`_
