@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Dependencies for the `design` plugin can now be installed via `pip install tidy3d[design]`.
+
 ### Fixed
 - Bug in `LayerRefinementSpec` that refines grids outside the layer region when one in-plane dimension is of size infinity.
 - Querying tasks was sometimes erroring unexpectedly.

@@ -208,11 +208,15 @@ docs = [
 ]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
-jax = ["jaxlib", "jax"]
 scikit-rf = ["scikit-rf"]
 trimesh = ["trimesh", "networkx", "rtree"]
 vtk = ["vtk"]
 ruff = ["ruff"]
+heatcharge = ["trimesh", "vtk", "devsim"]
+# plugins with extra deps
+adjoint = ["jaxlib", "jax"]
+pytorch = ["torch"]
+design = ["bayesian-optimization", "pygad", "pyswarms"]
 
 [tool.poetry.scripts]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"
