@@ -73,6 +73,7 @@ class CellGrid(td.Grid):
     def n_cells(self):
         return np.prod(self.num_cells)
 
+    # column order
     def decode_cell(self, cell: int):
         if cell < 0 or cell >= self.n_cells():
             raise ValueError(f"cell={cell} is out of bounds")
@@ -484,6 +485,7 @@ class SpatialMediumCreator4:
             geometry = struct.geometry
             medium = struct.medium
             p = SpatialMediumCreator4.calc_cell_factor(cell, geometry)
+            print('idx: ', idx, 'p: ', p, 'geometry:', geometry)
             if p == 0:
                 continue
             cell_info.append((p, medium))
@@ -521,7 +523,15 @@ class SpatialMediumCreator4:
                 data[px, py, pz] = np.average(vals)
 
         cell_grid = make_grid()
-        structures = self._sim.structures
+        structures: list[td.Structure] = []
+        for s in self._sim.structures:
+            if isinstance(s.geometry,td.Box):
+                x = 0 in s.geometry.zero_dims and td.inf or s.geometry.size[0]
+                y = 1 in s.geometry.zero_dims and td.inf or s.geometry.size[1]
+                z = 2 in s.geometry.zero_dims and td.inf or s.geometry.size[2]
+                s = s.updated_copy(geometry=td.Box(center=s.geometry.center, size=(x, y, z)))
+            structures.append(s)
+
         bg_permittivity = 1.0
         cell_permittivity = np.full(cell_grid.n_cells(),
                                     self._sim.medium.eps_model(None).real or bg_permittivity)
@@ -529,16 +539,17 @@ class SpatialMediumCreator4:
 
         total_cells = cell_grid.n_cells()
         print(f"process total cells: {total_cells} on {cpu_count()} cores, iterations: {self.MAX_ITERATIONS}")
+        print('grid shape: ', cell_grid.num_cells)
         p = Pool(cpu_count() - 1)
         start = time.perf_counter()
+        # for idx in range(total_cells):
+        #     cell_permittivity[idx] = self.calc_cell_permittivity(
+        #         (idx, structures, cell_grid, bg_permittivity))[1]
         for idx, perm in p.imap_unordered(
                 self.calc_cell_permittivity,
             ((idx, structures, cell_grid, bg_permittivity)
              for idx in range(total_cells))):
             cell_permittivity[idx] = perm
-            # t = time.time()
-            # try_process_cell_point(idx, cell_grid, cell_permittivity, data)
-            # print(f"process {idx} time: {time.time() - t}")
         print(f"Calc Time elapsed: {time.perf_counter() - start}")
 
         # data = np.ones(
@@ -569,7 +580,7 @@ class SpatialMediumCreator4:
                     return vv
                 return {k: _slice_coords(v) for k, v in coords.to_dict.items()}
             # new_coords = cell_grid.centers.to_dict
-            new_coords = interpolate_coords(cell_grid.boundaries, 3)
+            new_coords = interpolate_coords(cell_grid.boundaries, 1)
 
             def interpolate_data(data: np.ndarray, n):
                 sp = data.shape
@@ -580,7 +591,8 @@ class SpatialMediumCreator4:
                             new_data[i * n:(i + 1) * n, j * n:(j + 1) * n, k * n:(k + 1) * n] = data[i, j, k]
                 return new_data
 
-        permittivity = SpatialDataArray(interpolate_data(permittivity_3d, 3), coords=new_coords)
+        # permittivity = SpatialDataArray(interpolate_data(permittivity_3d, 3), coords=new_coords)
+        permittivity = SpatialDataArray(interpolate_data(permittivity_3d, 1), coords=new_coords)
         return td.CustomMedium(permittivity=permittivity, interp_method='nearest'), permittivity_3d
 
 class SpatialMediumCreator5:
@@ -731,7 +743,6 @@ class SpatialMediumCreator5:
 
 class SpatialMediumCreator6(SpatialMediumCreator5):
     """ Creates a spatially varying medium based on the structures in the simulation.
-        这个版本不对周围8个cell进行平均
     """
     def create(self, sub_divide=2):
         return super().create(sub_divide)
