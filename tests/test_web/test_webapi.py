@@ -343,6 +343,39 @@ def _test_load(mock_load, mock_get_info, tmp_path):
 @responses.activate
 def test_delete(set_api_key, mock_get_info):
     responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "groupId": "group123",
+                "version": "v1",
+                "createdAt": CREATED_AT,
+            }
+        },
+        status=200,
+    )
+
+    responses.add(
+        responses.DELETE,
+        f"{Env.current.web_api_endpoint}/tidy3d/group/group123/versions",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "versions": ["v1"],
+                }
+            )
+        ],
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
+            }
+        },
+        status=200,
+    )
+
+    responses.add(
         responses.DELETE,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
         json={
@@ -413,10 +446,44 @@ def test_delete_old(set_api_key):
         json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
+
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
         json={"data": [{"taskId": TASK_ID, "createdAt": CREATED_AT}]},
+        status=200,
+    )
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "groupId": "group123",
+                "version": "v1",
+                "createdAt": CREATED_AT,
+            }
+        },
+        status=200,
+    )
+
+    responses.add(
+        responses.DELETE,
+        f"{Env.current.web_api_endpoint}/tidy3d/group/group123/versions",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "versions": ["v1"],
+                }
+            )
+        ],
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "createdAt": CREATED_AT,
+            }
+        },
         status=200,
     )
 

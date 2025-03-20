@@ -178,10 +178,12 @@ class HttpSessionManager:
             REINITIALIZED = True
 
     @http_interceptor
-    def get(self, path: str, json=None):
+    def get(self, path: str, json=None, params=None):
         """Get the resource."""
         self.reinit()
-        return self.session.get(url=Env.current.get_real_url(path), auth=api_key_auth, json=json)
+        return self.session.get(
+            url=Env.current.get_real_url(path), auth=api_key_auth, json=json, params=params
+        )
 
     @http_interceptor
     def post(self, path: str, json=None):
@@ -198,10 +200,12 @@ class HttpSessionManager:
         )
 
     @http_interceptor
-    def delete(self, path: str):
+    def delete(self, path: str, json=None, params=None):
         """Delete the resource."""
         self.reinit()
-        return self.session.delete(Env.current.get_real_url(path), auth=api_key_auth)
+        return self.session.delete(
+            Env.current.get_real_url(path), auth=api_key_auth, json=json, params=params
+        )
 
 
 http = HttpSessionManager(requests.Session())

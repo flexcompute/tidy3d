@@ -815,23 +815,23 @@ def load(
 
 
 @wait_for_connection
-def delete(task_id: TaskId) -> TaskInfo:
+def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
     """Delete server-side data associated with task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
+    versions : bool = False
+        If ``True``, delete all versions of the task in the task group. Otherwise, delete only the version associated with the task ID.
 
     Returns
     -------
     TaskInfo
         Object containing information about status, size, credits of task.
     """
-
-    # task = SimulationTask.get(task_id)
     task = SimulationTask(taskId=task_id)
-    task.delete()
+    task.delete(versions=versions)
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
