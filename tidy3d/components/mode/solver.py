@@ -660,7 +660,12 @@ class EigSolver(Tidy3dBaseModel):
         Hx = h_field[:N, :] / (1j * neff - keff)
         Hy = h_field[N:, :] / (1j * neff - keff)
         Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex))
-        Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
+        # Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
+
+        # Ez = -inv_eps_zz * div^H J H_xy, while Hxy = vals^-1 * qmat * Exy;
+        # Note that div^H J q_partial = 0, so Ez = -vals^-1 inv_eps_zz * div^H J q_ep Exy
+        h_partial_field = q_ep.dot(vecs) / (1j * neff - keff)
+        Ez = inv_eps_zz.dot(dxb.dot(h_partial_field[N:, :]) - dyb.dot(h_partial_field[:N, :]))
 
         # Bundle up
         E = np.stack((Ex, Ey, Ez), axis=0)
