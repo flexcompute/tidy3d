@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] - 2025-03-20
+
 ### Added
 - New `LobeMeasurer` tool in the `microwave` plugin that locates lobes in antenna patterns and calculates lobe measures like half-power beamwidth and sidelobe level.
 - Validation step that raises a `ValueError` when no frequency-domain monitors are present, preventing invalid adjoint runs.
@@ -1544,7 +1546,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...develop
+[2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.7.9...v2.8.0
 [2.7.9]: https://github.com/flexcompute/tidy3d/compare/v2.7.8...v2.7.9
 [2.7.8]: https://github.com/flexcompute/tidy3d/compare/v2.7.7...v2.7.8
