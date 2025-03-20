@@ -1,3 +1,5 @@
+from typing import Union
+
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
@@ -15,6 +17,36 @@ class ConstantMobilityModel(Tidy3dBaseModel):
     mu: pd.NonNegativeFloat = pd.Field(
         ..., title="Mobility", description="Mobility", units="cm²/V-s"
     )
+
+
+class CaugheyThomasHighField(Tidy3dBaseModel):
+    """Caughey-Thomas high-field effect coefficients.
+
+    Notes
+    -----
+      This class is typically used in a `CaugheyThomasMobility` object. The formulations
+      is that described in [1]_ and summarized in the equation below
+
+      .. math::
+        \\mu = \\frac{\\mu_0}{\\left[1 + \\left(\\frac{\\mu_0 E}{v_{\\rm{sat}}} \\right)^\\beta \\right]^{1/\\beta}}
+
+      where :math:`\\mu_0` is the low-field mobility coefficient, :math:`v_{\\rm{sat}}` is the saturation
+      velocity, and :math:`E` is the electric field component in the velocity direction. :math:`\\beta`
+      is a coefficient that usually takes on the values 1 (holes) and 2 (electrons).
+
+
+      .. [1] M. Caughey and R.E. Thomas. Carrier mobilities in silicon empirically related to doping
+           and field. Proceedings of the IEEE, 55(12):2192–2193, December 1967
+    """
+
+    v_sat: pd.PositiveFloat = pd.Field(
+        ..., title="Saturation velocity", description="Saturation velocity in cm/s", units="cm/s"
+    )
+
+    beta: float = pd.Field(..., title="Exponent coefficient", description="Exponent coefficient")
+
+
+MobilityHighFieldEffectModel = Union[CaugheyThomasHighField]
 
 
 class CaugheyThomasMobility(Tidy3dBaseModel):
@@ -103,12 +135,6 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
         ...   exp_4=-0.146,
         ... )
 
-
-    Warning
-    -------
-    There are some current limitations of this model:
-
-    - High electric field effects not yet supported.
     """
 
     # mobilities
@@ -160,4 +186,8 @@ class CaugheyThomasMobility(Tidy3dBaseModel):
         ...,
         title="Exponent of thermal dependence of the doping exponent effect.",
         description="Exponent of thermal dependence of the doping exponent effect.",
+    )
+
+    high_field: MobilityHighFieldEffectModel = pd.Field(
+        None, title="High-field effect model", description="High-field effect model."
     )
