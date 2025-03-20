@@ -69,7 +69,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         """
         folder = FOLDER_CACHE.get(folder_name)
         if not folder:
-            resp = http.get(f"tidy3d/project?projectName={folder_name}")
+            resp = http.get("tidy3d/project", params={"projectName": folder_name})
             if resp:
                 folder = Folder(**resp)
         if create and not folder:
@@ -280,11 +280,28 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             return []
         return parse_obj_as(List[SimulationTask], resp)
 
-    def delete(self):
-        """Delete current task from server."""
+    def delete(self, versions: bool = False):
+        """Delete current task from server.
+
+        Parameters
+        ----------
+        versions : bool = False
+            If ``True``, delete all versions of the task in the task group. Otherwise, delete only the version associated with the current task ID.
+        """
         if not self.task_id:
             raise ValueError("Task id not found.")
-        http.delete(f"tidy3d/tasks/{self.task_id}")
+
+        task_details = http.get(f"tidy3d/tasks/{self.task_id}")
+
+        if task_details and "groupId" in task_details and "version" in task_details:
+            group_id = task_details["groupId"]
+            version = task_details["version"]
+            if versions:
+                http.delete("tidy3d/group", json={"groupIds": [group_id]})
+            else:
+                http.delete(f"tidy3d/group/{group_id}/versions", json={"versions": [version]})
+        else:  # Fallback to old method if we can't get the groupId and version
+            http.delete(f"tidy3d/tasks/{self.task_id}")
 
     def get_simulation_json(self, to_file: str, verbose: bool = True) -> pathlib.Path:
         """Get json file for a :class:`.Simulation` from server.
