@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Querying tasks was sometimes erroring unexpectedly.
 - Fixed automatic creation of missing output directories.
 - Bug in handling of tuple-type gradients that could lead to empty tuples or failing gradient calculations when differentiating w.r.t. (for instance) `td.Box.center`.
+- Bug causing incorrect field projection results when multiple projection monitors with numerous sampling points were used.
 
 ## [2.8.0] - 2025-03-04
 
