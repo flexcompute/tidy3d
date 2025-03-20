@@ -1396,7 +1396,7 @@
     },
     "SolidMedium": {
       "title": "SolidMedium",
-      "description": "Solid medium for heat simulations.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for medium.\ncapacity : PositiveFloat\n    [units = J/(kg*K)].  Volumetric heat capacity in unit of J/(kg*K).\nconductivity : PositiveFloat\n    [units = W/(um*K)].  Thermal conductivity of material in units of W/(um*K).\n\nExample\n-------\n>>> solid = SolidSpec(\n...     capacity=2,\n...     conductivity=3,\n... )",
+      "description": "Solid medium for heat simulations.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for medium.\ncapacity : PositiveFloat\n    [units = J/(kg*K)].  Volumetric heat capacity in unit of J/(kg*K).\nconductivity : PositiveFloat\n    [units = W/(um*K)].  Thermal conductivity of material in units of W/(um*K).\n\nExample\n-------\n>>> solid = SolidMedium(\n...     capacity=2,\n...     conductivity=3,\n... )",
       "type": "object",
       "properties": {
         "attrs": {
@@ -1441,7 +1441,7 @@
     },
     "FluidMedium": {
       "title": "FluidMedium",
-      "description": "Fluid medium. Heat simulations will not solve for temperature\nin a structure that has a medium with this 'heat_spec'.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for medium.\n\nExample\n-------\n>>> solid = FluidSpec()",
+      "description": "Fluid medium. Heat simulations will not solve for temperature\nin a structure that has a medium with this 'heat_spec'.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for medium.\n\nExample\n-------\n>>> solid = FluidMedium()",
       "type": "object",
       "properties": {
         "attrs": {
@@ -1606,6 +1606,101 @@
       },
       "additionalProperties": false
     },
+    "HammerstadSurfaceRoughness": {
+      "title": "HammerstadSurfaceRoughness",
+      "description": "Modified Hammerstad surface roughness model. It's a popular model that works well\nunder 5 GHz for surface roughness below 2 micrometer RMS.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nrq : PositiveFloat\n    [units = um].  RMS peak-to-valley height (Rq) of the surface roughness.\nroughness_factor : ConstrainedFloatValue = 2.0\n    Expected maximal increase in conductor losses due to roughness effect. Value 2 gives the classic Hammerstad equation.\n\nNote\n----\n\n    The power loss compared to smooth surface is described by:\n\n    .. math::\n\n        1 + (RF-1) \\frac{2}{\\pi}\\arctan(1.4\\frac{R_q^2}{\\delta^2})\n\n    where :math:`\\delta` is skin depth, :math:`R_q` the RMS peak-to-vally height, and RF\n    roughness factor.\n\nNote\n----\nThis model is based on:\n\n    Y. Shlepnev, C. Nwachukwu, \"Roughness characterization for interconnect analysis\",\n    2011 IEEE International Symposium on Electromagnetic Compatibility,\n    (DOI: 10.1109/ISEMC.2011.6038367), 2011.\n\n    V. Dmitriev-Zdorov, B. Simonovich, I. Kochikov, \"A Causal Conductor Roughness Model\n    and its Effect on Transmission Line Characteristics\", Signal Integrity Journal, 2018.",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "type": {
+          "title": "Type",
+          "default": "HammerstadSurfaceRoughness",
+          "enum": [
+            "HammerstadSurfaceRoughness"
+          ],
+          "type": "string"
+        },
+        "rq": {
+          "title": "RMS Peak-to-Valley Height",
+          "description": "RMS peak-to-valley height (Rq) of the surface roughness.",
+          "units": "um",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "roughness_factor": {
+          "title": "Roughness Factor",
+          "description": "Expected maximal increase in conductor losses due to roughness effect. Value 2 gives the classic Hammerstad equation.",
+          "default": 2.0,
+          "exclusiveMinimum": 1.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "rq"
+      ],
+      "additionalProperties": false
+    },
+    "HuraySurfaceRoughness": {
+      "title": "HuraySurfaceRoughness",
+      "description": "Huray surface roughness model.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nrelative_area : PositiveFloat = 1\n    Relative area of the matte base compared to a flat surface\ncoeffs : Tuple[Tuple[pydantic.v1.types.PositiveFloat, pydantic.v1.types.PositiveFloat], ...]\n    [units = (None, um)].  List of (:math:`f_i, r_i`) values for model, where :math:`f_i` is the ratio of total sphere surface area to the flat surface area, and :math:`r_i` the radius of the sphere.\n\nNote\n----\n\n    The power loss compared to smooth surface is described by:\n\n    .. math::\n\n        \\frac{A_{matte}}{A_{flat}} + \\frac{3}{2}\\sum_i f_i/[1+\\frac{\\delta}{r_i}+\\frac{\\delta^2}{2r_i^2}]\n\n    where :math:`\\delta` is skin depth, :math:`r_i` the radius of sphere,\n    :math:`\\frac{A_{matte}}{A_{flat}}` the relative area of the matte compared to flat surface,\n    and :math:`f_i=N_i4\\pi r_i^2/A_{flat}` the ratio of total sphere\n    surface area (number of spheres :math:`N_i` times the individual sphere surface area)\n    to the flat surface area.\n\nNote\n----\nThis model is based on:\n\n    J. Eric Bracken, \"A Causal Huray Model for Surface Roughness\", DesignCon, 2012.",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "type": {
+          "title": "Type",
+          "default": "HuraySurfaceRoughness",
+          "enum": [
+            "HuraySurfaceRoughness"
+          ],
+          "type": "string"
+        },
+        "relative_area": {
+          "title": "Relative Area",
+          "description": "Relative area of the matte base compared to a flat surface",
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "coeffs": {
+          "title": "Coefficients for surface ratio and sphere radius",
+          "description": "List of (:math:`f_i, r_i`) values for model, where :math:`f_i` is the ratio of total sphere surface area to the flat surface area, and :math:`r_i` the radius of the sphere.",
+          "units": [
+            null,
+            "um"
+          ],
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
     "SurfaceImpedanceFitterParam": {
       "title": "SurfaceImpedanceFitterParam",
       "description": "Advanced parameters for fitting surface impedance of a :class:`.LossyMetalMedium`.\nInternally, the quantity to be fitted is surface impedance divided by ``-1j * \\omega``.\n\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nmax_num_poles : PositiveInt = 5\n    Maximal number of poles in complex-conjugate pole residue model for fitting surface impedance.\ntolerance_rms : NonNegativeFloat = 0.001\n    Tolerance in fitting.\nfrequency_sampling_points : PositiveInt = 20\n    Number of sampling frequencies used in fitting.\nlog_sampling : bool = True\n    Whether to sample frequencies logarithmically (``True``),  or linearly (``False``).",
@@ -1657,7 +1752,7 @@
     },
     "LossyMetalMedium": {
       "title": "LossyMetalMedium",
-      "description": "Lossy metal that can be modeled with a surface impedance boundary condition (SIBC).\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Tuple[float, float]\n    [units = (Hz, Hz)].  Frequency range of validity for the medium.\nallow_gain : Literal[False] = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nviz_spec : Optional[VisualizationSpec] = None\n    Plotting specification for visualizing medium.\nheat_spec : Union[FluidSpec, SolidSpec, SolidMedium, FluidMedium, NoneType] = None\n    DEPRECATED: Use `td.MultiPhysicsMedium`. Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can beused for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\npermittivity : Literal[1] = 1.0\n    [units = None (relative permittivity)].  Relative permittivity.\nconductivity : Union[float, Box] = 0.0\n    [units = S/um].  Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\nfit_param : SurfaceImpedanceFitterParam = SurfaceImpedanceFitterParam(attrs={}, max_num_poles=5, tolerance_rms=0.001, frequency_sampling_points=20, log_sampling=True, type='SurfaceImpedanceFitterParam')\n    Parameters for fitting surface impedance divided by (-1j * omega) over the frequency range using pole-residue pair model.\n\nNotes\n-----\n\n    SIBC is most accurate when the skin depth is much smaller than the structure feature size.\n    If not the case, please use a regular medium instead, or set ``simulation.subpixel.lossy_metal``\n    to ``td.VolumetricAveraging()`` or ``td.Staircasing()``.\n\nExample\n-------\n>>> lossy_metal = LossyMetalMedium(conductivity=10, frequency_range=(9e9, 10e9))",
+      "description": "Lossy metal that can be modeled with a surface impedance boundary condition (SIBC).\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Tuple[float, float]\n    [units = (Hz, Hz)].  Frequency range of validity for the medium.\nallow_gain : Literal[False] = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nviz_spec : Optional[VisualizationSpec] = None\n    Plotting specification for visualizing medium.\nheat_spec : Union[FluidSpec, SolidSpec, SolidMedium, FluidMedium, NoneType] = None\n    DEPRECATED: Use `td.MultiPhysicsMedium`. Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can beused for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\npermittivity : Literal[1] = 1.0\n    [units = None (relative permittivity)].  Relative permittivity.\nconductivity : Union[float, Box] = 0.0\n    [units = S/um].  Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\nroughness : Union[HammerstadSurfaceRoughness, HuraySurfaceRoughness] = None\n    Surface roughness model that applies a frequency-dependent scaling factor to surface impedance.\nfit_param : SurfaceImpedanceFitterParam = SurfaceImpedanceFitterParam(attrs={}, max_num_poles=5, tolerance_rms=0.001, frequency_sampling_points=20, log_sampling=True, type='SurfaceImpedanceFitterParam')\n    Parameters for fitting surface impedance divided by (-1j * omega) over the frequency range using pole-residue pair model.\n\nNotes\n-----\n\n    SIBC is most accurate when the skin depth is much smaller than the structure feature size.\n    If not the case, please use a regular medium instead, or set ``simulation.subpixel.lossy_metal``\n    to ``td.VolumetricAveraging()`` or ``td.Staircasing()``.\n\nExample\n-------\n>>> lossy_metal = LossyMetalMedium(conductivity=10, frequency_range=(9e9, 10e9))",
       "type": "object",
       "properties": {
         "attrs": {
@@ -1786,6 +1881,25 @@
             {
               "title": "AutogradBox",
               "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "roughness": {
+          "title": "Surface Roughness Model",
+          "description": "Surface roughness model that applies a frequency-dependent scaling factor to surface impedance.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "HammerstadSurfaceRoughness": "#/definitions/HammerstadSurfaceRoughness",
+              "HuraySurfaceRoughness": "#/definitions/HuraySurfaceRoughness"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/HammerstadSurfaceRoughness"
+            },
+            {
+              "$ref": "#/definitions/HuraySurfaceRoughness"
             }
           ]
         },
