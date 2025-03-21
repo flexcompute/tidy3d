@@ -10,15 +10,7 @@ from tidy3d.components.viz import Polygon, set_default_labels_and_title
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
 
-
-@pytest.fixture(scope="module", autouse=True)
-def mpl_config():
-    """Configure matplotlib non-interactive backend for all tests in this module."""
-    original_backend = mpl.get_backend()
-    mpl.use("Agg")
-    yield
-    plt.close("all")
-    mpl.use(original_backend)
+pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
 
 def test_make_polygon_dict():

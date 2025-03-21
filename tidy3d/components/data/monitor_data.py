@@ -13,7 +13,7 @@ import xarray as xr
 from pandas import DataFrame
 from xarray.core.types import Self
 
-from ...constants import C_0, ETA_0, MICROMETER, MU_0
+from ...constants import C_0, EPSILON_0, ETA_0, MICROMETER
 from ...exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
 from ...log import log
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
@@ -1158,53 +1158,8 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
     def make_adjoint_sources(
         self, dataset_names: list[str], fwidth: float
-    ) -> List[Union[CustomCurrentSource, PointDipole]]:
+    ) -> List[CustomCurrentSource]:
         """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
-
-        if np.allclose(self.monitor.size, 0):
-            return self.to_adjoint_point_sources(fwidth=fwidth)
-
-        return self.to_adjoint_field_sources(fwidth=fwidth)
-
-    def to_adjoint_point_sources(self, fwidth: float) -> List[PointDipole]:
-        """Create adjoint point dipole source if this field data contains one item."""
-
-        sources = []
-
-        for polarization, field_component in self.field_components.items():
-            if field_component is None:
-                continue
-
-            for freq0 in field_component.coords["f"]:
-                omega0 = 2 * np.pi * freq0
-                scaling_factor = 33 / (MU_0 * omega0)
-
-                forward_amp = self.get_amplitude(field_component.sel(f=freq0))
-
-                if forward_amp == 0.0:
-                    continue
-
-                adj_phase = np.pi + np.angle(forward_amp)
-                adj_amp = scaling_factor * forward_amp
-
-                src_adj = PointDipole(
-                    center=self.monitor.center,
-                    polarization=polarization,
-                    source_time=GaussianPulse(
-                        freq0=freq0,
-                        fwidth=fwidth,
-                        amplitude=abs(adj_amp),
-                        phase=adj_phase,
-                    ),
-                    interpolate=True,
-                )
-
-                sources.append(src_adj)
-
-        return sources
-
-    def to_adjoint_field_sources(self, fwidth: float) -> List[CustomCurrentSource]:
-        """Create adjoint custom field sources if this field data has some dimensionality."""
 
         sources = []
         source_geo = self.monitor.geometry
@@ -1221,12 +1176,24 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 if "H" in name:
                     values *= -1
 
-                # make coords that are shifted relative to geometry (0,0,0) = geometry.center
                 coords = dict(field_component.coords.copy())
+                grid_coords = Coords(**{key: coords[key] for key in "xyz"})
+
+                size_element = grid_coords.cell_size_meshgrid
+
+                # make coords that are shifted relative to geometry (0,0,0) = geometry.center
                 for dim, key in enumerate("xyz"):
                     coords[key] = np.array(coords[key]) - source_geo.center[dim]
+
                 coords["f"] = np.array([freq0])
                 values = np.expand_dims(values, axis=-1)
+
+                size_element = np.reshape(size_element, values.shape)
+
+                omega0 = 2 * np.pi * freq0
+                scaling_factor = 0.5 * omega0 * EPSILON_0 / size_element
+
+                values *= scaling_factor
 
                 # ignore zero components
                 if not np.all(values == 0):
