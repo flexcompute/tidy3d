@@ -1547,7 +1547,7 @@ which fields are to be projected is now determined automatically based on the me
 - A large number of small improvements and bug fixes.
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...develop
-[2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
+[2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.7.9...v2.8.0
 [2.7.9]: https://github.com/flexcompute/tidy3d/compare/v2.7.8...v2.7.9
 [2.7.8]: https://github.com/flexcompute/tidy3d/compare/v2.7.7...v2.7.8
