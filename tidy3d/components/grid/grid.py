@@ -8,7 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from ...exceptions import SetupError
-from ..base import Tidy3dBaseModel
+from ..base import Tidy3dBaseModel, cached_property
 from ..data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
 from ..data.utils import UnstructuredGridDataset, UnstructuredGridDatasetType
 from ..geometry.base import Box
@@ -50,6 +50,46 @@ class Coords(Tidy3dBaseModel):
     def to_list(self):
         """Return a list of the three Coord1D objects as numpy arrays."""
         return list(self.to_dict.values())
+
+    @cached_property
+    def cell_sizes(self) -> SpatialDataArray:
+        """Returns the sizes of the cells in each coordinate array as a dictionary."""
+        cell_sizes = {}
+
+        coord_dict = self.to_dict
+        for dim in "xyz":
+            if len(coord_dict[dim]) > 1:
+                diff = coord_dict[dim][1:] - coord_dict[dim][0:-1]
+
+                diff_left = np.pad(diff, ((1, 0)), mode="edge")
+                diff_right = np.pad(diff, ((0, 1)), mode="edge")
+
+                diff_avg = 0.5 * (diff_left + diff_right)
+                cell_sizes[dim] = diff_avg
+            else:
+                cell_sizes[dim] = 1
+
+        return cell_sizes
+
+    @cached_property
+    def cell_size_meshgrid(self):
+        """Returns an N-dimensional grid where N is the number of coordinate arrays that have more than one
+        element. Each grid element corresponds to the size of the mesh cell in N-dimensions and 1 for N=0."""
+        coord_dict = self.to_dict
+
+        cell_size_meshgrid = np.squeeze(np.ones(tuple(len(coord_dict[dim]) for dim in "xyz")))
+        meshgrid_elements = [
+            size for dim, size in self.cell_sizes.items() if len(coord_dict[dim]) > 1
+        ]
+
+        if len(meshgrid_elements) > 1:
+            meshgrid = np.meshgrid(*meshgrid_elements, indexing="ij")
+            for idx in range(0, len(meshgrid)):
+                cell_size_meshgrid *= np.reshape(meshgrid[idx], cell_size_meshgrid.shape)
+        elif len(meshgrid_elements) == 1:
+            cell_size_meshgrid = meshgrid_elements[0]
+
+        return cell_size_meshgrid
 
     def _interp_from_xarray(
         self,

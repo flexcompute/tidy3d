@@ -275,7 +275,10 @@ ignore = [
 
 [tool.pytest.ini_options]
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain"
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical' "
+markers = [
+    "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
+]
 env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [

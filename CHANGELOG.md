@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
 - Inaccurate gradient when auto-grabbing permittivities for structures using `td.PolySlab` when using dispersive material models.
+- Fixed scaling for adjoint sources when differentiating with respect to `FieldData` to account for the mesh size of the monitor and thus the created source. This aligns adjoint gradient magnitudes with numerical finite difference gradients for field data.
 
 ## [2.8.1] - 2025-03-20
 
