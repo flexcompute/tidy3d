@@ -10,13 +10,14 @@ import h5py
 import numpy as np
 import xarray as xr
 from autograd.tracer import isbox
-from xarray.core import alignment, missing
+from xarray.core import missing
 from xarray.core.indexes import PandasIndex
 from xarray.core.indexing import _outer_to_numpy_indexer
 from xarray.core.types import InterpOptions, Self
 from xarray.core.utils import OrderedSet, either_dict_or_kwargs
 from xarray.core.variable import as_variable
 
+from ...compat import alignment
 from ...constants import (
     HERTZ,
     MICROMETER,
