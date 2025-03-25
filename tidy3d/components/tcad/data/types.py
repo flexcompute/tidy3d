@@ -6,6 +6,7 @@ from typing import Union
 
 from tidy3d.components.tcad.data.monitor_data.charge import (
     SteadyCapacitanceData,
+    SteadyEnergyBandData,
     SteadyFreeCarrierData,
     SteadyPotentialData,
 )
@@ -15,5 +16,6 @@ TCADMonitorDataType = Union[
     TemperatureData,
     SteadyPotentialData,
     SteadyFreeCarrierData,
+    SteadyEnergyBandData,
     SteadyCapacitanceData,
 ]

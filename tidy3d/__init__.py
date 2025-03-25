@@ -32,6 +32,7 @@ from tidy3d.components.tcad.data.sim_data import (
 )
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
+    SteadyEnergyBandData,
     SteadyFreeCarrierData,
     SteadyPotentialData,
     TemperatureData,
@@ -41,6 +42,7 @@ from tidy3d.components.tcad.generation_recombination import FossumCarrierLifetim
 from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
 )
@@ -603,6 +605,7 @@ __all__ = [
     "HeatChargeSimulation",
     "SteadyPotentialData",
     "SteadyFreeCarrierData",
+    "SteadyEnergyBandData",
     "SteadyCapacitanceData",
     "CaugheyThomasMobility",
     "ConstantMobilityModel",
@@ -616,6 +619,7 @@ __all__ = [
     "HeatChargeBoundarySpec",
     "SteadyPotentialMonitor",
     "SteadyFreeCarrierMonitor",
+    "SteadyEnergyBandMonitor",
     "SteadyCapacitanceMonitor",
     "SpaceTimeModulation",
     "SpaceModulation",
