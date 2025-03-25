@@ -220,6 +220,8 @@ def monitors():
 
     free_carrier_mnt1 = td.SteadyFreeCarrierMonitor(size=(1.6, 2, 3), name="carrier_test")
 
+    energy_band_mnt1 = td.SteadyEnergyBandMonitor(size=(1.6, 2, 3), name="bandgap_test")
+
     return [
         temp_mnt1,
         temp_mnt2,
@@ -231,6 +233,7 @@ def monitors():
         volt_mnt4,
         capacitance_mnt1,
         free_carrier_mnt1,
+        energy_band_mnt1,
     ]
 
 
@@ -478,7 +481,7 @@ def temperature_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def voltage_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _ = monitors
+    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _, _ = monitors
 
     # SpatialDataArray
     nx, ny, nz = 9, 6, 5
@@ -551,7 +554,7 @@ def voltage_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def capacitance_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, _, _, _, _, cap_mt1, _ = monitors
+    cap_mt1 = monitors[8]
 
     # SpatialDataArray
     cap_data1 = td.SteadyCapacitanceData(monitor=cap_mt1)
@@ -563,7 +566,7 @@ def capacitance_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def free_carrier_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, _, _, _, _, _, fc_mnt = monitors
+    fc_mnt = monitors[9]
 
     # SpatialDataArray
     fc_data1 = td.SteadyFreeCarrierData(monitor=fc_mnt)
@@ -583,6 +586,28 @@ def free_carrier_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def energy_band_monitor_data(monitors):
+    """Creates different voltage monitor data."""
+    eb_mnt = monitors[10]
+
+    # SpatialDataArray
+    eb_data1 = td.SteadyEnergyBandData(monitor=eb_mnt)
+    eb_data2 = eb_data1.symmetry_expanded_copy
+    assert eb_data2 is not None
+
+    field_components = eb_data1.field_components
+
+    eb_fields = eb_data1.field_name("abs^2")
+    assert eb_fields is not None
+    eb_fields_default = eb_data1.field_name()
+    assert eb_fields_default is not None
+
+    assert field_components is not None
+
+    return (eb_data1,)
+
+
+@pytest.fixture(scope="module")
 def simulation_data(
     heat_simulation,
     conduction_simulation,
@@ -592,6 +617,7 @@ def simulation_data(
     voltage_monitor_data,
     capacitance_monitor_data,
     free_carrier_monitor_data,
+    energy_band_monitor_data,
 ):
     """Creates 'HeatChargeSimulationData' for both Heat and Conduction simulations."""
     heat_sim_data = td.HeatChargeSimulationData(
@@ -1323,6 +1349,181 @@ def test_plotting_functions(simulation_data):
     # Invalid plotting parameters
     with pytest.raises(KeyError):
         heat_sim_data.plot_field("test", invalid_param=0)
+
+
+def test_bandgap_monitor():
+    """Test energy bandgap monitor ploting function."""
+    # create a triangle grid
+    tri_grid_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tri_grid_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tri_grid_values_single_voltage = td.IndexedVoltageDataArray(
+        [[0.0], [0], [3], [3]],
+        coords=dict(index=np.arange(4), voltage=[1]),
+        name="test",
+    )
+
+    tri_grid_values_multi_voltage = td.IndexedVoltageDataArray(
+        [[0.0, 0.0], [0, 0], [3, -3], [3, -3]],
+        coords=dict(index=np.arange(4), voltage=[-1, 1]),
+        name="test",
+    )
+
+    tri_grid_single_voltage = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values_single_voltage,
+    )
+
+    tri_grid_multi_voltage = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values_multi_voltage,
+    )
+
+    # create a tet mesh
+    tet_grid_points = td.PointDataArray(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 3, 7], [0, 2, 7, 3], [0, 2, 6, 7], [0, 4, 7, 6], [0, 4, 5, 7], [0, 1, 7, 5]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values_single_voltage = td.IndexedVoltageDataArray(
+        [[0.0], [0.0], [0.0], [0.0], [3.0], [3.0], [3.0], [3.0]],
+        coords=dict(index=np.arange(8), voltage=[1]),
+        name="test_tet",
+    )
+
+    tet_grid_values_multi_voltage = td.IndexedVoltageDataArray(
+        [
+            [0.0, 0.5],
+            [0.0, 0.5],
+            [0.0, 0.5],
+            [0.0, 0.5],
+            [3.0, 3.5],
+            [3.0, 3.5],
+            [3.0, 3.5],
+            [3.0, 3.5],
+        ],
+        coords=dict(index=np.arange(8), voltage=[-1, 1]),
+        name="test_tet",
+    )
+
+    tet_grid_single_voltage = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values_single_voltage,
+    )
+
+    tet_grid_multi_voltage = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values_multi_voltage,
+    )
+
+    aux_monitor_2D = td.SteadyEnergyBandMonitor(
+        center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="bands_2D", unstructured=True
+    )
+
+    aux_monitor_3D = td.SteadyEnergyBandMonitor(
+        center=(0, 0.14, 0.0), size=(0.6, 0.3, 0.5), name="bands_3D", unstructured=True
+    )
+
+    tri_single_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_2D,
+        Ec=tri_grid_single_voltage,
+        Ev=tri_grid_single_voltage,
+        Ei=tri_grid_single_voltage,
+        Efn=tri_grid_single_voltage,
+        Efp=tri_grid_single_voltage,
+    )
+
+    tri_multi_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_2D,
+        Ec=tri_grid_multi_voltage,
+        Ev=tri_grid_multi_voltage,
+        Ei=tri_grid_multi_voltage,
+        Efn=tri_grid_multi_voltage,
+        Efp=tri_grid_multi_voltage,
+    )
+
+    tet_single_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_3D,
+        Ec=tet_grid_single_voltage,
+        Ev=tet_grid_single_voltage,
+        Ei=tet_grid_single_voltage,
+        Efn=tet_grid_single_voltage,
+        Efp=tet_grid_single_voltage,
+    )
+
+    tet_multi_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_3D,
+        Ec=tet_grid_multi_voltage,
+        Ev=tet_grid_multi_voltage,
+        Ei=tet_grid_multi_voltage,
+        Efn=tet_grid_multi_voltage,
+        Efp=tet_grid_multi_voltage,
+    )
+
+    # test check for the voltage value in the list of arguments
+
+    tri_single_voltage_data.plot(x=0.0)
+    tri_multi_voltage_data.plot(x=0.0, voltage=1.0)
+
+    with pytest.raises(DataError):
+        tri_multi_voltage_data.plot(x=0.0)
+
+    tet_single_voltage_data.plot(x=0.0, y=0.0)
+    tet_multi_voltage_data.plot(x=0.0, y=0.0, voltage=1.0)
+
+    with pytest.raises(DataError):
+        tri_multi_voltage_data.plot(x=0.0, y=0.0)
+
+    # test check for the number of coordinates in the list of arguments
+
+    with pytest.raises(DataError):
+        tri_single_voltage_data.plot()
+
+    with pytest.raises(DataError):
+        tri_single_voltage_data.plot(x=0.0, y=0.0)
+
+    with pytest.raises(DataError):
+        tet_single_voltage_data.plot()
+
+    with pytest.raises(DataError):
+        tet_single_voltage_data.plot(x=0.0)
+
+    with pytest.raises(DataError):
+        tet_single_voltage_data.plot(x=0.0, y=0.0, z=0.0)
+
+    # test check for the incorrect cross-section plane
+
+    with pytest.raises(DataError):
+        tri_single_voltage_data.plot(y=0.0)
 
 
 def test_additional_edge_cases():
