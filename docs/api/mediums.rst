@@ -12,7 +12,7 @@ This page summarizes the EM material classes available in the Tidy3D python API.
 + `Non-dispersive`_ medium: Constant optical property
 + `Dispersive`_ medium: Optical property varies with frequency
 + `Anisotropic`_ medium: Optical property varies with direction of light propagation
-+ `Spatially-varying`_ medium <Spatial Variation>`_: Optical property varies with spatial coordinates
++ `Spatially-varying`_ medium: Optical property varies with spatial coordinates
 + `Perturbation`_ medium: Optical property is perturbed by the result of a multiphysics (heat/charge) simulation
 + `Metallic`_: Metals in the shallow skin depth regime
 
@@ -90,7 +90,7 @@ Alternatively, the ``FastDispersionFitter`` plugin can be used to generate a dis
        delimiter=",",
    )
 
-To define a material with constant loss tangent, use the ``constant_loss_tangent_model`` method.
+To define a material with constant loss tangent, use the ``constant_loss_tangent_model()`` method.
 
 .. code-block:: python
 
@@ -101,7 +101,7 @@ To define a material with constant loss tangent, use the ``constant_loss_tangent
        frequency_range=(1e9, 5e9)
    )
 
-Use the convenience methods ``plot()`` and ``eps_model`` to access the optical properties of the dispersive material model.
+Use the convenience methods ``plot()`` and ``eps_model()`` to access the optical properties of the dispersive material model.
 
 .. code-block:: python
 
