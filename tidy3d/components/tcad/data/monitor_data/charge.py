@@ -313,15 +313,15 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
             matplotlib axes to plot on, if not specified, one is created.
         """
 
+        if not isinstance(self.Ec, TriangularGridDataset):
+            raise DataError(
+                "Bandgap monitor slice plot can be done only for a 2D unstructured dataset."
+            )
+
         if axis == self.Ec.normal_axis:
             raise DataError(
                 f"Triangular grid (normal: {self.Ec.normal_axis}) cannot be sliced by a parallel "
                 "plane."
-            )
-
-        if not isinstance(self.Ec, TriangularGridDataset):
-            raise DataError(
-                "Bandgap monitor slice plot can be done only for a 2D unstructured dataset."
             )
 
         Ec_slice = self.Ec.sel(voltage=voltage).plane_slice(axis=axis, pos=pos)
@@ -338,6 +338,44 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         ax.legend()
 
         return ax
+
+    def plane_slice(self, axis: Axis, pos: float) -> SteadyEnergyBandData:
+        """Slice data with a plane and return the resulting :class:`.SteadyEnergyBandData`.
+
+        Parameters
+        ----------
+        axis : Axis
+            The normal direction of the slicing plane.
+        pos : float
+            Position of the slicing plane along its normal direction.
+
+        Returns
+        -------
+        SteadyEnergyBandData
+            The resulting slice.
+        """
+
+        if not isinstance(self.Ec, TetrahedralGridDataset):
+            raise DataError(
+                "Bandgap monitor plane slice can be done only for a 3D unstructured dataset."
+            )
+
+        Ec_slice = self.Ec.plane_slice(axis=axis, pos=pos)
+        Ev_slice = self.Ev.plane_slice(axis=axis, pos=pos)
+        Ei_slice = self.Ei.plane_slice(axis=axis, pos=pos)
+        Efn_slice = self.Efn.plane_slice(axis=axis, pos=pos)
+        Efp_slice = self.Efp.plane_slice(axis=axis, pos=pos)
+
+        return SteadyEnergyBandData(
+            Ec=Ec_slice,
+            Ev=Ev_slice,
+            Ei=Ei_slice,
+            Efn=Efn_slice,
+            Efp=Efp_slice,
+            monitor=self.monitor,
+            symmetry=self.symmetry,
+            symmetry_center=self.symmetry_center,
+        )
 
 
 class SteadyCapacitanceData(HeatChargeMonitorData):
