@@ -7,16 +7,18 @@ EM Mediums
 Overview
 --------
 
-This page summarizes the EM material classes available in the Tidy3D python API. The material classes are split into six broad categories:
+The EM medium describes the electromagnetic properties of the material. In conjunction with Maxwell's equations and the constitutive equations, these properties determine how EM waves propagate through and interact with the medium. Tidy3D supports a diverse set of medium types to model various material characteristics.
 
-+ `Non-dispersive`_ medium: Constant optical property
+In the Tidy3D python API, medium classes are split into six broad categories:
+
++ `Non-dispersive`_ medium: Constant relative permittivity :math:`\varepsilon_r` and conductivity :math:`\sigma`
 + `Dispersive`_ medium: Optical property varies with frequency
 + `Anisotropic`_ medium: Optical property varies with direction of light propagation
 + `Spatially-varying`_ medium: Optical property varies with spatial coordinates
 + `Perturbation`_ medium: Optical property is perturbed by the result of a multiphysics (heat/charge) simulation
 + `Metallic`_: Metals in the shallow skin depth regime
 
-Combinations are also possible, e.g. a spatially-varying, dispersive, anisotropic medium. In addition to these categories, users can define additional modifiers on some mediums using medium specifications:
+Combinations are possible, e.g. a spatially-varying, dispersive, anisotropic medium. In addition to these categories, users can define additional modifiers on some mediums using medium specifications:
 
 + `Nonlinearity`_: Optical property depends on electric field
 + `Spatio-temporal modulation`_: Optical property is modulated by a function of time and spatial coordinates
@@ -37,7 +39,7 @@ Non-Dispersive
 
    tidy3d.Medium
 
-A simple, non-dispersive optical medium can be described by constant relative permittivity and conductivity (units: S/um), or equivalently, the real and imaginary components of the refractive index. Note that using the latter option requires specifying the applicable frequency (units: Hz), and is thus only appropriate for narrow-band simulations.
+A simple, non-dispersive optical medium can be described by constant relative permittivity :math:`\varepsilon_r` and conductivity :math:`\sigma` (units: S/um). Alternatively, it can also be defined using the real (:math:`n`) and imaginary (:math:`k`) components of the refractive index, but note that this is exact only at a single specified frequency (units: Hz). Thus the latter option is only appropriate for narrow-band simulations.
 
 .. code-block:: python
 
@@ -47,12 +49,16 @@ A simple, non-dispersive optical medium can be described by constant relative pe
    # A lossy medium with constant permittivity and conductivity
    my_lossy_medium = Medium(permittivity=4.0, conductivity=1.0)
 
-   # Alternatively, use refractive index n and k instead
-   my_medium_nk = Medium.from_nk(n=1.5, k=1e-3, freq=1e12)
+   # Alternatively, use refractive index n and k at a specified frequency
+   my_medium_nk = Medium.from_nk(n=1.5, k=1e-3, freq=150e12)
+
+.. note::
+   
+   To specify a constant :math:`n` and :math:`k` over a wide frequency range, it is required to use a dispersive model. Please see the section on `dispersive`_ mediums.
 
 .. note::
 
-   To specify a lossy dielectric using a constant loss tangent, it is required to use a dispersive model. Please refer to the section on `dispersive`_ medium. 
+   To specify a lossy dielectric using a constant loss tangent model, it is required to use a dispersive model. Please see the section on `dispersive`_ mediums. 
 
 ~~~~
 
@@ -77,7 +83,7 @@ There are many different models that can be used to describe dispersive mediums.
 
    tidy3d.plugins.dispersion.FastDispersionFitter
 
-Alternatively, the ``FastDispersionFitter`` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL.
+Alternatively, the ``FastDispersionFitter`` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL from the materials database `refractiveindex.info <https://refractiveindex.info>`_.
 
 .. code-block:: python
 
@@ -136,24 +142,28 @@ Anisotropic
    tidy3d.FullyAnisotropicMedium
    tidy3d.Medium2D
 
-An anisotropic medium has different optical properties depending on the direction of light propagation. Its relative permittivity is thus specified in the form of a 3x3 tensor. For a non-dispersive anistropic material, use the ``FullyAnisotropicMedium`` class:
+An anisotropic medium has different optical properties depending on the direction of light propagation. Its relative permittivity is thus specified in the form of a 3x3 tensor. For diagonally anisotropic mediums, use ``AnisotropicMedium``:
 
 .. code-block:: python
 
-   perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]
-   cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
-   my_anisotropic_medium = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
-
-For a dispersive anisotropic medium, use the ``AnisotropicMedium`` instead:
-
-.. code-block:: python
-
+   # specify mediums for the xx, yy, zz diagonal components 
    medium_xx = Medium(permittivity=4.0)
    medium_yy = Medium(permittivity=4.1)
    medium_zz = Medium(permittivity=3.9)
    my_anisotropic_medium = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
 
-Note that ``xx``, ``yy``, and ``zz`` can accept any medium, including dispersive and metallic medium definitions. Currently, only diagonal anisotropy is supported. The ``Medium2D`` class is the 2D counterpart to ``AnisotropicMedium``.
+Note that ``xx``, ``yy``, and ``zz`` can support dispersive mediums as well. To specify all 9 components of the tensor, use ``FullyAnistropicMedium``:
+
+.. code-block:: python
+
+   # specify the full 3x3 tensor
+   perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]
+   cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
+   my_anisotropic_medium = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
+
+Currently, ``FullyAnisotropicMedium`` only supports non-dispersive mediums.
+
+The ``Medium2D`` class is used to simulate 2D materials without an out-of-plane response.
 
 .. seealso::
 
@@ -190,7 +200,7 @@ At lower frequencies, the EM field typically does not penetrate very far into th
    # lossy metal
    my_lossy_metal = LossyMetalMedium(conductivity=58, freq_range=(1e9, 10e9))
 
-The :class:`tidy3d.LossyMetalMedium` class can also accept surface roughness specification using the Hammerstad or Huray models. Please refer to its documentation page for details.
+The ``LossyMetalMedium`` class implements the surface impedance boundary condition (SIBC). It can also accept surface roughness specifications using the Hammerstad or Huray models. Please refer to its documentation page for details.
 
 .. note::
    
