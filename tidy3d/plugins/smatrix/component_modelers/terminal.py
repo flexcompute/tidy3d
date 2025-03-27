@@ -113,7 +113,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         field_monitors = [
             mon
             for port in self.ports
-            for mon in port.to_field_monitors(
+            for mon in port.to_monitors(
                 self.freqs, snap_center=snap_centers.get(port.name), grid=sim_wo_source.grid
             )
         ]
@@ -149,15 +149,13 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         # Now, create simulations with wave port sources and mode solver monitors for computing port modes
         for wave_port in self._wave_ports:
-            mode_monitor = wave_port.to_mode_solver_monitor(freqs=self.freqs)
             # Source is placed just before the field monitor of the port
             mode_src_pos = wave_port.center[wave_port.injection_axis] + self._shift_value_signed(
                 wave_port
             )
             port_source = wave_port.to_source(self._source_time, snap_center=mode_src_pos)
 
-            new_mnts_for_wave = new_mnts + [mode_monitor]
-            update_dict = dict(monitors=new_mnts_for_wave, sources=[port_source])
+            update_dict = dict(sources=[port_source])
 
             task_name = self._task_name(port=wave_port)
             sim_dict[task_name] = sim_wo_source.copy(update=update_dict)

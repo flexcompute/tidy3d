@@ -75,7 +75,7 @@ class AbstractLumpedPort(AbstractTerminalPort):
     def to_current_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port current."""
 
-    def to_field_monitors(
+    def to_monitors(
         self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
     ) -> list[FieldMonitor]:
         """Field monitors to compute port voltage and current."""

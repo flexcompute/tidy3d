@@ -5,13 +5,13 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
+from ....components.base import cached_property, skip_if_fields_missing
 from ....components.data.data_array import FreqDataArray, FreqModeDataArray
-from ....components.data.monitor_data import ModeSolverData
+from ....components.data.monitor_data import ModeData
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
 from ....components.grid.grid import Grid
-from ....components.monitor import FieldMonitor, ModeSolverMonitor
+from ....components.monitor import ModeMonitor
 from ....components.simulation import Simulation
 from ....components.source.field import ModeSource, ModeSpec
 from ....components.source.time import GaussianPulse
@@ -62,15 +62,34 @@ class WavePort(AbstractTerminalPort, Box):
         description="Definition of current integral used to compute current and the characteristic impedance.",
     )
 
+    def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
+        """Calculates scaling coefficients to convert mode amplitudes
+        to the total port voltage.
+        """
+        mode_data = mode_data._isel(mode_index=[self.mode_index])
+        if self.voltage_integral is None:
+            current_coeffs = self.current_integral.compute_current(mode_data)
+            voltage_coeffs = 2 * np.abs(mode_data.flux) / np.conj(current_coeffs)
+        else:
+            voltage_coeffs = self.voltage_integral.compute_voltage(mode_data)
+        return voltage_coeffs.squeeze()
+
+    def _mode_current_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
+        """Calculates scaling coefficients to convert mode amplitudes
+        to the total port current.
+        """
+        mode_data = mode_data._isel(mode_index=[self.mode_index])
+        if self.current_integral is None:
+            voltage_coeffs = self.voltage_integral.compute_voltage(mode_data)
+            current_coeffs = (2 * np.abs(mode_data.flux) / voltage_coeffs).conj()
+        else:
+            current_coeffs = self.current_integral.compute_current(mode_data)
+        return current_coeffs.squeeze()
+
     @cached_property
     def injection_axis(self):
         """Injection axis of the port."""
         return self.size.index(0.0)
-
-    @cached_property
-    def _field_monitor_name(self) -> str:
-        """Return the name of the :class:`.FieldMonitor` associated with this port."""
-        return f"{self.name}_field"
 
     @cached_property
     def _mode_monitor_name(self) -> str:
@@ -92,35 +111,24 @@ class WavePort(AbstractTerminalPort, Box):
             name=self.name,
         )
 
-    def to_field_monitors(
+    def to_monitors(
         self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
-    ) -> list[FieldMonitor]:
-        """Field monitor to compute port voltage and current."""
+    ) -> list[ModeMonitor]:
+        """The wave port uses a :class:`.ModeMonitor` to compute the characteristic impedance
+        and the port voltages and currents."""
         center = list(self.center)
         if snap_center:
             center[self.injection_axis] = snap_center
-        field_mon = FieldMonitor(
-            center=center,
-            size=self.size,
-            freqs=freqs,
-            name=self._field_monitor_name,
-            colocate=False,
-        )
-        return [field_mon]
-
-    def to_mode_solver_monitor(self, freqs: FreqArray) -> ModeSolverMonitor:
-        """Mode solver monitor to compute modes that will be used to
-        compute characteristic impedances."""
-        mode_mon = ModeSolverMonitor(
+        mode_mon = ModeMonitor(
             center=self.center,
             size=self.size,
             freqs=freqs,
             name=self._mode_monitor_name,
             colocate=False,
             mode_spec=self.mode_spec,
-            direction=self.direction,
+            store_fields_direction=self.direction,
         )
-        return mode_mon
+        return [mode_mon]
 
     def to_mode_solver(self, simulation: Simulation, freqs: FreqArray) -> ModeSolver:
         """Helper to create a :class:`.ModeSolver` instance."""
@@ -136,16 +144,29 @@ class WavePort(AbstractTerminalPort, Box):
 
     def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute voltage across the port."""
-        field_monitor = sim_data[self._field_monitor_name]
-        return self.voltage_integral.compute_voltage(field_monitor)
+        mode_data = sim_data[self._mode_monitor_name]
+        voltage_coeffs = self._mode_voltage_coefficients(mode_data)
+        amps = mode_data.amps
+        fwd_amps = amps.sel(direction="+").squeeze()
+        bwd_amps = amps.sel(direction="-").squeeze()
+        return voltage_coeffs * (fwd_amps + bwd_amps)
 
     def compute_current(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute current flowing through the port."""
-        field_monitor = sim_data[self._field_monitor_name]
-        return self.current_integral.compute_current(field_monitor)
+        mode_data = sim_data[self._mode_monitor_name]
+        current_coeffs = self._mode_current_coefficients(mode_data)
+        amps = mode_data.amps
+        fwd_amps = amps.sel(direction="+").squeeze()
+        bwd_amps = amps.sel(direction="-").squeeze()
+        # In ModeData, fwd_amps and bwd_amps are not relative to
+        # the direction fields are stored
+        sign = 1.0
+        if self.direction == "-":
+            sign = -1.0
+        return sign * current_coeffs * (fwd_amps - bwd_amps)
 
     def compute_port_impedance(
-        self, sim_mode_data: Union[SimulationData, ModeSolverData]
+        self, sim_mode_data: Union[SimulationData, ModeData]
     ) -> FreqModeDataArray:
         """Helper to compute impedance of port. The port impedance is computed from the
         transmission line mode, which should be TEM or at least quasi-TEM."""
@@ -153,13 +174,13 @@ class WavePort(AbstractTerminalPort, Box):
             voltage_integral=self.voltage_integral, current_integral=self.current_integral
         )
         if isinstance(sim_mode_data, SimulationData):
-            mode_solver_data = sim_mode_data[self._mode_monitor_name]
+            mode_data = sim_mode_data[self._mode_monitor_name]
         else:
-            mode_solver_data = sim_mode_data
+            mode_data = sim_mode_data
 
         # Filter out unwanted modes to reduce impedance computation effort
-        mode_solver_data = mode_solver_data._isel(mode_index=[self.mode_index])
-        impedance_array = impedance_calc.compute_impedance(mode_solver_data)
+        mode_data = mode_data._isel(mode_index=[self.mode_index])
+        impedance_array = impedance_calc.compute_impedance(mode_data)
         return impedance_array
 
     @staticmethod
@@ -185,10 +206,11 @@ class WavePort(AbstractTerminalPort, Box):
         return val
 
     @pd.validator("current_integral", always=True)
+    @skip_if_fields_missing(["voltage_integral"])
     def _check_voltage_or_current(cls, val, values):
         """Raise validation error if both ``voltage_integral`` and ``current_integral``
         were not provided."""
-        if not values.get("voltage_integral") and not val:
+        if values.get("voltage_integral") is None and val is None:
             raise ValidationError(
                 "At least one of 'voltage_integral' or 'current_integral' must be provided."
             )

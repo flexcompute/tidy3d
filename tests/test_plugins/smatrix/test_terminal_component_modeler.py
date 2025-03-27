@@ -253,7 +253,7 @@ def test_converting_port_to_simulation_objects(snap_center):
     port = LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=2, impedance=50, name="Port1")
     freqs = np.linspace(1e9, 10e9, 11)
     source_time = td.GaussianPulse(freq0=5e9, fwidth=9e9)
-    _ = port.to_field_monitors(freqs=freqs, snap_center=snap_center)
+    _ = port.to_monitors(freqs=freqs, snap_center=snap_center)
     _ = port.to_source(source_time=source_time, snap_center=snap_center)
 
 
@@ -413,17 +413,38 @@ def test_make_coaxial_component_modeler_with_wave_ports(tmp_path):
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     _ = make_coaxial_component_modeler(
-        path_dir=str(tmp_path), port_types=(WavePort, WavePort), grid_spec=grid_spec
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+        grid_spec=grid_spec,
     )
 
 
-def test_run_coaxial_component_modeler_with_wave_ports(monkeypatch, tmp_path):
+@pytest.mark.parametrize("voltage_enabled", [False, True])
+@pytest.mark.parametrize("current_enabled", [False, True])
+def test_run_coaxial_component_modeler_with_wave_ports(
+    monkeypatch, tmp_path, voltage_enabled, current_enabled
+):
     """Checks that the terminal component modeler runs with wave ports."""
     z_grid = td.UniformGrid(dl=1 * 1e3)
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    if not (voltage_enabled or current_enabled):
+        with pytest.raises(pd.ValidationError):
+            modeler = make_coaxial_component_modeler(
+                path_dir=str(tmp_path),
+                port_types=(WavePort, WavePort),
+                grid_spec=grid_spec,
+                use_voltage=voltage_enabled,
+                use_current=current_enabled,
+            )
+        return
+
     modeler = make_coaxial_component_modeler(
-        path_dir=str(tmp_path), port_types=(WavePort, WavePort), grid_spec=grid_spec
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+        grid_spec=grid_spec,
+        use_voltage=voltage_enabled,
+        use_current=current_enabled,
     )
     s_matrix = run_component_modeler(monkeypatch, modeler)
 

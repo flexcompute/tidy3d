@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `eps_component` argument in `td.Simulation.plot_eps()` to optionally select a specific permittivity component to plot (eg. `"xx"`).
 - Monitor `AuxFieldTimeMonitor` for aux fields like the free carrier density in `TwoPhotonAbsorption`.
 - Broadband handling (`num_freqs` argument) to the TFSF source.
+- Ability to define a `WavePort` using only a voltage or current path integral, with the missing quantity inferred via power conservation.
 
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
