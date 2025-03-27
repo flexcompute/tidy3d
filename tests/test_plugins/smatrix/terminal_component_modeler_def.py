@@ -251,6 +251,8 @@ def make_coaxial_component_modeler(
         CoaxialLumpedPort,
         CoaxialLumpedPort,
     ),
+    use_current: bool = True,
+    use_voltage: bool = True,
     **kwargs,
 ):
     if not length:
@@ -279,6 +281,25 @@ def make_coaxial_component_modeler(
             voltage_center[0] += mean_radius
             voltage_size = [Router - Rinner, 0, 0]
 
+            voltage_integral = None
+            if use_voltage:
+                voltage_integral = microwave.VoltageIntegralAxisAligned(
+                    center=voltage_center,
+                    size=voltage_size,
+                    extrapolate_to_endpoints=True,
+                    snap_path_to_grid=True,
+                    sign="+",
+                )
+            current_integral = None
+            if use_current:
+                current_integral = microwave.CustomCurrentIntegral2D.from_circular_path(
+                    center=center,
+                    radius=mean_radius,
+                    num_points=41,
+                    normal_axis=2,
+                    clockwise=direction != "+",
+                )
+
             port = WavePort(
                 center=center,
                 size=[2 * Router, 2 * Router, 0],
@@ -286,20 +307,8 @@ def make_coaxial_component_modeler(
                 name=name,
                 mode_spec=td.ModeSpec(num_modes=1),
                 mode_index=0,
-                voltage_integral=microwave.VoltageIntegralAxisAligned(
-                    center=voltage_center,
-                    size=voltage_size,
-                    extrapolate_to_endpoints=True,
-                    snap_path_to_grid=True,
-                    sign="+",
-                ),
-                current_integral=microwave.CustomCurrentIntegral2D.from_circular_path(
-                    center=center,
-                    radius=mean_radius,
-                    num_points=41,
-                    normal_axis=2,
-                    clockwise=direction != "+",
-                ),
+                voltage_integral=voltage_integral,
+                current_integral=current_integral,
             )
         return port
 

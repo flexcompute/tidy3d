@@ -72,15 +72,15 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         if not self.voltage_integral:
             flux = em_field.flux
             if isinstance(em_field, FieldTimeData):
-                voltage = flux / current
+                voltage = flux.abs / current
             else:
-                voltage = 2 * flux / np.conj(current)
+                voltage = 2 * flux.abs / np.conj(current)
         if not self.current_integral:
             flux = em_field.flux
             if isinstance(em_field, FieldTimeData):
-                current = flux / voltage
+                current = flux.abs / voltage
             else:
-                current = np.conj(2 * flux / voltage)
+                current = np.conj(2 * flux.abs / voltage)
 
         impedance = voltage / current
         impedance = ImpedanceCalculator._set_data_array_attributes(impedance)
