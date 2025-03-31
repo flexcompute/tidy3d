@@ -80,7 +80,10 @@ There are many different models that can be used to describe dispersive mediums.
 .. autosummary::
    :toctree: _autosummary/
    :template: module.rst
-
+   
+   tidy3d.SurfaceImpedanceFitterParam
+   tidy3d.HammerstadSurfaceRoughness
+   tidy3d.HuraySurfaceRoughness
    tidy3d.plugins.dispersion.FastDispersionFitter
 
 Alternatively, the ``FastDispersionFitter`` plugin can be used to generate a dispersive medium from external data. The data can be provided as a local text file or a web URL from the materials database `refractiveindex.info <https://refractiveindex.info>`_.
