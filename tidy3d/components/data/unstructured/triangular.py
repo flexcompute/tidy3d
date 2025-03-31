@@ -657,3 +657,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_ylabel(ax_labels[1])
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
+
+    def get_cell_volumes(self):
+        """Get areas associated to each cell of the grid."""
+        v0 = self.points[self.cells.sel(vertex_index=0)]
+        e01 = self.points[self.cells.sel(vertex_index=1)] - v0
+        e02 = self.points[self.cells.sel(vertex_index=2)] - v0
+
+        return 0.5 * np.abs(np.cross(e01, e02))

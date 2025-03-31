@@ -240,6 +240,8 @@ from .components.medium import (
     Debye,
     Drude,
     FullyAnisotropicMedium,
+    HammerstadSurfaceRoughness,
+    HuraySurfaceRoughness,
     KerrNonlinearity,
     Lorentz,
     LossyMetalMedium,
@@ -331,6 +333,7 @@ from .components.structure import MeshOverrideStructure, Structure
 
 # subpixel
 from .components.subpixel_spec import (
+    ContourPathAveraging,
     HeuristicPECStaircasing,
     PECConformal,
     PolarizedAveraging,
@@ -424,6 +427,8 @@ __all__ = [
     "CustomAnisotropicMedium",
     "LossyMetalMedium",
     "SurfaceImpedanceFitterParam",
+    "HammerstadSurfaceRoughness",
+    "HuraySurfaceRoughness",
     "RotationAroundAxis",
     "PerturbationMedium",
     "PerturbationPoleResidue",
@@ -623,6 +628,7 @@ __all__ = [
     "Staircasing",
     "VolumetricAveraging",
     "PolarizedAveraging",
+    "ContourPathAveraging",
     "HeuristicPECStaircasing",
     "PECConformal",
     "SurfaceImpedance",

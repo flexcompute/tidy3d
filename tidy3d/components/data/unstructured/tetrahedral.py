@@ -347,3 +347,12 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             return self_after_non_spatial_sel.interp(x=x, y=y, z=z)
 
         return self_after_non_spatial_sel
+
+    def get_cell_volumes(self):
+        """Get the volumes associated to each cell in the grid"""
+        v0 = self.points[self.cells.sel(vertex_index=0)]
+        e01 = self.points[self.cells.sel(vertex_index=1)] - v0
+        e02 = self.points[self.cells.sel(vertex_index=2)] - v0
+        e03 = self.points[self.cells.sel(vertex_index=3)] - v0
+
+        return np.abs(np.sum(np.cross(e01, e02) * e03, axis=1)) / 6

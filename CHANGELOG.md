@@ -8,8 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `fill` and `fill_structures` argument in `td.Simulation.plot_structures()` and `td.Simulation.plot()` respectively to disable fill and plot outlines of structures only.
+- New subpixel averaging option `ContourPathAveraging` applied to dielectric material boundaries.
+
+### Fixed
+- Compatibility with `xarray>=2025.03`.
+
+## [2.8.1] - 2025-03-20
+
+### Added
 - New `LobeMeasurer` tool in the `microwave` plugin that locates lobes in antenna patterns and calculates lobe measures like half-power beamwidth and sidelobe level.
 - Validation step that raises a `ValueError` when no frequency-domain monitors are present, preventing invalid adjoint runs.
+- Metal surface roughness models: modified Hammerstad, Huray Snowball, and Cannonball-Huray.
+- Support for Fermi-Dirac statistics in Charge solver. This option can be activated when defining the analysis type `IsothermalSteadyChargeDCAnalysis` with `fermi_dirac=True`. This option will provide more accurate results in simulations where very high doping may lead the pseudo-Fermi energy levels to approach either the conduction or the valence energy levels.
 
 ### Changed
 
@@ -20,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Querying tasks was sometimes erroring unexpectedly.
 - Fixed automatic creation of missing output directories.
 - Bug in handling of tuple-type gradients that could lead to empty tuples or failing gradient calculations when differentiating w.r.t. (for instance) `td.Box.center`.
+- Bug causing incorrect field projection results when multiple projection monitors with numerous sampling points were used.
+- Improved accuracy for normal E-field components in mode solver at microwave frequencies.
+- Deleting tasks using `web.delete(task_id)` would error when deleting tasks in the tidy3d root folder and others would not get completely removed in the Web GUI.
 
 ## [2.8.0] - 2025-03-04
 
@@ -1540,7 +1554,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...develop
+[2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.7.9...v2.8.0
 [2.7.9]: https://github.com/flexcompute/tidy3d/compare/v2.7.8...v2.7.9
 [2.7.8]: https://github.com/flexcompute/tidy3d/compare/v2.7.7...v2.7.8

@@ -206,7 +206,7 @@ Tidy3D also offers plugins that require additional dependencies:
 
 - ``design``: Design space exploration and optimization.
 - ``pytorch``: A PyTorch wrapper for objective functions defined using autograd.
-- ``adjoint``: Adjoint optimization using JAX (deprecated in favor of native autorad support in Tidy3D)
+- ``adjoint``: Adjoint optimization using JAX (deprecated in favor of native autograd support in Tidy3D)
 
 For example, to install the design plugin dependencies:
 

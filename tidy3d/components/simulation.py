@@ -385,12 +385,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
         ----------
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
         x : float = None
             position of plane in x direction, only one of x, y, z must be specified to define plane.
         y : float = None
@@ -426,7 +429,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
 
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.scene.plot(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            hlim=hlim,
+            vlim=vlim,
+            fill_structures=fill_structures,
+        )
+
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_lumped_elements(
@@ -438,6 +450,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+
         return ax
 
     @equal_aspect
@@ -3270,6 +3283,12 @@ class Simulation(AbstractYeeGridSimulation):
                 if non_zero_dims == 1:
                     raise SetupError(
                         f"Monitor '{monitor.name}' is not supported in 1D simulations."
+                    )
+
+                if not monitor.far_field_approx:
+                    raise SetupError(
+                        f"Exact far-field projection for 2D simulations is not yet available for Monitor '{monitor.name}'. "
+                        "Currently, only 'far_field_approx = True' is supported."
                     )
 
                 if isinstance(monitor, FieldProjectionAngleMonitor):
