@@ -5,11 +5,11 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
 import trimesh
 import xarray as xr
 from autograd.core import VJPNode
 from autograd.tracer import new_box
+from pydantic import Field
 
 import tidy3d as td
 from tidy3d import ModeIndexDataArray
@@ -28,7 +28,7 @@ SIM_MONITORS = td.Simulation(
     size=(10.0, 10.0, 10.0),
     grid_spec=td.GridSpec(wavelength=1.0),
     run_time=1e-13,
-    monitors=[
+    monitors=(
         td.FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=FREQS, name="field_freq"),
         td.FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10, name="field_time"),
         td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=FREQS, name="flux_freq"),
@@ -40,7 +40,7 @@ SIM_MONITORS = td.Simulation(
             mode_spec=td.ModeSpec(num_modes=3),
             name="mode",
         ),
-    ],
+    ),
     boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
 )
 
@@ -405,7 +405,7 @@ tracer_arr = new_box(np.array([[[1.0]]]), 0, start_node)
 SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),
     run_time=1e-12,
-    structures=[
+    structures=(
         td.Structure(
             geometry=td.Cylinder(length=1, center=(-1 * tracer, 0, 0), radius=tracer, axis=2),
             medium=td.Medium(permittivity=1 + tracer, name="dieletric"),
@@ -481,7 +481,7 @@ SIM_FULL = td.Simulation(
             name="fully_anisotropic_box",
         ),
         td.Structure(
-            geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),
+            geometry=td.GeometryGroup(geometries=(td.Box(size=(1, 1, 1), center=(-1, 0, 0)),)),
             medium=td.PEC,
             name="pec_group",
         ),
@@ -496,7 +496,7 @@ SIM_FULL = td.Simulation(
         ),
         td.Structure(
             geometry=td.PolySlab(
-                vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
+                vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=(-1, 1)
             ),
             medium=td.PoleResidue(
                 eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)
@@ -616,7 +616,7 @@ SIM_FULL = td.Simulation(
         ),
         td.Structure(
             geometry=td.PolySlab(
-                vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
+                vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=(-1, 1)
             ),
             medium=td.PoleResidue(
                 eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)
@@ -675,8 +675,8 @@ SIM_FULL = td.Simulation(
                 name="SiO2",
             ),
         ),
-    ],
-    sources=[
+    ),
+    sources=(
         td.UniformCurrentSource(
             size=(0, 0, 0),
             center=(0, 0.5, 0),
@@ -792,10 +792,10 @@ SIM_FULL = td.Simulation(
                 freq0=2e14, fwidth=4e13, values=np.linspace(0, 10, 1000), dt=1e-12 / 100
             ),
         ),
-    ],
+    ),
     monitors=(
         td.FieldMonitor(
-            size=(0, 0, 0), center=(0, 0, 0), fields=["Ex"], freqs=[1.5e14, 2e14], name="field"
+            size=(0, 0, 0), center=(0, 0, 0), fields=("Ex",), freqs=[1.5e14, 2e14], name="field"
         ),
         td.FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
         td.AuxFieldTimeMonitor(
@@ -867,7 +867,7 @@ SIM_FULL = td.Simulation(
             freqs=[1e14, 2e14],
         ),
     ),
-    lumped_elements=[
+    lumped_elements=(
         td.LumpedResistor(
             center=(2, 2, 0), size=(0.2, 0.2, 0), name="Resistor", resistance=42, voltage_axis=0
         ),
@@ -886,7 +886,7 @@ SIM_FULL = td.Simulation(
             network=td.RLCNetwork(inductance=1e-9, capacitance=10e-12, network_topology="parallel"),
             voltage_axis=0,
         ),
-    ],
+    ),
     symmetry=(0, 0, 0),
     boundary_spec=td.BoundarySpec(
         x=td.Boundary(plus=td.PML(num_layers=20), minus=td.Absorber(num_layers=100)),
@@ -900,12 +900,12 @@ SIM_FULL = td.Simulation(
         grid_x=td.AutoGrid(),
         grid_y=td.CustomGrid(dl=100 * [0.04]),
         grid_z=td.UniformGrid(dl=0.05),
-        override_structures=[
+        override_structures=(
             td.Structure(
                 geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
                 medium=td.Medium(permittivity=2.0),
-            )
-        ],
+            ),
+        ),
     ),
 )
 
@@ -1223,7 +1223,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.FieldProjectionKSpaceMonitor: make_field_projection_kspace_data,
     }
 
-    data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
+    data = tuple(MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors)
     sim_data = td.SimulationData(simulation=simulation, data=data)
 
     if path is not None:
@@ -1235,14 +1235,14 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 class BatchDataTest(Tidy3dBaseModel):
     """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
 
-    task_paths: dict[str, str] = pd.Field(
-        ...,
+    task_paths: dict[str, str] = Field(
         title="Data Paths",
         description="Mapping of task_name to path to corresponding data for each task in batch.",
     )
 
-    task_ids: dict[str, str] = pd.Field(
-        ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
+    task_ids: dict[str, str] = Field(
+        title="Task IDs",
+        description="Mapping of task_name to task_id for each task in batch.",
     )
 
     sim_data: dict[str, td.SimulationData]

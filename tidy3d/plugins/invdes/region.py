@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import abc
-import typing
 import warnings
+from typing import Literal, Optional, Self, Union
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pd
 from autograd import elementwise_grad, grad
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 import tidy3d as td
 from tidy3d.components.types import TYPE_TAG_STR, Coordinate, Size
@@ -25,28 +25,24 @@ from .transformation import TransformationType
 class DesignRegion(InvdesBaseModel, abc.ABC):
     """Base class for design regions in the ``invdes`` plugin."""
 
-    size: Size = pd.Field(
-        ...,
+    size: Size = Field(
         title="Size",
         description="Size in x, y, and z directions.",
         units=td.constants.MICROMETER,
     )
 
-    center: Coordinate = pd.Field(
-        ...,
+    center: Coordinate = Field(
         title="Center",
         description="Center of object in x, y, and z.",
         units=td.constants.MICROMETER,
     )
 
-    eps_bounds: tuple[float, float] = pd.Field(
-        ...,
-        ge=1.0,
+    eps_bounds: tuple[float, float] = Field(
         title="Relative Permittivity Bounds",
         description="Minimum and maximum relative permittivity expressed to the design region.",
     )
 
-    transformations: tuple[TransformationType, ...] = pd.Field(
+    transformations: tuple[TransformationType, ...] = Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -56,7 +52,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
 
-    penalties: tuple[PenaltyType, ...] = pd.Field(
+    penalties: tuple[PenaltyType, ...] = Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -64,25 +60,27 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         "inside of the penalties directly through the ``.weight`` field.",
     )
 
-    initialization_spec: InitializationSpecType = pd.Field(
-        UniformInitializationSpec(value=0.5),
+    initialization_spec: InitializationSpecType = Field(
+        default_factory=lambda: UniformInitializationSpec(value=0.5),
         title="Initialization Specification",
         description="Specification of how to initialize the parameters in the design region.",
         discriminator=TYPE_TAG_STR,
     )
 
-    def _post_init_validators(self):
-        """Automatically call any `_validate_XXX` method."""
-        for attr_name in dir(self):
-            if attr_name.startswith("_validate") and callable(getattr(self, attr_name)):
-                getattr(self, attr_name)()
+    @field_validator("eps_bounds")
+    def _validate_ge_one(v):
+        if any(vi < 1 for vi in v):
+            raise ValueError("Each value in 'eps_bounds' must be '>=1.0'.")
+        return v
 
-    def _validate_eps_bounds(self):
+    @model_validator(mode="after")
+    def _validate_eps_bounds(self) -> Self:
         if self.eps_bounds[1] < self.eps_bounds[0]:
             raise ValidationError(
                 f"Maximum relative permittivity ({self.eps_bounds[1]}) must be "
                 f"greater than minimum relative permittivity ({self.eps_bounds[0]})."
             )
+        return self
 
     @property
     def geometry(self) -> td.Box:
@@ -132,8 +130,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 class TopologyDesignRegion(DesignRegion):
     """Design region as a pixellated permittivity grid."""
 
-    pixel_size: pd.PositiveFloat = pd.Field(
-        ...,
+    pixel_size: PositiveFloat = Field(
         title="Pixel Size",
         description="Pixel size of the design region in x, y, z. For now, we only support the same "
         "pixel size in all 3 dimensions. If ``TopologyDesignRegion.override_structure_dl`` is left "
@@ -143,14 +140,14 @@ class TopologyDesignRegion(DesignRegion):
         "a value on the same order as the grid size.",
     )
 
-    uniform: tuple[bool, bool, bool] = pd.Field(
+    uniform: tuple[bool, bool, bool] = Field(
         (False, False, True),
         title="Uniform",
         description="Axes along which the design should be uniform. By default, the structure "
         "is assumed to be uniform, i.e. invariant, in the z direction.",
     )
 
-    transformations: tuple[TransformationType, ...] = pd.Field(
+    transformations: tuple[TransformationType, ...] = Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -159,7 +156,7 @@ class TopologyDesignRegion(DesignRegion):
         "permittivity and 1 corresponds to the maximum relative permittivity. "
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
-    penalties: tuple[PenaltyType, ...] = pd.Field(
+    penalties: tuple[PenaltyType, ...] = Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -167,7 +164,7 @@ class TopologyDesignRegion(DesignRegion):
         "inside of the penalties directly through the ``.weight`` field.",
     )
 
-    override_structure_dl: typing.Union[pd.PositiveFloat, typing.Literal[False]] = pd.Field(
+    override_structure_dl: Optional[Union[PositiveFloat, Literal[False]]] = Field(
         None,
         title="Design Region Override Structure",
         description="Defines grid size when adding an ``override_structure`` to the "
@@ -366,4 +363,4 @@ class TopologyDesignRegion(DesignRegion):
         return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
 
 
-DesignRegionType = typing.Union[TopologyDesignRegion]
+DesignRegionType = Union[TopologyDesignRegion]

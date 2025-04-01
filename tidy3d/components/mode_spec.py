@@ -3,16 +3,24 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Literal, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import (
+    Field,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    field_validator,
+    model_validator,
+)
 
+from tidy3d.compat import Self
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
-from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .base import Tidy3dBaseModel
 from .types import Axis2D, TrackFreq
 
 GROUP_INDEX_STEP = 0.005
@@ -60,21 +68,25 @@ class ModeSpec(Tidy3dBaseModel):
 
     """
 
-    num_modes: pd.PositiveInt = pd.Field(
-        1, title="Number of modes", description="Number of modes returned by mode solver."
+    num_modes: PositiveInt = Field(
+        1,
+        title="Number of modes",
+        description="Number of modes returned by mode solver.",
     )
 
-    target_neff: pd.PositiveFloat = pd.Field(
-        None, title="Target effective index", description="Guess for effective index of the mode."
+    target_neff: Optional[PositiveFloat] = Field(
+        None,
+        title="Target effective index",
+        description="Guess for effective index of the mode.",
     )
 
-    num_pml: tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
+    num_pml: tuple[NonNegativeInt, NonNegativeInt] = Field(
         (0, 0),
         title="Number of PML layers",
         description="Number of standard pml layers to add in the two tangential axes.",
     )
 
-    filter_pol: Literal["te", "tm"] = pd.Field(
+    filter_pol: Optional[Literal["te", "tm"]] = Field(
         None,
         title="Polarization filtering",
         description="The solver always computes the ``num_modes`` modes closest to the given "
@@ -90,14 +102,14 @@ class ModeSpec(Tidy3dBaseModel):
         "``tm``-fraction uses the E field component parallel to the second plane axis.",
     )
 
-    angle_theta: float = pd.Field(
+    angle_theta: float = Field(
         0.0,
         title="Polar Angle",
         description="Polar angle of the propagation axis from the injection axis.",
         units=RADIAN,
     )
 
-    angle_phi: float = pd.Field(
+    angle_phi: float = Field(
         0.0,
         title="Azimuth Angle",
         description="Azimuth angle of the propagation axis in the plane orthogonal to the "
@@ -105,7 +117,7 @@ class ModeSpec(Tidy3dBaseModel):
         units=RADIAN,
     )
 
-    precision: Literal["auto", "single", "double"] = pd.Field(
+    precision: Literal["auto", "single", "double"] = Field(
         "auto",
         title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
@@ -114,7 +126,7 @@ class ModeSpec(Tidy3dBaseModel):
         "conductor, single precision otherwise.",
     )
 
-    bend_radius: float = pd.Field(
+    bend_radius: Optional[float] = Field(
         None,
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
@@ -123,7 +135,7 @@ class ModeSpec(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    bend_axis: Axis2D = pd.Field(
+    bend_axis: Optional[Axis2D] = Field(
         None,
         title="Bend axis",
         description="Index into the two tangential axes defining the normal to the "
@@ -132,20 +144,20 @@ class ModeSpec(Tidy3dBaseModel):
         "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
     )
 
-    angle_rotation: bool = pd.Field(
+    angle_rotation: bool = Field(
         False,
-        title="Use fields rotation when angle_theta is not zero",
-        description="Defines how modes are computed when angle_theta is not zero. "
-        "If 'False', a coordinate transformation is applied through the permittivity and permeability tensors."
-        "If 'True', the structures in the simulation are first rotated to compute a mode solution at "
+        title="Use fields rotation when ``angle_theta`` is not zero",
+        description="Defines how modes are computed when ``angle_theta`` is not zero. "
+        "If ``False``, a coordinate transformation is applied through the permittivity and permeability tensors."
+        "If ``True``, the structures in the simulation are first rotated to compute a mode solution at "
         "a reference plane normal to the structure's azimuthal direction. Then, the fields are rotated "
-        "to align with the mode plane, using the 'n_eff' calculated at the reference plane. The second option can "
+        "to align with the mode plane, using the ``n_eff`` calculated at the reference plane. The second option can "
         "produce more accurate results, but more care must be taken, for example, in ensuring that the "
         "original mode plane intersects the correct geometries in the simulation with rotated structures. "
-        "Note: currently only supported when 'angle_phi' is a multiple of 'np.pi'.",
+        "Note: currently only supported when ``angle_phi`` is a multiple of ``np.pi``.",
     )
 
-    track_freq: Union[TrackFreq, None] = pd.Field(
+    track_freq: Union[TrackFreq, None] = Field(
         "central",
         title="Mode Tracking Frequency",
         description="Parameter that turns on/off mode tracking based on their similarity. "
@@ -154,7 +166,7 @@ class ModeSpec(Tidy3dBaseModel):
         "If ``None`` no mode tracking is performed.",
     )
 
-    group_index_step: Union[pd.PositiveFloat, bool] = pd.Field(
+    group_index_step: Union[PositiveFloat, bool] = Field(
         False,
         title="Frequency step for group index computation",
         description="Control the computation of the group index alongside the effective index. If "
@@ -163,75 +175,74 @@ class ModeSpec(Tidy3dBaseModel):
         f"default of {GROUP_INDEX_STEP} is used.",
     )
 
-    @pd.validator("bend_axis", always=True)
-    @skip_if_fields_missing(["bend_radius"])
-    def bend_axis_given(cls, val, values):
-        """Check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
-        if val is None and values.get("bend_radius") is not None:
-            raise SetupError("'bend_axis' must also be defined if 'bend_radius' is defined.")
+    @field_validator("group_index_step", mode="before")
+    def _validate_group_index_step_default(val):
+        """If ``True``, replace with default fractional step."""
+        if val is True:
+            return GROUP_INDEX_STEP
         return val
 
-    @pd.validator("bend_radius", always=True)
-    def bend_radius_not_zero(cls, val, values):
-        """Check that ``bend_raidus`` magnitude is not close to zero.`"""
-        if val is not None and isclose(val, 0):
+    @field_validator("group_index_step")
+    def _validate_group_index_step_size(val):
+        """Ensure group-index step is < 1."""
+        if val is not False and val >= 1:
+            raise ValidationError(
+                "Parameter 'group_index_step' must be a fractional value less than 1."
+            )
+        return val
+
+    @field_validator("bend_radius")
+    def _validate_bend_radius_not_zero(v):
+        """`bend_radius` magnitude must be non-zero."""
+        if v is not None and isclose(v, 0):
             raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
-        return val
+        return v
 
-    @pd.validator("angle_theta", allow_reuse=True, always=True)
-    def glancing_incidence(cls, val):
-        """Warn if close to glancing incidence."""
-        if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
+    @field_validator("angle_theta")
+    def _validate_angle_theta_glancing(val):
+        """Disallow incidence too close to glancing."""
+        if abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             raise SetupError(
                 "Mode propagation axis too close to glancing angle for accurate injection. "
                 "For best results, switch the injection axis."
             )
         return val
 
-    # Must be executed before type validation by pydantic, otherwise True is converted to 1.0
-    @pd.validator("group_index_step", pre=True)
-    def assign_default_on_true(cls, val):
-        """Assign the default fractional frequency step value if not provided."""
-        if val is True:
-            return GROUP_INDEX_STEP
-        return val
+    @model_validator(mode="after")
+    def _check_bend_axis_given(self) -> Self:
+        """``bend_axis`` must be provided when ``bend_radius`` is set."""
+        if self.bend_radius is not None and self.bend_axis is None:
+            raise SetupError("'bend_axis' must also be defined if 'bend_radius' is defined.")
+        return self
 
-    @pd.validator("group_index_step")
-    def check_group_step_size(cls, val):
-        """Ensure a reasonable group index step is used."""
-        if val >= 1:
+    @model_validator(mode="after")
+    def _check_angle_rotation_with_phi(self) -> Self:
+        """``angle_rotation`` requires ``angle_phi`` % (π/2) == 0."""
+        if self.angle_rotation and not isclose(self.angle_phi % (np.pi / 2), 0):
             raise ValidationError(
-                "Parameter 'group_index_step' is a fractional value. It must be less than 1."
+                "'angle_phi' must be a multiple of 'π/2' when 'angle_rotation' is enabled."
             )
-        return val
+        return self
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_precision(cls, values):
-        """Verify critical ModeSpec settings for group index calculation."""
-        if values["group_index_step"] > 0:
-            if values["track_freq"] is None:
-                log.warning(
-                    "Group index calculation without mode tracking can lead to incorrect results "
-                    "around mode crossings. Consider setting 'track_freq' to 'central'."
-                )
+    @model_validator(mode="after")
+    def _check_precision(self) -> Self:
+        """Verify critical ``ModeSpec`` settings for group index calculation."""
+        if self.group_index_step is False:
+            return self
 
-            # multiply by 5 to be safe
-            if values["group_index_step"] < 5 * fp_eps and values["precision"] != "double":
-                log.warning(
-                    "Group index step is too small! "
-                    "The results might be fully corrupted by numerical errors. "
-                    "For more accurate results, please consider using 'double' precision, "
-                    "or increasing the value of 'group_index_step'."
-                )
-
-        return values
-
-    @pd.validator("angle_rotation")
-    def angle_rotation_with_phi(cls, val, values):
-        """Currently ``angle_rotation`` is only supported with ``angle_phi % (np.pi / 2) == 0``."""
-        if val and not isclose(values["angle_phi"] % (np.pi / 2), 0):
-            raise ValidationError(
-                "Parameter 'angle_phi' must be a multiple of 'np.pi / 2' when 'angle_rotation' is "
-                "enabled."
+        if self.track_freq is None:
+            log.warning(
+                "Group index calculation without mode tracking can lead to incorrect results "
+                "around mode crossings. Consider setting 'track_freq' to 'central'."
             )
-        return val
+
+        # multiply by 5 to be safe
+        if self.group_index_step < 5 * fp_eps and self.precision != "double":
+            log.warning(
+                "Group index step is too small! "
+                "The results might be fully corrupted by numerical errors. "
+                "For more accurate results, please consider using 'double' precision, "
+                "or increasing the value of 'group_index_step'."
+            )
+
+        return self

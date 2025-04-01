@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Union
 
 import numpy as np
+from pydantic_core import core_schema
 
 from tidy3d.components.type_util import _add_schema
 
@@ -31,14 +32,16 @@ class NumpyArrayType(np.ndarray):
     """Subclass of ``np.ndarray`` with a schema defined for pydantic."""
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
-        """Sets the schema of np.ndarray object."""
+    def __get_pydantic_core_schema__(cls, source, handler):
+        return core_schema.no_info_plain_validator_function(np.asarray)
 
-        schema = {
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        return {
             "title": "npdarray",
             "type": "numpy.ndarray",
+            "items": {},
         }
-        field_schema.update(schema)
 
 
 _add_schema(JaxArrayType, title="JaxArray", field_type_str="jax.numpy.ndarray")

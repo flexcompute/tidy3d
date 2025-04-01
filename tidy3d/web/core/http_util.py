@@ -110,7 +110,7 @@ def get_headers() -> dict[str, str]:
 
     Returns
     -------
-    Dict[str, str]
+    dict[str, str]
         dictionary with "Authorization" and "Application" keys.
     """
     return {

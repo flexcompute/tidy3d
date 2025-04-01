@@ -10,8 +10,8 @@ from typing import Callable, Optional, Union
 
 import h5py
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
+from pydantic import Field
 
 from tidy3d.components.autograd.utils import split_list
 from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel
@@ -23,7 +23,14 @@ from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from tidy3d.components.types import (
+    Ax,
+    Axis,
+    ColormapType,
+    FieldVal,
+    PlotScale,
+    discriminated_union,
+)
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError
@@ -32,10 +39,12 @@ from tidy3d.log import log
 from .data_array import FreqDataArray
 from .monitor_data import AbstractFieldData, FieldTimeData, MonitorDataType, MonitorDataTypes
 
-DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
+DATA_TYPE_MAP = {data.model_fields["monitor"].annotation: data for data in MonitorDataTypes}
 
 # maps monitor type (string) to the class of the corresponding data
-DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in MonitorDataTypes}
+DATA_TYPE_NAME_MAP = {
+    val.model_fields["monitor"].annotation.__name__: val for val in MonitorDataTypes
+}
 
 # residuals below this are considered good fits for broadband adjoint source creation
 RESIDUAL_CUTOFF_ADJOINT = 1e-6
@@ -50,21 +59,18 @@ NUM_ADJOINT_FWIDTH_TO_FMIN = 0.5
 class AdjointSourceInfo(Tidy3dBaseModel):
     """Stores information about the adjoint sources to pass to autograd pipeline."""
 
-    sources: tuple[annotate_type(SourceType), ...] = pd.Field(
-        ...,
+    sources: tuple[discriminated_union(SourceType), ...] = Field(
         title="Adjoint Sources",
         description="Set of processed sources to include in the adjoint simulation.",
     )
 
-    post_norm: Union[float, FreqDataArray] = pd.Field(
-        ...,
+    post_norm: Union[float, FreqDataArray] = Field(
         title="Post Normalization Values",
         description="Factor to multiply the adjoint fields by after running "
         "given the adjoint source pipeline used.",
     )
 
-    normalize_sim: bool = pd.Field(
-        ...,
+    normalize_sim: bool = Field(
         title="Normalize Adjoint Simulation",
         description="Whether the adjoint simulation needs to be normalized "
         "given the adjoint source pipeline used.",
@@ -909,20 +915,18 @@ class SimulationData(AbstractYeeGridSimulationData):
 
     """
 
-    simulation: Simulation = pd.Field(
-        ...,
+    simulation: Simulation = Field(
         title="Simulation",
         description="Original :class:`.Simulation` associated with the data.",
     )
 
-    data: tuple[annotate_type(MonitorDataType), ...] = pd.Field(
-        ...,
+    data: tuple[discriminated_union(MonitorDataType), ...] = Field(
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
         "associated with the monitors of the original :class:`.Simulation`.",
     )
 
-    diverged: bool = pd.Field(
+    diverged: bool = Field(
         False,
         title="Diverged",
         description="A boolean flag denoting whether the simulation run diverged.",
@@ -991,7 +995,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             return new_spectrum_fn(freqs) / old_spectrum_fn(freqs)
 
         # Make a new monitor_data dictionary with renormalized data
-        data_normalized = [mnt_data.normalize(source_spectrum_fn) for mnt_data in self.data]
+        data_normalized = tuple(mnt_data.normalize(source_spectrum_fn) for mnt_data in self.data)
 
         simulation = self.simulation.copy(update={"normalize_index": normalize_index})
 

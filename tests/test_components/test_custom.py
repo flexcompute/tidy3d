@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import dill as pickle
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
 import xarray as xr
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.data.dataset import PermittivityDataset
@@ -117,7 +117,7 @@ def test_validator_tangential_field():
     """Test that it errors if no tangential field defined."""
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update={"Ex": None, "Ez": None, "Hx": None, "Hz": None})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.CustomFieldSource(size=SIZE, source_time=ST, field_dataset=field_dataset)
 
 
@@ -125,7 +125,7 @@ def test_validator_non_planar():
     """Test that it errors if the source geometry has a volume."""
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update={"Ex": None, "Ez": None, "Hx": None, "Hz": None})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = td.CustomFieldSource(size=(1, 1, 1), source_time=ST, field_dataset=field_dataset)
 
 
@@ -135,7 +135,7 @@ def test_validator_freq_out_of_range_src(source):
     key, dataset = get_dataset(source)
     Ex_new = td.ScalarFieldDataArray(dataset.Ex.data, coords={"x": X, "y": Y, "z": Z, "f": [0]})
     dataset_fail = dataset.copy(update={"Ex": Ex_new})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = source.updated_copy(size=SIZE, source_time=ST, **{key: dataset_fail})
 
 
@@ -146,7 +146,7 @@ def test_validator_freq_multiple(source):
     new_data = np.concatenate((dataset.Ex.data, dataset.Ex.data), axis=-1)
     Ex_new = td.ScalarFieldDataArray(new_data, coords={"x": X, "y": Y, "z": Z, "f": [1, 2]})
     dataset_fail = dataset.copy(update={"Ex": Ex_new})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = source.copy(update={key: dataset_fail})
 
 
@@ -420,7 +420,7 @@ def test_medium_smaller_than_one_positive_sigma(unstructured):
     if unstructured:
         n_dataarray = cartesian_to_unstructured(n_dataarray.isel(f=0))
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = CustomMedium.from_nk(n_dataarray)
 
     # negative sigma
@@ -434,7 +434,7 @@ def test_medium_smaller_than_one_positive_sigma(unstructured):
         n_dataarray = cartesian_to_unstructured(n_dataarray.isel(f=0), seed=1)
         k_dataarray = cartesian_to_unstructured(k_dataarray.isel(f=0), seed=1)
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = CustomMedium.from_nk(n_dataarray, k_dataarray, freq=freqs[0])
 
 
@@ -471,9 +471,9 @@ def test_medium_nk(unstructured):
     assert np.isclose(med.eps_model(1e14), meds.eps_model(1e14), rtol=RTOL)
 
     # gain
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         med = CustomMedium.from_nk(n=n, k=-k)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         meds = CustomMedium.from_nk(n=ns, k=-ks, freq=freqs[0])
     med = CustomMedium.from_nk(n=n, k=-k, allow_gain=True)
     meds = CustomMedium.from_nk(n=ns, k=-ks, freq=freqs[0], allow_gain=True)
@@ -498,7 +498,7 @@ def test_medium_eps_model():
     med.eps_model(frequency=freqs[0])
 
     # error with multifrequency data
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         med = make_custom_medium(make_scalar_data_multifreqs())
 
 
@@ -553,16 +553,8 @@ def verify_custom_medium_methods(mat, reduced_fields):
         # data fields in medium classes could be SpatialArrays or 2d tuples of spatial arrays
         # lets convert everything into 2d tuples of spatial arrays for uniform handling
         if isinstance(original, (td.SpatialDataArray, UnstructuredGridDataset)):
-            original = [
-                [
-                    original,
-                ],
-            ]
-            reduced = [
-                [
-                    reduced,
-                ],
-            ]
+            original = [[original]]
+            reduced = [[reduced]]
 
         for or_set, re_set in zip(original, reduced):
             assert len(or_set) == len(re_set)
@@ -645,30 +637,30 @@ def test_custom_isotropic_medium(unstructured):
     conductivity = make_spatial_data(value=1, unstructured=unstructured, seed=seed)
 
     # some terms in permittivity are complex
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=1 + 0.1j, unstructured=unstructured, seed=seed)
         mat = CustomMedium(permittivity=epstmp, conductivity=conductivity)
 
     # some terms in permittivity are < 1
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
         mat = CustomMedium(permittivity=epstmp, conductivity=conductivity)
 
     # some terms in conductivity are complex
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         sigmatmp = make_spatial_data(value=0.1j, unstructured=unstructured, seed=seed)
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     # some terms in conductivity are negative
     sigmatmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
     mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp, allow_gain=True)
     verify_custom_medium_methods(mat, ["permittivity", "conductivity"])
     assert not mat.is_spatially_uniform
 
     # inconsistent coords
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         sigmatmp = make_spatial_data(value=0, dx=1, unstructured=unstructured, seed=seed)
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
@@ -724,27 +716,27 @@ def test_custom_pole_residue(unstructured):
     c = 1j * make_spatial_data(value=1, unstructured=unstructured, seed=seed)
 
     # some terms in eps_inf are negative
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomPoleResidue(eps_inf=epstmp, poles=((a, c),))
 
     # some terms in eps_inf are complex
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=0.1j, unstructured=unstructured, seed=seed)
         mat = CustomPoleResidue(eps_inf=epstmp, poles=((a, c),))
 
     # inconsistent coords of eps_inf with a,c
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=1, dx=1, unstructured=unstructured, seed=seed)
         mat = CustomPoleResidue(eps_inf=epstmp, poles=((a, c),))
 
     # mixing Cartesian and unstructured data
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=1, dx=1, unstructured=(not unstructured), seed=seed)
         mat = CustomPoleResidue(eps_inf=epstmp, poles=((a, c),))
 
     # break causality
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         atmp = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
         mat = CustomPoleResidue(eps_inf=eps_inf, poles=((atmp, c),))
 
@@ -760,7 +752,7 @@ def test_custom_pole_residue(unstructured):
     # non-dispersive but gain
     a = 0 * c
     mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c - 0.1),))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat_medium = mat.to_medium()
     mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c - 0.1),), allow_gain=True)
     mat_medium = mat.to_medium()
@@ -784,34 +776,34 @@ def test_custom_sellmeier(unstructured):
     c2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
 
     # complex b
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         btmp = make_spatial_data(value=-0.5j, unstructured=unstructured, seed=seed)
         mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)))
 
     # complex c
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         ctmp = make_spatial_data(value=-0.5j, unstructured=unstructured, seed=seed)
         mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
 
     # negative c
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         ctmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
 
     # negative b
     btmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)))
     mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)), allow_gain=True)
     assert mat.pole_residue.allow_gain
 
     # inconsistent coord
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         btmp = make_spatial_data(value=0, dx=1, unstructured=unstructured, seed=seed)
         mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
 
     # mixing Cartesian and unstructured data
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         btmp = make_spatial_data(value=0, dx=1, unstructured=(not unstructured), seed=seed)
         mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
 
@@ -843,32 +835,32 @@ def test_custom_lorentz(unstructured):
     delta2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
 
     # complex de
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         detmp = make_spatial_data(value=-0.5j, unstructured=unstructured, seed=seed)
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)))
 
     # mixed delta > f and delta < f over spatial points
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         deltatmp = make_spatial_data(value=1, unstructured=unstructured, seed=seed)
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
 
     # inconsistent coords
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         ftmp = make_spatial_data(value=1, dx=1, unstructured=unstructured, seed=seed)
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, ftmp, delta2)))
 
     # mixing Cartesian and unstructured data
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         ftmp = make_spatial_data(value=1, dx=1, unstructured=(not unstructured), seed=seed)
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, ftmp, delta2)))
 
     # break causality with negative delta
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         deltatmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
 
     # gain medium with negative delta epsilon
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         detmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)))
     mat = CustomLorentz(
@@ -899,22 +891,22 @@ def test_custom_drude(unstructured):
     delta2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
 
     # complex delta
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         deltatmp = make_spatial_data(value=-0.5j, unstructured=unstructured, seed=seed)
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, deltatmp)))
 
     # negative delta
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         deltatmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, deltatmp)))
 
     # inconsistent coords
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         ftmp = make_spatial_data(value=1, dx=1, unstructured=unstructured, seed=seed)
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (ftmp, delta2)))
 
     # mixing Cartesian and unstructured data
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         ftmp = make_spatial_data(value=1, dx=1, unstructured=(not unstructured), seed=seed)
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (ftmp, delta2)))
 
@@ -937,32 +929,32 @@ def test_custom_debye(unstructured):
     tau2 = make_spatial_data(value=0, unstructured=unstructured, seed=seed)
 
     # complex eps
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=-0.5j, unstructured=unstructured, seed=seed)
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
 
     # complex tau
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         tautmp = make_spatial_data(value=-0.5j, unstructured=unstructured, seed=seed)
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
 
     # negative tau
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         tautmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
 
     # inconsistent coords
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=0, dx=1, unstructured=unstructured, seed=seed)
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
 
     # mixing Cartesian and unstructured data
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=0, dx=1, unstructured=(not unstructured), seed=seed)
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
 
     # negative delta epsilon
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         epstmp = make_spatial_data(value=-0.5, unstructured=unstructured, seed=seed)
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)), allow_gain=True)
@@ -1014,7 +1006,7 @@ def test_custom_anisotropic_medium(unstructured):
     # so that xx-component is using "nearest"
     freq = 2e14
     dist_coeff = 0.7
-    coord_test = td.Coords(x=[X[0] * dist_coeff + X[1] * (1 - dist_coeff)], y=Y[0], z=Z[0])
+    coord_test = td.Coords(x=[X[0] * dist_coeff + X[1] * (1 - dist_coeff)], y=[Y[0]], z=[Z[0]])
     eps_nearest = mat.eps_sigma_to_eps_complex(
         permittivity.interp(x=X[0], y=Y[0], z=Z[0], method="nearest"),
         conductivity.interp(x=X[0], y=Y[0], z=Z[0], method="nearest"),
@@ -1065,11 +1057,11 @@ def test_custom_anisotropic_medium(unstructured):
     field_components = {f"eps_{d}{d}": make_scalar_data() for d in "xyz"}
     eps_dataset = PermittivityDataset(**field_components)
     mat_tmp = CustomMedium(eps_dataset=eps_dataset)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = CustomAnisotropicMedium(xx=mat_tmp, yy=mat_yy, zz=mat_zz)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_tmp, zz=mat_zz)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_tmp)
 
 
@@ -1160,7 +1152,7 @@ def test_warn_planewave_intersection():
         medium=mat,
     )
     with AssertLogLevel("WARNING"):
-        sim.updated_copy(structures=[box])
+        sim.updated_copy(structures=(box,))
 
 
 def test_warn_diffraction_monitor_intersection():
@@ -1189,10 +1181,10 @@ def test_warn_diffraction_monitor_intersection():
     with AssertLogLevel(None):
         sim = td.Simulation(
             size=(1, 1, 2),
-            structures=[box],
+            structures=(box,),
             grid_spec=td.GridSpec.auto(wavelength=1),
-            monitors=[monitor],
-            sources=[src],
+            monitors=(monitor,),
+            sources=(src,),
             run_time=1e-12,
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
@@ -1205,7 +1197,7 @@ def test_warn_diffraction_monitor_intersection():
         medium=mat,
     )
     with AssertLogLevel("WARNING"):
-        sim.updated_copy(structures=[box])
+        sim.updated_copy(structures=(box,))
 
 
 @pytest.mark.parametrize(
@@ -1232,7 +1224,7 @@ def test_custom_medium_duplicate_coords(custom_class, data_key):
     spatial_data = td.SpatialDataArray(data, coords=coords)
 
     if custom_class == CustomMedium:
-        with pytest.raises(pydantic.ValidationError, match="duplicate coordinates"):
+        with pytest.raises(ValidationError, match="duplicate coordinates"):
             _ = custom_class(permittivity=spatial_data)
     else:
         field_components = {
@@ -1240,5 +1232,5 @@ def test_custom_medium_duplicate_coords(custom_class, data_key):
         }
         field_dataset = td.FieldDataset(**field_components)
 
-        with pytest.raises(pydantic.ValidationError, match="duplicate coordinates"):
+        with pytest.raises(ValidationError, match="duplicate coordinates"):
             _ = custom_class(size=SIZE, source_time=ST, **{data_key: field_dataset})

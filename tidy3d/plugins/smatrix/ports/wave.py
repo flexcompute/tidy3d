@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeInt, model_validator
 
-from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.monitor_data import ModeData
 from tidy3d.components.data.sim_data import SimulationData
@@ -30,19 +30,18 @@ from .base_terminal import AbstractTerminalPort
 class WavePort(AbstractTerminalPort, Box):
     """Class representing a single wave port"""
 
-    direction: Direction = pd.Field(
-        ...,
+    direction: Direction = Field(
         title="Direction",
         description="'+' or '-', defining which direction is considered 'input'.",
     )
 
-    mode_spec: ModeSpec = pd.Field(
-        ModeSpec(),
+    mode_spec: ModeSpec = Field(
+        default_factory=ModeSpec,
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
 
-    mode_index: pd.NonNegativeInt = pd.Field(
+    mode_index: NonNegativeInt = Field(
         0,
         title="Mode Index",
         description="Index into the collection of modes returned by mode solver. "
@@ -51,13 +50,13 @@ class WavePort(AbstractTerminalPort, Box):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    voltage_integral: Optional[VoltageIntegralTypes] = pd.Field(
+    voltage_integral: Optional[VoltageIntegralTypes] = Field(
         None,
         title="Voltage Integral",
         description="Definition of voltage integral used to compute voltage and the characteristic impedance.",
     )
 
-    current_integral: Optional[CurrentIntegralTypes] = pd.Field(
+    current_integral: Optional[CurrentIntegralTypes] = Field(
         None,
         title="Current Integral",
         description="Definition of current integral used to compute current and the characteristic impedance.",
@@ -105,7 +104,7 @@ class WavePort(AbstractTerminalPort, Box):
         if snap_center:
             center[self.injection_axis] = snap_center
         return ModeSource(
-            center=center,
+            center=tuple(center),
             size=self.size,
             source_time=source_time,
             mode_spec=self.mode_spec,
@@ -186,44 +185,37 @@ class WavePort(AbstractTerminalPort, Box):
         impedance_array = impedance_calc.compute_impedance(mode_data)
         return impedance_array
 
-    @pd.validator("voltage_integral", "current_integral")
-    def _validate_path_integrals_within_port(cls, val, values):
-        """Raise ``ValidationError`` when the supplied path integrals are not within the port bounds."""
-        center = values["center"]
-        size = values["size"]
-        box = Box(center=center, size=size)
-        if val and not bounds_contains(
-            box.bounds, val.bounds, fp_eps, np.finfo(np.float32).smallest_normal
-        ):
-            raise ValidationError(
-                f"'{cls.__name__}' must be setup with all path integrals defined within the bounds "
-                f"of the port. Path bounds are '{val.bounds}', but port bounds are '{box.bounds}'."
-            )
-        return val
+    @model_validator(mode="after")
+    def _validate_path_integrals_within_port(self):
+        box = Box(center=self.center, size=self.size)
 
-    @pd.validator("current_integral", always=True)
-    @skip_if_fields_missing(["voltage_integral"])
-    def _check_voltage_or_current(cls, val, values):
+        for name in ("voltage_integral", "current_integral"):
+            val = getattr(self, name)
+            if val and not bounds_contains(
+                box.bounds, val.bounds, fp_eps, np.finfo(np.float32).smallest_normal
+            ):
+                raise ValueError(
+                    f"{name} bounds {val.bounds!r} must be inside port bounds {box.bounds!r}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _check_voltage_or_current(self):
         """Raise validation error if both ``voltage_integral`` and ``current_integral``
         were not provided."""
-        if values.get("voltage_integral") is None and val is None:
+        if self.voltage_integral is None and self.current_integral is None:
             raise ValidationError(
                 "At least one of 'voltage_integral' or 'current_integral' must be provided."
             )
-        return val
+        return self
 
-    @pd.validator("current_integral", always=True)
-    def validate_current_integral_sign(cls, val, values):
-        """
-        Validate that the sign of ``current_integral`` matches the port direction.
-        """
-        if val is None:
-            return val
-
-        direction = values.get("direction")
-        name = values.get("name")
-        if val.sign != direction:
+    @model_validator(mode="after")
+    def validate_current_integral_sign(self):
+        """Validate that the sign of ``current_integral`` matches the port direction."""
+        if self.current_integral is None:
+            return self
+        if self.current_integral.sign != self.direction:
             raise ValidationError(
-                f"'current_integral' sign must match the '{name}' direction '{direction}'."
+                f"'current_integral' sign must match the '{self.name}' direction '{self.direction}'."
             )
-        return val
+        return self

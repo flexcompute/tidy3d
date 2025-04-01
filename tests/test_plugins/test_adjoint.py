@@ -13,12 +13,12 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
 import trimesh
 from jax import grad
 from jax.test_util import check_grads
 from numpy.testing import assert_allclose
+from pydantic import ValidationError
 from xarray import DataArray
 
 import tidy3d as td
@@ -1022,7 +1022,7 @@ def test_structure_overlaps():
 
 def test_validate_subpixel():
     """Make sure errors if subpixel is off."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = JaxSimulation(
             size=(10, 10, 10),
             run_time=SIM_RUN_TIME,
@@ -1070,7 +1070,7 @@ def test_flip_direction():
 
 def test_strict_types():
     """Test that things fail if you try to use just any object in a Jax component."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = JaxBox(size=(1, 1, [1, 2]), center=(0, 0, 0))
 
 
@@ -1512,7 +1512,7 @@ def _test_custom_medium_3D(use_emulated_run):
     make_custom_medium(1, 10, 10)
     make_custom_medium(10, 1, 10)
     make_custom_medium(10, 10, 1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         make_custom_medium(10, 10, 10)
 
 

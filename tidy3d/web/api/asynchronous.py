@@ -30,7 +30,7 @@ def run_async(
 
     Parameters
     ----------
-    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
+    simulations : dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
         Mapping of task name to simulation.
     folder_name : str = "default"
         Name of folder to store each task on web UI.

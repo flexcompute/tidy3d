@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.log import DEFAULT_LEVEL, _level_value
@@ -22,7 +22,7 @@ def test_logging_level():
 
 
 def test_log_level_not_found():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         td.config.logging_level = "NOT_A_LEVEL"
 
 

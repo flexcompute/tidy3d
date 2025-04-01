@@ -1,6 +1,5 @@
 """Holds dispersive models for several commonly used RF materials."""
 
-# from ...components.base import Tidy3dBaseModel
 from __future__ import annotations
 
 from tidy3d.components.medium import PoleResidue

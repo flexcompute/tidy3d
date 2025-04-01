@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import abc
-import typing
+from typing import Callable, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 import tidy3d as td
 from tidy3d.components.autograd import get_static
@@ -19,39 +19,37 @@ from .base import InvdesBaseModel
 from .region import DesignRegionType
 from .validators import check_pixel_size
 
-PostProcessFnType = typing.Callable[[td.SimulationData], float]
+PostProcessFnType = Callable[[td.SimulationData], float]
 
 
 class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     """Container for an inverse design problem."""
 
-    design_region: DesignRegionType = pd.Field(
-        ...,
+    design_region: DesignRegionType = Field(
         title="Design Region",
         description="Region within which we will optimize the simulation.",
     )
 
-    task_name: str = pd.Field(
-        ...,
+    task_name: str = Field(
         title="Task Name",
         description="Task name to use in the objective function when running the ``JaxSimulation``.",
     )
 
-    verbose: bool = pd.Field(
+    verbose: bool = Field(
         False,
         title="Task Verbosity",
         description="If ``True``, will print the regular output from ``web`` functions.",
     )
 
-    metric: typing.Optional[ExpressionType] = pd.Field(
+    metric: Optional[ExpressionType] = Field(
         None,
         title="Objective Metric",
         description="Serializable expression defining the objective function.",
     )
 
     def make_objective_fn(
-        self, post_process_fn: typing.Optional[typing.Callable] = None, maximize: bool = True
-    ) -> typing.Callable[[anp.ndarray], tuple[float, dict]]:
+        self, post_process_fn: Optional[Callable] = None, maximize: bool = True
+    ) -> Callable[[anp.ndarray], tuple[float, dict]]:
         """Construct the objective function for this InverseDesign object."""
 
         if (post_process_fn is None) and (self.metric is None):
@@ -62,7 +60,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
         direction_multiplier = 1 if maximize else -1
 
-        def objective_fn(params: anp.ndarray, aux_data: typing.Optional[dict] = None) -> float:
+        def objective_fn(params: anp.ndarray, aux_data: Optional[dict] = None) -> float:
             """Full objective function."""
             data = self.to_simulation_data(params=params)
 
@@ -118,13 +116,12 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 class InverseDesign(AbstractInverseDesign):
     """Container for an inverse design problem."""
 
-    simulation: td.Simulation = pd.Field(
-        ...,
+    simulation: td.Simulation = Field(
         title="Base Simulation",
         description="Simulation without the design regions or monitors used in the objective fn.",
     )
 
-    output_monitor_names: tuple[str, ...] = pd.Field(
+    output_monitor_names: Optional[tuple[str, ...]] = Field(
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
@@ -136,23 +133,16 @@ class InverseDesign(AbstractInverseDesign):
 
     _check_sim_pixel_size = check_pixel_size("simulation")
 
-    @pd.root_validator(pre=False)
-    def _validate_model(cls, values: dict) -> dict:
-        cls._validate_metric(values)
-        return values
-
-    @staticmethod
-    def _validate_metric(values: dict) -> dict:
-        metric_expr = values.get("metric")
-        if not metric_expr:
-            return values
-        simulation = values.get("simulation")
-        for metric in metric_expr.filter(Metric):
-            InverseDesign._validate_metric_monitor_name(metric, simulation)
-            InverseDesign._validate_metric_mode_index(metric, simulation)
-            InverseDesign._validate_metric_f(metric, simulation)
-        InverseDesign._validate_metric_data(metric_expr, simulation)
-        return values
+    @model_validator(mode="after")
+    def _validate_model(self):
+        if not self.metric:
+            return self
+        for metric in self.metric.filter(Metric):
+            InverseDesign._validate_metric_monitor_name(metric, self.simulation)
+            InverseDesign._validate_metric_mode_index(metric, self.simulation)
+            InverseDesign._validate_metric_f(metric, self.simulation)
+        InverseDesign._validate_metric_data(self.metric, self.simulation)
+        return self
 
     @staticmethod
     def _validate_metric_monitor_name(metric: Metric, simulation: td.Simulation) -> None:
@@ -260,13 +250,12 @@ class InverseDesign(AbstractInverseDesign):
 class InverseDesignMulti(AbstractInverseDesign):
     """``InverseDesign`` with multiple simulations and corresponding postprocess functions."""
 
-    simulations: tuple[td.Simulation, ...] = pd.Field(
-        ...,
+    simulations: tuple[td.Simulation, ...] = Field(
         title="Base Simulations",
         description="Set of simulation without the design regions or monitors used in the objective fn.",
     )
 
-    output_monitor_names: tuple[typing.Union[tuple[str, ...], None], ...] = pd.Field(
+    output_monitor_names: Optional[tuple[Union[tuple[str, ...], None], ...]] = Field(
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
@@ -278,12 +267,12 @@ class InverseDesignMulti(AbstractInverseDesign):
 
     _check_sim_pixel_size = check_pixel_size("simulations")
 
-    @pd.root_validator()
-    def _check_lengths(cls, values):
+    @model_validator(mode="after")
+    def _check_lengths(self):
         """Check the lengths of all of the multi fields."""
 
-        keys = ("simulations", "post_process_fns", "output_monitor_names", "override_structure_dl")
-        multi_dict = {key: values.get(key) for key in keys}
+        keys = ("simulations", "output_monitor_names")
+        multi_dict = {key: getattr(self, key) for key in keys}
         sizes = {key: len(val) for key, val in multi_dict.items() if val is not None}
 
         if len(set(sizes.values())) != 1:
@@ -293,7 +282,7 @@ class InverseDesignMulti(AbstractInverseDesign):
                 "corresponding sizes of '{sizes}'."
             )
 
-        return values
+        return self
 
     @property
     def task_names(self) -> list[str]:
@@ -330,4 +319,4 @@ class InverseDesignMulti(AbstractInverseDesign):
         return self.run_async(simulations, **kwargs)
 
 
-InverseDesignType = typing.Union[InverseDesign, InverseDesignMulti]
+InverseDesignType = Union[InverseDesign, InverseDesignMulti]

@@ -4,21 +4,15 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeInt
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.medium import Drude, Medium2D, PoleResidue
 from tidy3d.constants import ELECTRON_VOLT, EPSILON_0, HBAR, K_B, KELVIN, Q_e
 from tidy3d.log import log
-
-try:
-    from scipy import integrate
-
-    INTEGRATE_AVAILABLE = True
-except ImportError:
-    INTEGRATE_AVAILABLE = False
 
 # default values of the physical parameters for graphene
 # scattering rate in eV
@@ -75,35 +69,35 @@ class Graphene(ParametricVariantItem2D):
 
     """
 
-    mu_c: float = pd.Field(
+    mu_c: float = Field(
         GRAPHENE_DEF_MU_C,
         title="Chemical potential in eV",
         description="Chemical potential in eV.",
         units=ELECTRON_VOLT,
     )
-    temp: float = pd.Field(
+    temp: float = Field(
         GRAPHENE_DEF_TEMP, title="Temperature in K", description="Temperature in K.", units=KELVIN
     )
-    gamma: float = pd.Field(
+    gamma: float = Field(
         GRAPHENE_DEF_GAMMA,
         title="Scattering rate in eV",
         description="Scattering rate in eV. Must be small compared to the optical frequency.",
         units=ELECTRON_VOLT,
     )
-    scaling: float = pd.Field(
+    scaling: float = Field(
         1,
         title="Scaling factor",
         description="Scaling factor used to model multiple layers of graphene.",
     )
 
-    include_interband: bool = pd.Field(
+    include_interband: bool = Field(
         True,
         title="Include interband terms",
         description="Include interband terms, relevant at high frequency (IR). "
         "Otherwise, the intraband terms only give a simpler Drude-type model relevant "
         "only at low frequency (THz).",
     )
-    interband_fit_freq_nodes: list[tuple[float, float]] = pd.Field(
+    interband_fit_freq_nodes: Optional[list[tuple[float, float]]] = Field(
         None,
         title="Interband fitting frequency nodes",
         description="Frequency nodes for fitting interband term. "
@@ -115,7 +109,7 @@ class Graphene(ParametricVariantItem2D):
         "of frequencies; consider changing the nodes to obtain a better fit for a "
         "narrow-band simulation.",
     )
-    interband_fit_num_iters: pd.NonNegativeInt = pd.Field(
+    interband_fit_num_iters: NonNegativeInt = Field(
         GRAPHENE_FIT_NUM_ITERS,
         title="Interband fitting number of iterations",
         description="Number of iterations for optimizing each Pade approximant when "
@@ -208,12 +202,12 @@ class Graphene(ParametricVariantItem2D):
 
         Parameters
         ----------
-        freqs : List[float]
+        freqs : list[float]
             The list of frequencies.
 
         Returns
         -------
-        List[complex]
+        list[complex]
             The list of corresponding conductivities, in S.
         """
         intra_sigma = self.intraband_drude.sigma_model(freqs)
@@ -225,14 +219,22 @@ class Graphene(ParametricVariantItem2D):
 
         Parameters
         ----------
-        freqs : List[float]
+        freqs : list[float]
             The list of frequencies.
 
         Returns
         -------
-        List[complex]
+        list[complex]
             The list of corresponding interband conductivities, in S.
         """
+        try:
+            from scipy import integrate
+        except ImportError:
+            raise ImportError(
+                "The package 'scipy' was not found. Please install the 'core' "
+                "dependencies to calculate the interband term of graphene. For example: "
+                "pip install tidy3d"
+            ) from None
 
         def fermi(E: float) -> float:
             """Fermi distribution."""
@@ -248,13 +250,6 @@ class Graphene(ParametricVariantItem2D):
         def integrand(E: float, omega: float) -> float:
             """Integrand for interband term."""
             return (fermi_g(E * HBAR) - fermi_g(HBAR * omega / 2)) / (omega**2 - 4 * E**2)
-
-        if not INTEGRATE_AVAILABLE:
-            raise ImportError(
-                "The package 'scipy' was not found. Please install the 'core' "
-                "dependencies to calculate the interband term of graphene. For example: "
-                "pip install tidy3d"
-            )
 
         omegas = 2 * np.pi * np.array(freqs)
         sigma = np.zeros(len(omegas), dtype=complex)
@@ -284,11 +279,11 @@ class Graphene(ParametricVariantItem2D):
 
         Parameters
         ----------
-        freqs : List[float]
+        freqs : list[float]
             The input frequencies.
-        sigma : List[complex]
+        sigma : list[complex]
             The interband conductivity to fit.
-        indslist : List[Tuple[int, int]]
+        indslist : list[tuple[int, int]]
             The indices at which to sample the data for fitting.
             The length of this list determines the number of Pade terms used.
         Returns

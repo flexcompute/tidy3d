@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import DataArray, FreqDataArray
@@ -35,27 +35,27 @@ class TerminalComponentModeler(AbstractComponentModeler):
     """Tool for modeling two-terminal multiport devices and computing port parameters
     with lumped and wave ports."""
 
-    ports: tuple[TerminalPortType, ...] = pd.Field(
+    ports: tuple[TerminalPortType, ...] = Field(
         (),
         title="Terminal Ports",
         description="Collection of lumped and wave ports associated with the network. "
         "For each port, one simulation will be run with a source that is associated with the port.",
     )
 
-    radiation_monitors: tuple[DirectivityMonitor, ...] = pd.Field(
+    radiation_monitors: tuple[DirectivityMonitor, ...] = Field(
         (),
         title="Radiation Monitors",
         description="Facilitates the calculation of figures-of-merit for antennas. "
         "These monitor will be included in every simulation and record the radiated fields. ",
     )
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
+    @model_validator(mode="before")
+    def _warn_rf_license(data):
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
-        return values
+        return data
 
     @equal_aspect
     @add_ax_if_none
@@ -218,7 +218,8 @@ class TerminalComponentModeler(AbstractComponentModeler):
         s_matrix = self.ab_to_s(a_matrix, b_matrix)
         return s_matrix
 
-    @pd.validator("simulation")
+    @field_validator("simulation")
+    @classmethod
     def _validate_3d_simulation(cls, val):
         """Error if :class:`.Simulation` is not a 3D simulation"""
 
@@ -228,18 +229,18 @@ class TerminalComponentModeler(AbstractComponentModeler):
             )
         return val
 
-    @pd.validator("radiation_monitors")
-    def _validate_radiation_monitors(cls, val, values):
-        freqs = set(values.get("freqs"))
-        for rad_mon in val:
+    @model_validator(mode="after")
+    def _validate_radiation_monitors(self):
+        freqs = set(self.freqs)
+        for rad_mon in self.radiation_monitors:
             mon_freqs = rad_mon.freqs
             is_subset = freqs.issuperset(mon_freqs)
             if not is_subset:
                 raise ValidationError(
                     f"The frequencies in the radiation monitor '{rad_mon.name}' "
-                    f"must be equal to or a subset of the frequencies in the '{cls.__name__}'."
+                    f"must be equal to or a subset of the frequencies in the '{self.__class__.__name__}'."
                 )
-        return val
+        return self
 
     @staticmethod
     def _check_grid_size_at_ports(simulation: Simulation, ports: list[Union[AbstractLumpedPort]]):

@@ -5,12 +5,19 @@ from __future__ import annotations
 from typing import Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
 from joblib import Parallel, delayed
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    field_validator,
+    model_validator,
+)
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.monitor_data import FieldData, PermittivityData
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import AbstractMedium
@@ -24,7 +31,7 @@ from tidy3d.components.monitor import (
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.structure import Structure
 from tidy3d.components.subpixel_spec import Staircasing, SubpixelSpec
-from tidy3d.components.types import Ax, annotate_type
+from tidy3d.components.types import Ax, discriminated_union
 from tidy3d.constants import HERTZ, SECOND
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
@@ -62,44 +69,40 @@ NL_WARNING = (
 )
 
 OutputMonitorTypes = (DiffractionMonitor, FieldMonitor, ModeMonitor)
-OutputMonitorType = tuple[annotate_type(Union[OutputMonitorTypes]), ...]
+OutputMonitorType = tuple[discriminated_union(Union[OutputMonitorTypes]), ...]
 
 
 class JaxInfo(Tidy3dBaseModel):
     """Class to store information when converting between jax and tidy3d."""
 
-    num_input_structures: pd.NonNegativeInt = pd.Field(
-        ...,
+    num_input_structures: NonNegativeInt = Field(
         title="Number of Input Structures",
         description="Number of input structures in the original JaxSimulation.",
     )
 
-    num_output_monitors: pd.NonNegativeInt = pd.Field(
-        ...,
+    num_output_monitors: NonNegativeInt = Field(
         title="Number of Output Monitors",
         description="Number of output monitors in the original JaxSimulation.",
     )
 
-    num_grad_monitors: pd.NonNegativeInt = pd.Field(
-        ...,
+    num_grad_monitors: NonNegativeInt = Field(
         title="Number of Gradient Monitors",
         description="Number of gradient monitors in the original JaxSimulation.",
     )
 
-    num_grad_eps_monitors: pd.NonNegativeInt = pd.Field(
-        ...,
+    num_grad_eps_monitors: NonNegativeInt = Field(
         title="Number of Permittivity Monitors",
         description="Number of permittivity monitors in the original JaxSimulation.",
     )
 
-    fwidth_adjoint: float = pd.Field(
+    fwidth_adjoint: Optional[float] = Field(
         None,
         title="Adjoint Frequency Width",
         description="Custom frequency width of the original JaxSimulation.",
         units=HERTZ,
     )
 
-    run_time_adjoint: float = pd.Field(
+    run_time_adjoint: Optional[float] = Field(
         None,
         title="Adjoint Run Time",
         description="Custom run time of the original JaxSimulation.",
@@ -108,7 +111,7 @@ class JaxInfo(Tidy3dBaseModel):
 
     input_structure_types: tuple[
         Literal["JaxStructure", "JaxStructureStaticMedium", "JaxStructureStaticGeometry"], ...
-    ] = pd.Field(
+    ] = Field(
         (),
         title="Input Structure Types",
         description="Type of the original input_structures (as strings).",
@@ -119,7 +122,7 @@ class JaxInfo(Tidy3dBaseModel):
 class JaxSimulation(Simulation, JaxObject):
     """A :class:`.Simulation` registered with jax."""
 
-    input_structures: tuple[annotate_type(JaxStructureType), ...] = pd.Field(
+    input_structures: tuple[discriminated_union(JaxStructureType), ...] = Field(
         (),
         title="Input Structures",
         description="Tuple of jax-compatible structures"
@@ -127,25 +130,25 @@ class JaxSimulation(Simulation, JaxObject):
         jax_field=True,
     )
 
-    output_monitors: OutputMonitorType = pd.Field(
+    output_monitors: OutputMonitorType = Field(
         (),
         title="Output Monitors",
         description="Tuple of monitors whose data the differentiable output depends on.",
     )
 
-    grad_monitors: tuple[FieldMonitor, ...] = pd.Field(
+    grad_monitors: tuple[FieldMonitor, ...] = Field(
         (),
         title="Gradient Field Monitors",
         description="Tuple of monitors used for storing fields, used internally for gradients.",
     )
 
-    grad_eps_monitors: tuple[PermittivityMonitor, ...] = pd.Field(
+    grad_eps_monitors: tuple[PermittivityMonitor, ...] = Field(
         (),
         title="Gradient Permittivity Monitors",
         description="Tuple of monitors used for storing epsilon, used internally for gradients.",
     )
 
-    fwidth_adjoint: pd.PositiveFloat = pd.Field(
+    fwidth_adjoint: Optional[PositiveFloat] = Field(
         None,
         title="Adjoint Frequency Width",
         description="Custom frequency width to use for ``source_time`` of adjoint sources. "
@@ -153,7 +156,7 @@ class JaxSimulation(Simulation, JaxObject):
         units=HERTZ,
     )
 
-    run_time_adjoint: pd.PositiveFloat = pd.Field(
+    run_time_adjoint: Optional[PositiveFloat] = Field(
         None,
         title="Adjoint Run Time",
         description="Custom ``run_time`` to use for adjoint simulation. "
@@ -161,8 +164,8 @@ class JaxSimulation(Simulation, JaxObject):
         units=SECOND,
     )
 
-    @pd.validator("output_monitors", always=True)
-    def _output_monitors_colocate_false(cls, val):
+    @field_validator("output_monitors")
+    def _output_monitors_colocate_false(val):
         """Make sure server-side colocation is off."""
         new_vals = []
         for mnt in val:
@@ -178,8 +181,8 @@ class JaxSimulation(Simulation, JaxObject):
             new_vals.append(mnt)
         return new_vals
 
-    @pd.validator("subpixel", always=True)
-    def _subpixel_is_on(cls, val):
+    @field_validator("subpixel")
+    def _subpixel_is_on(val):
         """Assert dielectric subpixel is on."""
         if (isinstance(val, SubpixelSpec) and isinstance(val.dielectric, Staircasing)) or not val:
             raise AdjointError(
@@ -188,14 +191,13 @@ class JaxSimulation(Simulation, JaxObject):
             )
         return val
 
-    @pd.validator("input_structures", always=True)
-    @skip_if_fields_missing(["structures"])
-    def _warn_overlap(cls, val, values):
+    @model_validator(mode="after")
+    def _warn_overlap(self):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
-
+        val = self.input_structures
         input_structures = [s for s in val if "geometry" in s._differentiable_fields]
 
-        structures = list(values.get("structures"))
+        structures = list(self.structures)
 
         # if the center and size of all structure geometries do not contain all numbers, skip check
         for struct in input_structures:
@@ -203,7 +205,7 @@ class JaxSimulation(Simulation, JaxObject):
             size_all_floats = all(isinstance(s, (float, int)) for s in geometry.bound_size)
             cent_all_floats = all(isinstance(c, (float, int)) for c in geometry.bound_center)
             if not (size_all_floats and cent_all_floats):
-                return val
+                return self
 
         with log as consolidated_logger:
             # check intersections with other input_structures
@@ -232,10 +234,10 @@ class JaxSimulation(Simulation, JaxObject):
                             "when 'JaxPolySlab' intersects with background structures."
                         )
 
-        return val
+        return self
 
-    @pd.validator("output_monitors", always=True)
-    def _warn_if_colocate(cls, val):
+    @field_validator("output_monitors")
+    def _warn_if_colocate(val):
         """warn if any colocate=True in output FieldMonitors."""
         for index, mnt in enumerate(val):
             if isinstance(mnt, FieldMonitor):
@@ -248,8 +250,8 @@ class JaxSimulation(Simulation, JaxObject):
                     return val
         return val
 
-    @pd.validator("medium", always=True)
-    def _warn_nonlinear_medium(cls, val):
+    @field_validator("medium")
+    def _warn_nonlinear_medium(val):
         """warn if the jax simulation medium is nonlinear."""
         # hasattr is just an additional check to avoid unnecessary bugs
         # if a medium is encountered that does not support nonlinear spec, or things change.
@@ -259,8 +261,8 @@ class JaxSimulation(Simulation, JaxObject):
             )
         return val
 
-    @pd.validator("structures", always=True)
-    def _warn_nonlinear_structure(cls, val):
+    @field_validator("structures")
+    def _warn_nonlinear_structure(val):
         """warn if a jax simulation structure.medium is nonlinear."""
         for i, struct in enumerate(val):
             medium = struct.medium
@@ -270,8 +272,8 @@ class JaxSimulation(Simulation, JaxObject):
                 log.warning(f"Nonlinear medium detected in structures[{i}]. " + NL_WARNING)
         return val
 
-    @pd.validator("input_structures", always=True)
-    def _warn_nonlinear_input_structure(cls, val):
+    @field_validator("input_structures")
+    def _warn_nonlinear_input_structure(val):
         """warn if a jax simulation input_structure.medium is nonlinear."""
         for i, struct in enumerate(val):
             medium = struct.medium
@@ -451,10 +453,10 @@ class JaxSimulation(Simulation, JaxObject):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        permittivity_threshold: pd.NonNegativeFloat = 1,
-        frequency: pd.PositiveFloat = 0,
+        permittivity_threshold: NonNegativeFloat = 1,
+        frequency: PositiveFloat = 0,
         gds_layer_dtype_map: Optional[
-            dict[AbstractMedium, tuple[pd.NonNegativeInt, pd.NonNegativeInt]]
+            dict[AbstractMedium, tuple[NonNegativeInt, NonNegativeInt]]
         ] = None,
     ) -> None:
         """Append the simulation structures to a .gds cell.
@@ -492,10 +494,10 @@ class JaxSimulation(Simulation, JaxObject):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        permittivity_threshold: pd.NonNegativeFloat = 1,
-        frequency: pd.PositiveFloat = 0,
+        permittivity_threshold: NonNegativeFloat = 1,
+        frequency: PositiveFloat = 0,
         gds_layer_dtype_map: Optional[
-            dict[AbstractMedium, tuple[pd.NonNegativeInt, pd.NonNegativeInt]]
+            dict[AbstractMedium, tuple[NonNegativeInt, NonNegativeInt]]
         ] = None,
     ) -> list:
         """Convert a simulation's planar slice to a .gds type polygon list.
@@ -602,9 +604,9 @@ class JaxSimulation(Simulation, JaxObject):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
+        hlim : tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
+        vlim : tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
 
         Returns
@@ -659,9 +661,9 @@ class JaxSimulation(Simulation, JaxObject):
             Defaults to the structure default alpha.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
+        hlim : tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
+        vlim : tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
 
         Returns

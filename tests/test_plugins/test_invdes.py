@@ -5,6 +5,7 @@ import autograd.numpy as anp
 import numpy as np
 import numpy.testing as npt
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
@@ -256,7 +257,6 @@ def make_invdes_multi():
     region = make_design_region()
 
     simulations = n * [simulation]
-    # post_process_fns = n * [post_process_fn]
 
     invdes = tdi.InverseDesignMulti(
         design_region=region,
@@ -601,29 +601,29 @@ def test_validate_invdes_metric():
     """Test the _validate_metric_monitor_name validator."""
     invdes = make_invdes()
     metric = ModePower(monitor_name="invalid_monitor", f=[FREQ0])
-    with pytest.raises(ValueError, match="monitors"):
+    with pytest.raises(ValidationError, match="monitors"):
         invdes.updated_copy(metric=metric)
 
     metric = ModePower(monitor_name=MNT_NAME2, mode_index=10, f=[FREQ0])
-    with pytest.raises(ValueError, match="mode index"):
+    with pytest.raises(ValidationError, match="mode index"):
         invdes.updated_copy(metric=metric)
 
     metric = ModePower(monitor_name=MNT_NAME2, mode_index=0, f=[FREQ0 / 2])
-    with pytest.raises(ValueError, match="frequencies"):
+    with pytest.raises(ValidationError, match="frequencies"):
         invdes.updated_copy(metric=metric)
 
     metric = ModePower(monitor_name=MNT_NAME2, mode_index=0)
     monitor = mnt2.updated_copy(freqs=[FREQ0, FREQ0 / 2])
-    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
-    with pytest.raises(ValueError, match="single frequency"):
+    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=(monitor,)))
+    with pytest.raises(ValidationError, match="single frequency"):
         invdes.updated_copy(metric=metric)
 
     metric = ModeAmp(monitor_name=MNT_NAME2, mode_index=0) + ModePower(
         monitor_name=MNT_NAME2, mode_index=0
     )
     monitor = mnt2.updated_copy(freqs=[FREQ0])
-    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=[monitor]))
-    with pytest.raises(ValueError, match="must return a real"):
+    invdes = invdes.updated_copy(simulation=simulation.updated_copy(monitors=(monitor,)))
+    with pytest.raises(ValidationError, match="must return a real"):
         invdes.updated_copy(metric=metric)
 
 

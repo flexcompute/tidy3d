@@ -1,13 +1,16 @@
 # utilities for autograd derivative passing
 from __future__ import annotations
 
-import numpy as np
-import pydantic.v1 as pd
-import xarray as xr
+from typing import Optional
 
+import numpy as np
+import xarray as xr
+from pydantic import Field
+
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
-from tidy3d.components.types import ArrayLike, Bound, tidycomplex
+from tidy3d.components.types import ArrayLike, Bound, Complex
 from tidy3d.constants import LARGE_NUMBER
 
 from .types import PathType
@@ -44,32 +47,27 @@ class DerivativeSurfaceMesh(Tidy3dBaseModel):
 
     """
 
-    centers: ArrayLike = pd.Field(
-        ...,
+    centers: ArrayLike = Field(
         title="Centers",
         description="(N, 3) array storing the centers of each surface element.",
     )
 
-    areas: ArrayLike = pd.Field(
-        ...,
+    areas: ArrayLike = Field(
         title="Area Elements",
         description="(N,) array storing the first perpendicular vectors of each surface element.",
     )
 
-    normals: ArrayLike = pd.Field(
-        ...,
+    normals: ArrayLike = Field(
         title="Normals",
         description="(N, 3) array storing the normal vectors of each surface element.",
     )
 
-    perps1: ArrayLike = pd.Field(
-        ...,
+    perps1: ArrayLike = Field(
         title="Perpendiculars 1",
         description="(N, 3) array storing the first perpendicular vectors of each surface element.",
     )
 
-    perps2: ArrayLike = pd.Field(
-        ...,
+    perps2: ArrayLike = Field(
         title="Perpendiculars 1",
         description="(N, 3) array storing the first perpendicular vectors of each surface element.",
     )
@@ -78,14 +76,12 @@ class DerivativeSurfaceMesh(Tidy3dBaseModel):
 class DerivativeInfo(Tidy3dBaseModel):
     """Stores derivative information passed to the ``.compute_derivatives`` methods."""
 
-    paths: list[PathType] = pd.Field(
-        ...,
+    paths: list[PathType] = Field(
         title="Paths to Traced Fields",
         description="List of paths to the traced fields that need derivatives calculated.",
     )
 
-    E_der_map: FieldData = pd.Field(
-        ...,
+    E_der_map: FieldData = Field(
         title="Electric Field Gradient Map",
         description='Dataset where the field components ``("Ex", "Ey", "Ez")`` store the '
         "multiplication of the forward and adjoint electric fields. The tangential components "
@@ -93,91 +89,81 @@ class DerivativeInfo(Tidy3dBaseModel):
         "All components are used when computing volume-based gradients.",
     )
 
-    D_der_map: FieldData = pd.Field(
-        ...,
+    D_der_map: FieldData = Field(
         title="Displacement Field Gradient Map",
         description='Dataset where the field components ``("Ex", "Ey", "Ez")`` store the '
         "multiplication of the forward and adjoint displacement fields. The normal component "
         "of this dataset is used when computing adjoint gradients for shifting boundaries.",
     )
 
-    E_fwd: FieldData = pd.Field(
-        ...,
+    E_fwd: FieldData = Field(
         title="Forward Electric Fields",
         description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
         "forward electric fields used for computing gradients for a given structure.",
     )
 
-    E_adj: FieldData = pd.Field(
-        ...,
+    E_adj: FieldData = Field(
         title="Adjoint Electric Fields",
         description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
         "adjoint electric fields used for computing gradients for a given structure.",
     )
 
-    D_fwd: FieldData = pd.Field(
-        ...,
+    D_fwd: FieldData = Field(
         title="Forward Displacement Fields",
         description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
         "forward displacement fields used for computing gradients for a given structure.",
     )
 
-    D_adj: FieldData = pd.Field(
-        ...,
+    D_adj: FieldData = Field(
         title="Adjoint Displacement Fields",
         description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
         "adjoint displacement fields used for computing gradients for a given structure.",
     )
 
-    eps_data: PermittivityData = pd.Field(
-        ...,
+    eps_data: PermittivityData = Field(
         title="Permittivity Dataset",
         description="Dataset of relative permittivity values along all three dimensions. "
         "Used for automatically computing permittivity inside or outside of a simple geometry.",
     )
 
-    eps_in: tidycomplex = pd.Field(
+    eps_in: Complex = Field(
         title="Permittivity Inside",
         description="Permittivity inside of the ``Structure``. "
         "Typically computed from ``Structure.medium.eps_model``."
         "Used when it can not be computed from ``eps_data`` or when ``eps_approx==True``.",
     )
 
-    eps_out: tidycomplex = pd.Field(
-        ...,
+    eps_out: Complex = Field(
         title="Permittivity Outside",
         description="Permittivity outside of the ``Structure``. "
         "Typically computed from ``Simulation.medium.eps_model``."
         "Used when it can not be computed from ``eps_data`` or when ``eps_approx==True``.",
     )
 
-    eps_background: tidycomplex = pd.Field(
+    eps_background: Optional[Complex] = Field(
         None,
         title="Permittivity in Background",
         description="Permittivity outside of the ``Structure`` as manually specified by. "
         "``Structure.background_medium``. ",
     )
 
-    bounds: Bound = pd.Field(
-        ...,
+    bounds: Bound = Field(
         title="Geometry Bounds",
         description="Bounds corresponding to the structure, used in ``Medium`` calculations.",
     )
 
-    bounds_intersect: Bound = pd.Field(
-        ...,
+    bounds_intersect: Bound = Field(
         title="Geometry and Simulation Intersections Bounds",
         description="Bounds corresponding to the minimum intersection between the "
         "structure and the simulation it is contained in.",
     )
 
-    frequency: float = pd.Field(
-        ...,
+    frequency: float = Field(
         title="Frequency of adjoint simulation",
         description="Frequency at which the adjoint gradient is computed.",
     )
 
-    eps_no_structure: SpatialDataArray = pd.Field(
+    eps_no_structure: Optional[SpatialDataArray] = Field(
         None,
         title="Permittivity Without Structure",
         description="The permittivity of the original simulation without the structure that is "
@@ -185,7 +171,7 @@ class DerivativeInfo(Tidy3dBaseModel):
         "structure for shape optimization.",
     )
 
-    eps_inf_structure: SpatialDataArray = pd.Field(
+    eps_inf_structure: Optional[SpatialDataArray] = Field(
         None,
         title="Permittivity With Infinite Structure",
         description="The permittivity of the original simulation where the structure being "
@@ -193,7 +179,7 @@ class DerivativeInfo(Tidy3dBaseModel):
         "inside of the structure for shape optimization.",
     )
 
-    eps_approx: bool = pd.Field(
+    eps_approx: bool = Field(
         False,
         title="Use Permittivity Approximation",
         description="If ``True``, approximates outside permittivity using ``Simulation.medium``"
@@ -202,7 +188,7 @@ class DerivativeInfo(Tidy3dBaseModel):
         "evaluate the inside and outside relative permittivity for each geometry.",
     )
 
-    def updated_paths(self, paths: list[PathType]) -> DerivativeInfo:
+    def updated_paths(self, paths: list[PathType]) -> Self:
         """Update this ``DerivativeInfo`` with new set of paths."""
         return self.updated_copy(paths=paths)
 

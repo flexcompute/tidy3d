@@ -8,14 +8,16 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, Union
 
 import autograd.numpy as np
-import pydantic.v1 as pydantic
 import shapely
 import xarray as xr
-
-try:
-    from matplotlib import patches
-except ImportError:
-    pass
+from pydantic import (
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    field_validator,
+    model_validator,
+)
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
@@ -35,7 +37,7 @@ from tidy3d.components.types import (
     PlanePosition,
     Shapely,
     Size,
-    annotate_type,
+    discriminated_union,
 )
 from tidy3d.components.viz import (
     ARROW_LENGTH,
@@ -61,6 +63,11 @@ from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 from .bound_ops import bounds_intersection, bounds_union
+
+try:
+    from matplotlib import patches
+except ImportError:
+    pass
 
 POLY_GRID_SIZE = 1e-12
 
@@ -167,7 +174,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[slice, slice, slice]
+        tuple[slice, slice, slice]
             Slices into each of the three arrays that are inside the geometry bounds.
         """
         bounds = self.bounds
@@ -229,7 +236,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -251,7 +258,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -271,7 +278,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane. For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
@@ -290,7 +297,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ----------
         other : :class:`Geometry`
             Geometry to check intersection with.
-        strict_inequality : Tuple[bool, bool, bool] = [False, False, False]
+        strict_inequality : tuple[bool, bool, bool] = [False, False, False]
             For each dimension, defines whether to include equality in the boundaries comparison.
             If ``False``, equality is included, and two geometries that only intersect at their
             boundaries will evaluate as ``True``. If ``True``, such geometries will evaluate as
@@ -329,7 +336,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ----------
         other : :class:`Geometry`
             Geometry to check containment with.
-        strict_inequality : Tuple[bool, bool, bool] = [False, False, False]
+        strict_inequality : tuple[bool, bool, bool] = [False, False, False]
             For each dimension, defines whether to include equality in the boundaries comparison.
             If ``False``, equality will be considered as contained. If ``True``, ``other``'s
             bounds must be strictly within the bounds of ``self``.
@@ -405,7 +412,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[float, float, float], Tuple[float, float float]
+        tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
@@ -449,7 +456,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[float, float], Tuple[Tuple[float, float], Tuple[float, float]]
+        tuple[float, float], tuple[tuple[float, float], tuple[float, float]]
             Bounds along axis and a tuple of bounds in the ordered planar coordinates.
             Packed as ``(zmin, zmax), ((xmin, ymin), (xmax, ymax))``.
         """
@@ -620,7 +627,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-            Tuple[float, float], Tuple[float, float]
+            tuple[float, float], tuple[float, float]
         The x and y plot limits, packed as ``(xmin, xmax), (ymin, ymax)``.
         """
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
@@ -727,14 +734,14 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        coord : Tuple[Any, Any, Any]
+        coord : tuple[Any, Any, Any]
             Tuple of three values in original coordinate system.
         axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        Any, Tuple[Any, Any]
+        Any, tuple[Any, Any]
             The input coordinates are separated into the one along the axis provided
             and the two on the planar coordinates,
             like ``axis_coord, (planar_coord1, planar_coord2)``.
@@ -751,14 +758,14 @@ class Geometry(Tidy3dBaseModel, ABC):
         ----------
         ax_coord : Any
             Value along axis direction.
-        plane_coords : Tuple[Any, Any]
+        plane_coords : tuple[Any, Any]
             Values along ordered planar directions.
         axis : int
             Integer index into 'xyz' (0,1,2).
 
         Returns
         -------
-        Tuple[Any, Any, Any]
+        tuple[Any, Any, Any]
             The three values in the xyz coordinate system.
         """
         coords = list(plane_coords)
@@ -875,7 +882,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        bounds : Tuple[Tuple[float, float, float], Tuple[float, float, float]] = None
+        bounds : tuple[tuple[float, float, float], tuple[float, float, float]] = None
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -898,7 +905,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        bounds : Tuple[Tuple[float, float, float], Tuple[float, float, float]] = None
+        bounds : tuple[tuple[float, float, float], tuple[float, float, float]] = None
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -961,7 +968,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ----------
         angle : float
             Rotation angle (in radians).
-        axis : Union[int, Tuple[float, float, float]]
+        axis : Union[int, tuple[float, float, float]]
             Axis of rotation: 0, 1, or 2 for x, y, and z, respectively, or a 3D vector.
 
         Returns
@@ -976,7 +983,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        normal : Tuple[float, float, float]
+        normal : tuple[float, float, float]
             The 3D normal vector of the plane of reflection. The plane is assumed
                 to pass through the origin (0,0,0).
 
@@ -1004,7 +1011,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[float, float, float]
+        tuple[float, float, float]
             r, theta, and phi coordinates relative to ``local_origin``.
         """
         r = np.sqrt(x**2 + y**2 + z**2)
@@ -1027,7 +1034,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[float, float, float]
+        tuple[float, float, float]
             x, y, and z coordinates relative to ``local_origin``.
         """
         r_sin_theta = r * np.sin(theta)
@@ -1057,7 +1064,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[float, float, float]
+        tuple[float, float, float]
             x, y, and z components of the vector field in cartesian coordinates.
         """
         sin_theta = np.sin(theta)
@@ -1090,7 +1097,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[float, float, float]
+        tuple[float, float, float]
             radial (s), elevation (theta), and azimuthal (phi) components
             of the vector field in spherical coordinates.
         """
@@ -1118,7 +1125,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        Tuple[float, float]
+        tuple[float, float]
             theta and phi coordinates relative to ``local_origin``.
         """
         phi_local = np.arctan2(uy, ux)
@@ -1143,10 +1150,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     @verify_packages_import(["gdstk"])
     def load_gds_vertices_gdstk(
-        gds_cell,
-        gds_layer: int,
-        gds_dtype: Optional[int] = None,
-        gds_scale: pydantic.PositiveFloat = 1.0,
+        gds_cell, gds_layer: int, gds_dtype: Optional[int] = None, gds_scale: PositiveFloat = 1.0
     ) -> list[ArrayFloat2D]:
         """Load polygon vertices from a ``gdstk.Cell``.
 
@@ -1165,7 +1169,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        List[ArrayFloat2D]
+        list[ArrayFloat2D]
             List of polygon vertices
         """
 
@@ -1200,7 +1204,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         slab_bounds: tuple[float, float],
         gds_layer: int,
         gds_dtype: Optional[int] = None,
-        gds_scale: pydantic.PositiveFloat = 1.0,
+        gds_scale: PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
@@ -1213,7 +1217,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             ``gdstk.Cell`` containing 2D geometric data.
         axis : int
             Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
-        slab_bounds: Tuple[float, float]
+        slab_bounds: tuple[float, float]
             Minimal and maximal positions of the extruded slab along ``axis``.
         gds_layer : int
             Layer index in the ``gds_cell``.
@@ -1262,7 +1266,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                             shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane
                         )
                     )
-                except pydantic.ValidationError as error:
+                except ValidationError as error:
                     consolidated_logger.warning(str(error))
                 except Tidy3dError as error:
                     consolidated_logger.warning(str(error))
@@ -1286,7 +1290,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             of any of those.
         axis : int
             Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
-        slab_bounds: Tuple[float, float]
+        slab_bounds: tuple[float, float]
             Minimal and maximal positions of the extruded slab along ``axis``.
         dilation : float
             Dilation of the polygon in the base by shifting each edge along its normal outwards
@@ -1313,8 +1317,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
+        gds_layer: NonNegativeInt = 0,
+        gds_dtype: NonNegativeInt = 0,
     ) -> list:
         """Convert a Geometry object's planar slice to a .gds type polygon.
 
@@ -1363,8 +1367,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
+        gds_layer: NonNegativeInt = 0,
+        gds_dtype: NonNegativeInt = 0,
     ) -> None:
         """Append a Geometry object's planar slice to a .gds cell.
 
@@ -1403,8 +1407,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
+        gds_layer: NonNegativeInt = 0,
+        gds_dtype: NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
     ) -> None:
         """Export a Geometry object's planar slice to a .gds file.
@@ -1524,15 +1528,23 @@ class Geometry(Tidy3dBaseModel, ABC):
 class Centered(Geometry, ABC):
     """Geometry with a well defined center."""
 
-    center: TracedCoordinate = pydantic.Field(
-        (0.0, 0.0, 0.0),
+    center: Optional[TracedCoordinate] = Field(
+        None,
         title="Center",
         description="Center of object in x, y, and z.",
         units=MICROMETER,
     )
 
-    @pydantic.validator("center", always=True)
-    def _center_not_inf(cls, val):
+    @field_validator("center", mode="before")
+    @classmethod
+    def _center_default(cls, val):
+        """Make sure center is not infinitiy."""
+        if val is None:
+            val = (0.0, 0.0, 0.0)
+        return val
+
+    @field_validator("center")
+    def _center_not_inf(val):
         """Make sure center is not infinitiy."""
         if any(np.isinf(v) for v in val):
             raise ValidationError("center can not contain td.inf terms.")
@@ -1559,7 +1571,7 @@ class SimplePlaneIntersection(Geometry, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -1601,7 +1613,7 @@ class SimplePlaneIntersection(Geometry, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -1611,11 +1623,13 @@ class SimplePlaneIntersection(Geometry, ABC):
 class Planar(SimplePlaneIntersection, Geometry, ABC):
     """Geometry with one ``axis`` that is slab-like with thickness ``height``."""
 
-    axis: Axis = pydantic.Field(
-        2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
+    axis: Axis = Field(
+        2,
+        title="Axis",
+        description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z).",
     )
 
-    sidewall_angle: float = pydantic.Field(
+    sidewall_angle: float = Field(
         0.0,
         title="Sidewall angle",
         description="Angle of the sidewall. "
@@ -1627,7 +1641,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         units=RADIAN,
     )
 
-    reference_plane: PlanePosition = pydantic.Field(
+    reference_plane: PlanePosition = Field(
         "middle",
         title="Reference plane for cross section",
         description="The position of the plane where the supplied cross section are "
@@ -1638,15 +1652,14 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         "``top`` refers to the positive side of the y-axis.",
     )
 
-    @pydantic.validator("sidewall_angle", always=True)
-    def validate_angle(cls, value: float) -> float:
+    @field_validator("sidewall_angle")
+    def validate_angle(val) -> float:
         lower_bound = -np.pi / 2
         upper_bound = np.pi / 2
-        if (value <= lower_bound) or (value >= upper_bound):
+        if (val <= lower_bound) or (val >= upper_bound):
             # u03C0 is unicode for pi
-            raise ValidationError(f"Sidewall angle ({value}) must be between -π/2 and π/2 rad.")
-
-        return value
+            raise ValidationError(f"Sidewall angle ({val}) must be between -π/2 and π/2 rad.")
+        return val
 
     @property
     @abstractmethod
@@ -1681,7 +1694,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
         `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -1704,7 +1717,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -1723,7 +1736,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -1783,15 +1796,17 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
 class Circular(Geometry):
     """Geometry with circular characteristics (specified by a radius)."""
 
-    radius: pydantic.NonNegativeFloat = pydantic.Field(
-        ..., title="Radius", description="Radius of geometry.", units=MICROMETER
+    radius: NonNegativeFloat = Field(
+        title="Radius",
+        description="Radius of geometry.",
+        units=MICROMETER,
     )
 
-    @pydantic.validator("radius", always=True)
-    def _radius_not_inf(cls, val):
+    @field_validator("radius")
+    def _radius_not_inf(val):
         """Make sure center is not infinitiy."""
         if np.isinf(val):
-            raise ValidationError("radius can not be td.inf.")
+            raise ValidationError("radius can not be 'td.inf'.")
         return val
 
     def _intersect_dist(self, position, z0) -> float:
@@ -1827,8 +1842,7 @@ class Box(SimplePlaneIntersection, Centered):
     >>> b = Box(center=(1,2,3), size=(2,2,2))
     """
 
-    size: TracedSize = pydantic.Field(
-        ...,
+    size: TracedSize = Field(
         title="Size",
         description="Size in x, y, and z directions.",
         units=MICROMETER,
@@ -1840,9 +1854,9 @@ class Box(SimplePlaneIntersection, Centered):
 
         Parameters
         ----------
-        rmin : Tuple[float, float, float]
+        rmin : tuple[float, float, float]
             (x, y, z) coordinate of the minimum values.
-        rmax : Tuple[float, float, float]
+        rmax : tuple[float, float, float]
             (x, y, z) coordinate of the maximum values.
 
         Example
@@ -1874,9 +1888,9 @@ class Box(SimplePlaneIntersection, Centered):
 
         Parameters
         ----------
-        size : Tuple[float, float, float]
+        size : tuple[float, float, float]
             Size of object in x, y, and z directions.
-        center : Tuple[float, float, float]
+        center : tuple[float, float, float]
             Center of object in x, y, and z.
 
         Example
@@ -1940,10 +1954,10 @@ class Box(SimplePlaneIntersection, Centered):
 
         surfaces = []
         for _cent, _size, _name, _normal_dir in zip(centers, sizes, names, normal_dirs):
-            if "normal_dir" in cls.__dict__["__fields__"]:
+            if "normal_dir" in cls.model_fields:
                 kwargs["normal_dir"] = _normal_dir
 
-            if "name" in cls.__dict__["__fields__"]:
+            if "name" in cls.model_fields:
                 kwargs["name"] = _name
 
             surface = cls(center=_cent, size=_size, **kwargs)
@@ -1964,9 +1978,9 @@ class Box(SimplePlaneIntersection, Centered):
 
         Parameters
         ----------
-        size : Tuple[float, float, float]
+        size : tuple[float, float, float]
             Size of object in x, y, and z directions.
-        center : Tuple[float, float, float]
+        center : tuple[float, float, float]
             Center of object in x, y, and z.
 
         Example
@@ -1977,7 +1991,7 @@ class Box(SimplePlaneIntersection, Centered):
         """
         exclude_surfaces = kwargs.pop("exclude_surfaces", None)
         surfaces = cls.surfaces(size=size, center=center, **kwargs)
-        if "name" in cls.__dict__["__fields__"] and exclude_surfaces:
+        if "name" in cls.model_fields and exclude_surfaces:
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
@@ -1998,7 +2012,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -2048,7 +2062,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -2108,7 +2122,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect this 2D box.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -2144,7 +2158,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         Returns
         -------
-        Tuple[float, float, float], Tuple[float, float float]
+        tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         size = self.size
@@ -2205,7 +2219,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         Parameters
         ----------
-        direction: Tuple[float, float, float]
+        direction: tuple[float, float, float]
             Normalized vector describing the arrow direction.
         x : float = None
             Position of plotting plane in x direction.
@@ -2534,24 +2548,25 @@ class Box(SimplePlaneIntersection, Centered):
 class Transformed(Geometry):
     """Class representing a transformed geometry."""
 
-    geometry: annotate_type(GeometryType) = pydantic.Field(
-        ..., title="Geometry", description="Base geometry to be transformed."
+    geometry: discriminated_union(GeometryType) = Field(
+        title="Geometry",
+        description="Base geometry to be transformed.",
     )
 
-    transform: MatrixReal4x4 = pydantic.Field(
-        np.eye(4).tolist(),
+    transform: MatrixReal4x4 = Field(
+        default_factory=lambda: np.eye(4).tolist(),
         title="Transform",
         description="Transform matrix applied to the base geometry.",
     )
 
-    @pydantic.validator("transform")
-    def _transform_is_invertible(cls, val):
+    @field_validator("transform")
+    def _transform_is_invertible(val):
         # If the transform is not invertible, this will raise an error
         _ = np.linalg.inv(val)
         return val
 
-    @pydantic.validator("geometry")
-    def _geometry_is_finite(cls, val):
+    @field_validator("geometry")
+    def _geometry_is_finite(val):
         if not np.isfinite(val.bounds).all():
             raise ValidationError(
                 "Transformations are only supported on geometries with finite dimensions. "
@@ -2560,13 +2575,13 @@ class Transformed(Geometry):
             )
         return val
 
-    @pydantic.root_validator(skip_on_failure=True)
-    def _apply_transforms(cls, values):
-        while isinstance(values["geometry"], Transformed):
-            inner = values["geometry"]
-            values["geometry"] = inner.geometry
-            values["transform"] = np.dot(values["transform"], inner.transform)
-        return values
+    @model_validator(mode="after")
+    def _apply_transforms(self):
+        while isinstance(self.geometry, Transformed):
+            inner = self.geometry
+            object.__setattr__(self, "geometry", inner.geometry)
+            object.__setattr__(self, "transform", np.dot(self.transform, inner.transform))
+        return self
 
     @cached_property
     def inverse(self) -> MatrixReal4x4:
@@ -2605,7 +2620,7 @@ class Transformed(Geometry):
 
         Returns
         -------
-        Tuple[float, float, float], Tuple[float, float, float]
+        tuple[float, float, float], tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         # NOTE (Lucas): The bounds are overestimated because we don't want to calculate
@@ -2629,7 +2644,7 @@ class Transformed(Geometry):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -2748,7 +2763,7 @@ class Transformed(Geometry):
         ----------
         angle : float
             Rotation angle (in radians).
-        axis : Union[int, Tuple[float, float, float]]
+        axis : Union[int, tuple[float, float, float]]
             Axis of rotation: 0, 1, or 2 for x, y, and z, respectively, or a 3D vector.
 
         Returns
@@ -2766,7 +2781,7 @@ class Transformed(Geometry):
 
         Parameters
         ----------
-        normal : Tuple[float, float, float]
+        normal : tuple[float, float, float]
             Normal of the plane of reflection.
 
         Returns
@@ -2829,27 +2844,24 @@ class Transformed(Geometry):
 class ClipOperation(Geometry):
     """Class representing the result of a set operation between geometries."""
 
-    operation: ClipOperationType = pydantic.Field(
-        ...,
+    operation: ClipOperationType = Field(
         title="Operation Type",
         description="Operation to be performed between geometries.",
     )
 
-    geometry_a: annotate_type(GeometryType) = pydantic.Field(
-        ...,
+    geometry_a: discriminated_union(GeometryType) = Field(
         title="Geometry A",
         description="First operand for the set operation. It can be any geometry type, including "
         ":class:`GeometryGroup`.",
     )
 
-    geometry_b: annotate_type(GeometryType) = pydantic.Field(
-        ...,
+    geometry_b: discriminated_union(GeometryType) = Field(
         title="Geometry B",
         description="Second operand for the set operation. It can also be any geometry type.",
     )
 
-    @pydantic.validator("geometry_a", "geometry_b", always=True)
-    def _geometries_untraced(cls, val):
+    @field_validator("geometry_a", "geometry_b")
+    def _geometries_untraced(val):
         """Make sure that ``ClipOperation`` geometries do not contain tracers."""
         traced = val._strip_traced_fields()
         if traced:
@@ -2871,7 +2883,7 @@ class ClipOperation(Geometry):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             Valid polygons retrieved from ``base geometry``.
         """
         if base_geometry.geom_type == "GeometryCollection":
@@ -2920,7 +2932,7 @@ class ClipOperation(Geometry):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -2947,7 +2959,7 @@ class ClipOperation(Geometry):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -2964,7 +2976,7 @@ class ClipOperation(Geometry):
 
         Returns
         -------
-        Tuple[float, float, float], Tuple[float, float float]
+        tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
         # Overestimates
@@ -3081,16 +3093,15 @@ class ClipOperation(Geometry):
 class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: tuple[annotate_type(GeometryType), ...] = pydantic.Field(
-        ...,
+    geometries: tuple[discriminated_union(GeometryType), ...] = Field(
         title="Geometries",
         description="Tuple of geometries in a single grouping. "
         "Can provide significant performance enhancement in ``Structure`` when all geometries are "
         "assigned the same medium.",
     )
 
-    @pydantic.validator("geometries", always=True)
-    def _geometries_not_empty(cls, val):
+    @field_validator("geometries")
+    def _geometries_not_empty(val):
         """make sure geometries are not empty."""
         if not len(val) > 0:
             raise ValidationError("GeometryGroup.geometries must not be empty.")
@@ -3102,7 +3113,7 @@ class GeometryGroup(Geometry):
 
         Returns
         -------
-        Tuple[float, float, float], Tuple[float, float, float]
+        tuple[float, float, float], tuple[float, float, float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
         """
 
@@ -3128,7 +3139,7 @@ class GeometryGroup(Geometry):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -3155,7 +3166,7 @@ class GeometryGroup(Geometry):
 
         Returns
         -------
-        List[shapely.geometry.base.BaseGeometry]
+        list[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
@@ -3264,9 +3275,9 @@ class GeometryGroup(Geometry):
     def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> GeometryGroup:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
-        new_geometries = [
+        new_geometries = tuple(
             geometry._update_from_bounds(bounds=bounds, axis=axis) for geometry in self.geometries
-        ]
+        )
         return self.updated_copy(geometries=new_geometries)
 
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:

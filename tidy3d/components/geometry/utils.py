@@ -7,7 +7,7 @@ from math import isclose
 from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
@@ -48,7 +48,7 @@ def merging_geometries_on_plane(
 
     Parameters
     ----------
-    geometries : List[GeometryType]
+    geometries : list[GeometryType]
         List of structures to filter on the plane.
     plane : Box
         Plane specification.
@@ -57,7 +57,7 @@ def merging_geometries_on_plane(
 
     Returns
     -------
-    List[Tuple[Any, shapely]]
+    list[tuple[Any, shapely]]
         List of shapes and their property value on the plane after merging.
     """
 
@@ -213,7 +213,7 @@ def from_shapely(
         of any of those.
     axis : int
         Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
-    slab_bounds: Tuple[float, float]
+    slab_bounds: tuple[float, float]
         Minimal and maximal positions of the extruded slab along ``axis``.
     dilation : float
         Dilation of the polygon in the base by shifting each edge along its normal outwards
@@ -286,7 +286,7 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
 
     Returns
     -------
-    List[Tuple[ArrayFloat2D]]
+    list[tuple[ArrayFloat2D]]
         List of tuples ``(exterior, *interiors)``.
     """
     if shape.geom_type == "LinearRing":
@@ -361,14 +361,12 @@ class SnapBehavior(Enum):
 class SnappingSpec(Tidy3dBaseModel):
     """Specifies how to apply grid snapping along each dimension."""
 
-    location: tuple[SnapLocation, SnapLocation, SnapLocation] = pydantic.Field(
-        ...,
+    location: tuple[SnapLocation, SnapLocation, SnapLocation] = Field(
         title="Location",
         description="Describes which positions in the grid will be considered for snapping.",
     )
 
-    behavior: tuple[SnapBehavior, SnapBehavior, SnapBehavior] = pydantic.Field(
-        ...,
+    behavior: tuple[SnapBehavior, SnapBehavior, SnapBehavior] = Field(
         title="Behavior",
         description="Describes how snapping positions will be chosen.",
     )

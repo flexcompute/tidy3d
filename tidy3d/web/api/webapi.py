@@ -222,7 +222,7 @@ def upload(
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     simulation_type : str = "tidy3d"
         Type of simulation being uploaded.
-    parent_tasks : List[str]
+    parent_tasks : list[str]
         List of related task ids.
     source_required: bool = True
         If ``True``, simulations without sources will raise an error before being uploaded.
@@ -909,7 +909,7 @@ def get_tasks(
 
     Returns
     -------
-    List[Dict]
+    list[dict]
         List of dictionaries storing the information for each of the tasks last ``num_tasks`` tasks.
     """
     folder = Folder.get(folder, create=True)

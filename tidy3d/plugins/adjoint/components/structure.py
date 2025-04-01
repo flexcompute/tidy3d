@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Union
 
 import numpy as np
-import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
+from pydantic import Field, field_validator
 
 from tidy3d.components.data.monitor_data import FieldData, PermittivityData
 from tidy3d.components.geometry.utils import GeometryType
@@ -29,13 +29,13 @@ class AbstractJaxStructure(Structure, JaxObject):
     _tidy3d_class = Structure
 
     # which of "geometry" or "medium" is differentiable for this class
-    _differentiable_fields = ()
+    _differentiable_fields: tuple[str, ...] = ()
 
     geometry: Union[JaxGeometryType, GeometryType]
     medium: Union[JaxMediumType, MediumType]
 
-    @pd.validator("medium", always=True)
-    def _check_2d_geometry(cls, val, values):
+    @field_validator("medium")
+    def _check_2d_geometry(val):
         """Override validator checking 2D geometry, which triggers unnecessarily for gradients."""
         return val
 
@@ -75,7 +75,7 @@ class AbstractJaxStructure(Structure, JaxObject):
         jax_fields = {"geometry": structure.geometry, "medium": structure.medium}
 
         for key, component in jax_fields.items():
-            if key in cls._differentiable_fields:
+            if key in cls._differentiable_fields.default:
                 type_map = GEO_MED_MAPPINGS[key]
                 jax_type = type_map[type(component)]
                 struct_dict[key] = jax_type.from_tidy3d(component)
@@ -152,7 +152,7 @@ class AbstractJaxStructure(Structure, JaxObject):
 
     def store_vjp(
         self,
-        # field_keys: List[Literal["medium", "geometry"]],
+        # field_keys: list[Literal["medium", "geometry"]],
         grad_data_fwd: FieldData,
         grad_data_adj: FieldData,
         grad_data_eps: PermittivityData,
@@ -194,16 +194,14 @@ class AbstractJaxStructure(Structure, JaxObject):
 class JaxStructure(AbstractJaxStructure, JaxObject):
     """A :class:`.Structure` registered with jax."""
 
-    geometry: JaxGeometryType = pd.Field(
-        ...,
+    geometry: JaxGeometryType = Field(
         title="Geometry",
         description="Geometry of the structure, which is jax-compatible.",
         jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
 
-    medium: JaxMediumType = pd.Field(
-        ...,
+    medium: JaxMediumType = Field(
         title="Medium",
         description="Medium of the structure, which is jax-compatible.",
         jax_field=True,
@@ -217,15 +215,14 @@ class JaxStructure(AbstractJaxStructure, JaxObject):
 class JaxStructureStaticMedium(AbstractJaxStructure, JaxObject):
     """A :class:`.Structure` registered with jax."""
 
-    geometry: JaxGeometryType = pd.Field(
-        ...,
+    geometry: JaxGeometryType = Field(
         title="Geometry",
         description="Geometry of the structure, which is jax-compatible.",
         jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
 
-    medium: MediumType = pd.Field(
+    medium: MediumType = Field(
         ...,
         title="Medium",
         description="Regular ``tidy3d`` medium of the structure, non differentiable. "
@@ -241,8 +238,7 @@ class JaxStructureStaticMedium(AbstractJaxStructure, JaxObject):
 class JaxStructureStaticGeometry(AbstractJaxStructure, JaxObject):
     """A :class:`.Structure` registered with jax."""
 
-    geometry: GeometryType = pd.Field(
-        ...,
+    geometry: GeometryType = Field(
         title="Geometry",
         description="Regular ``tidy3d`` geometry of the structure, non differentiable. "
         "Supports angled sidewalls and other complex geometries.",
@@ -250,8 +246,7 @@ class JaxStructureStaticGeometry(AbstractJaxStructure, JaxObject):
         discriminator=TYPE_TAG_STR,
     )
 
-    medium: JaxMediumType = pd.Field(
-        ...,
+    medium: JaxMediumType = Field(
         title="Medium",
         description="Medium of the structure, which is jax-compatible.",
         jax_field=True,

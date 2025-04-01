@@ -6,10 +6,9 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
-from pydantic.v1 import NonNegativeFloat, PositiveInt
+from pydantic import Field, NonNegativeFloat, PositiveInt, model_validator
 
-from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
@@ -585,13 +584,13 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
             simulation=sim_array.updated_copy(monitors=good_monitors), data=data_array
         )
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
+    @model_validator(mode="before")
+    def _warn_rf_license(data):
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
-        return values
+        return data
 
 
 class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
@@ -620,35 +619,33 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     ... ) # doctest: +SKIP
     """
 
-    array_size: tuple[PositiveInt, PositiveInt, PositiveInt] = pd.Field(
+    array_size: tuple[PositiveInt, PositiveInt, PositiveInt] = Field(
         title="Array Size",
         description="Number of antennas along x, y, and z directions.",
     )
 
-    spacings: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = pd.Field(
+    spacings: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = Field(
         title="Antenna Spacings",
         description="Center-to-center spacings between antennas along x, y, and z directions.",
     )
 
-    phase_shifts: tuple[float, float, float] = pd.Field(
+    phase_shifts: tuple[float, float, float] = Field(
         (0, 0, 0),
         title="Phase Shifts",
         description="Phase-shifts between antennas along x, y, and z directions.",
     )
 
-    amp_multipliers: tuple[Optional[ArrayLike], Optional[ArrayLike], Optional[ArrayLike]] = (
-        pd.Field(
-            (None, None, None),
-            title="Amplitude Multipliers",
-            description="Amplitude multipliers spatially distributed along x, y, and z directions.",
-        )
+    amp_multipliers: tuple[Optional[ArrayLike], Optional[ArrayLike], Optional[ArrayLike]] = Field(
+        (None, None, None),
+        title="Amplitude Multipliers",
+        description="Amplitude multipliers spatially distributed along x, y, and z directions.",
     )
 
-    @pd.validator("amp_multipliers", pre=True, always=True)
-    @skip_if_fields_missing(["array_size"])
-    def _check_amp_multipliers(cls, val, values):
+    @model_validator(mode="after")
+    def _check_amp_multipliers(self):
         """Check that the length of the amplitude multipliers is equal to the array size along each dimension."""
-        array_size = values.get("array_size")
+        val = self.amp_multipliers
+        array_size = self.array_size
         if len(val) != 3:
             raise ValueError("'amp_multipliers' must have 3 elements.")
         if val[0] is not None and len(val[0]) != array_size[0]:
@@ -663,7 +660,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
             raise ValueError(
                 f"'amp_multipliers' has length of {len(val[2])} along the z direction, but the array size is {array_size[2]}."
             )
-        return val
+        return self
 
     @property
     def _antenna_locations(self) -> ArrayLike:

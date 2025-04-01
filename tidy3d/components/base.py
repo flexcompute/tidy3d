@@ -7,30 +7,32 @@ import io
 import json
 import math
 import os
-import pathlib
 import tempfile
-from functools import wraps
+import typing as _t
+from collections import defaultdict
+from collections.abc import Iterator, Mapping, Sequence
+from functools import total_ordering, wraps
 from math import ceil
-from typing import Any, Callable, Optional, Union
+from pathlib import Path
+from typing import Any, Callable, Literal, Optional, TypeVar, Union
 
 import h5py
 import numpy as np
-import pydantic.v1 as pydantic
 import rich
 import xarray as xr
 import yaml
-from autograd.builtins import dict as dict_ag
 from autograd.tracer import isbox
-from pydantic.v1.fields import ModelField
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
+from tidy3d.compat import Self
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
 
-from .autograd.types import AutogradFieldMap, Box
+from .autograd.types import AutogradFieldMap, TracedDict
 from .autograd.utils import get_static
-from .data.data_array import DATA_ARRAY_MAP, DataArray
+from .data.data_array import DATA_ARRAY_MAP
 from .file_util import compress_file_to_gzip, extract_gzip_file
-from .types import TYPE_TAG_STR, ComplexNumber, Literal
+from .types import TYPE_TAG_STR, Undefined
 
 INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally
@@ -68,17 +70,10 @@ def cached_property(cached_property_getter):
     return property(cache(cached_property_getter))
 
 
-def ndarray_encoder(val):
-    """How a ``np.ndarray`` gets handled before saving to json."""
-    if np.any(np.iscomplex(val)):
-        return {"real": val.real.tolist(), "imag": val.imag.tolist()}
-    return val.real.tolist()
-
-
 def _get_valid_extension(fname: str) -> str:
     """Return the file extension from fname, validated to accepted ones."""
     valid_extensions = [".json", ".yaml", ".hdf5", ".h5", ".hdf5.gz"]
-    extensions = [s.lower() for s in pathlib.Path(fname).suffixes[-2:]]
+    extensions = [s.lower() for s in Path(fname).suffixes[-2:]]
     if len(extensions) == 0:
         raise FileError(f"File '{fname}' missing extension.")
     single_extension = extensions[-1]
@@ -93,40 +88,93 @@ def _get_valid_extension(fname: str) -> str:
     )
 
 
-def skip_if_fields_missing(fields: list[str], root=False):
-    """Decorate ``validator`` to check that other fields have passed validation."""
-
-    def actual_decorator(validator):
-        @wraps(validator)
-        def _validator(cls, *args, **kwargs):
-            """New validator function."""
-            values = kwargs.get("values")
-            if values is None:
-                values = args[0] if root else args[1]
-            for field in fields:
-                if field not in values:
-                    log.warning(
-                        f"Could not execute validator '{validator.__name__}' because field "
-                        f"'{field}' failed validation."
-                    )
-                    if root:
-                        return values
-                    return kwargs.get("val") if "val" in kwargs else args[0]
-
-            return validator(cls, *args, **kwargs)
-
-        return _validator
-
-    return actual_decorator
+def _fmt_ann_literal(ann) -> str:
+    """Spell the annotation exactly as written."""
+    if ann is None:
+        return "Any"
+    if isinstance(ann, _t._GenericAlias):
+        return str(ann).replace("typing.", "")
+    return ann.__name__ if hasattr(ann, "__name__") else str(ann)
 
 
-class Tidy3dBaseModel(pydantic.BaseModel):
+T = TypeVar("T", bound="Tidy3dBaseModel")
+
+
+@total_ordering
+class Tidy3dBaseModel(BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
     Defines configuration for handling data structures
     as well as methods for importing, exporting, and hashing tidy3d objects.
     For more details on pydantic base models, see:
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_default=True,
+        validate_assignment=True,
+        populate_by_name=True,
+        ser_json_inf_nan="strings",
+        extra="forbid",
+        frozen=True,
+    )
+
+    attrs: dict = Field(
+        default_factory=dict,
+        title="Attributes",
+        description="Dictionary storing arbitrary metadata for a Tidy3D object. "
+        "This dictionary can be freely used by the user for storing data without affecting the "
+        "operation of Tidy3D as it is not used internally. "
+        "Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. "
+        "For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. "
+        "Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects "
+        "that can not be serialized. One can check if ``attrs`` are serializable "
+        "by calling ``obj.json()``.",
+    )
+
+    _cached_properties: dict = PrivateAttr(default_factory=dict)
+
+    @field_validator("name", check_fields=False)
+    def _validate_name_no_special_characters(name):
+        if name is None:
+            return name
+        for character in FORBID_SPECIAL_CHARACTERS:
+            if character in name:
+                raise ValueError(
+                    f"Special character '{character}' not allowed in component name {name}."
+                )
+        return name
+
+    def __init__(self, **kwargs):
+        """Init method, includes post-init validators."""
+        log.begin_capture()
+        super().__init__(**kwargs)
+        log.end_capture(self)
+
+    def __init_subclass__(cls: type[T], **kwargs):
+        """Injects a constant discriminator field before Pydantic builds the model.
+
+        Adds
+            type: Literal["<ClassName>"] = "<ClassName>"
+        to every concrete subclass so it can participate in a
+        `Field(discriminator="type")` union without manual boilerplate.
+
+        Must run *before* `super().__init_subclass__()`; that call lets Pydantic
+        see the injected field during its normal schema/validator generation.
+        See also: https://peps.python.org/pep-0487/
+        """
+        tag = cls.__name__
+        cls.__annotations__[TYPE_TAG_STR] = Literal[tag]
+        setattr(cls, TYPE_TAG_STR, tag)
+
+        super().__init_subclass__(**kwargs)
+
+    @classmethod
+    def __pydantic_init_subclass__(cls: type[T], **kwargs):
+        super().__pydantic_init_subclass__(**kwargs)
+
+        # add docstring once pydantic is done constructing the class
+        cls.__doc__ = cls.generate_docstring()
 
     def __hash__(self) -> int:
         """Hash method."""
@@ -141,101 +189,44 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         self.to_hdf5(bf)
         return hashlib.sha256(bf.getvalue()).hexdigest()
 
-    def __init__(self, **kwargs):
-        """Init method, includes post-init validators."""
-        log.begin_capture()
-        super().__init__(**kwargs)
-        self._post_init_validators()
-        log.end_capture(self)
+    def copy(
+        self, *, deep: bool = True, validate: bool = True, update: Mapping[str, Any] | None = None
+    ) -> Self:
+        """Return a copy of the model.
 
-    def _post_init_validators(self) -> None:
-        """Call validators taking ``self`` that get run after init, implement in subclasses."""
-
-    def __init_subclass__(cls) -> None:
-        """Things that are done to each of the models."""
-
-        cls.add_type_field()
-        cls.generate_docstring()
-
-    class Config:
-        """Sets config for all :class:`Tidy3dBaseModel` objects.
-
-        Configuration Options
-        ---------------------
-        allow_population_by_field_name : bool = True
-            Allow properties to stand in for fields(?).
-        arbitrary_types_allowed : bool = True
-            Allow types like numpy arrays.
-        extra : str = 'forbid'
-            Forbid extra kwargs not specified in model.
-        json_encoders : Dict[type, Callable]
-            Defines how to encode type in json file.
-        validate_all : bool = True
-            Validate default values just to be safe.
-        validate_assignment : bool
-            Re-validate after re-assignment of field in model.
+        Parameters
+        ----------
+        deep : bool = True
+            Whether to make a deep copy first (same as v1).
+        validate : bool = True
+            If ``True``, run full Pydantic validation on the copied data.
+        update : Mapping[str, Any] | None = None
+            Optional mapping of fields to overwrite (passed straight
+            through to ``model_copy(update=...)``).
         """
+        if update and self.model_config.get("extra") == "forbid":
+            invalid = set(update) - set(self.model_fields)
+            if invalid:
+                raise KeyError(f"'{self.type}' received invalid fields on copy: {invalid}")
 
-        arbitrary_types_allowed = True
-        validate_all = True
-        extra = "forbid"
-        validate_assignment = True
-        allow_population_by_field_name = True
-        json_encoders = {
-            np.ndarray: ndarray_encoder,
-            complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: DataArray._json_encoder,
-            Box: lambda x: x._value,
-        }
-        frozen = True
-        allow_mutation = False
-        copy_on_model_validation = "none"
+        new_model = self.model_copy(deep=deep, update=update)
 
-    _cached_properties = pydantic.PrivateAttr({})
-
-    @pydantic.root_validator(skip_on_failure=True)
-    def _special_characters_not_in_name(cls, values):
-        name = values.get("name")
-        if name:
-            for character in FORBID_SPECIAL_CHARACTERS:
-                if character in name:
-                    raise ValueError(
-                        f"Special character '{character}' not allowed in component name {name}."
-                    )
-        return values
-
-    attrs: dict = pydantic.Field(
-        {},
-        title="Attributes",
-        description="Dictionary storing arbitrary metadata for a Tidy3D object. "
-        "This dictionary can be freely used by the user for storing data without affecting the "
-        "operation of Tidy3D as it is not used internally. "
-        "Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. "
-        "For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. "
-        "Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects "
-        "that can not be serialized. One can check if ``attrs`` are serializable "
-        "by calling ``obj.json()``.",
-    )
-
-    def copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
-        """Copy a Tidy3dBaseModel.  With ``deep=True`` and ``validate=True`` as default."""
-        kwargs.update(deep=deep)
-        new_copy = pydantic.BaseModel.copy(self, **kwargs)
         if validate:
-            return self.validate(new_copy.dict())
-        # cached property is cleared automatically when validation is on, but it
-        # needs to be manually cleared when validation is off
-        new_copy._cached_properties = {}
-        return new_copy
+            return self.__class__.model_validate(new_model.model_dump())
+        else:
+            # make sure cache is always cleared
+            new_model._cached_properties = {}
+
+        return new_model
 
     def updated_copy(
-        self, path: Optional[str] = None, deep: bool = True, validate: bool = True, **kwargs
-    ) -> Tidy3dBaseModel:
+        self, path: str | None = None, *, deep: bool = True, validate: bool = True, **kwargs: Any
+    ) -> Self:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
         Note
         ----
-        If ``path`` supplied, applies the updated copy with the update performed on the sub-
+        If ``path`` is supplied, applies the updated copy with the update performed on the sub-
         component corresponding to the path. For indexing into a tuple or list, use the integer
         value.
 
@@ -243,54 +234,193 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim = simulation.updated_copy(size=new_size, path=f"structures/{i}/geometry") # doctest: +SKIP
         """
-
         if not path:
-            return self._updated_copy(**kwargs, deep=deep, validate=validate)
+            return self.copy(deep=deep, validate=validate, update=kwargs)
 
-        path_components = path.split("/")
-
-        field_name = path_components[0]
+        path_parts = path.split("/")
+        field_name, *rest = path_parts
 
         try:
             sub_component = getattr(self, field_name)
-        except AttributeError as e:
+        except AttributeError as exc:
             raise AttributeError(
-                f"Could not field field '{field_name}' in the sub-component `path`. "
-                f"Found fields of '{tuple(self.__fields__.keys())}'. "
-                "Please double check the `path` passed to `.updated_copy()`."
-            ) from e
+                f"Could not find field '{field_name}' in path '{path}'. "
+                f"Available top-level fields: {tuple(self.model_fields)}."
+            ) from exc
 
         if isinstance(sub_component, (list, tuple)):
-            integer_index_path = path_components[1]
-
             try:
-                index = int(integer_index_path)
-            except ValueError:
+                index = int(rest[0])
+            except (IndexError, ValueError):
                 raise ValueError(
-                    f"Could not grab integer index from path '{path}'. "
-                    f"Please correct the sub path containing '{integer_index_path}' to be an "
-                    f"integer index into '{field_name}' (containing {len(sub_component)} elements)."
+                    f"Expected integer index into '{field_name}' in path '{path}'."
                 ) from None
-
             sub_component_list = list(sub_component)
-            sub_component = sub_component_list[index]
-            sub_path = "/".join(path_components[2:])
-
-            sub_component_list[index] = sub_component.updated_copy(
-                path=sub_path, deep=deep, validate=validate, **kwargs
+            sub_component_list[index] = sub_component_list[index].updated_copy(
+                path="/".join(rest[1:]),
+                deep=deep,
+                validate=validate,
+                **kwargs,
             )
-            new_component = tuple(sub_component_list)
+            new_value = type(sub_component)(sub_component_list)
         else:
-            sub_path = "/".join(path_components[1:])
-            new_component = sub_component.updated_copy(
-                path=sub_path, deep=deep, validate=validate, **kwargs
+            new_value = sub_component.updated_copy(
+                path="/".join(rest),
+                deep=deep,
+                validate=validate,
+                **kwargs,
             )
 
-        return self._updated_copy(deep=deep, validate=validate, **{field_name: new_component})
+        return self.copy(deep=deep, validate=validate, update={field_name: new_value})
 
-    def _updated_copy(self, deep: bool = True, validate: bool = True, **kwargs) -> Tidy3dBaseModel:
-        """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
-        return self.copy(update=kwargs, deep=deep, validate=validate)
+    @staticmethod
+    def _core_model_traversal(
+        current_obj: Any, current_path_segments: list[str]
+    ) -> Iterator[tuple[Self, list[str]]]:
+        """
+        Recursively traverses a model structure yielding Tidy3dBaseModel instances and their paths.
+
+        This is an internal helper method used by :meth:`find_paths` and :meth:`find_submodels`
+        to navigate nested :class:`Tidy3dBaseModel` structures.
+
+        Parameters
+        ----------
+        current_obj : Any
+            The current object in the traversal, which can be a :class:`Tidy3dBaseModel`,
+            list, tuple, or other type.
+        current_path_segments : list[str]
+            A list of strings representing the path segments from the initial model
+            to the ``current_obj``.
+
+        Returns
+        -------
+        Iterator[tuple[Self, list[str]]]
+            An iterator yielding tuples, where the first element is a found :class:`Tidy3dBaseModel` instance
+            and the second is a list of strings representing the path to that instance
+            from the initial object. The path for the top-level model itself will be an empty list.
+        """
+        if isinstance(current_obj, Tidy3dBaseModel):
+            yield current_obj, current_path_segments
+
+            for field_name in current_obj.model_fields:
+                if (
+                    field_name == "type"
+                    and getattr(current_obj, field_name, None) == current_obj.__class__.__name__
+                ):
+                    continue
+
+                field_value = getattr(current_obj, field_name)
+                yield from Tidy3dBaseModel._core_model_traversal(
+                    field_value, [*current_path_segments, field_name]
+                )
+        elif isinstance(current_obj, (list, tuple)):
+            for index, item in enumerate(current_obj):
+                yield from Tidy3dBaseModel._core_model_traversal(
+                    item, [*current_path_segments, str(index)]
+                )
+
+    def find_paths(self, target_field_name: str, target_field_value: Any = Undefined) -> list[str]:
+        """
+        Finds paths to nested model instances that have a specific field, optionally matching a value.
+
+        The paths are string representations like ``"structures/0/geometry"``, designed for direct
+        use with the :meth:`updated_copy` method to modify specific parts of this model.
+        An empty string ``""`` in the returned list indicates that this model instance
+        itself (the one ``find_paths`` is called on) matches the criteria.
+
+        Parameters
+        ----------
+        target_field_name : str
+            The name of the attribute (field) to search for within nested
+            :class:`Tidy3dBaseModel` instances. For example, ``"name"`` or ``"permittivity"``.
+        target_field_value : Any, optional
+            If provided, only paths to model instances where ``target_field_name`` also has this
+            specific value will be returned. If omitted, paths are returned if the
+            ``target_field_name`` exists, regardless of its value.
+
+        Returns
+        -------
+        list[str]
+            A sorted list of unique string paths. Each path points to a
+            :class:`Tidy3dBaseModel` instance that possesses the ``target_field_name``
+            (and optionally matches ``target_field_value``).
+
+        Example
+        -------
+        >>> # Assume 'sim' is a Tidy3D simulation object
+        >>> # Find all geometries named "waveguide"
+        >>> paths = sim.find_paths(target_field_name="name", target_field_value="waveguide") # doctest: +SKIP
+        >>> # paths might be ['structures/0', 'structures/3']
+        >>> # Update the size of the first found "waveguide"
+        >>> new_sim = sim.updated_copy(path=paths[0], size=(1.0, 0.5, 0.22)) # doctest: +SKIP
+        """
+        found_paths_set = set()
+
+        for sub_model_instance, path_segments_to_sub_model in Tidy3dBaseModel._core_model_traversal(
+            self, []
+        ):
+            if target_field_name in sub_model_instance.model_fields:
+                passes_value_filter = True
+                if target_field_value is not Undefined:
+                    actual_value = getattr(sub_model_instance, target_field_name)
+                    if actual_value != target_field_value:
+                        passes_value_filter = False
+
+                if passes_value_filter:
+                    path_str = "/".join(path_segments_to_sub_model)
+                    found_paths_set.add(path_str)
+
+        return sorted(found_paths_set)
+
+    def find_submodels(self, target_type: Self) -> list[Self]:
+        """
+        Finds all unique nested instances of a specific Tidy3D model type within this model.
+
+        This method traverses the model structure and collects all instances that are of
+        the ``target_type`` (e.g., :class:`~tidy3d.Structure`, :class:`~tidy3d.Medium`,
+        :class:`~tidy3d.Box`).
+        Uniqueness is determined by the model's content. The order of models
+        in the returned list corresponds to their first encounter during a depth-first traversal.
+
+        Parameters
+        ----------
+        target_type : Tidy3dBaseModel
+            The specific Tidy3D class (e.g., ``Structure``, ``Medium``, ``Box``) to search for.
+            This class must be a subclass of :class:`Tidy3dBaseModel`.
+
+        Returns
+        -------
+        list[Tidy3dBaseModel]
+            A list of unique instances found within this model that are of the
+            provided ``target_type``.
+
+        Example
+        -------
+        >>> # Assume 'sim' is a Tidy3D Simulation object
+        >>> # Find all Structure instances within the simulation
+        >>> all_structures = sim.find_submodels(td.Structure) # doctest: +SKIP
+        >>> for struct in all_structures:
+        ...     print(f"Structure: {struct.name}, medium: {struct.medium}") # doctest: +SKIP
+
+        >>> # Find all Box geometries within the simulation
+        >>> all_boxes = sim.find_submodels(td.Box) # doctest: +SKIP
+        >>> for box in all_boxes:
+        ...     print(f"Found Box with size: {box.size}") # doctest: +SKIP
+
+        >>> # Find all Medium instances (useful for checking materials)
+        >>> all_media = sim.find_submodels(td.Medium) # doctest: +SKIP
+        >>> # Note: This would find td.Medium instances, but not td.PECMedium or td.PoleResidue
+        >>> # unless they inherit directly from td.Medium and not just Tidy3dBaseModel or td.AbstractMedium.
+        >>> # To find all medium types, one might search for td.AbstractMedium if that's a common base.
+        """
+        found_models_dict = {}
+
+        for sub_model_candidate, _ in Tidy3dBaseModel._core_model_traversal(self, []):
+            if isinstance(sub_model_candidate, target_type):
+                if sub_model_candidate not in found_models_dict:
+                    found_models_dict[sub_model_candidate] = True
+
+        return list(found_models_dict.keys())
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -308,8 +438,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def from_file(
-        cls, fname: str, group_path: Optional[str] = None, **parse_obj_kwargs
-    ) -> Tidy3dBaseModel:
+        cls: type[T], fname: str, group_path: Optional[str] = None, **parse_obj_kwargs
+    ) -> Self:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
@@ -332,10 +462,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
         model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls.model_validate(model_dict, **parse_obj_kwargs)
 
     @classmethod
-    def dict_from_file(cls, fname: str, group_path: Optional[str] = None) -> dict:
+    def dict_from_file(cls: type[T], fname: str, group_path: Optional[str] = None) -> dict:
         """Loads a dictionary containing the model from a .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
@@ -396,7 +526,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return converter(fname=fname)
 
     @classmethod
-    def from_json(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
+    def from_json(cls: type[T], fname: str, **parse_obj_kwargs) -> Self:
         """Load a :class:`Tidy3dBaseModel` from .json file.
 
         Parameters
@@ -416,10 +546,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_json(fname='folder/sim.json') # doctest: +SKIP
         """
         model_dict = cls.dict_from_json(fname=fname)
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls.model_validate(model_dict, **parse_obj_kwargs)
 
     @classmethod
-    def dict_from_json(cls, fname: str) -> dict:
+    def dict_from_json(cls: type[T], fname: str) -> dict:
         """Load dictionary of the model from a .json file.
 
         Parameters
@@ -452,13 +582,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        json_string = self._json(indent=INDENT_JSON_FILE)
+        json_string = self.model_dump_json(indent=INDENT_JSON_FILE)
         self._warn_if_contains_data(json_string)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
 
     @classmethod
-    def from_yaml(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
+    def from_yaml(cls: type[T], fname: str, **parse_obj_kwargs) -> Self:
         """Loads :class:`Tidy3dBaseModel` from .yaml file.
 
         Parameters
@@ -478,10 +608,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
         model_dict = cls.dict_from_yaml(fname=fname)
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls.model_validate(model_dict, **parse_obj_kwargs)
 
     @classmethod
-    def dict_from_yaml(cls, fname: str) -> dict:
+    def dict_from_yaml(cls: type[T], fname: str) -> dict:
         """Load dictionary of the model from a .yaml file.
 
         Parameters
@@ -527,8 +657,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             log.warning(
                 "Data contents found in the model to be written to file. "
                 "Note that this data will not be included in '.json' or '.yaml' formats. "
-                "As a result, it will not be possible to load the file back to the original model."
-                "Instead, use `.hdf5` extension in filename passed to 'to_file()'."
+                "As a result, it will not be possible to load the file back to the original model. "
+                "Instead, use '.hdf5' extension in filename passed to 'to_file()'."
             )
 
     @staticmethod
@@ -556,12 +686,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return int(str(key_name))
 
     @classmethod
-    def tuple_to_dict(cls, tuple_values: tuple) -> dict:
+    def tuple_to_dict(cls: type[T], tuple_values: tuple) -> dict:
         """How we generate a dictionary mapping new keys to tuple values for hdf5."""
         return {cls.get_tuple_group_name(index=i): val for i, val in enumerate(tuple_values)}
 
     @classmethod
-    def get_sub_model(cls, group_path: str, model_dict: dict | list) -> dict:
+    def get_sub_model(cls: type[T], group_path: str, model_dict: dict | list) -> dict:
         """Get the sub model for a given group path."""
 
         for key in group_path.split("/"):
@@ -581,7 +711,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return JSON_TAG
 
     @classmethod
-    def _json_string_from_hdf5(cls, fname: str) -> str:
+    def _json_string_from_hdf5(cls: type[T], fname: str) -> str:
         """Load the model json string from an hdf5 file."""
         with h5py.File(fname, "r") as f_handle:
             num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
@@ -592,7 +722,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def dict_from_hdf5(
-        cls, fname: str, group_path: str = "", custom_decoders: Optional[list[Callable]] = None
+        cls: type[T],
+        fname: str,
+        group_path: str = "",
+        custom_decoders: Optional[list[Callable]] = None,
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
@@ -667,12 +800,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def from_hdf5(
-        cls,
+        cls: type[T],
         fname: str,
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
         **parse_obj_kwargs,
-    ) -> Tidy3dBaseModel:
+    ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -698,7 +831,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         model_dict = cls.dict_from_hdf5(
             fname=fname, group_path=group_path, custom_decoders=custom_decoders
         )
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls.model_validate(model_dict, **parse_obj_kwargs)
 
     def to_hdf5(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
@@ -747,11 +880,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     elif isinstance(value, dict):
                         add_data_to_file(data_dict=value, group_path=subpath)
 
-            add_data_to_file(data_dict=self.dict())
+            add_data_to_file(data_dict=self.model_dump())
 
     @classmethod
     def dict_from_hdf5_gz(
-        cls, fname: str, group_path: str = "", custom_decoders: Optional[list[Callable]] = None
+        cls: type[T],
+        fname: str,
+        group_path: str = "",
+        custom_decoders: Optional[list[Callable]] = None,
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5.gz file.
 
@@ -789,12 +925,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def from_hdf5_gz(
-        cls,
+        cls: type[T],
         fname: str,
         group_path: str = "",
         custom_decoders: Optional[list[Callable]] = None,
         **parse_obj_kwargs,
-    ) -> Tidy3dBaseModel:
+    ) -> Self:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
 
         Parameters
@@ -820,7 +956,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         model_dict = cls.dict_from_hdf5_gz(
             fname=fname, group_path=group_path, custom_decoders=custom_decoders
         )
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls.model_validate(model_dict, **parse_obj_kwargs)
 
     def to_hdf5_gz(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
@@ -846,71 +982,57 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         finally:
             os.unlink(decompressed)
 
-    def __lt__(self, other):
+    def __lt__(self, other: object) -> bool:
         """define < for getting unique indices based on hash."""
         return hash(self) < hash(other)
 
-    def __gt__(self, other):
-        """define > for getting unique indices based on hash."""
-        return hash(self) > hash(other)
+    def __eq__(self, other: object) -> bool:
+        """Two models are equal when origins match and every public or extra field matches."""
+        if not isinstance(other, BaseModel):
+            return NotImplemented
 
-    def __le__(self, other):
-        """define <= for getting unique indices based on hash."""
-        return hash(self) <= hash(other)
-
-    def __ge__(self, other):
-        """define >= for getting unique indices based on hash."""
-        return hash(self) >= hash(other)
-
-    def __eq__(self, other):
-        """Define == for two Tidy3dBaseModels."""
-        if other is None:
+        self_origin = (
+            getattr(self, "__pydantic_generic_metadata__", {}).get("origin") or self.__class__
+        )
+        other_origin = (
+            getattr(other, "__pydantic_generic_metadata__", {}).get("origin") or other.__class__
+        )
+        if self_origin is not other_origin:
             return False
 
-        def check_equal(dict1: dict, dict2: dict) -> bool:
-            """Check if two dictionaries are equal, with special handlings."""
+        if getattr(self, "__pydantic_extra__", None) != getattr(other, "__pydantic_extra__", None):
+            return False
 
-            # if different keys, automatically fail
-            if not dict1.keys() == dict2.keys():
+        def _fields_equal(a, b) -> bool:
+            a = get_static(a)
+            b = get_static(b)
+
+            if a is b:
+                return True
+            if type(a) is not type(b):
+                if not (isinstance(a, (list, tuple)) and isinstance(b, (list, tuple))):
+                    return False
+            if isinstance(a, np.ndarray):
+                return np.array_equal(a, b)
+            if isinstance(a, (xr.DataArray, xr.Dataset)):
+                return a.equals(b)
+            if isinstance(a, Mapping):
+                if a.keys() != b.keys():
+                    return False
+                return all(_fields_equal(a[k], b[k]) for k in a)
+            if isinstance(a, Sequence) and not isinstance(a, (str, bytes)):
+                if len(a) != len(b):
+                    return False
+                return all(_fields_equal(x, y) for i, (x, y) in enumerate(zip(a, b)))
+            if isinstance(a, float) and isinstance(b, float) and np.isnan(a) and np.isnan(b):
+                return True
+            return a == b
+
+        for name in self.model_fields:
+            if not _fields_equal(getattr(self, name), getattr(other, name)):
                 return False
 
-            # loop through elements in each dict
-            for key in dict1:  # noqa: PLC0206
-                val1 = dict1[key]
-                val2 = dict2[key]
-
-                val1 = get_static(val1)
-                val2 = get_static(val2)
-
-                # if one of val1 or val2 is None (exclusive OR)
-                if (val1 is None) != (val2 is None):
-                    return False
-
-                # convert tuple to dict to use this recursive function
-                if isinstance(val1, tuple) or isinstance(val2, tuple):
-                    val1 = dict(zip(range(len(val1)), val1))
-                    val2 = dict(zip(range(len(val2)), val2))
-
-                # if dictionaries, recurse
-                if isinstance(val1, dict) or isinstance(val2, dict):
-                    are_equal = check_equal(val1, val2)
-                    if not are_equal:
-                        return False
-
-                # if numpy arrays, use numpy to do equality check
-                elif isinstance(val1, np.ndarray) or isinstance(val2, np.ndarray):
-                    if not np.array_equal(val1, val2):
-                        return False
-
-                # everything else
-                else:
-                    # note: this logic is because != is handled differently in DataArrays apparently
-                    if not val1 == val2:
-                        return False
-
-            return True
-
-        return check_equal(self.dict(), other.dict())
+        return True
 
     @cached_property
     def _json_string(self) -> str:
@@ -921,34 +1043,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         str
             Json-formatted string holding :class:`Tidy3dBaseModel` data.
         """
-        return self._json()
-
-    def _json(self, indent=INDENT, exclude_unset=False, **kwargs) -> str:
-        """Overwrites the model ``json`` representation with some extra customized handling.
-
-        Parameters
-        -----------
-        **kwargs : kwargs passed to `self.json()`
-
-        Returns
-        -------
-        str
-            Json-formatted string holding :class:`Tidy3dBaseModel` data.
-        """
-
-        def make_json_compatible(json_string: str) -> str:
-            """Makes the string compatible with json standards, notably for infinity."""
-
-            tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
-            json_string = json_string.replace("-Infinity", tmp_string)
-            json_string = json_string.replace('""-Infinity""', tmp_string)
-            json_string = json_string.replace("Infinity", '"Infinity"')
-            json_string = json_string.replace('""Infinity""', '"Infinity"')
-            return json_string.replace(tmp_string, '"-Infinity"')
-
-        json_string = self.json(indent=indent, exclude_unset=exclude_unset, **kwargs)
-        json_string = make_json_compatible(json_string)
-        return json_string
+        return self.model_dump_json(indent=INDENT, exclude_unset=False)
 
     def _strip_traced_fields(
         self, starting_path: tuple[str] = (), include_untraced_data_arrays: bool = False
@@ -958,7 +1053,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         Parameters
         ----------
         starting_path : tuple[str, ...] = ()
-            If provided, starts recursing in self.dict() from this path of field names
+            If provided, starts recursing in self.model_dump() from this path of field names
         include_untraced_data_arrays : bool = False
             Whether to include ``DataArray`` objects without tracers.
             We need to include these when returning data, but are unnecessary for structures.
@@ -980,8 +1075,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 field_mapping[path] = x
 
             # for data arrays, need to be more careful as their tracers are stored in .data
-            elif isinstance(x, xr.DataArray) and (isbox(x.data) or include_untraced_data_arrays):
-                field_mapping[path] = x.data
+            elif isinstance(x, xr.DataArray):
+                data = x.data
+                if isbox(data) or any(isbox(el) for el in np.asarray(data).ravel()):
+                    field_mapping[path] = x.data
+                elif include_untraced_data_arrays:
+                    field_mapping[path] = x.data
 
             # for sequences, add (i,) to the path and handle each value individually
             elif isinstance(x, (list, tuple)):
@@ -994,22 +1093,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     handle_value(val, path=(*path, key))
 
         # recursively parse the dictionary of this object
-        self_dict = self.dict()
+        self_dict = self.model_dump(round_trip=True)
 
         # if an include_only string was provided, only look at that subset of the dict
-        if starting_path:
-            for key in starting_path:
-                self_dict = self_dict[key]
+        for key in starting_path:
+            self_dict = self_dict[key]
 
         handle_value(self_dict, path=starting_path)
 
-        # convert the resulting field_mapping to an autograd-traced dictionary
-        return dict_ag(field_mapping)
+        return TracedDict(field_mapping)
 
-    def _insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
+    def _insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Self:
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
-
-        self_dict = self.dict()
+        self_dict = self.model_dump(round_trip=True)
 
         def insert_value(x, path: tuple[str, ...], sub_dict: dict):
             """Insert a value into the path into a dictionary."""
@@ -1033,9 +1129,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         for path, value in field_mapping.items():
             insert_value(value, path=path, sub_dict=self_dict)
 
-        return self.parse_obj(self_dict)
+        return self.__class__.model_validate(self_dict)
 
-    def to_static(self) -> Tidy3dBaseModel:
+    def to_static(self) -> Self:
         """Version of object with all autograd-traced fields removed."""
 
         # get dictionary of all traced fields
@@ -1052,118 +1148,109 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return self._insert_traced_fields(field_mapping_static)
 
     @classmethod
-    def add_type_field(cls) -> None:
-        """Automatically place "type" field with model name in the model field dictionary."""
-
-        value = cls.__name__
-        annotation = Literal[value]
-
-        tag_field = ModelField.infer(
-            name=TYPE_TAG_STR,
-            value=value,
-            annotation=annotation,
-            class_validators=None,
-            config=cls.__config__,
-        )
-        cls.__fields__[TYPE_TAG_STR] = tag_field
-
-    @classmethod
     def generate_docstring(cls) -> str:
-        """Generates a docstring for a Tidy3D mode and saves it to the __doc__ of the class."""
+        """Generates a docstring for a Tidy3D model."""
 
-        # store the docstring in here
         doc = ""
 
-        # if the model already has a docstring, get the first lines and save the rest
+        # keep any pre-existing class description
         original_docstrings = []
         if cls.__doc__:
             original_docstrings = cls.__doc__.split("\n\n")
-            class_description = original_docstrings.pop(0)
-            doc += class_description
+            doc += original_docstrings.pop(0)
         original_docstrings = "\n\n".join(original_docstrings)
 
-        # create the list of parameters (arguments) for the model
+        # parameters
         doc += "\n\n    Parameters\n    ----------\n"
-        for field_name, field in cls.__fields__.items():
-            # ignore the type tag
+        for field_name, field in cls.model_fields.items():  # v2
             if field_name == TYPE_TAG_STR:
                 continue
 
-            # get data type
-            data_type = field._type_display()
+            # type
+            ann = getattr(field, "annotation", None)
+            data_type = _fmt_ann_literal(ann)
 
-            # get default values
-            default_val = field.get_default()
-            if "=" in str(default_val):
-                # handle cases where default values are pydantic models
-                default_val = f"{default_val.__class__.__name__}({default_val})"
-                default_val = (", ").join(default_val.split(" "))
+            # default / default_factory
+            default_val = (
+                f"{field.default_factory.__name__}()"
+                if field.default_factory is not None
+                else field.get_default(call_default_factory=False)
+            )
 
-            # make first line: name : type = default
-            default_str = "" if field.required else f" = {default_val}"
+            if isinstance(default_val, BaseModel) or (
+                "=" in str(default_val) if default_val is not None else False
+            ):
+                default_val = ", ".join(
+                    str(f"{default_val.__class__.__name__}({default_val})").split(" ")
+                )
+
+            default_str = "" if field.is_required() else f" = {default_val}"
             doc += f"    {field_name} : {data_type}{default_str}\n"
 
-            # get field metadata
-            field_info = field.field_info
-            doc += "        "
+            parts = []
 
-            # add units (if present)
-            units = field_info.extra.get("units")
+            # units
+            units = None
+            extra = getattr(field, "json_schema_extra", None)
+            if isinstance(extra, dict):
+                units = extra.get("units")
+            if units is None and hasattr(field, "metadata"):
+                for meta in field.metadata:
+                    if isinstance(meta, dict) and "units" in meta:
+                        units = meta["units"]
+                        break
             if units is not None:
-                if isinstance(units, (tuple, list)):
-                    unitstr = "("
-                    for unit in units:
-                        unitstr += str(unit)
-                        unitstr += ", "
-                    unitstr = unitstr[:-2]
-                    unitstr += ")"
-                else:
-                    unitstr = units
-                doc += f"[units = {unitstr}].  "
+                unitstr = (
+                    f"({', '.join(str(u) for u in units)})"
+                    if isinstance(units, (list, tuple))
+                    else str(units)
+                )
+                parts.append(f"[units = {unitstr}].")
 
-            # add description
-            description_str = field_info.description
-            if description_str is not None:
-                doc += f"{description_str}\n"
+            # description
+            desc = getattr(field, "description", None)
+            if desc:
+                parts.append(desc)
 
-        # add in remaining things in the docs
+            if parts:
+                doc += "        " + "  ".join(parts) + "\n"
+
         if original_docstrings:
-            doc += "\n"
-            doc += original_docstrings
-
+            doc += "\n" + original_docstrings
         doc += "\n"
-        cls.__doc__ = doc
+
+        return doc
 
     def get_submodels_by_hash(self) -> dict[int, list[Union[str, tuple[str, int]]]]:
-        """Return a dictionary of this object's sub-models indexed by their hash values."""
-        fields = {}
-        for key in self.__fields__:
-            field = getattr(self, key)
+        """
+        Return a mapping ``{hash(submodel): [field_path, ...]}`` for every
+        nested ``Tidy3dBaseModel`` inside this model.
+        """
+        out = defaultdict(list)
 
-            if isinstance(field, Tidy3dBaseModel):
-                hash_ = hash(field)
-                if hash_ not in fields:
-                    fields[hash_] = []
-                fields[hash_].append(key)
+        for name in self.model_fields:
+            value = getattr(self, name)
 
-            # Do we need to consider np.ndarray here?
-            elif isinstance(field, (list, tuple, np.ndarray)):
-                for index, sub_field in enumerate(field):
-                    if isinstance(sub_field, Tidy3dBaseModel):
-                        hash_ = hash(sub_field)
-                        if hash_ not in fields:
-                            fields[hash_] = []
-                        fields[hash_].append((key, index))
+            if isinstance(value, Tidy3dBaseModel):
+                out[hash(value)].append(name)
+                continue
 
-            elif isinstance(field, dict):
-                for index, sub_field in field.items():
-                    if isinstance(sub_field, Tidy3dBaseModel):
-                        hash_ = hash(sub_field)
-                        if hash_ not in fields:
-                            fields[hash_] = []
-                        fields[hash_].append((key, index))
+            if isinstance(value, (list, tuple)):
+                for idx, item in enumerate(value):
+                    if isinstance(item, Tidy3dBaseModel):
+                        out[hash(item)].append((name, idx))
 
-        return fields
+            elif isinstance(value, np.ndarray):
+                for idx, item in enumerate(value.flat):
+                    if isinstance(item, Tidy3dBaseModel):
+                        out[hash(item)].append((name, idx))
+
+            elif isinstance(value, dict):
+                for k, item in value.items():
+                    if isinstance(item, Tidy3dBaseModel):
+                        out[hash(item)].append((name, k))
+
+        return dict(out)
 
     @staticmethod
     def _scientific_notation(
@@ -1201,3 +1288,30 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         sci_max = to_sci(max_val, common_exponent, precision)
 
         return sci_min, sci_max
+
+    def __rich_repr__(self):
+        """How to pretty-print instances of ``Tidy3dBaseModel``."""
+        for name in self.model_fields:
+            value = getattr(self, name)
+
+            # don't print the type field we add to the models
+            if name == "type":
+                continue
+
+            # skip `attrs` if it's an empty dictionary
+            if name == "attrs" and isinstance(value, dict) and not value:
+                continue
+
+            yield name, value
+
+    def __str__(self) -> str:
+        """Return a pretty-printed string representation of the model."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        sio = StringIO()
+        console = Console(file=sio)
+        console.print(self)
+        output = sio.getvalue()
+        return output.rstrip("\n")

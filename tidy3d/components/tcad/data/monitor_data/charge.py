@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Union
+from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
-from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.data_array import (
     DataArray,
     IndexedVoltageDataArray,
@@ -22,28 +21,27 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, annotate_type
+from tidy3d.components.types import Ax, discriminated_union
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
 FieldDataset = Union[
-    SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
+    SpatialDataArray, discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
 ]
 
-UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
+UnstructuredFieldType = discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
 
 
 class SteadyPotentialData(HeatChargeMonitorData):
     """Stores electric potential :math:`\\psi` from a charge simulation."""
 
-    monitor: SteadyPotentialMonitor = pd.Field(
-        ...,
+    monitor: SteadyPotentialMonitor = Field(
         title="Electric potential monitor",
         description="Electric potential monitor associated with a `charge` simulation.",
     )
 
-    potential: FieldDataset = pd.Field(
+    potential: Optional[FieldDataset] = Field(
         None,
         title="Electric potential series",
         description="Contains the electric potential series.",
@@ -54,20 +52,16 @@ class SteadyPotentialData(HeatChargeMonitorData):
         """Maps the field components to their associated data."""
         return {"potential": self.potential}
 
-    @pd.validator("potential", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def warn_no_data(cls, val, values):
+    @model_validator(mode="after")
+    def warn_no_data(self):
         """Warn if no data provided."""
-
-        mnt = values.get("monitor")
-
-        if val is None:
+        if self.potential is None:
             log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
+                f"No data is available for monitor '{self.monitor.name}'. This is "
+                "typically caused by monitor not intersecting any solid medium."
             )
 
-        return val
+        return self
 
     @property
     def symmetry_expanded_copy(self) -> SteadyPotentialData:
@@ -95,25 +89,22 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         ``monitor``.
     """
 
-    monitor: SteadyFreeCarrierMonitor = pd.Field(
-        ...,
+    monitor: SteadyFreeCarrierMonitor = Field(
         title="Free carrier monitor",
         description="Free carrier data associated with a Charge simulation.",
     )
 
-    electrons: UnstructuredFieldType = pd.Field(
+    electrons: Optional[UnstructuredFieldType] = Field(
         None,
         title="Electrons series",
         description=r"Contains the computed electrons concentration $n$.",
-        discriminator=TYPE_TAG_STR,
     )
     # n = electrons
 
-    holes: UnstructuredFieldType = pd.Field(
+    holes: Optional[UnstructuredFieldType] = Field(
         None,
         title="Holes series",
         description=r"Contains the computed holes concentration $p$.",
-        discriminator=TYPE_TAG_STR,
     )
     # p = holes
 
@@ -122,38 +113,29 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
         """Maps the field components to their associated data."""
         return {"electrons": self.electrons, "holes": self.holes}
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_correct_data_type(cls, values):
+    @model_validator(mode="after")
+    def check_correct_data_type(self):
         """Issue error if incorrect data type is used"""
-
-        mnt = values.get("monitor")
-        field_data = {field: values.get(field) for field in ["electrons", "holes"]}
-
+        field_data = {field: getattr(self, field) for field in ["electrons", "holes"]}
         for field, data in field_data.items():
             if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
                 if not isinstance(data.values, IndexedVoltageDataArray):
                     raise ValueError(
-                        f"In the data associated with monitor {mnt}, the field {field} does not contain "
-                        "data associated to any voltage value."
+                        f"In the data associated with monitor {self.monitor}, the "
+                        f"field {field} does not contain data associated to any voltage value."
                     )
+        return self
 
-        return values
-
-    @pd.root_validator(skip_on_failure=True)
-    def warn_no_data(cls, values):
+    @model_validator(mode="after")
+    def warn_no_data(self):
         """Warn if no data provided."""
 
-        mnt = values.get("monitor")
-        electrons = values.get("electrons")
-        holes = values.get("holes")
-
-        if electrons is None or holes is None:
+        if self.electrons is None or self.holes is None:
             log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
+                f"No data is available for monitor '{self.monitor.name}'. This is "
+                "typically caused by monitor not intersecting any solid medium."
             )
-
-        return values
+        return self
 
     @property
     def symmetry_expanded_copy(self) -> SteadyFreeCarrierData:
@@ -192,45 +174,39 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         as defined in the  ``monitor``.
     """
 
-    monitor: SteadyEnergyBandMonitor = pd.Field(
-        ...,
+    monitor: SteadyEnergyBandMonitor = Field(
         title="Energy band monitor",
         description="Energy bands data associated with a Charge simulation.",
     )
 
-    Ec: UnstructuredFieldType = pd.Field(
+    Ec: Optional[UnstructuredFieldType] = Field(
         None,
         title="Conduction band series",
         description=r"Contains the computed energy of the bottom of the conduction band $Ec$.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Ev: UnstructuredFieldType = pd.Field(
+    Ev: Optional[UnstructuredFieldType] = Field(
         None,
         title="Valence band series",
         description=r"Contains the computed energy of the top of the valence band $Ec$.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Ei: UnstructuredFieldType = pd.Field(
+    Ei: Optional[UnstructuredFieldType] = Field(
         None,
         title="Intrinsic Fermi level series",
         description=r"Contains the computed intrinsic Fermi level for the material $Ei$.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Efn: UnstructuredFieldType = pd.Field(
+    Efn: Optional[UnstructuredFieldType] = Field(
         None,
         title="Electron's quasi-Fermi level series",
         description=r"Contains the computed quasi-Fermi level for electrons $Efn$.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    Efp: UnstructuredFieldType = pd.Field(
+    Efp: Optional[UnstructuredFieldType] = Field(
         None,
         title="Hole's quasi-Fermi level series",
         description=r"Contains the computed quasi-Fermi level for holes $Efp$.",
-        discriminator=TYPE_TAG_STR,
     )
 
     @property
@@ -238,39 +214,37 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
         """Maps the field components to their associated data."""
         return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_correct_data_type(cls, values):
+    @model_validator(mode="after")
+    def check_correct_data_type(self):
         """Issue error if incorrect data type is used"""
 
-        mnt = values.get("monitor")
-        field_data = {field: values.get(field) for field in ["Ec", "Ev", "Ei", "Efn", "Efp"]}
+        field_data = {field: getattr(self, field) for field in ["Ec", "Ev", "Ei", "Efn", "Efp"]}
 
         for field, data in field_data.items():
             if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
                 if not isinstance(data.values, IndexedVoltageDataArray):
                     raise ValueError(
-                        f"In the data associated with monitor {mnt}, the field {field} does not contain "
-                        "data associated to any voltage value."
+                        f"In the data associated with monitor {self.monitor}, the "
+                        f"field {field} does not contain data associated to any voltage value."
                     )
 
-        return values
+        return self
 
-    @pd.root_validator(skip_on_failure=True)
-    def warn_no_data(cls, values):
+    @model_validator(mode="after")
+    def warn_no_data(self):
         """Warn if no data provided."""
 
-        mnt = values.get("monitor")
         fields = ["Ec", "Ev", "Ei", "Efn", "Efp"]
         for field_name in fields:
-            field_data = values.get(field_name)
+            field_data = getattr(self, field_name)
 
             if field_data is None:
                 log.warning(
-                    f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                    "monitor not intersecting any solid medium."
+                    f"No data is available for monitor '{self.monitor.name}'. This "
+                    "is typically caused by monitor not intersecting any solid medium."
                 )
 
-        return values
+        return self
 
     @property
     def symmetry_expanded_copy(self) -> SteadyEnergyBandData:
@@ -394,40 +368,36 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     This is only computed when a voltage source with more than two sources is included within the simulation and determines the :math:`\\Delta V`.
     """
 
-    monitor: SteadyCapacitanceMonitor = pd.Field(
-        ...,
+    monitor: SteadyCapacitanceMonitor = Field(
         title="Capacitance monitor",
         description="Capacitance data associated with a Charge simulation.",
     )
 
-    hole_capacitance: SteadyVoltageDataArray = pd.Field(
+    hole_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Hole capacitance",
         description=r"Small signal capacitance ($\frac{dQ_p}{dV}$) associated to the monitor.",
     )
     # C_p = hole_capacitance
 
-    electron_capacitance: SteadyVoltageDataArray = pd.Field(
+    electron_capacitance: Optional[SteadyVoltageDataArray] = Field(
         None,
         title="Electron capacitance",
         description=r"Small signal capacitance ($\frac{dQn}{dV}$) associated to the monitor.",
     )
     # C_n = electron_capacitance
 
-    @pd.validator("hole_capacitance", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def warn_no_data(cls, val, values):
+    @model_validator(mode="after")
+    def warn_no_data(self):
         """Warn if no data provided."""
 
-        mnt = values.get("monitor")
-
-        if val is None:
+        if self.hole_capacitance is None:
             log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
+                f"No data is available for monitor '{self.monitor.name}'. This is "
+                "typically caused by monitor not intersecting any solid medium."
             )
 
-        return val
+        return self
 
     def field_name(self, val: str) -> str:
         """Gets the name of the fields to be plotted."""

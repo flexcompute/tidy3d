@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pd
 import pytest
 import responses
 
@@ -75,13 +75,13 @@ def test_lossless_dispersion(random_data, mock_remote_api):
     """perform fitting on random data"""
 
     # wrong input data
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         fitter = DispersionFitter(wvl_um=[], n_data=())
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         fitter = DispersionFitter(wvl_um=[1.0], n_data=(1.0, 1.1))
 
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         fitter = DispersionFitter(wvl_um=[1.0], n_data=(1.0), k_data=(0, 1))
 
     with pytest.raises(SetupError):

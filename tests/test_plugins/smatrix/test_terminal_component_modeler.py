@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pd
 import pytest
 import xarray as xr
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray
@@ -77,7 +77,7 @@ def test_validate_no_sources(tmp_path):
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
     sim_w_source = modeler.simulation.copy(update={"sources": (source,)})
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.copy(update={"simulation": sim_w_source})
 
 
@@ -95,7 +95,7 @@ def test_validate_3D_sim(tmp_path):
         ),
         run_time=1e-10,
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.updated_copy(simulation=sim)
 
 
@@ -246,7 +246,7 @@ def test_coarse_grid_at_port(monkeypatch, tmp_path):
 
 
 def test_validate_port_voltage_axis():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
 
 
@@ -293,7 +293,7 @@ def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path):
 
 
 def test_validate_coaxial_center_not_inf():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         CoaxialLumpedPort(
             center=(td.inf, 0, 0),
             outer_diameter=8,
@@ -307,7 +307,7 @@ def test_validate_coaxial_center_not_inf():
 
 
 def test_validate_coaxial_port_diameters():
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         CoaxialLumpedPort(
             center=(0, 0, 0),
             outer_diameter=1,
@@ -432,7 +432,7 @@ def test_run_coaxial_component_modeler_with_wave_ports(
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     if not (voltage_enabled or current_enabled):
-        with pytest.raises(pd.ValidationError):
+        with pytest.raises(ValidationError):
             modeler = make_coaxial_component_modeler(
                 path_dir=str(tmp_path),
                 port_types=(WavePort, WavePort),
@@ -530,7 +530,7 @@ def test_wave_port_path_integral_validation():
         current_integral=custom_current_path,
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = WavePort(
             center=center_port,
             size=size_port,
@@ -542,7 +542,7 @@ def test_wave_port_path_integral_validation():
         )
 
     voltage_path = voltage_path.updated_copy(size=(4, 0, 0))
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = WavePort(
             center=center_port,
             size=size_port,
@@ -556,7 +556,7 @@ def test_wave_port_path_integral_validation():
     custom_current_path = CustomCurrentIntegral2D.from_circular_path(
         center=center_port, radius=3, num_points=21, normal_axis=2, clockwise=False
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = WavePort(
             center=center_port,
             size=size_port,
@@ -611,7 +611,7 @@ def test_port_source_snapped_to_PML(tmp_path):
         voltage_integral=voltage_path,
         current_integral=None,
     )
-    modeler = modeler.updated_copy(ports=[port])
+    modeler = modeler.updated_copy(ports=(port,))
 
     # Error because port is snapped to PML layers; but the error message might not
     # be very informative, e.g. "simulation.sources[0]' is outside of the simulation domain".
@@ -625,7 +625,7 @@ def test_port_source_snapped_to_PML(tmp_path):
     # also validate the negative side
     voltage_path = voltage_path.updated_copy(center=(-port_pos, 0, 0))
     port = port.updated_copy(direction="+", center=(-port_pos, 0, 0), voltage_integral=voltage_path)
-    modeler = modeler.updated_copy(ports=[port])
+    modeler = modeler.updated_copy(ports=(port,))
     with pytest.raises(SetupError):
         modeler.sim_dict
 
@@ -638,7 +638,7 @@ def test_wave_port_validate_current_integral(tmp_path):
     modeler = make_coaxial_component_modeler(
         path_dir=str(tmp_path), port_types=(WavePort, WavePort)
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = modeler.updated_copy(direction="-", path="ports/0/")
 
 
@@ -671,7 +671,7 @@ def test_antenna_helpers(monkeypatch, tmp_path):
         theta=theta,
         phi=phi,
     )
-    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    modeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
 
     # Run simulation to get data
     _ = run_component_modeler(monkeypatch, modeler)
@@ -729,11 +729,11 @@ def test_antenna_parameters(monkeypatch, tmp_path):
         theta=theta,
         phi=phi,
     )
-    with pytest.raises(pd.ValidationError):
-        modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    with pytest.raises(ValidationError):
+        modeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
 
     radiation_monitor = radiation_monitor.updated_copy(freqs=modeler.freqs)
-    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    modeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
 
     # Run simulation and get antenna parameters
     _ = run_component_modeler(monkeypatch, modeler)
@@ -785,7 +785,7 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
         theta=theta,
         phi=phi,
     )
-    modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
+    modeler = modeler.updated_copy(radiation_monitors=(radiation_monitor,))
     s_matrix = run_component_modeler(monkeypatch, modeler)
 
     # Define port amplitudes

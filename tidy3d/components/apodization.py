@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import numpy as np
-import pydantic.v1 as pd
+from typing import Optional
 
+import numpy as np
+from pydantic import Field, NonNegativeFloat, PositiveFloat, model_validator
+
+from tidy3d.compat import Self
 from tidy3d.constants import SECOND
 from tidy3d.exceptions import SetupError
 
-from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .base import Tidy3dBaseModel
 from .types import ArrayFloat1D, Ax
 from .viz import add_ax_if_none
 
@@ -27,45 +30,40 @@ class ApodizationSpec(Tidy3dBaseModel):
 
     """
 
-    start: pd.NonNegativeFloat = pd.Field(
+    start: Optional[NonNegativeFloat] = Field(
         None,
         title="Start Interval",
         description="Defines the time at which the start apodization ends.",
         units=SECOND,
     )
 
-    end: pd.NonNegativeFloat = pd.Field(
+    end: Optional[NonNegativeFloat] = Field(
         None,
         title="End Interval",
         description="Defines the time at which the end apodization begins.",
         units=SECOND,
     )
 
-    width: pd.PositiveFloat = pd.Field(
+    width: Optional[PositiveFloat] = Field(
         None,
         title="Apodization Width",
         description="Characteristic decay length of the apodization function, i.e., the width of the ramping up of the scaling function from 0 to 1.",
         units=SECOND,
     )
 
-    @pd.validator("end", always=True, allow_reuse=True)
-    @skip_if_fields_missing(["start"])
-    def end_greater_than_start(cls, val, values):
+    @model_validator(mode="after")
+    def end_greater_than_start(self) -> Self:
         """Ensure end is greater than or equal to start."""
-        start = values.get("start")
-        if val is not None and start is not None and val < start:
+        if self.end is not None and self.start is not None and self.end < self.start:
             raise SetupError("End apodization begins before start apodization ends.")
-        return val
+        return self
 
-    @pd.validator("width", always=True, allow_reuse=True)
-    @skip_if_fields_missing(["start", "end"])
-    def width_provided(cls, val, values):
+    @model_validator(mode="after")
+    def width_provided(self) -> Self:
         """Check that width is provided if either start or end apodization is requested."""
-        start = values.get("start")
-        end = values.get("end")
-        if (start is not None or end is not None) and val is None:
+        if (self.start is not None or self.end is not None) and self.width is None:
             raise SetupError("Apodization width must be set.")
-        return val
+        return self
 
     @add_ax_if_none
     def plot(self, times: ArrayFloat1D, ax: Ax = None) -> Ax:

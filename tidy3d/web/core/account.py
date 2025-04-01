@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic.v1 import Extra, Field
+from pydantic import Extra, Field
 
 from .http_util import http
 from .types import Tidy3DResource

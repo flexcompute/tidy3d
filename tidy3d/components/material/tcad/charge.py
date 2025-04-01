@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from typing import Optional, Union
+
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.medium import AbstractMedium
@@ -12,20 +14,19 @@ from tidy3d.components.tcad.types import (
     MobilityModelType,
     RecombinationModelType,
 )
-from tidy3d.components.types import Union
-from tidy3d.constants import (
-    CONDUCTIVITY,
-    ELECTRON_VOLT,
-    PERMITTIVITY,
-)
+from tidy3d.constants import CONDUCTIVITY, ELECTRON_VOLT, PERMITTIVITY
 
 
 class AbstractChargeMedium(AbstractMedium):
     """Abstract class for Charge specifications
     Currently, permittivity is treated as a constant."""
 
-    permittivity: float = pd.Field(
-        1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
+    permittivity: float = Field(
+        1.0,
+        ge=1.0,
+        title="Permittivity",
+        description="Relative permittivity.",
+        units=PERMITTIVITY,
     )
 
     @property
@@ -73,8 +74,7 @@ class ChargeConductorMedium(AbstractChargeMedium):
         A relative permittivity will be assumed 1 if no value is specified.
     """
 
-    conductivity: pd.PositiveFloat = pd.Field(
-        ...,
+    conductivity: PositiveFloat = Field(
         title="Electric conductivity",
         description=f"Electric conductivity of material in units of {CONDUCTIVITY}.",
         units=CONDUCTIVITY,
@@ -254,59 +254,54 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     """
 
-    N_c: pd.PositiveFloat = pd.Field(
-        ...,
+    N_c: PositiveFloat = Field(
         title="Effective density of electron states",
         description=r"$N_c$ Effective density of states in the conduction band.",
         units="cm^(-3)",
     )
 
-    N_v: pd.PositiveFloat = pd.Field(
-        ...,
+    N_v: PositiveFloat = Field(
         title="Effective density of hole states",
         description=r"$N_v$ Effective density of states in the valence band.",
         units="cm^(-3)",
     )
 
-    E_g: pd.PositiveFloat = pd.Field(
-        ...,
+    E_g: PositiveFloat = Field(
         title="Band-gap energy",
         description="Band-gap energy",
         units=ELECTRON_VOLT,
     )
 
-    mobility_n: MobilityModelType = pd.Field(
-        ...,
+    mobility_n: MobilityModelType = Field(
         title="Mobility model for electrons",
         description="Mobility model for electrons",
     )
 
-    mobility_p: MobilityModelType = pd.Field(
-        ...,
+    mobility_p: MobilityModelType = Field(
         title="Mobility model for holes",
         description="Mobility model for holes",
     )
 
-    R: tuple[RecombinationModelType, ...] = pd.Field(
-        [],
+    R: tuple[RecombinationModelType, ...] = Field(
+        (),
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material.",
     )
 
-    delta_E_g: BandGapNarrowingModelType = pd.Field(
+    delta_E_g: Optional[BandGapNarrowingModelType] = Field(
         None,
         title=r"$\Delta E_g$ Bandgap narrowing model.",
         description="Bandgap narrowing model.",
     )
 
-    N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
+    N_a: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = Field(
         0,
         title="Doping: Acceptor concentration",
         description="Units of 1/cm^3",
         units="1/cm^3",
     )
 
-    N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
+    N_d: Union[NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = Field(
         0,
         title="Doping: Donor concentration",
         description="Units of 1/cm^3",

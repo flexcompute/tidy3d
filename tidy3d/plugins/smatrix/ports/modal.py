@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.geometry.base import Box
@@ -39,18 +39,16 @@ class ModalPortDataArray(DataArray):
 class Port(Box):
     """Specifies a port in the scattering matrix."""
 
-    direction: Direction = pd.Field(
-        ...,
+    direction: Direction = Field(
         title="Direction",
         description="'+' or '-', defining which direction is considered 'input'.",
     )
-    mode_spec: ModeSpec = pd.Field(
-        ModeSpec(),
+    mode_spec: ModeSpec = Field(
+        default_factory=ModeSpec,
         title="Mode Specification",
         description="Specifies how the mode solver will solve for the modes of the port.",
     )
-    name: str = pd.Field(
-        ...,
+    name: str = Field(
         title="Name",
         description="Unique name for the port.",
         min_length=1,

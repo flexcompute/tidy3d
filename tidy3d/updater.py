@@ -6,8 +6,8 @@ import functools
 import json
 from typing import Callable, Optional
 
-import pydantic.v1 as pd
 import yaml
+from pydantic import BaseModel
 
 from .components.base import Tidy3dBaseModel
 from .exceptions import FileError, SetupError
@@ -17,7 +17,7 @@ from .version import __version__
 """Storing version numbers."""
 
 
-class Version(pd.BaseModel):
+class Version(BaseModel):
     """Stores a version number (excluding patch)."""
 
     major: int
@@ -83,7 +83,7 @@ CurrentVersion = Version.from_string(__version__)
 """Class for updating simulation objects."""
 
 
-class Updater(pd.BaseModel):
+class Updater(BaseModel):
     """Converts a tidy3d simulation.json file to an up-to-date Simulation instance."""
 
     sim_dict: dict

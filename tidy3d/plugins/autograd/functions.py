@@ -40,7 +40,7 @@ def _pad_indices(n: int, pad_width: tuple[int, int], *, mode: PaddingType) -> ND
     ----------
     n : int
         The size of the axis to pad.
-    pad_width : Tuple[int, int]
+    pad_width : tuple[int, int]
         The number of values padded to the edges of the axis.
     mode : PaddingType
         The padding mode to use.
@@ -93,7 +93,7 @@ def _pad_axis(
     ----------
     array : np.ndarray
         The input array to pad.
-    pad_width : Tuple[int, int]
+    pad_width : tuple[int, int]
         The number of values padded to the edges of the axis.
     axis : int
         The axis along which to pad.
@@ -132,7 +132,7 @@ def pad(
     ----------
     array : np.ndarray
         The input array to pad.
-    pad_width : Union[int, Tuple[int, int]]
+    pad_width : Union[int, tuple[int, int]]
         The number of values padded to the edges of each axis. If an integer is provided,
         it is used for both the left and right sides. If a tuple is provided, it specifies
         the padding for the left and right sides respectively.
@@ -204,7 +204,7 @@ def convolve(
         The kernel to convolve with the input array. All dimensions of the kernel must be odd.
     padding : PaddingType = "constant"
         The padding mode to use.
-    axes : Union[Tuple[List[int], List[int]], None] = None
+    axes : Union[tuple[list[int], list[int]], None] = None
         The axes along which to perform the convolution.
     mode : Literal["full", "valid", "same"] = "same"
         The convolution mode.
@@ -252,7 +252,7 @@ def grey_dilation(
     ----------
     array : np.ndarray
         The input array to perform grey dilation on.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -306,7 +306,7 @@ def grey_erosion(
     ----------
     array : np.ndarray
         The input array to perform grey dilation on.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -360,7 +360,7 @@ def grey_opening(
     ----------
     array : np.ndarray
         The input array to perform grey opening on.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -393,7 +393,7 @@ def grey_closing(
     ----------
     array : np.ndarray
         The input array to perform grey closing on.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -426,7 +426,7 @@ def morphological_gradient(
     ----------
     array : np.ndarray
         The input array to compute the morphological gradient of.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -459,7 +459,7 @@ def morphological_gradient_internal(
     ----------
     array : np.ndarray
         The input array to compute the internal morphological gradient of.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -490,7 +490,7 @@ def morphological_gradient_external(
     ----------
     array : np.ndarray
         The input array to compute the external morphological gradient of.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -594,7 +594,7 @@ def smooth_max(
         Input array.
     tau : float = 1.0
         Temperature parameter controlling smoothness. Larger values make the maximum smoother.
-    axis : Union[int, Tuple[int, ...], None] = None
+    axis : Union[int, tuple[int, ...], None] = None
         Axis or axes over which the smooth maximum is computed. By default, the smooth maximum is computed over the entire array.
 
     Returns
@@ -616,7 +616,7 @@ def smooth_min(
         Input array.
     tau : float = 1.0
         Temperature parameter controlling smoothness. Larger values make the minimum smoother.
-    axis : Union[int, Tuple[int, ...], None] = None
+    axis : Union[int, tuple[int, ...], None] = None
         Axis or axes over which the smooth minimum is computed. By default, the smooth minimum is computed over the entire array.
 
     Returns
@@ -646,7 +646,7 @@ def least_squares(
         Independent variable data.
     y : np.ndarray
         Dependent variable data.
-    initial_guess : Tuple[float, ...]
+    initial_guess : tuple[float, ...]
         Initial guess for the parameters to be optimized.
     max_iterations : int = 100
         Maximum number of iterations for the optimization process.

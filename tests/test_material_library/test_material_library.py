@@ -71,9 +71,7 @@ def test_medium_repr():
     repr_noname_medium = test_media[0].__repr__()
     str_noname_medium_dict = str(noname_medium_in_dict)
 
-    assert "type='Medium' permittivity=2.25 conductivity=0.0" in str_noname_medium, (
-        "Expected medium information in string"
-    )
+    assert "name=None," in str_noname_medium, "Expected medium information in string"
     assert "Medium(attrs={}, name=None, frequency_range=None" in repr_noname_medium, (
         "Expcted medium information in repr"
     )

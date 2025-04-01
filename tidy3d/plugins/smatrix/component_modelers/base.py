@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union, get_args
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray
@@ -35,27 +35,25 @@ TerminalPortType = Union[LumpedPortType, WavePort]
 class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     """Tool for modeling devices and computing port parameters."""
 
-    simulation: Simulation = pd.Field(
-        ...,
+    simulation: Simulation = Field(
         title="Simulation",
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: tuple[Union[Port, TerminalPortType], ...] = pd.Field(
+    ports: tuple[Union[Port, TerminalPortType], ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
 
-    freqs: FreqArray = pd.Field(
-        ...,
+    freqs: FreqArray = Field(
         title="Frequencies",
         description="Array or list of frequencies at which to compute port parameters.",
         units=HERTZ,
     )
 
-    remove_dc_component: bool = pd.Field(
+    remove_dc_component: bool = Field(
         True,
         title="Remove DC Component",
         description="Whether to remove the DC component in the Gaussian pulse spectrum. "
@@ -66,19 +64,19 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "pulse spectrum which can have a nonzero DC component.",
     )
 
-    folder_name: str = pd.Field(
+    folder_name: str = Field(
         "default",
         title="Folder Name",
         description="Name of the folder for the tasks on web.",
     )
 
-    verbose: bool = pd.Field(
+    verbose: bool = Field(
         False,
         title="Verbosity",
         description="Whether the :class:`.AbstractComponentModeler` should print status and progressbars.",
     )
 
-    callback_url: str = pd.Field(
+    callback_url: Optional[str] = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -86,20 +84,20 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    path_dir: str = pd.Field(
+    path_dir: str = Field(
         DEFAULT_DATA_DIR,
         title="Directory Path",
         description="Base directory where data and batch will be downloaded.",
     )
 
-    solver_version: str = pd.Field(
+    solver_version: Optional[str] = Field(
         None,
         title="Solver Version",
         description_str="Custom solver version to use. "
         "If not supplied, uses default for the current front end version.",
     )
 
-    batch_cached: Batch = pd.Field(
+    batch_cached: Optional[Batch] = Field(
         None,
         title="Batch (Cached)",
         description="Optional field to specify ``batch``. Only used as a workaround internally "
@@ -108,15 +106,15 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "fields that were not used to create the task will cause errors.",
     )
 
-    @pd.validator("simulation", always=True)
-    def _sim_has_no_sources(cls, val):
+    @field_validator("simulation")
+    def _sim_has_no_sources(val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError("'AbstractComponentModeler.simulation' must not have any sources.")
         return val
 
-    @pd.validator("ports", always=True)
-    def _warn_rf_license(cls, val):
+    @field_validator("ports")
+    def _warn_rf_license(val):
         """Warn about new licensing requirements for RF ports."""
         rf_port = False
         TerminalPortTypeTuple = get_args(TerminalPortType)

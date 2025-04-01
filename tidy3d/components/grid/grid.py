@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
@@ -29,16 +29,19 @@ class Coords(Tidy3dBaseModel):
     >>> coords = Coords(x=x, y=y, z=z)
     """
 
-    x: Coords1D = pd.Field(
-        ..., title="X Coordinates", description="1-dimensional array of x coordinates."
+    x: Coords1D = Field(
+        title="X Coordinates",
+        description="1-dimensional array of x coordinates.",
     )
 
-    y: Coords1D = pd.Field(
-        ..., title="Y Coordinates", description="1-dimensional array of y coordinates."
+    y: Coords1D = Field(
+        title="Y Coordinates",
+        description="1-dimensional array of y coordinates.",
     )
 
-    z: Coords1D = pd.Field(
-        ..., title="Z Coordinates", description="1-dimensional array of z coordinates."
+    z: Coords1D = Field(
+        title="Z Coordinates",
+        description="1-dimensional array of z coordinates.",
     )
 
     @property
@@ -279,20 +282,17 @@ class FieldGrid(Tidy3dBaseModel):
     >>> field_grid = FieldGrid(x=coords, y=coords, z=coords)
     """
 
-    x: Coords = pd.Field(
-        ...,
+    x: Coords = Field(
         title="X Positions",
         description="x,y,z coordinates of the locations of the x-component of a vector field.",
     )
 
-    y: Coords = pd.Field(
-        ...,
+    y: Coords = Field(
         title="Y Positions",
         description="x,y,z coordinates of the locations of the y-component of a vector field.",
     )
 
-    z: Coords = pd.Field(
-        ...,
+    z: Coords = Field(
         title="Z Positions",
         description="x,y,z coordinates of the locations of the z-component of a vector field.",
     )
@@ -312,14 +312,12 @@ class YeeGrid(Tidy3dBaseModel):
     >>> Ex_coords = yee_grid.E.x
     """
 
-    E: FieldGrid = pd.Field(
-        ...,
+    E: FieldGrid = Field(
         title="Electric Field Grid",
         description="Coordinates of the locations of all three components of the electric field.",
     )
 
-    H: FieldGrid = pd.Field(
-        ...,
+    H: FieldGrid = Field(
         title="Electric Field Grid",
         description="Coordinates of the locations of all three components of the magnetic field.",
     )
@@ -352,8 +350,7 @@ class Grid(Tidy3dBaseModel):
     >>> yee_grid = grid.yee
     """
 
-    boundaries: Coords = pd.Field(
-        ...,
+    boundaries: Coords = Field(
         title="Boundary Coordinates",
         description="x,y,z coordinates of the boundaries between cells, defining the FDTD grid.",
     )
@@ -580,7 +577,7 @@ class Grid(Tidy3dBaseModel):
 
         Returns
         -------
-        List[Tuple[int, int]]
+        list[tuple[int, int]]
             The (start, stop) indexes of the cells that intersect with ``box`` in each of the three
             dimensions.
         """
@@ -694,6 +691,7 @@ class Grid(Tidy3dBaseModel):
         """
 
         boundary_dict = self.boundaries.to_dict.copy()
+
         for dim, center, size in zip("xyz", box.center, box.size):
             # Overwrite grid boundaries with box center if box is size 0 along dimension
             if size == 0:

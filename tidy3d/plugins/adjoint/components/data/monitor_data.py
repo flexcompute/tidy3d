@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import jax.numpy as jnp
 import numpy as np
-import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
@@ -81,8 +81,7 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
 class JaxModeData(JaxMonitorData, ModeData):
     """A :class:`.ModeData` registered with jax."""
 
-    amps: JaxDataArray = pd.Field(
-        ...,
+    amps: JaxDataArray = Field(
         title="Amplitudes",
         description="Jax-compatible modal amplitude data associated with an output monitor.",
         jax_field=True,
@@ -122,37 +121,37 @@ class JaxModeData(JaxMonitorData, ModeData):
 class JaxFieldData(JaxMonitorData, FieldData):
     """A :class:`.FieldData` registered with jax."""
 
-    Ex: JaxDataArray = pd.Field(
+    Ex: Optional[JaxDataArray] = Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
         jax_field=True,
     )
-    Ey: JaxDataArray = pd.Field(
+    Ey: Optional[JaxDataArray] = Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
         jax_field=True,
     )
-    Ez: JaxDataArray = pd.Field(
+    Ez: Optional[JaxDataArray] = Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
         jax_field=True,
     )
-    Hx: JaxDataArray = pd.Field(
+    Hx: Optional[JaxDataArray] = Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
         jax_field=True,
     )
-    Hy: JaxDataArray = pd.Field(
+    Hy: Optional[JaxDataArray] = Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
         jax_field=True,
     )
-    Hz: JaxDataArray = pd.Field(
+    Hz: Optional[JaxDataArray] = Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
@@ -336,38 +335,32 @@ class JaxFieldData(JaxMonitorData, FieldData):
 class JaxDiffractionData(JaxMonitorData, DiffractionData):
     """A :class:`.DiffractionData` registered with jax."""
 
-    Er: JaxDataArray = pd.Field(
-        ...,
+    Er: JaxDataArray = Field(
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
         jax_field=True,
     )
-    Etheta: JaxDataArray = pd.Field(
-        ...,
+    Etheta: JaxDataArray = Field(
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
         jax_field=True,
     )
-    Ephi: JaxDataArray = pd.Field(
-        ...,
+    Ephi: JaxDataArray = Field(
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
         jax_field=True,
     )
-    Hr: JaxDataArray = pd.Field(
-        ...,
+    Hr: JaxDataArray = Field(
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
         jax_field=True,
     )
-    Htheta: JaxDataArray = pd.Field(
-        ...,
+    Htheta: JaxDataArray = Field(
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
         jax_field=True,
     )
-    Hphi: JaxDataArray = pd.Field(
-        ...,
+    Hphi: JaxDataArray = Field(
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
         jax_field=True,

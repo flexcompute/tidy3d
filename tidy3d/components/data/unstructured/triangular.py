@@ -5,15 +5,14 @@ from __future__ import annotations
 from typing import Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveInt
+from xarray import DataArray as XrDataArray
 
 try:
     from matplotlib import pyplot as plt
     from matplotlib.tri import Triangulation
 except ImportError:
     pass
-
-from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
@@ -72,14 +71,12 @@ class TriangularGridDataset(UnstructuredGridDataset):
     ... )
     """
 
-    normal_axis: Axis = pd.Field(
-        ...,
+    normal_axis: Axis = Field(
         title="Grid Axis",
         description="Orientation of the grid.",
     )
 
-    normal_pos: float = pd.Field(
-        ...,
+    normal_pos: float = Field(
         title="Position",
         description="Coordinate of the grid along the normal direction.",
     )
@@ -87,12 +84,12 @@ class TriangularGridDataset(UnstructuredGridDataset):
     """ Fundamental parameters to set up based on grid dimensionality """
 
     @classmethod
-    def _point_dims(cls) -> pd.PositiveInt:
+    def _point_dims(cls) -> PositiveInt:
         """Dimensionality of stored grid point coordinates."""
         return 2
 
     @classmethod
-    def _cell_num_vertices(cls) -> pd.PositiveInt:
+    def _cell_num_vertices(cls) -> PositiveInt:
         """Number of vertices in a cell."""
         return 3
 

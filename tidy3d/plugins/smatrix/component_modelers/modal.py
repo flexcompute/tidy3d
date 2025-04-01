@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeInt, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.sim_data import SimulationData
@@ -23,7 +23,7 @@ from tidy3d.web.api.container import BatchData
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler
 
-MatrixIndex = tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
+MatrixIndex = tuple[str, NonNegativeInt]  # the 'i' in S_ij
 Element = tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
 
 
@@ -40,14 +40,14 @@ class ComponentModeler(AbstractComponentModeler):
         * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
     """
 
-    ports: tuple[Port, ...] = pd.Field(
+    ports: tuple[Port, ...] = Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
 
-    element_mappings: tuple[tuple[Element, Element, Complex], ...] = pd.Field(
+    element_mappings: tuple[tuple[Element, Element, Complex], ...] = Field(
         (),
         title="Element Mappings",
         description="Mapping between elements of the scattering matrix, "
@@ -60,7 +60,7 @@ class ComponentModeler(AbstractComponentModeler):
         "is skipped automatically.",
     )
 
-    run_only: Optional[tuple[MatrixIndex, ...]] = pd.Field(
+    run_only: Optional[tuple[MatrixIndex, ...]] = Field(
         None,
         title="Run Only",
         description="If given, a tuple of matrix indices, specified by (:class:`.Port`, ``int``),"
@@ -72,13 +72,13 @@ class ComponentModeler(AbstractComponentModeler):
     :class:`ComponentModeler`. ``run_only`` contains the scattering matrix indices that the user wants to run as a
     source. If any indices are excluded, they will not be run."""
 
-    verbose: bool = pd.Field(
+    verbose: bool = Field(
         False,
         title="Verbosity",
         description="Whether the :class:`.ComponentModeler` should print status and progressbars.",
     )
 
-    callback_url: str = pd.Field(
+    callback_url: Optional[str] = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -86,8 +86,8 @@ class ComponentModeler(AbstractComponentModeler):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    @pd.validator("simulation", always=True)
-    def _sim_has_no_sources(cls, val):
+    @field_validator("simulation")
+    def _sim_has_no_sources(val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError("'ComponentModeler.simulation' must not have any sources.")
@@ -181,9 +181,7 @@ class ComponentModeler(AbstractComponentModeler):
             name=port.name,
         )
 
-    def to_source(
-        self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs
-    ) -> list[ModeSource]:
+    def to_source(self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs) -> ModeSource:
         """Creates a list of mode sources from a given port."""
         freq0 = np.mean(self.freqs)
         fdiff = max(self.freqs) - min(self.freqs)
@@ -224,7 +222,7 @@ class ComponentModeler(AbstractComponentModeler):
         for port_source in self.ports:
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
     @equal_aspect
@@ -243,7 +241,7 @@ class ComponentModeler(AbstractComponentModeler):
         for port_source in self.ports:
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
+        sim_plot = self.simulation.copy(update={"sources": tuple(plot_sources)})
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:

@@ -10,12 +10,12 @@ from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal, Optional
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveInt, PrivateAttr
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.components.types import annotate_type
+from tidy3d.components.types import discriminated_union
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
@@ -126,20 +126,24 @@ class Job(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulation: SimulationType = pd.Field(
-        ...,
+    simulation: SimulationType = Field(
         title="simulation",
         description="Simulation to run as a 'task'.",
         discriminator="type",
     )
 
-    task_name: TaskName = pd.Field(..., title="Task Name", description="Unique name of the task.")
-
-    folder_name: str = pd.Field(
-        "default", title="Folder Name", description="Name of folder to store task on web UI."
+    task_name: TaskName = Field(
+        title="Task Name",
+        description="Unique name of the task.",
     )
 
-    callback_url: str = pd.Field(
+    folder_name: str = Field(
+        "default",
+        title="Folder Name",
+        description="Name of folder to store task on web UI.",
+    )
+
+    callback_url: Optional[str] = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -147,28 +151,32 @@ class Job(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    solver_version: str = pd.Field(
+    solver_version: Optional[str] = Field(
         None,
         title="Solver Version",
         description="Custom solver version to use, "
         "otherwise uses default for the current front end version.",
     )
 
-    verbose: bool = pd.Field(
-        True, title="Verbose", description="Whether to print info messages and progressbars."
+    verbose: bool = Field(
+        True,
+        title="Verbose",
+        description="Whether to print info messages and progressbars.",
     )
 
-    simulation_type: str = pd.Field(
+    simulation_type: str = Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of simulation, used internally only.",
     )
 
-    parent_tasks: tuple[TaskId, ...] = pd.Field(
-        None, title="Parent Tasks", description="Tuple of parent task ids, used internally only."
+    parent_tasks: Optional[tuple[TaskId, ...]] = Field(
+        None,
+        title="Parent Tasks",
+        description="Tuple of parent task ids, used internally only.",
     )
 
-    task_id_cached: TaskId = pd.Field(
+    task_id_cached: Optional[TaskId] = Field(
         None,
         title="Task ID (Cached)",
         description="Optional field to specify ``task_id``. Only used as a workaround internally "
@@ -177,28 +185,30 @@ class Job(WebContainer):
         "fields that were not used to create the task will cause errors.",
     )
 
-    reduce_simulation: Literal["auto", True, False] = pd.Field(
+    reduce_simulation: Literal["auto", True, False] = Field(
         "auto",
         title="Reduce Simulation",
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
-    pay_type: PayType = pd.Field(
+    pay_type: PayType = Field(
         PayType.AUTO,
         title="Payment Type",
         description="Specify the payment method.",
     )
 
-    _upload_fields = (
-        "simulation",
-        "task_name",
-        "folder_name",
-        "callback_url",
-        "verbose",
-        "simulation_type",
-        "parent_tasks",
-        "solver_version",
-        "reduce_simulation",
+    _upload_fields: tuple[str, ...] = PrivateAttr(
+        (
+            "simulation",
+            "task_name",
+            "folder_name",
+            "callback_url",
+            "verbose",
+            "simulation_type",
+            "parent_tasks",
+            "solver_version",
+            "reduce_simulation",
+        )
     )
 
     def to_file(self, fname: str) -> None:
@@ -411,18 +421,20 @@ class BatchData(Tidy3dBaseModel, Mapping):
         * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
     """
 
-    task_paths: dict[TaskName, str] = pd.Field(
-        ...,
+    task_paths: dict[TaskName, str] = Field(
         title="Data Paths",
         description="Mapping of task_name to path to corresponding data for each task in batch.",
     )
 
-    task_ids: dict[TaskName, str] = pd.Field(
-        ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
+    task_ids: dict[TaskName, str] = Field(
+        title="Task IDs",
+        description="Mapping of task_name to task_id for each task in batch.",
     )
 
-    verbose: bool = pd.Field(
-        True, title="Verbose", description="Whether to print info messages and progressbars."
+    verbose: bool = Field(
+        True,
+        title="Verbose",
+        description="Whether to print info messages and progressbars.",
     )
 
     def load_sim_data(self, task_name: str) -> SimulationDataType:
@@ -499,30 +511,31 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: dict[TaskName, annotate_type(SimulationType)] = pd.Field(
-        ...,
+    simulations: dict[TaskName, discriminated_union(SimulationType)] = Field(
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
     )
 
-    folder_name: str = pd.Field(
+    folder_name: str = Field(
         "default",
         title="Folder Name",
         description="Name of folder to store member of each batch on web UI.",
     )
 
-    verbose: bool = pd.Field(
-        True, title="Verbose", description="Whether to print info messages and progressbars."
+    verbose: bool = Field(
+        True,
+        title="Verbose",
+        description="Whether to print info messages and progressbars.",
     )
 
-    solver_version: str = pd.Field(
+    solver_version: Optional[str] = Field(
         None,
         title="Solver Version",
         description="Custom solver version to use, "
         "otherwise uses default for the current front end version.",
     )
 
-    callback_url: str = pd.Field(
+    callback_url: Optional[str] = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -530,19 +543,19 @@ class Batch(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    simulation_type: str = pd.Field(
+    simulation_type: str = Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of each simulation in the batch, used internally only.",
     )
 
-    parent_tasks: dict[str, tuple[TaskId, ...]] = pd.Field(
+    parent_tasks: Optional[dict[str, tuple[TaskId, ...]]] = Field(
         None,
         title="Parent Tasks",
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    num_workers: Optional[pd.PositiveInt] = pd.Field(
+    num_workers: Optional[PositiveInt] = Field(
         DEFAULT_NUM_WORKERS,
         title="Number of Workers",
         description="Number of workers for multi-threading upload and download of batch. "
@@ -551,19 +564,19 @@ class Batch(WebContainer):
         "number of threads available on the system.",
     )
 
-    reduce_simulation: Literal["auto", True, False] = pd.Field(
+    reduce_simulation: Literal["auto", True, False] = Field(
         "auto",
         title="Reduce Simulation",
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
-    pay_type: PayType = pd.Field(
+    pay_type: PayType = Field(
         PayType.AUTO,
         title="Payment Type",
         description="Specify the payment method.",
     )
 
-    jobs_cached: dict[TaskName, Job] = pd.Field(
+    jobs_cached: Optional[dict[TaskName, Job]] = Field(
         None,
         title="Jobs (Cached)",
         description="Optional field to specify ``jobs``. Only used as a workaround internally "
@@ -572,7 +585,7 @@ class Batch(WebContainer):
         "fields that were not used to create the task will cause errors.",
     )
 
-    _job_type = Job
+    _job_type: type = PrivateAttr(Job)
 
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
@@ -629,7 +642,7 @@ class Batch(WebContainer):
         for task_name, simulation in self.simulations.items():
             job_kwargs = {}
 
-            for key in JobType._upload_fields:
+            for key in JobType._upload_fields.default:
                 if key in self_dict:
                     job_kwargs[key] = self_dict.get(key)
 
@@ -699,7 +712,7 @@ class Batch(WebContainer):
 
         Returns
         -------
-        Dict[str, :class:`TaskInfo`]
+        dict[str, :class:`TaskInfo`]
             Mapping of task name to data about task associated with each task.
         """
         info_dict = {}
@@ -728,7 +741,7 @@ class Batch(WebContainer):
 
         Returns
         -------
-        Dict[str: :class:`RunInfo`]
+        dict[str: :class:`RunInfo`]
             Maps task names to run info for each task in the :class:`Batch`.
         """
         run_info_dict = {}

@@ -5,15 +5,14 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pydantic
-from autograd.tracer import isbox
+from pydantic import field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
-from .autograd.utils import get_static
-from .base import DATA_ARRAY_MAP, skip_if_fields_missing
-from .data.dataset import Dataset, FieldDataset
+from .autograd.utils import get_static, hasbox
+from .base import DATA_ARRAY_MAP
 from .geometry.base import Box
 from .mode_spec import ModeSpec
 
@@ -56,7 +55,8 @@ MIN_FREQUENCY = 1e5
 def assert_line():
     """makes sure a field's ``size`` attribute has exactly 2 zeros"""
 
-    @pydantic.validator("size", allow_reuse=True, always=True)
+    @field_validator("size")
+    @classmethod
     def is_line(cls, val):
         """Raise validation error if not 1 dimensional."""
         if val.count(0.0) != 2:
@@ -69,7 +69,8 @@ def assert_line():
 def assert_plane():
     """makes sure a field's ``size`` attribute has exactly 1 zero"""
 
-    @pydantic.validator("size", allow_reuse=True, always=True)
+    @field_validator("size")
+    @classmethod
     def is_plane(cls, val):
         """Raise validation error if not planar."""
         if val.count(0.0) != 1:
@@ -82,7 +83,8 @@ def assert_plane():
 def assert_line_or_plane():
     """makes sure a field's ``size`` attribute has either 1 or 2 zeros"""
 
-    @pydantic.validator("size", allow_reuse=True, always=True)
+    @field_validator("size")
+    @classmethod
     def is_line_or_plane(cls, val):
         """Raise validation error if not a line or plane."""
         if val.count(0.0) == 0 or val.count(0.0) == 3:
@@ -97,7 +99,7 @@ def assert_line_or_plane():
 def assert_volumetric():
     """makes sure a field's ``size`` attribute has no zero entry"""
 
-    @pydantic.validator("size", allow_reuse=True, always=True)
+    @field_validator("size")
     def is_volumetric(cls, val):
         """Raise validation error if volume is 0."""
         if val.count(0.0) > 0:
@@ -111,11 +113,12 @@ def assert_volumetric():
     return is_volumetric
 
 
+# FIXME: this validator doesn't do anything
 def validate_name_str():
     """make sure the name does not include [, ] (used for default names)"""
 
-    @pydantic.validator("name", allow_reuse=True, always=True, pre=True)
-    def field_has_unique_names(cls, val):
+    @field_validator("name")
+    def field_has_unique_names(val):
         """raise exception if '[' or ']' in name"""
         # if val and ('[' in val or ']' in val):
         #     raise SetupError(f"'[' or ']' not allowed in name: {val} (used for defaults)")
@@ -124,14 +127,14 @@ def validate_name_str():
     return field_has_unique_names
 
 
-def validate_unique(field_name: str):
+def validate_unique(*field_names: str):
     """Make sure the given field has unique entries."""
 
-    @pydantic.validator(field_name, always=True, allow_reuse=True)
-    def field_has_unique_entries(cls, val):
+    @field_validator(*field_names)
+    def field_has_unique_entries(val, info):
         """Check if the field has unique entries."""
         if len(set(val)) != len(val):
-            raise SetupError(f"Entries of '{field_name}' must be unique.")
+            raise SetupError(f"Entries of '{info.field_name}' must be unique.")
         return val
 
     return field_has_unique_entries
@@ -143,15 +146,15 @@ def validate_mode_objects_symmetry(field_name: str):
 
     obj_type = "ModeSource" if field_name == "sources" else "ModeMonitor"
 
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    @skip_if_fields_missing(["center", "symmetry"])
-    def check_symmetry(cls, val, values):
+    @model_validator(mode="after")
+    def check_symmetry(self):
         """check for intersection of each structure with simulation bounds."""
-        sim_center = values.get("center")
+        val = getattr(self, field_name)
+        sim_center = self.center
         for position_index, geometric_object in enumerate(val):
             if geometric_object.type == obj_type:
                 bounds_min, _ = geometric_object.bounds
-                for dim, sym in enumerate(values.get("symmetry")):
+                for dim, sym in enumerate(self.symmetry):
                     if (
                         sym != 0
                         and bounds_min[dim] < sim_center[dim]
@@ -163,21 +166,21 @@ def validate_mode_objects_symmetry(field_name: str):
                             "or centered on the symmetry axis."
                         )
 
-        return val
+        return self
 
     return check_symmetry
 
 
-def assert_unique_names(field_name: str):
+def assert_unique_names(*field_names: str):
     """makes sure all elements of a field have unique .name values"""
 
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    def field_has_unique_names(cls, val, values):
+    @field_validator(*field_names)
+    def field_has_unique_names(val, info):
         """make sure each element of val has a unique name (if specified)."""
         field_names = [field.name for field in val if field.name]
         unique_names = set(field_names)
         if len(unique_names) != len(field_names):
-            raise SetupError(f"'{field_name}' names are not unique, given {field_names}.")
+            raise SetupError(f"'{info.field_name}' names are not unique, given {field_names}.")
         return val
 
     return field_has_unique_names
@@ -188,12 +191,12 @@ def assert_objects_in_sim_bounds(
 ):
     """Makes sure all objects in field are at least partially inside of simulation bounds."""
 
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    @skip_if_fields_missing(["center", "size"])
-    def objects_in_sim_bounds(cls, val, values):
+    @model_validator(mode="after")
+    def objects_in_sim_bounds(self):
         """check for intersection of each structure with simulation bounds."""
-        sim_center = values.get("center")
-        sim_size = values.get("size")
+        val = getattr(self, field_name)
+        sim_center = self.center
+        sim_size = self.size
         sim_box = Box(size=sim_size, center=sim_center)
 
         # Do a strict check, unless simulation is 0D along a dimension
@@ -212,7 +215,7 @@ def assert_objects_in_sim_bounds(
                         raise SetupError(message)
                     consolidated_logger.warning(message, custom_loc=custom_loc)
 
-        return val
+        return self
 
     return objects_in_sim_bounds
 
@@ -225,12 +228,12 @@ def assert_objects_contained_in_sim_bounds(
 ):
     """Makes sure all objects in field are completely inside the simulation bounds."""
 
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    @skip_if_fields_missing(["center", "size"])
-    def objects_contained_in_sim_bounds(cls, val, values):
+    @model_validator(mode="after")
+    def objects_contained_in_sim_bounds(self):
         """check for containment of each structure with simulation bounds."""
-        sim_center = values.get("center")
-        sim_size = values.get("size")
+        val = getattr(self, field_name)
+        sim_center = self.center
+        sim_size = self.size
         sim_box = Box(size=sim_size, center=sim_center)
 
         # Do a strict check, unless simulation is 0D along a dimension
@@ -256,7 +259,7 @@ def assert_objects_contained_in_sim_bounds(
                         raise SetupError(message)
                     consolidated_logger.warning(message, custom_loc=custom_loc)
 
-        return val
+        return self
 
     return objects_contained_in_sim_bounds
 
@@ -264,13 +267,13 @@ def assert_objects_contained_in_sim_bounds(
 def enforce_monitor_fields_present():
     """Make sure all of the fields in the monitor are present in the corresponding data."""
 
-    @pydantic.root_validator(skip_on_failure=True, allow_reuse=True)
-    def _contains_fields(cls, values):
+    @model_validator(mode="after")
+    def _contains_fields(self):
         """Make sure the initially specified fields are here."""
-        for field_name in values.get("monitor").fields:
-            if values.get(field_name) is None:
+        for field_name in self.monitor.fields:
+            if getattr(self, field_name) is None:
                 raise SetupError(f"missing field {field_name}")
-        return values
+        return self
 
     return _contains_fields
 
@@ -278,14 +281,14 @@ def enforce_monitor_fields_present():
 def required_if_symmetry_present(field_name: str):
     """Make a field required (not None) if any non-zero symmetry eigenvalue is present."""
 
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    @skip_if_fields_missing(["symmetry"])
-    def _make_required(cls, val, values):
+    @model_validator(mode="after")
+    def _make_required(self):
         """Ensure val is not None if the symmetry is non-zero along any dimension."""
-        symmetry = values.get("symmetry")
+        val = getattr(self, field_name)
+        symmetry = self.symmetry
         if any(sym_val != 0 for sym_val in symmetry) and val is None:
             raise SetupError(f"'{field_name}' must be provided if symmetry present.")
-        return val
+        return self
 
     return _make_required
 
@@ -293,8 +296,8 @@ def required_if_symmetry_present(field_name: str):
 def warn_if_dataset_none(field_name: str):
     """Warn if a Dataset field has None in its dictionary."""
 
-    @pydantic.validator(field_name, pre=True, always=True, allow_reuse=True)
-    def _warn_if_none(cls, val: Dataset) -> Dataset:
+    @field_validator(field_name, mode="before")
+    def _warn_if_none(val: dict) -> Optional[dict]:
         """Warn if the DataArrays fail to load."""
         if isinstance(val, dict):
             if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
@@ -308,13 +311,13 @@ def warn_if_dataset_none(field_name: str):
 def assert_single_freq_in_range(field_name: str):
     """Assert only one frequency supplied in source and it's in source time range."""
 
-    @pydantic.validator(field_name, always=True, allow_reuse=True)
-    @skip_if_fields_missing(["source_time"])
-    def _single_frequency_in_range(cls, val: FieldDataset, values: dict) -> FieldDataset:
+    @model_validator(mode="after")
+    def _single_frequency_in_range(self) -> Self:
         """Assert only one frequency supplied and it's in source time range."""
+        val = getattr(self, field_name, None)
         if val is None:
-            return val
-        source_time = values.get("source_time")
+            return self
+        source_time = self.source_time
         fmin, fmax = source_time.frequency_range()
         for name, scalar_field in val.field_components.items():
             freqs = scalar_field.f
@@ -329,7 +332,7 @@ def assert_single_freq_in_range(field_name: str):
                     f"'{field_name}.{name}' contains frequency: {freq:.2e} Hz, which is outside "
                     f"of the 'source_time' frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
                 )
-        return val
+        return self
 
     return _single_frequency_in_range
 
@@ -378,13 +381,13 @@ def validate_parameter_perturbation(
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""
 
-    @pydantic.validator(field_name, always=True, allow_reuse=True)
-    def _warn_perturbed_val_range(cls, val, values):
+    @field_validator(field_name)
+    def _warn_perturbed_val_range(val, info):
         """Assert perturbations do not drive a parameter out of physical bounds."""
 
         if val is not None:
             # get base values
-            base_values = values[base_field_name]
+            base_values = info.data[base_field_name]
 
             # check that shapes of base parameter and perturbations coincide
             if np.shape(base_values) != np.shape(val):
@@ -442,7 +445,8 @@ def _assert_min_freq(freqs, msg_start: str):
 def validate_freqs_min():
     """Validate lower bound for monitor, and mode solver frequencies."""
 
-    @pydantic.validator("freqs", always=True, allow_reuse=True)
+    @field_validator("freqs")
+    @classmethod
     def freqs_lower_bound(cls, val):
         """Raise validation error if any of ``freqs`` is lower than ``MIN_FREQUENCY``."""
         _assert_min_freq(val, msg_start=f"All of '{cls.__name__}.freqs'")
@@ -454,7 +458,8 @@ def validate_freqs_min():
 def validate_freqs_not_empty():
     """Validate that the array of frequencies is not empty."""
 
-    @pydantic.validator("freqs", always=True, allow_reuse=True)
+    @field_validator("freqs")
+    @classmethod
     def freqs_not_empty(cls, val):
         """Raise validation error if ``freqs`` is an empty Tuple."""
         if len(val) == 0:
@@ -482,12 +487,13 @@ def validate_mode_plane_radius(mode_spec: ModeSpec, plane: Box, msg_prefix: str 
         )
 
 
-def _warn_unsupported_traced_argument(name: str):
-    @pydantic.validator(name, always=True, allow_reuse=True)
-    def _warn_traced_arg(cls, val, values):
-        if isbox(val):
+def _warn_unsupported_traced_argument(*names: str):
+    @field_validator(*names)
+    @classmethod
+    def _warn_traced_arg(cls, val, info):
+        if hasbox(val):
             log.warning(
-                f"Field '{name}' of '{cls.__name__}' received an autograd tracer "
+                f"Field '{info.field_name}' of '{cls.__name__}' received an autograd tracer "
                 f"(i.e., a value being tracked for automatic differentiation). "
                 f"Automatic differentiation through this field is unsupported, "
                 f"so the tracer has been converted to its static value. "
