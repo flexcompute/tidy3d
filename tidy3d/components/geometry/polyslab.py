@@ -21,6 +21,7 @@ from ..autograd.types import TracedFloat
 from ..base import cached_property, skip_if_fields_missing
 from ..transformation import RotationAroundAxis
 from ..types import (
+    ArrayFloat1D,
     ArrayFloat2D,
     ArrayLike,
     Axis,
@@ -1215,6 +1216,28 @@ class PolySlab(base.Planar):
     def vertices_to_array(vertices_tuple: ArrayFloat2D) -> np.ndarray:
         """Converts a list of tuples (vertices) to a numpy array."""
         return np.array(vertices_tuple)
+
+    @cached_property
+    def interior_angle(self) -> ArrayFloat1D:
+        """Angle formed inside polygon by two adjacent edges."""
+
+        def normalize(v):
+            return v / np.linalg.norm(v, axis=0)
+
+        vs_orig = self.reference_polygon.T
+        vs_next = np.roll(vs_orig, axis=-1, shift=-1)
+        vs_previous = np.roll(vs_orig, axis=-1, shift=+1)
+
+        asp = normalize(vs_next - vs_orig)
+        asm = normalize(vs_previous - vs_orig)
+
+        cos_angle = asp[0] * asm[0] + asp[1] * asm[1]
+        sin_angle = asp[0] * asm[1] - asp[1] * asm[0]
+
+        angle = np.arccos(cos_angle)
+        # concave angles
+        angle[sin_angle < 0] = 2 * np.pi - angle[sin_angle < 0]
+        return angle
 
     @staticmethod
     def _shift_vertices(
