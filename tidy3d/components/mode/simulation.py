@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.boundary import Boundary, BoundarySpec
@@ -20,7 +20,14 @@ from tidy3d.components.simulation import (
     validate_boundaries_for_zero_dims,
 )
 from tidy3d.components.source.field import ModeSource
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
+from tidy3d.components.types import (
+    Ax,
+    Direction,
+    EMField,
+    FreqArray,
+    discriminated_union,
+)
+from tidy3d.components.validators import validate_mode_plane_radius
 from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -33,7 +40,7 @@ ModeSimulationMonitorType = PermittivityMonitor
 # should be very small -- otherwise, generating tmesh will fail or take a long time
 RUN_TIME = 1e-30
 
-MODE_PLANE_TYPE = Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor]
+MODE_PLANE_TYPE = discriminated_union(Union[Box, ModeSource, ModeMonitor, ModeSolverMonitor])
 
 
 # attributes shared between ModeSimulation class and ModeSolver class
@@ -112,31 +119,31 @@ class ModeSimulation(AbstractYeeGridSimulation):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    mode_spec: ModeSpec = pd.Field(
-        ...,
+    mode_spec: ModeSpec = Field(
         title="Mode specification",
         description="Container with specifications about the modes to be solved for.",
     )
 
-    freqs: FreqArray = pd.Field(
-        ..., title="Frequencies", description="A list of frequencies at which to solve."
+    freqs: FreqArray = Field(
+        title="Frequencies",
+        description="A list of frequencies at which to solve.",
     )
 
-    direction: Direction = pd.Field(
+    direction: Direction = Field(
         "+",
         title="Propagation direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
     )
 
-    colocate: bool = pd.Field(
+    colocate: bool = Field(
         True,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default is ``True``.",
     )
 
-    fields: tuple[EMField, ...] = pd.Field(
+    fields: tuple[EMField, ...] = Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
@@ -144,8 +151,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "like ``mode_area`` require all E-field components.",
     )
 
-    boundary_spec: BoundarySpec = pd.Field(
-        BoundarySpec(),
+    boundary_spec: BoundarySpec = Field(
+        default_factory=BoundarySpec,
         title="Boundaries",
         description="Specification of boundary conditions along each dimension. If ``None``, "
         "PML boundary conditions are applied on all sides. This behavior is for "
@@ -154,27 +161,27 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "apply PML layers in the mode solver.",
     )
 
-    monitors: tuple[ModeSimulationMonitorType, ...] = pd.Field(
+    monitors: tuple[ModeSimulationMonitorType, ...] = Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
 
-    sources: tuple[()] = pd.Field(
+    sources: tuple[()] = Field(
         (),
         title="Sources",
         description="Sources in the simulation. Note: sources are not supported in mode "
         "simulations.",
     )
 
-    grid_spec: GridSpec = pd.Field(
-        GridSpec(),
+    grid_spec: GridSpec = Field(
+        default_factory=GridSpec,
         title="Grid Specification",
         description="Specifications for the simulation grid along each of the three directions.",
     )
 
-    plane: MODE_PLANE_TYPE = pd.Field(
+    plane: Optional[MODE_PLANE_TYPE] = Field(
         None,
         title="Plane",
         description="Cross-sectional plane in which the mode will be computed. "
@@ -182,65 +189,71 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "the provided ``plane`` and the simulation geometry. "
         "If ``None``, the simulation must be 2D, and the plane will be the entire "
         "simulation geometry.",
-        discriminator=TYPE_TAG_STR,
     )
 
-    @pd.validator("plane", always=True)
-    def is_plane(cls, val, values):
+    @field_validator("grid_spec")
+    def _validate_auto_grid_wavelength(val):
+        # abstract override, logic is handled in post-init to ensure freqs is defined
+        return val
+
+    @field_validator("plane")
+    def _validate_planar(val):
+        if val.size.count(0.0) != 1:
+            raise ValidationError(f"'ModeSimulation.plane' must be planar, given 'size={val.size}'")
+        return val
+
+    @model_validator(mode="before")
+    def is_plane(data):
         """Raise validation error if not planar."""
-        if val is None:
-            sim_center = values.get("center")
-            sim_size = values.get("size")
-            val = Box(size=sim_size, center=sim_center)
+        if data.get("plane") is None:
+            val = Box(size=data.get("size"), center=data.get("center"))
             if val.size.count(0.0) != 1:
                 raise ValidationError(
                     "If the 'ModeSimulation' geometry is not planar, "
                     "then 'plane' must be specified."
                 )
-            return val
-        if val.size.count(0.0) != 1:
-            raise ValidationError(f"'ModeSimulation.plane' must be planar, given 'size={val}'")
-        return val
+            data["plane"] = val
+        return data
 
-    @pd.validator("plane", always=True)
-    def plane_in_sim_bounds(cls, val, values):
+    @model_validator(mode="after")
+    def plane_in_sim_bounds(self):
         """Check that the plane is at least partially inside the simulation bounds."""
-        sim_center = values.get("center")
-        sim_size = values.get("size")
-        sim_box = Box(size=sim_size, center=sim_center)
-
-        if not sim_box.intersects(val):
+        sim_box = Box(size=self.size, center=self.center)
+        if not sim_box.intersects(self.plane):
             raise SetupError("'ModeSimulation.plane' must intersect 'ModeSimulation.geometry.")
-        return val
+        return self
 
-    @pd.validator("boundary_spec", always=True)
-    def boundaries_for_zero_dims(cls, val, values):
+    @model_validator(mode="after")
+    def boundaries_for_zero_dims(self):
         """Replace with periodic boundary along zero-size dimensions."""
+        val = self.boundary_spec
         boundaries = [val.x, val.y, val.z]
-        size = values.get("size")
-
-        for dim, size_dim in enumerate(size):
+        for dim, size_dim in enumerate(self.size):
             if size_dim == 0:
                 boundaries[dim] = Boundary.periodic()
+        boundary_spec = BoundarySpec(x=boundaries[0], y=boundaries[1], z=boundaries[2])
+        object.__setattr__(self, "boundary_spec", boundary_spec)
+        return self
 
-        return BoundarySpec(x=boundaries[0], y=boundaries[1], z=boundaries[2])
+    @model_validator(mode="after")
+    def _validate_mode_solver(self):
+        _ = self._mode_solver
+        return self
 
-    def _post_init_validators(self) -> None:
-        """Call validators taking `self` that get run after init."""
-        ModeSolver._validate_mode_plane_radius(
+    @model_validator(mode="after")
+    def _validate_grid(self):
+        _ = self.grid
+        return self
+
+    @model_validator(mode="after")
+    def _validate_mode_plane_radius(self):
+        validate_mode_plane_radius(
             mode_spec=self.mode_spec,
             plane=self.plane,
             sim_geom=self.geometry,
-            msg_prefix="'ModeSimulation'",
+            msg_prefix="ModeSimulation",
         )
-        _ = self._mode_solver
-        _ = self.grid
-
-    @pd.validator("grid_spec", always=True)
-    def _validate_auto_grid_wavelength(cls, val, values):
-        """Handle the case where grid_spec is auto and wavelength is not provided."""
-        # this is handled instead post-init to ensure freqs is defined
-        return val
+        return self
 
     @cached_property
     def _mode_solver(self) -> ModeSolver:
@@ -290,14 +303,14 @@ class ModeSimulation(AbstractYeeGridSimulation):
             **kwargs,
             run_time=RUN_TIME,
             grid_spec=grid_spec,
-            monitors=[],
+            monitors=(),
         )
 
     @classmethod
     def from_simulation(
         cls,
         simulation: AbstractYeeGridSimulation,
-        wavelength: Optional[pd.PositiveFloat] = None,
+        wavelength: Optional[PositiveFloat] = None,
         **kwargs,
     ) -> ModeSimulation:
         """Creates :class:`.ModeSimulation` from a :class:`.AbstractYeeGridSimulation`.
@@ -306,7 +319,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         ----------
         simulation: :class:`.AbstractYeeGridSimulation`
             Starting simulation defining structures, grid, etc.
-        wavelength: Optional[pd.PositiveFloat]
+        wavelength: Optional[PositiveFloat]
             Wavelength used for automatic grid generation. Required if auto grid
             is used in ``grid_spec``.
         **kwargs
@@ -354,7 +367,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     @classmethod
     def from_mode_solver(
-        cls, mode_solver: ModeSolver, wavelength: Optional[pd.PositiveFloat] = None
+        cls, mode_solver: ModeSolver, wavelength: Optional[PositiveFloat] = None
     ) -> ModeSimulation:
         """Creates :class:`.ModeSimulation` from a :class:`.ModeSolver`.
 
@@ -362,7 +375,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         ----------
         simulation: :class:`.AbstractYeeGridSimulation`
             Starting simulation defining structures, grid, etc.
-        wavelength: Optional[pd.PositiveFloat]
+        wavelength: Optional[PositiveFloat]
             Wavelength used for automatic grid generation. Required if auto grid
             is used in ``grid_spec``.
 

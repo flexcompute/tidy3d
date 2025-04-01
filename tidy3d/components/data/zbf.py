@@ -5,7 +5,7 @@ from __future__ import annotations
 from struct import unpack
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import Tidy3dBaseModel
 
@@ -15,58 +15,58 @@ class ZBFData(Tidy3dBaseModel):
     Contains data read in from a ``.zbf`` file
     """
 
-    version: int = pd.Field(title="Version", description="File format version number.")
-    nx: int = pd.Field(title="Samples in X", description="Number of samples in the x direction.")
-    ny: int = pd.Field(title="Samples in Y", description="Number of samples in the y direction.")
-    ispol: bool = pd.Field(
+    version: int = Field(title="Version", description="File format version number.")
+    nx: int = Field(title="Samples in X", description="Number of samples in the x direction.")
+    ny: int = Field(title="Samples in Y", description="Number of samples in the y direction.")
+    ispol: bool = Field(
         title="Is Polarized",
         description="``True`` if the beam is polarized, ``False`` otherwise.",
     )
-    unit: str = pd.Field(
+    unit: str = Field(
         title="Spatial Units", description="Spatial units, either 'mm', 'cm', 'in', or 'm'."
     )
-    dx: float = pd.Field(title="Grid Spacing, X", description="Grid spacing in x.")
-    dy: float = pd.Field(title="Grid Spacing, Y", description="Grid spacing in y.")
-    zposition_x: float = pd.Field(
+    dx: float = Field(title="Grid Spacing, X", description="Grid spacing in x.")
+    dy: float = Field(title="Grid Spacing, Y", description="Grid spacing in y.")
+    zposition_x: float = Field(
         title="Z Position, X Direction",
         description="The pilot beam z position with respect to the pilot beam waist, x direction.",
     )
-    zposition_y: float = pd.Field(
+    zposition_y: float = Field(
         title="Z Position, Y Direction",
         description="The pilot beam z position with respect to the pilot beam waist, y direction.",
     )
-    rayleigh_x: float = pd.Field(
+    rayleigh_x: float = Field(
         title="Rayleigh Distance, X Direction",
         description="The pilot beam Rayleigh distance in the x direction.",
     )
-    rayleigh_y: float = pd.Field(
+    rayleigh_y: float = Field(
         title="Rayleigh Distance, Y Direction",
         description="The pilot beam Rayleigh distance in the y direction.",
     )
-    waist_x: float = pd.Field(
+    waist_x: float = Field(
         title="Beam Waist, X", description="The pilot beam waist in the x direction."
     )
-    waist_y: float = pd.Field(
+    waist_y: float = Field(
         title="Beam Waist, Y", description="The pilot beam waist in the y direction."
     )
-    wavelength: float = pd.Field(..., title="Wavelength", description="The wavelength of the beam.")
-    background_refractive_index: float = pd.Field(
+    wavelength: float = Field(title="Wavelength", description="The wavelength of the beam.")
+    background_refractive_index: float = Field(
         title="Background Refractive Index",
         description="The index of refraction in the current medium.",
     )
-    receiver_eff: float = pd.Field(
+    receiver_eff: float = Field(
         title="Receiver Efficiency",
         description="The receiver efficiency. Zero if fiber coupling is not computed.",
     )
-    system_eff: float = pd.Field(
+    system_eff: float = Field(
         title="System Efficiency",
         description="The system efficiency. Zero if fiber coupling is not computed.",
     )
-    Ex: np.ndarray = pd.Field(
+    Ex: np.ndarray = Field(
         title="Electric Field, X Component",
         description="Complex-valued electric field, x component.",
     )
-    Ey: np.ndarray = pd.Field(
+    Ey: np.ndarray = Field(
         title="Electric Field, Y Component",
         description="Complex-valued electric field, y component.",
     )

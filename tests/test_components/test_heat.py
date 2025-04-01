@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pd
 import pytest
 from matplotlib import pyplot as plt
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d import (
@@ -54,10 +54,10 @@ def make_heat_mediums():
 def test_heat_medium():
     _, solid_medium = make_heat_mediums()
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = solid_medium.heat_spec.updated_copy(capacity=-1)
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = solid_medium.heat_spec.updated_copy(conductivity=-1)
 
     # check we can create solid medium from  SI units
@@ -116,13 +116,13 @@ def make_heat_bcs():
 def test_heat_bcs():
     bc_temp, bc_flux, bc_conv = make_heat_bcs()
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = TemperatureBC(temperature=-10)
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = ConvectionBC(ambient_temperature=-400, transfer_coeff=0.2)
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = ConvectionBC(ambient_temperature=400, transfer_coeff=-0.2)
 
 
@@ -144,10 +144,10 @@ def make_heat_mnts():
 def test_heat_mnt():
     temp_mnt, _, _, _, _, _ = make_heat_mnts()
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = temp_mnt.updated_copy(name=None)
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = temp_mnt.updated_copy(size=(-1, 2, 3))
 
 
@@ -257,20 +257,20 @@ def make_distance_grid_spec():
 
 def test_grid_spec():
     grid_spec = make_uniform_grid_spec()
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = grid_spec.updated_copy(dl=0)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = grid_spec.updated_copy(min_edges_per_circumference=-1)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = grid_spec.updated_copy(min_edges_per_side=-1)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = grid_spec.updated_copy(relative_min_dl=-1e-4)
 
     grid_spec = make_distance_grid_spec()
     _ = grid_spec.updated_copy(relative_min_dl=0)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = grid_spec.updated_copy(dl_interface=-1)
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = grid_spec.updated_copy(distance_interface=2, distance_bulk=1)
 
 
@@ -290,8 +290,8 @@ def make_custom_heat_source():
 def test_heat_source():
     source = make_heat_source()
     source = make_custom_heat_source()
-    with pytest.raises(pd.ValidationError):
-        _ = source.updated_copy(structures=[])
+    with pytest.raises(ValidationError):
+        _ = source.updated_copy(structures=())
 
 
 def make_heat_sim(include_custom_source: bool = True):
@@ -355,23 +355,25 @@ def test_heat_sim():
             condition=bc_temp, placement=StructureSimulationBoundary(structure="no_mesh")
         ),
     ]:
-        with pytest.raises(pd.ValidationError):
-            _ = heat_sim.updated_copy(boundary_spec=[pl])
+        with pytest.raises(ValidationError):
+            _ = heat_sim.updated_copy(boundary_spec=(pl,))
 
-    with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(sources=[HeatSource(structures=["noname"])], rate=-10)
+    with pytest.raises(ValidationError):
+        _ = heat_sim.updated_copy(sources=(HeatSource(structures=["noname"]),), rate=-10)
 
     # run 2D case
-    _ = heat_sim.updated_copy(center=(0.7, 0, 0), size=(0, 2, 2), monitors=heat_sim.monitors[:5])
+    _ = heat_sim.updated_copy(
+        center=(0.7, 0, 0), size=(0, 2, 2), monitors=tuple(heat_sim.monitors[:5])
+    )
 
     # test unsupported 1D heat domains
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = heat_sim.updated_copy(center=(1, 1, 1), size=(1, 0, 0))
 
     temp_mnt = heat_sim.monitors[0]
 
-    with pytest.raises(pd.ValidationError):
-        heat_sim.updated_copy(monitors=[temp_mnt, temp_mnt])
+    with pytest.raises(ValidationError):
+        heat_sim.updated_copy(monitors=(temp_mnt, temp_mnt))
 
     _ = heat_sim.plot(x=0)
     plt.close()
@@ -384,7 +386,7 @@ def test_heat_sim():
     plt.close()
 
     # no negative symmetry
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = heat_sim.updated_copy(symmetry=(-1, 0, 1))
 
     # no SolidSpec in the entire simulation
@@ -393,16 +395,16 @@ def test_heat_sim():
     )
     solid_med = heat_sim.structures[1].medium
 
-    _ = heat_sim.updated_copy(structures=[], medium=solid_med, sources=[], boundary_spec=[bc_spec])
-    with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(structures=[], sources=[], boundary_spec=[bc_spec], monitors=[])
+    _ = heat_sim.updated_copy(structures=(), medium=solid_med, sources=(), boundary_spec=(bc_spec,))
+    with pytest.raises(ValidationError):
+        _ = heat_sim.updated_copy(structures=(), sources=(), boundary_spec=(bc_spec,), monitors=())
 
     _ = heat_sim.updated_copy(
-        structures=[heat_sim.structures[0]], medium=solid_med, boundary_spec=[bc_spec], sources=[]
+        structures=(heat_sim.structures[0],), medium=solid_med, boundary_spec=(bc_spec,), sources=()
     )
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = heat_sim.updated_copy(
-            structures=[heat_sim.structures[0]], boundary_spec=[bc_spec], sources=[], monitors=[]
+            structures=(heat_sim.structures[0],), boundary_spec=(bc_spec,), sources=(), monitors=()
         )
 
     # 1D and 2D structures
@@ -414,18 +416,18 @@ def test_heat_sim():
         geometry=td.Box(size=(1, 0, 1)),
         medium=heat_sim.medium,
     )
-    with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(structures=[*list(heat_sim.structures), struct_1d])
+    with pytest.raises(ValidationError):
+        _ = heat_sim.updated_copy(structures=(*heat_sim.structures, struct_1d))
 
-    with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(structures=[*list(heat_sim.structures), struct_2d])
+    with pytest.raises(ValidationError):
+        _ = heat_sim.updated_copy(structures=(*heat_sim.structures, struct_2d))
 
     # no data expected inside a monitor
     for mnt_size in [(0.2, 0.2, 0.2), (0, 1, 1), (0, 2, 0), (0, 0, 0)]:
         temp_mnt = td.TemperatureMonitor(center=(0, 0, 0), size=mnt_size, name="test")
 
-        with pytest.raises(pd.ValidationError):
-            _ = heat_sim.updated_copy(monitors=[temp_mnt])
+        with pytest.raises(ValidationError):
+            _ = heat_sim.updated_copy(monitors=(temp_mnt,))
 
 
 @pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
@@ -526,15 +528,15 @@ def test_sim_data():
     with pytest.raises(KeyError):
         _ = heat_sim_data.plot_field("test3", x=0)
 
-    with pytest.raises(pd.ValidationError):
-        _ = heat_sim_data.updated_copy(data=[heat_sim_data.data[0]] * 2)
+    with pytest.raises(ValidationError):
+        _ = heat_sim_data.updated_copy(data=(heat_sim_data.data[0],) * 2)
 
     temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="test")
     temp_mnt = temp_mnt.updated_copy(name="test2")
 
-    sim = heat_sim_data.simulation.updated_copy(monitors=[temp_mnt])
+    sim = heat_sim_data.simulation.updated_copy(monitors=(temp_mnt,))
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         _ = heat_sim_data.updated_copy(simulation=sim)
 
 
@@ -687,13 +689,13 @@ def test_unsteady_setup():
     )
 
     heat_sim = heat_sim.updated_copy(
-        structures=[solid_structure],
+        structures=(solid_structure,),
         analysis_spec=unsteady_spec,
-        monitors=[temp_mnt],
-        boundary_spec=[bc],
+        monitors=(temp_mnt,),
+        boundary_spec=(bc,),
     )
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         solid_medium = td.MultiPhysicsMedium(
             heat=td.SolidMedium(
                 conductivity=3,
@@ -701,9 +703,9 @@ def test_unsteady_setup():
             name="solid_medium",
         )
         new_struct = solid_structure.updated_copy(medium=solid_medium)
-        _ = heat_sim.updated_copy(structures=[new_struct])
+        _ = heat_sim.updated_copy(structures=(new_struct,))
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         solid_medium = td.MultiPhysicsMedium(
             heat=td.SolidMedium(
                 conductivity=3,
@@ -712,9 +714,9 @@ def test_unsteady_setup():
             name="solid_medium",
         )
         new_struct = solid_structure.updated_copy(medium=solid_medium)
-        _ = heat_sim.updated_copy(structures=[new_struct])
+        _ = heat_sim.updated_copy(structures=(new_struct,))
 
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(ValidationError):
         solid_medium = td.MultiPhysicsMedium(
             heat=td.SolidMedium(
                 conductivity=3,
@@ -723,4 +725,4 @@ def test_unsteady_setup():
             name="solid_medium",
         )
         new_struct = solid_structure.updated_copy(medium=solid_medium)
-        _ = heat_sim.updated_copy(structures=[new_struct])
+        _ = heat_sim.updated_copy(structures=(new_struct,))

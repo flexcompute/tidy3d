@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Union
 
-import pydantic.v1 as pd
+import pydantic as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.tcad.source.abstract import StructureBasedHeatChargeSource

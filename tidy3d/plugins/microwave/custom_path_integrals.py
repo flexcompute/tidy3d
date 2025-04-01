@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Literal, Optional
 
 import numpy as np
-import pydantic.v1 as pd
 import shapely
 import xarray as xr
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Geometry
@@ -49,18 +49,16 @@ class CustomPathIntegral2D(AbstractAxesRH):
     If the path is not closed, forward and backward differences are used at the endpoints.
     """
 
-    axis: Axis = pd.Field(
+    axis: Axis = Field(
         2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
     )
 
-    position: float = pd.Field(
-        ...,
+    position: float = Field(
         title="Position",
         description="Position of the plane along the ``axis``.",
     )
 
-    vertices: ArrayFloat2D = pd.Field(
-        ...,
+    vertices: ArrayFloat2D = Field(
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the path. "
         "The index of dimension should be in the ascending order, which means "
@@ -210,8 +208,8 @@ class CustomPathIntegral2D(AbstractAxesRH):
         """Axis for performing integration."""
         return self.axis
 
-    @pd.validator("vertices", always=True)
-    def _correct_shape(cls, val):
+    @field_validator("vertices")
+    def _correct_shape(val):
         """Makes sure vertices size is correct."""
         # overall shape of vertices
         if val.shape[1] != 2:

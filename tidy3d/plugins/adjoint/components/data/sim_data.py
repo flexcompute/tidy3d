@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
+from pydantic import Field
 
 from tidy3d.components.data.monitor_data import FieldData, MonitorDataType, PermittivityData
 from tidy3d.components.data.sim_data import SimulationData
@@ -24,32 +24,31 @@ from .monitor_data import JAX_MONITOR_DATA_MAP, JaxMonitorDataType
 class JaxSimulationData(SimulationData, JaxObject):
     """A :class:`.SimulationData` registered with jax."""
 
-    output_data: tuple[JaxMonitorDataType, ...] = pd.Field(
+    output_data: tuple[JaxMonitorDataType, ...] = Field(
         (),
         title="Jax Data",
         description="Tuple of Jax-compatible data associated with output monitors.",
         jax_field=True,
     )
 
-    grad_data: tuple[FieldData, ...] = pd.Field(
+    grad_data: tuple[FieldData, ...] = Field(
         (),
         title="Gradient Field Data",
         description="Tuple of monitor data storing fields associated with the input structures.",
     )
 
-    grad_eps_data: tuple[PermittivityData, ...] = pd.Field(
+    grad_eps_data: tuple[PermittivityData, ...] = Field(
         (),
         title="Gradient Permittivity Data",
         description="Tuple of monitor data storing epsilon associated with the input structures.",
     )
 
-    simulation: JaxSimulation = pd.Field(
-        ...,
+    simulation: JaxSimulation = Field(
         title="Simulation",
         description="The jax-compatible simulation corresponding to the data.",
     )
 
-    task_id: str = pd.Field(
+    task_id: Optional[str] = Field(
         None,
         title="Task ID",
         description="Optional field storing the task_id for the original JaxSimulation.",

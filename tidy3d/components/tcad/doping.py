@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, PositiveFloat, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
@@ -72,23 +72,20 @@ class AbstractDopingBox(Box):
 
         return indices_in_box, X, Y, Z, normal_axis
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_dimensions(cls, values):
+    @field_validator("size")
+    def check_dimensions(val):
         """Make sure dimensionality is specified correctly. I.e.,
         a 2D box must be defined with an inf size in the normal direction."""
-
-        size = values["size"]
         for dim in range(3):
-            if size[dim] == 0:
+            if val[dim] == 0:
                 zero_dim_name = "xyz"[dim]
-
                 raise SetupError(
                     f"The doping box has been set up with 0 size in the {zero_dim_name} direction. "
                     "If this was intended to be translationally invariant, the box must have a large "
                     "or infinite ('td.inf') size in the perpendicular direction."
                 )
 
-        return values
+        return val
 
 
 class ConstantDoping(AbstractDopingBox):
@@ -109,7 +106,7 @@ class ConstantDoping(AbstractDopingBox):
     >>> constant_box2 = td.ConstantDoping.from_bounds(rmin=box_coords[0], rmax=box_coords[1], concentration=1e18)
     """
 
-    concentration: pd.NonNegativeFloat = pd.Field(
+    concentration: NonNegativeFloat = Field(
         default=0,
         title="Doping concentration density.",
         description="Doping concentration density in #/cm^3.",
@@ -184,25 +181,25 @@ class GaussianDoping(AbstractDopingBox):
     ... )
     """
 
-    ref_con: pd.PositiveFloat = pd.Field(
+    ref_con: PositiveFloat = Field(
         title="Reference concentration.",
         description="Reference concentration. This is the minimum concentration in the box "
         "and it is attained at the edges/faces of the box.",
     )
 
-    concentration: pd.PositiveFloat = pd.Field(
+    concentration: PositiveFloat = Field(
         title="Concentration",
         description="The concentration at the center of the box.",
     )
 
-    width: pd.PositiveFloat = pd.Field(
+    width: PositiveFloat = Field(
         title="Width of the gaussian.",
         description="Width of the gaussian. The concentration will transition from "
         "'concentration' at the center of the box to 'ref_con' at the edge/face "
         "of the box in a distance equal to 'width'. ",
     )
 
-    source: str = pd.Field(
+    source: str = Field(
         "xmin",
         title="Source face",
         description="Specifies the side of the box acting as the source, i.e., "

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import PERCMCUBE, VOLT
@@ -37,27 +37,24 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
 
         .. [1] 'UNIFIED APPARENT BANDGAP NARROWING IN n- AND p-TYPE SILICON' Solid-State Electronics Vol. 35, No. 2, pp. 125-129, 1992"""
 
-    v1: pd.PositiveFloat = pd.Field(
-        ...,
+    v1: PositiveFloat = Field(
         title=r"$V_{1,bgn}$ parameter",
         description=r"$V_{1,bgn}$ parameter",
         units=VOLT,
     )
 
-    n2: pd.PositiveFloat = pd.Field(
-        ...,
+    n2: PositiveFloat = Field(
         title=r"$N_{2,bgn}$ parameter",
         description=r"$N_{2,bgn}$ parameter",
         units=PERCMCUBE,
     )
 
-    c2: float = pd.Field(
+    c2: float = Field(
         title=r"$C_{2,bgn}$ parameter",
         description=r"$C_{2,bgn}$ parameter",
     )
 
-    min_N: pd.NonNegativeFloat = pd.Field(
-        ...,
+    min_N: NonNegativeFloat = Field(
         title="Minimum total doping",
         description="Bandgap narrowing is applied at location where total doping "
         "is higher than 'min_N'.",

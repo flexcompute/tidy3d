@@ -299,7 +299,7 @@ def mock_webapi(
 
 @responses.activate
 def test_source_validation(monkeypatch, mock_upload, mock_get_info, mock_metadata):
-    sim = make_sim().copy(update={"sources": []})
+    sim = make_sim().copy(update={"sources": ()})
 
     assert upload(sim, TASK_NAME, PROJECT_NAME, source_required=False)
     with pytest.raises(SetupError):

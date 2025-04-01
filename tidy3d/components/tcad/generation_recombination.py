@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pydantic.v1 as pd
+from pydantic import Field, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import Union
@@ -40,25 +40,42 @@ class FossumCarrierLifetime(Tidy3dBaseModel):
 
     """
 
-    tau_300: pd.PositiveFloat = pd.Field(
-        ..., title="Tau at 300K", description="Carrier lifetime at 300K", units=SECOND
+    tau_300: PositiveFloat = Field(
+        title="Tau at 300K",
+        description="Carrier lifetime at 300K",
+        units=SECOND,
     )
 
-    alpha_T: float = pd.Field(
-        ..., title="Exponent for thermal dependence", description="Exponent for thermal dependence"
+    alpha_T: float = Field(
+        title="Exponent for thermal dependence",
+        description="Exponent for thermal dependence",
     )
 
-    N0: pd.PositiveFloat = pd.Field(
-        ..., title="Reference concentration", description="Reference concentration", units=PERCMCUBE
+    N0: PositiveFloat = Field(
+        title="Reference concentration",
+        description="Reference concentration",
+        units=PERCMCUBE,
     )
 
-    A: float = pd.Field(..., title="Constant A", description="Constant A")
+    A: float = Field(
+        title="Constant A",
+        description="Constant A",
+    )
 
-    B: float = pd.Field(..., title="Constant B", description="Constant B")
+    B: float = Field(
+        title="Constant B",
+        description="Constant B",
+    )
 
-    C: float = pd.Field(..., title="Constant C", description="Constant C")
+    C: float = Field(
+        title="Constant C",
+        description="Constant C",
+    )
 
-    alpha: float = pd.Field(..., title="Exponent constant", description="Exponent constant")
+    alpha: float = Field(
+        title="Exponent constant",
+        description="Exponent constant",
+    )
 
 
 CarrierLifetimeType = Union[FossumCarrierLifetime]
@@ -87,12 +104,14 @@ class AugerRecombination(Tidy3dBaseModel):
         ... )
     """
 
-    c_n: pd.PositiveFloat = pd.Field(
-        ..., title="Constant for electrons", description="Constant for electrons in cm^6/s"
+    c_n: PositiveFloat = Field(
+        title="Constant for electrons",
+        description="Constant for electrons in cm^6/s",
     )
 
-    c_p: pd.PositiveFloat = pd.Field(
-        ..., title="Constant for holes", description="Constant for holes in cm^6/s"
+    c_p: PositiveFloat = Field(
+        title="Constant for holes",
+        description="Constant for holes in cm^6/s",
     )
 
 
@@ -117,8 +136,7 @@ class RadiativeRecombination(Tidy3dBaseModel):
         ... )
     """
 
-    r_const: float = pd.Field(
-        ...,
+    r_const: float = Field(
         title="Radiation constant in cm^3/s",
         description="Radiation constant in cm^3/s",
     )
@@ -159,10 +177,14 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     - This model represents mid-gap traps Shockley-Reed-Hall recombination.
     """
 
-    tau_n: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
-        ..., title="Electron lifetime", description="Electron lifetime", union=SECOND
+    tau_n: Union[PositiveFloat, CarrierLifetimeType] = Field(
+        title="Electron lifetime",
+        description="Electron lifetime",
+        union=SECOND,
     )
 
-    tau_p: Union[pd.PositiveFloat, CarrierLifetimeType] = pd.Field(
-        ..., title="Hole lifetime", description="Hole lifetime", units=SECOND
+    tau_p: Union[PositiveFloat, CarrierLifetimeType] = Field(
+        title="Hole lifetime",
+        description="Hole lifetime",
+        units=SECOND,
     )

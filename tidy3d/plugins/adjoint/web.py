@@ -5,16 +5,15 @@ from __future__ import annotations
 import os
 import tempfile
 from functools import partial
-from typing import Optional
+from typing import Literal, Optional
 
-import pydantic.v1 as pd
 from jax import custom_vjp
 from jax.tree_util import register_pytree_node_class
+from pydantic import Field
 
 import tidy3d as td
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.types import Literal
 from tidy3d.web.api.asynchronous import run_async as web_run_async
 from tidy3d.web.api.container import DEFAULT_DATA_DIR, Batch, BatchData, Job
 from tidy3d.web.api.webapi import run as web_run
@@ -34,8 +33,9 @@ JAX_INFO_FILE = "jax_info.json"
 class RunResidual(JaxObject):
     """Class to store extra data needed to pass between the forward and backward adjoint run."""
 
-    fwd_task_id: str = pd.Field(
-        ..., title="Forward task_id", description="task_id of the forward simulation."
+    fwd_task_id: str = Field(
+        title="Forward task_id",
+        description="task_id of the forward simulation.",
     )
 
 
@@ -43,8 +43,9 @@ class RunResidual(JaxObject):
 class RunResidualBatch(JaxObject):
     """Class to store extra data needed to pass between the forward and backward adjoint run."""
 
-    fwd_task_ids: tuple[str, ...] = pd.Field(
-        ..., title="Forward task_ids", description="task_ids of the forward simulations."
+    fwd_task_ids: tuple[str, ...] = Field(
+        title="Forward task_ids",
+        description="task_ids of the forward simulations.",
     )
 
 
@@ -52,8 +53,9 @@ class RunResidualBatch(JaxObject):
 class RunResidualAsync(JaxObject):
     """Class to store extra data needed to pass between the forward and backward adjoint run."""
 
-    fwd_task_ids: dict[str, str] = pd.Field(
-        ..., title="Forward task_ids", description="task_ids of the forward simulation for async."
+    fwd_task_ids: dict[str, str] = Field(
+        title="Forward task_ids",
+        description="task_ids of the forward simulation for async.",
     )
 
 
@@ -261,13 +263,13 @@ AdjointSimulationType = Literal["tidy3d", "adjoint_fwd", "adjoint_bwd"]
 class AdjointJob(Job):
     """Job that uploads a jax_info object and also includes new fields for adjoint tasks."""
 
-    simulation_type: AdjointSimulationType = pd.Field(
+    simulation_type: AdjointSimulationType = Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of simulation, used internally only.",
     )
 
-    jax_info: JaxInfo = pd.Field(
+    jax_info: Optional[JaxInfo] = Field(
         None,
         title="Jax Info",
         description="Container of information needed to reconstruct jax simulation.",
@@ -288,19 +290,18 @@ class AdjointJob(Job):
 class AdjointBatch(Batch):
     """Batch that uploads a jax_info object and also includes new fields for adjoint tasks."""
 
-    simulation_type: AdjointSimulationType = pd.Field(
+    simulation_type: AdjointSimulationType = Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of simulation, used internally only.",
     )
 
-    jax_infos: dict[str, JaxInfo] = pd.Field(
-        ...,
+    jax_infos: dict[str, JaxInfo] = Field(
         title="Jax Info Dict",
         description="Containers of information needed to reconstruct JaxSimulation for each item.",
     )
 
-    jobs_cached: dict[str, AdjointJob] = pd.Field(
+    jobs_cached: Optional[dict[str, AdjointJob]] = Field(
         None,
         title="Jobs (Cached)",
         description="Optional field to specify ``jobs``. Only used as a workaround internally "
@@ -405,7 +406,7 @@ def run_async(
 
     Parameters
     ----------
-    simulations : Tuple[:class:`.JaxSimulation`, ...]
+    simulations : tuple[:class:`.JaxSimulation`, ...]
         Collection of :class:`.JaxSimulations` to run asynchronously.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
@@ -426,7 +427,7 @@ def run_async(
 
     Returns
     ------
-    Tuple[:class:`.JaxSimulationData`, ...]
+    tuple[:class:`.JaxSimulationData`, ...]
         Contains the :class:`.JaxSimulationData` of each :class:`.JaxSimulation`.
     """
 
@@ -790,7 +791,7 @@ def run_async_local(
 
     Parameters
     ----------
-    simulations : Tuple[:class:`.JaxSimulation`, ...]
+    simulations : tuple[:class:`.JaxSimulation`, ...]
         Collection of :class:`.JaxSimulations` to run asynchronously.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
@@ -810,7 +811,7 @@ def run_async_local(
 
     Returns
     ------
-    Tuple[:class:`.JaxSimulationData`, ...]
+    tuple[:class:`.JaxSimulationData`, ...]
         Contains the :class:`.JaxSimulationData` of each :class:`.JaxSimulation`.
     """
 

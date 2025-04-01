@@ -57,7 +57,7 @@ def make_mode_sim():
         simulation=simulation,
         plane=td.Box(center=(0, 0, 0), size=(1, 1, 0)),
         mode_spec=mode_spec,
-        freqs=[2e14],
+        freqs=(2e14,),
         direction="-",
     )
     return ms
@@ -300,6 +300,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
 
     fname_tmp = str(tmp_path / "web_test_tmp.json")
     download_json(TASK_ID, fname_tmp)
+
     assert ModeSolver.from_file(fname_tmp) == sim
 
 

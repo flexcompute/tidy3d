@@ -1,17 +1,20 @@
 # type information for autograd
 
-# utilities for working with autograd
 from __future__ import annotations
 
 import copy
-import typing
+from typing import Annotated, Literal, Optional, Union, get_origin
 
-import pydantic.v1 as pd
-from autograd.builtins import dict as dict_ag
+import autograd.numpy as anp
+from autograd.builtins import dict as TracedDict
 from autograd.extend import Box, defvjp, primitive
+from pydantic import BeforeValidator, PlainSerializer, PositiveFloat, TypeAdapter
 
+from tidy3d.compat import TypeAlias
 from tidy3d.components.type_util import _add_schema
-from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
+from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D, _auto_serializer
+
+from .utils import get_static, hasbox
 
 # add schema to the Box
 _add_schema(Box, title="AutogradBox", field_type_str="autograd.tracer.Box")
@@ -25,32 +28,96 @@ defvjp(_deepcopy, lambda ans, x, memo: lambda g: _deepcopy(g, memo))
 
 Box.__copy__ = lambda v: _copy(v)
 Box.__deepcopy__ = lambda v, memo: _deepcopy(v, memo)
+Box.__str__ = lambda self: f"{self._value} <{type(self).__name__}>"
+Box.__repr__ = Box.__str__
 
-# Types for floats, or collections of floats that can also be autograd tracers
-TracedFloat = typing.Union[float, Box]
-TracedPositiveFloat = typing.Union[pd.PositiveFloat, Box]
-TracedSize1D = typing.Union[Size1D, Box]
-TracedSize = typing.Union[tuple[TracedSize1D, TracedSize1D, TracedSize1D], Box]
-TracedCoordinate = typing.Union[tuple[TracedFloat, TracedFloat, TracedFloat], Box]
-TracedVertices = typing.Union[ArrayFloat2D, Box]
 
-# poles
-TracedComplex = typing.Union[Complex, Box]
+def traced_alias(base_alias, *, name: Optional[str] = None) -> TypeAlias:
+    base_adapter = TypeAdapter(base_alias, config={"arbitrary_types_allowed": True})
+
+    def _validate_box_or_container(v):
+        # case 1: v itself is a tracer
+        # in this case we just validate but leave the tracer untouched
+        if isinstance(v, Box):
+            base_adapter.validate_python(get_static(v))
+            return v
+
+        # case 2: v is a plain container that contains at least one tracer
+        # in this case we try to coerce into ArrayBox for one-shot validation,
+        # but always return the original v, and fall back to a structural walk if needed
+        if hasbox(v):
+            # decide whether we must return an array
+            origin = get_origin(base_alias)
+            is_array_field = base_alias in (ArrayLike, ArrayFloat2D) or origin is None
+
+            if is_array_field:
+                dense = anp.array(v)
+                base_adapter.validate_python(get_static(dense))
+                return dense
+
+            # otherwise it's a Python container type
+            # try the fast-path array validation, but return the array so ops work
+            try:
+                dense = anp.array(v)
+                base_adapter.validate_python(get_static(dense))
+                return dense
+
+            except Exception:
+                # ragged/un-coercible -> rebuild container of Boxes
+                if isinstance(v, tuple):
+                    return tuple(_validate_box_or_container(x) for x in v)
+                if isinstance(v, list):
+                    return [_validate_box_or_container(x) for x in v]
+                if isinstance(v, dict):
+                    return {k: _validate_box_or_container(x) for k, x in v.items()}
+                # fallback: can't handle this structure
+                raise
+
+        raise ValueError("expected autograd tracer")
+
+    return Union[
+        base_alias,
+        Annotated[
+            Box,
+            BeforeValidator(_validate_box_or_container),
+            PlainSerializer(lambda a, _: _auto_serializer(get_static(a), _), when_used="json"),
+        ],
+        Annotated[object, BeforeValidator(_validate_box_or_container)],
+    ]
+
+
+# "primitive" types that can use traced_alias
+TracedArrayLike = traced_alias(ArrayLike)
+TracedArrayFloat2D = traced_alias(ArrayFloat2D)
+TracedFloat = traced_alias(float)
+TracedPositiveFloat = traced_alias(PositiveFloat)
+TracedComplex = traced_alias(Complex)
+TracedSize1D = traced_alias(Size1D)
+
+# derived traced types (these mirror the types in `components.types`)
+TracedSize = tuple[TracedSize1D, TracedSize1D, TracedSize1D]
+TracedCoordinate = tuple[TracedFloat, TracedFloat, TracedFloat]
 TracedPoleAndResidue = tuple[TracedComplex, TracedComplex]
+TracedPolesAndResidues = tuple[TracedPoleAndResidue, ...]
 
 # The data type that we pass in and out of the web.run() @autograd.primitive
-AutogradTraced = typing.Union[Box, ArrayLike]
-PathType = tuple[typing.Union[int, str], ...]
-AutogradFieldMap = dict_ag[PathType, AutogradTraced]
+PathType = tuple[Union[int, str], ...]
+AutogradFieldMap = TracedDict[PathType, Box]
 
-InterpolationType = typing.Literal["nearest", "linear"]
+InterpolationType = Literal["nearest", "linear"]
 
 __all__ = [
     "AutogradFieldMap",
-    "AutogradTraced",
+    "InterpolationType",
+    "PathType",
+    "TracedArrayFloat2D",
+    "TracedArrayLike",
+    "TracedComplex",
     "TracedCoordinate",
     "TracedFloat",
+    "TracedPoleAndResidue",
+    "TracedPolesAndResidues",
+    "TracedPositiveFloat",
     "TracedSize",
     "TracedSize1D",
-    "TracedVertices",
 ]

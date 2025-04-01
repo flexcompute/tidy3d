@@ -7,4 +7,9 @@ try:
 except ImportError:
     from xarray.core import alignment
 
-__all__ = ["alignment"]
+try:
+    from typing import Self, TypeAlias  # Python >= 3.11
+except ImportError:  # Python <3.11
+    from typing_extensions import Self, TypeAlias
+
+__all__ = ["Self", "TypeAlias", "alignment"]

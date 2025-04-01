@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 import jax.numpy as jnp
-import pydantic.v1 as pd
+from pydantic import Field, NonNegativeFloat, PositiveFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat2D
@@ -52,27 +52,27 @@ class RadiusPenalty(Penalty):
 
     """
 
-    min_radius: float = pd.Field(
+    min_radius: float = Field(
         0.150,
         title="Minimum Radius",
         description="Radius of curvature value below which the penalty ramps to its maximum value.",
         units=MICROMETER,
     )
 
-    alpha: float = pd.Field(
+    alpha: float = Field(
         1.0,
         title="Alpha",
         description="Parameter controlling the strength of the penalty.",
     )
 
-    kappa: float = pd.Field(
+    kappa: float = Field(
         10.0,
         title="Kappa",
         description="Parameter controlling the steepness of the penalty evaluation.",
         units="1/" + MICROMETER,
     )
 
-    wrap: bool = pd.Field(
+    wrap: bool = Field(
         False,
         title="Wrap",
         description="Whether to consider the first set of points as connected to the last.",
@@ -184,8 +184,7 @@ class ErosionDilationPenalty(Penalty):
 
     """
 
-    length_scale: pd.NonNegativeFloat = pd.Field(
-        ...,
+    length_scale: NonNegativeFloat = Field(
         title="Length Scale",
         description="Length scale of erosion and dilation. "
         "Corresponds to ``radius`` in the :class:`ConicFilter` used for filtering. "
@@ -194,15 +193,14 @@ class ErosionDilationPenalty(Penalty):
         units=MICROMETER,
     )
 
-    pixel_size: pd.PositiveFloat = pd.Field(
-        ...,
+    pixel_size: PositiveFloat = Field(
         title="Pixel Size",
         description="Size of each pixel in the array (must be the same along all dimensions). "
         "Corresponds to ``design_region_dl`` in the :class:`ConicFilter` used for filtering.",
         units=MICROMETER,
     )
 
-    beta: pd.PositiveFloat = pd.Field(
+    beta: PositiveFloat = Field(
         100.0,
         title="Projection Beta",
         description="Strength of the ``tanh`` projection. "
@@ -210,7 +208,7 @@ class ErosionDilationPenalty(Penalty):
         "Higher values correspond to stronger discretization.",
     )
 
-    eta0: pd.PositiveFloat = pd.Field(
+    eta0: PositiveFloat = Field(
         0.5,
         title="Projection Midpoint",
         description="Value between 0 and 1 that sets the projection midpoint. In other words, "
@@ -218,7 +216,7 @@ class ErosionDilationPenalty(Penalty):
         "Corresponds to ``eta`` in the :class:`BinaryProjector`.",
     )
 
-    delta_eta: pd.PositiveFloat = pd.Field(
+    delta_eta: PositiveFloat = Field(
         0.01,
         title="Delta Eta Cutoff",
         description="The binarization threshold for erosion and dilation operations "

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
+from pydantic import ValidationError
 
 import tidy3d as td
 from tidy3d.exceptions import SetupError
@@ -317,7 +317,7 @@ def test_zerosize_dimensions():
 
     assert np.allclose(sim.grid.boundaries.y, [-dl / 2, dl / 2])
 
-    with pytest.raises(SetupError):
+    with pytest.raises(ValidationError):
         sim = td.Simulation(
             size=(5, 0, 10),
             boundary_spec=td.BoundarySpec.pec(
@@ -333,7 +333,7 @@ def test_zerosize_dimensions():
             run_time=1e-12,
         )
 
-    with pytest.raises(SetupError):
+    with pytest.raises(ValidationError):
         sim = td.Simulation(
             size=(5, 3, 10),
             boundary_spec=td.BoundarySpec.pec(
@@ -532,7 +532,7 @@ def test_domain_mismatch():
 def test_uniform_grid_dl_validation(dl, expect_exception):
     """Test the validator that checks 'dl' is between 1e-7 and 3e8 µm."""
     if expect_exception:
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(ValidationError):
             _ = td.Simulation(
                 size=(1, 1, 1),
                 grid_spec=td.GridSpec.uniform(dl=dl),

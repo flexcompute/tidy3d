@@ -3,18 +3,18 @@ from __future__ import annotations
 
 import os
 import tempfile
-import typing
 from collections import defaultdict
 from os.path import basename, dirname, join
 from pathlib import Path
+from typing import Any, Callable, Literal, Optional, Union
 
 import numpy as np
-from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.autograd.types import TracedDict
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
@@ -96,18 +96,18 @@ def run(
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: typing.Optional[str] = None,
+    callback_url: Optional[str] = None,
     verbose: bool = True,
-    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
-    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
-    solver_version: typing.Optional[str] = None,
-    worker_group: typing.Optional[str] = None,
+    progress_callback_upload: Optional[Callable[[float], None]] = None,
+    progress_callback_download: Optional[Callable[[float], None]] = None,
+    solver_version: Optional[str] = None,
+    worker_group: Optional[str] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: typing.Optional[list[str]] = None,
+    parent_tasks: Optional[list[str]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -145,7 +145,7 @@ def run(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: typing.Union[PayType, str] = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
         Which method to pay for the simulation.
     Returns
     -------
@@ -232,15 +232,15 @@ def run_async(
     simulations: dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: typing.Optional[str] = None,
-    num_workers: typing.Optional[int] = None,
+    callback_url: Optional[str] = None,
+    num_workers: Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: typing.Optional[dict[str, list[str]]] = None,
+    parent_tasks: Optional[dict[str, list[str]]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: typing.Literal["auto", True, False] = "auto",
-    pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -269,7 +269,7 @@ def run_async(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: typing.Union[PayType, str] = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
         Specify the payment method.
 
     Returns
@@ -371,7 +371,7 @@ def _run_async(
     traced_fields_sim_dict = {}
     for task_name in task_names:
         traced_fields_sim_dict[task_name] = setup_run(simulation=simulations[task_name])
-    traced_fields_sim_dict = dict_ag(traced_fields_sim_dict)
+    traced_fields_sim_dict = TracedDict(traced_fields_sim_dict)
 
     # TODO: shortcut primitive running for any items with no tracers?
 
@@ -402,7 +402,6 @@ def _run_async(
 
 def setup_run(simulation: td.Simulation) -> AutogradFieldMap:
     """Process a user-supplied ``Simulation`` into inputs to ``_run_primitive``."""
-
     # get a mapping of all the traced fields in the provided simulation
     return simulation._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
@@ -478,7 +477,7 @@ def _run_primitive(
 def _run_async_primitive(
     sim_fields_dict: dict[str, AutogradFieldMap],
     sims_original: dict[str, td.Simulation],
-    aux_data_dict: dict[dict[str, typing.Any]],
+    aux_data_dict: dict[dict[str, Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     **run_async_kwargs,
@@ -622,7 +621,7 @@ def _run_bwd(
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     **run_kwargs,
-) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
+) -> Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
 
     # indicate this is an adjoint run
@@ -742,11 +741,11 @@ def _run_async_bwd(
     data_fields_original_dict: dict[str, AutogradFieldMap],
     sim_fields_original_dict: dict[str, AutogradFieldMap],
     sims_original: dict[str, td.Simulation],
-    aux_data_dict: dict[str, dict[str, typing.Any]],
+    aux_data_dict: dict[str, dict[str, Any]],
     local_gradient: bool,
     max_num_adjoint_per_fwd: int,
     **run_async_kwargs,
-) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
+) -> Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
 
     # indicate this is an adjoint run
@@ -1099,7 +1098,7 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 
 def parse_run_kwargs(**run_kwargs):
     """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
-    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type"]
+    job_fields = [*list(Job._upload_fields.default), "solver_version", "pay_type"]
     job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
     return job_init_kwargs
 

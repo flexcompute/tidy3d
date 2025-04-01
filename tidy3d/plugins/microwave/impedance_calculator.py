@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.monitor_data import FieldTimeData
@@ -29,13 +29,13 @@ CurrentIntegralTypes = Union[CurrentIntegralAxisAligned, CustomCurrentIntegral2D
 class ImpedanceCalculator(Tidy3dBaseModel):
     """Tool for computing the characteristic impedance of a transmission line."""
 
-    voltage_integral: Optional[VoltageIntegralTypes] = pd.Field(
+    voltage_integral: Optional[VoltageIntegralTypes] = Field(
         None,
         title="Voltage Integral",
         description="Definition of path integral for computing voltage.",
     )
 
-    current_integral: Optional[CurrentIntegralTypes] = pd.Field(
+    current_integral: Optional[CurrentIntegralTypes] = Field(
         None,
         title="Current Integral",
         description="Definition of contour integral for computing current.",
@@ -88,15 +88,15 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         impedance = ImpedanceCalculator._set_data_array_attributes(impedance)
         return impedance
 
-    @pd.validator("current_integral", always=True)
-    def check_voltage_or_current(cls, val, values):
+    @model_validator(mode="after")
+    def check_voltage_or_current(self):
         """Raise validation error if both ``voltage_integral`` and ``current_integral``
         are not provided."""
-        if not values.get("voltage_integral") and not val:
+        if not self.voltage_integral and not self.current_integral:
             raise ValidationError(
                 "At least one of 'voltage_integral' or 'current_integral' must be provided."
             )
-        return val
+        return self
 
     @staticmethod
     def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
@@ -104,10 +104,10 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         data_array.name = "Z0"
         return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
+    @model_validator(mode="before")
+    def _warn_rf_license(data):
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
-        return values
+        return data

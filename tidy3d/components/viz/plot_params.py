@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
-import pydantic.v1 as pd
 from numpy import inf
+from pydantic import Field, NonNegativeFloat
 
 from tidy3d.components.base import Tidy3dBaseModel
 
@@ -13,8 +13,8 @@ class AbstractPlotParams(Tidy3dBaseModel):
     Corresponds with select properties of ``matplotlib.artist.Artist``.
     """
 
-    alpha: Any = pd.Field(1.0, title="Opacity")
-    zorder: float = pd.Field(None, title="Display Order")
+    alpha: Any = Field(1.0, title="Opacity")
+    zorder: Optional[float] = Field(None, title="Display Order")
 
     def include_kwargs(self, **kwargs) -> AbstractPlotParams:
         """Update the plot params with supplied kwargs."""
@@ -42,13 +42,13 @@ class PathPlotParams(AbstractPlotParams):
     Corresponds with select properties of ``matplotlib.lines.Line2D``.
     """
 
-    color: Any = pd.Field(None, title="Color", alias="c")
-    linewidth: pd.NonNegativeFloat = pd.Field(2, title="Line Width", alias="lw")
-    linestyle: str = pd.Field("--", title="Line Style", alias="ls")
-    marker: Any = pd.Field("o", title="Marker Style")
-    markeredgecolor: Any = pd.Field(None, title="Marker Edge Color", alias="mec")
-    markerfacecolor: Any = pd.Field(None, title="Marker Face Color", alias="mfc")
-    markersize: pd.NonNegativeFloat = pd.Field(10, title="Marker Size", alias="ms")
+    color: Optional[Any] = Field(None, title="Color", alias="c")
+    linewidth: NonNegativeFloat = Field(2, title="Line Width", alias="lw")
+    linestyle: str = Field("--", title="Line Style", alias="ls")
+    marker: Any = Field("o", title="Marker Style")
+    markeredgecolor: Optional[Any] = Field(None, title="Marker Edge Color", alias="mec")
+    markerfacecolor: Optional[Any] = Field(None, title="Marker Face Color", alias="mfc")
+    markersize: NonNegativeFloat = Field(10, title="Marker Size", alias="ms")
 
 
 class PlotParams(AbstractPlotParams):
@@ -56,11 +56,11 @@ class PlotParams(AbstractPlotParams):
     Corresponds with select properties of ``matplotlib.patches.Patch``.
     """
 
-    edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
-    facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
-    fill: bool = pd.Field(True, title="Is Filled")
-    hatch: str = pd.Field(None, title="Hatch Style")
-    linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
+    edgecolor: Optional[Any] = Field(None, title="Edge Color", alias="ec")
+    facecolor: Optional[Any] = Field(None, title="Face Color", alias="fc")
+    fill: bool = Field(True, title="Is Filled")
+    hatch: Optional[str] = Field(None, title="Hatch Style")
+    linewidth: NonNegativeFloat = Field(1, title="Line Width", alias="lw")
 
 
 # defaults for different tidy3d objects

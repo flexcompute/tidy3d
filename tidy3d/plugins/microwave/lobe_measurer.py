@@ -6,11 +6,11 @@ from math import isclose, isnan
 from typing import Optional
 
 import numpy as np
-import pydantic.v1 as pd
 from pandas import DataFrame
+from pydantic import Field, field_validator, model_validator
 from scipy.signal import find_peaks, peak_widths
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.types import ArrayFloat1D, ArrayLike, Ax
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
@@ -40,21 +40,19 @@ class LobeMeasurer(Tidy3dBaseModel):
     >>> lobe_measures = lobe_measurer.lobe_measures # doctest: +SKIP
     """
 
-    angle: ArrayFloat1D = pd.Field(
-        ...,
+    angle: ArrayFloat1D = Field(
         title="Angle",
         description="A 1-dimensional array of angles in radians. The angles should be "
         "in the range [0, 2π] and should be sorted in ascending order.",
     )
 
-    radiation_pattern: ArrayFloat1D = pd.Field(
-        ...,
+    radiation_pattern: ArrayFloat1D = Field(
         title="Radiation Pattern",
         description="A 1-dimensional array of real values representing the radiation pattern "
         "of the antenna measured on a linear scale.",
     )
 
-    apply_cyclic_extension: bool = pd.Field(
+    apply_cyclic_extension: bool = Field(
         True,
         title="Apply Cyclic Extension",
         description="To enable accurate peak finding near boundaries of the ``angle`` array, "
@@ -62,7 +60,7 @@ class LobeMeasurer(Tidy3dBaseModel):
         "of interest, this can be set to ``False``.",
     )
 
-    width_measure: float = pd.Field(
+    width_measure: float = Field(
         0.5,
         gt=0.0,
         le=1.0,
@@ -71,7 +69,7 @@ class LobeMeasurer(Tidy3dBaseModel):
         "Default value of ``0.5`` corresponds with the half-power beamwidth.",
     )
 
-    min_lobe_height: float = pd.Field(
+    min_lobe_height: float = Field(
         DEFAULT_MIN_LOBE_REL_HEIGHT,
         gt=0.0,
         le=1.0,
@@ -80,7 +78,7 @@ class LobeMeasurer(Tidy3dBaseModel):
         "Lobe heights are measured relative to the maximum value in ``radiation_pattern``.",
     )
 
-    null_threshold: float = pd.Field(
+    null_threshold: float = Field(
         DEFAULT_NULL_THRESHOLD,
         gt=0.0,
         le=1.0,
@@ -89,30 +87,29 @@ class LobeMeasurer(Tidy3dBaseModel):
         "which is relative to the maximum value in the ``radiation_pattern``.",
     )
 
-    @pd.validator("angle", always=True)
-    def _sorted_angle(cls, val):
+    @field_validator("angle")
+    def _sorted_angle(val):
         """Ensure the angle array is sorted."""
         if not np.all(np.diff(val) >= 0):
             raise ValidationError("The angle array must be sorted in ascending order.")
         return val
 
-    @pd.validator("radiation_pattern", always=True)
-    def _nonnegative_radiation_pattern(cls, val):
+    @field_validator("radiation_pattern")
+    def _nonnegative_radiation_pattern(val):
         """Ensure the radiation pattern is nonnegative."""
         if not np.all(val >= 0):
             raise ValidationError("Radiation pattern must be nonnegative.")
         return val
 
-    @pd.validator("apply_cyclic_extension", always=True)
-    @skip_if_fields_missing(["angle"])
-    def _cyclic_extension_valid(cls, val, values):
-        if val:
-            angle = values.get("angle")
+    @model_validator(mode="after")
+    def _cyclic_extension_valid(self):
+        if self.apply_cyclic_extension:
+            angle = self.angle
             if np.any(angle < 0) or np.any(angle > 2 * np.pi):
                 raise ValidationError(
                     "When using cyclic extension, the angle array must be in the range [0, 2π]."
                 )
-        return val
+        return self
 
     @cached_property
     def lobe_measures(self) -> DataFrame:
@@ -347,10 +344,10 @@ class LobeMeasurer(Tidy3dBaseModel):
 
         return ax
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
+    @model_validator(mode="before")
+    def _warn_rf_license(data):
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
-        return values
+        return data

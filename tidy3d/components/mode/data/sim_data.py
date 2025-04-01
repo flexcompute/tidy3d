@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-import pydantic.v1 as pd
+from pydantic import Field
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.monitor_data import ModeSolverData, PermittivityData
@@ -18,17 +18,17 @@ ModeSimulationMonitorDataType = PermittivityData
 class ModeSimulationData(AbstractYeeGridSimulationData):
     """Data associated with a mode solver simulation."""
 
-    simulation: ModeSimulation = pd.Field(
-        ..., title="Mode simulation", description="Mode simulation associated with this data."
+    simulation: ModeSimulation = Field(
+        title="Mode simulation",
+        description="Mode simulation associated with this data.",
     )
 
-    modes_raw: ModeSolverData = pd.Field(
-        ...,
+    modes_raw: ModeSolverData = Field(
         title="Raw Modes",
         description=":class:`.ModeSolverData` containing the field and effective index on unexpanded grid.",
     )
 
-    data: tuple[ModeSimulationMonitorDataType, ...] = pd.Field(
+    data: tuple[ModeSimulationMonitorDataType, ...] = Field(
         (),
         title="Monitor Data",
         description="List of monitor data "

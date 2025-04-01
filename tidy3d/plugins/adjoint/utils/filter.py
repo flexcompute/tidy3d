@@ -7,10 +7,11 @@ from abc import ABC, abstractmethod
 import jax.numpy as jnp
 import jax.scipy as jsp
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import MICROMETER
+from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
 
@@ -25,7 +26,7 @@ class Filter(Tidy3dBaseModel, ABC):
 class AbstractCircularFilter(Filter, ABC):
     """Abstract circular filter class. Initializes with parameters and .evaluate() on a design."""
 
-    radius: float = pd.Field(
+    radius: float = Field(
         ...,
         title="Filter Radius",
         description="Radius of the filter to convolve with supplied spatial data. "
@@ -35,7 +36,7 @@ class AbstractCircularFilter(Filter, ABC):
         units=MICROMETER,
     )
 
-    design_region_dl: float = pd.Field(
+    design_region_dl: float = Field(
         ...,
         title="Grid Size in Design Region",
         description="Grid size in the design region. "
@@ -48,16 +49,16 @@ class AbstractCircularFilter(Filter, ABC):
         """Filter radius in pixels."""
         return np.ceil(self.radius / self.design_region_dl)
 
-    @pd.root_validator(pre=True)
-    def _deprecate_feature_size(cls, values):
+    @model_validator(mode="before")
+    def _deprecate_feature_size(data):
         """Extra warning for user using ``feature_size`` field."""
-        if "feature_size" in values:
-            raise pd.ValidationError(
+        if "feature_size" in data:
+            raise ValidationError(
                 "The 'feature_size' field of circular filters available in 2.4 pre-releases was "
                 "renamed to 'radius' for the official 2.4.0 release. "
                 "If you're seeing this message, please change your script to use that field name."
             )
-        return values
+        return data
 
     @abstractmethod
     def make_kernel(self, coords_rad: jnp.array) -> jnp.array:
@@ -178,11 +179,17 @@ class BinaryProjector(Filter):
 
     """
 
-    vmin: float = pd.Field(..., title="Min Value", description="Minimum value to project to.")
+    vmin: float = Field(
+        title="Min Value",
+        description="Minimum value to project to.",
+    )
 
-    vmax: float = pd.Field(..., title="Max Value", description="Maximum value to project to.")
+    vmax: float = Field(
+        title="Max Value",
+        description="Maximum value to project to.",
+    )
 
-    beta: float = pd.Field(
+    beta: float = Field(
         1.0,
         title="Beta",
         description="Steepness of the binarization, "
@@ -191,9 +198,9 @@ class BinaryProjector(Filter):
         "Can be useful to ramp up in a scheduled way during optimization.",
     )
 
-    eta: float = pd.Field(0.5, title="Eta", description="Halfway point in projection function.")
+    eta: float = Field(0.5, title="Eta", description="Halfway point in projection function.")
 
-    strict_binarize: bool = pd.Field(
+    strict_binarize: bool = Field(
         False,
         title="Binarize strictly",
         description="If ``False``, the binarization is still continuous between min and max. "

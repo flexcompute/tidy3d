@@ -8,7 +8,7 @@ import warnings
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pd
 import pytest
 import shapely
 import trimesh
@@ -38,10 +38,10 @@ SPHERE = td.Sphere(radius=1)
 CYLINDER = td.Cylinder(axis=2, length=1, radius=1)
 
 GROUP = td.GeometryGroup(
-    geometries=[
+    geometries=(
         td.Box(center=(-0.25, 0, 0), size=(0.5, 1, 1)),
         td.Box(center=(0.25, 0, 0), size=(0.5, 1, 1)),
-    ]
+    )
 )
 UNION = td.ClipOperation(
     operation="union",
@@ -223,16 +223,16 @@ def test_intersections_plane_inf():
 
 
 def test_center_not_inf_validate():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Box(center=(td.inf, 0, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Box(center=(-td.inf, 0, 0))
 
 
 def test_radius_not_inf_validate():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Sphere(radius=td.inf)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=td.inf, center=(0, 0, 0), axis=1, length=1)
 
 
@@ -249,7 +249,7 @@ def test_slanted_cylinder_infinite_length_validate():
         sidewall_angle=0.1,
         reference_plane="middle",
     )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(
             radius=1,
             center=(0, 0, 0),
@@ -258,7 +258,7 @@ def test_slanted_cylinder_infinite_length_validate():
             sidewall_angle=0.1,
             reference_plane="top",
         )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(
             radius=1,
             center=(0, 0, 0),
@@ -305,7 +305,7 @@ def test_polyslab_inf_bounds(lower_bound, upper_bound):
 
 
 def test_polyslab_bounds():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         td.PolySlab(vertices=((0, 0), (1, 0), (1, 1)), slab_bounds=(0.5, -0.5), axis=2)
 
 
@@ -341,15 +341,15 @@ def test_polyslab_inf_to_finite_bounds(axis):
 
 
 def test_validate_polyslab_vertices_valid():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         POLYSLAB.copy(update={"vertices": (1, 2, 3)})
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         crossing_verts = ((0, 0), (1, 1), (0, 1), (1, 0))
         POLYSLAB.copy(update={"vertices": crossing_verts})
 
 
 def test_sidewall_failed_validation():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         POLYSLAB.copy(update={"sidewall_angle": 1000})
 
 
@@ -383,7 +383,7 @@ def test_gdstk_cell():
 
 def make_geo_group():
     """Make a generic Geometry Group."""
-    boxes = [td.Box(size=(1, 1, 1), center=(i, 0, 0)) for i in range(-5, 5)]
+    boxes = tuple(td.Box(size=(1, 1, 1), center=(i, 0, 0)) for i in range(-5, 5))
     return td.GeometryGroup(geometries=boxes)
 
 
@@ -411,8 +411,8 @@ def test_geo_group_methods():
 
 def test_geo_group_empty():
     """dont allow empty geometry list."""
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.GeometryGroup(geometries=[])
+    with pytest.raises(pd.ValidationError):
+        _ = td.GeometryGroup(geometries=())
 
 
 def test_geo_group_volume():
@@ -587,22 +587,22 @@ def test_flattening():
     flat = list(
         flatten_groups(
             td.GeometryGroup(
-                geometries=[
+                geometries=(
                     td.Box(size=(1, 1, 1)),
                     td.Box(size=(0, 1, 0)),
                     td.ClipOperation(
                         operation="union",
                         geometry_a=td.Box(size=(0, 0, 1)),
                         geometry_b=td.GeometryGroup(
-                            geometries=[
+                            geometries=(
                                 td.Box(size=(2, 2, 2)),
                                 td.GeometryGroup(
-                                    geometries=[td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3))]
+                                    geometries=(td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3)))
                                 ),
-                            ]
+                            )
                         ),
                     ),
-                ]
+                )
             )
         )
     )
@@ -612,22 +612,22 @@ def test_flattening():
     flat = list(
         flatten_groups(
             td.GeometryGroup(
-                geometries=[
+                geometries=(
                     td.Box(size=(1, 1, 1)),
                     td.Box(size=(0, 1, 0)),
                     td.ClipOperation(
                         operation="intersection",
                         geometry_a=td.Box(size=(0, 0, 1)),
                         geometry_b=td.GeometryGroup(
-                            geometries=[
+                            geometries=(
                                 td.Box(size=(2, 2, 2)),
                                 td.GeometryGroup(
-                                    geometries=[td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3))]
+                                    geometries=(td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3)))
                                 ),
-                            ]
+                            )
                         ),
                     ),
-                ]
+                )
             )
         )
     )
@@ -670,15 +670,15 @@ def test_geometry_traversal():
     assert len(geometries) == 1
 
     geo_tree = td.GeometryGroup(
-        geometries=[
+        geometries=(
             td.Box(size=(1, 0, 0)),
             td.ClipOperation(
                 operation="intersection",
                 geometry_a=td.GeometryGroup(
-                    geometries=[
+                    geometries=(
                         td.Box(size=(5, 0, 0)),
                         td.Box(size=(6, 0, 0)),
-                    ]
+                    )
                 ),
                 geometry_b=td.ClipOperation(
                     operation="difference",
@@ -687,13 +687,13 @@ def test_geometry_traversal():
                 ),
             ),
             td.GeometryGroup(
-                geometries=[
+                geometries=(
                     td.Box(size=(3, 0, 0)),
                     td.Box(size=(4, 0, 0)),
-                ]
+                )
             ),
             td.Box(size=(2, 0, 0)),
-        ]
+        )
     )
     geometries = list(traverse_geometries(geo_tree))
     assert len(geometries) == 13
@@ -711,34 +711,34 @@ def test_geometry():
     # _ = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
 
     # make sure wrong axis arguments error
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=-1, length=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.PolySlab(radius=1, center=(0, 0, 0), axis=-1, slab_bounds=(-0.5, 0.5))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.PolySlab(radius=1, center=(0, 0, 0), axis=3, slab_bounds=(-0.5, 0.5))
 
     # make sure negative values error
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Sphere(radius=-1, center=(0, 0, 0))
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=-1, center=(0, 0, 0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=-1)
 
 
 def test_geometry_sizes():
     # negative in size kwargs errors
     for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(pd.ValidationError):
             _ = td.Box(size=size, center=(0, 0, 0))
-        with pytest.raises(pydantic.ValidationError):
+        with pytest.raises(pd.ValidationError):
             _ = td.Simulation(size=size, run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
     # negative grid sizes error?
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.uniform(dl=-1.0), run_time=1e-12)
 
 
@@ -879,7 +879,7 @@ def test_polyslab_intersection_inf_bounds():
     assert poly.intersections_plane(x=0)[0] == shapely.box(-1, 0.0, 1, LARGE_NUMBER)
 
     # 2) [-inf, 0]
-    poly = poly.updated_copy(slab_bounds=[-td.inf, 0])
+    poly = poly.updated_copy(slab_bounds=(-td.inf, 0))
     assert len(poly.intersections_plane(x=0)) == 1
     assert poly.intersections_plane(x=0)[0] == shapely.box(-1, -LARGE_NUMBER, 1, 0)
 
@@ -1043,7 +1043,7 @@ def test_custom_surface_geometry(tmp_path):
 def test_geo_group_sim():
     geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
     geos_orig = list(geo_grp.geometries)
-    geo_grp_full = geo_grp.updated_copy(geometries=[*geos_orig, td.Box(size=(1, 1, 1))])
+    geo_grp_full = geo_grp.updated_copy(geometries=(*geos_orig, td.Box(size=(1, 1, 1))))
 
     sim = td.Simulation(
         size=(10, 10, 10),
@@ -1060,7 +1060,7 @@ def test_geo_group_sim():
 
 
 def test_finite_geometry_transformation():
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pd.ValidationError):
         _ = td.Box(size=(td.inf, 0, 1)).scaled(1, 1, 1)
 
 
@@ -1119,7 +1119,7 @@ def test_subdivide():
     overlapping_boxes = td.GeometryGroup(geometries=(box, overlap_box))
 
     background_structure = td.Structure(medium=td.Medium(), geometry=td.Box(size=(10, 10, 10)))
-    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure])
+    subdivisions = subdivide(geom=overlapping_boxes, structures=(background_structure,))
     assert len(subdivisions) == 1
 
     # Test that when a small sliver is created during subdivide
@@ -1127,7 +1127,7 @@ def test_subdivide():
     box_sliver = td.Structure(
         medium=td.Medium(), geometry=td.Box(size=(1, 1, 1), center=(1 - fp_eps, 0, 0))
     )
-    subdivisions = subdivide(geom=overlapping_boxes, structures=[background_structure, box_sliver])
+    subdivisions = subdivide(geom=overlapping_boxes, structures=(background_structure, box_sliver))
 
 
 @pytest.mark.parametrize("snap_location", [SnapLocation.Boundary, SnapLocation.Center])

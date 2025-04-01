@@ -8,11 +8,11 @@ from typing import Union
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pydantic.v1 as pd
 import shapely
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
 from joblib import Parallel, delayed
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -24,7 +24,7 @@ from tidy3d.components.geometry.polyslab import (
     PolySlab,
 )
 from tidy3d.components.monitor import FieldMonitor, PermittivityMonitor
-from tidy3d.components.types import ArrayFloat2D, Bound, Coordinate2D  # , annotate_type
+from tidy3d.components.types import ArrayFloat2D, Bound, Coordinate2D
 from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log
@@ -134,7 +134,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
     _tidy3d_class = Box
 
-    center_jax: tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+    center_jax: tuple[JaxFloat, JaxFloat, JaxFloat] = Field(
         (0.0, 0.0, 0.0),
         title="Center (Jax)",
         description="Jax traced value for the center of the box in (x, y, z).",
@@ -142,8 +142,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         stores_jax_for="center",
     )
 
-    size_jax: tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
-        ...,
+    size_jax: tuple[JaxFloat, JaxFloat, JaxFloat] = Field(
         title="Size (Jax)",
         description="Jax-traced value for the size of the box in (x, y, z).",
         units=MICROMETER,
@@ -276,8 +275,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
     _tidy3d_class = PolySlab
 
-    vertices_jax: tuple[tuple[JaxFloat, JaxFloat], ...] = pd.Field(
-        ...,
+    vertices_jax: tuple[tuple[JaxFloat, JaxFloat], ...] = Field(
         title="Vertices (Jax)",
         description="Jax-traced list of (d1, d2) defining the 2 dimensional positions of the "
         "polygon face vertices at the ``reference_plane``. "
@@ -287,8 +285,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         stores_jax_for="vertices",
     )
 
-    slab_bounds_jax: tuple[JaxFloat, JaxFloat] = pd.Field(
-        ...,
+    slab_bounds_jax: tuple[JaxFloat, JaxFloat] = Field(
         title="Slab bounds (Jax)",
         description="Jax-traced list of (h1, h2) defining the minimum and maximum positions "
         "of the slab along the ``axis`` dimension. ",
@@ -296,7 +293,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         stores_jax_for="slab_bounds",
     )
 
-    sidewall_angle_jax: JaxFloat = pd.Field(
+    sidewall_angle_jax: JaxFloat = Field(
         default=0.0,
         title="Sidewall angle (Jax)",
         description="Jax-traced float defining the sidewall angle of the slab "
@@ -305,7 +302,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         stores_jax_for="sidewall_angle",
     )
 
-    dilation_jax: JaxFloat = pd.Field(
+    dilation_jax: JaxFloat = Field(
         default=0.0,
         title="Dilation (Jax)",
         description="Jax-traced float defining the dilation.",
@@ -313,8 +310,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         stores_jax_for="dilation",
     )
 
-    @pd.validator("sidewall_angle", always=True)
-    def no_sidewall(cls, val):
+    @field_validator("sidewall_angle")
+    def no_sidewall(val):
         """Warn if sidewall angle present."""
         if not np.isclose(val, 0.0):
             log.warning(
@@ -397,7 +394,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
         Returns
         -------
-        Tuple[jnp.ndarray, jnp.narray, Tuple[jnp.ndarray, jnp.ndarray]]
+        tuple[jnp.ndarray, jnp.narray, tuple[jnp.ndarray, jnp.ndarray]]
             New polygon vertices;
             and the shift of vertices in direction parallel to the edges.
             Shift along x and y direction.
@@ -479,7 +476,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
         Returns
         -------
-        Tuple[jnp.ndarray, jnp.narray]
+        tuple[jnp.ndarray, jnp.narray]
             edge length, and reduction rate
         """
 
@@ -841,8 +838,8 @@ class JaxComplexPolySlab(JaxPolySlab, ComplexPolySlab):
 
     _tidy3d_class = ComplexPolySlab
 
-    @pd.validator("vertices", always=True)
-    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
+    @field_validator("vertices")
+    def no_self_intersecting_polygon_during_extrusion(val):
         """Turn off the validation for this class."""
         return val
 
@@ -878,7 +875,7 @@ class JaxComplexPolySlab(JaxPolySlab, ComplexPolySlab):
 
         Returns
         -------
-        List[JaxPolySlab]
+        list[JaxPolySlab]
             A list of simple jax polyslabs.
         """
         sub_polyslab_list = []
@@ -993,8 +990,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
 
     _tidy3d_class = GeometryGroup
 
-    geometries: tuple[JaxPolySlab, ...] = pd.Field(
-        ...,
+    geometries: tuple[JaxPolySlab, ...] = Field(
         title="Geometries",
         description="Tuple of jax geometries in a single grouping. "
         "Can provide significant performance enhancement in ``JaxStructure`` when all geometries "

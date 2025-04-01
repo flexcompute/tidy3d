@@ -13,7 +13,7 @@ from typing import Callable, Optional
 
 import boto3
 from boto3.s3.transfer import TransferConfig
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from rich.progress import (
     BarColumn,
     DownloadColumn,

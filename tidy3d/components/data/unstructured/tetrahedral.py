@@ -5,15 +5,11 @@ from __future__ import annotations
 from typing import Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pydantic import PositiveInt
 from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import (
-    CellDataArray,
-    IndexedDataArray,
-    PointDataArray,
-)
+from tidy3d.components.data.data_array import CellDataArray, IndexedDataArray, PointDataArray
 from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
 from tidy3d.exceptions import DataError
 from tidy3d.packaging import requires_vtk, vtk
@@ -58,17 +54,17 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     """ Fundametal parameters to set up based on grid dimensionality """
 
     @classmethod
-    def _traingular_dataset_type(cls) -> type:
+    def _triangular_dataset_type(cls) -> type:
         """Corresponding class for triangular grid datasets. We need to know this when creating a triangular slice from a tetrahedral grid."""
         return TriangularGridDataset
 
     @classmethod
-    def _point_dims(cls) -> pd.PositiveInt:
+    def _point_dims(cls) -> PositiveInt:
         """Dimensionality of stored grid point coordinates."""
         return 3
 
     @classmethod
-    def _cell_num_vertices(cls) -> pd.PositiveInt:
+    def _cell_num_vertices(cls) -> PositiveInt:
         """Number of vertices in a cell."""
         return 4
 
@@ -160,7 +156,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
 
-        return self._traingular_dataset_type()._from_vtk_obj(
+        return self._triangular_dataset_type()._from_vtk_obj(
             slice_vtk,
             remove_degenerate_cells=True,
             remove_unused_points=True,

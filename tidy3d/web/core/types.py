@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import Enum
 
-from pydantic.v1 import BaseModel
+from pydantic import BaseModel
 
 
 class Tidy3DResource(BaseModel, ABC):
@@ -43,7 +43,7 @@ class Queryable(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
-    def list(cls, *args, **kwargs) -> [Queryable]:
+    def list(cls, *args, **kwargs) -> list[Queryable]:
         """List all resources of this type."""
 
 

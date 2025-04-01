@@ -7,10 +7,11 @@ from abc import ABC, abstractmethod
 from typing import Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
+from pandas import RangeIndex
+from pydantic import Field, PositiveInt, field_validator, model_validator
 from xarray import DataArray as XrDataArray
 
-from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import (
     DATA_ARRAY_MAP,
     CellDataArray,
@@ -34,20 +35,17 @@ DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC):
     """Abstract base for datasets that store unstructured grid data."""
 
-    points: PointDataArray = pd.Field(
-        ...,
+    points: PointDataArray = Field(
         title="Grid Points",
         description="Coordinates of points composing the unstructured grid.",
     )
 
-    values: IndexedDataArrayTypes = pd.Field(
-        ...,
+    values: IndexedDataArrayTypes = Field(
         title="Point Values",
         description="Values stored at the grid points.",
     )
 
-    cells: CellDataArray = pd.Field(
-        ...,
+    cells: CellDataArray = Field(
         title="Grid Cells",
         description="Cells composing the unstructured grid specified as connections between grid "
         "points.",
@@ -57,17 +55,18 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @classmethod
     @abstractmethod
-    def _point_dims(cls) -> pd.PositiveInt:
+    def _point_dims(cls) -> PositiveInt:
         """Dimensionality of stored grid point coordinates."""
 
     @classmethod
     @abstractmethod
-    def _cell_num_vertices(cls) -> pd.PositiveInt:
+    def _cell_num_vertices(cls) -> PositiveInt:
         """Number of vertices in a cell."""
 
     """ Validators """
 
-    @pd.validator("points", always=True)
+    @field_validator("points")
+    @classmethod
     def points_right_dims(cls, val):
         """Check that point coordinates have the right dimensionality."""
         # currently support only the standard axis ordering, that is 01(2)
@@ -80,8 +79,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @pd.validator("points", always=True)
-    def points_right_indexing(cls, val):
+    @field_validator("points")
+    def points_right_indexing(val):
         """Check that points are indexed corrrectly."""
         indices_expected = np.arange(len(val.data))
         indices_given = val.index.data
@@ -93,15 +92,15 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @pd.validator("values", always=True)
-    def first_values_dim_is_index(cls, val):
+    @field_validator("values")
+    def first_values_dim_is_index(val):
         """Check that the number of data values matches the number of grid points."""
         if val.dims[0] != "index":
             raise ValidationError("First dimension of array 'values' must be 'index'.")
         return val
 
-    @pd.validator("values", always=True)
-    def values_right_indexing(cls, val):
+    @field_validator("values")
+    def values_right_indexing(val):
         """Check that data values are indexed correctly."""
         # currently support only simple ordered indexing of points, that is, 0, 1, 2, ...
         indices_expected = np.arange(len(val.index.data))
@@ -114,24 +113,21 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @pd.validator("values", always=True)
-    @skip_if_fields_missing(["points"])
-    def number_of_values_matches_points(cls, val, values):
+    @model_validator(mode="after")
+    def number_of_values_matches_points(self):
         """Check that the number of data values matches the number of grid points."""
-        num_values = len(val.index)
-
-        points = values.get("points")
-        num_points = len(points)
+        num_values = len(self.values.index)
+        num_points = len(self.points)
 
         if num_points != num_values:
             raise ValidationError(
                 f"The number of data values ({num_values}) does not match the number of grid "
                 f"points ({num_points})."
             )
-        return val
+        return self
 
-    @pd.validator("cells", always=True)
-    def match_cells_to_vtk_type(cls, val):
+    @field_validator("cells")
+    def match_cells_to_vtk_type(val):
         """Check that cell connections does not have duplicate points."""
         if vtk is None:
             return val
@@ -139,7 +135,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # using val.astype(np.int32/64) directly causes issues when dataarray are later checked ==
         return CellDataArray(val.data.astype(vtk["id_type"], copy=False), coords=val.coords)
 
-    @pd.validator("cells", always=True)
+    @field_validator("cells")
+    @classmethod
     def cells_right_type(cls, val):
         """Check that cell are of the right type."""
         # only supporting the standard ordering of cell vertices 012(3)
@@ -152,18 +149,19 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @pd.validator("cells", always=True)
-    @skip_if_fields_missing(["points"])
-    def check_cell_vertex_range(cls, val, values):
+    @model_validator(mode="after")
+    def check_cell_vertex_range(self):
         """Check that cell connections use only defined points."""
+        val = getattr(self, "cells", None)
+        if val is None:
+            return self
         all_point_indices_used = val.data.ravel()
         # skip validation if zero size data
         if len(all_point_indices_used) > 0:
             min_index_used = np.min(all_point_indices_used)
             max_index_used = np.max(all_point_indices_used)
 
-            points = values.get("points")
-            num_points = len(points)
+            num_points = len(self.points)
 
             if max_index_used > num_points - 1 or min_index_used < 0:
                 raise ValidationError(
@@ -171,9 +169,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     f"[{min_index_used}, {max_index_used}]. The valid range of point indices is "
                     f"[0, {num_points - 1}]."
                 )
-        return val
+        return self
 
-    @pd.validator("cells", always=True)
+    @field_validator("cells")
     def warn_degenerate_cells(cls, val):
         """Check that cell connections does not have duplicate points."""
         degenerate_cells = cls._find_degenerate_cells(val)
@@ -187,13 +185,14 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @pd.root_validator(pre=True, allow_reuse=True)
-    def _warn_if_none(cls, values):
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_if_none(cls, data: dict) -> dict:
         """Warn if any of data arrays are not loaded."""
 
         no_data_fields = []
         for field_name in ["points", "cells", "values"]:
-            field = values.get(field_name)
+            field = data.get(field_name)
             if isinstance(field, str) and field in DATA_ARRAY_MAP.keys():
                 no_data_fields.append(field_name)
         if len(no_data_fields) > 0:
@@ -201,20 +200,37 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             log.warning(
                 f"Loading {', '.join(formatted_names)} without data. Constructing an empty dataset."
             )
-            values["points"] = PointDataArray(
+            data["points"] = PointDataArray(
                 np.zeros((0, cls._point_dims())), dims=["index", "axis"]
             )
-            values["cells"] = CellDataArray(
+            data["cells"] = CellDataArray(
                 np.zeros((0, cls._cell_num_vertices())), dims=["cell_index", "vertex_index"]
             )
-            values["values"] = IndexedDataArray(np.zeros(0), dims=["index"])
-        return values
+            data["values"] = IndexedDataArray(np.zeros(0), dims=["index"])
+        return data
 
-    @pd.root_validator(skip_on_failure=True, allow_reuse=True)
-    def _warn_unused_points(cls, values):
+    @model_validator(mode="before")
+    def _add_default_coords(cls, data: dict) -> dict:
+        def _add_default_coords(da):
+            """Add 0..N-1 coordinates to any dimension that does not already have one.
+            Note: We use a pandas `RangeIndex` here for constant memory.
+            """
+            missing = {d: RangeIndex(da.sizes[d]) for d in da.dims if d not in da.coords}
+            return da.assign_coords(missing) if missing else da
+
+        if "points" in data:
+            data["points"] = _add_default_coords(data["points"])
+        if "cells" in data:
+            data["cells"] = _add_default_coords(data["cells"])
+        if "values" in data:
+            data["values"] = _add_default_coords(data["values"])
+        return data
+
+    @model_validator(mode="after")
+    def _warn_unused_points(self):
         """Warn if some points are unused."""
-        point_indices = set(np.arange(len(values["points"].data)))
-        used_indices = set(values["cells"].values.ravel())
+        point_indices = set(np.arange(len(self.points.data)))
+        used_indices = set(self.cells.values.ravel())
 
         if not point_indices.issubset(used_indices):
             log.warning(
@@ -222,7 +238,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 "Consider calling 'clean()' to remove them."
             )
 
-        return values
+        return self
 
     """ Convenience properties """
 
@@ -571,7 +587,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def _get_values_from_vtk(
         cls,
         vtk_obj,
-        num_points: pd.PositiveInt,
+        num_points: PositiveInt,
         field: Optional[str] = None,
         values_type=IndexedDataArray,
         expect_complex=None,
@@ -720,7 +736,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -1391,7 +1407,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        xyz_grid : Tuple[ArrayLike[float], ...]
+        xyz_grid : tuple[ArrayLike[float], ...]
             x, y, and z coordiantes defining rectilinear grid.
         cell_inds : ArrayLike[int]
             Indices of cells to perfrom interpolation from.
@@ -1404,7 +1420,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Returns
         -------
-        Tuple[Tuple[ArrayLike, ...], ArrayLike]
+        tuple[tuple[ArrayLike, ...], ArrayLike]
             x, y, and z indices of interpolated values and values themselves.
         """
 
@@ -1712,7 +1728,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns
@@ -1779,7 +1795,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
+        bounds : tuple[float, float, float], tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
 
         Returns

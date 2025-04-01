@@ -4,27 +4,27 @@ from __future__ import annotations
 
 from typing import Optional, Union
 
-import pydantic.v1 as pd
+from pydantic import Field, model_validator
 
-from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.data_array import (
     DataArray,
+    IndexedDataArray,
+    IndexedTimeDataArray,
     ScalarFieldTimeDataArray,
     SpatialDataArray,
 )
 from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridDataset
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
-from tidy3d.components.tcad.monitors.heat import (
-    TemperatureMonitor,
-)
-from tidy3d.components.types import annotate_type
+from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
+from tidy3d.components.types import discriminated_union
 from tidy3d.constants import KELVIN
 from tidy3d.log import log
 
 FieldDataset = Union[
+    discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset]),
     SpatialDataArray,
     ScalarFieldTimeDataArray,
-    annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset]),
+    SpatialDataArray,
 ]
 UnstructuredFieldType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
@@ -46,12 +46,13 @@ class TemperatureData(HeatChargeMonitorData):
     >>> temp_mnt_data_expanded = temp_mnt_data.symmetry_expanded_copy
     """
 
-    monitor: TemperatureMonitor = pd.Field(
-        ..., title="Monitor", description="Temperature monitor associated with the data."
+    monitor: TemperatureMonitor = Field(
+        title="Monitor",
+        description="Temperature monitor associated with the data.",
     )
 
-    temperature: Optional[FieldDataset] = pd.Field(
-        ...,
+    temperature: Optional[FieldDataset] = Field(
+        None,
         title="Temperature",
         description="Spatial temperature field.",
         units=KELVIN,
@@ -62,20 +63,28 @@ class TemperatureData(HeatChargeMonitorData):
         """Maps the field components to their associated data."""
         return {"temperature": self.temperature}
 
-    @pd.validator("temperature", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def warn_no_data(cls, val, values):
+    @model_validator(mode="after")
+    def warn_no_data(self):
         """Warn if no data provided."""
-
-        mnt = values.get("monitor")
-
-        if val is None:
+        if self.temperature is None:
             log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
+                f"No data is available for monitor '{self.monitor.name}'. This is typically caused by "
                 "monitor not intersecting any solid medium."
             )
+        return self
 
-        return val
+    @model_validator(mode="after")
+    def check_correct_data_type(self):
+        """Issue error if incorrect data type is used"""
+        if isinstance(self.temperature, TetrahedralGridDataset) or isinstance(
+            self.temperature, TriangularGridDataset
+        ):
+            if not isinstance(self.temperature.values, (IndexedDataArray, IndexedTimeDataArray)):
+                raise ValueError(
+                    f"Monitor {self.monitor} of type {type(self.monitor)} cannot be "
+                    f"associated with data arrays of type {type(self.temperature.values)}."
+                )
+        return self
 
     def field_name(self, val: str = "") -> str:
         """Gets the name of the fields to be plot."""

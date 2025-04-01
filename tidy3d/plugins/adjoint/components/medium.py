@@ -6,9 +6,9 @@ from abc import ABC
 from typing import Callable, Literal, Optional, Union
 
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
+from pydantic import Field, field_validator, model_validator
 
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.geometry.base import Geometry
@@ -142,14 +142,14 @@ class JaxMedium(Medium, AbstractJaxMedium):
 
     _tidy3d_class = Medium
 
-    permittivity_jax: JaxFloat = pd.Field(
+    permittivity_jax: JaxFloat = Field(
         1.0,
         title="Permittivity",
         description="Relative permittivity of the medium. May be a ``jax`` ``Array``.",
         stores_jax_for="permittivity",
     )
 
-    conductivity_jax: JaxFloat = pd.Field(
+    conductivity_jax: JaxFloat = Field(
         0.0,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
@@ -202,22 +202,19 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
 
     _tidy3d_class = AnisotropicMedium
 
-    xx: JaxMedium = pd.Field(
-        ...,
+    xx: JaxMedium = Field(
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
         jax_field=True,
     )
 
-    yy: JaxMedium = pd.Field(
-        ...,
+    yy: JaxMedium = Field(
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
         jax_field=True,
     )
 
-    zz: JaxMedium = pd.Field(
-        ...,
+    zz: JaxMedium = Field(
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         jax_field=True,
@@ -284,7 +281,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
     _tidy3d_class = CustomMedium
 
-    eps_dataset: Optional[JaxPermittivityDataset] = pd.Field(
+    eps_dataset: Optional[JaxPermittivityDataset] = Field(
         None,
         title="Permittivity Dataset",
         description="User-supplied dataset containing complex-valued permittivity "
@@ -293,16 +290,16 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         jax_field=True,
     )
 
-    @pd.root_validator(pre=True)
-    def _pre_deprecation_dataset(cls, values):
+    @model_validator(mode="before")
+    def _pre_deprecation_dataset(data):
         """Don't allow permittivity as a field until we support it."""
-        if values.get("permittivity") or values.get("conductivity"):
+        if data.get("permittivity") or data.get("conductivity"):
             raise SetupError(
                 "'permittivity' and 'conductivity' are not yet supported in adjoint plugin. "
                 "Please continue to use the 'eps_dataset' field to define the component "
                 "of the permittivity tensor."
             )
-        return values
+        return data
 
     def _validate_web_adjoint(self) -> None:
         """Run validators for this component, only if using ``tda.web.run()``."""
@@ -326,12 +323,12 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
                     + WEB_ADJOINT_MESSAGE
                 )
 
-    @pd.validator("eps_dataset", always=True)
-    def _eps_dataset_single_frequency(cls, val):
+    @field_validator("eps_dataset")
+    def _eps_dataset_single_frequency(val):
         """Override of inherited validator. (still needed)"""
         return val
 
-    @pd.validator("eps_dataset", always=True)
+    @field_validator("eps_dataset")
     def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val, values):
         """Override of inherited validator."""
         return val

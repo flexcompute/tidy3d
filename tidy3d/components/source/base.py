@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import Optional
 
-import pydantic.v1 as pydantic
+from pydantic import Field, field_validator
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
@@ -26,8 +26,7 @@ from .time import SourceTimeType
 class Source(Box, AbstractSource, ABC):
     """Abstract base class for all sources."""
 
-    source_time: SourceTimeType = pydantic.Field(
-        ...,
+    source_time: SourceTimeType = Field(
         title="Source Time",
         description="Specification of the source time-dependence.",
         discriminator=TYPE_TAG_STR,
@@ -62,8 +61,8 @@ class Source(Box, AbstractSource, ABC):
     _warn_traced_center = _warn_unsupported_traced_argument("center")
     _warn_traced_size = _warn_unsupported_traced_argument("size")
 
-    @pydantic.validator("source_time", always=True)
-    def _freqs_lower_bound(cls, val):
+    @field_validator("source_time")
+    def _freqs_lower_bound(val):
         """Raise validation error if central frequency is too low."""
         _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
         return val

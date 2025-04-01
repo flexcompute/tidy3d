@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-import pydantic.v1 as pd
 import xarray as xr
+from pydantic import Field, model_validator
 
 from tidy3d.components.data.data_array import FieldProjectionAngleDataArray, FreqDataArray
 from tidy3d.components.data.monitor_data import DirectivityData
@@ -64,14 +64,12 @@ class AntennaMetricsData(DirectivityData):
     John Wiley & Sons, Chapter 2.9 (2016).
     """
 
-    power_incident: FreqDataArray = pd.Field(
-        ...,
+    power_incident: FreqDataArray = Field(
         title="Power incident",
         description="Array of values representing the incident power to an antenna.",
     )
 
-    power_reflected: FreqDataArray = pd.Field(
-        ...,
+    power_reflected: FreqDataArray = Field(
         title="Power reflected",
         description="Array of values representing power reflected due to an impedance mismatch with the antenna.",
     )
@@ -198,10 +196,10 @@ class AntennaMetricsData(DirectivityData):
         partial_G = self.partial_realized_gain()
         return partial_G.Gtheta + partial_G.Gphi
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
+    @model_validator(mode="before")
+    def _warn_rf_license(data):
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
-        return values
+        return data

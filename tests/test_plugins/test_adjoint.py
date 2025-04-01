@@ -13,12 +13,12 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import pydantic.v1 as pydantic
 import pytest
 import trimesh
 from jax import grad
 from jax.test_util import check_grads
 from numpy.testing import assert_allclose
+from pydantic import ValidationError
 from xarray import DataArray
 
 import tidy3d as td
@@ -501,7 +501,7 @@ def test_run_flux(use_emulated_run, tmp_path):
         td_field_components = {}
         for fld, jax_data_array in mnt_data.field_components.items():
             data_array = td.ScalarFieldDataArray(
-                np.array(jax_data_array.values), coords=jax_data_array.coords
+                jnp.array(jax_data_array.values), coords=jax_data_array.coords
             )
             td_field_components[fld] = data_array
 
@@ -629,7 +629,7 @@ def _test_adjoint_setup_adj(use_emulated_run, tmp_path):
     sim_data_vjp = sim_data_fwd.copy()
     output_data_vjp = []
     for mode_data in sim_data_vjp.output_data:
-        new_values = 0 * np.array(mode_data.amps.values)
+        new_values = 0 * jnp.array(mode_data.amps.values)
         new_values[0, 0, 0] = 1 + 1j
         amps_vjp = mode_data.amps.copy(update={"values": new_values.tolist()})
         mode_data_vjp = mode_data.copy(update={"amps": amps_vjp})
@@ -1022,7 +1022,7 @@ def test_structure_overlaps():
 
 def test_validate_subpixel():
     """Make sure errors if subpixel is off."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = JaxSimulation(
             size=(10, 10, 10),
             run_time=SIM_RUN_TIME,
@@ -1070,7 +1070,7 @@ def test_flip_direction():
 
 def test_strict_types():
     """Test that things fail if you try to use just any object in a Jax component."""
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         _ = JaxBox(size=(1, 1, [1, 2]), center=(0, 0, 0))
 
 
@@ -1512,7 +1512,7 @@ def _test_custom_medium_3D(use_emulated_run):
     make_custom_medium(1, 10, 10)
     make_custom_medium(10, 1, 10)
     make_custom_medium(10, 10, 1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(ValidationError):
         make_custom_medium(10, 10, 10)
 
 

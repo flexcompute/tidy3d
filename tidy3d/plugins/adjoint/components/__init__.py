@@ -6,8 +6,7 @@ from __future__ import annotations
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
 from .data.monitor_data import JaxModeData
-from .data.sim_data import JaxSimulationData
-from .geometry import JaxBox, JaxComplexPolySlab, JaxPolySlab
+from .geometry import JaxBox, JaxComplexPolySlab, JaxGeometryGroup, JaxPolySlab
 from .medium import JaxAnisotropicMedium, JaxCustomMedium, JaxMedium
 from .simulation import JaxSimulation
 from .structure import JaxStructure, JaxStructureStaticGeometry, JaxStructureStaticMedium

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Union
+from typing import Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
-import pydantic.v1 as pydantic
 import xarray as xr
+from pydantic import Field, model_validator
 from rich.progress import track
 
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
@@ -16,7 +16,7 @@ from tidy3d.exceptions import SetupError
 from tidy3d.log import get_logging_console
 
 from .autograd.functions import add_at, trapz
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import (
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
@@ -66,20 +66,18 @@ class FieldProjector(Tidy3dBaseModel):
         * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
     """
 
-    sim_data: SimulationData = pydantic.Field(
-        ...,
+    sim_data: SimulationData = Field(
         title="Simulation data",
         description="Container for simulation data containing the near field monitors.",
     )
 
-    surfaces: tuple[FieldProjectionSurface, ...] = pydantic.Field(
-        ...,
+    surfaces: tuple[FieldProjectionSurface, ...] = Field(
         title="Surface monitor with direction",
-        description="Tuple of each :class:`.FieldProjectionSurface` to use as source of "
+        description="tuple of each :class:`.FieldProjectionSurface` to use as source of "
         "near field.",
     )
 
-    pts_per_wavelength: Union[int, type(None)] = pydantic.Field(
+    pts_per_wavelength: Optional[int] = Field(
         PTS_PER_WVL,
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which "
@@ -87,7 +85,7 @@ class FieldProjector(Tidy3dBaseModel):
         "will not resampled, but will still be colocated.",
     )
 
-    origin: Coordinate = pydantic.Field(
+    origin: Optional[Coordinate] = Field(
         None,
         title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
@@ -95,20 +93,18 @@ class FieldProjector(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
+    @model_validator(mode="after")
+    def _check_origin_set(self):
+        """Sets ``.origin`` as the average of centers of all surface monitors if not provided."""
+        if self.origin is None:
+            centers = np.array([surface.monitor.center for surface in self.surfaces])
+            object.__setattr__(self, "origin", tuple(np.mean(centers, axis=0)))
+        return self
+
     @cached_property
     def is_2d_simulation(self) -> bool:
         non_zero_dims = sum(1 for size in self.sim_data.simulation.size if size != 0)
         return non_zero_dims == 2
-
-    @pydantic.validator("origin", always=True)
-    @skip_if_fields_missing(["surfaces"])
-    def set_origin(cls, val, values):
-        """Sets .origin as the average of centers of all surface monitors if not provided."""
-        if val is None:
-            surfaces = values.get("surfaces")
-            val = np.array([surface.monitor.center for surface in surfaces])
-            return tuple(np.mean(val, axis=0))
-        return val
 
     @cached_property
     def medium(self) -> MediumType:
@@ -137,10 +133,10 @@ class FieldProjector(Tidy3dBaseModel):
         ----------
         sim_data : :class:`.SimulationData`
             Container for simulation data containing the near field monitors.
-        near_monitors : List[:class:`.FieldMonitor`]
-            Tuple of :class:`.FieldMonitor` objects on which near fields will be sampled.
-        normal_dirs : List[:class:`.Direction`]
-            Tuple containing the :class:`.Direction` of the normal to each surface monitor
+        near_monitors : list[:class:`.FieldMonitor`]
+            tuple of :class:`.FieldMonitor` objects on which near fields will be sampled.
+        normal_dirs : list[:class:`.Direction`]
+            tuple containing the :class:`.Direction` of the normal to each surface monitor
             w.r.t. to the positive x, y or z unit vectors. Must have the same length as monitors.
         pts_per_wavelength : int = 10
             Number of points per wavelength with which to discretize the
@@ -270,7 +266,7 @@ class FieldProjector(Tidy3dBaseModel):
         surface_currents[H2] = field_data.field_components[E1] * signs[0]
         surface_currents[H1] = field_data.field_components[E2] * signs[1]
 
-        new_monitor = surface.monitor.copy(update={"fields": [E1, E2, H1, H2]})
+        new_monitor = surface.monitor.copy(update={"fields": (E1, E2, H1, H2)})
 
         return FieldData(
             monitor=new_monitor,
@@ -402,9 +398,9 @@ class FieldProjector(Tidy3dBaseModel):
         frequency : float
             Frequency to select from each :class:`.FieldMonitor` to use for projection.
             Must be a frequency stored in each :class:`FieldMonitor`.
-        theta : Union[float, Tuple[float, ...], np.ndarray]
+        theta : Union[float, tuple[float, ...], np.ndarray]
             Polar angles (rad) downward from x=y=0 line relative to the local origin.
-        phi : Union[float, Tuple[float, ...], np.ndarray]
+        phi : Union[float, tuple[float, ...], np.ndarray]
             Azimuthal (rad) angles from y=z=0 line relative to the local origin.
         surface: :class:`FieldProjectionSurface`
             :class:`FieldProjectionSurface` object to use as source of near field.

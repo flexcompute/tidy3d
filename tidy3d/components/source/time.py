@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Union
 
 import numpy as np
-import pydantic.v1 as pydantic
+from pydantic import Field, PositiveFloat, field_validator
 
 from tidy3d.components.data.data_array import TimeDataArray
 from tidy3d.components.data.dataset import TimeDataset
@@ -71,17 +71,18 @@ class SourceTime(AbstractTimeDependence):
 class Pulse(SourceTime, ABC):
     """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
 
-    freq0: pydantic.PositiveFloat = pydantic.Field(
-        ..., title="Central Frequency", description="Central frequency of the pulse.", units=HERTZ
+    freq0: PositiveFloat = Field(
+        title="Central Frequency",
+        description="Central frequency of the pulse.",
+        units=HERTZ,
     )
-    fwidth: pydantic.PositiveFloat = pydantic.Field(
-        ...,
+    fwidth: PositiveFloat = Field(
         title="",
         description="Standard deviation of the frequency content of the pulse.",
         units=HERTZ,
     )
 
-    offset: float = pydantic.Field(
+    offset: float = Field(
         5.0,
         title="Offset",
         description="Time delay of the maximum value of the "
@@ -123,7 +124,7 @@ class GaussianPulse(Pulse):
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     """
 
-    remove_dc_component: bool = pydantic.Field(
+    remove_dc_component: bool = Field(
         True,
         title="Remove DC Component",
         description="Whether to remove the DC component in the Gaussian pulse spectrum. "
@@ -187,7 +188,7 @@ class GaussianPulse(Pulse):
 
     @classmethod
     def from_frequency_range(
-        cls, fmin: pydantic.PositiveFloat, fmax: pydantic.PositiveFloat, **kwargs
+        cls, fmin: PositiveFloat, fmax: PositiveFloat, **kwargs
     ) -> GaussianPulse:
         """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
 
@@ -295,14 +296,14 @@ class CustomSourceTime(Pulse):
 
     """
 
-    offset: float = pydantic.Field(
+    offset: float = Field(
         0.0,
         title="Offset",
         description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
     )
 
-    source_time_dataset: Optional[TimeDataset] = pydantic.Field(
-        ...,
+    source_time_dataset: Optional[TimeDataset] = Field(
+        None,
         title="Source time dataset",
         description="Dataset for storing the envelope of the custom source time. "
         "This envelope will be modulated by a complex exponential at frequency ``freq0``.",
@@ -311,8 +312,8 @@ class CustomSourceTime(Pulse):
     _no_nans_dataset = validate_no_nans("source_time_dataset")
     _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
 
-    @pydantic.validator("source_time_dataset", always=True)
-    def _more_than_one_time(cls, val):
+    @field_validator("source_time_dataset")
+    def _more_than_one_time(val):
         """Must have more than one time to interpolate."""
         if val is None:
             return val
