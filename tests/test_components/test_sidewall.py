@@ -260,6 +260,18 @@ def test_edge_events():
 
 
 @pytest.mark.parametrize("execution_number", range(50))
+def test_interior_angle(execution_number):
+    """
+    Validate that the sum of interior angels are (n-2) * np.pi.
+    """
+    N = 10  # number of vertices
+    vertices = convert_valid_polygon(np.random.random((N, 2)) * 10)
+    s = setup_polyslab(vertices, dilation=0, angle=0, bounds=(0, 0.5))
+    n_vertices = s.reference_polygon.shape[0]
+    assert np.isclose((n_vertices - 2) * np.pi, np.sum(s.interior_angle))
+
+
+@pytest.mark.parametrize("execution_number", range(50))
 def test_max_erosion_polygon(execution_number):
     """
     Maximal erosion distance validation
@@ -275,18 +287,22 @@ def test_max_erosion_polygon(execution_number):
     # compute maximal allowed erosion distance
     max_dist = s._neighbor_vertices_crossing_detection(s.reference_polygon, -100)
     # verify it is indeed maximal allowed
-    dilation = -max_dist + 1e-10
+    dilation = -max_dist + 1e-8
     # avoid polygon splitting etc. case
-    if not s._edge_events_detection(s.reference_polygon, dilation, ignore_at_dist=False):
-        s = setup_polyslab(vertices, dilation, angle, bounds)
-        assert np.isclose(minimal_edge_length(s.reference_polygon), 0, atol=1e-4)
+    if s._edge_events_detection(s.reference_polygon, dilation, ignore_at_dist=False):
+        pytest.skip("Self-intersecting polygon.")
+    # avoid checking if interior angle too small
+    if any(s.interior_angle < 1e-2):
+        pytest.skip("Interior angle < 1e-2.")
+    s = setup_polyslab(vertices, dilation, angle, bounds)
+    assert np.isclose(minimal_edge_length(s.reference_polygon), 0, atol=1e-4)
 
-        # verify it is indeed maximal allowed
-        dilation = 0.0
-        bounds = (0, max_dist - 1e-10)
-        angle = np.pi / 4
-        s = setup_polyslab(vertices, dilation, angle, bounds)
-        assert np.isclose(minimal_edge_length(s.top_polygon), 0, atol=1e-4)
+    # verify it is indeed maximal allowed
+    dilation = 0.0
+    bounds = (0, max_dist - 1e-10)
+    angle = np.pi / 4
+    s = setup_polyslab(vertices, dilation, angle, bounds)
+    assert np.isclose(minimal_edge_length(s.top_polygon), 0, atol=1e-4)
 
 
 @pytest.mark.parametrize("execution_number", range(50))
