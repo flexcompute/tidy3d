@@ -210,7 +210,7 @@ class Job(WebContainer):
         self = self.updated_copy(task_id_cached=task_id_cached)
         super(Job, self).to_file(fname=fname)  # noqa: UP008
 
-    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
+    def run(self, path: str = DEFAULT_DATA_PATH, use_credits: bool = None) -> SimulationDataType:
         """Run :class:`Job` all the way through and return data.
 
         Parameters
@@ -218,13 +218,18 @@ class Job(WebContainer):
         path_dir : str = "./simulation_data.hdf5"
             Base directory where data will be downloaded, by default current working directory.
 
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
+
         Returns
         -------
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
         self.upload()
-        self.start()
+        self.start(use_credits=use_credits)
         self.monitor()
         return self.load(path=path)
 
@@ -263,14 +268,25 @@ class Job(WebContainer):
         """Return current status of :class:`Job`."""
         return self.get_info().status
 
-    def start(self) -> None:
+    def start(
+        self,
+        use_credits: bool = None,
+    ) -> None:
         """Start running a :class:`Job`.
+
+        Parameters
+        ----------
+
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
 
         Note
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id, solver_version=self.solver_version)
+        web.start(self.task_id, solver_version=self.solver_version, use_credits=use_credits)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -561,14 +577,21 @@ class Batch(WebContainer):
 
     _job_type = Job
 
-    def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
+    def run(
+        self,
+        path_dir: str = DEFAULT_DATA_DIR,
+        use_credits: bool = None,
+    ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
         Parameters
         ----------
         path_dir : str
             Base directory where data will be downloaded, by default current working directory.
-
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
         Returns
         ------
         :class:`BatchData`
@@ -591,7 +614,7 @@ class Batch(WebContainer):
         """
         self._check_path_dir(path_dir)
         self.upload()
-        self.start()
+        self.start(use_credits=use_credits)
         self.monitor()
         self.download(path_dir=path_dir)
         return self.load(path_dir=path_dir)
@@ -694,13 +717,26 @@ class Batch(WebContainer):
             info_dict[task_name] = task_info
         return info_dict
 
-    def start(self) -> None:
+    def start(
+        self,
+        use_credits: bool = None,
+    ) -> None:
         """Start running all tasks in the :class:`Batch`.
+
+        Parameters
+        ----------
+
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
 
         Note
         ----
         To monitor the running simulations, can call :meth:`Batch.monitor`.
         """
+        for _, job in self.jobs.items():
+            job.start(use_credits=use_credits)
         if self.verbose:
             console = get_logging_console()
             console.log(f"Started working on Batch containing {self.num_jobs} tasks.")

@@ -56,6 +56,7 @@ def run(
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    use_credits: bool = None,
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -81,6 +82,10 @@ def run(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Restrict simulation to mode solver region. If "auto", then simulation is automatically
         restricted if it contains custom mediums.
+    use_credits: bool = None
+        None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+        True: Pay for the task with credits;
+        False: Run with reserved GPU if user has the license.
     Returns
     -------
     :class:`.ModeSolverData`
@@ -114,7 +119,7 @@ def run(
             f"Mode solver created with task_id='{task.task_id}', solver_id='{task.solver_id}'."
         )
     task.upload(verbose=verbose, progress_callback=progress_callback_upload)
-    task.submit()
+    task.submit(use_credits=use_credits)
 
     # Wait for task to finish
     prev_status = "draft"
@@ -461,15 +466,29 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         finally:
             os.unlink(file_name)
 
-    def submit(self):
+    def submit(
+        self,
+        use_credits: bool = None,
+    ):
         """Start the execution of this task.
 
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
+
+        Parameters
+        ----------
+
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
         """
         http.post(
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
-            {"enableCaching": Env.current.enable_caching},
+            {
+                "enableCaching": Env.current.enable_caching,
+                "useCredits": use_credits,
+            },
         )
 
     def delete(self):

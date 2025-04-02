@@ -83,6 +83,7 @@ def run(
     solver_version: str = None,
     worker_group: str = None,
     simulation_type: str = "tidy3d",
+    use_credits: bool = None,
     parent_tasks: list[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> SimulationDataType:
@@ -117,6 +118,10 @@ def run(
         worker group
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    use_credits: bool = None
+        None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+        True: Pay for the task with credits;
+        False: Run with reserved GPU if user has the license.
 
     Returns
     -------
@@ -178,6 +183,7 @@ def run(
         task_id,
         solver_version=solver_version,
         worker_group=worker_group,
+        use_credits=use_credits,
     )
     monitor(task_id, verbose=verbose)
     data = load(
@@ -371,6 +377,7 @@ def start(
     task_id: TaskId,
     solver_version: str = None,
     worker_group: str = None,
+    use_credits: bool = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -383,6 +390,11 @@ def start(
         target solver version.
     worker_group: str = None
         worker group
+    use_credits: bool = None
+        None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+        True: Pay for the task with credits;
+        False: Run with reserved GPU if user has the license.
+
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
@@ -393,6 +405,7 @@ def start(
     task.submit(
         solver_version=solver_version,
         worker_group=worker_group,
+        use_credits=use_credits,
     )
 
 

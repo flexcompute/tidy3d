@@ -413,6 +413,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         solver_version: str = None,
         worker_group: str = None,
+        use_credits: bool = None,
     ):
         """Kick off this task.
 
@@ -426,6 +427,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             target solver version.
         worker_group: str = None
             worker group
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
         """
 
         if solver_version:
@@ -440,6 +445,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "workerGroup": worker_group,
                 "protocolVersion": protocol_version,
                 "enableCaching": Env.current.enable_caching,
+                "useCredits": use_credits,
             },
         )
 

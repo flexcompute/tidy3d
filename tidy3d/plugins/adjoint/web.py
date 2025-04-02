@@ -85,6 +85,7 @@ def _run(
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
     verbose: bool = True,
+    use_credits: bool = None,
 ) -> JaxSimulationData:
     """Split the provided ``JaxSimulation`` into a regular ``Simulation`` and a ``JaxInfo`` part,
     run using ``tidy3d_run_fn``, which runs on the server by default but can be monkeypatched,
@@ -111,6 +112,7 @@ def run(
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
     verbose: bool = True,
+    use_credits: bool = None,
 ) -> JaxSimulationData:
     """Submits a :class:`.JaxSimulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.JaxSimulationData` object.
@@ -131,7 +133,10 @@ def run(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
-
+    use_credits: bool = None
+        None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+        True: Pay for the task with credits;
+        False: Run with reserved GPU if user has the license.
     Returns
     -------
     :class:`.JaxSimulationData`
@@ -148,6 +153,7 @@ def run(
         path=path,
         callback_url=callback_url,
         verbose=verbose,
+        use_credits=use_credits,
     )
 
 
@@ -271,16 +277,23 @@ class AdjointJob(Job):
         description="Container of information needed to reconstruct jax simulation.",
     )
 
-    def start(self) -> None:
+    def start(self, use_credits: bool = None) -> None:
         """Start running a :class:`AdjointJob`. after uploading jax info.
 
+        Parameters
+        ----------
+
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
         Note
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
         if self.jax_info is not None:
             upload_jax_info(task_id=self.task_id, jax_info=self.jax_info, verbose=self.verbose)
-        super().start()
+        super().start(use_credits=use_credits)
 
 
 class AdjointBatch(Batch):
@@ -309,8 +322,16 @@ class AdjointBatch(Batch):
 
     _job_type = AdjointJob
 
-    def start(self) -> None:
+    def start(self,use_credits: bool = None,) -> None:
         """Start running a :class:`AdjointBatch`. after uploading jax info for each job.
+
+        Parameters
+        ----------
+
+        use_credits: bool = None
+            None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+            True: Pay for the task with credits;
+            False: Run with reserved GPU if user has the license.
 
         Note
         ----
@@ -319,7 +340,7 @@ class AdjointBatch(Batch):
         for task_name, job in self.jobs.items():
             jax_info = self.jax_infos.get(task_name)
             upload_jax_info(task_id=job.task_id, jax_info=jax_info, verbose=job.verbose)
-        super().start()
+        super().start(use_credits=use_credits)
 
 
 def webapi_run_adjoint_fwd(
@@ -588,6 +609,7 @@ def webapi_run_async_adjoint_bwd(
     callback_url: str,
     verbose: bool,
     parent_tasks: List[List[str]],
+    use_credits: bool = None,
 ) -> List[JaxSimulation]:
     """Runs the forward simulations on our servers, stores the gradient data for later."""
 
@@ -635,6 +657,7 @@ def run_local(
     callback_url: str = None,
     verbose: bool = True,
     num_proc: int = NUM_PROC_LOCAL,
+    use_credits: bool = None,
 ) -> JaxSimulationData:
     """Submits a :class:`.JaxSimulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.JaxSimulationData` object.
@@ -658,6 +681,10 @@ def run_local(
     num_proc: int = 1
         Number of processes to use for the gradient computations.
 
+    use_credits: bool = None
+        None:  Run with reserved GPU if user has the license, otherwise run with credits pay.
+        True: Pay for the task with credits;
+        False: Run with reserved GPU if user has the license.
     Returns
     -------
     :class:`.JaxSimulationData`
@@ -675,6 +702,7 @@ def run_local(
         path=path,
         callback_url=callback_url,
         verbose=verbose,
+        use_credits=use_credits,
     )
 
     # convert back to jax type and return
