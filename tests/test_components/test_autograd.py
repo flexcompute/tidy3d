@@ -380,6 +380,17 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         medium=med,
     )
 
+    polyslab_dispersive = td.Structure(
+        geometry=td.PolySlab(
+            vertices=vertices,
+            slab_bounds=slab_bounds,
+            axis=POLYSLAB_AXIS,
+            sidewall_angle=0.00,
+            dilation=0.00,
+        ),
+        medium=td.material_library["Si3N4"]["Philipp1973Sellmeier"],
+    )
+
     # geometry group
     geo_group = td.Structure(
         geometry=td.GeometryGroup(
@@ -469,6 +480,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         custom_med=custom_med,
         custom_med_vec=custom_med_vec,
         polyslab=polyslab,
+        polyslab_dispersive=polyslab_dispersive,
         geo_group=geo_group,
         complex_polyslab=complex_polyslab_geo_group,
         pole_res=pole_res,
@@ -2117,3 +2129,24 @@ def test_flux_monitor_freq_exclusion(use_emulated_run):
 
     grad_no_flux_monitors = ag.grad(objective_with_monitors(monitors_just_field))(params0)
     grad_with_flux_monitors = ag.grad(objective_with_monitors(monitors_with_flux))(params0)
+
+
+def test_dispersive_no_inf(use_emulated_run):
+    """Test that automatic permittivity grabbing uses the correct freq_adj to
+    retrieve permittivity in dispersive material models.
+    """
+
+    fn_dict = get_functions(args[0][0], args[0][1])
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(args):
+        structure_traced = make_structures(args)["polyslab_dispersive"]
+        sim = make_sim(args).updated_copy(structures=[structure_traced])
+        sim_data = run(sim, task_name="adjoint_test", verbose=False)
+        return postprocess(sim_data)
+
+    # the following will raise a warning (and fail) if the dispersive material
+    # model is called without a frequency
+    with AssertLogLevel("INFO"):
+        grad = ag.grad(objective)(params0)
