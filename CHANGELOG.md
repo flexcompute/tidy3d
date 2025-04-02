@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
+- Inaccurate gradient when auto-grabbing permittivities for structures using `td.PolySlab` when using dispersive material models.
 
 ## [2.8.1] - 2025-03-20
 
