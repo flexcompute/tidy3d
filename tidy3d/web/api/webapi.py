@@ -83,9 +83,9 @@ def run(
     solver_version: str = None,
     worker_group: str = None,
     simulation_type: str = "tidy3d",
-    use_credits: bool = None,
     parent_tasks: list[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    use_credits: bool = None,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
