@@ -1010,7 +1010,9 @@ def postprocess_adj(
             structs_no_struct = list(sim_orig.structures)
             structs_no_struct.pop(structure_index)
             sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
-            eps_no_structure = sim_no_structure.epsilon(box=plane_eps, coord_key="centers")
+            eps_no_structure = sim_no_structure.epsilon(
+                box=plane_eps, coord_key="centers", freq=freq_adj
+            )
 
             # get permittivity with structures on top of an infinite version of this structure
             structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
@@ -1019,7 +1021,9 @@ def postprocess_adj(
                 medium=structure.medium,
                 monitors=[],
             )
-            eps_inf_structure = sim_inf_structure.epsilon(box=plane_eps, coord_key="centers")
+            eps_inf_structure = sim_inf_structure.epsilon(
+                box=plane_eps, coord_key="centers", freq=freq_adj
+            )
 
         else:
             eps_no_structure = eps_inf_structure = None
