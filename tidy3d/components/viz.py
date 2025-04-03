@@ -40,6 +40,14 @@ ARROW_ALPHA = 0.8
 # Arrow length in inches
 ARROW_LENGTH = 0.3
 
+FLEXCOMPUTE_COLORS = {
+    "brand_green": 0x00643C,
+    "brand_tan": 0xB8A18B,
+    "brand_blue": 0x6DB5DD,
+    "brand_purple": 0x8851AD,
+    "brand_black": 0x000000,
+}
+
 """ Decorators """
 
 
