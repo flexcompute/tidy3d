@@ -16,7 +16,7 @@ from ..geometry.base import Box
 from ..grid.grid import Grid
 from ..grid.grid_spec import GridSpec
 from ..mode_spec import ModeSpec
-from ..monitor import ModeMonitor, ModeSolverMonitor
+from ..monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
 from ..simulation import AbstractYeeGridSimulation, Simulation
 from ..source.field import ModeSource
 from ..types import (
@@ -28,6 +28,8 @@ from ..types import (
 )
 from ..validators import validate_mode_plane_radius
 from .mode_solver import ModeSolver
+
+ModeSimulationMonitorType = PermittivityMonitor
 
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time
@@ -148,7 +150,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "apply PML layers in the mode solver.",
     )
 
-    monitors: Tuple[()] = pd.Field(
+    monitors: Tuple[ModeSimulationMonitorType, ...] = pd.Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "

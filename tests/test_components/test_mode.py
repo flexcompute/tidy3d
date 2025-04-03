@@ -77,11 +77,15 @@ def test_angle_rotation_with_phi():
 
 def get_mode_sim():
     mode_spec = MODE_SPEC.updated_copy(filter_pol="tm")
+    permittivity_monitor = td.PermittivityMonitor(
+        size=(1, 1, 0), center=(0, 0, 0), name="eps", freqs=FS
+    )
     sim = td.ModeSimulation(
         size=SIZE_2D,
         freqs=FS,
         mode_spec=mode_spec,
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
+        monitors=[permittivity_monitor],
     )
     return sim
 
@@ -153,7 +157,7 @@ def test_mode_sim():
     )
 
     assert td.ModeSimulation.from_simulation(sim) == sim
-    assert td.ModeSimulation.from_mode_solver(sim._mode_solver) == sim
+    assert td.ModeSimulation.from_mode_solver(sim._mode_solver) == sim.updated_copy(monitors=[])
     _ = td.ModeSimulation.from_simulation(
         simulation=fdtd_sim,
         plane=td.Box(size=(4, 4, 0)),
