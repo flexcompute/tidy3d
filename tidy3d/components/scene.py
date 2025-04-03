@@ -18,9 +18,7 @@ from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
     SemiconductorMedium,
 )
-from tidy3d.components.material.tcad.heat import (
-    SolidSpec,
-)
+from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
@@ -1504,8 +1502,9 @@ class Scene(Tidy3dBaseModel):
 
         medium_list = [self.medium] + list(self.mediums)
         if property == "heat_conductivity":
+            SolidType = (SolidSpec, SolidMedium)
             medium_list = [
-                medium for medium in medium_list if isinstance(medium.heat_spec, SolidSpec)
+                medium for medium in medium_list if isinstance(medium.heat_spec, SolidType)
             ]
             cond_list = [medium.heat_spec.conductivity for medium in medium_list]
         elif property == "electric_conductivity":
@@ -1558,7 +1557,8 @@ class Scene(Tidy3dBaseModel):
             plot_params = plot_params.copy(update={"alpha": alpha})
 
         cond_medium = None
-        if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidSpec):
+        SolidType = (SolidSpec, SolidMedium)
+        if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidType):
             cond_medium = medium.heat_spec.conductivity
         elif property == "electric_conductivity" and isinstance(
             medium.charge, ChargeConductorMedium
