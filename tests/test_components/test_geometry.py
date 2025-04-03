@@ -12,7 +12,6 @@ import pytest
 import shapely
 import tidy3d as td
 import trimesh
-from tidy3d.components.geometry.base import Planar
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -160,8 +159,15 @@ def test_bounds(component):
     _ = component.bounds
 
 
-def test_planar_bounds():
-    _ = Planar.bounds.fget(CYLINDER)
+@pytest.mark.parametrize(
+    "component,expected_bounds",
+    [
+        (CYLINDER, ((-1.0, -1.0, -0.5), (1.0, 1.0, 0.5))),
+        (POLYSLAB, ((0.0, 0.0, -0.5), (1.0, 1.0, 0.5))),
+    ],
+)
+def test_planar_bounds(component, expected_bounds):
+    assert all(a == b for a, b in zip(component.bounds, expected_bounds))
 
 
 @pytest.mark.parametrize("component", GEO_TYPES)
@@ -212,10 +218,6 @@ def test_intersections_plane_inf():
     b = td.Cylinder(radius=2.9, center=(-0.45, 9, 0), length=td.inf)
     c = a - b
     assert len(c.intersections_plane(y=0)) == 1
-
-
-def test_bounds_base():
-    assert all(a == b for a, b in zip(Planar.bounds.fget(POLYSLAB), POLYSLAB.bounds))
 
 
 def test_center_not_inf_validate():
