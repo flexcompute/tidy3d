@@ -7,13 +7,15 @@ from typing import Literal, Tuple
 import pydantic.v1 as pd
 
 from ...base import cached_property
-from ...data.monitor_data import ModeSolverData
+from ...data.monitor_data import ModeSolverData, PermittivityData
 from ...data.sim_data import AbstractYeeGridSimulationData
 from ...types import (
     Ax,
     PlotScale,
 )
 from ..simulation import ModeSimulation
+
+ModeSimulationMonitorDataType = PermittivityData
 
 
 class ModeSimulationData(AbstractYeeGridSimulationData):
@@ -29,7 +31,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         description=":class:`.ModeSolverData` containing the field and effective index on unexpanded grid.",
     )
 
-    data: Tuple[None, ...] = pd.Field(
+    data: Tuple[ModeSimulationMonitorDataType, ...] = pd.Field(
         (),
         title="Monitor Data",
         description="List of monitor data "
