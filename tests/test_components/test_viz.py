@@ -1,12 +1,24 @@
 """Tests visualization operations."""
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pydantic.v1 as pd
 import pytest
 import tidy3d as td
+from tidy3d import Box, Medium, Simulation, Structure
 from tidy3d.components.viz import Polygon, set_default_labels_and_title
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
+
+
+@pytest.fixture(scope="module", autouse=True)
+def mpl_config():
+    """Configure matplotlib non-interactive backend for all tests in this module."""
+    original_backend = mpl.get_backend()
+    mpl.use("Agg")
+    yield
+    plt.close("all")
+    mpl.use(original_backend)
 
 
 def test_make_polygon_dict():
@@ -37,8 +49,6 @@ def test_0d_plot(center_z, len_collections):
 
     # if a point is plotted, a single collection will be present, otherwise nothing
     assert len(ax.collections) == len_collections
-
-    plt.close()
 
 
 def test_2d_boundary_plot():
@@ -102,8 +112,6 @@ def test_set_default_labels_title():
             axis_labels=axis_labels, axis=2, position=0, ax=ax, plot_length_units="inches"
         )
 
-    plt.close()
-
 
 def test_make_viz_spec():
     """
@@ -144,7 +152,6 @@ def test_plot_from_structure():
     structure = td.Structure(geometry=geometry, medium=medium)
 
     structure.plot(z=0)
-    plt.close()
 
 
 def test_plot_from_simulation():
@@ -158,7 +165,6 @@ def test_plot_from_simulation():
     )
 
     refine_box.plot(z=0)
-    plt.close()
 
 
 def plot_with_viz_spec(alpha, facecolor, edgecolor=None, use_viz_spec=True):
@@ -263,3 +269,59 @@ def test_plot_multi_from_structure_local(rng):
         rng=rng,
         use_viz_spec=False,
     )
+
+
+def test_sim_plot_fill_structures():
+    """Test fill_structures in Simulation.plot()"""
+    box = Box(size=(1, 1, 1))
+    struct = Structure(geometry=box, medium=Medium(permittivity=2.0))
+    sim = Simulation(
+        size=(2, 2, 2),
+        structures=[struct],
+        grid_spec=td.GridSpec(wavelength=1.0),
+        run_time=1e-12,
+    )
+
+    fig1, ax1 = plt.subplots()
+    sim.plot(x=0, fill_structures=False, ax=ax1)
+    structure_patches = [p for p in ax1.patches if isinstance(p, mpl.patches.PathPatch)]
+    for patch in structure_patches[:1]:  # only one structure, rest is PML etc
+        assert not patch.get_fill(), "Should be unfilled when False"
+        assert patch.get_edgecolor() != "none"
+
+    fig2, ax2 = plt.subplots()
+    sim.plot(x=0, fill_structures=True, ax=ax2)
+    structure_patches = [p for p in ax2.patches if isinstance(p, mpl.patches.PathPatch)]
+    for patch in structure_patches[:1]:
+        assert patch.get_fill(), "Should be filled when True"
+
+
+def test_sim_plot_structures_fill():
+    """Test fill_structures in Simulation.plot_structures()"""
+    box = Box(size=(1, 1, 1))
+    struct = Structure(geometry=box, medium=Medium(permittivity=2.0))
+    sim = Simulation(
+        size=(2, 2, 2),
+        structures=[struct],
+        grid_spec=td.GridSpec(wavelength=1.0),
+        run_time=1e-12,
+    )
+
+    fig1, ax1 = plt.subplots()
+    sim.plot_structures(x=0, fill=False, ax=ax1)
+    structure_patches = [p for p in ax1.patches if isinstance(p, mpl.patches.PathPatch)]
+    assert len(structure_patches) > 0, "No structures plotted"
+
+    for patch in structure_patches[:1]:
+        assert not patch.get_fill(), "Should be unfilled when False"
+        assert patch.get_edgecolor() != "none", "Edges should be visible"
+        assert patch.get_linewidth() > 0, "Edge width should be positive"
+
+    fig2, ax2 = plt.subplots()
+    sim.plot_structures(x=0, fill=True, ax=ax2)
+    structure_patches = [p for p in ax2.patches if isinstance(p, mpl.patches.PathPatch)]
+    assert len(structure_patches) > 0, "No structures plotted"
+
+    for patch in structure_patches[:1]:
+        assert patch.get_fill(), "Should be filled when True"
+        assert patch.get_facecolor() != "none", "Face color should be set"

@@ -667,3 +667,75 @@ def test_triangular_dataset_uniform():
 
     tri_grid = tri_grid.updated_copy(values=tri_grid_values)
     assert not tri_grid.is_uniform
+
+
+def test_cell_values():
+    """Test whether the cell values are correctly calculated"""
+    import tidy3d as td
+
+    # start with a triangle grid
+    tri_grid_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tri_grid_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tri_grid_values = td.IndexedVoltageDataArray(
+        [[0.0, 0.0], [0, 0], [3, -3], [3, -3]],
+        coords=dict(index=np.arange(4), voltage=[-1, 1]),
+        name="test",
+    )
+
+    tri_grid = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values,
+    )
+
+    cell_values = tri_grid.get_cell_values(voltage=-1)
+    cell_vols = tri_grid.get_cell_volumes()
+    assert np.dot(cell_values, cell_vols) == 1.5
+
+    # Now repeat for a tet mesh
+    tet_grid_points = td.PointDataArray(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 3, 7], [0, 2, 7, 3], [0, 2, 6, 7], [0, 4, 7, 6], [0, 4, 5, 7], [0, 1, 7, 5]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values = td.IndexedDataArray(
+        [0.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 3.0], coords=dict(index=np.arange(8)), name="test_tet"
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    # this will fail since we now have a single field (voltage isn't a coordinate)
+    with pytest.raises(KeyError):
+        _ = tet_grid.get_cell_values(voltage=1)
+
+    cell_values = tet_grid.get_cell_values()
+    cell_vols = tet_grid.get_cell_volumes()
+    assert np.dot(cell_values, cell_vols) == 1.5

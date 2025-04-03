@@ -65,6 +65,16 @@ def test_group_index_step_validation():
     assert not ms.group_index_step > 0
 
 
+def test_angle_rotation_with_phi():
+    """Test the `angle_rotation_with_phi` validator."""
+
+    td.ModeSpec(angle_phi=np.pi, angle_rotation=True)
+
+    # Case where angle_phi is not a multiple of np.pi and angle_rotation is True
+    with pytest.raises(pydantic.ValidationError):
+        td.ModeSpec(angle_phi=np.pi / 2, angle_rotation=True)
+
+
 def get_mode_sim():
     mode_spec = MODE_SPEC.updated_copy(filter_pol="tm")
     sim = td.ModeSimulation(

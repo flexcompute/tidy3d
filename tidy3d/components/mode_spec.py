@@ -138,7 +138,8 @@ class ModeSpec(Tidy3dBaseModel):
         "a reference plane normal to the structure's azimuthal direction. Then, the fields are rotated "
         "to align with the mode plane, using the 'n_eff' calculated at the reference plane. The second option can "
         "produce more accurate results, but more care must be taken, for example, in ensuring that the "
-        "original mode plane intersects the correct geometries in the simulation with rotated structures.",
+        "original mode plane intersects the correct geometries in the simulation with rotated structures. "
+        "Note: currently only supported when 'angle_phi' is a multiple of 'np.pi'.",
     )
 
     track_freq: Union[TrackFreq, None] = pd.Field(
@@ -221,3 +222,13 @@ class ModeSpec(Tidy3dBaseModel):
                 )
 
         return values
+
+    @pd.validator("angle_rotation")
+    def angle_rotation_with_phi(cls, val, values):
+        """Currently ``angle_rotation`` is only supported with ``angle_phi % np.pi == 0``."""
+        if val and not isclose(values["angle_phi"] % np.pi, 0):
+            raise ValidationError(
+                "Parameter 'angle_phi' must be a multiple of 'np.pi' when 'angle_rotation' is "
+                "enabled."
+            )
+        return val

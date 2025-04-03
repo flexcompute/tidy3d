@@ -13,6 +13,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Operating System :: OS Independent",
 ]
 documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
@@ -21,9 +22,9 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0.0"
+python = ">=3.9,<3.14"
 pyroots = ">=0.5.0"
-xarray = ">=2023.08.0,<2025.03.0"
+xarray = ">=2023.08"
 importlib-metadata = ">=6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
@@ -273,7 +274,8 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal"
+# TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain"
 env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
