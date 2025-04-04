@@ -49,6 +49,12 @@ def make_ax() -> Ax:
     return ax
 
 
+def make_ax_3d() -> Ax:
+    """makes an empty ``ax`` with 3d projection."""
+    _, ax = plt.subplots(1, 1, tight_layout=True, subplot_kw={"projection": "3d"})
+    return ax
+
+
 def add_ax_if_none(plot):
     """Decorates ``plot(*args, **kwargs, ax=None)`` function.
     if ax=None in the function call, creates an ax and feeds it to rest of function.
@@ -59,6 +65,22 @@ def add_ax_if_none(plot):
         """New plot function using a generated ax if None."""
         if kwargs.get("ax") is None:
             ax = make_ax()
+            kwargs["ax"] = ax
+        return plot(*args, **kwargs)
+
+    return _plot
+
+
+def add_ax_3d_if_none(plot):
+    """Decorates ``plot(*args, **kwargs, ax=None)`` function.
+    if ax=None in the function call, creates an ax with 3d projection and feeds it to rest of function.
+    """
+
+    @wraps(plot)
+    def _plot(*args, **kwargs) -> Ax:
+        """New plot function using a generated ax if None."""
+        if kwargs.get("ax") is None:
+            ax = make_ax_3d()
             kwargs["ax"] = ax
         return plot(*args, **kwargs)
 
