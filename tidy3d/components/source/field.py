@@ -95,14 +95,16 @@ class DirectionalSource(FieldSource, ABC):
 class BroadbandSource(Source, ABC):
     """A source with frequency dependent field distributions."""
 
+    # Default as for analytic beam sources; overwrriten for ModeSource below
     num_freqs: int = pydantic.Field(
-        1,
+        3,
         title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
-        "than 20, is typically sufficient to obtain converged results.",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. Default is 3, which should cover even very broadband sources. For simulations "
+        "which are not very broadband and the source is very large (e.g. metalens simulations), "
+        "decreasing the value to 1 may lead to a speed up in the preprocessing.",
         ge=1,
-        le=99,
+        le=20,
     )
 
     @cached_property
@@ -425,6 +427,16 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
+    num_freqs: int = pydantic.Field(
+        1,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of injected "
+        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
+        "than 20, is typically sufficient to obtain converged results.",
+        ge=1,
+        le=99,
+    )
+
     @cached_property
     def angle_theta(self):
         """Polar angle of propagation."""
@@ -498,17 +510,6 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         title="Angular Dependence Specification",
         description="Specification of plane wave propagation direction dependence on wavelength.",
         discriminator=TYPE_TAG_STR,
-    )
-
-    num_freqs: int = pydantic.Field(
-        3,
-        title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of the injected "
-        "field. Default is 3, which should cover even very broadband sources. For simulations "
-        "which are not very broadband and the source is very large (e.g. metalens simulations), "
-        "decreasing the value to 1 may lead to a speed up in the preprocessing.",
-        ge=1,
-        le=10,
     )
 
     @cached_property
@@ -590,16 +591,6 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         units=MICROMETER,
     )
 
-    num_freqs: int = pydantic.Field(
-        3,
-        title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
-        "than 20, is typically sufficient to obtain converged results.",
-        ge=1,
-        le=99,
-    )
-
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     """The simple astigmatic Gaussian distribution allows
@@ -648,18 +639,8 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         units=MICROMETER,
     )
 
-    num_freqs: int = pydantic.Field(
-        3,
-        title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
-        "than 20, is typically sufficient to obtain converged results.",
-        ge=1,
-        le=99,
-    )
 
-
-class TFSF(AngledFieldSource, VolumeSource):
+class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
     """Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.
 
     Notes
