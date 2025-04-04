@@ -27,6 +27,7 @@ from .types import (
     Coordinate,
     Direction,
     EMField,
+    EMSurfaceField,
     FreqArray,
     FreqBound,
     Literal,
@@ -1538,6 +1539,158 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
 
 
+class AbstractSurfaceMonitor(Monitor, ABC):
+    """:class:`Monitor` that records electromagnetic field data as a function of x,y,z on PEC surfaces."""
+
+    fields: Tuple[EMSurfaceField, ...] = pydantic.Field(
+        ["E", "H"],
+        title="Field Components",
+        description="Collection of field components to store in the monitor.",
+    )
+
+    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
+        (1, 1, 1),
+        title="Spatial Interval",
+        description="Number of grid step intervals between monitor recordings. If equal to 1, "
+        "there will be no downsampling. If greater than 1, the step will be applied, but the "
+        "first and last point of the monitor grid are always included.",
+    )
+
+    colocate: Literal[False] = pydantic.Field(
+        False,
+        title="Colocate Fields",
+        description="For surface monitors fields are always colocated on surface.",
+    )
+
+
+class SurfaceFieldMonitor(AbstractSurfaceMonitor, FreqMonitor):
+    """:class:`Monitor` that records electromagnetic fields in the frequency domain on PEC surfaces.
+
+    Notes
+    -----
+
+        :class:`SurfaceFieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of
+        frequencies to perform the calculation "in-place" with the time stepping. These monitors are specifically designed
+        to record fields on PEC (perfect electric conductor) surfaces, storing the normal E and tangential H fields.
+
+    Example
+    -------
+    >>> monitor = SurfaceFieldMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     fields=['E', 'H'],
+    ...     freqs=[250e12, 300e12],
+    ...     name='surface_monitor')
+
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization.
+        In general, this is severely overestimated for surface monitors.
+        """
+
+        # estimation based on triangulated surface when it crosses cells in xy plane
+        num_tris = num_cells * 6
+        num_points = num_cells * 4
+
+        # storing 3 coordinate components per point
+        storage = 3 * BYTES_REAL * num_points
+
+        # storing 3 indices per triangle
+        storage += 3 * BYTES_REAL * num_tris
+
+        # EH field values + normal field
+        storage += (
+            BYTES_COMPLEX * num_points * len(self.freqs) * len(self.fields) * 3
+            + 3 * num_points * BYTES_REAL
+        )
+
+        return storage
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+
+        # fields
+        storage = BYTES_COMPLEX * num_cells * len(self.freqs) * len(self.fields) * 3
+
+        # fields valid map
+        storage += BYTES_REAL * num_cells * len(self.freqs) * len(self.fields) * 3
+
+        # auxiliary variables (normals and locations)
+        storage += BYTES_REAL * num_cells * 7 * 4
+
+        return storage
+
+
+class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
+    """:class:`Monitor` that records electromagnetic fields in the time domain on PEC surfaces.
+
+    Notes
+    -----
+
+        :class:`SurfaceFieldTimeMonitor` objects are best used to monitor the time dependence of the fields
+        on a PEC surface. They can also be used to create “animations” of the field pattern evolution.
+
+        To create an animation, we need to capture the frames at different time instances of the simulation. This can
+        be done by using a :class:`SurfaceFieldTimeMonitor`. Usually a FDTD simulation contains a large number of time steps
+        and grid points. Recording the field at every time step and grid point will result in a large dataset. For
+        the purpose of making animations, this is usually unnecessary.
+
+
+    Example
+    -------
+    >>> monitor = SurfaceFieldTimeMonitor(
+    ...     center=(1,2,3),
+    ...     size=(2,2,2),
+    ...     fields=['H'],
+    ...     start=1e-13,
+    ...     stop=5e-13,
+    ...     interval=2,
+    ...     name='movie_monitor')
+
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization.
+        In general, this is severely overestimated for surface monitors.
+        """
+        num_steps = self.num_steps(tmesh)
+
+        # estimation based on triangulated surface when it crosses cells in xy plane
+        num_tris = num_cells * 6
+        num_points = num_cells * 4
+
+        # storing 3 coordinate components per point
+        storage = 3 * BYTES_REAL * num_points
+
+        # storing 3 indices per triangle
+        storage += 3 * BYTES_REAL * num_tris
+
+        # EH field values + normal field
+        storage += (
+            BYTES_COMPLEX * num_points * num_steps * len(self.fields) * 3
+            + 3 * num_points * BYTES_REAL
+        )
+
+        return storage
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+
+        num_steps = self.num_steps(tmesh)
+
+        # fields
+        storage = BYTES_COMPLEX * num_cells * num_steps * len(self.fields) * 3
+
+        # fields valid map
+        storage += BYTES_REAL * num_cells * num_steps * len(self.fields) * 3
+
+        # auxiliary variables (normals and locations)
+        storage += BYTES_REAL * num_cells * 7 * 4
+
+        return storage
+
+
 # types of monitors that are accepted by simulation
 MonitorType = Union[
     FieldMonitor,
@@ -1553,4 +1706,6 @@ MonitorType = Union[
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 ]

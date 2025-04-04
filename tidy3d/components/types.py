@@ -226,6 +226,7 @@ Direction = Literal["+", "-"]
 """ monitors """
 
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+EMSurfaceField = Literal["E", "H"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FreqArray = Union[tuple[float, ...], ArrayFloat1D]
 ObsGridArray = Union[tuple[float, ...], ArrayFloat1D]

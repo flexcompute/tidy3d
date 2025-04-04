@@ -139,6 +139,9 @@ from .components.data.data_array import (
     HeatDataArray,
     IndexedDataArray,
     IndexedFieldVoltageDataArray,
+    IndexedFieldDataArray,
+    IndexedFieldTimeDataArray,
+    IndexedFreqDataArray,
     IndexedTimeDataArray,
     IndexedVoltageDataArray,
     ModeAmpsDataArray,
@@ -174,6 +177,7 @@ from .components.data.monitor_data import (
     PermittivityData,
 )
 from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from .components.data.unstructured.surface import TriangularSurfaceDataset
 from .components.data.utils import (
     TetrahedralGridDataset,
     TriangularGridDataset,
@@ -302,6 +306,8 @@ from .components.monitor import (
     ModeSolverMonitor,
     Monitor,
     PermittivityMonitor,
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
 )
 from .components.parameter_perturbation import (
     CustomChargePerturbation,
@@ -714,4 +720,7 @@ __all__ = [
     "set_logging_console",
     "set_logging_file",
     "wavelengths",
+    "SurfaceFieldMonitor",
+    "SurfaceFieldTimeMonitor",
+    "TriangularSurfaceDataset",
 ]
