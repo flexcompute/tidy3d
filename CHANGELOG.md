@@ -13,12 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A property `interior_angle` in `PolySlab` that stores angles formed inside polygon by two adjacent edges.
 - `eps_component` argument in `td.Simulation.plot_eps()` to optionally select a specific permittivity component to plot (eg. `"xx"`).
 - Monitor `AuxFieldTimeMonitor` for aux fields like the free carrier density in `TwoPhotonAbsorption`.
+- Broadband handling (`num_freqs` argument) to the TFSF source.
 
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
 - Inaccurate gradient when auto-grabbing permittivities for structures using `td.PolySlab` when using dispersive material models.
 - Fixed scaling for adjoint sources when differentiating with respect to `FieldData` to account for the mesh size of the monitor and thus the created source. This aligns adjoint gradient magnitudes with numerical finite difference gradients for field data.
 - Warn when mode solver pml covers a significant portion of the mode plane.
+- TFSF server errors related to the auxiliary plane wave source that would previously happen on the server are now caught upon simulation creation.
+
+### Changed
+- `num_freqs` in Gaussian beam type sources limited to 20, which should besufficient for all cases.
 
 ## [2.8.1] - 2025-03-20
 

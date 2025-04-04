@@ -148,7 +148,6 @@ def test_logging_warning_capture():
         medium=td.Medium(permittivity=6),
     )
 
-    # 1 warning: too high "num_freqs"
     # 1 warning: glancing angle
     gaussian_beam = td.GaussianBeam(
         center=(4, 0, 0),
@@ -157,7 +156,6 @@ def test_logging_warning_capture():
         waist_distance=1,
         source_time=source_time,
         direction="+",
-        num_freqs=30,
         angle_theta=np.pi / 2.1,
     )
 
@@ -217,7 +215,7 @@ def test_logging_warning_capture():
     sim.validate_pre_upload()
     warning_list = td.log.captured_warnings()
     print(json.dumps(warning_list, indent=4))
-    assert len(warning_list) == 31
+    assert len(warning_list) == 30
     td.log.set_capture(False)
 
     # check that capture doesn't change validation errors
