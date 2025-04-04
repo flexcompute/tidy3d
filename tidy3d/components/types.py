@@ -215,6 +215,8 @@ FreqBoundMax = float
 FreqBoundMin = float
 FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
 
+PermittivityComponent = Literal["xx", "xy", "xz", "yx", "yy", "yz", "zx", "zy", "zz"]
+
 """ sources """
 
 Polarization = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
