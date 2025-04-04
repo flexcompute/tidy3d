@@ -1001,32 +1001,28 @@ def postprocess_adj(
             eps_background = None
 
         # manually override simulation medium as the background structure
-        if not isinstance(structure.geometry, td.Box):
-            # auto permittivity detection
-            sim_orig = sim_data_orig.simulation
-            plane_eps = eps_fwd.monitor.geometry
+        # auto permittivity detection
+        sim_orig = sim_data_orig.simulation
+        plane_eps = eps_fwd.monitor.geometry
 
-            # get permittivity without this structure
-            structs_no_struct = list(sim_orig.structures)
-            structs_no_struct.pop(structure_index)
-            sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
-            eps_no_structure = sim_no_structure.epsilon(
-                box=plane_eps, coord_key="centers", freq=freq_adj
-            )
+        # get permittivity without this structure
+        structs_no_struct = list(sim_orig.structures)
+        structs_no_struct.pop(structure_index)
+        sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
+        eps_no_structure = sim_no_structure.epsilon(
+            box=plane_eps, coord_key="centers", freq=freq_adj
+        )
 
-            # get permittivity with structures on top of an infinite version of this structure
-            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-            sim_inf_structure = sim_orig.updated_copy(
-                structures=structs_inf_struct,
-                medium=structure.medium,
-                monitors=[],
-            )
-            eps_inf_structure = sim_inf_structure.epsilon(
-                box=plane_eps, coord_key="centers", freq=freq_adj
-            )
-
-        else:
-            eps_no_structure = eps_inf_structure = None
+        # get permittivity with structures on top of an infinite version of this structure
+        structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+        sim_inf_structure = sim_orig.updated_copy(
+            structures=structs_inf_struct,
+            medium=structure.medium,
+            monitors=[],
+        )
+        eps_inf_structure = sim_inf_structure.epsilon(
+            box=plane_eps, coord_key="centers", freq=freq_adj
+        )
 
         # get minimum intersection of bounds with structure and sim
         struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
