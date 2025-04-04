@@ -2657,7 +2657,7 @@ class Simulation(AbstractYeeGridSimulation):
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["medium", "center", "size", "structures", "sources"])
     def tfsf_boundaries(cls, val, values):
-        """Error if the boundary conditions are compatible with TFSF sources, if any."""
+        """Error if the boundary conditions are incompatible with TFSF sources, if any."""
         boundaries = val.to_list
         sources = values.get("sources")
         size = values.get("size")
@@ -3572,6 +3572,7 @@ class Simulation(AbstractYeeGridSimulation):
         _ = self.scene
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
+        self._validate_tfsf_aux_sources()
         self._validate_nonlinear_specs()
         self._validate_custom_source_time()
         self._validate_mode_object_bends()
@@ -3706,6 +3707,54 @@ class Simulation(AbstractYeeGridSimulation):
                             f"axis, '{'xyz'[source.injection_axis]}'.",
                             custom_loc=["sources", source_ind],
                         )
+
+    def _aux_tfsf_source(self, source: TFSF) -> PlaneWave:
+        """Create the auxiliary plane wave source for a give TFSF source."""
+        # center and size of the plane wave source
+        source_size = [inf] * 3
+        source_size[source.injection_axis] = 0
+        source_center = list(source.injection_plane_center)
+
+        # since we need to access values of the aux self at dual grid locations below the actual
+        # injection plane, we need to place the aux sim's source at least one full cell below the
+        # location of the injection plane; for good measure, we'll offset the source by two cells
+        src_grid = self.discretize(source, extend=False)
+        src_grid_sizes = src_grid.sizes.to_list
+        if source.direction == "+":
+            offset = -sum(src_grid_sizes[source.injection_axis][0:2])
+        else:
+            offset = sum(src_grid_sizes[source.injection_axis][-1:-3:-1])
+        source_center[source.injection_axis] += offset
+
+        # Make sure that the new source center is within the simulation bounds
+        sim_axis_bounds = [self.bounds[i][source.injection_axis] for i in range(2)]
+        if (
+            source_center[source.injection_axis] < sim_axis_bounds[0]
+            or source_center[source.injection_axis] > sim_axis_bounds[1]
+        ):
+            raise SetupError(
+                "The TFSF source is too close to the simulation domain boundary along the "
+                "injection axis. Slightly increase the simulation domain size along that "
+                "dimension, or decrease the source size."
+            )
+
+        # Note: broadband injection for TFSF not currently supported
+        return PlaneWave(
+            size=source_size,
+            center=source_center,
+            source_time=source.source_time,
+            angle_theta=source.angle_theta,
+            angle_phi=source.angle_phi,
+            pol_angle=source.pol_angle,
+            direction=source.direction,
+            num_freqs=source.num_freqs,
+        )
+
+    def _validate_tfsf_aux_sources(self):
+        """Validate that PlaneWave sources auxiliary to TFSF sources can be successfully created."""
+        for source in self.sources:
+            if isinstance(source, TFSF):
+                _ = self._aux_tfsf_source(source)
 
     def _validate_nonlinear_specs(self) -> None:
         """Run :class:`.NonlinearSpec` validators that depend on knowing the central

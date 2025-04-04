@@ -1887,6 +1887,30 @@ def test_tfsf_symmetry():
         )
 
 
+def test_tfsf_aux_source_outside_domain():
+    """Test that a TFSF source cannot be too close to the simulation domain boundaries
+    along the injection direction."""
+    src_time = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+
+    source = td.TFSF(
+        size=[1, 1, 1],
+        source_time=src_time,
+        pol_angle=0,
+        angle_theta=np.pi / 4,
+        angle_phi=np.pi / 6,
+        direction="+",
+        injection_axis=2,
+    )
+
+    with pytest.raises(SetupError):
+        _ = td.Simulation(
+            size=(2.0, 2.0, 1.01),
+            grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
+            run_time=1e-12,
+            sources=[source],
+        )
+
+
 def test_tfsf_boundaries():
     """Test that a TFSF source is allowed to cross boundaries only in particular cases."""
     src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1e12)
