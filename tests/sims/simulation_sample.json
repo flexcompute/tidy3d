@@ -607,6 +607,72 @@
             "attrs": {},
             "geometry": {
                 "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": "fully_anisotropic_box",
+            "background_permittivity": null,
+            "background_medium": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "viz_spec": null,
+                "heat_spec": null,
+                "type": "FullyAnisotropicMedium",
+                "permittivity": [
+                    [
+                        6.0,
+                        2.0,
+                        3.0
+                    ],
+                    [
+                        2.0,
+                        7.0,
+                        4.0
+                    ],
+                    [
+                        3.0,
+                        4.0,
+                        9.0
+                    ]
+                ],
+                "conductivity": [
+                    [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                ]
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
                 "type": "GeometryGroup",
                 "geometries": [
                     {
@@ -2015,6 +2081,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
+            "num_freqs": 3,
             "direction": "+",
             "angle_theta": 0.5235987755982988,
             "angle_phi": 0.6283185307179586,
@@ -2190,6 +2257,33 @@
                 "Hx",
                 "Hy",
                 "Hz"
+            ]
+        },
+        {
+            "attrs": {},
+            "type": "AuxFieldTimeMonitor",
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "size": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "name": "aux_field_time",
+            "interval_space": [
+                1,
+                1,
+                1
+            ],
+            "colocate": true,
+            "start": 0.0,
+            "stop": null,
+            "interval": 100,
+            "fields": [
+                "Nfx"
             ]
         },
         {
@@ -3107,7 +3201,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.8.0",
+    "version": "2.8.1",
     "plot_length_units": "\u03bcm",
     "lumped_elements": [
         {
