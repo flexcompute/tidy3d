@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed `reverse` property of `td.Scene.plot_structures_property()` to also reverse the colorbar.
 
+### Fixed
+- Fixed bug in surface gradient computation where fields, instead of gradients, were being summed in frequency.
+
 ## [2.8.2] - 2025-04-09
 
 ### Added

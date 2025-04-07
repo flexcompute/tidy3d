@@ -977,11 +977,11 @@ def postprocess_adj(
         eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
-        fwd_flds_normed = {}
+        adj_flds_normed = {}
         for key, val in E_adj.field_components.items():
-            fwd_flds_normed[key] = val * sim_data_adj.simulation.post_norm
+            adj_flds_normed[key] = val * sim_data_adj.simulation.post_norm
 
-        E_adj = E_adj.updated_copy(**fwd_flds_normed)
+        E_adj = E_adj.updated_copy(**adj_flds_normed)
 
         # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
         der_maps = get_derivative_maps(
@@ -996,78 +996,87 @@ def postprocess_adj(
         # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
 
-        # todo: handle multi-frequency, move to a property?
-        frequencies = {src.source_time.freq0 for src in sim_data_adj.simulation.sources}
-        frequencies = list(frequencies)
-        freq_adj = frequencies[0] or None
+        adjoint_frequencies = E_adj.monitor.freqs
+        for freq_idx, freq_adj in enumerate(adjoint_frequencies):
+            eps_in = np.mean(structure.medium.eps_model(freq_adj))
+            eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(freq_adj))
+            if structure.background_medium:
+                eps_background = structure.background_medium.eps_model(freq_adj)
+            else:
+                eps_background = None
 
-        eps_in = np.mean(structure.medium.eps_model(freq_adj))
-        eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(freq_adj))
-        if structure.background_medium:
-            eps_background = structure.background_medium.eps_model(freq_adj)
-        else:
-            eps_background = None
+            # manually override simulation medium as the background structure
+            if not isinstance(structure.geometry, td.Box):
+                # auto permittivity detection
+                sim_orig = sim_data_orig.simulation
+                plane_eps = eps_fwd.monitor.geometry
 
-        # manually override simulation medium as the background structure
-        if not isinstance(structure.geometry, td.Box):
-            # auto permittivity detection
-            sim_orig = sim_data_orig.simulation
-            plane_eps = eps_fwd.monitor.geometry
+                # get permittivity without this structure
+                structs_no_struct = list(sim_orig.structures)
+                structs_no_struct.pop(structure_index)
+                sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
+                eps_no_structure = sim_no_structure.epsilon(
+                    box=plane_eps, coord_key="centers", freq=freq_adj
+                )
 
-            # get permittivity without this structure
-            structs_no_struct = list(sim_orig.structures)
-            structs_no_struct.pop(structure_index)
-            sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
-            eps_no_structure = sim_no_structure.epsilon(
-                box=plane_eps, coord_key="centers", freq=freq_adj
+                # get permittivity with structures on top of an infinite version of this structure
+                structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+                sim_inf_structure = sim_orig.updated_copy(
+                    structures=structs_inf_struct,
+                    medium=structure.medium,
+                    monitors=[],
+                )
+                eps_inf_structure = sim_inf_structure.epsilon(
+                    box=plane_eps, coord_key="centers", freq=freq_adj
+                )
+
+            else:
+                eps_no_structure = eps_inf_structure = None
+
+            # get minimum intersection of bounds with structure and sim
+            struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
+            rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
+            rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
+            rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
+            bounds_intersect = (rmin_intersect, rmax_intersect)
+
+            derivative_info = DerivativeInfo(
+                paths=structure_paths,
+                E_der_map=E_der_map.field_components,
+                D_der_map=D_der_map.field_components,
+                E_fwd=E_fwd.field_components,
+                E_adj=E_adj.field_components,
+                D_fwd=D_fwd.field_components,
+                D_adj=D_adj.field_components,
+                eps_data=eps_fwd.field_components,
+                eps_in=eps_in,
+                eps_out=eps_out,
+                eps_background=eps_background,
+                frequency=freq_adj,
+                eps_no_structure=eps_no_structure,
+                eps_inf_structure=eps_inf_structure,
+                bounds=struct_bounds,
+                bounds_intersect=bounds_intersect,
             )
 
-            # get permittivity with structures on top of an infinite version of this structure
-            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-            sim_inf_structure = sim_orig.updated_copy(
-                structures=structs_inf_struct,
-                medium=structure.medium,
-                monitors=[],
-            )
-            eps_inf_structure = sim_inf_structure.epsilon(
-                box=plane_eps, coord_key="centers", freq=freq_adj
-            )
+            vjp_value_map = structure.compute_derivatives(derivative_info)
 
-        else:
-            eps_no_structure = eps_inf_structure = None
-
-        # get minimum intersection of bounds with structure and sim
-        struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
-        rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
-        rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
-        rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
-        bounds_intersect = (rmin_intersect, rmax_intersect)
-
-        derivative_info = DerivativeInfo(
-            paths=structure_paths,
-            E_der_map=E_der_map.field_components,
-            D_der_map=D_der_map.field_components,
-            E_fwd=E_fwd.field_components,
-            E_adj=E_adj.field_components,
-            D_fwd=D_fwd.field_components,
-            D_adj=D_adj.field_components,
-            eps_data=eps_fwd.field_components,
-            eps_in=eps_in,
-            eps_out=eps_out,
-            eps_background=eps_background,
-            frequency=freq_adj,
-            eps_no_structure=eps_no_structure,
-            eps_inf_structure=eps_inf_structure,
-            bounds=struct_bounds,
-            bounds_intersect=bounds_intersect,
-        )
-
-        vjp_value_map = structure.compute_derivatives(derivative_info)
-
-        # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
-        for structure_path, vjp_value in vjp_value_map.items():
-            sim_path = tuple(["structures", structure_index] + list(structure_path))
-            sim_fields_vjp[sim_path] = vjp_value
+            # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
+            for structure_path, vjp_value in vjp_value_map.items():
+                sim_path = tuple(["structures", structure_index] + list(structure_path))
+                if freq_idx == 0:
+                    sim_fields_vjp[sim_path] = vjp_value
+                else:
+                    if isinstance(sim_fields_vjp[sim_path], (list, tuple)):
+                        if not isinstance(sim_fields_vjp[sim_path], type(vjp_value)):
+                            raise AdjointError(
+                                f"Unexpected vjp value type for gradient field {sim_path}"
+                            )
+                        sim_fields_vjp[sim_path] = type(sim_fields_vjp[sim_path])(
+                            x + y for x, y in zip(vjp_value, sim_fields_vjp[sim_path])
+                        )
+                    else:
+                        sim_fields_vjp[sim_path] += vjp_value
 
     return sim_fields_vjp
 
