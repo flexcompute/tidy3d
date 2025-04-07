@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.2] - 2025-04-09
+
 ### Added
 - `fill` and `fill_structures` argument in `td.Simulation.plot_structures()` and `td.Simulation.plot()` respectively to disable fill and plot outlines of structures only.
 - New subpixel averaging option `ContourPathAveraging` applied to dielectric material boundaries.
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `num_freqs` in Gaussian beam type sources limited to 20, which should besufficient for all cases.
 - The `angle_phi` parameter of `ModeSpec` is only limited to multiples of `np.pi / 2` if `angle_rotation` is set to `True`, as other values would currently not work correctly.
+- The `ramp_up_iters` parameter of the `ChargeSolver` was changed back to 1 for efficiency. It can be increased in cases with e.g. high doping when convergence is more difficult.
 
 ## [2.8.1] - 2025-03-20
 
@@ -1567,7 +1570,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...develop
+[2.8.2]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.7.9...v2.8.0
 [2.7.9]: https://github.com/flexcompute/tidy3d/compare/v2.7.8...v2.7.9
