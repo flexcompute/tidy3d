@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `num_freqs` in Gaussian beam type sources limited to 20, which should besufficient for all cases.
+- The `angle_phi` parameter of `ModeSpec` is only limited to multiples of `np.pi / 2` if `angle_rotation` is set to `True`, as other values would currently not work correctly.
 
 ## [2.8.1] - 2025-03-20
 

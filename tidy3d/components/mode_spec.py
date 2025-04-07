@@ -225,10 +225,10 @@ class ModeSpec(Tidy3dBaseModel):
 
     @pd.validator("angle_rotation")
     def angle_rotation_with_phi(cls, val, values):
-        """Currently ``angle_rotation`` is only supported with ``angle_phi % np.pi == 0``."""
-        if val and not isclose(values["angle_phi"] % np.pi, 0):
+        """Currently ``angle_rotation`` is only supported with ``angle_phi % (np.pi / 2) == 0``."""
+        if val and not isclose(values["angle_phi"] % (np.pi / 2), 0):
             raise ValidationError(
-                "Parameter 'angle_phi' must be a multiple of 'np.pi' when 'angle_rotation' is "
+                "Parameter 'angle_phi' must be a multiple of 'np.pi / 2' when 'angle_rotation' is "
                 "enabled."
             )
         return val
