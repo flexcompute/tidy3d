@@ -72,7 +72,7 @@ def test_angle_rotation_with_phi():
 
     # Case where angle_phi is not a multiple of np.pi and angle_rotation is True
     with pytest.raises(pydantic.ValidationError):
-        td.ModeSpec(angle_phi=np.pi / 2, angle_rotation=True)
+        td.ModeSpec(angle_phi=np.pi / 3, angle_rotation=True)
 
 
 def get_mode_sim():
