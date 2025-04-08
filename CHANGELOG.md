@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Ability to select payment option when submitting jobs from the Python client.
+
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
 

@@ -18,6 +18,7 @@ from tidy3d.components.types import Literal
 
 from ....exceptions import AdjointError
 from ...core.s3utils import download_file, upload_file
+from ...core.types import PayType
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
 from ..container import DEFAULT_DATA_PATH, Batch, BatchData, Job
@@ -106,6 +107,7 @@ def run(
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: PayType = PayType.AUTO,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -143,7 +145,8 @@ def run(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-
+    pay_type: PayType = AUTO
+        Which method to pay for the simulation.
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -205,6 +208,7 @@ def run(
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            pay_type=pay_type,
         )
 
     return run_webapi(
@@ -221,6 +225,7 @@ def run(
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
     )
 
 
@@ -236,6 +241,7 @@ def run_async(
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: PayType = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -264,6 +270,8 @@ def run_async(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    pay_type: PayType = PayType.AUTO
+        Specify the payment method.
 
     Returns
     ------
@@ -293,6 +301,7 @@ def run_async(
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            pay_type=pay_type,
         )
 
     return run_async_webapi(
@@ -305,6 +314,7 @@ def run_async(
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
     )
 
 
@@ -1075,7 +1085,7 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 
 def parse_run_kwargs(**run_kwargs):
     """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
-    job_fields = list(Job._upload_fields) + ["solver_version"]
+    job_fields = list(Job._upload_fields) + ["solver_version", "pay_type"]
     job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
     return job_init_kwargs
 
@@ -1084,6 +1094,7 @@ def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs
 ) -> tuple[td.SimulationData, str]:
     """Run a simulation without any tracers using regular web.run()."""
+
     job_init_kwargs = parse_run_kwargs(**run_kwargs)
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
@@ -1102,6 +1113,7 @@ def _run_async_tidy3d(
     simulations: dict[str, td.Simulation], **run_kwargs
 ) -> tuple[BatchData, dict[str, str]]:
     """Run a batch of simulations using regular web.run()."""
+
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     path_dir = run_kwargs.pop("path_dir", None)
     batch = Batch(simulations=simulations, **batch_init_kwargs)

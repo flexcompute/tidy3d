@@ -3,6 +3,7 @@
 from typing import Dict, List, Literal
 
 from ...log import log
+from ..core.types import PayType
 from .container import DEFAULT_DATA_DIR, Batch, BatchData
 from .tidy3d_stub import SimulationType
 
@@ -17,6 +18,7 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: Dict[str, List[str]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: PayType = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -40,6 +42,8 @@ def run_async(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    pay_type: PayType = PayType.AUTO
+        Specify the payment method.
 
     Returns
     ------
@@ -75,6 +79,7 @@ def run_async(
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
     )
 
     batch_data = batch.run(path_dir=path_dir)

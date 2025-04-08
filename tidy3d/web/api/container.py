@@ -22,6 +22,7 @@ from ..api import webapi as web
 from ..core.constants import TaskId, TaskName
 from ..core.task_core import Folder
 from ..core.task_info import RunInfo, TaskInfo
+from ..core.types import PayType
 from .tidy3d_stub import SimulationDataType, SimulationType
 
 # Max # of workers for parallel upload / download: above 10, performance is same but with warnings
@@ -182,6 +183,12 @@ class Job(WebContainer):
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
+    pay_type: PayType = pd.Field(
+        PayType.AUTO,
+        title="Payment Type",
+        description="Specify the payment method.",
+    )
+
     _upload_fields = (
         "simulation",
         "task_name",
@@ -270,7 +277,7 @@ class Job(WebContainer):
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id, solver_version=self.solver_version)
+        web.start(self.task_id, solver_version=self.solver_version, pay_type=self.pay_type)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -550,6 +557,12 @@ class Batch(WebContainer):
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
+    pay_type: PayType = pd.Field(
+        PayType.AUTO,
+        title="Payment Type",
+        description="Specify the payment method.",
+    )
+
     jobs_cached: Dict[TaskName, Job] = pd.Field(
         None,
         title="Jobs (Cached)",
@@ -624,6 +637,7 @@ class Batch(WebContainer):
             job_kwargs["simulation"] = simulation
             job_kwargs["verbose"] = False
             job_kwargs["solver_version"] = self.solver_version
+            job_kwargs["pay_type"] = self.pay_type
             job_kwargs["reduce_simulation"] = self.reduce_simulation
             if self.parent_tasks and task_name in self.parent_tasks:
                 job_kwargs["parent_tasks"] = self.parent_tasks[task_name]

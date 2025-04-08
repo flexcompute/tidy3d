@@ -28,7 +28,7 @@ from ..core.environment import Env
 from ..core.http_util import http
 from ..core.s3utils import download_file, download_gz_file, upload_file
 from ..core.task_core import Folder
-from ..core.types import ResourceLifecycle, Submittable
+from ..core.types import PayType, ResourceLifecycle, Submittable
 
 SIMULATION_JSON = "simulation.json"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
@@ -56,6 +56,7 @@ def run(
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: PayType = PayType.AUTO,
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -81,6 +82,8 @@ def run(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Restrict simulation to mode solver region. If "auto", then simulation is automatically
         restricted if it contains custom mediums.
+    pay_type: PayType = PayType.AUTO
+        Which method to pay the simulation.
     Returns
     -------
     :class:`.ModeSolverData`
@@ -114,7 +117,7 @@ def run(
             f"Mode solver created with task_id='{task.task_id}', solver_id='{task.solver_id}'."
         )
     task.upload(verbose=verbose, progress_callback=progress_callback_upload)
-    task.submit()
+    task.submit(pay_type=pay_type)
 
     # Wait for task to finish
     prev_status = "draft"
@@ -461,7 +464,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         finally:
             os.unlink(file_name)
 
-    def submit(self):
+    def submit(
+        self,
+        pay_type: PayType = PayType.AUTO,
+    ):
         """Start the execution of this task.
 
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
@@ -469,7 +475,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         """
         http.post(
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
-            {"enableCaching": Env.current.enable_caching},
+            {
+                "enableCaching": Env.current.enable_caching,
+                "payType": pay_type.value,
+            },
         )
 
     def delete(self):
