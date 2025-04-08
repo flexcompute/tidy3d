@@ -20,8 +20,14 @@ except ImportError:
 from tidy3d.compat import _shapely_is_older_than
 from tidy3d.components.autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
 from tidy3d.components.autograd.constants import GRADIENT_DTYPE_FLOAT
-from tidy3d.components.autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
+from tidy3d.components.autograd.derivative_utils import (
+    DerivativeInfo,
+    FieldData,
+    integrate_within_bounds,
+)
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
 from tidy3d.components.types import (
     ArrayFloat2D,
@@ -51,7 +57,7 @@ from tidy3d.components.viz import (
     polygon_patch,
     set_default_labels_and_title,
 )
-from tidy3d.constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
+from tidy3d.constants import EPSILON_0, LARGE_NUMBER, MICROMETER, MU_0, RADIAN, fp_eps, inf
 from tidy3d.exceptions import (
     SetupError,
     Tidy3dError,
@@ -61,8 +67,6 @@ from tidy3d.exceptions import (
 )
 from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
-
-from .bound_ops import bounds_intersection, bounds_union
 
 POLY_GRID_SIZE = 1e-12
 POLY_TOLERANCE_RATIO = 1e-12
@@ -2440,11 +2444,11 @@ class Box(SimplePlaneIntersection, Centered):
 
         # normal and tangential dims
         dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal)
-        fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
+        fld_E_normal, flds_E_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
 
         # fields and bounds
-        D_normal = derivative_info.D_der_map[fld_normal]
-        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_perp)
+        D_normal = derivative_info.D_der_map[fld_E_normal]
+        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_E_perp)
         bounds_normal, bounds_perp = self.pop_axis(
             np.array(derivative_info.bounds).T, axis=axis_normal
         )
@@ -2494,36 +2498,322 @@ class Box(SimplePlaneIntersection, Centered):
         eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal)
         eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal)
 
-        # compute integration pre-factors
-        delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]
-        delta_eps_inv_normal = 1.0 / eps_in_normal - 1.0 / eps_out_normal
-
-        def integrate_face(arr: xr.DataArray) -> complex:
-            """Interpolate and integrate a scalar field data over the face using bounds."""
-
-            arr_at_face = arr.interp(**{dim_normal: float(coord_normal_face)}, assume_sorted=True)
-
-            integral_result = integrate_within_bounds(
-                arr=arr_at_face,
-                dims=dims_perp,
-                bounds=bounds_perp,
+        if derivative_info.is_medium_pec:
+            return self._derivative_face_pec(
+                dim_normal=dim_normal,
+                axis_normal=axis_normal,
+                min_max_index=min_max_index,
+                coord_normal_face=coord_normal_face,
+                dims_perp=dims_perp,
+                bounds_perp=bounds_perp,
+                D_normal=D_normal,
+                H_der_map=derivative_info.H_der_map,
+                eps_out_normal=eps_out_normal,
+            )
+        else:
+            return self._derivative_face_dielectric(
+                dim_normal=dim_normal,
+                coord_normal_face=coord_normal_face,
+                dims_perp=dims_perp,
+                bounds_perp=bounds_perp,
+                D_normal=D_normal,
+                Es_perp=Es_perp,
+                eps_in_normal=eps_in_normal,
+                eps_out_normal=eps_out_normal,
+                eps_in_perps=eps_in_perps,
+                eps_out_perps=eps_out_perps,
             )
 
-            return complex(integral_result.sum("f"))
+    @staticmethod
+    def _arr_at_face(arr: xr.DataArray, interp_point: float, dim_normal: str) -> xr.DataArray:
+        """Interpolate the array at the given coordinate unless it only has a single value in the normal
+        dimnsion already in which case just return the array itself."""
+        arr_at_face = (
+            arr
+            if (len(arr.coords[dim_normal]) == 1)
+            else arr.interp(**{dim_normal: float(interp_point)}, assume_sorted=True)
+        )
 
-        # compute vjp from field integrals
-        vjp_value = 0.0
+        return arr_at_face
 
-        # perform D-normal integral
+    @staticmethod
+    def _integrate_face(
+        arr_at_face: xr.DataArray,
+        integration_dims: Union[tuple[str], tuple[str, str]],
+        integration_bounds: Union[tuple[Coordinate2D], tuple[Coordinate2D, Coordinate2D]],
+    ) -> complex:
+        """Perform the integration of the surface and sum over the frequency component of the gradient."""
+
+        integral_result = integrate_within_bounds(
+            arr=arr_at_face,
+            dims=integration_dims,
+            bounds=integration_bounds,
+        )
+
+        return complex(integral_result.sum("f"))
+
+    @staticmethod
+    def _snap_coords_outside(
+        min_max_index: int, snap_coords_values: np.ndarray, coord_normal_face: float
+    ) -> float:
+        """Snap interpolation coordinate for a PEC face integration to be just outside the surface boundary.
+        This ensures we don't interpolate with fields that are zero inside of the PEC."""
+
+        if min_max_index == 0:
+            min_boundary_mapping = np.where(snap_coords_values > coord_normal_face)[0]
+            index_face = (
+                0
+                if (len(min_boundary_mapping) == 0)
+                else np.maximum(0, min_boundary_mapping[0] - 1)
+            )
+
+            if snap_coords_values[index_face] > coord_normal_face:
+                log.warning("Unable to snap coordinates outside of min face.")
+        else:
+            max_boundary_mapping = np.where(snap_coords_values < coord_normal_face)[0]
+            index_face = (
+                len(snap_coords_values) - 1
+                if (len(max_boundary_mapping) == 0)
+                else np.minimum(len(snap_coords_values) - 1, max_boundary_mapping[-1] + 1)
+            )
+
+            if snap_coords_values[index_face] < coord_normal_face:
+                log.warning("Unable to snap coordinates outside of max face.")
+
+        snapped_point = snap_coords_values[index_face]
+
+        return snapped_point
+
+    @staticmethod
+    def _check_singularity_correction_pec(
+        size: TracedSize, axis_normal: Axis
+    ) -> tuple[bool, str, bool]:
+        """Checks if the box is 2D (i.e. - one of the dimensions is zero) and
+        identifies the zero dimension if any. Then, checks if we should apply singularity
+        correction if we are integrating a face with that contains the zero dimension."""
+
+        # detect whether the box is 2-dimensional
+        zero_size_map = [s == 0.0 for s in size]
+
+        dimension = 3 - np.sum(zero_size_map)
+        if dimension < 2:
+            log.error(
+                "Derivative of PEC material with less than 2 dimensions is unsupported. "
+                f"Specified PEC box is {dimension}-dimesional"
+            )
+
+        do_singularity_correction = False
+        is_2d = np.any(zero_size_map)
+        zero_dimension = None
+        if is_2d:
+            zero_dim_idx = np.where(zero_size_map)[0][0]
+            zero_dimension = "xyz"[zero_dim_idx]
+
+            # for singularity correction, need 2-dimensional box and that
+            # the face we are integrating over is the 1-dimensional (i.e. -
+            # the normal for the face is not the same as the flat dimension
+            do_singularity_correction = not (axis_normal == zero_dim_idx)
+
+        return is_2d, zero_dimension, do_singularity_correction
+
+    @staticmethod
+    def _trim_dims_and_bounds_edge(
+        dims_perp: tuple[str, str],
+        bounds_perp: tuple[Coordinate2D, Coordinate2D],
+        zero_dimension: str,
+    ) -> tuple[tuple[str], tuple[tuple[float], tuple[float]]]:
+        """Trim the dimensions and bounds for integration along the edge."""
+
+        # if we are correcting for singularity and integrating over the line, then adjust
+        # integration dimensions and bounds to exclude the flat dimension
+        integration_dims = [dim for dim in dims_perp if (not (dim == zero_dimension))]
+
+        integration_bounds = []
+        zero_dim_idx = 0
+        # find the index into the bounds that corresponds to the flat dimension
+        for dim in dims_perp:
+            if dim == zero_dimension:
+                break
+            zero_dim_idx += 1
+
+        # trim the zero dimension from the integration bounds
+        for bound in bounds_perp:
+            new_bound = [b for b_idx, b in enumerate(bound) if b_idx != zero_dim_idx]
+
+            integration_bounds.append(new_bound)
+
+        return integration_dims, integration_bounds
+
+    def _derivative_face_dielectric(
+        self,
+        dim_normal: str,
+        coord_normal_face: float,
+        dims_perp: tuple[str, str],
+        bounds_perp: tuple[Coordinate2D, Coordinate2D],
+        D_normal: ScalarFieldDataArray,
+        Es_perp: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
+        eps_in_normal: ScalarFieldDataArray,
+        eps_out_normal: ScalarFieldDataArray,
+        eps_in_perps: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
+        eps_out_perps: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
+    ) -> float:
+        """Compute derivative with respect to the face using the dielectric form of the gradient.
+
+        Parameters
+        ----------
+        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
+            Data type for interpolation coordinates and values.
+
+        dim_normal : str
+            Surface normal of the face
+        coord_normal_face : float
+            The coordinate at which to interpolate the surface fields
+        dims_perp : tuple[str, str]
+            The perpendicular dimensions of the face
+        bounds_perp : tuple[Coordinate2D, Coordinate2D]
+            Bounds of integration along the face
+        D_normal : ScalarFieldDataArray
+            D-field component normal to the surface
+        Es_perp : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            E-field components tangential to the surface
+        eps_in_normal : ScalarFieldDataArray
+            Normal component of permittivity inside the surface
+        eps_out_normal : ScalarFieldDataArray
+            Normal component of permittivity outside the surface
+        eps_in_perps : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            Tangential components of permittivity inside the surface
+        eps_out_perps : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            Tangential components of permittivity outside the surface
+
+        Returns
+        -------
+        float
+            Surface gradient vjp value
+        """
+
+        delta_eps_inv_normal = 1.0 / eps_in_normal - 1.0 / eps_out_normal
+
+        # compute integration pre-factors
+        delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]
+
         integrand_D = -delta_eps_inv_normal * D_normal
-        integral_D = integrate_face(integrand_D)
-        vjp_value += integral_D
+        integral_D = self._integrate_face(
+            self._arr_at_face(integrand_D, coord_normal_face, dim_normal),
+            integration_dims=dims_perp,
+            integration_bounds=bounds_perp,
+        )
+
+        vjp_value = integral_D
 
         # perform E-perpendicular integrals
         for E_perp, delta_eps_perp in zip(Es_perp, delta_eps_perps):
             integrand_E = E_perp * delta_eps_perp
-            integral_E = integrate_face(integrand_E)
+            integral_E = self._integrate_face(
+                self._arr_at_face(integrand_E, coord_normal_face, dim_normal),
+                integration_dims=dims_perp,
+                integration_bounds=bounds_perp,
+            )
+
             vjp_value += integral_E
+
+        return np.real(vjp_value)
+
+    def _derivative_face_pec(
+        self,
+        dim_normal: str,
+        axis_normal: Axis,
+        min_max_index: int,
+        coord_normal_face: float,
+        dims_perp: tuple[str, str],
+        bounds_perp: tuple[Coordinate2D, Coordinate2D],
+        D_normal: ScalarFieldDataArray,
+        H_der_map: FieldData,
+        eps_out_normal: ScalarFieldDataArray,
+    ) -> float:
+        """Compute derivative with respect to the face using the PEC form of the gradient.
+
+        Parameters
+        ----------
+        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
+            Data type for interpolation coordinates and values.
+
+        dim_normal : str
+            Surface normal of the face
+        axis_normal : Axis
+            Axis (index) corresponding to the normal of the face
+        min_max_index : int
+            Indicator for if the face is on the minimum of the box (0) or the maximum of the Box (1)
+        coord_normal_face : float
+            The coordinate at which to interpolate the surface fields
+        dims_perp : tuple[str, str]
+            The perpendicular dimensions of the face
+        bounds_perp : tuple[Coordinate2D, Coordinate2D]
+            Bounds of integration along the face
+        D_normal : ScalarFieldDataArray
+            D-field component normal to the surface
+        H_der_map : FieldData
+            Multiplication of H-field components in the Box region
+        eps_out_normal : ScalarFieldDataArray
+            Normal component of permittivity outside the surface
+
+        Returns
+        -------
+        float
+            Surface gradient vjp value
+        """
+
+        fld_H_normal, flds_H_perp = self.pop_axis(("Hx", "Hy", "Hz"), axis=axis_normal)
+        Hs_perp = tuple(H_der_map[key] for key in flds_H_perp)
+
+        is_2d, zero_dimension, do_singularity_correction = self._check_singularity_correction_pec(
+            self.size, axis_normal
+        )
+
+        integration_dims = dims_perp
+        integration_bounds = bounds_perp
+        if do_singularity_correction:
+            integration_dims, integration_bounds = self._trim_dims_and_bounds_edge(
+                dims_perp, bounds_perp, zero_dimension
+            )
+
+        integrand_E = D_normal / np.real(eps_out_normal)
+
+        # apply singularity correction only when integrating along the line
+        def _apply_singularity_correction(interp_point: float) -> float:
+            edge_distance = np.abs(interp_point - coord_normal_face)
+            return (0.5 * np.pi * edge_distance) if do_singularity_correction else 1.0
+
+        snap_E_coord = self._snap_coords_outside(
+            min_max_index, integrand_E.coords[dim_normal].values, coord_normal_face
+        )
+
+        integral_E = self._integrate_face(
+            self._arr_at_face(integrand_E, snap_E_coord, dim_normal),
+            integration_dims=integration_dims,
+            integration_bounds=integration_bounds,
+        )
+
+        vjp_value = _apply_singularity_correction(snap_E_coord) * integral_E
+
+        for H_perp_idx, H_perp in enumerate(Hs_perp):
+            integrand_H = MU_0 * H_perp / EPSILON_0
+
+            if (is_2d and not (flds_H_perp[H_perp_idx] == f"H{zero_dimension}")) and (
+                dim_normal != zero_dimension
+            ):
+                continue
+
+            snap_H_coord = self._snap_coords_outside(
+                min_max_index, integrand_H.coords[dim_normal].values, coord_normal_face
+            )
+
+            integral_H = self._integrate_face(
+                self._arr_at_face(integrand_H, snap_H_coord, dim_normal),
+                integration_dims=integration_dims,
+                integration_bounds=integration_bounds,
+            )
+
+            vjp_value += _apply_singularity_correction(snap_H_coord) * integral_H
 
         return np.real(vjp_value)
 

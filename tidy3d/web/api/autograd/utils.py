@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import typing
 
+import numpy as np
 import pydantic as pd
 
 import tidy3d as td
@@ -22,12 +23,23 @@ def get_derivative_maps(
     """Get electric and displacement field derivative maps."""
     der_map_E = derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
     der_map_D = derivative_map_D(fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj)
-    return {"E": der_map_E, "D": der_map_D}
+
+    make_H_der_map = np.all([f"H{dim}" in fld_fwd.field_components for dim in "xyz"])
+    der_map_H = None
+    if make_H_der_map:
+        der_map_H = derivative_map_H(fld_fwd=fld_fwd, fld_adj=fld_adj)
+
+    return {"E": der_map_E, "D": der_map_D, "H": der_map_H}
 
 
 def derivative_map_E(fld_fwd: td.FieldData, fld_adj: td.FieldData) -> td.FieldData:
     """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. these."""
-    return multiply_field_data(fld_fwd, fld_adj)
+    return multiply_field_data(fld_fwd, fld_adj, fld_key="E")
+
+
+def derivative_map_H(fld_fwd: td.FieldData, fld_adj: td.FieldData) -> td.FieldData:
+    """Get td.FieldData where the Hx, Hy, Hz components store the gradients w.r.t. these."""
+    return multiply_field_data(fld_fwd, fld_adj, fld_key="H")
 
 
 def derivative_map_D(
@@ -39,22 +51,24 @@ def derivative_map_D(
     """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. D fields."""
     fwd_D = E_to_D(fld_data=fld_fwd, eps_data=eps_fwd)
     adj_D = E_to_D(fld_data=fld_adj, eps_data=eps_adj)
-    return multiply_field_data(fwd_D, adj_D)
+
+    return multiply_field_data(fwd_D, adj_D, fld_key="E")
 
 
 def E_to_D(fld_data: td.FieldData, eps_data: td.PermittivityData) -> td.FieldData:
     """Convert electric field to displacement field."""
-    return multiply_field_data(fld_data, eps_data)
+
+    return multiply_field_data(fld_data, eps_data, fld_key="E")
 
 
 def multiply_field_data(
-    fld_1: td.FieldData, fld_2: typing.Union[td.FieldData, td.PermittivityData]
+    fld_1: td.FieldData, fld_2: typing.Union[td.FieldData, td.PermittivityData], fld_key: str
 ) -> td.FieldData:
     """Elementwise multiply two field data objects, writes data into ``fld_1`` copy."""
 
     def get_field_key(dim: str, fld_data: typing.Union[td.FieldData, td.PermittivityData]) -> str:
         """Get the key corresponding to the scalar field along this dimension."""
-        return f"E{dim}" if isinstance(fld_data, td.FieldData) else f"eps_{dim}{dim}"
+        return f"{fld_key}{dim}" if isinstance(fld_data, td.FieldData) else f"eps_{dim}{dim}"
 
     field_components = {}
     for dim in "xyz":
