@@ -67,3 +67,7 @@ class PayType(str, Enum):
             if key in cls.__members__:
                 return cls.__members__[key]
         return super()._missing_(value)
+
+
+class OptimizationType(str, Enum):
+    BATCH = "BATCH"
