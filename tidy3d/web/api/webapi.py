@@ -29,6 +29,7 @@ from ..core.constants import (
 from ..core.environment import Env
 from ..core.task_core import Folder, SimulationTask
 from ..core.task_info import ChargeType, TaskInfo
+from ..core.types import PayType
 from .connect_util import (
     REFRESH_TIME,
     get_grid_points_str,
@@ -85,6 +86,7 @@ def run(
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: PayType = PayType.AUTO,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -117,6 +119,8 @@ def run(
         worker group
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    pay_type: PayType = PayType.AUTO
+       Which method to pay the simulation.
 
     Returns
     -------
@@ -178,6 +182,7 @@ def run(
         task_id,
         solver_version=solver_version,
         worker_group=worker_group,
+        pay_type=pay_type,
     )
     monitor(task_id, verbose=verbose)
     data = load(
@@ -371,6 +376,7 @@ def start(
     task_id: TaskId,
     solver_version: str = None,
     worker_group: str = None,
+    pay_type: PayType = PayType.AUTO,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -383,6 +389,8 @@ def start(
         target solver version.
     worker_group: str = None
         worker group
+    pay_type: PayType = PayType.AUTO
+        Which method to pay the simulation
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
@@ -393,6 +401,7 @@ def start(
     task.submit(
         solver_version=solver_version,
         worker_group=worker_group,
+        pay_type=pay_type,
     )
 
 

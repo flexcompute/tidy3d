@@ -22,7 +22,7 @@ from tidy3d.web.api.webapi import (
     upload,
 )
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.types import TaskType
+from tidy3d.web.core.types import PayType, TaskType
 
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
@@ -150,6 +150,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
                     "workerGroup": None,
                     "protocolVersion": td.version.__version__,
                     "enableCaching": Env.current.enable_caching,
+                    "payType": PayType.AUTO,
                 }
             )
         ],

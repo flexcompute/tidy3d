@@ -7,7 +7,7 @@ from responses import matchers
 from tidy3d.web.core import http_util
 from tidy3d.web.core.environment import Env, EnvironmentConfig
 from tidy3d.web.core.task_core import Folder, SimulationTask
-from tidy3d.web.core.types import TaskType
+from tidy3d.web.core.types import PayType, TaskType
 
 test_env = EnvironmentConfig(
     name="test",
@@ -214,6 +214,7 @@ def test_submit(set_api_key):
                     "solverVersion": None,
                     "workerGroup": None,
                     "enableCaching": Env.current.enable_caching,
+                    "payType": PayType.AUTO,
                 }
             )
         ],

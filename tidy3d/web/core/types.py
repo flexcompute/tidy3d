@@ -54,3 +54,8 @@ class TaskType(str, Enum):
     HEAT_CHARGE = "HEAT_CHARGE"
     EME = "EME"
     MODE = "MODE"
+
+
+class PayType(str, Enum):
+    CREDITS = "FLEX_CREDIT"
+    AUTO = "AUTO"
