@@ -281,7 +281,7 @@ class AdjointJob(Job):
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
         if self.jax_info is not None:
-            upload_jax_info(task_id=self.task_id, jax_info=self.jax_info, verbose=self.verbose)
+            upload_jax_info(task_id=self.task_id(), jax_info=self.jax_info, verbose=self.verbose)
         super().start()
 
 

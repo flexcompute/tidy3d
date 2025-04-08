@@ -44,9 +44,9 @@ class WebContainer(Tidy3dBaseModel, ABC):
         """Make sure local output directory exists and create it if not."""
 
     @staticmethod
-    def _check_folder(folder_name: str) -> None:
+    def _check_folder(folder_name: str) -> Folder:
         """Make sure ``folder_name`` exists on the web UI and create it if not."""
-        Folder.get(folder_name, create=True)
+        return Folder.get(folder_name, create=True)
 
 
 class Job(WebContainer):
@@ -235,24 +235,24 @@ class Job(WebContainer):
         self.monitor()
         return self.load(path=path)
 
-    @cached_property
-    def task_id(self) -> TaskId:
+    def task_id(self, batch_id: str = None) -> TaskId:
         """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
         if self.task_id_cached:
             return self.task_id_cached
         self._check_folder(self.folder_name)
-        return self._upload()
+        return self._upload(batch_id)
 
-    def _upload(self) -> TaskId:
+    def _upload(self, batch_id: str) -> TaskId:
         """Upload this job and return the task ID for handling."""
         # upload kwargs with all fields except task_id
         upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
+        upload_kwargs["batch_id"] = batch_id
         task_id = web.upload(**upload_kwargs)
         return task_id
 
-    def upload(self) -> None:
+    def upload(self, batch_id: str = None) -> None:
         """Upload this ``Job``."""
-        _ = self.task_id
+        _ = self.task_id(batch_id)
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -370,7 +370,9 @@ class Job(WebContainer):
         Cost is calculated assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
-        return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
+        return web.estimate_cost(
+            self.task_id(), verbose=verbose, solver_version=self.solver_version
+        )
 
     @staticmethod
     def _check_path_dir(path: str) -> None:
@@ -509,6 +511,18 @@ class Batch(WebContainer):
         "default",
         title="Folder Name",
         description="Name of folder to store member of each batch on web UI.",
+    )
+
+    batch_id: str = pd.Field(
+        None,
+        title="Batch Id",
+        description="ID of batch to store member of each batch on web UI.",
+    )
+
+    batch_name: str = pd.Field(
+        "batch",
+        title="Batch Name",
+        description="Name of batch to store member of each batch on web UI.",
     )
 
     verbose: bool = pd.Field(
@@ -674,8 +688,15 @@ class Batch(WebContainer):
     def upload(self) -> None:
         """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
         self._check_folder(self.folder_name)
+        batch_id = self.create_batch()
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-            futures = [executor.submit(job.upload) for _, job in self.jobs.items()]
+            futures = [
+                executor.submit(
+                    job.upload,
+                    batch_id,
+                )
+                for _, job in self.jobs.items()
+            ]
 
             # progressbar (number of tasks uploaded)
             if self.verbose:
@@ -710,6 +731,10 @@ class Batch(WebContainer):
 
     def start(self) -> None:
         """Start running all tasks in the :class:`Batch`.
+
+        Parameters:
+            batch_id: str
+                Batch ID to start the tasks in.
 
         Note
         ----
@@ -1068,3 +1093,8 @@ class Batch(WebContainer):
         """
         if len(path_dir) > 0 and not os.path.exists(path_dir):
             os.makedirs(path_dir, exist_ok=True)
+
+    def create_batch(self) -> str:
+        """Create batch."""
+        folder = self._check_folder(self.folder_name)
+        return OptimizationBatch.create(self.batch_name, folder.folder_id)
