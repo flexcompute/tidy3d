@@ -1167,7 +1167,6 @@ def _run_async_tidy3d_bwd(
     _ = run_kwargs.pop("path_dir", None)
     batch = Batch(simulations=simulations, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d_bwd()'")
-
     batch.start()
     batch.monitor()
 
