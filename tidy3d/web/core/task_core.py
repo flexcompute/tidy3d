@@ -443,7 +443,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "workerGroup": worker_group,
                 "protocolVersion": protocol_version,
                 "enableCaching": Env.current.enable_caching,
-                "payType": pay_type.name,
+                "payType": pay_type.value,
             },
         )
 

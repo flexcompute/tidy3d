@@ -477,7 +477,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
             {
                 "enableCaching": Env.current.enable_caching,
-                "payType": pay_type.name,
+                "payType": pay_type.value,
             },
         )
 
