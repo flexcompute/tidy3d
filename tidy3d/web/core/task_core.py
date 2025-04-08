@@ -22,7 +22,7 @@ from .file_util import read_simulation_from_hdf5
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
 from .stub import TaskStub
-from .types import Queryable, ResourceLifecycle, Submittable, Tidy3DResource
+from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
@@ -413,6 +413,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         solver_version: str = None,
         worker_group: str = None,
+        pay_type: PayType = PayType.AUTO,
     ):
         """Kick off this task.
 
@@ -426,6 +427,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             target solver version.
         worker_group: str = None
             worker group
+        pay_type: PayType = PayType.AUTO
+            Which method to pay the simulation.
         """
 
         if solver_version:
@@ -440,6 +443,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "workerGroup": worker_group,
                 "protocolVersion": protocol_version,
                 "enableCaching": Env.current.enable_caching,
+                "payType": pay_type.name,
             },
         )
 

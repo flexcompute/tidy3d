@@ -17,6 +17,7 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: Dict[str, List[str]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    use_credits: bool = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -77,5 +78,5 @@ def run_async(
         reduce_simulation=reduce_simulation,
     )
 
-    batch_data = batch.run(path_dir=path_dir)
+    batch_data = batch.run(path_dir=path_dir, use_credits=use_credits)
     return batch_data

@@ -18,6 +18,7 @@ from tidy3d.components.types import Literal
 
 from ....exceptions import AdjointError
 from ...core.s3utils import download_file, upload_file
+from ...core.types import PayType
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
 from ..container import DEFAULT_DATA_PATH, Batch, BatchData, Job
@@ -106,6 +107,7 @@ def run(
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: PayType = PayType.AUTO,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -143,7 +145,8 @@ def run(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-
+    pay_type: PayType = AUTO
+        Which method to pay for the simulation.
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -221,6 +224,7 @@ def run(
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
     )
 
 
