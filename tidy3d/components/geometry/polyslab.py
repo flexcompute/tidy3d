@@ -1447,13 +1447,15 @@ class PolySlab(base.Planar):
         """
         vjps: AutogradFieldMap = {}
 
-        sim_min, sim_max = map(np.asarray, derivative_info.bounds_intersect)
-        extents = sim_max - sim_min
+        intersect_min, intersect_max = map(np.asarray, derivative_info.bounds_intersect)
+        sim_min, sim_max = map(np.asarray, derivative_info.simulation_bounds)
+
+        extents = intersect_max - intersect_min
         is_2d = np.isclose(extents[self.axis], 0.0)
 
         # early return if polyslab is not in simulation domain
         slab_min, slab_max = self.slab_bounds
-        if (slab_max <= sim_min[self.axis]) or (slab_min >= sim_max[self.axis]):
+        if (slab_max < sim_min[self.axis]) or (slab_min > sim_max[self.axis]):
             log.warning(
                 "'PolySlab' lies completely outside the simulation domain.",
                 log_once=True,
@@ -1473,6 +1475,7 @@ class PolySlab(base.Planar):
                 vjps[path] = self._compute_derivative_vertices(
                     derivative_info, sim_min, sim_max, is_2d, interpolators
                 )
+
             elif path[0] == "slab_bounds":
                 idx = path[1]
                 face_coord = self.slab_bounds[idx]
@@ -1508,6 +1511,12 @@ class PolySlab(base.Planar):
         is split equally between the two vertices that bound the edge segment.
         """
         # rmin/rmax over the geometry and simulation box
+        if np.isclose(self.slab_bounds[1] - self.slab_bounds[0], 0.0):
+            log.warning(
+                "Computing slab face derivatives for flat structures is not fully supported and "
+                "may give zero for the derivative. Try using a structure with a small, but nonzero "
+                "thickness for slab bound derivatives."
+            )
         rmin, rmax = derivative_info.bounds_intersect
         _, (r1_min, r2_min) = self.pop_axis(rmin, axis=self.axis)
         _, (r1_max, r2_max) = self.pop_axis(rmax, axis=self.axis)

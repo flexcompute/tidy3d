@@ -10,7 +10,7 @@ import xarray as xr
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.types import ArrayLike, Bound, tidycomplex
-from tidy3d.constants import C_0, LARGE_NUMBER
+from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
 
 from .constants import (
@@ -111,8 +111,31 @@ class DerivativeInfo:
     Bounds corresponding to the minimum intersection between the structure
     and the simulation it is contained in."""
 
+    simulation_bounds: Bound
+    """Simulation bounds.
+    Bounds corresponding to the simulation domain containing this structure.
+    Unlike bounds_intersect, this is independent of the structure's bounds and
+    is purely based on the simulation geometry."""
+
     frequencies: ArrayLike
     """Frequencies at which the adjoint gradient should be computed."""
+
+    H_der_map: Optional[FieldData] = None
+    """Magnetic field gradient map.
+    Dataset where the field components ("Hx", "Hy", "Hz") store the multiplication
+    of the forward and adjoint magnetic fields. The tangential component of this
+    dataset is used when computing adjoint gradients for shifting boundaries of
+    structures composed of PEC mediums."""
+
+    H_fwd: Optional[FieldData] = None
+    """Forward magnetic fields.
+    Dataset where the field components ("Hx", "Hy", "Hz") represent the forward
+    magnetic fields used for computing gradients for a given structure."""
+
+    H_adj: Optional[FieldData] = None
+    """Adjoint magnetic fields.
+    Dataset where the field components ("Hx", "Hy", "Hz") represent the adjoint
+    magnetic fields used for computing gradients for a given structure."""
 
     # Optional fields with defaults
     eps_background: Optional[EpsType] = None
@@ -138,6 +161,11 @@ class DerivativeInfo:
     the inside permittivity using Structure.medium. Only set True for
     GeometryGroup handling where it is difficult to automatically evaluate
     the inside and outside relative permittivity for each geometry."""
+
+    is_medium_pec: bool = False
+    """Indicates if structure material is PEC.
+    If True, the structure contains a PEC material which changes the gradient
+    formulation at the boundary compared to the dielectric case."""
 
     interpolators: Optional[dict] = None
     """Pre-computed interpolators.
@@ -235,7 +263,6 @@ class DerivativeInfo:
                     data = arr.data.astype(
                         GRADIENT_DTYPE_COMPLEX if np.iscomplexobj(arr.data) else dtype, copy=False
                     )
-
                     # create interpolator with frequency dimension
                     if "f" in arr.dims:
                         freq_coords = arr.coords["f"].data.astype(dtype, copy=False)
@@ -251,8 +278,13 @@ class DerivativeInfo:
                         data = data[..., np.newaxis]
 
                     points_with_freq = (*points, freq_coords)
+                    # If PEC, use nearest interpolation instead of linear to avoid interpolating
+                    # with field values inside the PEC (which are 0). Instead, we make sure to
+                    # choose interplation points such that their nearest location is outside of
+                    # the PEC surface.
+                    method = "nearest" if self.is_medium_pec else "linear"
                     interpolator_obj = RegularGridInterpolator(
-                        points_with_freq, data, method="linear", bounds_error=False, fill_value=None
+                        points_with_freq, data, method=method, bounds_error=False, fill_value=None
                     )
 
                     def interpolator(coords):
@@ -275,12 +307,16 @@ class DerivativeInfo:
                 else:
                     interpolators[component_name] = LazyInterpolator(creator_func)
 
-        for group_key, data_dict in [
+        # process field interpolators (nested dictionaries)
+        interpolator_groups = [
             ("E_fwd", self.E_fwd),
             ("E_adj", self.E_adj),
             ("D_fwd", self.D_fwd),
             ("D_adj", self.D_adj),
-        ]:
+        ]
+        if self.is_medium_pec:
+            interpolator_groups += [("H_fwd", self.H_fwd), ("H_adj", self.H_adj)]
+        for group_key, data_dict in interpolator_groups:
             _make_lazy_interpolator_group(data_dict, group_key, is_field_group=True)
 
         if self.eps_inf_structure is not None:
@@ -333,6 +369,39 @@ class DerivativeInfo:
                 "Please create interpolators using 'create_interpolators()' first."
             )
 
+        if "eps_no" in interpolators:
+            eps_out = interpolators["eps_no"](spatial_coords)
+        else:
+            # use eps_background if available, otherwise use eps_out
+            eps_to_prepare = (
+                self.eps_background if self.eps_background is not None else self.eps_out
+            )
+            eps_out = self._prepare_epsilon(eps_to_prepare)
+
+        if self.is_medium_pec:
+            vjps = self._evaluate_pec_gradient_at_points(
+                spatial_coords, normals, perps1, perps2, interpolators, eps_out
+            )
+        else:
+            vjps = self._evaluate_dielectric_gradient_at_points(
+                spatial_coords, normals, perps1, perps2, interpolators, eps_out
+            )
+
+        # sum over frequency dimension
+        vjps = np.sum(vjps, axis=-1)
+
+        return vjps
+
+    def _evaluate_dielectric_gradient_at_points(
+        self,
+        spatial_coords: np.ndarray,
+        normals: np.ndarray,
+        perps1: np.ndarray,
+        perps2: np.ndarray,
+        interpolators: dict,
+        # todo: type
+        eps_out,
+    ) -> np.ndarray:
         # evaluate all field components at surface points
         E_fwd_at_coords = {
             name: interp(spatial_coords) for name, interp in interpolators["E_fwd"].items()
@@ -346,6 +415,14 @@ class DerivativeInfo:
         D_adj_at_coords = {
             name: interp(spatial_coords) for name, interp in interpolators["D_adj"].items()
         }
+
+        if "eps_inf" in interpolators:
+            eps_in = interpolators["eps_inf"](spatial_coords)
+        else:
+            eps_in = self._prepare_epsilon(self.eps_in)
+
+        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+        delta_eps = eps_in - eps_out
 
         # project fields onto local surface basis (normal + two tangents)
         D_fwd_norm = self._project_in_basis(D_fwd_at_coords, basis_vector=normals)
@@ -361,27 +438,231 @@ class DerivativeInfo:
         E_der_perp1 = E_fwd_perp1 * E_adj_perp1
         E_der_perp2 = E_fwd_perp2 * E_adj_perp2
 
-        if "eps_inf" in interpolators:
-            eps_in = interpolators["eps_inf"](spatial_coords)
-        else:
-            eps_in = self._prepare_epsilon(self.eps_in)
-
-        if "eps_no" in interpolators:
-            eps_out = interpolators["eps_no"](spatial_coords)
-        else:
-            # use eps_background if available, otherwise use eps_out
-            eps_to_prepare = (
-                self.eps_background if self.eps_background is not None else self.eps_out
-            )
-            eps_out = self._prepare_epsilon(eps_to_prepare)
-
-        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
-        delta_eps = eps_in - eps_out
-
         vjps = -delta_eps_inv * D_der_norm + E_der_perp1 * delta_eps + E_der_perp2 * delta_eps
 
-        # sum over frequency dimension
-        vjps = np.sum(vjps, axis=-1)
+        return vjps
+
+    def _evaluate_pec_gradient_at_points(
+        self,
+        spatial_coords: np.ndarray,
+        normals: np.ndarray,
+        perps1: np.ndarray,
+        perps2: np.ndarray,
+        interpolators: dict,
+        # todo: type
+        eps_out,
+    ) -> np.ndarray:
+        def _adjust_spatial_coords_pec(grid_centers: dict[str, np.ndarray]):
+            """Assuming a nearest interpolation, adjust the interpolation points given the grid
+            defined by `grid_centers` and using `spatial_coords` as a starting point such that we
+            select a point outside of the PEC boundary.
+
+                 *** (nearest point outside boundary)
+                  ^
+                  | n (normal direction)
+                  |
+            _.-~'`-._.-~'`-._ (PEC surface)
+                  * (nearest point)
+
+            Parameters
+            ----------
+            grid_centers: dict[str, np.ndarray]
+                The grid points for a given field component indexed by dimension. These grid points
+                are used to find the nearest snapping point and adjust the inerpolation coordinates
+                to ensure we fall outside of the PEC surface.
+
+            Returns
+            -------
+            (np.ndarray, np.ndarray)
+                (N, 3) array of coordinate centers at which to interpolate such that they line up
+                with a grid center and are outside the PEC surface
+                (N,) array of distances from the nearest interpolation points to the desired surface
+                edge points specified by `spatial_coords`
+
+            """
+            grid_ddim = np.zeros_like(normals)
+            for idx, dim in enumerate("xyz"):
+                expanded_coords = np.expand_dims(spatial_coords[:, idx], axis=1)
+                grid_centers_select = grid_centers[dim]
+
+                diff = np.abs(expanded_coords - grid_centers_select)
+
+                nearest_grid = np.argmin(diff, axis=-1)
+                nearest_grid = np.minimum(np.maximum(nearest_grid, 1), len(grid_centers_select) - 1)
+
+                # compute the local grid spacing near the boundary
+                grid_ddim[:, idx] = (
+                    grid_centers_select[nearest_grid] - grid_centers_select[nearest_grid - 1]
+                )
+
+            # assuming we move in the normal direction, finds which dimension we need to move the least
+            # in order to ensure we snap to a point outside the boundary in the worst case (i.e. - the
+            # nearest point is just inside the surface)
+            min_movement_index = np.argmin(
+                np.abs(grid_ddim) / (np.abs(normals) + np.finfo(normals.dtype).min), axis=1
+            )
+
+            selection = (np.arange(normals.shape[0]), min_movement_index)
+            coords_dn = np.expand_dims(np.abs(grid_ddim[selection]), axis=1)
+
+            # adjust coordinates by half a grid point outside boundary such that nearest interpolation
+            # point snaps to outside the boundary
+            adjust_spatial_coords = spatial_coords + normals * 0.5 * coords_dn
+
+            edge_distance = np.zeros_like(adjust_spatial_coords[:, 0])
+            for idx, dim in enumerate("xyz"):
+                expanded_adjusted_coords = np.expand_dims(adjust_spatial_coords[:, idx], axis=1)
+                grid_centers_select = grid_centers[dim]
+
+                # find nearest grid point from the adjusted coordinates
+                diff = np.abs(expanded_adjusted_coords - grid_centers_select)
+                nearest_grid = np.argmin(diff, axis=-1)
+
+                # compute edge distance from the nearest interpolated point to the boundary edge
+                edge_distance += (
+                    np.abs(spatial_coords[:, idx] - grid_centers_select[nearest_grid]) ** 2
+                )
+
+            # this edge distance is useful when correcting for edge singularities from the PEC material
+            # and is used when the PEC PolySlab structure has zero thickness
+            edge_distance = np.sqrt(edge_distance)
+
+            return adjust_spatial_coords, edge_distance
+
+        def _snap_coordinate_outside(field_components: FieldData):
+            """Helper function to perform coordinate adjustment and compute edge distance for each
+            component in `field_components`.
+
+            Parameters
+            ----------
+            field_components: FieldData
+                The field components (i.e - Ex, Ey, Ez, Hx, Hy, Hz) that we would like to sample just
+                outside the PEC surface using nearest interpolation.
+
+            Returns
+            -------
+            dict[str, dict[str, np.ndarray]]
+                Dictionary mapping each field component name to a dictionary of adjusted coordinates
+                and edge distances for that component.
+            """
+            adjustment = {}
+            for name in field_components:
+                field_component = field_components[name]
+                field_component_coords = field_component.coords
+
+                adjusted_coords, edge_distance = _adjust_spatial_coords_pec(
+                    {
+                        key: np.array(field_component_coords[key].values)
+                        for key in field_component_coords
+                    }
+                )
+                adjustment[name] = {"coords": adjusted_coords, "edge_distance": edge_distance}
+
+            return adjustment
+
+        def _interpolate_field_components(interp_coords, field_name):
+            return {
+                name: interp(interp_coords[name]["coords"])
+                for name, interp in interpolators[field_name].items()
+            }
+
+        # adjust coordinates for PEC to be outside structure bounds and get edge distance for singularity correction.
+        E_fwd_coords_adjusted = _snap_coordinate_outside(self.E_fwd)
+        E_adj_coords_adjusted = _snap_coordinate_outside(self.E_adj)
+
+        H_fwd_coords_adjusted = _snap_coordinate_outside(self.H_fwd)
+        H_adj_coords_adjusted = _snap_coordinate_outside(self.H_adj)
+
+        # using the adjusted coordinates, evaluate all field components at surface points
+        E_fwd_at_coords = _interpolate_field_components(E_fwd_coords_adjusted, "E_fwd")
+        E_adj_at_coords = _interpolate_field_components(E_adj_coords_adjusted, "E_adj")
+        H_fwd_at_coords = _interpolate_field_components(H_fwd_coords_adjusted, "H_fwd")
+        H_adj_at_coords = _interpolate_field_components(H_adj_coords_adjusted, "H_adj")
+
+        structure_sizes = np.array(
+            [self.bounds[1][idx] - self.bounds[0][idx] for idx in range(len(self.bounds[0]))]
+        )
+
+        is_flat_perp_dim1 = np.isclose(np.abs(np.sum(perps1[0] * structure_sizes)), 0.0)
+        is_flat_perp_dim2 = np.isclose(np.abs(np.sum(perps2[0] * structure_sizes)), 0.0)
+        flat_perp_dims = [is_flat_perp_dim1, is_flat_perp_dim2]
+
+        # check if this integration is happening along an edge in which case we will eliminate
+        # on of the H field integration components and apply singularity correction
+        pec_line_integration = is_flat_perp_dim1 or is_flat_perp_dim2
+
+        def _compute_singularity_correction(adjustment_: dict[str, dict[str, np.ndarray]]):
+            """
+            Given the `adjustment_` which contains the distance from the PEC edge each field
+            component is nearest interpolated at, computes the singularity correction when
+            working with 2D PEC using the average edge_distance for each component. In the case
+            of 3D PEC gradients, no singularity correction is applied so an array of ones is returned.
+
+            Parameters
+            ----------
+            adjustment_: dict[str, dict[str, np.ndarray]]
+                Dictionary that maps field component name to a dictionary containing the coordinate
+                adjustment and the distance to the PEC edge for those coordinates. The edge distance
+                is used for 2D PEC singularity correction.
+
+            Returns
+            -------
+            np.ndarray
+                Returns the singularity correction which has shape (N,) where there are N points in
+                `spatial_coords`
+            """
+            return (
+                (
+                    0.5
+                    * np.pi
+                    * np.mean([adjustment_[name]["edge_distance"] for name in adjustment_], axis=0)
+                )
+                if pec_line_integration
+                else np.ones_like(spatial_coords, shape=spatial_coords.shape[0])
+            )
+
+        E_norm_singularity_correction = np.expand_dims(
+            _compute_singularity_correction(E_fwd_coords_adjusted), axis=1
+        )
+        H_perp_singularity_correction = np.expand_dims(
+            _compute_singularity_correction(H_fwd_coords_adjusted), axis=1
+        )
+
+        E_fwd_norm = self._project_in_basis(E_fwd_at_coords, basis_vector=normals)
+        E_adj_norm = self._project_in_basis(E_adj_at_coords, basis_vector=normals)
+
+        # compute the normal E contribution to the gradient (the tangential E contribution
+        # is 0 in the case of PEC since this field component is continuous and thus 0 at
+        # the boundary)
+        contrib_E = E_norm_singularity_correction * eps_out * E_fwd_norm * E_adj_norm
+        vjps = contrib_E
+
+        # compute the tangential H contribution to the gradient (the normal H contribution
+        # is 0 for PEC)
+        H_fwd_perp1 = self._project_in_basis(H_fwd_at_coords, basis_vector=perps1)
+        H_adj_perp1 = self._project_in_basis(H_adj_at_coords, basis_vector=perps1)
+
+        H_fwd_perp2 = self._project_in_basis(H_fwd_at_coords, basis_vector=perps2)
+        H_adj_perp2 = self._project_in_basis(H_adj_at_coords, basis_vector=perps2)
+
+        H_der_perp1 = H_perp_singularity_correction * H_fwd_perp1 * H_adj_perp1
+        H_der_perp2 = H_perp_singularity_correction * H_fwd_perp2 * H_adj_perp2
+
+        H_integration_components = (H_der_perp1, H_der_perp2)
+        if pec_line_integration:
+            # if we are integrating along the line, we choose the H component normal to
+            # the edge which corresponds to a surface current along the edge whereas the other
+            # tangential component corresponds to a surface current along the flat dimension.
+            H_integration_components = tuple(
+                H_comp for idx, H_comp in enumerate(H_integration_components) if flat_perp_dims[idx]
+            )
+
+        # for each of the tangential components we are integrating the H fields over,
+        # adjust weighting to account for pre-weighting of the source by `EPSILON_0`
+        # and multiply by appropriate `MU_0` factor
+        for H_perp in H_integration_components:
+            contrib_H = MU_0 * H_perp / EPSILON_0
+            vjps += contrib_H
 
         return vjps
 

@@ -998,8 +998,7 @@ def _compute_eps_array(medium, frequencies):
 
 
 def _slice_field_data(
-    field_data: dict,
-    freqs: np.ndarray,
+    field_data: dict, freqs: np.ndarray, component_indicator: typing.Optional[str] = None
 ) -> dict:
     """Slice field data dictionary along frequency dimension.
 
@@ -1009,13 +1008,18 @@ def _slice_field_data(
         Dictionary of field components.
     freqs : np.ndarray
         Frequencies to select.
+    component_indicator: str
+        Component to filter field data selction on.
 
     Returns
     -------
     dict
         Sliced field data dictionary.
     """
-    return {k: v.sel(f=freqs) for k, v in field_data.items()}
+    if component_indicator:
+        return {k: v.sel(f=freqs) for k, v in field_data.items() if component_indicator in k}
+    else:
+        return {k: v.sel(f=freqs) for k, v in field_data.items()}
 
 
 def postprocess_adj(
@@ -1036,33 +1040,39 @@ def postprocess_adj(
     sim_fields_vjp = {}
     for structure_index, structure_paths in sim_vjp_map.items():
         # grab the forward and adjoint data
-        E_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
+        fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
         eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
-        E_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
+        fld_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
         eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
-        adj_flds_normed = {}
-        for key, val in E_adj.field_components.items():
-            adj_flds_normed[key] = val * sim_data_adj.simulation.post_norm
+        fwd_flds_adj_normed = {}
+        for key, val in fld_adj.field_components.items():
+            fwd_flds_adj_normed[key] = val * sim_data_adj.simulation.post_norm
 
-        E_adj = E_adj.updated_copy(**adj_flds_normed)
+        fld_adj = fld_adj.updated_copy(**fwd_flds_adj_normed)
 
         # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
         der_maps = get_derivative_maps(
-            fld_fwd=E_fwd, eps_fwd=eps_fwd, fld_adj=E_adj, eps_adj=eps_adj
+            fld_fwd=fld_fwd,
+            eps_fwd=eps_fwd,
+            fld_adj=fld_adj,
+            eps_adj=eps_adj,
         )
         E_der_map = der_maps["E"]
         D_der_map = der_maps["D"]
+        H_der_map = der_maps["H"]
 
-        D_fwd = E_to_D(E_fwd, eps_fwd)
-        D_adj = E_to_D(E_adj, eps_fwd)
+        H_info_exists = H_der_map is not None
+
+        D_fwd = E_to_D(fld_fwd, eps_fwd)
+        D_adj = E_to_D(fld_adj, eps_fwd)
 
         # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
 
         # compute epsilon arrays for all frequencies
-        adjoint_frequencies = np.array(E_adj.monitor.freqs)
+        adjoint_frequencies = np.array(fld_adj.monitor.freqs)
 
         eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
         eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
@@ -1092,27 +1102,31 @@ def postprocess_adj(
                 for f in adjoint_frequencies
             ]
 
-            # permittivity with infinite structure
-            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-            sim_inf_structure = sim_orig.updated_copy(
-                structures=structs_inf_struct,
-                medium=structure.medium,
-                monitors=[],
-                sources=[],
-                grid_spec=sim_orig_grid_spec,
-            )
-
-            eps_inf_structure_data = [
-                sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-                for f in adjoint_frequencies
-            ]
-
             eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
                 f=adjoint_frequencies
             )
-            eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
-                f=adjoint_frequencies
-            )
+
+            if structure.medium.is_pec:
+                eps_inf_structure = None
+            else:
+                # permittivity with infinite structure
+                structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+                sim_inf_structure = sim_orig.updated_copy(
+                    structures=structs_inf_struct,
+                    medium=structure.medium,
+                    monitors=[],
+                    sources=[],
+                    grid_spec=sim_orig_grid_spec,
+                )
+
+                eps_inf_structure_data = [
+                    sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+                    for f in adjoint_frequencies
+                ]
+
+                eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
+                    f=adjoint_frequencies
+                )
         else:
             eps_no_structure = eps_inf_structure = None
 
@@ -1141,11 +1155,30 @@ def postprocess_adj(
             # slice field data for current chunk
             E_der_map_chunk = _slice_field_data(E_der_map.field_components, select_adjoint_freqs)
             D_der_map_chunk = _slice_field_data(D_der_map.field_components, select_adjoint_freqs)
-            E_fwd_chunk = _slice_field_data(E_fwd.field_components, select_adjoint_freqs)
-            E_adj_chunk = _slice_field_data(E_adj.field_components, select_adjoint_freqs)
+            E_fwd_chunk = _slice_field_data(
+                fld_fwd.field_components, select_adjoint_freqs, component_indicator="E"
+            )
+            E_adj_chunk = _slice_field_data(
+                fld_adj.field_components, select_adjoint_freqs, component_indicator="E"
+            )
             D_fwd_chunk = _slice_field_data(D_fwd.field_components, select_adjoint_freqs)
             D_adj_chunk = _slice_field_data(D_adj.field_components, select_adjoint_freqs)
             eps_data_chunk = _slice_field_data(eps_fwd.field_components, select_adjoint_freqs)
+
+            H_der_map_chunk = None
+            H_fwd_chunk = None
+            H_adj_chunk = None
+
+            if H_info_exists:
+                H_der_map_chunk = _slice_field_data(
+                    H_der_map.field_components, select_adjoint_freqs
+                )
+                H_fwd_chunk = _slice_field_data(
+                    fld_fwd.field_components, select_adjoint_freqs, component_indicator="H"
+                )
+                H_adj_chunk = _slice_field_data(
+                    fld_adj.field_components, select_adjoint_freqs, component_indicator="H"
+                )
 
             # slice epsilon arrays
             eps_in_chunk = eps_in.sel(f=select_adjoint_freqs)
@@ -1169,19 +1202,24 @@ def postprocess_adj(
                 paths=structure_paths,
                 E_der_map=E_der_map_chunk,
                 D_der_map=D_der_map_chunk,
+                H_der_map=H_der_map_chunk,
                 E_fwd=E_fwd_chunk,
                 E_adj=E_adj_chunk,
                 D_fwd=D_fwd_chunk,
                 D_adj=D_adj_chunk,
+                H_fwd=H_fwd_chunk,
+                H_adj=H_adj_chunk,
                 eps_data=eps_data_chunk,
                 eps_in=eps_in_chunk,
                 eps_out=eps_out_chunk,
                 eps_background=eps_background_chunk,
-                frequencies=adjoint_frequencies[freq_slice],  # only chunk frequencies
+                frequencies=select_adjoint_freqs,  # only chunk frequencies
                 eps_no_structure=eps_no_structure_chunk,
                 eps_inf_structure=eps_inf_structure_chunk,
                 bounds=struct_bounds,
                 bounds_intersect=bounds_intersect,
+                simulation_bounds=sim_data_orig.simulation.bounds,
+                is_medium_pec=structure.medium.is_pec,
             )
 
             # compute derivatives for chunk

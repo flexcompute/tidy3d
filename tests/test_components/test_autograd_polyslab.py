@@ -96,6 +96,7 @@ class DummyDI:
         axis: int,
         coeffs: dict[str, float],
         bounds_intersect: Optional[tuple[tuple[float, ...], tuple[float, ...]]] = None,
+        simulation_bounds: Optional[tuple[tuple[float, ...], tuple[float, ...]]] = None,
     ) -> None:
         self.paths = paths
         self.axis = axis
@@ -111,6 +112,12 @@ class DummyDI:
             bounds_intersect
             if bounds_intersect is not None
             else ((-1e3, -1e3, -1e3), (1e3, 1e3, 1e3))
+        )
+
+        self.simulation_bounds = (
+            simulation_bounds
+            if simulation_bounds is not None
+            else ((-2e3, -2e3, -2e3), (2e3, 2e3, 2e3))
         )
 
     adaptive_vjp_spacing = DerivativeInfo.adaptive_vjp_spacing
@@ -234,6 +241,7 @@ class TestPolySlab2DInPlane:
             axis=self.AXIS,
             coeffs=COEFFS,
             bounds_intersect=((-1e3, -1e3, z_mid), (1e3, 1e3, z_mid)),
+            simulation_bounds=((-2e3, -2e3, z_mid - 1e3), (2e3, 2e3, z_mid + 1e3)),
         )
         self.results = self.slab._compute_derivatives(self.di)
         self.z_mid = z_mid
@@ -304,6 +312,7 @@ class TestPolySlab2DCrossSection:
             axis=cls.AXIS,
             coeffs=COEFFS,
             bounds_intersect=(sim_min, sim_max),
+            simulation_bounds=(sim_min, sim_max),
         )
         cls.results = cls.slab._compute_derivatives(cls.di)
 

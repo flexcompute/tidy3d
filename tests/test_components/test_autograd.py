@@ -1621,6 +1621,7 @@ def test_pole_residue(monkeypatch):
             [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
 
     grads_computed = pr._compute_derivatives(derivative_info=info)
@@ -1662,6 +1663,7 @@ def test_adaptive_spacing(eps_real):
         eps_no_structure={},
         eps_inf_structure={},
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
 
     with AssertLogLevel("WARNING", contains_str="Based on the material, the adaptive spacing"):
@@ -1691,6 +1693,7 @@ def test_cylinder_discretization(eps_real):
         eps_no_structure={},
         eps_inf_structure={},
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
 
     with AssertLogLevel(
@@ -1771,6 +1774,7 @@ def test_custom_pole_residue(monkeypatch):
             [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
         ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
 
     grads_computed = pr._compute_derivatives(derivative_info=info)

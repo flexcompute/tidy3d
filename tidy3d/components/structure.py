@@ -321,11 +321,15 @@ class Structure(AbstractStructure):
         else:
             interval_space = AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY
 
+        field_components_for_adjoint = [f"E{dim}" for dim in "xyz"]
+        if self.medium.is_pec:
+            field_components_for_adjoint += [f"H{dim}" for dim in "xyz"]
+
         mnt_fld = FieldMonitor(
             size=size,
             center=center,
             freqs=freqs,
-            fields=("Ex", "Ey", "Ez"),
+            fields=field_components_for_adjoint,
             name=self._get_monitor_name(index=index, data_type="fld"),
             interval_space=interval_space,
             colocate=False,
