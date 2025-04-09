@@ -3,6 +3,7 @@
 import numpy as np
 import pydantic.v1 as pydantic
 
+from ..constants import fp_eps
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
@@ -459,8 +460,8 @@ def validate_mode_plane_radius(mode_spec: ModeSpec, plane: Box, msg_prefix: str 
     _, plane_axs = plane.pop_axis([0, 1, 2], plane.size.index(0.0))
     radial_ax = plane_axs[(mode_spec.bend_axis + 1) % 2]
 
-    if np.abs(mode_spec.bend_radius) < plane.size[radial_ax] / 2:
+    if not (np.abs(mode_spec.bend_radius) > plane.size[radial_ax] / 2 + fp_eps):
         raise ValueError(
-            f"{msg_prefix} bend radius is smaller than half the mode plane size "
-            "along the radial axis, which can produce wrong results."
+            f"{msg_prefix} bend radius must be larger than half the mode plane size "
+            "along the radial axis to avoid wrong results."
         )

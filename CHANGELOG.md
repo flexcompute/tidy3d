@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The `bend_radius` for a mode solve must be strictly larger than half the mode plane size (previously it could be equal).
+
 ## [2.8.2] - 2025-04-09
 
 ### Added
