@@ -1,7 +1,6 @@
 """Tests the simulation and its validators."""
 
-import shutil
-from pathlib import Path
+import uuid
 
 import gdstk
 import matplotlib.pyplot as plt
@@ -9,7 +8,7 @@ import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
-from matplotlib.testing.decorators import check_figures_equal
+from matplotlib.testing.compare import compare_images
 from tidy3d.components import simulation
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
 from tidy3d.components.simulation import MAX_NUM_SOURCES
@@ -744,12 +743,6 @@ class TestAnisotropicPlotting:
 
         return td.CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
 
-    @pytest.fixture(scope="module", autouse=True)
-    def cleanup_figures(self):
-        yield  # Run tests first
-        fig_dir = Path().resolve() / "result_images"
-        shutil.rmtree(fig_dir, ignore_errors=False)
-
     def make_sim(self, medium):
         L = 5
 
@@ -771,6 +764,25 @@ class TestAnisotropicPlotting:
             sources=[source],
             run_time=1e-12,
         )
+
+    def compare_eps_images(self, tmp_path, eps_comp1, eps_comp2, expected, medium):
+        """Asserts that two epsilon component plots are different"""
+        sim = self.make_sim(medium)
+
+        # plot and save epsilon component 1
+        fname1 = tmp_path / (str(uuid.uuid4()) + ".png")
+        f1, ax1 = plt.subplots()
+        sim.plot_eps(x=0, eps_component=eps_comp1, ax=ax1)
+        f1.savefig(fname1)
+
+        # plot and save epsilon component 2
+        fname2 = tmp_path / (str(uuid.uuid4()) + ".png")
+        f2, ax2 = plt.subplots()
+        sim.plot_eps(x=0, eps_component=eps_comp2, ax=ax2)
+        f2.savefig(fname2)
+
+        # compare_images only returns None if the two images are the same
+        assert (compare_images(fname1, fname2, tol=0.001) is None) == expected
 
     @pytest.mark.parametrize("eps_comp", ("xyz", "123", "", 5))
     def test_bad_eps_arg(self, eps_comp):
@@ -801,22 +813,16 @@ class TestAnisotropicPlotting:
             self.make_sim(self.medium_diag).plot_eps(x=0, eps_component=eps_comp)
 
     @pytest.mark.parametrize(
-        "eps_comp1,eps_comp2",
+        "eps_comp1,eps_comp2,expected",
         (
-            pytest.param("xx", "yy", marks=pytest.mark.xfail),
-            pytest.param("xx", "zz", marks=pytest.mark.xfail),
-            pytest.param("yy", "zz", marks=pytest.mark.xfail),
+            pytest.param("xx", "yy", False),
+            pytest.param("xx", "zz", False),
+            pytest.param("yy", "zz", False),
         ),
     )
-    @check_figures_equal(extensions=("png",))
-    def test_plot_anisotropic_medium_diff(self, fig_test, fig_ref, eps_comp1, eps_comp2):
+    def test_plot_anisotropic_medium_diff(self, tmp_path, eps_comp1, eps_comp2, expected):
         """Tests that the plots of different components of an AnisotropicMedium are actually different."""
-        sim = self.make_sim(self.medium_diag)
-
-        ax1 = fig_test.add_subplot()
-        sim.plot_eps(x=0, eps_component=eps_comp1, ax=ax1)
-        ax2 = fig_ref.add_subplot()
-        sim.plot_eps(x=0, eps_component=eps_comp2, ax=ax2)
+        self.compare_eps_images(tmp_path, eps_comp1, eps_comp2, expected, self.medium_diag)
 
     @pytest.mark.parametrize(
         "eps_comp",
@@ -839,23 +845,15 @@ class TestAnisotropicPlotting:
         for eps_comp2 in allcomps:
             if eps_comp1 == eps_comp2 or eps_comp1[::-1] == eps_comp2:
                 # Same components, or transposed components (eg. xy and yx) should plot the same
-                fullyani_testplot_diff_params.append((eps_comp1, eps_comp2))
+                fullyani_testplot_diff_params.append((eps_comp1, eps_comp2, True))
             else:
                 # All other component pairs should plot differently
-                fullyani_testplot_diff_params.append(
-                    pytest.param(eps_comp1, eps_comp2, marks=pytest.mark.xfail)
-                )
+                fullyani_testplot_diff_params.append(pytest.param(eps_comp1, eps_comp2, False))
 
-    @pytest.mark.parametrize("eps_comp1,eps_comp2", fullyani_testplot_diff_params)
-    @check_figures_equal(extensions=("png",))
-    def test_plot_fully_anisotropic_medium_diff(self, fig_test, fig_ref, eps_comp1, eps_comp2):
+    @pytest.mark.parametrize("eps_comp1,eps_comp2,expected", fullyani_testplot_diff_params)
+    def test_plot_fully_anisotropic_medium_diff(self, tmp_path, eps_comp1, eps_comp2, expected):
         """Tests that the plots of different components of a FullyAnisotropicMedium are actually different."""
-        sim = self.make_sim(self.medium_fullyani)
-
-        ax1 = fig_test.add_subplot()
-        sim.plot_eps(x=0, eps_component=eps_comp1, ax=ax1)
-        ax2 = fig_ref.add_subplot()
-        sim.plot_eps(x=0, eps_component=eps_comp2, ax=ax2)
+        self.compare_eps_images(tmp_path, eps_comp1, eps_comp2, expected, self.medium_fullyani)
 
     @pytest.mark.parametrize(
         "eps_comp",
@@ -880,24 +878,18 @@ class TestAnisotropicPlotting:
             self.make_sim(medium_customani).plot_eps(x=0, eps_component=eps_comp)
 
     @pytest.mark.parametrize(
-        "eps_comp1,eps_comp2",
+        "eps_comp1,eps_comp2,expected",
         (
-            pytest.param("xx", "yy", marks=pytest.mark.xfail),
-            pytest.param("xx", "zz", marks=pytest.mark.xfail),
-            pytest.param("yy", "zz", marks=pytest.mark.xfail),
+            pytest.param("xx", "yy", False),
+            pytest.param("xx", "zz", False),
+            pytest.param("yy", "zz", False),
         ),
     )
-    @check_figures_equal(extensions=("png",))
     def test_plot_customanisotropic_medium_diff(
-        self, fig_test, fig_ref, eps_comp1, eps_comp2, medium_customani
+        self, tmp_path, eps_comp1, eps_comp2, expected, medium_customani
     ):
-        """Tests that the plots of different components of an AnisotropicMedium are actually different."""
-        sim = self.make_sim(medium_customani)
-
-        ax1 = fig_test.add_subplot()
-        sim.plot_eps(x=0, eps_component=eps_comp1, ax=ax1)
-        ax2 = fig_ref.add_subplot()
-        sim.plot_eps(x=0, eps_component=eps_comp2, ax=ax2)
+        """Tests that the plots of different components of a CustomAnisotropicMedium are actually different."""
+        self.compare_eps_images(tmp_path, eps_comp1, eps_comp2, expected, medium_customani)
 
 
 def test_plot():

@@ -19,9 +19,9 @@ def rng():
     return np.random.default_rng(seed)
 
 
-@pytest.fixture(autouse=True, scope="module")
+@pytest.fixture(autouse=True)
 def close_matplotlib():
-    plt.close()
+    plt.close("all")
 
 
 @pytest.fixture(autouse=True, scope="module")
