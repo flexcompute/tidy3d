@@ -6,6 +6,19 @@ Grid Discretization
 Overview
 --------
 
+Grid discretization lies at the heart of the FDTD algorithm. The simulation domain is rendered onto a finite grid of spatial points --- including material domains and boundary conditions. From the user's perspective, there are two general categories of length scales to be aware of when it comes to defining the grid:
+
+* Physical length scales: this primarily consists of the EM wavelength in the local medium, but depending on the application, could include other quantities like mode propagation and attenuation lengths, metallic skin depth etc.
+
+* Geometric length scales: this refers to the feature sizes of the structure under simulation, such as minimum dimensions, radii of curvature, sharp points etc.
+
+To obtain good results, the minimum grid size should be small enough to resolve length scales in both of the above categories.
+
+It is also important to keep in mind the CFL condition, which relates the maximum time step to the minimum grid size in the simulation. When using a very small grid size, the time step will also have to decrease, which can lead to a dramatic increase in simulation cost. Thus, the user should also ensure that they are not using an overly fine grid for their simulation.
+
+To learn how to provide a grid specification in a Tidy3D simulation, see the `Grid Specification`_ section below. The following sections cover more advanced topics, such as implementing additional grid `refinement`_, `subpixel averaging`_, and other `utility classes`_.
+
+
 .. seealso::
 
    For an introduction to FDTD discretization and related topics, please see the following FDTD101 lectures:
@@ -30,6 +43,41 @@ Grid Specification
    tidy3d.CustomGrid
    tidy3d.CustomGridBoundaries
 
+The ``GridSpec`` object in Tidy3D contains grid definition along all three spatial axes. Each spatial axis accepts one of the basic grid types, ``AutoGrid``, ``UniformGrid``, ``QuasiUniformGrid``, or ``CustomGrid``. A typical Tidy3D ``Simulation`` object contains one instance of ``GridSpec``, which in turn contains three instances of the grid types, which specify the grid along that particular axis:
+
+.. code-block:: python
+
+   my_grid_spec = GridSpec(
+       grid_x = AutoGrid(min_steps_per_wvl=16),
+       grid_y = UniformGrid(dl=0.1),
+       grid_z = QuasiUniformGrid(dl=0.1),
+       wavelength=1.55
+   )
+
+Notice in the above example that we also defined the free-space wavelength, which is necessary for the ``AutoGrid`` grid type. (Note that setting ``wavelength`` in this manner is optional if there is at least one source in the simulation.)
+
+If the grid specification is the same along all three spatial axes, the user can alternatively define it inline like so:
+
+.. code-block:: python
+
+   # auto grid with 16 grid points per wavelength
+   my_autogrid_spec = GridSpec.auto(wavelength=1.55, min_steps_per_wvl=16)
+
+   # uniform grid with spacing of 0.1 microns
+   my_uniform_grid_spec = GridSpec.uniform(dl=0.1)
+
+   # quasi-uniform grid with spacing of 0.1 microns
+   my_quasiuniform_grid_spec = GridSpec.quasiuniform(dl=0.1)
+
+Please find short descriptions of each grid type below. For more information, please refer to their respective documentation page.
+
+* The ``AutoGrid`` grid type automatically sets the grid size based on the EM wavelength in the local medium and user-specified minimum steps per wavelength. This is the default option if no grid specification is provided.
+
+* The ``UniformGrid`` grid type creates a uniform grid with fixed spacing ``dl``.
+
+* The ``QuasiUniformGrid`` grid type behaves similarly to the ``UniformGrid``, but respects snapping for structure boundaries.
+
+* The ``CustomGrid`` grid type allows the user to manually specify grid point positions. 
 
 .. seealso::
 
@@ -51,6 +99,56 @@ Refinement
    tidy3d.GridRefinement
    tidy3d.CornerFinderSpec
 
+For certain applications, the user may wish to apply additional grid refinement in specific regions, layers, or points in the simulation domain. The ``GridSpec`` class accepts the following optional parameters:
+
+* ``override_structures``: The user provides a list of mesh override structures to apply additional refinement to a specific region
+* ``snapping_points``: The user specifies a list of points that enforce grid boundaries to pass through them
+* ``layer_refinement_specs``: The user specifies additional refinement within a layered region (e.g. a metallic trace plane)
+
+For the ``override_structures`` option, the user may provide a list consisting of  ``Structure`` instances and/or ``MeshOverrideStructure`` instances. In the former case, the provided ``Structure`` is used as a fictitious material with artifically higher refractive index to enforce higher grid resolution:
+
+.. code-block:: python
+
+   # fictitous structure used for grid refinement
+   my_refinement_box = Structure(
+       geometry=Box(center=(0,0,0), size=(1,1,1)),
+       medium=Medium(permittivity=16),
+   )
+
+   # apply the refinement structure to the grid spec
+   my_refined_grid_spec = GridSpec.auto(
+       wavelength=1.55,
+       min_steps_per_wvl=16,
+       override_structures=[my_refinement_box]
+   )
+
+In the example above, the ``AutoGrid`` would generate a grid as though the region within ``my_refinement_box`` had ``permittivity=16``, when it could be much lower in the actual structure. Note that ``my_refinement_box`` is not actually present in the simulation and is only taken into account for grid generation purposes.
+
+The second method is to define a ``MeshOverrideStructure``. This allows the user to specify step sizes along each direction:
+
+.. code-block:: python
+
+   # a mesh override structure that enforces step size dx=0.1 and dz=0.2
+   my_mesh_override_structure = MeshOverrideStructure(
+       geometry=Box(center=(0,0,0), size=(1,1,1)),
+       dl=(0.1, None, 0.2),
+   )
+
+The ``LayerRefinementSpec`` class allows the user to specify added refinement to a layered region (e.g. a metallic trace plane). Within the layer, the grid can be snapped to structure corners. Along the layer normal axis, the grid can also be snapped to the layer bounds.
+
+.. code-block:: python
+
+   my_layer_refinement_spec = LayerRefinementSpec(
+       axis=2,
+       center=(0, 0, 0),
+       size=(3, 2, 0.1),
+       min_steps_along_axis=4,  # minimum 4 grid points along the layer normal axis
+       bounds_snapping='bounds',  # snap grid boundaries to upper and lower layer boundaries
+       corner_snapping=True,  # snap grid points to structure corners
+   )
+
+For more detailed usage examples of ``LayerRefinementSpec``, please refer to the learning center article linked below.       
+
 .. seealso::
 
    For more detail explanation and examples, please see the following learning center resources:
@@ -68,6 +166,21 @@ Subpixel Averaging
    :template: module.rst
 
    tidy3d.SubpixelSpec
+
+Subpixel averaging is used to accurately resolve material boundaries which do not line up with the grid boundaries. Under normal circumstances, the default settings are appropriate and the user does not need to provide a custom ``SubpixelSpec``.
+
+More advanced users may opt to define a custom ``SubpixelSpec``. The custom ``SubpixelSpec`` instance is then passed into the ``Simulation`` object as a parameter.
+
+.. code-block:: python
+
+   my_custom_subpixel_spec = SubpixelSpec(
+       dielectric=PolarizedAveraging(),
+       metal=Staircasing(),
+       pec=PECConformal(),
+       lossy_metal=SurfaceImpedance(),
+   )
+
+In the example above, the chosen method of subpixel averaging is specified for each material type. For more details on each subpixel averaging method, please refer to their respective documentation pages below. 
 
 .. autosummary::
    :toctree: _autosummary/
@@ -101,6 +214,8 @@ Utility Classes
    tidy3d.FieldGrid
    tidy3d.YeeGrid
    tidy3d.Grid
+
+These classes contain information of the grid and related quantities. Advanced users may refer to their respective documentation pages to find specific attributes and methods. 
 
 ~~~~
 

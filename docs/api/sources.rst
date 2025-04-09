@@ -6,6 +6,21 @@ Sources
 Overview
 --------
 
+Sources in Tidy3D provide the necessary excitation to investigate the EM behaviour of the structures under simulation. The type of source used in a simulation tends to very application-specific. For instance, a ``PlaneWave`` source may be used for a unit cell simulation in a metalens; whereas a ``ModeSource`` would be more appropriate for a waveguide crossing problem.
+
+The following sections on this page describe the respective source types available in Tidy3D:
+
+* `Dipole and Uniform Current`_
+* `Plane Wave`_
+* `Gaussian Beam`_
+* `Mode Source`_
+* `Total-Field/Scattered-Field (TFSF)`_
+* `User-defined`_
+
+In addition to the spatial distribution of the source, it is also important to define the source time-dependence. This is covered in the following section:
+
+* `Source Time Dependence`_
+
 ~~~~
 
 Source Time Dependence
@@ -18,6 +33,24 @@ Source Time Dependence
    tidy3d.GaussianPulse
    tidy3d.ContinuousWave
    tidy3d.CustomSourceTime
+
+Each source requires the ``source_time`` parameter to be defined, which provides the time-dependence of the source.
+
+.. code-block:: python
+
+   # frequency information
+   my_center_frequency = 200e12  # center frequency in Hz
+   my_bandwidth = 20e12  # bandwidth
+   
+   # my source time
+   my_source_time = GaussianPulse(freq0=my_center_frequency, fwidth=my_bandwidth)
+
+   # a point dipole source
+   my_dipole_source = PointDipole(source_time=my_source_time)
+
+In the example above, we defined a ``PointSource`` with a modulated Gaussian pulse time-dependence. This is well-suited for simulations with a specific center frequency and bandwidth, and thus is by far the most common type of time-dependence used.
+
+For specific applications, the user may wish to define a ``ContinuousWave`` excitation or even a ``CustomSourceTime`` function. Please refer to their respective documentation page for more details.
 
 ~~~~
 
