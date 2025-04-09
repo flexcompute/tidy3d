@@ -40,7 +40,7 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
     )
 
     ramp_up_iters: pd.PositiveInt = pd.Field(
-        default=5,
+        default=1,
         title="Ramp-up iterations.",
         description="In order to help in start up, quantities such as doping "
         "are ramped up until they reach their specified value. This parameter "
