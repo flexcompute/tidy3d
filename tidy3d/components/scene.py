@@ -1800,8 +1800,8 @@ class Scene(Tidy3dBaseModel):
                         if doping > limits[1]:
                             limits[1] = doping
                     if isinstance(doping, SpatialDataArray):
-                        min_value = np, min(doping.data)
-                        max_value = np.max(doping.data)
+                        min_value = np.min(doping.data.flatten())
+                        max_value = np.max(doping.data.flatten())
                         if min_value < limits[0]:
                             limits[0] = min_value
                         if max_value > limits[1]:
