@@ -86,9 +86,15 @@ class Source(Box, AbstractSource, ABC):
         if self._dir_vector is not None:
             bend_radius = None
             bend_axis = None
-            if hasattr(self, "mode_spec"):
+            if hasattr(self, "mode_spec") and self.mode_spec.bend_radius is not None:
                 bend_radius = self.mode_spec.bend_radius
                 bend_axis = self._bend_axis
+                sign = 1 if self.direction == "+" else -1
+                # Curvature has to be reversed because of ploting coordinates
+                if (self.size.index(0), bend_axis) in [(1, 2), (2, 0), (2, 1)]:
+                    bend_radius *= -sign
+                else:
+                    bend_radius *= sign
 
             ax = self._plot_arrow(
                 x=x,
