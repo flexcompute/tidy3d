@@ -11,6 +11,7 @@ from tidy3d.components.medium import AbstractMedium
 from tidy3d.components.tcad.doping import DopingBoxType
 from tidy3d.components.tcad.types import (
     BandGapNarrowingModelType,
+    EffectiveDOSModelType,
     MobilityModelType,
     RecombinationModelType,
 )
@@ -256,14 +257,14 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     """
 
-    N_c: pd.PositiveFloat = pd.Field(
+    N_c: Union[pd.PositiveFloat, EffectiveDOSModelType] = pd.Field(
         ...,
         title="Effective density of electron states",
         description=r"$N_c$ Effective density of states in the conduction band.",
         units="cm^(-3)",
     )
 
-    N_v: pd.PositiveFloat = pd.Field(
+    N_v: Union[pd.PositiveFloat, EffectiveDOSModelType] = pd.Field(
         ...,
         title="Effective density of hole states",
         description=r"$N_v$ Effective density of states in the valence band.",
