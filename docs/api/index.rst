@@ -13,11 +13,9 @@ API |:computer:|
     rf_material_library
     boundary_conditions
     discretization
-    subpixel_averaging
     sources
     analytic_beams
     monitors
-    mode
     field_projector
     lumped_elements
     output_data
@@ -46,10 +44,8 @@ API |:computer:|
 .. include:: /api/monitors.rst
 .. include:: /api/output_data.rst
 .. include:: /api/analytic_beams.rst
-.. include:: /api/mode.rst
 .. include:: /api/field_projector.rst
 .. include:: /api/lumped_elements.rst
-.. include:: /api/subpixel_averaging.rst
 .. include:: /api/logging.rst
 .. include:: /api/heat/index.rst
 .. include:: /api/charge/index.rst
