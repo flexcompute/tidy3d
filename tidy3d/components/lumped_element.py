@@ -203,6 +203,7 @@ class RectangularLumpedElement(LumpedElement, Box):
                 geometry=Box(center=self.center, size=override_size),
                 dl=(dl, dl, dl),
                 shadow=False,
+                priority=-1,
             )
         ]
 
@@ -408,6 +409,7 @@ class CoaxialLumpedResistor(LumpedElement):
                 geometry=Box(center=self.center, size=override_size),
                 dl=override_dl,
                 shadow=False,
+                priority=-1,
             )
         ]
 

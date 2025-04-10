@@ -994,10 +994,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         plot_params[0] = plot_params[0].include_kwargs(edgecolor=kwargs["colors_internal"])
 
         if self.grid_spec.auto_grid_used:
+            # Internal and external override structures are visualized with different colors,
+            # so let's not sort them together.
             all_override_structures = [
-                self.internal_override_structures,
-                self.grid_spec.external_override_structures,
+                Structure._sort_structures(structures, self.scene.structure_priority_mode)
+                for structures in [
+                    self.internal_override_structures,
+                    self.grid_spec.external_override_structures,
+                ]
             ]
+
             for structures, plot_param in zip(all_override_structures, plot_params):
                 for structure in structures:
                     bounds = list(zip(*structure.geometry.bounds))
@@ -1229,6 +1235,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             internal_snapping_points=self.internal_snapping_points,
             internal_override_structures=self.internal_override_structures,
             boundary_types=boundary_types,
+            structure_priority_mode=self.scene.structure_priority_mode,
         )
 
         # This would AutoGrid the in-plane directions of the 2D materials
@@ -1268,7 +1275,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     @cached_property
     def static_structures(self) -> list[Structure]:
         """Structures in simulation with all autograd tracers removed."""
-        return [structure.to_static() for structure in self.structures]
+        return [structure.to_static() for structure in self.scene.sorted_structures]
 
     @cached_property
     def num_cells(self) -> int:
@@ -1569,7 +1576,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             not any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
             and not self.lumped_elements
         ):
-            return self.structures
+            return self.scene.sorted_structures
 
         def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> List[float]:
             """Get grid size around the 2D material."""
@@ -4538,7 +4545,7 @@ class Simulation(AbstractYeeGridSimulation):
         clip = gdstk.rectangle(bmin, bmax)
 
         polygons = []
-        for structure in self.structures:
+        for structure in self.scene.sorted_structures:
             gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
             for polygon in structure.to_gdstk(
                 x=x,
@@ -5009,7 +5016,7 @@ class Simulation(AbstractYeeGridSimulation):
         ]
         datasets_geometry = []
 
-        for struct in self.structures:
+        for struct in self.scene.sorted_structures:
             for geometry in traverse_geometries(struct.geometry):
                 if isinstance(geometry, TriangleMesh):
                     datasets_geometry += [geometry.mesh_dataset]

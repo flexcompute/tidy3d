@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pathlib
 from collections import defaultdict
-from typing import Optional, Tuple, Union
+from functools import cmp_to_key
+from typing import List, Optional, Tuple, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -24,9 +25,9 @@ from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
 from .material.types import StructureMediumType
-from .medium import AbstractCustomMedium, CustomMedium, Medium, Medium2D
+from .medium import AbstractCustomMedium, CustomMedium, LossyMetalMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
-from .types import TYPE_TAG_STR, Ax, Axis
+from .types import TYPE_TAG_STR, Ax, Axis, PriorityMode
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
 
@@ -69,6 +70,16 @@ class AbstractStructure(Tidy3dBaseModel):
         "``Simulation`` by default to compute the shape derivatives.",
     )
 
+    priority: int = pydantic.Field(
+        None,
+        title="Priority",
+        description="Priority of the structure applied in structure overlapping region. "
+        "The material property in the overlapping region is dictated by the structure "
+        "of higher priority. For structures of equal priority, "
+        "the structure added later to the structure list takes precedence. When `priority` is None, "
+        "the value is automatically assigned based on `structure_priority_mode` in the `Simulation`.",
+    )
+
     @pydantic.root_validator(skip_on_failure=True)
     def _handle_background_mediums(cls, values):
         """Handle background medium combinations, including deprecation."""
@@ -103,6 +114,27 @@ class AbstractStructure(Tidy3dBaseModel):
         """Prevents the creation of slanted polyslabs rotated out of plane."""
         validate_no_transformed_polyslabs(val)
         return val
+
+    def _priority(self, priority_mode: PriorityMode) -> int:
+        """Priority of this structure. The priority value is set automatically based on `priority_modes,
+        if its original value is `None`.
+        """
+        if self.priority is not None:
+            return self.priority
+        return 0
+
+    @staticmethod
+    def _sort_structures(
+        structures: List[StructureType], structure_priority_mode: PriorityMode
+    ) -> List[StructureType]:
+        """Sort structure lists based on their priority values in ascending order."""
+
+        def structure_comparator(struct1, struct2):
+            return struct1._priority(structure_priority_mode) - struct2._priority(
+                structure_priority_mode
+            )
+
+        return sorted(structures, key=cmp_to_key(structure_comparator))
 
     @property
     def viz_spec(self):
@@ -182,6 +214,20 @@ class Structure(AbstractStructure):
         description="Defines the electromagnetic properties of the structure's medium.",
         discriminator=TYPE_TAG_STR,
     )
+
+    def _priority(self, priority_mode: PriorityMode) -> int:
+        """Priority of this structure. The priority value is set automatically based on `priority_modes,
+        if its original value is `None`.
+        """
+        if self.priority is not None:
+            return self.priority
+
+        if priority_mode == "conductor":
+            if self.medium.is_pec:
+                return 100
+            if isinstance(self.medium, LossyMetalMedium):
+                return 90
+        return 0
 
     @property
     def viz_spec(self):
@@ -613,6 +659,13 @@ class MeshOverrideStructure(AbstractStructure):
         title="Grid Size",
         description="Grid size along x, y, z directions.",
         units=MICROMETER,
+    )
+
+    priority: int = pydantic.Field(
+        0,
+        title="Priority",
+        description="Priority of the structure applied in mesh override structure overlapping region. "
+        "The priority of internal override structures is ``-1``.",
     )
 
     enforce: bool = pydantic.Field(

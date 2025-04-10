@@ -307,3 +307,48 @@ def test_max_geometry_validation():
     ]
     with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
         _ = td.Scene(structures=not_fine)
+
+
+def test_structure_manual_priority():
+    """make sure structure is properly orderd based on the priority settings."""
+
+    box = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+    structures = []
+    priorities = [2, 4, -1, -4, 0]
+    for priority in priorities:
+        structures.append(box.updated_copy(priority=priority))
+    scene = td.Scene(
+        structures=structures,
+    )
+
+    sorted_priorities = [s.priority for s in scene.sorted_structures]
+    assert all(np.diff(sorted_priorities) >= 0)
+
+
+def test_structure_automatic_priority():
+    """make sure metallic structure has the highest priority in `conductor` mode."""
+
+    box = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+    box_pec = box.updated_copy(medium=td.PEC)
+    box_lossymetal = box.updated_copy(
+        medium=td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 2e14))
+    )
+    structures = [box_pec, box_lossymetal, box]
+    scene = td.Scene(
+        structures=structures,
+        structure_priority_mode="equal",
+    )
+
+    # in equal mode, the order is preserved
+    scene.sorted_structures == structures
+
+    # conductor mode
+    scene = scene.updated_copy(structure_priority_mode="conductor")
+    assert scene.sorted_structures[-1].medium == td.PEC
+    assert isinstance(scene.sorted_structures[-2].medium, td.LossyMetalMedium)
