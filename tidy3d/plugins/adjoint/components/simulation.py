@@ -419,7 +419,9 @@ class JaxSimulation(Simulation, JaxObject):
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
-        all_structures = list(self.structures) + [js.to_structure() for js in self.input_structures]
+        all_structures = list(self.scene.sorted_structures) + [
+            js.to_structure() for js in self.input_structures
+        ]
         all_monitors = (
             list(self.monitors)
             + list(self.output_monitors)

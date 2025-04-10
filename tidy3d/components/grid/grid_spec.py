@@ -22,6 +22,7 @@ from ..types import (
     Axis,
     Coordinate,
     CoordinateOptional,
+    PriorityMode,
     Symmetry,
     annotate_type,
 )
@@ -959,6 +960,7 @@ class GridRefinement(Tidy3dBaseModel):
             dl=dl_list,
             shadow=False,
             drop_outside_sim=drop_outside_sim,
+            priority=-1,
         )
 
 
@@ -1518,6 +1520,7 @@ class LayerRefinementSpec(Box):
                     dl=self._unpop_axis(ax_coord=dl, plane_coord=None),
                     shadow=False,
                     drop_outside_sim=self.refinement_inside_sim_only,
+                    priority=-1,
                 )
             )
 
@@ -2293,10 +2296,11 @@ class GridSpec(Tidy3dBaseModel):
         wavelength: pd.PositiveFloat,
         sim_size: Tuple[float, 3],
         lumped_elements: List[LumpedElementType],
+        structure_priority_mode: PriorityMode = "equal",
         internal_override_structures: List[MeshOverrideStructure] = None,
     ) -> List[StructureType]:
-        """Internal and external mesh override structures. External override structures take higher priority.
-        So far, internal override structures all come from `layer_refinement_specs`.
+        """Internal and external mesh override structures sorted based on their priority. By default,
+        the priority of internal override structures is -1, and 0 for external ones.
 
         Parameters
         ----------
@@ -2308,22 +2312,23 @@ class GridSpec(Tidy3dBaseModel):
             Simulation domain size.
         lumped_elements : List[LumpedElementType]
             List of lumped elements.
+        structure_priority_mode : PriorityMode
+            Structure priority setting.
         internal_override_structures : List[MeshOverrideStructure]
             If `None`, recomputes internal override structures.
 
         Returns
         -------
         List[StructureType]
-            List of override structures.
+            List of sorted override structures.
         """
 
         if internal_override_structures is None:
-            return (
-                self.internal_override_structures(structures, wavelength, sim_size, lumped_elements)
-                + self.external_override_structures
+            internal_override_structures = self.internal_override_structures(
+                structures, wavelength, sim_size, lumped_elements
             )
-
-        return internal_override_structures + self.external_override_structures
+        all_structures = internal_override_structures + self.external_override_structures
+        return Structure._sort_structures(all_structures, structure_priority_mode)
 
     def _min_vacuum_dl_in_autogrid(self, wavelength: float, sim_size: Tuple[float, 3]) -> float:
         """Compute grid step size in vacuum for Autogrd. If AutoGrid is applied along more than 1 dimension,
@@ -2398,6 +2403,7 @@ class GridSpec(Tidy3dBaseModel):
             [None, None],
             [None, None],
         ],
+        structure_priority_mode: PriorityMode = "equal",
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
@@ -2425,6 +2431,8 @@ class GridSpec(Tidy3dBaseModel):
         boundary_types : Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [[None, None], [None, None], [None, None]]
             Type of boundary conditions along each dimension: "pec/pmc", "periodic", or
             None for any other. This is relevant only for gap meshing.
+        structure_priority_mode : PriorityMode
+            Structure priority setting.
 
         Returns
         -------
@@ -2441,6 +2449,7 @@ class GridSpec(Tidy3dBaseModel):
             lumped_elements=lumped_elements,
             internal_override_structures=internal_override_structures,
             internal_snapping_points=internal_snapping_points,
+            structure_priority_mode=structure_priority_mode,
         )
 
         return grid
@@ -2460,6 +2469,7 @@ class GridSpec(Tidy3dBaseModel):
             [None, None],
             [None, None],
         ],
+        structure_priority_mode: PriorityMode = "equal",
     ) -> Tuple[Grid, List[CoordinateOptional]]:
         """Make the entire simulation grid based on some simulation parameters.
         Also return snappiung point resulted from iterative gap meshing.
@@ -2488,6 +2498,8 @@ class GridSpec(Tidy3dBaseModel):
         boundary_types : Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [[None, None], [None, None], [None, None]]
             Type of boundary conditions along each dimension: "pec/pmc", "periodic", or
             None for any other. This is relevant only for gap meshing.
+        structure_priority_mode : PriorityMode
+            Structure priority setting.
 
         Returns
         -------
@@ -2504,6 +2516,7 @@ class GridSpec(Tidy3dBaseModel):
             lumped_elements=lumped_elements,
             internal_override_structures=internal_override_structures,
             internal_snapping_points=internal_snapping_points,
+            structure_priority_mode=structure_priority_mode,
         )
 
         sim_geometry = structures[0].geometry
@@ -2549,6 +2562,7 @@ class GridSpec(Tidy3dBaseModel):
                     internal_override_structures=internal_override_structures,
                     internal_snapping_points=snapping_lines + internal_snapping_points,
                     dl_min_from_gaps=0.45 * min_gap_width,
+                    structure_priority_mode=structure_priority_mode,
                 )
 
                 same = old_grid == new_grid
@@ -2575,6 +2589,7 @@ class GridSpec(Tidy3dBaseModel):
         internal_override_structures: List[MeshOverrideStructure] = None,
         internal_snapping_points: List[CoordinateOptional] = None,
         dl_min_from_gaps: pd.PositiveFloat = inf,
+        structure_priority_mode: PriorityMode = "equal",
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
@@ -2601,7 +2616,8 @@ class GridSpec(Tidy3dBaseModel):
             If `None`, recomputes internal snapping points.
         dl_min_from_gaps : pd.PositiveFloat
             Minimal grid size computed based on autodetected gaps.
-
+        structure_priority_mode : PriorityMode
+            Structure priority setting.
 
         Returns
         -------
@@ -2664,6 +2680,7 @@ class GridSpec(Tidy3dBaseModel):
             wavelength,
             sim_size,
             lumped_elements,
+            structure_priority_mode,
             internal_override_structures,
         )
 

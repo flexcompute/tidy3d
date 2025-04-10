@@ -54,6 +54,7 @@ from .types import (
     InterpMethod,
     LengthUnit,
     PermittivityComponent,
+    PriorityMode,
     Shapely,
     Size,
 )
@@ -106,8 +107,20 @@ class Scene(Tidy3dBaseModel):
         (),
         title="Structures",
         description="Tuple of structures present in scene. "
-        "Note: Structures defined later in this list override the "
-        "simulation material properties in regions of spatial overlap.",
+        "Note: In regions of spatial overlap between structures, "
+        "material properties are dictated by structure of higher priority. "
+        "The priority for structure of `priority=None` is set automatically "
+        "based on `structure_priority_mode`. For structures of equal priority, "
+        "the structure added later to the structure list takes precedence.",
+    )
+
+    structure_priority_mode: PriorityMode = pd.Field(
+        "equal",
+        title="Structure Priority Setting",
+        description="This field only affects structures of `priority=None`. "
+        "If `equal`, the priority of those structures is set to 0; if `conductor`, "
+        "the priority of structures made of `LossyMetalMedium` is set to 90, "
+        "`PECMedium` to 100, and others to 0.",
     )
 
     plot_length_units: Optional[LengthUnit] = pd.Field(
@@ -246,6 +259,17 @@ class Scene(Tidy3dBaseModel):
         return {medium: index for index, medium in enumerate(self.mediums)}
 
     @cached_property
+    def sorted_structures(self) -> List[Structure]:
+        """Returns a list of sorted structures based on their priority.In the sorted list,
+        latter added structures take higher priority.
+
+        Returns
+        -------
+        List[:class:`.Structure`]
+        """
+        return Structure._sort_structures(self.structures, self.structure_priority_mode)
+
+    @cached_property
     def background_structure(self) -> Structure:
         """Returns structure representing the background of the :class:`.Scene`."""
         geometry = Box(size=(inf, inf, inf))
@@ -254,7 +278,7 @@ class Scene(Tidy3dBaseModel):
     @cached_property
     def all_structures(self) -> List[Structure]:
         """List of all structures in the simulation including the background."""
-        return [self.background_structure] + list(self.structures)
+        return [self.background_structure] + self.sorted_structures
 
     @staticmethod
     def intersecting_media(
@@ -443,7 +467,7 @@ class Scene(Tidy3dBaseModel):
         """
 
         medium_shapes = self._get_structures_2dbox(
-            structures=self.to_static().structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         medium_map = self.medium_map
         for medium, shape in medium_shapes:
@@ -889,7 +913,7 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        structures = self.structures
+        structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -1466,7 +1490,7 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        structures = self.structures
+        structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -1744,7 +1768,7 @@ class Scene(Tidy3dBaseModel):
         """
 
         scene_dict = self.dict()
-        structures = self.structures
+        structures = self.sorted_structures
         array_dict = {
             "temperature": temperature,
             "electron_density": electron_density,
@@ -1795,7 +1819,7 @@ class Scene(Tidy3dBaseModel):
         acceptors_lims = [1e50, -1e50]
         donors_lims = [1e50, -1e50]
 
-        for struct in [self.background_structure] + list(self.structures):
+        for struct in self.all_structures:
             if isinstance(struct.medium.charge, SemiconductorMedium):
                 electric_spec = struct.medium.charge
                 for doping, limits in zip(

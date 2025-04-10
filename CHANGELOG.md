@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `eps_lim` keyword argument to `Simulation.plot_eps()` for manual control over the permittivity color limits.
 - Added `thickness` parameter to `LossyMetalMedium` for computing surface impedance of a thin conductor.
+- `priority` field in `Structure` and `MeshOverrideStructure` for setting the behavior in structure overlapping region. When its value is `None`, the priority is automatically determined based on the material property and simulation's `structure_priority_mode`.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.

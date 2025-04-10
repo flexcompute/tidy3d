@@ -1043,7 +1043,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # get structure list
         structures = [self.simulation_structure]
-        structures += list(self.structures)
+        structures += list(self.scene.sorted_structures)
 
         # construct slicing plane
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1433,7 +1433,7 @@ class HeatChargeSimulation(AbstractSimulation):
         """
 
         # background can't have source, so no need to add background structure
-        structures = self.structures
+        structures = self.scene.sorted_structures
 
         # alpha is None just means plot without any transparency
         if alpha is None:
