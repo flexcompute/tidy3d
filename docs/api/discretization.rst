@@ -54,7 +54,11 @@ The ``GridSpec`` object in Tidy3D contains grid definition along all three spati
        wavelength=1.55
    )
 
-Notice in the above example that we also defined the free-space wavelength, which is necessary for the ``AutoGrid`` grid type. (Note that setting ``wavelength`` in this manner is optional if there is at least one source in the simulation.)
+Notice in the above example that we also defined the free-space wavelength, which is necessary for the ``AutoGrid`` grid type.
+
+.. note::
+
+   Note that setting ``wavelength`` in this manner is optional if there is at least one source in the simulation.
 
 If the grid specification is the same along all three spatial axes, the user can alternatively define it inline like so:
 
