@@ -364,6 +364,11 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         kwargs_alpha = patch_kwargs.get("alpha")
         arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
 
+        bend_radius = self.mode_spec.bend_radius
+        # Curvature has to be reversed because of ploting coordinates
+        if (self.normal_axis, self._bend_axis) in [(1, 2), (2, 0), (2, 1)]:
+            bend_radius = -bend_radius
+
         # and then add an arrow using the direction comuputed from `_dir_arrow`.
         ax = self._plot_arrow(
             x=x,
@@ -371,7 +376,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             z=z,
             ax=ax,
             direction=self._dir_arrow,
-            bend_radius=self.mode_spec.bend_radius,
+            bend_radius=bend_radius,
             bend_axis=self._bend_axis,
             color=ARROW_COLOR_MONITOR,
             alpha=arrow_alpha,

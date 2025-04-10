@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed scaling for adjoint sources when differentiating with respect to `FieldData` to account for the mesh size of the monitor and thus the created source. This aligns adjoint gradient magnitudes with numerical finite difference gradients for field data.
 - Warn when mode solver pml covers a significant portion of the mode plane.
 - TFSF server errors related to the auxiliary plane wave source that would previously happen on the server are now caught upon simulation creation.
+- Opposite arrow curvature for mode sources and monitors with non-zero bendind radius when plotted in the figure's Y axis.
 
 ### Changed
 - `num_freqs` in Gaussian beam type sources limited to 20, which should besufficient for all cases.
