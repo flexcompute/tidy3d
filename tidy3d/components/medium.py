@@ -15,7 +15,6 @@ import autograd.numpy as np
 import numpy as npo
 import pydantic.v1 as pd
 import xarray as xr
-from scipy import signal
 
 from tidy3d.components.material.tcad.heat import ThermalSpecType
 
@@ -3481,6 +3480,11 @@ class PoleResidue(DispersiveMedium):
             ``tuple`` is an array of coefficients representing any direct polynomial term.
 
         """
+
+        try:
+            from scipy import signal
+        except ImportError:
+            raise ImportError("scipy is required to use this method.")
 
         if a.ndim != 1 or np.any(np.iscomplex(a)):
             raise ValidationError(

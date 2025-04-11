@@ -11,8 +11,6 @@ from typing import Dict, List, Tuple, Union
 import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
-from matplotlib.collections import PatchCollection
-from matplotlib.patches import Rectangle
 
 from ...constants import C_0
 from ...exceptions import SetupError, ValidationError
@@ -2315,6 +2313,13 @@ class ModeSolver(Tidy3dBaseModel):
         cls, simulation: Simulation, plane: Box, mode_spec: ModeSpec, ax: Ax = None
     ) -> Ax:
         """Plot the mode plane absorbing boundaries."""
+
+        try:
+            from matplotlib.collections import PatchCollection
+            from matplotlib.patches import Rectangle
+        except ImportError:
+            raise ImportError("matplotlib is required to plot the mode plane absorbing boundaries.")
+
         # Get the mode plane normal axis, center, and limits.
         _, h_lim, v_lim, _ = cls._center_and_lims(simulation=simulation, plane=plane)
 

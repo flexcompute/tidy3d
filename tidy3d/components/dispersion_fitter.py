@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Optional, Tuple
 
 import numpy as np
-import scipy
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 from rich.progress import Progress
 
@@ -493,6 +492,11 @@ class FastFitterData(AdvancedFastFitterParam):
     def iterate_poles(self) -> FastFitterData:
         """Perform a single iteration of the pole-updating procedure."""
 
+        try:
+            import scipy
+        except ImportError:
+            raise ImportError("scipy is required to fit the dispersion.")
+
         def compute_zeros(residues: ArrayComplex1D, d_tilde: float) -> ArrayComplex1D:
             """Compute the zeros from the residues."""
             size = len(self.real_poles) + 2 * len(self.complex_poles)
@@ -593,6 +597,12 @@ class FastFitterData(AdvancedFastFitterParam):
 
     def fit_residues(self) -> FastFitterData:
         """Fit residues."""
+
+        try:
+            import scipy
+        except ImportError:
+            raise ImportError("scipy is required to fit the dispersion.")
+
         # build the matrices
         if self.optimize_eps_inf:
             poly_len = 1
@@ -649,6 +659,11 @@ class FastFitterData(AdvancedFastFitterParam):
 
     def iterate_passivity(self, passivity_omega: ArrayFloat1D) -> Tuple[FastFitterData, int]:
         """Iterate passivity enforcement algorithm."""
+
+        try:
+            import scipy
+        except ImportError:
+            raise ImportError("scipy is required to fit the dispersion.")
 
         size = len(self.real_poles) + 2 * len(self.complex_poles)
         constraint_matrix = np.imag(self.pole_matrix_omega(passivity_omega))
