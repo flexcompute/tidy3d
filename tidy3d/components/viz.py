@@ -172,6 +172,7 @@ MEDIUM_CMAP = [
 
 # colormap for structure's permittivity in plot_eps
 STRUCTURE_EPS_CMAP = "gist_yarg"
+STRUCTURE_EPS_CMAP_R = "gist_yarg_r"
 STRUCTURE_HEAT_COND_CMAP = "gist_yarg"
 
 
