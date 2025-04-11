@@ -61,6 +61,7 @@ from .validators import assert_unique_names
 from .viz import (
     MEDIUM_CMAP,
     STRUCTURE_EPS_CMAP,
+    STRUCTURE_EPS_CMAP_R,
     STRUCTURE_HEAT_COND_CMAP,
     PlotParams,
     add_ax_if_none,
@@ -1004,7 +1005,9 @@ class Scene(Tidy3dBaseModel):
                     ax=ax,
                 )
             else:
-                self._add_cbar_eps(eps_min=property_min, eps_max=property_max, ax=ax)
+                self._add_cbar_eps(
+                    eps_min=property_min, eps_max=property_max, ax=ax, reverse=reverse
+                )
 
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1017,10 +1020,14 @@ class Scene(Tidy3dBaseModel):
         return ax
 
     @staticmethod
-    def _add_cbar_eps(eps_min: float, eps_max: float, ax: Ax = None) -> None:
+    def _add_cbar_eps(eps_min: float, eps_max: float, ax: Ax = None, reverse: bool = False) -> None:
         """Add a permittivity colorbar to plot."""
         Scene._add_cbar(
-            vmin=eps_min, vmax=eps_max, label=r"$\epsilon_r$", cmap=STRUCTURE_EPS_CMAP, ax=ax
+            vmin=eps_min,
+            vmax=eps_max,
+            label=r"$\epsilon_r$",
+            cmap=STRUCTURE_EPS_CMAP if not reverse else STRUCTURE_EPS_CMAP_R,
+            ax=ax,
         )
 
     @staticmethod

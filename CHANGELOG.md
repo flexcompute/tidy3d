@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
 
+### Fixed
+- Fixed `reverse` property of `td.Scene.plot_structures_property()` to also reverse the colorbar.
+
 ## [2.8.2] - 2025-04-09
 
 ### Added
