@@ -319,6 +319,13 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
             "and the code to be running on a jupyter notebook."
         ) from e
 
+    from base64 import b64encode
+    from io import BytesIO
+
+    buffer = BytesIO()
+    sim.to_hdf5_gz(buffer)
+    buffer.seek(0)
+    base64 = b64encode(buffer.read()).decode("utf-8")
     js_code = """
         /**
         * Simulation Viewer Injector
@@ -385,15 +392,14 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
                         frame.src = VIEWER_URL + "?uuid=" + uuid;
 
                         var postMessageToViewer;
-                        postMessageToViewer = event => {{
-                            if(event.data.type === 'viewer' && event.data.uuid===uuid){{
-                                var simulation = JSON.parse(node.dataset.simulation);
-                                frame.contentWindow.postMessage({ type: 'jupyter', uuid, value: simulation}, '*');
+                        postMessageToViewer = event => {
+                            if(event.data.type === 'viewer' && event.data.uuid===uuid){
+                                frame.contentWindow.postMessage({ type: 'jupyter', uuid, value: node.dataset.simulation, fileType: 'hdf5'}, '*');
 
                                 // Run once only
                                 window.removeEventListener('message', postMessageToViewer);
-                            }}
-                        }};
+                            }
+                        };
                         window.addEventListener(
                             'message',
                             postMessageToViewer,
@@ -411,7 +417,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
         })();
     """
     html_code = f"""
-    <div class="simulation-viewer" data-width="{escape(str(width))}" data-height="{escape(str(height))}" data-simulation="{escape(sim._json_string)}" />
+    <div class="simulation-viewer" data-width="{escape(str(width))}" data-height="{escape(str(height))}" data-simulation="{escape(base64)}" />
     <script>
         {js_code}
     </script>
