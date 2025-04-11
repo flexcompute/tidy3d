@@ -183,6 +183,13 @@ class SubpixelSpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    multimedium_staircasing_drop_small_volume: bool = pd.Field(
+        False, title="drop", description="drop"
+    )
+    multimedium_staircasing_apply_largest_volume: bool = pd.Field(
+        False, title="largest", description="largest"
+    )
+
     @classmethod
     def staircasing(cls) -> SubpixelSpec:
         """Apply staircasing on all material boundaries."""
