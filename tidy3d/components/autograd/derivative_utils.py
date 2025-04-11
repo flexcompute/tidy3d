@@ -313,26 +313,39 @@ class DerivativeInfo(Tidy3dBaseModel):
     ) -> dict[str, ScalarFieldDataArray]:
         """Compute the value of an dict with keys Ex, Ey, Ez at a set of spatial locations."""
 
-        xs, ys, zs = spatial_coords.T
-        edge_index_dim = "edge_index"
+        from scipy.interpolate import RegularGridInterpolator
 
-        interp_kwargs = {}
-        for dim, locations_dim in zip("xyz", (xs, ys, zs)):
-            # filter out any infinity values to use LARGE_NUMBER and get 0 in the interp()
-            locations_dim = np.nan_to_num(locations_dim, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
-            interp_kwargs[dim] = xr.DataArray(locations_dim, dims=edge_index_dim)
-
+        coords = np.nan_to_num(spatial_coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
         components = {}
-        for fld_name, arr in fld_dataset.items():
-            arr_interp = arr.interp(
-                **interp_kwargs,
-                assume_sorted=True,
-                kwargs=dict(fill_value=None, bounds_error=False),
-            )
-            if "f" in arr_interp.coords:
-                arr_interp = arr_interp.sum("f")
+        edge_index_dim = "edge_index"
+        n_points = coords.shape[0]
 
-            components[fld_name] = arr_interp
+        for fld_name, arr in fld_dataset.items():
+            data = arr.values
+            points = tuple(arr.coords[dim].values for dim in "xyz")
+            interp_kwargs = {"method": "linear", "bounds_error": False, "fill_value": None}
+
+            if "f" in arr.dims:
+                f_dim_idx = arr.dims.index("f")
+                result = np.zeros(n_points, dtype=data.dtype)
+
+                for f_idx in range(data.shape[f_dim_idx]):
+                    slicer = [slice(None)] * data.ndim
+                    slicer[f_dim_idx] = f_idx
+                    interpolator = RegularGridInterpolator(
+                        points, data[tuple(slicer)], **interp_kwargs
+                    )
+                    result += interpolator(coords)
+            else:
+                interpolator = RegularGridInterpolator(points, data, **interp_kwargs)
+                result = interpolator(coords)
+
+            components[fld_name] = xr.DataArray(
+                result,
+                coords={edge_index_dim: np.arange(n_points)},
+                dims=[edge_index_dim],
+                name=fld_name,
+            )
 
         return components
 
@@ -342,7 +355,6 @@ class DerivativeInfo(Tidy3dBaseModel):
         basis_vector: np.ndarray,
     ) -> xr.DataArray:
         """Project a derivative dataset along a supplied basis vector."""
-
         value = 0.0
         for coeffs, dim in zip(basis_vector.T, "xyz"):
             value += coeffs * der_dataset[f"E{dim}"]
