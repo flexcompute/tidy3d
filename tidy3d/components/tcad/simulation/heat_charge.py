@@ -711,10 +711,12 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # make sure mediums with doping have been defined
         for structure in structures:
+            if isinstance(structure.medium, SemiconductorMedium):
+                charge_sim = True
             if isinstance(structure.medium, MultiPhysicsMedium):
                 if structure.medium.charge is not None:
                     if isinstance(structure.medium.charge, SemiconductorMedium):
-                        return True
+                        charge_sim = True
         return charge_sim
 
     @staticmethod
