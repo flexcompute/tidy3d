@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from tidy3d.packaging import Tidy3dImportError, check_import, verify_packages_import
+from tidy3d.packaging import (
+    Tidy3dImportError,
+    check_import,
+    supports_local_subpixel,
+    tidy3d_extras,
+    verify_packages_import,
+)
 
 assert check_import("tidy3d") is True
 
@@ -63,6 +69,20 @@ def test_check_import():
 
     assert mock_check_import("tidy3d") is True
     assert mock_check_import("module2") is False
+
+
+def test_tidy3d_extras():
+    import importlib
+
+    has_tidy3d_extras = importlib.util.find_spec("tidy3d_extras") is not None
+    print(f"has_tidy3d_extras = {has_tidy3d_extras}")
+
+    @supports_local_subpixel
+    def get_eps():
+        assert tidy3d_extras["use_local_subpixel"] is False
+        assert tidy3d_extras["mod"] is None
+
+    get_eps()
 
 
 if __name__ == "__main__":
