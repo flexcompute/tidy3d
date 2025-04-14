@@ -20,6 +20,41 @@ from tidy3d.components.material.tcad.heat import (
 )
 from tidy3d.components.microwave.data.monitor_data import (
     AntennaMetricsData,
+    MicrowaveModeData,
+    MicrowaveModeSolverData,
+)
+from tidy3d.components.microwave.impedance_calculator import ImpedanceCalculator
+from tidy3d.components.microwave.mode_spec import (
+    MicrowaveModeSpec,
+)
+from tidy3d.components.microwave.monitor import (
+    MicrowaveModeMonitor,
+    MicrowaveModeSolverMonitor,
+)
+from tidy3d.components.microwave.path_integrals.integrals.auto import (
+    path_integrals_from_lumped_element,
+)
+from tidy3d.components.microwave.path_integrals.integrals.current import (
+    AxisAlignedCurrentIntegral,
+    CompositeCurrentIntegral,
+    Custom2DCurrentIntegral,
+)
+from tidy3d.components.microwave.path_integrals.integrals.voltage import (
+    AxisAlignedVoltageIntegral,
+    Custom2DVoltageIntegral,
+)
+from tidy3d.components.microwave.path_integrals.specs.current import (
+    AxisAlignedCurrentIntegralSpec,
+    CompositeCurrentIntegralSpec,
+    Custom2DCurrentIntegralSpec,
+)
+from tidy3d.components.microwave.path_integrals.specs.impedance import (
+    AutoImpedanceSpec,
+    CustomImpedanceSpec,
+)
+from tidy3d.components.microwave.path_integrals.specs.voltage import (
+    AxisAlignedVoltageIntegralSpec,
+    Custom2DVoltageIntegralSpec,
 )
 from tidy3d.components.spice.analysis.ac import IsothermalSSACAnalysis, SSACAnalysis
 from tidy3d.components.spice.analysis.dc import (
@@ -459,8 +494,13 @@ __all__ = [
     "AstigmaticGaussianBeamProfile",
     "AugerRecombination",
     "AutoGrid",
+    "AutoImpedanceSpec",
     "AuxFieldTimeData",
     "AuxFieldTimeMonitor",
+    "AxisAlignedCurrentIntegral",
+    "AxisAlignedCurrentIntegralSpec",
+    "AxisAlignedVoltageIntegral",
+    "AxisAlignedVoltageIntegralSpec",
     "BlochBoundary",
     "Boundary",
     "BoundaryEdge",
@@ -477,6 +517,8 @@ __all__ = [
     "ChargeToleranceSpec",
     "ClipOperation",
     "CoaxialLumpedResistor",
+    "CompositeCurrentIntegral",
+    "CompositeCurrentIntegralSpec",
     "ConstantDoping",
     "ConstantEffectiveDOS",
     "ConstantEnergyBandGap",
@@ -489,6 +531,10 @@ __all__ = [
     "Coords1D",
     "CornerFinderSpec",
     "CurrentBC",
+    "Custom2DCurrentIntegral",
+    "Custom2DCurrentIntegralSpec",
+    "Custom2DVoltageIntegral",
+    "Custom2DVoltageIntegralSpec",
     "CustomAnisotropicMedium",
     "CustomChargePerturbation",
     "CustomCurrentSource",
@@ -499,6 +545,7 @@ __all__ = [
     "CustomGrid",
     "CustomGridBoundaries",
     "CustomHeatPerturbation",
+    "CustomImpedanceSpec",
     "CustomLorentz",
     "CustomMedium",
     "CustomPoleResidue",
@@ -607,6 +654,7 @@ __all__ = [
     "HeatSource",
     "HeuristicPECStaircasing",
     "HuraySurfaceRoughness",
+    "ImpedanceCalculator",
     "IndexPerturbation",
     "IndexedDataArray",
     "IndexedFieldVoltageDataArray",
@@ -634,6 +682,11 @@ __all__ = [
     "MediumMediumInterface",
     "MediumMonitor",
     "MeshOverrideStructure",
+    "MicrowaveModeData",
+    "MicrowaveModeMonitor",
+    "MicrowaveModeSolverData",
+    "MicrowaveModeSolverMonitor",
+    "MicrowaveModeSpec",
     "ModeABCBoundary",
     "ModeAmpsDataArray",
     "ModeData",
@@ -765,6 +818,7 @@ __all__ = [
     "log",
     "material_library",
     "medium_from_nk",
+    "path_integrals_from_lumped_element",
     "restore_matplotlib_rcparams",
     "set_logging_console",
     "set_logging_file",

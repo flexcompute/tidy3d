@@ -15,6 +15,11 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.grid.grid import Grid
+from tidy3d.components.microwave.impedance_calculator import (
+    CurrentIntegralType,
+    ImpedanceCalculator,
+    VoltageIntegralType,
+)
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource, ModeSpec
@@ -24,7 +29,6 @@ from tidy3d.components.structure import MeshOverrideStructure
 from tidy3d.components.types import Axis, Direction, FreqArray
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
-from tidy3d.plugins.microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
 from tidy3d.plugins.mode import ModeSolver
 
 from .base_terminal import AbstractTerminalPort
@@ -58,13 +62,13 @@ class WavePort(AbstractTerminalPort, Box):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    voltage_integral: Optional[VoltageIntegralTypes] = pd.Field(
+    voltage_integral: Optional[VoltageIntegralType] = pd.Field(
         None,
         title="Voltage Integral",
         description="Definition of voltage integral used to compute voltage and the characteristic impedance.",
     )
 
-    current_integral: Optional[CurrentIntegralTypes] = pd.Field(
+    current_integral: Optional[CurrentIntegralType] = pd.Field(
         None,
         title="Current Integral",
         description="Definition of current integral used to compute current and the characteristic impedance.",

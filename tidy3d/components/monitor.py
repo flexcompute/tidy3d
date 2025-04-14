@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -16,6 +16,7 @@ from .apodization import ApodizationSpec
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .base_sim.monitor import AbstractMonitor
 from .medium import MediumType
+from .microwave.base import MicrowaveBaseModel
 from .mode_spec import ModeSpec
 from .types import (
     ArrayFloat1D,
@@ -1218,7 +1219,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 6
 
 
-class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
+class DirectivityMonitor(MicrowaveBaseModel, FieldProjectionAngleMonitor, FluxMonitor):
     """
     :class:`Monitor` that records the radiation characteristics of antennas in the frequency domain
     at specified observation angles.
@@ -1246,14 +1247,6 @@ class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(
             self.freqs
         ) * 6 + BYTES_REAL * len(self.freqs)
-
-    @pydantic.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
 
 
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
@@ -1574,22 +1567,3 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
-
-
-# types of monitors that are accepted by simulation
-MonitorType = Union[
-    FieldMonitor,
-    FieldTimeMonitor,
-    AuxFieldTimeMonitor,
-    MediumMonitor,
-    PermittivityMonitor,
-    FluxMonitor,
-    FluxTimeMonitor,
-    ModeMonitor,
-    ModeSolverMonitor,
-    FieldProjectionAngleMonitor,
-    FieldProjectionCartesianMonitor,
-    FieldProjectionKSpaceMonitor,
-    DiffractionMonitor,
-    DirectivityMonitor,
-]

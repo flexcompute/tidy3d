@@ -15,6 +15,9 @@ from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.utils_2d import increment_float
 from tidy3d.components.grid.grid import Grid, YeeGrid
 from tidy3d.components.lumped_element import CoaxialLumpedResistor
+from tidy3d.components.microwave.path_integrals.integrals.current import Custom2DCurrentIntegral
+from tidy3d.components.microwave.path_integrals.integrals.voltage import AxisAlignedVoltageIntegral
+from tidy3d.components.microwave.path_integrals.specs.base import AbstractAxesRH
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
@@ -22,8 +25,6 @@ from tidy3d.components.types import Axis, Coordinate, Direction, FreqArray, Size
 from tidy3d.components.validators import skip_if_fields_missing
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
-from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
-from tidy3d.plugins.microwave.path_integrals import AbstractAxesRH
 
 from .base_lumped import AbstractLumpedPort
 
@@ -42,7 +43,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     ...             direction="+",
     ...             name="coax_port_1",
     ...             impedance=50
-    ...         ) # doctest: +SKIP
+    ...         )
     """
 
     center: Coordinate = pd.Field(
@@ -282,7 +283,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         exact_port_center = self.snapped_center(sim_data.simulation.grid)
         field_data = sim_data[self._voltage_monitor_name]
 
-        voltage_integral = VoltageIntegralAxisAligned(
+        voltage_integral = AxisAlignedVoltageIntegral(
             center=self._voltage_path_center(exact_port_center),
             size=self._voltage_path_size,
             extrapolate_to_endpoints=True,
@@ -332,7 +333,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         # Setup the path integral and integrate the H field
         path_center = list(exact_port_center)
         path_center[self.injection_axis] = path_pos
-        path_integral = CustomCurrentIntegral2D.from_circular_path(
+        path_integral = Custom2DCurrentIntegral.from_circular_path(
             path_center, radius, num_path_coords, self.injection_axis, False
         )
         current = path_integral.compute_current(field_data)

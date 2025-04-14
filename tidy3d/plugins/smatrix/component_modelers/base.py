@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Literal, Optional, Union, get_args
+from typing import TYPE_CHECKING, Literal, Optional, Union
 
 import pydantic.v1 as pd
 
@@ -100,22 +100,6 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError(f"'{cls.__name__}.simulation' must not have any sources.")
-        return val
-
-    @pd.validator("ports", always=True)
-    def _warn_rf_license(cls, val):
-        """Warn about new licensing requirements for RF ports."""
-        rf_port = False
-        TerminalPortTypeTuple = get_args(TerminalPortType)
-        for port in val:
-            if type(port) in TerminalPortTypeTuple:
-                rf_port = True
-                break
-        if rf_port:
-            log.warning(
-                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-                log_once=True,
-            )
         return val
 
     @pd.validator("element_mappings", always=True)

@@ -15,6 +15,7 @@ from tidy3d.components.frequency_extrapolation import (
 )
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.index import SimulationMap
+from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.monitor import DirectivityMonitor, ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
@@ -57,7 +58,7 @@ class ModelerLowFrequencySmoothingSpec(AbstractLowFrequencySmoothingSpec):
 DEFAULT_LOW_FREQUENCY_SMOOTHING_SPEC = ModelerLowFrequencySmoothingSpec()
 
 
-class TerminalComponentModeler(AbstractComponentModeler):
+class TerminalComponentModeler(AbstractComponentModeler, MicrowaveBaseModel):
     """
     Tool for modeling two-terminal multiport devices and computing port parameters
     with lumped and wave ports.
@@ -129,14 +130,6 @@ class TerminalComponentModeler(AbstractComponentModeler):
         title="Low Frequency Smoothing",
         description="The low frequency smoothing parameters for the terminal component simulation.",
     )
-
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
 
     @pd.root_validator(pre=False)
     def _warn_refactor_2_10(cls, values):

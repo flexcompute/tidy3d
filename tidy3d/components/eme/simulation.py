@@ -17,7 +17,7 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.medium import FullyAnisotropicMedium
-from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor, MonitorType
+from tidy3d.components.monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor
 from tidy3d.components.scene import Scene
 from tidy3d.components.simulation import (
     AbstractYeeGridSimulation,
@@ -25,6 +25,7 @@ from tidy3d.components.simulation import (
     validate_boundaries_for_zero_dims,
 )
 from tidy3d.components.types import Ax, Axis, FreqArray, Symmetry, annotate_type
+from tidy3d.components.types.monitor import MonitorType
 from tidy3d.components.validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf

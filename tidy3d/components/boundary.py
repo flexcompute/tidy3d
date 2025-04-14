@@ -26,6 +26,7 @@ from .mode_spec import ModeSpec
 from .monitor import ModeMonitor, ModeSolverMonitor
 from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
 from .types import TYPE_TAG_STR, Ax, Axis, Complex, Direction, FreqBound
+from .types.mode_spec import ModeSpecType
 
 MIN_NUM_PML_LAYERS = 6
 MIN_NUM_STABLE_PML_LAYERS = 6
@@ -246,10 +247,11 @@ class BroadbandModeABCSpec(Tidy3dBaseModel):
 class ModeABCBoundary(AbstractABCBoundary):
     """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
 
-    mode_spec: ModeSpec = pd.Field(
+    mode_spec: ModeSpecType = pd.Field(
         DEFAULT_MODE_SPEC_MODE_ABC,
         title="Mode Specification",
         description="Parameters that determine the modes computed by the mode solver.",
+        discriminator=TYPE_TAG_STR,
     )
 
     mode_index: pd.NonNegativeInt = pd.Field(
@@ -1117,7 +1119,7 @@ class Boundary(Tidy3dBaseModel):
     def mode_abc(
         cls,
         plane: Box,
-        mode_spec: ModeSpec = DEFAULT_MODE_SPEC_MODE_ABC,
+        mode_spec: ModeSpecType = DEFAULT_MODE_SPEC_MODE_ABC,
         mode_index: pd.NonNegativeInt = 0,
         freq_spec: Optional[Union[pd.PositiveFloat, BroadbandModeABCSpec]] = None,
     ):
@@ -1127,7 +1129,7 @@ class Boundary(Tidy3dBaseModel):
         ----------
         plane: Box
             Cross-sectional plane in which the absorbed mode will be computed.
-        mode_spec: ModeSpec = ModeSpec()
+        mode_spec: ModeSpecType = ModeSpec()
             Parameters that determine the modes computed by the mode solver.
         mode_index : pd.NonNegativeInt = 0
             Mode index.

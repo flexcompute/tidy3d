@@ -33,7 +33,6 @@ from tidy3d.components.monitor import (
     MediumMonitor,
     ModeMonitor,
     ModeSolverMonitor,
-    MonitorType,
     PermittivityMonitor,
 )
 from tidy3d.components.source.base import Source
@@ -54,6 +53,7 @@ from tidy3d.components.types import (
     TrackFreq,
     UnitsZBF,
 )
+from tidy3d.components.types.monitor import MonitorType
 from tidy3d.components.validators import (
     enforce_monitor_fields_present,
     required_if_symmetry_present,
@@ -1645,7 +1645,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
     eps_spec: list[EpsSpecType] = pd.Field(
         None,
-        title="Permettivity Specification",
+        title="Permittivity Specification",
         description="Characterization of the permittivity profile on the plane where modes are "
         "computed. Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
     )
@@ -3544,9 +3544,9 @@ class DirectivityData(FieldProjectionAngleData):
     >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
     >>> flux_data = FluxDataArray(np.random.random(len(f)), coords=coords_flux)
     >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
-    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta) # doctest: +SKIP
+    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
     >>> data = DirectivityData(monitor=monitor, flux=flux_data, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
-    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces) # doctest: +SKIP
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces)
     """
 
     monitor: DirectivityMonitor = pd.Field(
@@ -3942,23 +3942,3 @@ class DirectivityData(FieldProjectionAngleData):
         keys = ("Eleft", "Eright", "Hleft", "Hright")
         data_arrays = (Eleft, Eright, Hleft, Hright)
         return xr.Dataset(dict(zip(keys, data_arrays)))
-
-
-MonitorDataTypes = (
-    FieldData,
-    FieldTimeData,
-    PermittivityData,
-    MediumData,
-    ModeSolverData,
-    ModeData,
-    FluxData,
-    FluxTimeData,
-    AuxFieldTimeData,
-    FieldProjectionKSpaceData,
-    FieldProjectionCartesianData,
-    FieldProjectionAngleData,
-    DiffractionData,
-    DirectivityData,
-)
-
-MonitorDataType = Union[MonitorDataTypes]

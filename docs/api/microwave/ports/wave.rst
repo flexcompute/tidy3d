@@ -46,12 +46,12 @@ If it is desired to only solve for the 2D port mode, one can use the ``to_mode_s
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.microwave.VoltageIntegralAxisAligned
-   tidy3d.plugins.microwave.CurrentIntegralAxisAligned
-   tidy3d.plugins.microwave.CustomVoltageIntegral2D
-   tidy3d.plugins.microwave.CustomCurrentIntegral2D
+   tidy3d.plugins.microwave.AxisAlignedVoltageIntegral
+   tidy3d.plugins.microwave.AxisAlignedCurrentIntegral
+   tidy3d.plugins.microwave.Custom2DVoltageIntegral
+   tidy3d.plugins.microwave.Custom2DCurrentIntegral
    tidy3d.plugins.microwave.AxisAlignedPathIntegral
-   tidy3d.plugins.microwave.CustomPathIntegral2D
+   tidy3d.plugins.microwave.Custom2DPathIntegral
    tidy3d.plugins.microwave.ImpedanceCalculator
 
 The classes above are used to define the voltage/current integration paths for impedance calculation.
@@ -59,14 +59,14 @@ The classes above are used to define the voltage/current integration paths for i
 .. code-block:: python
 
    # Define voltage integration line
-   my_voltage_integral = VoltageIntegralAxisAligned(
+   my_voltage_integral = AxisAlignedVoltageIntegral(
        center=(0,0,0),  # center of integration line
        size=(5, 0, 0),  # length of integration line
        sign='+',  # sign of integral
    )
 
    # Define current integration loop
-   my_current_integral = CurrentIntegralAxisAligned(
+   my_current_integral = AxisAlignedCurrentIntegral(
        center=(0,0,0),  # center of integration loop
        size=(20, 20, 0),  # size of integration loop
        sign='+', # sign of integral (should match wave port direction)

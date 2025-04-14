@@ -15,6 +15,7 @@ from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
+from tidy3d.components.microwave.data.monitor_data import MicrowaveModeSolverData
 from tidy3d.components.mode.data.sim_data import ModeSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.simulation import Simulation
@@ -245,6 +246,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         supported_data_classes = [
             SimulationData,
             ModeSolverData,
+            MicrowaveModeSolverData,
             HeatSimulationData,
             HeatChargeSimulationData,
             EMESimulationData,
@@ -334,6 +336,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                 stub_data,
                 (
                     ModeSolverData,
+                    MicrowaveModeSolverData,
                     ModeSimulationData,
                     TerminalComponentModelerData,
                     ModalComponentModelerData,

@@ -10,6 +10,8 @@ from typing import Literal, Optional, Union, get_args
 
 import autograd.numpy as np
 
+from .types.monitor import MonitorType
+
 try:
     import matplotlib as mpl
 except ImportError:
@@ -71,6 +73,8 @@ from .medium import (
     MediumType3D,
     PECMedium,
 )
+from .microwave.mode_spec import MicrowaveModeSpec
+from .microwave.path_integrals.mode_plane_analyzer import ModePlaneAnalyzer
 from .monitor import (
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
@@ -87,7 +91,6 @@ from .monitor import (
     MediumMonitor,
     ModeMonitor,
     Monitor,
-    MonitorType,
     PermittivityMonitor,
     SurfaceIntegrationMonitor,
     TimeMonitor,
@@ -4471,6 +4474,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_time_monitors_outside_run_time()
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
+        self._validate_microwave_mode_specs()
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
@@ -4658,6 +4662,33 @@ class Simulation(AbstractYeeGridSimulation):
                     f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
                     "(Hz) as defined by the sources."
                 )
+
+    def _validate_microwave_mode_specs(self) -> None:
+        """Raise error if any microwave mode specifications with ``AutoImpedanceSpec`` will
+        fail to instantiate.
+        """
+        for monitor in self.monitors:
+            if not isinstance(monitor, AbstractModeMonitor):
+                continue
+
+            if (
+                isinstance(monitor.mode_spec, MicrowaveModeSpec)
+                and monitor.mode_spec._using_auto_current_spec
+            ):
+                mode_plane_analyzer = ModePlaneAnalyzer(
+                    center=monitor.center, size=monitor.size, field_data_colocated=monitor.colocate
+                )
+                try:
+                    _ = mode_plane_analyzer.get_conductor_bounding_boxes(
+                        self.volumetric_structures,
+                        self.grid,
+                        self.symmetry,
+                        self.simulation_geometry,
+                    )
+                except SetupError as e:
+                    raise SetupError(
+                        f"Failed to setup auto impedance specification for monitor '{monitor.name}'"
+                    ) from e
 
     @cached_property
     def monitors_data_size(self) -> dict[str, float]:

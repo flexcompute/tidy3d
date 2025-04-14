@@ -12,6 +12,15 @@ import pydantic.v1 as pydantic
 import pytest
 import shapely
 import trimesh
+from shapely.geometry import (
+    GeometryCollection,
+    LineString,
+    MultiLineString,
+    MultiPoint,
+    MultiPolygon,
+    Point,
+    Polygon,
+)
 
 import tidy3d as td
 from tidy3d.compat import _shapely_is_older_than
@@ -22,6 +31,7 @@ from tidy3d.components.geometry.utils import (
     SnapLocation,
     SnappingSpec,
     flatten_groups,
+    flatten_shapely_geometries,
     snap_box_to_grid,
     traverse_geometries,
 )
@@ -1137,7 +1147,14 @@ def test_subdivide():
 @pytest.mark.parametrize("snap_location", [SnapLocation.Boundary, SnapLocation.Center])
 @pytest.mark.parametrize(
     "snap_behavior",
-    [SnapBehavior.Off, SnapBehavior.Closest, SnapBehavior.Expand, SnapBehavior.Contract],
+    [
+        SnapBehavior.Off,
+        SnapBehavior.Closest,
+        SnapBehavior.Expand,
+        SnapBehavior.Contract,
+        SnapBehavior.StrictExpand,
+        SnapBehavior.StrictContract,
+    ],
 )
 def test_snap_box_to_grid(snap_location, snap_behavior):
     """ "Test that all combinations of SnappingSpec correctly modify a test box without error."""
@@ -1158,12 +1175,78 @@ def test_snap_box_to_grid(snap_location, snap_behavior):
     new_box = snap_box_to_grid(grid, box, snap_spec)
 
     if snap_behavior != SnapBehavior.Off and snap_location == SnapLocation.Boundary:
-        # Check that the box boundary slightly off from 0.1 was correctly snapped to 0.1
-        assert math.isclose(new_box.bounds[0][1], xyz[1])
-        # Check that the box boundary slightly off from 0.3 was correctly snapped to 0.3
-        assert math.isclose(new_box.bounds[1][1], xyz[3])
-        # Check that the box boundary outside the grid was snapped to the smallest grid coordinate
-        assert math.isclose(new_box.bounds[0][2], xyz[0])
+        # Strict behaviors have different snapping rules, so skip these specific assertions
+        if snap_behavior not in (SnapBehavior.StrictExpand, SnapBehavior.StrictContract):
+            # Check that the box boundary slightly off from 0.1 was correctly snapped to 0.1
+            assert math.isclose(new_box.bounds[0][1], xyz[1])
+            # Check that the box boundary slightly off from 0.3 was correctly snapped to 0.3
+            assert math.isclose(new_box.bounds[1][1], xyz[3])
+            # Check that the box boundary outside the grid was snapped to the smallest grid coordinate
+            assert math.isclose(new_box.bounds[0][2], xyz[0])
+
+
+def test_snap_box_to_grid_strict_behaviors():
+    """Test StrictExpand and StrictContract behaviors specifically."""
+    xyz = np.linspace(0, 1, 11)  # Grid points at 0.0, 0.1, 0.2, ..., 1.0
+    coords = td.Coords(x=xyz, y=xyz, z=xyz)
+    grid = td.Grid(boundaries=coords)
+
+    # Test StrictExpand: should always move endpoints outwards, even if coincident
+    box_coincident = td.Box(
+        center=(0.1, 0.2, 0.3), size=(0, 0, 0)
+    )  # Centered exactly on grid points
+    snap_spec_strict_expand = SnappingSpec(
+        location=[SnapLocation.Boundary] * 3, behavior=[SnapBehavior.StrictExpand] * 3
+    )
+
+    expanded_box = snap_box_to_grid(grid, box_coincident, snap_spec_strict_expand)
+
+    # StrictExpand should move bounds outwards even when already on grid
+    assert np.isclose(expanded_box.bounds[0][0], 0.0)  # Left bound moved left from 0.1
+    assert np.isclose(expanded_box.bounds[1][0], 0.2)  # Right bound moved right from 0.1
+    assert np.isclose(expanded_box.bounds[0][1], 0.1)  # Bottom bound moved down from 0.2
+    assert np.isclose(expanded_box.bounds[1][1], 0.3)  # Top bound moved up from 0.2
+
+    # Test StrictContract: should always move endpoints inwards, even if coincident
+    box_large = td.Box(center=(0.5, 0.5, 0.5), size=(0.4, 0.4, 0.4))  # Spans multiple grid cells
+    snap_spec_strict_contract = SnappingSpec(
+        location=[SnapLocation.Boundary] * 3, behavior=[SnapBehavior.StrictContract] * 3
+    )
+
+    contracted_box = snap_box_to_grid(grid, box_large, snap_spec_strict_contract)
+
+    # StrictContract should make the box smaller than the original
+    assert contracted_box.size[0] < box_large.size[0]
+    assert contracted_box.size[1] < box_large.size[1]
+    assert contracted_box.size[2] < box_large.size[2]
+
+    # Test edge case: box coincident with grid boundaries
+    box_on_grid = td.Box(
+        center=(0.15, 0.25, 0.35), size=(0.1, 0.1, 0.1)
+    )  # Boundaries at 0.1,0.2 and 0.2,0.3
+
+    # Regular Expand shouldn't change a box already coincident with grid
+    snap_spec_regular_expand = SnappingSpec(
+        location=[SnapLocation.Boundary] * 3, behavior=[SnapBehavior.Expand] * 3
+    )
+    regular_expanded = snap_box_to_grid(grid, box_on_grid, snap_spec_regular_expand)
+    assert np.allclose(regular_expanded.bounds, box_on_grid.bounds)  # Should be unchanged
+
+    # StrictExpand should still expand even when coincident
+    strict_expanded = snap_box_to_grid(grid, box_on_grid, snap_spec_strict_expand)
+    assert not np.allclose(strict_expanded.bounds, box_on_grid.bounds)  # Should be changed
+    assert strict_expanded.size[0] > box_on_grid.size[0]  # Should be larger
+
+    # Test with margin parameter for strict behaviors
+    snap_spec_strict_expand_margin = SnappingSpec(
+        location=[SnapLocation.Boundary] * 3,
+        behavior=[SnapBehavior.StrictExpand] * 3,
+        margin=(1, 1, 1),  # Consider 1 additional grid point when expanding
+    )
+
+    margin_expanded = snap_box_to_grid(grid, box_coincident, snap_spec_strict_expand_margin)
+    # With margin=1, should expand even further than without margin
+    assert margin_expanded.size[0] >= expanded_box.size[0]
 
 
 def test_triangulation_with_collinear_vertices():
@@ -1298,3 +1381,105 @@ def test_cleanup_shapely_object():
     orig_polygon = shapely.Polygon(exterior_coords)
     new_polygon = cleanup_shapely_object(orig_polygon, tolerance_ratio=1e-12)
     assert len(new_polygon.exterior.coords) == 0  # empty / collinear polygons should get deleted
+
+
+def test_flatten_shapely_geometries():
+    """Test the flatten_shapely_geometries utility function comprehensively."""
+    # Test 1: Single polygon (should be wrapped in list and returned)
+    single_polygon = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    result = flatten_shapely_geometries(single_polygon)
+    assert len(result) == 1
+    assert result[0] == single_polygon
+
+    # Test 2: List of polygons (should return as-is)
+    poly1 = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+    poly2 = Polygon([(2, 0), (3, 0), (3, 1), (2, 1)])
+    polygon_list = [poly1, poly2]
+    result = flatten_shapely_geometries(polygon_list)
+    assert len(result) == 2
+    assert result == polygon_list
+
+    # Test 3: MultiPolygon (should be flattened)
+    multi_polygon = MultiPolygon([poly1, poly2])
+    result = flatten_shapely_geometries(multi_polygon)
+    assert len(result) == 2
+    assert result[0] == poly1
+    assert result[1] == poly2
+
+    # Test 4: Empty geometries (should be filtered out)
+    empty_polygon = Polygon()
+    mixed_list = [poly1, empty_polygon, poly2]
+    result = flatten_shapely_geometries(mixed_list)
+    assert len(result) == 2
+    assert empty_polygon not in result
+
+    # Test 5: GeometryCollection (should be recursively flattened)
+    line = LineString([(0, 0), (1, 1)])
+    point = Point(0, 0)
+    collection = GeometryCollection([poly1, line, point, poly2])
+    result = flatten_shapely_geometries(collection)
+    assert len(result) == 2  # Only polygons kept by default
+    assert poly1 in result
+    assert poly2 in result
+
+    # Test 6: Custom keep_types parameter
+    result_with_lines = flatten_shapely_geometries(collection, keep_types=(Polygon, LineString))
+    assert len(result_with_lines) == 3  # 2 polygons + 1 line
+    assert poly1 in result_with_lines
+    assert poly2 in result_with_lines
+    assert line in result_with_lines
+
+    # Test 7: Nested collections and multi-geometries
+    line1 = LineString([(0, 0), (1, 1)])
+    line2 = LineString([(2, 2), (3, 3)])
+    multi_line = MultiLineString([line1, line2])
+    nested_collection = GeometryCollection(
+        [
+            collection,  # Contains poly1, line, point, poly2
+            multi_line,
+            poly1,
+        ]
+    )
+    result = flatten_shapely_geometries(nested_collection)
+    assert len(result) == 3  # poly1 (from collection), poly2 (from collection), poly1 (direct)
+
+    # Test 8: MultiPoint (should be handled)
+    point1 = Point(0, 0)
+    point2 = Point(1, 1)
+    multi_point = MultiPoint([point1, point2])
+    result = flatten_shapely_geometries(multi_point, keep_types=(Point,))
+    assert len(result) == 2
+    assert point1 in result
+    assert point2 in result
+
+    # Test 9: MultiLineString (should be handled)
+    result = flatten_shapely_geometries(multi_line, keep_types=(LineString,))
+    assert len(result) == 2
+    assert line1 in result
+    assert line2 in result
+
+    # Test 10: Mixed empty and non-empty geometries
+    empty_multi = MultiPolygon([])
+    mixed_with_empty = [poly1, empty_multi, empty_polygon, poly2]
+    result = flatten_shapely_geometries(mixed_with_empty)
+    assert len(result) == 2
+    assert poly1 in result
+    assert poly2 in result
+
+    # Test 11: Deeply nested structure
+    inner_collection = GeometryCollection([poly1, line])
+    outer_multi = MultiPolygon([poly2])
+    deep_collection = GeometryCollection([inner_collection, outer_multi])
+    result = flatten_shapely_geometries(deep_collection)
+    assert len(result) == 2
+    assert poly1 in result
+    assert poly2 in result
+
+    # Test 12: All geometry types filtered out
+    points_and_lines = GeometryCollection([Point(0, 0), LineString([(0, 0), (1, 1)])])
+    result = flatten_shapely_geometries(points_and_lines)  # Default keeps only Polygons
+    assert len(result) == 0
+
+    # Test 13: Edge case - single empty geometry
+    result = flatten_shapely_geometries(empty_polygon)
+    assert len(result) == 0

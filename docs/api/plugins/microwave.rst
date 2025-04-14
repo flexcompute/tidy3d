@@ -13,11 +13,11 @@ Microwave
    :template: module.rst
 
    tidy3d.plugins.microwave.AxisAlignedPathIntegral 
-   tidy3d.plugins.microwave.VoltageIntegralAxisAligned
-   tidy3d.plugins.microwave.CurrentIntegralAxisAligned
-   tidy3d.plugins.microwave.CustomPathIntegral2D 
-   tidy3d.plugins.microwave.CustomVoltageIntegral2D
-   tidy3d.plugins.microwave.CustomCurrentIntegral2D
+   tidy3d.plugins.microwave.AxisAlignedVoltageIntegral
+   tidy3d.plugins.microwave.AxisAlignedCurrentIntegral
+   tidy3d.plugins.microwave.Custom2DPathIntegral 
+   tidy3d.plugins.microwave.Custom2DVoltageIntegral
+   tidy3d.plugins.microwave.Custom2DCurrentIntegral
    tidy3d.plugins.microwave.ImpedanceCalculator
    tidy3d.plugins.microwave.RectangularAntennaArrayCalculator
    tidy3d.plugins.microwave.LobeMeasurer

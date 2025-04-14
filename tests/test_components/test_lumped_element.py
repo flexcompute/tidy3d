@@ -7,7 +7,7 @@ import pydantic.v1 as pydantic
 import pytest
 
 import tidy3d as td
-from tidy3d.components.lumped_element import NetworkConversions
+from tidy3d.components.lumped_element import network_complex_permittivity
 
 
 def test_lumped_resistor():
@@ -261,7 +261,7 @@ def test_RLC_and_lumped_network_agreement(Rval, Lval, Cval, topology):
     (a, b) = RLC._as_admittance_function
 
     eps_from_RLC_med = med_RLC.eps_model(freqs)
-    eps_direct = 1 + sf * NetworkConversions.complex_permittivity(a=a, b=b, freqs=freqs)
+    eps_direct = 1 + sf * network_complex_permittivity(a=a, b=b, freqs=freqs)
 
     assert np.allclose(eps_from_RLC_med, eps_direct, rtol=rtol)
 

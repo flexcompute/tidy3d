@@ -5,7 +5,6 @@ from typing import Optional, Union
 import numpy as np
 
 import tidy3d as td
-import tidy3d.plugins.microwave as microwave
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
     LumpedPort,
@@ -288,7 +287,7 @@ def make_coaxial_component_modeler(
 
             voltage_integral = None
             if use_voltage:
-                voltage_integral = microwave.VoltageIntegralAxisAligned(
+                voltage_integral = td.AxisAlignedVoltageIntegral(
                     center=voltage_center,
                     size=voltage_size,
                     extrapolate_to_endpoints=True,
@@ -297,7 +296,7 @@ def make_coaxial_component_modeler(
                 )
             current_integral = None
             if use_current:
-                current_integral = microwave.CustomCurrentIntegral2D.from_circular_path(
+                current_integral = td.Custom2DCurrentIntegral.from_circular_path(
                     center=center,
                     radius=mean_radius,
                     num_points=41,

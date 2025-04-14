@@ -10,12 +10,14 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.data.data_array import FieldProjectionAngleDataArray, FreqDataArray
-from tidy3d.components.data.monitor_data import DirectivityData
+from tidy3d.components.data.monitor_data import DirectivityData, ModeData, ModeSolverData
+from tidy3d.components.microwave.base import MicrowaveBaseModel
+from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
 from tidy3d.components.types import PolarizationBasis
-from tidy3d.log import log
 
 
-class AntennaMetricsData(DirectivityData):
+class AntennaMetricsData(DirectivityData, MicrowaveBaseModel):
     """Data representing the main parameters and figures of merit for antennas.
 
     Example
@@ -39,8 +41,8 @@ class AntennaMetricsData(DirectivityData):
     ...     name="rad_monitor",
     ...     phi=phi,
     ...     theta=theta
-    ... ) # doctest: +SKIP
-    >>> power_data = FreqDataArray(np.random.random(len(f)), coords=coords_flux) # doctest: +SKIP
+    ... )
+    >>> power_data = FreqDataArray(np.random.random(len(f)), coords=coords_flux)
     >>> data = AntennaMetricsData(
     ...     monitor=monitor,
     ...     projection_surfaces=monitor.projection_surfaces,
@@ -53,7 +55,7 @@ class AntennaMetricsData(DirectivityData):
     ...     Hphi=scalar_field,
     ...     power_incident=power_data,
     ...     power_reflected=power_data
-    ... ) # doctest: +SKIP
+    ... )
 
     Notes
     -----
@@ -198,10 +200,157 @@ class AntennaMetricsData(DirectivityData):
         partial_G = self.partial_realized_gain()
         return partial_G.Gtheta + partial_G.Gphi
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
+
+class MicrowaveModeData(ModeData, MicrowaveBaseModel):
+    """
+    Data associated with a :class:`.ModeMonitor` for microwave and RF applications: modal amplitudes,
+    propagation indices, mode profiles, and transmission line data.
+
+    Notes
+    -----
+
+        This class extends :class:`.ModeData` with additional microwave-specific data including
+        characteristic impedance, voltage coefficients, and current coefficients. The data is
+        stored as `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        objects using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+        The microwave mode data contains all the information from :class:`.ModeData` plus additional
+        microwave dataset with impedance calculations performed using voltage and current line integrals
+        as specified in the :class:`.MicrowaveModeSpec`.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> import numpy as np
+    >>> from tidy3d.components.data.data_array import (
+    ...     CurrentFreqModeDataArray,
+    ...     ImpedanceFreqModeDataArray,
+    ...     ModeAmpsDataArray,
+    ...     ModeIndexDataArray,
+    ...     VoltageFreqModeDataArray,
+    ... )
+    >>> from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+    >>> direction = ["+", "-"]
+    >>> f = [1e14, 2e14, 3e14]
+    >>> mode_index = np.arange(3)
+    >>> index_coords = dict(f=f, mode_index=mode_index)
+    >>> index_data = ModeIndexDataArray((1+1j) * np.random.random((3, 3)), coords=index_coords)
+    >>> amp_coords = dict(direction=direction, f=f, mode_index=mode_index)
+    >>> amp_data = ModeAmpsDataArray((1+1j) * np.random.random((2, 3, 3)), coords=amp_coords)
+    >>> impedance_data = ImpedanceFreqModeDataArray(50 * np.ones((3, 3)), coords=index_coords)
+    >>> voltage_data = VoltageFreqModeDataArray((1+1j) * np.random.random((3, 3)), coords=index_coords)
+    >>> current_data = CurrentFreqModeDataArray((0.02+0.01j) * np.random.random((3, 3)), coords=index_coords)
+    >>> tl_data = TransmissionLineDataset(
+    ...     Z0=impedance_data,
+    ...     voltage_coeffs=voltage_data,
+    ...     current_coeffs=current_data
+    ... )
+    >>> monitor = td.MicrowaveModeMonitor(
+    ...    center=(0, 0, 0),
+    ...    size=(2, 0, 6),
+    ...    freqs=[2e14, 3e14],
+    ...    mode_spec=td.MicrowaveModeSpec(num_modes=3, impedance_specs=td.AutoImpedanceSpec()),
+    ...    name='microwave_mode',
+    ... )
+    >>> data = MicrowaveModeData(
+    ...     monitor=monitor,
+    ...     amps=amp_data,
+    ...     n_complex=index_data,
+    ...     transmission_line_data=tl_data
+    ... )
+    """
+
+    monitor: MicrowaveModeMonitor = pd.Field(
+        ..., title="Monitor", description="Mode monitor associated with the data."
+    )
+
+    transmission_line_data: Optional[TransmissionLineDataset] = pd.Field(
+        None,
+        title="Transmission Line Data",
+        description="Additional data relevant to transmission lines in RF and microwave applications, "
+        "like characteristic impedance. This field is populated when a :class:`MicrowaveModeSpec` has "
+        "been used to set up the monitor or mode solver.",
+    )
+
+    @property
+    def modes_info(self) -> xr.Dataset:
+        """Dataset collecting various properties of the stored modes."""
+        super_info = super().modes_info
+        if self.transmission_line_data is not None:
+            super_info["Re(Z0)"] = self.transmission_line_data.Z0.real
+            super_info["Im(Z0)"] = self.transmission_line_data.Z0.imag
+        return super_info
+
+
+class MicrowaveModeSolverData(ModeSolverData, MicrowaveModeData):
+    """
+    Data associated with a :class:`.ModeSolverMonitor` for microwave and RF applications: scalar components
+    of E and H fields plus characteristic impedance data.
+
+    Notes
+    -----
+
+        This class extends :class:`.ModeSolverData` with additional microwave-specific data including
+        characteristic impedance, voltage coefficients, and current coefficients. The data is
+        stored as `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        objects using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+        The microwave mode solver data contains all field components (Ex, Ey, Ez, Hx, Hy, Hz) and
+        effective indices from :class:`.ModeSolverData`, plus impedance calculations performed using
+        voltage and current line integrals as specified in the :class:`.MicrowaveModeSpec`.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> import numpy as np
+    >>> from tidy3d import Grid, Coords
+    >>> from tidy3d.components.data.data_array import (
+    ...     CurrentFreqModeDataArray,
+    ...     ImpedanceFreqModeDataArray,
+    ...     ScalarModeFieldDataArray,
+    ...     ModeIndexDataArray,
+    ...     VoltageFreqModeDataArray,
+    ... )
+    >>> from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+    >>> x = [-1, 1, 3]
+    >>> y = [-2, 0]
+    >>> z = [-3, -1, 1, 3, 5]
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(3)
+    >>> grid = Grid(boundaries=Coords(x=x, y=y, z=z))
+    >>> field_coords = dict(x=x[:-1], y=y[:-1], z=z[:-1], f=f, mode_index=mode_index)
+    >>> field = ScalarModeFieldDataArray((1+1j)*np.random.random((2,1,4,2,3)), coords=field_coords)
+    >>> index_coords = dict(f=f, mode_index=mode_index)
+    >>> index_data = ModeIndexDataArray((1+1j) * np.random.random((2,3)), coords=index_coords)
+    >>> impedance_data = ImpedanceFreqModeDataArray(50 * np.ones((2, 3)), coords=index_coords)
+    >>> voltage_data = VoltageFreqModeDataArray((1+1j) * np.random.random((2, 3)), coords=index_coords)
+    >>> current_data = CurrentFreqModeDataArray((0.02+0.01j) * np.random.random((2, 3)), coords=index_coords)
+    >>> tl_data = TransmissionLineDataset(
+    ...     Z0=impedance_data,
+    ...     voltage_coeffs=voltage_data,
+    ...     current_coeffs=current_data
+    ... )
+    >>> monitor = td.MicrowaveModeSolverMonitor(
+    ...    center=(0, 0, 0),
+    ...    size=(2, 0, 6),
+    ...    freqs=[2e14, 3e14],
+    ...    mode_spec=td.MicrowaveModeSpec(num_modes=3, impedance_specs=td.AutoImpedanceSpec()),
+    ...    name='microwave_mode_solver',
+    ... )
+    >>> data = MicrowaveModeSolverData(
+    ...     monitor=monitor,
+    ...     Ex=field,
+    ...     Ey=field,
+    ...     Ez=field,
+    ...     Hx=field,
+    ...     Hy=field,
+    ...     Hz=field,
+    ...     n_complex=index_data,
+    ...     grid_expanded=grid,
+    ...     transmission_line_data=tl_data
+    ... )
+    """
+
+    monitor: MicrowaveModeSolverMonitor = pd.Field(
+        ..., title="Monitor", description="Mode monitor associated with the data."
+    )

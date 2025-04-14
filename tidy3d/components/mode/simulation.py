@@ -12,7 +12,6 @@ from tidy3d.components.boundary import BoundarySpec
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import (
     MediumMonitor,
     ModeMonitor,
@@ -26,6 +25,7 @@ from tidy3d.components.simulation import (
 )
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
+from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -119,10 +119,11 @@ class ModeSimulation(AbstractYeeGridSimulation):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    mode_spec: ModeSpec = pd.Field(
+    mode_spec: ModeSpecType = pd.Field(
         ...,
         title="Mode specification",
         description="Container with specifications about the modes to be solved for.",
+        discriminator=TYPE_TAG_STR,
     )
 
     freqs: FreqArray = pd.Field(

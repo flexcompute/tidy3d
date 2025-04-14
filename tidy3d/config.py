@@ -37,6 +37,13 @@ class Tidy3dConfig(pd.BaseModel):
         "for several elements.",
     )
 
+    suppress_rf_license_warning: bool = pd.Field(
+        False,
+        title="Suppress RF License Warning",
+        description="Enable or disable the RF/microwave license warning message when "
+        "instantiating microwave components.",
+    )
+
     use_local_subpixel: Optional[bool] = pd.Field(
         None,
         title="Whether to use local subpixel averaging. If 'None', local subpixel "

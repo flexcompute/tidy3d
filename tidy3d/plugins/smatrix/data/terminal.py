@@ -7,12 +7,12 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.components.data.monitor_data import MonitorData
 from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
-from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.base import AbstractComponentModelerData
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
@@ -29,7 +29,7 @@ from tidy3d.plugins.smatrix.utils import (
 )
 
 
-class MicrowaveSMatrixData(Tidy3dBaseModel):
+class MicrowaveSMatrixData(MicrowaveBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
 
     port_reference_impedances: Optional[PortDataArray] = pd.Field(
@@ -51,7 +51,7 @@ class MicrowaveSMatrixData(Tidy3dBaseModel):
     )
 
 
-class TerminalComponentModelerData(AbstractComponentModelerData):
+class TerminalComponentModelerData(AbstractComponentModelerData, MicrowaveBaseModel):
     """
     Data associated with a :class:`.TerminalComponentModeler` simulation run.
 
@@ -116,14 +116,6 @@ class TerminalComponentModelerData(AbstractComponentModelerData):
             s_param_def=s_param_def if (s_param_def is not None) else self.modeler.s_param_def,
         )
         return smatrix_data
-
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
 
     def _monitor_data_at_port_amplitude(
         self,
