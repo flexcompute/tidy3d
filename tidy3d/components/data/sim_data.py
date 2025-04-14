@@ -25,12 +25,13 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from tidy3d.components.types.monitor_data import MonitorDataType, MonitorDataTypes
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, FileError, SetupError, Tidy3dKeyError
 from tidy3d.log import log
 
 from .data_array import FreqDataArray, TimeDataArray
-from .monitor_data import AbstractFieldData, FieldTimeData, MonitorDataType, MonitorDataTypes
+from .monitor_data import AbstractFieldData, FieldTimeData
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 

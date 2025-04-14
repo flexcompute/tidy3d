@@ -14,6 +14,7 @@ from tidy3d.components.data.validators import validate_can_interpolate, validate
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
+from tidy3d.components.types.mode_spec import ModeSpecType
 from tidy3d.components.validators import (
     assert_plane,
     assert_single_freq_in_range,
@@ -391,10 +392,11 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    mode_spec: ModeSpec = pydantic.Field(
+    mode_spec: ModeSpecType = pydantic.Field(
         ModeSpec(),
         title="Mode Specification",
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
+        discriminator=TYPE_TAG_STR,
     )
 
     mode_index: pydantic.NonNegativeInt = pydantic.Field(

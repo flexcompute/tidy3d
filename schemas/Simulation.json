@@ -894,6 +894,23 @@
       },
       "type": "object"
     },
+    "AutoImpedanceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "type": {
+          "default": "AutoImpedanceSpec",
+          "enum": [
+            "AutoImpedanceSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "AuxFieldTimeMonitor": {
       "additionalProperties": false,
       "properties": {
@@ -1064,6 +1081,270 @@
       },
       "required": [
         "name",
+        "size"
+      ],
+      "type": "object"
+    },
+    "AxisAlignedCurrentIntegralSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "extrapolate_to_endpoints": {
+          "default": false,
+          "type": "boolean"
+        },
+        "sign": {
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "snap_contour_to_grid": {
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "default": "AxisAlignedCurrentIntegralSpec",
+          "enum": [
+            "AxisAlignedCurrentIntegralSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "sign",
+        "size"
+      ],
+      "type": "object"
+    },
+    "AxisAlignedVoltageIntegralSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "extrapolate_to_endpoints": {
+          "default": false,
+          "type": "boolean"
+        },
+        "sign": {
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "snap_path_to_grid": {
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "default": "AxisAlignedVoltageIntegralSpec",
+          "enum": [
+            "AxisAlignedVoltageIntegralSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "sign",
         "size"
       ],
       "type": "object"
@@ -2122,6 +2403,47 @@
       ],
       "type": "object"
     },
+    "CompositeCurrentIntegralSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "path_specs": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/AxisAlignedCurrentIntegralSpec"
+              },
+              {
+                "$ref": "#/definitions/Custom2DCurrentIntegralSpec"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "sum_spec": {
+          "enum": [
+            "split",
+            "sum"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "CompositeCurrentIntegralSpec",
+          "enum": [
+            "CompositeCurrentIntegralSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "path_specs",
+        "sum_spec"
+      ],
+      "type": "object"
+    },
     "ConstantDoping": {
       "additionalProperties": false,
       "properties": {
@@ -2456,6 +2778,78 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "Custom2DCurrentIntegralSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "axis": {
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "type": "integer"
+        },
+        "position": {
+          "type": "number"
+        },
+        "type": {
+          "default": "Custom2DCurrentIntegralSpec",
+          "enum": [
+            "Custom2DCurrentIntegralSpec"
+          ],
+          "type": "string"
+        },
+        "vertices": {
+          "type": "ArrayLike"
+        }
+      },
+      "required": [
+        "axis",
+        "position",
+        "vertices"
+      ],
+      "type": "object"
+    },
+    "Custom2DVoltageIntegralSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "axis": {
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "type": "integer"
+        },
+        "position": {
+          "type": "number"
+        },
+        "type": {
+          "default": "Custom2DVoltageIntegralSpec",
+          "enum": [
+            "Custom2DVoltageIntegralSpec"
+          ],
+          "type": "string"
+        },
+        "vertices": {
+          "type": "ArrayLike"
+        }
+      },
+      "required": [
+        "axis",
+        "position",
+        "vertices"
+      ],
       "type": "object"
     },
     "CustomAnisotropicMedium": {
@@ -3643,6 +4037,46 @@
       "required": [
         "perturbation_values"
       ],
+      "type": "object"
+    },
+    "CustomImpedanceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "current_spec": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AxisAlignedCurrentIntegralSpec"
+            },
+            {
+              "$ref": "#/definitions/CompositeCurrentIntegralSpec"
+            },
+            {
+              "$ref": "#/definitions/Custom2DCurrentIntegralSpec"
+            }
+          ]
+        },
+        "type": {
+          "default": "CustomImpedanceSpec",
+          "enum": [
+            "CustomImpedanceSpec"
+          ],
+          "type": "string"
+        },
+        "voltage_spec": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AxisAlignedVoltageIntegralSpec"
+            },
+            {
+              "$ref": "#/definitions/Custom2DVoltageIntegralSpec"
+            }
+          ]
+        }
+      },
       "type": "object"
     },
     "CustomLorentz": {
@@ -10209,6 +10643,569 @@
       ],
       "type": "object"
     },
+    "MicrowaveModeMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "apodization": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ApodizationSpec"
+            }
+          ],
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "colocate": {
+          "default": true,
+          "type": "boolean"
+        },
+        "conjugated_dot_product": {
+          "default": true,
+          "type": "boolean"
+        },
+        "freqs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "ArrayLike"
+            }
+          ]
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "items": [
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "mode_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/MicrowaveModeSpec"
+            }
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "store_fields_direction": {
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "MicrowaveModeMonitor",
+          "enum": [
+            "MicrowaveModeMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
+    "MicrowaveModeSolverMonitor": {
+      "additionalProperties": false,
+      "properties": {
+        "apodization": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/ApodizationSpec"
+            }
+          ],
+          "default": {
+            "attrs": {},
+            "end": null,
+            "start": null,
+            "type": "ApodizationSpec",
+            "width": null
+          }
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "center": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "autograd.tracer.Box"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "colocate": {
+          "default": true,
+          "type": "boolean"
+        },
+        "conjugated_dot_product": {
+          "default": true,
+          "type": "boolean"
+        },
+        "direction": {
+          "default": "+",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "fields": {
+          "default": [
+            "Ex",
+            "Ey",
+            "Ez",
+            "Hx",
+            "Hy",
+            "Hz"
+          ],
+          "items": {
+            "enum": [
+              "Ex",
+              "Ey",
+              "Ez",
+              "Hx",
+              "Hy",
+              "Hz"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freqs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "ArrayLike"
+            }
+          ]
+        },
+        "interval_space": {
+          "default": [
+            1,
+            1,
+            1
+          ],
+          "items": [
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            },
+            {
+              "enum": [
+                1
+              ],
+              "type": "integer"
+            }
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "mode_spec": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/MicrowaveModeSpec"
+            }
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    {
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ],
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            {
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "store_fields_direction": {
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "MicrowaveModeSolverMonitor",
+          "enum": [
+            "MicrowaveModeSolverMonitor"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "freqs",
+        "name",
+        "size"
+      ],
+      "type": "object"
+    },
+    "MicrowaveModeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "angle_phi": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "angle_rotation": {
+          "default": false,
+          "type": "boolean"
+        },
+        "angle_theta": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "bend_axis": {
+          "enum": [
+            0,
+            1
+          ],
+          "type": "integer"
+        },
+        "bend_radius": {
+          "type": "number"
+        },
+        "filter_pol": {
+          "enum": [
+            "te",
+            "tm"
+          ],
+          "type": "string"
+        },
+        "group_index_step": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "default": false
+        },
+        "impedance_specs": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/AutoImpedanceSpec"
+                  },
+                  {
+                    "$ref": "#/definitions/CustomImpedanceSpec"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "oneOf": [
+                {
+                  "$ref": "#/definitions/AutoImpedanceSpec"
+                },
+                {
+                  "$ref": "#/definitions/CustomImpedanceSpec"
+                }
+              ]
+            }
+          ]
+        },
+        "num_modes": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "num_pml": {
+          "default": [
+            0,
+            0
+          ],
+          "items": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "precision": {
+          "default": "double",
+          "enum": [
+            "auto",
+            "double",
+            "single"
+          ],
+          "type": "string"
+        },
+        "target_neff": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "track_freq": {
+          "default": "central",
+          "enum": [
+            "central",
+            "highest",
+            "lowest"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "default": "MicrowaveModeSpec",
+          "enum": [
+            "MicrowaveModeSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "ModeABCBoundary": {
       "additionalProperties": false,
       "properties": {
@@ -10233,11 +11230,6 @@
           "type": "integer"
         },
         "mode_spec": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/ModeSpec"
-            }
-          ],
           "default": {
             "angle_phi": 0.0,
             "angle_rotation": false,
@@ -10256,7 +11248,22 @@
             "target_neff": null,
             "track_freq": "central",
             "type": "ModeSpec"
-          }
+          },
+          "discriminator": {
+            "mapping": {
+              "MicrowaveModeSpec": "#/definitions/MicrowaveModeSpec",
+              "ModeSpec": "#/definitions/ModeSpec"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/MicrowaveModeSpec"
+            },
+            {
+              "$ref": "#/definitions/ModeSpec"
+            }
+          ]
         },
         "name": {
           "type": "string"
@@ -10827,11 +11834,6 @@
           "type": "integer"
         },
         "mode_spec": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/ModeSpec"
-            }
-          ],
           "default": {
             "angle_phi": 0.0,
             "angle_rotation": false,
@@ -10850,7 +11852,22 @@
             "target_neff": null,
             "track_freq": "central",
             "type": "ModeSpec"
-          }
+          },
+          "discriminator": {
+            "mapping": {
+              "MicrowaveModeSpec": "#/definitions/MicrowaveModeSpec",
+              "ModeSpec": "#/definitions/ModeSpec"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/MicrowaveModeSpec"
+            },
+            {
+              "$ref": "#/definitions/ModeSpec"
+            }
+          ]
         },
         "name": {
           "type": "string"
@@ -15736,6 +16753,8 @@
             "FluxMonitor": "#/definitions/FluxMonitor",
             "FluxTimeMonitor": "#/definitions/FluxTimeMonitor",
             "MediumMonitor": "#/definitions/MediumMonitor",
+            "MicrowaveModeMonitor": "#/definitions/MicrowaveModeMonitor",
+            "MicrowaveModeSolverMonitor": "#/definitions/MicrowaveModeSolverMonitor",
             "ModeMonitor": "#/definitions/ModeMonitor",
             "ModeSolverMonitor": "#/definitions/ModeSolverMonitor",
             "PermittivityMonitor": "#/definitions/PermittivityMonitor"
@@ -15775,6 +16794,12 @@
           },
           {
             "$ref": "#/definitions/MediumMonitor"
+          },
+          {
+            "$ref": "#/definitions/MicrowaveModeMonitor"
+          },
+          {
+            "$ref": "#/definitions/MicrowaveModeSolverMonitor"
           },
           {
             "$ref": "#/definitions/ModeMonitor"

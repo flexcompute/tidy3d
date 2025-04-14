@@ -11,24 +11,26 @@ from pydantic.v1 import NonNegativeFloat, PositiveInt, conint
 from scipy.signal.windows import blackman, blackmanharris, chebwin, hamming, hann, kaiser, taylor
 from scipy.special import j0, jn_zeros
 
-from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.grid.grid_spec import GridSpec, LayerRefinementSpec
 from tidy3d.components.lumped_element import LumpedElement
 from tidy3d.components.medium import Medium, MediumType3D
-from tidy3d.components.monitor import AbstractFieldProjectionMonitor, MonitorType
+from tidy3d.components.microwave.base import MicrowaveBaseModel
+from tidy3d.components.monitor import AbstractFieldProjectionMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure
 from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Axis, Bound, Undefined
+from tidy3d.components.types.monitor import MonitorType
 from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import Tidy3dNotImplementedError
 from tidy3d.log import log
 
 
-class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
+class AbstractAntennaArrayCalculator(MicrowaveBaseModel, ABC):
     """Abstract base for phased array calculators."""
 
     taper: Union[RectangularTaper, RadialTaper] = pd.Field(
@@ -595,14 +597,6 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
             simulation=sim_array.updated_copy(monitors=good_monitors), data=data_array
         )
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
-
     def _rect_taper_array_factor(
         self, exp_x: ArrayLike, exp_y: ArrayLike, exp_z: ArrayLike
     ) -> ArrayLike:
@@ -734,7 +728,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     ...    array_size=(3, 4, 5),
     ...    spacings=(0.5, 0.5, 0.5),
     ...    phase_shifts=(0, 0, 0),
-    ... ) # doctest: +SKIP
+    ... )
     """
 
     array_size: tuple[PositiveInt, PositiveInt, PositiveInt] = pd.Field(
@@ -906,7 +900,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
             return self._general_taper_array_factor(exp_x, exp_y, exp_z)
 
 
-class AbstractWindow(Tidy3dBaseModel, ABC):
+class AbstractWindow(MicrowaveBaseModel, ABC):
     """This class provides interface for window selection."""
 
     def _get_weights_discrete(self, N: int) -> ArrayLike:
@@ -1168,7 +1162,7 @@ RectangularWindowType = Union[
 ]
 
 
-class AbstractTaper(Tidy3dBaseModel, ABC):
+class AbstractTaper(MicrowaveBaseModel, ABC):
     """Abstract taper class provides an interface for taper of Array antennas."""
 
     @abstractmethod

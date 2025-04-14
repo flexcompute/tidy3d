@@ -2,6 +2,28 @@
 
 from __future__ import annotations
 
+from tidy3d.components.microwave.impedance_calculator import (
+    CurrentIntegralType,
+    ImpedanceCalculator,
+    VoltageIntegralType,
+)
+from tidy3d.components.microwave.path_integrals.integrals.auto import (
+    path_integrals_from_lumped_element,
+)
+from tidy3d.components.microwave.path_integrals.integrals.base import (
+    AxisAlignedPathIntegral,
+    Custom2DPathIntegral,
+)
+from tidy3d.components.microwave.path_integrals.integrals.current import (
+    AxisAlignedCurrentIntegral,
+    CompositeCurrentIntegral,
+    Custom2DCurrentIntegral,
+)
+from tidy3d.components.microwave.path_integrals.integrals.voltage import (
+    AxisAlignedVoltageIntegral,
+    Custom2DVoltageIntegral,
+)
+
 from . import models
 from .array_factor import (
     BlackmanHarrisWindow,
@@ -15,31 +37,25 @@ from .array_factor import (
     RectangularTaper,
     TaylorWindow,
 )
-from .auto_path_integrals import path_integrals_from_lumped_element
-from .custom_path_integrals import (
-    CustomCurrentIntegral2D,
-    CustomPathIntegral2D,
-    CustomVoltageIntegral2D,
-)
-from .impedance_calculator import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
 from .lobe_measurer import LobeMeasurer
-from .path_integrals import (
-    AxisAlignedPathIntegral,
-    CurrentIntegralAxisAligned,
-    VoltageIntegralAxisAligned,
-)
 from .rf_material_library import rf_material_library
 
+# Backwards compatibility
+CurrentIntegralTypes = CurrentIntegralType
+VoltageIntegralTypes = VoltageIntegralType
+
 __all__ = [
+    "AxisAlignedCurrentIntegral",
     "AxisAlignedPathIntegral",
+    "AxisAlignedVoltageIntegral",
     "BlackmanHarrisWindow",
     "BlackmanWindow",
     "ChebWindow",
-    "CurrentIntegralAxisAligned",
+    "CompositeCurrentIntegral",
     "CurrentIntegralTypes",
-    "CustomCurrentIntegral2D",
-    "CustomPathIntegral2D",
-    "CustomVoltageIntegral2D",
+    "Custom2DCurrentIntegral",
+    "Custom2DPathIntegral",
+    "Custom2DVoltageIntegral",
     "HammingWindow",
     "HannWindow",
     "ImpedanceCalculator",
@@ -49,7 +65,6 @@ __all__ = [
     "RectangularAntennaArrayCalculator",
     "RectangularTaper",
     "TaylorWindow",
-    "VoltageIntegralAxisAligned",
     "VoltageIntegralTypes",
     "models",
     "path_integrals_from_lumped_element",

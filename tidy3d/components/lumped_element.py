@@ -16,9 +16,8 @@ from tidy3d.components.structure import MeshOverrideStructure, Structure
 from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
 from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
 from tidy3d.exceptions import ValidationError
-from tidy3d.log import log
 
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .base import cached_property, skip_if_fields_missing
 from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from .geometry.primitives import Cylinder
 from .geometry.utils import (
@@ -29,6 +28,7 @@ from .geometry.utils import (
     snap_point_to_grid,
 )
 from .geometry.utils_2d import increment_float
+from .microwave.base import MicrowaveBaseModel
 from .microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
     capacitance_rectangular_sheets,
@@ -50,7 +50,7 @@ DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 1
 LOSS_FACTOR_INDUCTOR = 1e6
 
 
-class LumpedElement(Tidy3dBaseModel, ABC):
+class LumpedElement(MicrowaveBaseModel, ABC):
     """Base class describing the interface all lumped elements obey."""
 
     name: str = pd.Field(
@@ -103,14 +103,6 @@ class LumpedElement(Tidy3dBaseModel, ABC):
         """Converts the :class:`.LumpedElement` object to a list of :class:`.Structure`
         which are ready to be added to the :class:`.Simulation`"""
         return [self.to_structure(grid)]
-
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
 
 
 class RectangularLumpedElement(LumpedElement, Box):
@@ -464,98 +456,100 @@ class CoaxialLumpedResistor(LumpedElement):
         return self.to_geometry()
 
 
-class NetworkConversions(Tidy3dBaseModel):
-    """Helper functionality for directly computing complex conductivity and permittivities using
-    equations in _`[1]`. Useful for testing the direct translations of lumped network parameters into
-    an equivalent PoleResidue medium.
+def network_complex_conductivity(
+    a: tuple[float, ...], b: tuple[float, ...], freqs: np.ndarray
+) -> np.ndarray:
+    """Returns the equivalent conductivity of the lumped network over the range of frequencies
+    provided in ``freqs`` using the expression in _`[1]`.
+
+    This implementation follows a similar approach as _`[1]` with a couple small differences. Instead of
+    scaling the complex conductivity by the size of a single grid cell, we later scale the quantities by the
+    size of the lumped element in the FDTD simulation. In many cases, we will assume the time step is small,
+    so that the complex conductivity can be expressed more simply as a rational expression.
+
+    Parameters
+    ----------
+    a : tuple[float, ...]
+        Coefficients of the numerator polynomial
+    b : tuple[float, ...]
+        Coefficients of the denominator polynomial.
+    freqs: np.ndarray
+        Frequencies at which to evaluate model.
+
+    Returns
+    -------
+    np.ndarray
+        The resulting complex conductivity.
 
     Notes
     -----
 
-        This implementation follows a similar approach as _`[1]` with a couple small differences. Instead of
-        scaling the complex conductivity by the size of a single grid cell, we later scale the quantities by the
-        size of the lumped element in the FDTD simulation. In many cases, we will assume the time step is small,
-        so that the complex conductivity can be expressed more simply as a rational expression.
+    **References**
 
-        **References**
-
-        .. [1]  J. A. Pereda, F. Alimenti, P. Mezzanotte, L. Roselli and R. Sorrentino, "A new algorithm
-                for the incorporation of arbitrary linear lumped networks into FDTD simulators," IEEE
-                Trans. Microw. Theory Tech., vol. 47, no. 6, pp. 943-949, Jun. 1999.
+    .. [1]  J. A. Pereda, F. Alimenti, P. Mezzanotte, L. Roselli and R. Sorrentino, "A new algorithm
+            for the incorporation of arbitrary linear lumped networks into FDTD simulators," IEEE
+            Trans. Microw. Theory Tech., vol. 47, no. 6, pp. 943-949, Jun. 1999.
     """
 
-    @staticmethod
-    def complex_conductivity(a: tuple[float, ...], b: tuple[float, ...], freqs: np.ndarray):
-        """Returns the equivalent conductivity of the lumped network over the range of frequencies
-        provided in ``freqs`` using the expression in _`[1]`.
-
-        Parameters
-        ----------
-        a : tuple[float, ...]
-            Coefficients of the numerator polynomial
-        b : tuple[float, ...]
-            Coefficients of the denominator polynomial.
-        freqs: np.ndarray
-            Frequencies at which to evaluate model.
-
-        Returns
-        -------
-        np.ndarray
-            The resulting complex conductivity.
-        """
-
-        # This is the original term from [1], instead we use the limiting case of dt -> 0.
-        # After time-discretization, the PoleResidue medium should model the original term.
-        # K_tan = -1j * (2 / dt) * np.tan(2 * np.pi * freqs * dt / 2)
-        K_tan = -1j * 2 * np.pi * freqs
-        numer = 0
-        denom = 0
-        for a_m, m in zip(a, range(len(a))):
-            numer += a_m * K_tan ** (m)
-        for b_m, m in zip(b, range(len(b))):
-            denom += b_m * K_tan ** (m)
-        # We do not include the scaling factor associated with the cell size, since we will
-        # distribute the network over more than one cell.
-        return numer / denom
-
-    @staticmethod
-    def complex_permittivity(a: tuple[float, ...], b: tuple[float, ...], freqs: np.ndarray):
-        """
-        Returns an equivalent complex permittivity of the lumped network over the range of frequencies
-        provided in ``freqs`` using the expression in _`[1]`. The result needs to be combined with a
-        :math:`\\epsilon_\\infty`, e.g., 1 or the existing background medium, before being added to an
-        FDTD simulation.
-
-        Parameters
-        ----------
-        a : tuple[float, ...]
-            Coefficients of the numerator polynomial
-        b : tuple[float, ...]
-            Coefficients of the denominator polynomial.
-        freqs: np.ndarray
-            Frequencies at which to evaluate model.
-
-        Returns
-        -------
-        np.ndarray
-            The equivalent frequency-dependent portion of the electric permittivity.
-        """
-
-        # For fitting with a pole-residue model, we provide a convenience function for
-        # converting the complex conductivity to a complex permittivity.
-        sigma = NetworkConversions.complex_conductivity(a, b, freqs)
-        return 1j * sigma / (2 * np.pi * freqs * EPSILON_0)
-
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
+    # This is the original term from [1], instead we use the limiting case of dt -> 0.
+    # After time-discretization, the PoleResidue medium should model the original term.
+    # K_tan = -1j * (2 / dt) * np.tan(2 * np.pi * freqs * dt / 2)
+    K_tan = -1j * 2 * np.pi * freqs
+    numer = 0
+    denom = 0
+    for a_m, m in zip(a, range(len(a))):
+        numer += a_m * K_tan ** (m)
+    for b_m, m in zip(b, range(len(b))):
+        denom += b_m * K_tan ** (m)
+    # We do not include the scaling factor associated with the cell size, since we will
+    # distribute the network over more than one cell.
+    return numer / denom
 
 
-class RLCNetwork(Tidy3dBaseModel):
+def network_complex_permittivity(
+    a: tuple[float, ...], b: tuple[float, ...], freqs: np.ndarray
+) -> np.ndarray:
+    """Returns an equivalent complex permittivity of the lumped network over the range of frequencies
+    provided in ``freqs`` using the expression in _`[1]`. The result needs to be combined with a
+    :math:`\\epsilon_\\infty`, e.g., 1 or the existing background medium, before being added to an
+    FDTD simulation.
+
+    This implementation follows a similar approach as _`[1]` with a couple small differences. Instead of
+    scaling the complex conductivity by the size of a single grid cell, we later scale the quantities by the
+    size of the lumped element in the FDTD simulation. In many cases, we will assume the time step is small,
+    so that the complex conductivity can be expressed more simply as a rational expression.
+
+    Parameters
+    ----------
+    a : tuple[float, ...]
+        Coefficients of the numerator polynomial
+    b : tuple[float, ...]
+        Coefficients of the denominator polynomial.
+    freqs: np.ndarray
+        Frequencies at which to evaluate model.
+
+    Returns
+    -------
+    np.ndarray
+        The equivalent frequency-dependent portion of the electric permittivity.
+
+    Notes
+    -----
+
+    **References**
+
+    .. [1]  J. A. Pereda, F. Alimenti, P. Mezzanotte, L. Roselli and R. Sorrentino, "A new algorithm
+            for the incorporation of arbitrary linear lumped networks into FDTD simulators," IEEE
+            Trans. Microw. Theory Tech., vol. 47, no. 6, pp. 943-949, Jun. 1999.
+    """
+
+    # For fitting with a pole-residue model, we provide a convenience function for
+    # converting the complex conductivity to a complex permittivity.
+    sigma = network_complex_conductivity(a, b, freqs)
+    return 1j * sigma / (2 * np.pi * freqs * EPSILON_0)
+
+
+class RLCNetwork(MicrowaveBaseModel):
     """Class for representing a simple network consisting of a resistor, capacitor, and inductor.
     Provides additional functionality for representing the network as an equivalent medium.
 
@@ -575,7 +569,7 @@ class RLCNetwork(Tidy3dBaseModel):
     >>> RL_series = RLCNetwork(resistance=75,
     ...                        inductance=1e-9,
     ...                        network_topology="series"
-    ...                       ) # doctest: +SKIP
+    ...                       )
 
     """
 
@@ -804,16 +798,8 @@ class RLCNetwork(Tidy3dBaseModel):
             raise ValueError("At least one element must be defined in the 'RLCNetwork'.")
         return val
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
 
-
-class AdmittanceNetwork(Tidy3dBaseModel):
+class AdmittanceNetwork(MicrowaveBaseModel):
     """Class for representing a network consisting of an arbitrary number of resistors,
     capacitors, and inductors. The network is represented in the Laplace domain
     as an admittance function. Provides additional functionality for representing the network
@@ -857,7 +843,7 @@ class AdmittanceNetwork(Tidy3dBaseModel):
     >>> b = (R, 0)
     >>> RC_parallel = AdmittanceNetwork(a=a,
     ...                                 b=b
-    ...               ) # doctest: +SKIP
+    ...               )
 
     """
 
@@ -889,14 +875,6 @@ class AdmittanceNetwork(Tidy3dBaseModel):
         """
         return (self.a, self.b)
 
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values
-
 
 class LinearLumpedElement(RectangularLumpedElement):
     """Lumped element representing a network consisting of resistors, capacitors, and inductors.
@@ -919,14 +897,14 @@ class LinearLumpedElement(RectangularLumpedElement):
     >>> RL_series = RLCNetwork(resistance=75,
     ...                        inductance=1e-9,
     ...                        network_topology="series"
-    ...             ) # doctest: +SKIP
+    ...             )
     >>> linear_element = LinearLumpedElement(
     ...                         center=[0, 0, 0],
     ...                         size=[2, 0, 3],
     ...                         voltage_axis=0,
     ...                         network=RL_series,
     ...                         name="LumpedRL"
-    ...                   ) # doctest: +SKIP
+    ...                   )
 
 
     See Also
@@ -1174,7 +1152,7 @@ class LinearLumpedElement(RectangularLumpedElement):
         an opposite sign compared to the expected value when using the engineering convention.
         """
         a, b = self.network._as_admittance_function
-        return NetworkConversions.complex_conductivity(a=a, b=b, freqs=freqs)
+        return network_complex_conductivity(a=a, b=b, freqs=freqs)
 
     def impedance(self, freqs: np.ndarray) -> np.ndarray:
         """Returns the impedance of this lumped element at the frequencies specified by ``freqs``.

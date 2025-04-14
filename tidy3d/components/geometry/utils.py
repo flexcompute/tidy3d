@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from enum import Enum
 from math import isclose
 from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic
+import pydantic.v1 as pydantic
 import shapely
+from shapely.geometry import (
+    Polygon,
+)
+from shapely.geometry.base import (
+    BaseMultipartGeometry,
+)
 
 from tidy3d.components.autograd.utils import get_static
 from tidy3d.components.base import Tidy3dBaseModel
@@ -43,6 +50,44 @@ GeometryType = Union[
 ]
 
 
+def flatten_shapely_geometries(
+    geoms: Union[Shapely, Iterable[Shapely]], keep_types: tuple[type, ...] = (Polygon,)
+) -> list[Shapely]:
+    """
+    Flatten nested geometries into a flat list, while only keeping the specified types.
+
+    Recursively extracts and returns non-empty geometries of the given types from input geometries,
+    expanding any GeometryCollections or Multi* types.
+
+    Parameters
+    ----------
+    geoms : Union[Shapely, Iterable[Shapely]]
+        Input geometries to flatten.
+
+    keep_types : tuple[type, ...]
+        Geometry types to keep (e.g., (Polygon, LineString)). Default is
+        (Polygon).
+
+    Returns
+    -------
+    list[Shapely]
+        Flat list of non-empty geometries matching the specified types.
+    """
+    # Handle single Shapely object by wrapping it in a list
+    if isinstance(geoms, Shapely):
+        geoms = [geoms]
+
+    flat = []
+    for geom in geoms:
+        if geom.is_empty:
+            continue
+        if isinstance(geom, keep_types):
+            flat.append(geom)
+        elif isinstance(geom, BaseMultipartGeometry):
+            flat.extend(flatten_shapely_geometries(geom.geoms, keep_types))
+    return flat
+
+
 def merging_geometries_on_plane(
     geometries: list[GeometryType],
     plane: Box,
@@ -65,7 +110,7 @@ def merging_geometries_on_plane(
 
     Returns
     -------
-    List[Tuple[Any, shapely]]
+    List[Tuple[Any, Shapely]]
         List of shapes and their property value on the plane after merging.
     """
 
@@ -375,7 +420,15 @@ class SnapBehavior(Enum):
     Snaps the interval's endpoints to the closest grid points,
     while guaranteeing that the snapping location will never move endpoints outwards.
     """
-    Off = 4
+    StrictExpand = 4
+    """
+    Same as Expand, but will always move endpoints outwards, even if already coincident with grid.
+    """
+    StrictContract = 5
+    """
+    Same as Contract, but will always move endpoints inwards, even if already coincident with grid.
+    """
+    Off = 6
     """
     Do not use snapping.
     """
@@ -394,6 +447,15 @@ class SnappingSpec(Tidy3dBaseModel):
         ...,
         title="Behavior",
         description="Describes how snapping positions will be chosen.",
+    )
+
+    margin: Optional[
+        tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt, pydantic.NonNegativeInt]
+    ] = pydantic.Field(
+        (0, 0, 0),
+        title="Margin",
+        description="Number of additional grid points to consider when expanding or contracting "
+        "during snapping. Only applies when ``SnapBehavior`` is ``Expand`` or ``Contract``.",
     )
 
 
@@ -420,34 +482,130 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps)
     The way in which each dimension of the `box` is snapped to the grid is controlled by ``snap_spec``.
     """
 
+    def _clamp_index(idx: int, length: int) -> int:
+        return max(0, min(idx, length - 1))
+
     def get_lower_bound(
-        test: float, coords: np.ArrayLike, upper_bound_idx: int, rel_tol: float
+        test: float,
+        coords: np.ArrayLike,
+        upper_bound_idx: int,
+        rel_tol: float,
+        strict_bounds: bool,
+        margin: int = 0,
     ) -> float:
-        """Helper to choose the lower bound in an array for a given test value,
-        using the index of the upper bound. If the test value is close to the upper
-        bound, it assumes they are equal, and in that case the upper bound is returned.
+        """Choose the lower bound from coords for snapping a test value downward.
+
+        Returns a coordinate value from ``coords`` that satisfies ``result <= test`` when
+        ``strict_bounds=False``, or ``result < test`` when ``strict_bounds=True``. The
+        ``rel_tol`` parameter is used to determine floating-point equality: if ``test`` is
+        close to a grid point (within ``rel_tol``).
+
+        Parameters
+        ----------
+        test : float
+            The value to snap.
+        coords : np.ArrayLike
+            Sorted array of coordinate values to snap to.
+        upper_bound_idx : int
+            Index from ``np.searchsorted(coords, test, side="left")`` - the first index where
+            ``coords[upper_bound_idx] >= test``.
+        rel_tol : float
+            Relative tolerance for floating-point equality comparison.
+        strict_bounds : bool
+            If ``False``: Return value satisfies ``result <= test`` (using ``rel_tol`` for equality).
+            If ``True``: Return value satisfies ``result < test`` (using ``rel_tol`` for equality).
+        margin : int, optional
+            Additional offset in grid cells (can be negative). Applied after determining the
+            snap index. Default is 0.
+
+        Returns
+        -------
+        float
+            The selected coordinate value from ``coords``.
         """
-        if upper_bound_idx == len(coords):
-            return coords[upper_bound_idx - 1]
-        if upper_bound_idx == 0 or isclose(coords[upper_bound_idx], test, rel_tol=rel_tol):
-            return coords[upper_bound_idx]
-        return coords[upper_bound_idx - 1]
+        snap_idx = upper_bound_idx - 1
+        if (
+            not strict_bounds
+            and upper_bound_idx != len(coords)
+            and isclose(coords[upper_bound_idx], test, rel_tol=rel_tol)
+        ):
+            snap_idx = upper_bound_idx
+        elif (
+            strict_bounds
+            and upper_bound_idx >= 2
+            and isclose(coords[upper_bound_idx - 1], test, rel_tol=rel_tol)
+        ):
+            snap_idx = upper_bound_idx - 2
+
+        # Apply margin and clamp
+        snap_idx += margin
+        snap_idx = _clamp_index(snap_idx, len(coords))
+        return coords[snap_idx]
 
     def get_upper_bound(
-        test: float, coords: np.ArrayLike, upper_bound_idx: int, rel_tol: float
+        test: float,
+        coords: np.ArrayLike,
+        upper_bound_idx: int,
+        rel_tol: float,
+        strict_bounds: bool,
+        margin: int = 0,
     ) -> float:
-        """Helper to choose the upper bound in an array for a given test value,
-        using the index of the upper bound. If the test value is close to the lower
-        bound, it assumes they are equal, and in that case the lower bound is returned.
+        """Choose the upper bound from coords for snapping a test value upward.
+
+        Returns a coordinate value from ``coords`` that satisfies ``result >= test`` when
+        ``strict_bounds=False``, or ``result > test`` when ``strict_bounds=True``. The
+        ``rel_tol`` parameter is used to determine floating-point equality: if ``test`` is
+        close to a grid point (within ``rel_tol``).
+
+        Parameters
+        ----------
+        test : float
+            The value to snap.
+        coords : np.ArrayLike
+            Sorted array of coordinate values to snap to.
+        upper_bound_idx : int
+            Index from ``np.searchsorted(coords, test, side="left")`` - the first index where
+            ``coords[upper_bound_idx] >= test``.
+        rel_tol : float
+            Relative tolerance for floating-point equality comparison.
+        strict_bounds : bool
+            If ``False``: Return value satisfies ``result >= test`` (using ``rel_tol`` for equality).
+            If ``True``: Return value satisfies ``result > test`` (using ``rel_tol`` for equality).
+        margin : int, optional
+            Additional offset in grid cells (can be negative). Applied after determining the
+            snap index. Default is 0.
+
+        Returns
+        -------
+        float
+            The selected coordinate value from ``coords``.
         """
-        if upper_bound_idx == len(coords):
-            return coords[upper_bound_idx - 1]
-        if upper_bound_idx > 0 and isclose(coords[upper_bound_idx - 1], test, rel_tol=rel_tol):
-            return coords[upper_bound_idx - 1]
-        return coords[upper_bound_idx]
+        snap_idx = upper_bound_idx
+
+        if (
+            not strict_bounds
+            and upper_bound_idx > 0
+            and (isclose(coords[upper_bound_idx - 1], test, rel_tol=rel_tol))
+        ):
+            snap_idx = upper_bound_idx - 1
+        elif (
+            strict_bounds
+            and upper_bound_idx < len(coords)
+            and isclose(coords[upper_bound_idx], test, rel_tol=rel_tol)
+        ):
+            snap_idx = upper_bound_idx + 1
+
+        # Apply margin and clamp
+        snap_idx += margin
+        snap_idx = _clamp_index(snap_idx, len(coords))
+        return coords[snap_idx]
 
     def find_snapping_locations(
-        interval_min: float, interval_max: float, coords: np.ndarray, snap_type: SnapBehavior
+        interval_min: float,
+        interval_max: float,
+        coords: np.ndarray,
+        snap_type: SnapBehavior,
+        snap_margin: pydantic.NonNegativeInt,
     ) -> tuple[float, float]:
         """Helper that snaps a supplied interval [interval_min, interval_max] to a
         sorted array representing coordinate values.
@@ -455,15 +613,48 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps)
         # Locate the interval that includes the min and max
         min_upper_bound_idx = np.searchsorted(coords, interval_min, side="left")
         max_upper_bound_idx = np.searchsorted(coords, interval_max, side="left")
+        strict_bounds = (
+            snap_type == SnapBehavior.StrictExpand or snap_type == SnapBehavior.StrictContract
+        )
         if snap_type == SnapBehavior.Closest:
             min_snap = get_closest_value(interval_min, coords, min_upper_bound_idx)
             max_snap = get_closest_value(interval_max, coords, max_upper_bound_idx)
-        elif snap_type == SnapBehavior.Expand:
-            min_snap = get_lower_bound(interval_min, coords, min_upper_bound_idx, rel_tol=rtol)
-            max_snap = get_upper_bound(interval_max, coords, max_upper_bound_idx, rel_tol=rtol)
+        elif snap_type == SnapBehavior.Expand or snap_type == SnapBehavior.StrictExpand:
+            min_snap = get_lower_bound(
+                interval_min,
+                coords,
+                min_upper_bound_idx,
+                rel_tol=rtol,
+                strict_bounds=strict_bounds,
+                margin=-snap_margin,
+            )
+            max_snap = get_upper_bound(
+                interval_max,
+                coords,
+                max_upper_bound_idx,
+                rel_tol=rtol,
+                strict_bounds=strict_bounds,
+                margin=+snap_margin,
+            )
         else:  # SnapType.Contract
-            min_snap = get_upper_bound(interval_min, coords, min_upper_bound_idx, rel_tol=rtol)
-            max_snap = get_lower_bound(interval_max, coords, max_upper_bound_idx, rel_tol=rtol)
+            min_snap = get_upper_bound(
+                interval_min,
+                coords,
+                min_upper_bound_idx,
+                rel_tol=rtol,
+                strict_bounds=strict_bounds,
+                margin=+snap_margin,
+            )
+            max_snap = get_lower_bound(
+                interval_max,
+                coords,
+                max_upper_bound_idx,
+                rel_tol=rtol,
+                strict_bounds=strict_bounds,
+                margin=-snap_margin,
+            )
+            if max_snap < min_snap:
+                raise SetupError("The supplied 'snap_margin' is too large for this contraction.")
         return (min_snap, max_snap)
 
     # Iterate over each axis and apply the specified snapping behavior.
@@ -473,6 +664,7 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps)
     for axis in range(3):
         snap_location = snap_spec.location[axis]
         snap_type = snap_spec.behavior[axis]
+        snap_margin = snap_spec.margin[axis]
         if snap_type == SnapBehavior.Off:
             continue
         if snap_location == SnapLocation.Boundary:
@@ -483,7 +675,9 @@ def snap_box_to_grid(grid: Grid, box: Box, snap_spec: SnappingSpec, rtol=fp_eps)
         box_min = min_b[axis]
         box_max = max_b[axis]
 
-        (new_min, new_max) = find_snapping_locations(box_min, box_max, snap_coords, snap_type)
+        (new_min, new_max) = find_snapping_locations(
+            box_min, box_max, snap_coords, snap_type, snap_margin
+        )
         min_b[axis] = new_min
         max_b[axis] = new_max
     return Box.from_bounds(min_b, max_b)

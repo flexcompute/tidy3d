@@ -20,13 +20,14 @@ from tidy3d.components.geometry.utils import (
 from tidy3d.components.geometry.utils_2d import increment_float
 from tidy3d.components.grid.grid import Grid, YeeGrid
 from tidy3d.components.lumped_element import LinearLumpedElement, LumpedResistor, RLCNetwork
+from tidy3d.components.microwave.path_integrals.integrals.current import AxisAlignedCurrentIntegral
+from tidy3d.components.microwave.path_integrals.integrals.voltage import AxisAlignedVoltageIntegral
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import UniformCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Axis, FreqArray, LumpDistType
 from tidy3d.components.validators import assert_line_or_plane
 from tidy3d.exceptions import SetupError, ValidationError
-from tidy3d.plugins.microwave import CurrentIntegralAxisAligned, VoltageIntegralAxisAligned
 
 from .base_lumped import AbstractLumpedPort
 
@@ -41,7 +42,7 @@ class LumpedPort(AbstractLumpedPort, Box):
     ...             voltage_axis=2,
     ...             name="port_1",
     ...             impedance=50
-    ...         ) # doctest: +SKIP
+    ...         )
 
     See Also
     --------
@@ -211,7 +212,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         """Helper to compute voltage across the port."""
         voltage_box = self._to_voltage_box(sim_data.simulation.grid)
         field_data = sim_data[self._voltage_monitor_name]
-        voltage_integral = VoltageIntegralAxisAligned(
+        voltage_integral = AxisAlignedVoltageIntegral(
             center=voltage_box.center,
             size=voltage_box.size,
             extrapolate_to_endpoints=True,
@@ -238,7 +239,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         current_box = self._to_current_box(sim_data.simulation.grid)
 
         # H field is continuous at integral bounds, so extrapolation is turned off
-        I_integral = CurrentIntegralAxisAligned(
+        I_integral = AxisAlignedCurrentIntegral(
             center=current_box.center,
             size=current_box.size,
             sign="+",

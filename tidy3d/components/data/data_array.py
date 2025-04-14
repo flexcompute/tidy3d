@@ -209,6 +209,12 @@ class DataArray(xr.DataArray):
         return abs(self)
 
     @property
+    def angle(self):
+        """Angle or phase value of data array."""
+        values = np.angle(self.values)
+        return type(self)(values, coords=self.coords)
+
+    @property
     def is_uniform(self):
         """Whether each element is of equal value in the data array"""
         raw_data = self.data.ravel()
@@ -1518,7 +1524,7 @@ class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
     __slots__ = ()
 
 
-def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
+def _make_base_result_data_array(result: DataArray) -> IntegralResultType:
     """Helper for creating the proper base result type."""
     cls = FreqDataArray
     if "t" in result.coords:
@@ -1528,7 +1534,7 @@ def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
     return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
 
 
-def _make_voltage_data_array(result: DataArray) -> VoltageIntegralResultTypes:
+def _make_voltage_data_array(result: DataArray) -> VoltageIntegralResultType:
     """Helper for creating the proper voltage array type."""
     cls = VoltageFreqDataArray
     if "t" in result.coords:
@@ -1538,7 +1544,7 @@ def _make_voltage_data_array(result: DataArray) -> VoltageIntegralResultTypes:
     return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
 
 
-def _make_current_data_array(result: DataArray) -> CurrentIntegralResultTypes:
+def _make_current_data_array(result: DataArray) -> CurrentIntegralResultType:
     """Helper for creating the proper current array type."""
     cls = CurrentFreqDataArray
     if "t" in result.coords:
@@ -1548,7 +1554,7 @@ def _make_current_data_array(result: DataArray) -> CurrentIntegralResultTypes:
     return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
 
 
-def _make_impedance_data_array(result: DataArray) -> ImpedanceResultTypes:
+def _make_impedance_data_array(result: DataArray) -> ImpedanceResultType:
     """Helper for creating the proper impedance array type."""
     cls = ImpedanceFreqDataArray
     if "t" in result.coords:
@@ -1616,13 +1622,13 @@ IndexedDataArrayTypes = Union[
     PointDataArray,
 ]
 
-IntegralResultTypes = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
-VoltageIntegralResultTypes = Union[
+IntegralResultType = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
+VoltageIntegralResultType = Union[
     VoltageFreqDataArray, VoltageFreqModeDataArray, VoltageTimeDataArray
 ]
-CurrentIntegralResultTypes = Union[
+CurrentIntegralResultType = Union[
     CurrentFreqDataArray, CurrentFreqModeDataArray, CurrentTimeDataArray
 ]
-ImpedanceResultTypes = Union[
+ImpedanceResultType = Union[
     ImpedanceFreqDataArray, ImpedanceFreqModeDataArray, ImpedanceTimeDataArray
 ]

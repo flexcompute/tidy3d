@@ -7,10 +7,11 @@ from typing import Literal, Optional, Union
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.monitor_data import MediumData, ModeSolverData, PermittivityData
+from tidy3d.components.data.monitor_data import MediumData, PermittivityData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.components.types import Ax, PlotScale
+from tidy3d.components.types import TYPE_TAG_STR, Ax, PlotScale
+from tidy3d.components.types.monitor_data import ModeSolverDataType
 
 ModeSimulationMonitorDataType = Union[PermittivityData, MediumData]
 
@@ -22,10 +23,11 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         ..., title="Mode simulation", description="Mode simulation associated with this data."
     )
 
-    modes_raw: ModeSolverData = pd.Field(
+    modes_raw: ModeSolverDataType = pd.Field(
         ...,
         title="Raw Modes",
-        description=":class:`.ModeSolverData` containing the field and effective index on unexpanded grid.",
+        description=":class:`.ModeSolverDataType` containing the field and effective index on unexpanded grid.",
+        discriminator=TYPE_TAG_STR,
     )
 
     data: tuple[ModeSimulationMonitorDataType, ...] = pd.Field(
@@ -36,7 +38,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
     )
 
     @cached_property
-    def modes(self) -> ModeSolverData:
+    def modes(self) -> ModeSolverDataType:
         """:class:`.ModeSolverData` containing the field and effective index data."""
         return self.modes_raw.symmetry_expanded_copy
 

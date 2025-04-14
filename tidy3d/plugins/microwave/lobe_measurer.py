@@ -9,11 +9,11 @@ import numpy as np
 import pydantic.v1 as pd
 from pandas import DataFrame
 
-from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.microwave.base import MicrowaveBaseModel
 from tidy3d.components.types import ArrayFloat1D, ArrayLike, Ax
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
-from tidy3d.log import log
 
 from .viz import plot_params_lobe_FNBW, plot_params_lobe_peak, plot_params_lobe_width
 
@@ -24,7 +24,7 @@ DEFAULT_MIN_LOBE_REL_HEIGHT = 1e-3
 DEFAULT_NULL_THRESHOLD = 1e-3
 
 
-class LobeMeasurer(Tidy3dBaseModel):
+class LobeMeasurer(MicrowaveBaseModel):
     """
     Tool for detecting and analyzing lobes in antenna radiation patterns,
     along with their characteristics such as direction and beamwidth.
@@ -35,8 +35,8 @@ class LobeMeasurer(Tidy3dBaseModel):
     >>> Urad = np.cos(theta) ** 2 * np.cos(3 * theta) ** 2
     >>> lobe_measurer = LobeMeasurer(
     ...     angle=theta,
-    ...     radiation_pattern=Urad) # doctest: +SKIP
-    >>> lobe_measures = lobe_measurer.lobe_measures # doctest: +SKIP
+    ...     radiation_pattern=Urad)
+    >>> lobe_measures = lobe_measurer.lobe_measures
     """
 
     angle: ArrayFloat1D = pd.Field(
@@ -349,11 +349,3 @@ class LobeMeasurer(Tidy3dBaseModel):
             ax.axvline(FNBW_bounds[1], **plot_params_lobe_FNBW.to_kwargs())
 
         return ax
-
-    @pd.root_validator(pre=False)
-    def _warn_rf_license(cls, values):
-        log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
-            log_once=True,
-        )
-        return values

@@ -15,11 +15,6 @@ from tidy3d import SimulationDataMap
 from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
-from tidy3d.plugins.microwave import (
-    CurrentIntegralAxisAligned,
-    CustomCurrentIntegral2D,
-    VoltageIntegralAxisAligned,
-)
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
     LumpedPort,
@@ -830,7 +825,7 @@ def test_wave_port_path_integral_validation():
     size_port = [2, 2, 0]
     center_port = [0, 0, -10]
 
-    voltage_path = VoltageIntegralAxisAligned(
+    voltage_path = td.AxisAlignedVoltageIntegral(
         center=(0.5, 0, -10),
         size=(1.0, 0, 0),
         extrapolate_to_endpoints=True,
@@ -838,7 +833,7 @@ def test_wave_port_path_integral_validation():
         sign="+",
     )
 
-    custom_current_path = CustomCurrentIntegral2D.from_circular_path(
+    custom_current_path = td.Custom2DCurrentIntegral.from_circular_path(
         center=center_port, radius=0.5, num_points=21, normal_axis=2, clockwise=False
     )
 
@@ -887,7 +882,7 @@ def test_wave_port_path_integral_validation():
             current_integral=None,
         )
 
-    custom_current_path = CustomCurrentIntegral2D.from_circular_path(
+    custom_current_path = td.Custom2DCurrentIntegral.from_circular_path(
         center=center_port, radius=3, num_points=21, normal_axis=2, clockwise=False
     )
     with pytest.raises(pd.ValidationError):
@@ -922,7 +917,7 @@ def test_wave_port_grid_validation(tmp_path):
     size_port = [2, 2, 0]
     center_port = [0, 0, -10]
 
-    voltage_path = VoltageIntegralAxisAligned(
+    voltage_path = td.AxisAlignedVoltageIntegral(
         center=(0.5, 0, -10),
         size=(1.0, 0, 0),
         extrapolate_to_endpoints=True,
@@ -930,7 +925,7 @@ def test_wave_port_grid_validation(tmp_path):
         sign="+",
     )
 
-    current_path = CurrentIntegralAxisAligned(
+    current_path = td.AxisAlignedCurrentIntegral(
         center=(0.5, 0, -10),
         size=(0.25, 0.5, 0),
         snap_contour_to_grid=True,
@@ -990,7 +985,7 @@ def test_port_source_snapped_to_PML(tmp_path):
     """
     modeler = make_component_modeler(planar_pec=True)
     port_pos = 5e4
-    voltage_path = VoltageIntegralAxisAligned(
+    voltage_path = td.AxisAlignedVoltageIntegral(
         center=(port_pos, 0, 0),
         size=(0, 1e3, 0),
         sign="+",

@@ -19,6 +19,9 @@ from tidy3d.components.data.data_array import (
     ModeIndexDataArray,
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
+    _make_current_data_array,
+    _make_impedance_data_array,
+    _make_voltage_data_array,
 )
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.data.sim_data import SimulationData
@@ -31,6 +34,16 @@ from tidy3d.components.medium import (
     IsotropicUniformMediumType,
     LossyMetalMedium,
 )
+from tidy3d.components.microwave.data.dataset import TransmissionLineDataset
+from tidy3d.components.microwave.data.monitor_data import MicrowaveModeSolverData
+from tidy3d.components.microwave.impedance_calculator import (
+    CurrentIntegralType,
+    ImpedanceCalculator,
+    VoltageIntegralType,
+)
+from tidy3d.components.microwave.mode_spec import MicrowaveModeSpec
+from tidy3d.components.microwave.monitor import MicrowaveModeMonitor, MicrowaveModeSolverMonitor
+from tidy3d.components.microwave.path_integrals.factory import make_path_integrals
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
@@ -55,6 +68,8 @@ from tidy3d.components.types import (
     PlotScale,
     Symmetry,
 )
+from tidy3d.components.types.mode_spec import ModeSpecType
+from tidy3d.components.types.monitor_data import ModeSolverDataType
 from tidy3d.components.validators import (
     validate_freqs_min,
     validate_freqs_not_empty,
@@ -146,10 +161,11 @@ class ModeSolver(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    mode_spec: ModeSpec = pydantic.Field(
+    mode_spec: ModeSpecType = pydantic.Field(
         ...,
         title="Mode specification",
         description="Container with specifications about the modes to be solved for.",
+        discriminator=TYPE_TAG_STR,
     )
 
     freqs: FreqArray = pydantic.Field(
@@ -427,6 +443,12 @@ class ModeSolver(Tidy3dBaseModel):
         num_freqs = len(self.freqs)
         return num_cells, num_freqs, num_modes
 
+    @property
+    def _has_microwave_mode_spec(self) -> bool:
+        """Check if the mode solver is using a :class:`.MicrowaveModeSpec`.,
+        and will thus be creating :class:`.MicrowaveModeSolverData`."""
+        return isinstance(self.mode_spec, MicrowaveModeSpec)
+
     def solve(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index data.
 
@@ -497,13 +519,13 @@ class ModeSolver(Tidy3dBaseModel):
         return simulation._snap_zero_dim(grid_snapped, skip_axis=normal_axis)
 
     @cached_property
-    def data_raw(self) -> ModeSolverData:
+    def data_raw(self) -> ModeSolverDataType:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
 
         Returns
         -------
-        ModeSolverData
-            :class:`.ModeSolverData` object containing the effective index and mode fields.
+        ModeSolverDataType
+            A mode solver data type object containing the effective index and mode fields.
         """
 
         if self.mode_spec.group_index_step > 0:
@@ -514,6 +536,8 @@ class ModeSolver(Tidy3dBaseModel):
 
         # Compute data on the Yee grid
         mode_solver_data = self._data_on_yee_grid()
+        if self._has_microwave_mode_spec:
+            mode_solver_data = MicrowaveModeSolverData(**mode_solver_data.dict(exclude={"type"}))
 
         # Colocate to grid boundaries if requested
         if self.colocate:
@@ -533,6 +557,9 @@ class ModeSolver(Tidy3dBaseModel):
         self._field_decay_warning(mode_solver_data.symmetry_expanded)
 
         mode_solver_data = self._filter_components(mode_solver_data)
+        # Calculate and add the characteristic impedance
+        if self._has_microwave_mode_spec:
+            mode_solver_data = self._add_microwave_data(mode_solver_data)
         return mode_solver_data
 
     @cached_property
@@ -1353,14 +1380,65 @@ class ModeSolver(Tidy3dBaseModel):
             ]:
                 data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
 
+    def _make_path_integrals(
+        self,
+    ) -> tuple[tuple[Optional[VoltageIntegralType]], tuple[Optional[CurrentIntegralType]]]:
+        """Wrapper for making path integrals from the MicrowaveModeSpec. Note: overriden in the backend to support
+        auto creation of path integrals."""
+        if not self._has_microwave_mode_spec:
+            raise ValueError(
+                "Cannot make path integrals for when 'mode_spec' is not a 'MicrowaveModeSpec'."
+            )
+        return make_path_integrals(self.mode_spec)
+
+    def _add_microwave_data(
+        self, mode_solver_data: MicrowaveModeSolverData
+    ) -> MicrowaveModeSolverData:
+        """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications."""
+        voltage_integrals, current_integrals = self._make_path_integrals()
+        # Need to operate on the full symmetry expanded fields
+        mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
+        Z0_list = []
+        V_list = []
+        I_list = []
+        if len(voltage_integrals) == 1 and self.mode_spec.num_modes > 1:
+            voltage_integrals = voltage_integrals * self.mode_spec.num_modes
+            current_integrals = current_integrals * self.mode_spec.num_modes
+        for mode_index in range(self.mode_spec.num_modes):
+            vi = voltage_integrals[mode_index]
+            ci = current_integrals[mode_index]
+            if vi is None and ci is None:
+                continue
+            impedance_calc = ImpedanceCalculator(
+                voltage_integral=voltage_integrals[mode_index],
+                current_integral=current_integrals[mode_index],
+            )
+            single_mode_data = mode_solver_data_expanded._isel(mode_index=[mode_index])
+            Z0, voltage, current = impedance_calc.compute_impedance(
+                single_mode_data, return_voltage_and_current=True
+            )
+            Z0_list.append(Z0)
+            V_list.append(voltage)
+            I_list.append(current)
+        all_mode_Z0 = xr.concat(Z0_list, dim="mode_index")
+        all_mode_Z0 = _make_impedance_data_array(all_mode_Z0)
+        all_mode_V = xr.concat(V_list, dim="mode_index")
+        all_mode_V = _make_voltage_data_array(all_mode_V)
+        all_mode_I = xr.concat(I_list, dim="mode_index")
+        all_mode_I = _make_current_data_array(all_mode_I)
+        mw_data = TransmissionLineDataset(
+            Z0=all_mode_Z0, voltage_coeffs=all_mode_V, current_coeffs=all_mode_I
+        )
+        return mode_solver_data.updated_copy(transmission_line_data=mw_data)
+
     @cached_property
-    def data(self) -> ModeSolverData:
+    def data(self) -> ModeSolverDataType:
         """:class:`.ModeSolverData` containing the field and effective index data.
 
         Returns
         -------
-        ModeSolverData
-            :class:`.ModeSolverData` object containing the effective index and mode fields.
+        ModeSolverDataType
+            A mode solver data type object containing the effective index and mode fields.
         """
         mode_solver_data = self.data_raw
         return mode_solver_data.symmetry_expanded_copy
@@ -1946,11 +2024,16 @@ class ModeSolver(Tidy3dBaseModel):
                 "The default value of 'None' is for backwards compatibility and is not accepted."
             )
 
-        return ModeMonitor(
+        mode_solver_monitor_type = ModeMonitor
+        if self._has_microwave_mode_spec:
+            mode_solver_monitor_type = MicrowaveModeMonitor
+
+        return mode_solver_monitor_type(
             center=self.plane.center,
             size=self.plane.size,
             freqs=freqs,
             mode_spec=self.mode_spec,
+            colocate=self.colocate,
             conjugated_dot_product=self.conjugated_dot_product,
             name=name,
         )
@@ -1977,7 +2060,11 @@ class ModeSolver(Tidy3dBaseModel):
         if colocate is None:
             colocate = self.colocate
 
-        return ModeSolverMonitor(
+        mode_solver_monitor_type = ModeSolverMonitor
+        if self._has_microwave_mode_spec:
+            mode_solver_monitor_type = MicrowaveModeSolverMonitor
+
+        return mode_solver_monitor_type(
             size=self.plane.size,
             center=self.plane.center,
             mode_spec=self.mode_spec,

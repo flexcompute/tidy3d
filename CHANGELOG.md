@@ -12,12 +12,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added support for `tidy3d-extras`, an optional plugin that enables more accurate local mode solving via subpixel averaging.
 - Added support for `symlog` and `log` scale plotting in `Scene.plot_eps()` and `Scene.plot_structures_property()` methods. The `symlog` scale provides linear behavior near zero and logarithmic behavior elsewhere, while 'log' is a base 10 logarithmic scale.
 - Added `LowFrequencySmoothingSpec` and `ModelerLowFrequencySmoothingSpec` for automatic smoothing of mode monitor data at low frequencies where DFT sampling is insufficient.
+- Added `MicrowaveModeSpec` for RF-specific mode information with customizable characteristic impedance calculations.
+- Added `MicrowaveModeMonitor` and `MicrowaveModeSolverMonitor` for microwave and RF mode analysis with transmission line data.
+- Added `MicrowaveModeData` and `MicrowaveModeSolverData` extending mode solver results with characteristic impedance, voltage coefficients, and current coefficients.
+- Added `AutoImpedanceSpec` for automatic transmission line impedance calculation based on simulation geometry.
+- Added `CustomImpedanceSpec` for user-defined voltage and current path specifications in impedance calculations.
+- Added voltage integral specification classes: `AxisAlignedVoltageIntegralSpec` and `Custom2DVoltageIntegralSpec`.
+- Added current integral specification classes: `AxisAlignedCurrentIntegralSpec`, `CompositeCurrentIntegralSpec`, and `Custom2DCurrentIntegralSpec`.
 
 ### Changed
 - Improved performance of antenna metrics calculation by utilizing cached wave amplitude calculations instead of recomputing wave amplitudes for each port excitation in the `TerminalComponentModelerData`.
 - Changed hashing method in `Tidy3dBaseModel` from sha256 to md5.
 - Allowing for more geometries in a ClipOperation geometry.
 - Improved the speed of computing `Box` shape derivatives when used inside a `GeometryGroup`.
+- All RF and microwave specific components now inherit from `MicrowaveBaseModel`.
+- **[BREAKING]** Renamed path integral classes in `tidy3d.plugins.microwave` for improved consistency. Please see our migration guide for details on updating your code.
+  - `VoltageIntegralAxisAligned` → `AxisAlignedVoltageIntegral`
+  - `CurrentIntegralAxisAligned` → `AxisAlignedCurrentIntegral`
+  - `CustomPathIntegral2D` → `Custom2DPathIntegral`
+  - `CustomVoltageIntegral2D` → `Custom2DVoltageIntegral`
+  - `CustomCurrentIntegral2D` → `Custom2DCurrentIntegral`
+  - Path integral and impedance calculator classes have been refactored and moved from `tidy3d.plugins.microwave` to `tidy3d.components.microwave`. They are now publicly exported via the top-level package `__init__.py`, so you can import them directly, e.g. `from tidy3d import ImpedanceCalculator, AxisAlignedVoltageIntegral, AxisAlignedCurrentIntegral, Custom2DVoltageIntegral, Custom2DCurrentIntegral, Custom2DPathIntegral`.
 
 ### Fixed
 - More robust `Sellmeier` and `Debye` material model, and prevent very large pole parameters in `PoleResidue` material model.

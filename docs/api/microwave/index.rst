@@ -8,6 +8,12 @@ Overview
 
    RF simulations will be subject to new license requirements in the future.
 
+.. warning::
+
+   Breaking changes were introduced in ``v2.10.0``, please see the migration guide for help migrating your code.
+
+   + `Migration Guide <microwave_migration.html>`_
+
 This page consolidates Tidy3D features related to microwave and RF simulation. While microwave/RF and optical simulations have many properties in common, there are some differences in the typical RF user workflow that deserve special consideration.
 
 The following sections discuss:
