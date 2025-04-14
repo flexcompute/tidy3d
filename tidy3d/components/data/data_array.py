@@ -209,6 +209,13 @@ class DataArray(xr.DataArray):
         return abs(self)
 
     @property
+    def angle(self):
+        """Angle or phase value of data array."""
+        values = np.angle(self.values)
+        SelfType = type(self)
+        return SelfType(values, coords=self.coords)
+
+    @property
     def is_uniform(self):
         """Whether each element is of equal value in the data array"""
         raw_data = self.data.ravel()

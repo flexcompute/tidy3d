@@ -4327,7 +4327,9 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_time_monitors_outside_run_time()
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
+        self._validate_microwave_mode_specs()
         self._validate_finalized()
+
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
@@ -4513,6 +4515,17 @@ class Simulation(AbstractYeeGridSimulation):
                     f"outside of the simulation frequency range ({sci_fmin}, {sci_fmax})"
                     "(Hz) as defined by the sources."
                 )
+
+    def _validate_microwave_mode_specs(self) -> None:
+        """Raise error if any microwave mode specifications fail to instantiate path integrals."""
+        from .microwave.path_integrals.path_integral_factory import make_path_integrals
+
+        for monitor in self.monitors:
+            if not isinstance(monitor, AbstractModeMonitor):
+                continue
+            mw_mode_spec = monitor.mode_spec.microwave_mode_spec
+            if mw_mode_spec is not None:
+                _ = make_path_integrals(mw_mode_spec, monitor, self)
 
     @cached_property
     def monitors_data_size(self) -> dict[str, float]:

@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal, Union
 
 import numpy as np
-import pydantic.v1 as pd
-import shapely
 import xarray as xr
 
-from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
+from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.geometry.base import Geometry
-from tidy3d.components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
-from tidy3d.components.viz import add_ax_if_none
-from tidy3d.constants import MICROMETER, fp_eps
-from tidy3d.exceptions import SetupError
+from tidy3d.components.microwave.path_integrals.base_spec import CustomPathIntegral2DSpec
+from tidy3d.components.microwave.path_integrals.current_spec import (
+    CompositeCurrentIntegralSpec,
+    CustomCurrentIntegral2DSpec,
+)
+from tidy3d.components.microwave.path_integrals.voltage_spec import CustomVoltageIntegral2DSpec
+from tidy3d.components.types import Axis, Coordinate
+from tidy3d.exceptions import DataError
+from tidy3d.log import log
 
 from .path_integrals import (
-    AbstractAxesRH,
     AxisAlignedPathIntegral,
     CurrentIntegralResultTypes,
     IntegralResultTypes,
@@ -27,18 +30,11 @@ from .path_integrals import (
     _make_current_data_array,
     _make_voltage_data_array,
 )
-from .viz import (
-    ARROW_CURRENT,
-    plot_params_current_path,
-    plot_params_voltage_minus,
-    plot_params_voltage_path,
-    plot_params_voltage_plus,
-)
 
 FieldParameter = Literal["E", "H"]
 
 
-class CustomPathIntegral2D(AbstractAxesRH):
+class CustomPathIntegral2D(CustomPathIntegral2DSpec):
     """Class for defining a custom path integral defined as a curve on an axis-aligned plane.
 
     Notes
@@ -51,27 +47,6 @@ class CustomPathIntegral2D(AbstractAxesRH):
     :math:`\\vec{dl}_i = \\frac{\\vec{r}_{i+1} - \\vec{r}_{i-1}}{2}`.
     If the path is not closed, forward and backward differences are used at the endpoints.
     """
-
-    axis: Axis = pd.Field(
-        2, title="Axis", description="Specifies dimension of the planar axis (0,1,2) -> (x,y,z)."
-    )
-
-    position: float = pd.Field(
-        ...,
-        title="Position",
-        description="Position of the plane along the ``axis``.",
-    )
-
-    vertices: ArrayFloat2D = pd.Field(
-        ...,
-        title="Vertices",
-        description="List of (d1, d2) defining the 2 dimensional positions of the path. "
-        "The index of dimension should be in the ascending order, which means "
-        "if the axis corresponds with ``y``, the coordinates of the vertices should be (x, z). "
-        "If you wish to indicate a closed contour, the final vertex should be made "
-        "equal to the first vertex, i.e., ``vertices[-1] == vertices[0]``",
-        units=MICROMETER,
-    )
 
     def compute_integral(
         self, field: FieldParameter, em_field: MonitorDataTypes
@@ -198,43 +173,8 @@ class CustomPathIntegral2D(AbstractAxesRH):
         circle_vertices[-1, :] = circle_vertices[0, :]
         return cls(axis=normal_axis, position=normal_center, vertices=circle_vertices)
 
-    @cached_property
-    def is_closed_contour(self) -> bool:
-        """Returns ``true`` when the first vertex equals the last vertex."""
-        return np.isclose(
-            self.vertices[0, :],
-            self.vertices[-1, :],
-            rtol=fp_eps,
-            atol=np.finfo(np.float32).smallest_normal,
-        ).all()
 
-    @cached_property
-    def main_axis(self) -> Axis:
-        """Axis for performing integration."""
-        return self.axis
-
-    @pd.validator("vertices", always=True)
-    def _correct_shape(cls, val):
-        """Makes sure vertices size is correct."""
-        # overall shape of vertices
-        if val.shape[1] != 2:
-            raise SetupError(
-                "'CustomPathIntegral2D.vertices' must be a 2 dimensional array shaped (N, 2). "
-                f"Given array with shape of '{val.shape}'."
-            )
-        return val
-
-    @cached_property
-    def bounds(self) -> Bound:
-        """Helper to get the geometric bounding box of the path integral."""
-        path_min = np.amin(self.vertices, axis=0)
-        path_max = np.amax(self.vertices, axis=0)
-        min_bound = Geometry.unpop_axis(self.position, path_min, self.axis)
-        max_bound = Geometry.unpop_axis(self.position, path_max, self.axis)
-        return (min_bound, max_bound)
-
-
-class CustomVoltageIntegral2D(CustomPathIntegral2D):
+class CustomVoltageIntegral2D(CustomPathIntegral2D, CustomVoltageIntegral2DSpec):
     """Class for computing the voltage between two points defined by a custom path.
     Computed voltage is :math:`V=V_b-V_a`, where position b is the final vertex in the supplied path.
 
@@ -264,57 +204,8 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         voltage = -1.0 * self.compute_integral(field="E", em_field=em_field)
         return _make_voltage_data_array(voltage)
 
-    @add_ax_if_none
-    def plot(
-        self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        ax: Ax = None,
-        **path_kwargs,
-    ) -> Ax:
-        """Plot path integral at single (x,y,z) coordinate.
 
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        **path_kwargs
-            Optional keyword arguments passed to the matplotlib plotting of the line.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/36marrat>`_.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):
-            return ax
-
-        plot_params = plot_params_voltage_path.include_kwargs(**path_kwargs)
-        plot_kwargs = plot_params.to_kwargs()
-        xs = self.vertices[:, 0]
-        ys = self.vertices[:, 1]
-        ax.plot(xs, ys, markevery=[0, -1], **plot_kwargs)
-
-        # Plot special end points
-        end_kwargs = plot_params_voltage_plus.include_kwargs(**path_kwargs).to_kwargs()
-        start_kwargs = plot_params_voltage_minus.include_kwargs(**path_kwargs).to_kwargs()
-        ax.plot(xs[0], ys[0], **start_kwargs)
-        ax.plot(xs[-1], ys[-1], **end_kwargs)
-
-        return ax
-
-
-class CustomCurrentIntegral2D(CustomPathIntegral2D):
+class CustomCurrentIntegral2D(CustomPathIntegral2D, CustomCurrentIntegral2DSpec):
     """Class for computing conduction current via Ampère's circuital law on a custom path.
     To compute the current flowing in the positive ``axis`` direction, the vertices should be
     ordered in a counterclockwise direction."""
@@ -337,64 +228,170 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         current = self.compute_integral(field="H", em_field=em_field)
         return _make_current_data_array(current)
 
-    @add_ax_if_none
-    def plot(
-        self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
-        z: Optional[float] = None,
-        ax: Ax = None,
-        **path_kwargs,
-    ) -> Ax:
-        """Plot path integral at single (x,y,z) coordinate.
 
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        **path_kwargs
-            Optional keyword arguments passed to the matplotlib plotting of the line.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/36marrat>`_.
+class CompositeCurrentIntegral(CompositeCurrentIntegralSpec):
+    """Current integral comprising one or more disjoint paths"""
 
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):
-            return ax
+    def compute_current(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
+        """Compute current flowing in loop defined by the outer edge of a rectangle."""
+        if isinstance(em_field, FieldTimeData) and self.sum_spec == "split":
+            raise DataError(
+                "Only frequency domain field data is supported when using the 'split' sum_spec. "
+                "Either switch the sum_spec to 'sum' or supply frequency domain data."
+            )
 
-        plot_params = plot_params_current_path.include_kwargs(**path_kwargs)
-        plot_kwargs = plot_params.to_kwargs()
-        xs = self.vertices[:, 0]
-        ys = self.vertices[:, 1]
-        ax.plot(xs, ys, **plot_kwargs)
-
-        # Add arrow at start of contour
-        ax.annotate(
-            "",
-            xytext=(xs[0], ys[0]),
-            xy=(xs[1], ys[1]),
-            arrowprops=ARROW_CURRENT,
+        from tidy3d.components.microwave.path_integrals.path_integral_factory import (
+            make_current_integral,
         )
-        return ax
 
-    @cached_property
-    def sign(self) -> Direction:
-        """Uses the ordering of the vertices to determine the direction of the current flow."""
-        linestr = shapely.LineString(coordinates=self.vertices)
-        is_ccw = shapely.is_ccw(linestr)
-        # Invert statement when the vertices are given as (x, z)
-        if self.axis == 1:
-            is_ccw = not is_ccw
-        if is_ccw:
-            return "+"
-        return "-"
+        current_integrals = [make_current_integral(path_spec) for path_spec in self.path_specs]
+
+        # Calculate currents from each path integral and store in dataarray with path index dimension
+        path_currents = []
+        for path in current_integrals:
+            term = path.compute_current(em_field)
+            path_currents.append(term)
+
+        # Stack all path currents along a new 'path_index' dimension
+        path_currents_array = xr.concat(path_currents, dim="path_index")
+        path_currents_array = path_currents_array.assign_coords(
+            path_index=range(len(path_currents))
+        )
+
+        # Initialize output arrays with zeros
+        first_term = path_currents[0]
+        current_in_phase = xr.zeros_like(first_term)
+        current_out_phase = xr.zeros_like(first_term)
+
+        # Choose phase reference for each frequency using phase from current with largest magnitude
+        path_magnitudes = np.abs(path_currents_array)
+        max_magnitude_indices = path_magnitudes.argmax(dim="path_index")
+
+        # Get the phase reference for each frequency from the path resulting in the largest magnitude current
+        phase_reference = xr.zeros_like(first_term.angle)
+        for freq_idx in range(len(first_term.f.values)):
+            if hasattr(first_term, "mode_index"):
+                max_path_indices = max_magnitude_indices.isel(f=freq_idx).values
+                for mode_idx in range(len(first_term.mode_index.values)):
+                    max_path_idx = max_path_indices[mode_idx]
+                    phase_reference[freq_idx, mode_idx] = path_currents_array.isel(
+                        path_index=max_path_idx, f=freq_idx, mode_index=mode_idx
+                    ).angle.values
+            else:
+                max_path_idx = max_magnitude_indices.isel(f=freq_idx).values
+                phase_reference[freq_idx] = path_currents_array.isel(
+                    path_index=max_path_idx, f=freq_idx
+                ).angle.values
+
+        # Perform phase splitting into in and out of phase for each frequency separately
+        for term in path_currents:
+            if np.all(term.abs == 0):
+                continue
+
+            # Compare phase to reference for each frequency
+            phase_diff = term.angle - phase_reference
+            # Wrap phase difference to [-pi, pi]
+            phase_diff.values = np.mod(phase_diff.values + np.pi, 2 * np.pi) - np.pi
+
+            # Add to in-phase or out-of-phase current based on phase difference
+            is_in_phase = np.abs(phase_diff) <= np.pi / 2
+            current_in_phase += xr.where(is_in_phase, term, 0)
+            current_out_phase += xr.where(~is_in_phase, term, 0)
+
+        current_in_phase = _make_current_data_array(current_in_phase)
+        current_out_phase = _make_current_data_array(current_out_phase)
+
+        if self.sum_spec == "sum":
+            return current_in_phase + current_out_phase
+
+        # Check amplitude consistency across frequencies
+        self._check_phase_amplitude_consistency(current_in_phase, current_out_phase)
+
+        # For split mode, return the larger magnitude current
+        current = xr.where(
+            abs(current_in_phase) >= abs(current_out_phase), current_in_phase, current_out_phase
+        )
+        return _make_current_data_array(current)
+
+    def _check_phase_sign_consistency(
+        self,
+        phase_difference: Union[FreqDataArray, FreqModeDataArray],
+    ) -> bool:
+        """
+        Check that the provided current data has a consistent phase with respect to the reference
+        phase. A consistent phase allows for the automatic identification of currents flowing in
+        opposite directions. However, when the provided data does not correspond with a transmission
+        line mode, this consistent phase condition will likely fail, so we emit a warning here to
+        notify the user.
+        """
+
+        # Check phase consistency across frequencies
+        freq_axis = phase_difference.get_axis_num("f")
+        all_in_phase = np.all(abs(phase_difference) <= np.pi / 2, axis=freq_axis)
+        all_out_of_phase = np.all(abs(phase_difference) > np.pi / 2, axis=freq_axis)
+        consistent_phase = np.logical_or(all_in_phase, all_out_of_phase)
+
+        if not np.all(consistent_phase) and self.sum_spec == "split":
+            warning_msg = (
+                "Phase alignment of computed current is not consistent across frequencies. "
+                "The provided fields are not suitable for the 'split' method of computing current. "
+                "Please provide the current path specifications manually."
+            )
+
+            if isinstance(phase_difference, FreqModeDataArray):
+                inconsistent_modes = []
+                mode_indices = phase_difference.mode_index.values
+                for mode_idx in range(len(mode_indices)):
+                    if not consistent_phase[mode_idx]:
+                        inconsistent_modes.append(mode_idx)
+
+                warning_msg += (
+                    f" Modes with indices {inconsistent_modes} violated the phase consistency "
+                    "requirement."
+                )
+
+            log.warning(warning_msg)
+
+            return False
+        return True
+
+    def _check_phase_amplitude_consistency(
+        self,
+        current_in_phase: Union[FreqDataArray, FreqModeDataArray],
+        current_out_phase: Union[FreqDataArray, FreqModeDataArray],
+    ) -> bool:
+        """
+        Check that the summed in phase and out of phase components of current have a consistent relative amplitude.
+        A consistent amplitude across frequencies allows for the automatic identification of the total conduction
+        current flowing in the transmission line. If the amplitudes are not consistent, we emit a warning.
+        """
+
+        # For split mode, return the larger magnitude current
+        freq_axis = current_in_phase.get_axis_num("f")
+        in_all_larger = np.all(abs(current_in_phase) >= abs(current_out_phase), axis=freq_axis)
+        in_all_smaller = np.all(abs(current_in_phase) < abs(current_out_phase), axis=freq_axis)
+        consistent_max_current = np.logical_or(in_all_larger, in_all_smaller)
+        if not np.all(consistent_max_current) and self.sum_spec == "split":
+            warning_msg = (
+                "There is not a consistently larger current across frequencies between the in-phase "
+                "and out-of-phase components. The provided fields are not suitable for the "
+                "'split' method of computing current. Please provide the current path "
+                "specifications manually."
+            )
+
+            if isinstance(current_in_phase, FreqModeDataArray):
+                inconsistent_modes = []
+                mode_indices = current_in_phase.mode_index.values
+                for mode_idx in range(len(mode_indices)):
+                    if not consistent_max_current[mode_idx]:
+                        inconsistent_modes.append(int(mode_indices[mode_idx]))
+
+                warning_msg += (
+                    f" Modes with indices {inconsistent_modes} violated the amplitude consistency "
+                    "requirement."
+                )
+
+            log.warning(warning_msg)
+
+            return False
+        return True

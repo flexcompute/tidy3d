@@ -17,6 +17,7 @@ from .array_factor import (
 )
 from .auto_path_integrals import path_integrals_from_lumped_element
 from .custom_path_integrals import (
+    CompositeCurrentIntegral,
     CustomCurrentIntegral2D,
     CustomPathIntegral2D,
     CustomVoltageIntegral2D,
@@ -35,6 +36,7 @@ __all__ = [
     "BlackmanHarrisWindow",
     "BlackmanWindow",
     "ChebWindow",
+    "CompositeCurrentIntegral",
     "CurrentIntegralAxisAligned",
     "CurrentIntegralTypes",
     "CustomCurrentIntegral2D",

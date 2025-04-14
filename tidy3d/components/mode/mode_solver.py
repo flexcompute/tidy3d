@@ -19,6 +19,9 @@ from tidy3d.components.data.data_array import (
     ModeIndexDataArray,
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
+    _make_current_data_array,
+    _make_impedance_data_array,
+    _make_voltage_data_array,
 )
 from tidy3d.components.data.monitor_data import ModeSolverData
 from tidy3d.components.data.sim_data import SimulationData
@@ -31,6 +34,7 @@ from tidy3d.components.medium import (
     IsotropicUniformMediumType,
     LossyMetalMedium,
 )
+from tidy3d.components.microwave.path_integrals.path_integral_factory import make_path_integrals
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
@@ -64,6 +68,7 @@ from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
+from tidy3d.plugins.microwave.impedance_calculator import ImpedanceCalculator
 
 # Importing the local solver may not work if e.g. scipy is not installed
 IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed
@@ -533,6 +538,9 @@ class ModeSolver(Tidy3dBaseModel):
         self._field_decay_warning(mode_solver_data.symmetry_expanded)
 
         mode_solver_data = self._filter_components(mode_solver_data)
+        # Calculate and add the characteristic impedance
+        if self.mode_spec.microwave_mode_spec is not None:
+            mode_solver_data = self._add_microwave_data(mode_solver_data)
         return mode_solver_data
 
     @cached_property
@@ -1357,6 +1365,42 @@ class ModeSolver(Tidy3dBaseModel):
             ]:
                 data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
 
+    def _add_microwave_data(self, mode_solver_data: ModeSolverData) -> ModeSolverData:
+        """Calculate and add microwave data to ``mode_solver_data`` which uses the path specifications.
+        If they were not supplied by the user, then create a specification automatically.
+        """
+        voltage_integrals, current_integrals = make_path_integrals(
+            self.mode_spec.microwave_mode_spec,
+            self.to_monitor(name=MODE_MONITOR_NAME),
+            self.simulation,
+        )
+        # Need to operate on the full symmetry expanded fields
+        mode_solver_data_expanded = mode_solver_data.symmetry_expanded_copy
+        Z0_list = []
+        V_list = []
+        I_list = []
+        for mode_index in range(self.mode_spec.num_modes):
+            impedance_calc = ImpedanceCalculator(
+                voltage_integral=voltage_integrals[mode_index],
+                current_integral=current_integrals[mode_index],
+            )
+            single_mode_data = mode_solver_data_expanded._isel(mode_index=[mode_index])
+            Z0, voltage, current = impedance_calc.compute_impedance(
+                single_mode_data, return_voltage_and_current=True
+            )
+            Z0_list.append(Z0)
+            V_list.append(voltage)
+            I_list.append(current)
+        all_mode_Z0 = xr.concat(Z0_list, dim="mode_index")
+        all_mode_Z0 = _make_impedance_data_array(all_mode_Z0)
+        all_mode_V = xr.concat(V_list, dim="mode_index")
+        all_mode_V = _make_voltage_data_array(all_mode_V)
+        all_mode_I = xr.concat(I_list, dim="mode_index")
+        all_mode_I = _make_current_data_array(all_mode_I)
+        return mode_solver_data.updated_copy(
+            Z0=all_mode_Z0, voltage_coeffs=all_mode_V, current_coeffs=all_mode_I
+        )
+
     @cached_property
     def data(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index data.
@@ -1955,6 +1999,7 @@ class ModeSolver(Tidy3dBaseModel):
             size=self.plane.size,
             freqs=freqs,
             mode_spec=self.mode_spec,
+            colocate=self.colocate,
             conjugated_dot_product=self.conjugated_dot_product,
             name=name,
         )

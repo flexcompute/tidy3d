@@ -319,6 +319,16 @@ def test_abs():
     _ = data.abs
 
 
+def test_angle():
+    # Make sure works on real data and the type is correct
+    data = make_scalar_field_time_data_array("Ex")
+    angle_data = data.angle
+    assert type(data) is type(angle_data)
+    data = make_mode_amps_data_array()
+    angle_data = data.angle
+    assert type(data) is type(angle_data)
+
+
 def test_heat_data_array():
     T = [0, 1e-12, 2e-12]
     _ = td.HeatDataArray((1 + 1j) * np.random.random((3,)), coords={"T": T})

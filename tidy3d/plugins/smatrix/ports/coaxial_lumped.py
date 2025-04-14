@@ -15,6 +15,7 @@ from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.geometry.utils_2d import increment_float
 from tidy3d.components.grid.grid import Grid, YeeGrid
 from tidy3d.components.lumped_element import CoaxialLumpedResistor
+from tidy3d.components.microwave.path_integrals.base_spec import AbstractAxesRH
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
@@ -23,7 +24,6 @@ from tidy3d.components.validators import skip_if_fields_missing
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
-from tidy3d.plugins.microwave.path_integrals import AbstractAxesRH
 
 from .base_lumped import AbstractLumpedPort
 

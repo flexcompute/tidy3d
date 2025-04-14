@@ -3777,3 +3777,56 @@ def test_structures_per_medium(monkeypatch):
             grid_spec=td.GridSpec.uniform(dl=0.02),
             structures=structs,
         )
+
+
+def test_validate_microwave_mode_spec_generation():
+    """Test that auto generation of path specs is correctly validated for currently unsupported structures."""
+    freq0 = 10e9
+    mm = 1e3
+    run_time_spec = td.RunTimeSpec(quality_factor=3.0)
+    size = (10 * mm, 10 * mm, 10 * mm)
+    size_mon = (0, 8 * mm, 8 * mm)
+
+    # Currently limited to generation of axis aligned boxes around conductors,
+    # so the path may intersect other nearby conductors, like in this coaxial cable
+    coaxial = td.Structure(
+        geometry=td.GeometryGroup(
+            geometries=(
+                td.ClipOperation(
+                    operation="difference",
+                    geometry_a=td.Cylinder(
+                        axis=0, radius=2.5 * mm, center=(0, 0, 0), length=td.inf
+                    ),
+                    geometry_b=td.Cylinder(
+                        axis=0, radius=1.3 * mm, center=(0, 0, 0), length=td.inf
+                    ),
+                ),
+                td.Cylinder(axis=0, radius=1 * mm, center=(0, 0, 0), length=td.inf),
+            )
+        ),
+        medium=td.PEC,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=2, target_neff=1.8, microwave_mode_spec=td.MicrowaveModeSpec()
+    )
+
+    mode_mon = td.ModeMonitor(
+        center=(0, 0, 0),
+        size=size_mon,
+        freqs=[freq0],
+        name="mode_1",
+        colocate=False,
+        mode_spec=mode_spec,
+    )
+    sim = td.Simulation(
+        run_time=run_time_spec,
+        size=size,
+        sources=[],
+        structures=[coaxial],
+        grid_spec=td.GridSpec.uniform(dl=0.1 * mm),
+        monitors=[mode_mon],
+    )
+
+    # check that validation error is caught
+    with pytest.raises(SetupError):
+        sim._validate_microwave_mode_specs()
