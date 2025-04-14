@@ -8,13 +8,24 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.data_array import ImpedanceResultTypes, _make_impedance_data_array
+from tidy3d.components.data.data_array import (
+    CurrentIntegralResultTypes,
+    ImpedanceResultTypes,
+    VoltageIntegralResultTypes,
+    _make_current_data_array,
+    _make_impedance_data_array,
+    _make_voltage_data_array,
+)
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
-from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegral2D
+from .custom_path_integrals import (
+    CompositeCurrentIntegral,
+    CustomCurrentIntegral2D,
+    CustomVoltageIntegral2D,
+)
 from .path_integrals import (
     AxisAlignedPathIntegral,
     CurrentIntegralAxisAligned,
@@ -23,7 +34,9 @@ from .path_integrals import (
 )
 
 VoltageIntegralTypes = Union[VoltageIntegralAxisAligned, CustomVoltageIntegral2D]
-CurrentIntegralTypes = Union[CurrentIntegralAxisAligned, CustomCurrentIntegral2D]
+CurrentIntegralTypes = Union[
+    CurrentIntegralAxisAligned, CustomCurrentIntegral2D, CompositeCurrentIntegral
+]
 
 
 class ImpedanceCalculator(Tidy3dBaseModel):
@@ -41,7 +54,12 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         description="Definition of contour integral for computing current.",
     )
 
-    def compute_impedance(self, em_field: MonitorDataTypes) -> ImpedanceResultTypes:
+    def compute_impedance(
+        self, em_field: MonitorDataTypes, return_voltage_and_current=False
+    ) -> Union[
+        ImpedanceResultTypes,
+        tuple[VoltageIntegralResultTypes, CurrentIntegralResultTypes, ImpedanceResultTypes],
+    ]:
         """Compute impedance for the supplied ``em_field`` using ``voltage_integral`` and
         ``current_integral``. If only a single integral has been defined, impedance is
         computed using the total flux in ``em_field``.
@@ -51,15 +69,22 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         em_field : :class:`.MonitorDataTypes`
             The electromagnetic field data that will be used for computing the characteristic
             impedance.
+        return_voltage_and_current: bool
+            When ``True``, returns additional :class:`.IntegralResultTypes` that represent the voltage
+            and current associated with the supplied fields.
 
         Returns
         -------
-        :class:`.ImpedanceResultTypes`
-            Result of impedance computation over remaining dimensions (frequency, time, mode indices).
+        :class:`.IntegralResultTypes` or tuple[VoltageIntegralResultTypes, CurrentIntegralResultTypes, ImpedanceResultTypes]
+            If ``return_extras=False``, single result of impedance computation
+            over remaining dimensions (frequency, time, mode indices). If ``return_extras=True``,
+            tuple of (impedance, voltage, current).
         """
 
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
 
+        voltage = None
+        current = None
         # If both voltage and current integrals have been defined then impedance is computed directly
         if self.voltage_integral is not None:
             voltage = self.voltage_integral.compute_voltage(em_field)
@@ -98,6 +123,12 @@ class ImpedanceCalculator(Tidy3dBaseModel):
             else:
                 impedance = voltage / current
         impedance = _make_impedance_data_array(impedance)
+        if return_voltage_and_current:
+            if voltage is None:
+                voltage = _make_voltage_data_array(impedance * current)
+            if current is None:
+                current = _make_current_data_array(voltage / impedance)
+            return (impedance, voltage, current)
         return impedance
 
     @pd.validator("current_integral", always=True)

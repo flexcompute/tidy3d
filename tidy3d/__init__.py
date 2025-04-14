@@ -20,6 +20,18 @@ from tidy3d.components.material.tcad.heat import (
 from tidy3d.components.microwave.data.monitor_data import (
     AntennaMetricsData,
 )
+from tidy3d.components.microwave.microwave_mode_spec import (
+    MicrowaveModeSpec,
+)
+from tidy3d.components.microwave.path_integrals.current_spec import (
+    CompositeCurrentIntegralSpec,
+    CurrentIntegralAxisAlignedSpec,
+    CustomCurrentIntegral2DSpec,
+)
+from tidy3d.components.microwave.path_integrals.voltage_spec import (
+    CustomVoltageIntegral2DSpec,
+    VoltageIntegralAxisAlignedSpec,
+)
 from tidy3d.components.spice.analysis.dc import (
     ChargeToleranceSpec,
     IsothermalSteadyChargeDCAnalysis,
@@ -463,6 +475,7 @@ __all__ = [
     "ChargeToleranceSpec",
     "ClipOperation",
     "CoaxialLumpedResistor",
+    "CompositeCurrentIntegralSpec",
     "ConstantDoping",
     "ConstantMobilityModel",
     "ContinuousWave",
@@ -473,8 +486,10 @@ __all__ = [
     "Coords1D",
     "CornerFinderSpec",
     "CurrentBC",
+    "CurrentIntegralAxisAlignedSpec",
     "CustomAnisotropicMedium",
     "CustomChargePerturbation",
+    "CustomCurrentIntegral2DSpec",
     "CustomCurrentSource",
     "CustomDebye",
     "CustomDrude",
@@ -487,6 +502,7 @@ __all__ = [
     "CustomPoleResidue",
     "CustomSellmeier",
     "CustomSourceTime",
+    "CustomVoltageIntegral2DSpec",
     "Cylinder",
     "DCCurrentSource",
     "DCVoltageSource",
@@ -608,6 +624,7 @@ __all__ = [
     "Medium2D",
     "MediumMediumInterface",
     "MeshOverrideStructure",
+    "MicrowaveModeSpec",
     "ModeABCBoundary",
     "ModeAmpsDataArray",
     "ModeData",
@@ -720,6 +737,7 @@ __all__ = [
     "VerticalNaturalConvectionCoeffModel",
     "VisualizationSpec",
     "VoltageBC",
+    "VoltageIntegralAxisAlignedSpec",
     "VoltageSourceType",
     "VolumeMeshData",
     "VolumeMeshMonitor",

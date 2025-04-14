@@ -12,12 +12,21 @@ from skrf import Frequency
 from skrf.media import MLine
 
 import tidy3d as td
+import tidy3d.components.microwave.path_integrals.current_spec
 import tidy3d.plugins.microwave as mw
 from tidy3d import FieldData
+from tidy3d.components.data.data_array import FreqModeDataArray
 from tidy3d.constants import ETA_0
 from tidy3d.exceptions import DataError
 
-from ..utils import get_spatial_coords_dict, run_emulated
+from ..utils import AssertLogLevel, get_spatial_coords_dict, run_emulated
+
+MAKE_PLOTS = False
+if MAKE_PLOTS:
+    # Interative plotting for debugging
+    from matplotlib import use
+
+    use("TkAgg")
 
 # Using similar code as "test_data/test_data_arrays.py"
 MON_SIZE = (2, 1, 0)
@@ -527,6 +536,45 @@ def test_custom_current_integral_normal_y():
     current_integral.compute_current(SIM_Z_DATA["field"])
 
 
+def test_composite_current_integral_warnings():
+    """Ensures that the checks function correctly on some test data."""
+    f = [2e9, 3e9, 4e9]
+    mode_index = list(np.arange(5))
+    coords = {"f": f, "mode_index": mode_index}
+    values = np.ones((3, 5))
+
+    path_spec = (
+        tidy3d.components.microwave.path_integrals.current_spec.CurrentIntegralAxisAlignedSpec(
+            center=(0, 0, 0), size=(2, 2, 0), sign="+"
+        )
+    )
+    composite_integral = mw.CompositeCurrentIntegral(
+        center=(0, 0, 0), size=(4, 4, 0), path_specs=[path_spec], sum_spec="split"
+    )
+
+    phase_diff = FreqModeDataArray(np.angle(values), coords=coords)
+    with AssertLogLevel(None):
+        assert composite_integral._check_phase_sign_consistency(phase_diff)
+
+    values[1, 2:] = -1
+    phase_diff = FreqModeDataArray(np.angle(values), coords=coords)
+    with AssertLogLevel("WARNING"):
+        assert not composite_integral._check_phase_sign_consistency(phase_diff)
+
+    values = np.ones((3, 5))
+    in_phase = FreqModeDataArray(values, coords=coords)
+    values = 0.5 * np.ones((3, 5))
+    out_phase = FreqModeDataArray(values, coords=coords)
+    with AssertLogLevel(None):
+        assert composite_integral._check_phase_amplitude_consistency(in_phase, out_phase)
+
+    values = 0.5 * np.ones((3, 5))
+    values[2, 4:] = 1.5
+    out_phase = FreqModeDataArray(values, coords=coords)
+    with AssertLogLevel("WARNING"):
+        assert not composite_integral._check_phase_amplitude_consistency(in_phase, out_phase)
+
+
 def test_custom_path_integral_accuracy():
     """Test the accuracy of the custom path integral."""
     field_data = make_coax_field_data()
@@ -785,12 +833,11 @@ def test_lobe_measurements(apply_cyclic_extension, include_endpoint):
 @pytest.mark.parametrize("min_value", [0.0, 1.0])
 def test_lobe_plots(min_value):
     """Run the lobe measurer on some test data and plot the results."""
-    # Interative plotting for debugging
-    # from matplotlib import use
-    # use("TkAgg")
     theta = np.linspace(0, 2 * np.pi, 301)
     Urad = np.cos(theta) ** 2 * np.cos(3 * theta) ** 2 + min_value
     lobe_measurer = mw.LobeMeasurer(angle=theta, radiation_pattern=Urad)
     _, ax = plt.subplots(1, 1, subplot_kw={"projection": "polar"})
     ax.plot(theta, Urad, "k")
     lobe_measurer.plot(0, ax)
+    if MAKE_PLOTS:
+        plt.show()
