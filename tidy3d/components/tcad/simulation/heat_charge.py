@@ -189,6 +189,7 @@ class HeatChargeSimulation(AbstractSimulation):
     ... )
 
     To run a drift-diffusion (``Charge`` |:zap:|) system:
+
     >>> import tidy3d as td
     >>> air = td.FluidMedium(
     ...     name="air"
