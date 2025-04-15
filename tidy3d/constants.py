@@ -238,6 +238,7 @@ UnitScaling = MappingProxyType(
         "mm": 1e-3,
         "cm": 1e-4,
         "m": 1e-6,
+        "in": 1.0 / 25400,
     }
 )
-"""Immutable dictionary for converting a unit specification to a scaling factor."""
+"""Immutable dictionary for converting microns to another spatial unit, eg. nm = um * UnitScaling["nm"]."""
