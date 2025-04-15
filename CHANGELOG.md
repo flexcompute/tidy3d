@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Methods `EMEExplicitGrid.from_structures` and `EMECompositeGrid.from_structure_groups` to place EME cell boundaries at structure bounds.
 - 'ModeSimulation' now supports 'PermittivityMonitor'.
 - Classmethod `from_frequency_range` in `GaussianPulse` for generating a pulse whose amplitude in the frequency_range [fmin, fmax] is maximized, which is particularly useful for running broadband simulations.
+- Differentiable function `td.plugins.autograd.interpolate_spline` for 1D linear, quadratic, and cubic spline interpolation, supporting differentiation with respect to the interpolated values (`y_points`) and optional endpoint derivative constraints.
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.

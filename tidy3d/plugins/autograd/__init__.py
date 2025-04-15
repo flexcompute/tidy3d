@@ -33,7 +33,7 @@ from .invdes import (
     ramp_projection,
     tanh_projection,
 )
-from .primitives import gaussian_filter
+from .primitives import gaussian_filter, interpolate_spline
 from .utilities import chain, get_kernel_size_px, make_kernel, scalar_objective
 
 __all__ = [
@@ -53,6 +53,7 @@ __all__ = [
     "make_curvature_penalty",
     "make_filter_and_project",
     "gaussian_filter",
+    "interpolate_spline",
     "make_kernel",
     "get_kernel_size_px",
     "chain",
