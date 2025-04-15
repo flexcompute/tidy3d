@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Differentiable function `td.plugins.autograd.interpolate_spline` for 1D linear, quadratic, and cubic spline interpolation, supporting differentiation with respect to the interpolated values (`y_points`) and optional endpoint derivative constraints.
 - `SteadyEnergyBandMonitor` in the Charge solver.
 - Pretty printing enabled with `rich.print` for the material library, materials, and their variants. In notebooks, this can be accessed using `rich.print` or `display`, or by evaluating the material library, a material, or a variant in a cell.
+- `FieldData` and `ModeData` support exporting E fields to a Zemax Beam File (ZBF) with `.to_zbf()` (warning: experimental feature).
+- `FieldDataset` supports reading E fields from a Zemax Beam File (ZBF) with `.from_zbf()` (warning: experimental feature).
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
