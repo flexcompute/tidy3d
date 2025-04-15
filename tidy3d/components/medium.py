@@ -867,24 +867,19 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @property
     def charge(self):
-        return ValueError(f"A `charge` medium does not exist in this Medium definition: {self}")
+        return None
 
     @property
     def electrical(self):
-        return ValueError(
-            f"An `electrical` medium does not exist in this Medium definition: {self}"
-        )
+        return None
 
     @property
     def heat(self):
-        if self.heat_spec:
-            return self.heat_spec
-        else:
-            return ValueError(f"A `heat` medium does not exist in this Medium definition: {self}")
+        return self.heat_spec
 
     @property
     def optical(self):
-        return ValueError(f"An `optical` medium does not exist in this Medium definition: {self}")
+        return None
 
     @pd.validator("modulation_spec", always=True)
     @skip_if_fields_missing(["nonlinear_spec"])
