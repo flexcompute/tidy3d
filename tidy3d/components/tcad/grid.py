@@ -87,14 +87,14 @@ class GridRefinementLine(Tidy3dBaseModel, ABC):
     """Refinement line for the unstructured mesh. The cell size depends on the distance from the line."""
 
     r1: Coordinate = pd.Field(
-        (0.0, 0.0, 0.0),
+        ...,
         title="Start point of the line",
         description="Start point of the line in x, y, and z.",
         units=MICROMETER,
     )
 
     r2: Coordinate = pd.Field(
-        (0.0, 0.0, 0.0),
+        ...,
         title="End point of the line",
         description="End point of the line in x, y, and z.",
         units=MICROMETER,
@@ -215,16 +215,10 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         "``dl_bulk`` is used instead.",
     )
 
-    refinement_regions: Tuple[GridRefinementRegion, ...] = pd.Field(
+    mesh_refinements: Tuple[Union[GridRefinementRegion, GridRefinementLine], ...] = pd.Field(
         (),
-        title="Refinement regions",
-        description="List of regions for which the mesh refinement will be applied",
-    )
-
-    refinement_lines: Tuple[GridRefinementLine, ...] = pd.Field(
-        (),
-        title="Refinement lines",
-        description="List of lines for which the mesh refinement will be applied",
+        title="Mesh refinement structures",
+        description="List of regions/lines for which the mesh refinement will be applied",
     )
 
     @pd.validator("distance_bulk", always=True)
