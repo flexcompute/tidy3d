@@ -21,6 +21,7 @@ from tidy3d.components.spice.analysis.dc import (
 )
 from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource
 from tidy3d.components.spice.sources.types import VoltageSourceType
+from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis, UnsteadySpec
 from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
@@ -131,6 +132,7 @@ from .components.data.data_array import (
     FluxTimeDataArray,
     HeatDataArray,
     IndexedDataArray,
+    IndexedTimeDataArray,
     IndexedVoltageDataArray,
     ModeAmpsDataArray,
     ModeIndexDataArray,
@@ -603,6 +605,8 @@ __all__ = [
     "UniformHeatSource",
     "HeatSource",
     "HeatFromElectricSource",
+    "UnsteadyHeatAnalysis",
+    "UnsteadySpec",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",
     "GridRefinementRegion",
@@ -635,6 +639,7 @@ __all__ = [
     "PointDataArray",
     "CellDataArray",
     "IndexedDataArray",
+    "IndexedTimeDataArray",
     "IndexedVoltageDataArray",
     "SteadyVoltageDataArray",
     "TriangularGridDataset",

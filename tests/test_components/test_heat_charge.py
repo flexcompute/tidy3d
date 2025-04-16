@@ -1603,3 +1603,71 @@ def test_symmetry_capacitance(symmetry):
         assert (
             mnt_data.symmetry_expanded_copy.electron_capacitance.data[n] == data[n] * scaling_factor
         )
+
+
+def test_unsteady_parameters():
+    """Test that unsteady parameters are set correctly."""
+
+    _ = td.UnsteadyHeatAnalysis(
+        initial_temperature=300,
+        unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+    )
+
+    # test non-positive initial temperature raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=0,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+        )
+
+    # test negative time step raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=10,
+            unsteady_spec=td.UnsteadySpec(time_step=-0.1, total_time_steps=1),
+        )
+
+    # test negative total time steps raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=10,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=-1),
+        )
+
+
+def test_unsteady_heat_analysis(heat_simulation):
+    """Test that the validators for unsteady heat analysis are working."""
+
+    unsteady_analysis_spec = td.UnsteadyHeatAnalysis(
+        initial_temperature=300,
+        unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+    )
+
+    temp_mnt = td.TemperatureMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, td.inf),
+        name="temperature",
+        unstructured=True,
+        interval=2,
+    )
+
+    # this should work since the monitor is unstructured
+    unsteady_sim = heat_simulation.updated_copy(
+        analysis_spec=unsteady_analysis_spec, monitors=[temp_mnt]
+    )
+
+    with pytest.raises(pd.ValidationError):
+        temp_mnt = temp_mnt.updated_copy(unstructured=False)
+        _ = unsteady_sim.updated_copy(monitors=[temp_mnt])
+
+    with pytest.raises(pd.ValidationError):
+        temp_mnt = temp_mnt.updated_copy(unstructured=True, interval=0)
+        _ = unsteady_sim.updated_copy(monitors=[temp_mnt])
+
+    # try simulation with excessive time steps
+    with pytest.raises(pd.ValidationError):
+        mew_spex = td.UnsteadyHeatAnalysis(
+            initial_temperature=300,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=100000),
+        )
+        _ = unsteady_sim.updated_copy(analysis_spec=mew_spex)

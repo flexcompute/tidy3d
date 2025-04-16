@@ -9,6 +9,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import (
+    DENSITY,
     SPECIFIC_HEAT_CAPACITY,
     THERMAL_CONDUCTIVITY,
 )
@@ -69,8 +70,9 @@ class SolidMedium(AbstractHeatMedium):
     """
 
     capacity: pd.PositiveFloat = pd.Field(
+        None,
         title="Heat capacity",
-        description=f"Volumetric heat capacity in unit of {SPECIFIC_HEAT_CAPACITY}.",
+        description=f"Specific heat capacity in unit of {SPECIFIC_HEAT_CAPACITY}.",
         units=SPECIFIC_HEAT_CAPACITY,
     )
 
@@ -79,6 +81,32 @@ class SolidMedium(AbstractHeatMedium):
         description=f"Thermal conductivity of material in units of {THERMAL_CONDUCTIVITY}.",
         units=THERMAL_CONDUCTIVITY,
     )
+
+    density: pd.PositiveFloat = pd.Field(
+        None,
+        title="Density",
+        description=f"Mass density of material in units of {DENSITY}.",
+        units=DENSITY,
+    )
+
+    def from_si_units(
+        conductivity: pd.PositiveFloat,
+        capacity: pd.PositiveFloat = None,
+        density: pd.PositiveFloat = None,
+    ):
+        """Create a SolidMedium using SI units"""
+        new_conductivity = conductivity * 1e-6  # Convert from W/(m*K) to W/(um*K)
+        new_capacity = capacity
+        new_density = density
+
+        if density is not None:
+            new_density = density * 1e-18
+
+        return SolidMedium(
+            capacity=new_capacity,
+            conductivity=new_conductivity,
+            density=new_density,
+        )
 
 
 class SolidSpec(SolidMedium):

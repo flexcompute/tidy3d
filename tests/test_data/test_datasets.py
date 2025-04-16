@@ -10,7 +10,7 @@ from ..utils import AssertLogLevel, cartesian_to_unstructured
 np.random.seed(4)
 
 
-@pytest.mark.parametrize("dataset_type_ind", [0, 1])
+@pytest.mark.parametrize("dataset_type_ind", [0, 1, 2])
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     import tidy3d as td
@@ -25,6 +25,11 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         dataset_type = td.TriangularGridDataset
         values_type = td.IndexedVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
+
+    if dataset_type_ind == 2:
+        dataset_type = td.TriangularGridDataset
+        values_type = td.IndexedTimeDataArray
+        extra_dims = {"t": [0, 1, 2]}
 
     # basic create
     tri_grid_points = td.PointDataArray(
@@ -322,7 +327,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     assert result.name == ds_name
 
 
-@pytest.mark.parametrize("dataset_type_ind", [0, 1])
+@pytest.mark.parametrize("dataset_type_ind", [0, 1, 2])
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     import tidy3d as td
@@ -337,6 +342,11 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         dataset_type = td.TetrahedralGridDataset
         values_type = td.IndexedVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
+
+    if dataset_type_ind == 2:
+        dataset_type = td.TetrahedralGridDataset
+        values_type = td.IndexedTimeDataArray
+        extra_dims = {"t": [0, 1, 2]}
 
     # basic create
     tet_grid_points = td.PointDataArray(
