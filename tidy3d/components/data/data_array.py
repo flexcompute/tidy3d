@@ -1248,6 +1248,22 @@ class IndexedVoltageDataArray(DataArray):
     _dims = ("index", "voltage")
 
 
+class IndexedTimeDataArray(DataArray):
+    """Stores a two-dimensional array with coordinates ``index`` and ``t``, where
+    ``index`` is usually associated with ``PointDataArray`` and ``t`` indicates at what
+    simulated time the data was obtained.
+
+    Example
+    -------
+    >>> indexed_array = IndexedTimeDataArray(
+    ...     (1+1j) * np.random.random((3,2)), coords=dict(index=np.arange(3), t=[0, 1])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "t")
+
+
 class SpatialVoltageDataArray(AbstractSpatialDataArray):
     """Spatial distribution with voltage mapping.
 
@@ -1305,7 +1321,8 @@ DATA_ARRAY_TYPES = [
     IndexedVoltageDataArray,
     SpatialVoltageDataArray,
     PerturbationCoefficientDataArray,
+    IndexedTimeDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
-IndexedDataArrayTypes = Union[IndexedDataArray, IndexedVoltageDataArray]
+IndexedDataArrayTypes = Union[IndexedDataArray, IndexedVoltageDataArray, IndexedTimeDataArray]

@@ -56,6 +56,13 @@ def test_heat_medium():
     with pytest.raises(pd.ValidationError):
         _ = solid_medium.heat_spec.updated_copy(conductivity=-1)
 
+    # check we can create solid medium from  SI units
+    _ = td.SolidSpec.from_si_units(
+        conductivity=1,
+        capacity=1,
+        density=1,
+    )
+
 
 def make_heat_structures():
     fluid_medium, solid_medium = make_heat_mediums()
