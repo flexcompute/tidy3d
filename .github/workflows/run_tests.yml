@@ -3,8 +3,12 @@ name: "tidy3d-frontend-tests"
 on:
   workflow_dispatch:
     inputs:
-      run_tests:
-        description: 'Run test suite'
+      remote_tests:
+        description: 'remote-tests'
+        type: boolean
+        default: true
+      local_tests:
+        description: 'local-tests'
         type: boolean
         default: false
   push:
@@ -14,12 +18,85 @@ on:
       - latest
       - develop
       - 'pre/*'
+    types: ['opened', 'reopened', 'synchronize', 'ready_for_review']
+  pull_request_review:
+    types: [submitted]
 
 jobs:
+  determine-test-scope:
+    runs-on: [ dev1 ] 
+    if: |
+      github.event.pull_request.draft == false ||
+      github.ref == 'refs/heads/develop' ||
+      github.event_name == 'workflow_dispatch'
+    outputs:
+      local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
+      remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
+    steps:
+      - name: determine-test-type
+        id: determine-test-type
+        env:
+          DRAFT_STATE: ${{ github.event.pull_request.draft }}
+          EVENT_NAME: ${{ github.event_name }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          REF: ${{ github.ref }}
+          INPUT_LOCAL: ${{ github.event.inputs.local_tests }}
+          INPUT_REMOTE: ${{ github.event.inputs.remote_tests }}
+        run: |
+          echo "Event: $EVENT_NAME"
+          echo "Draft: $DRAFT_STATE"
+          echo "Review State: $REVIEW_STATE"
+          echo "Git REF: $REF"
+          echo "Input local: $INPUT_FAST"
+          echo "Input remote: $INPUT_FULL"
 
+          remote_tests=false
+          local_tests=false
+          # Workflow_dispatch input override
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            
+            # Each option is self contained
+            if [[ "$INPUT_REMOTE" == "true" ]]; then
+              remote_tests=true
+            fi
+            
+            if [[ "$INPUT_LOCAL" == "true" ]]; then
+              local_tests=true
+            fi
+          fi
+
+          # If triggered by PR review and approved
+          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            if [[ "$REVIEW_STATE" == "approved" ]]; then
+              local_tests=true
+              remote_tests=true
+            else
+              local_tests=false
+              remote_tests=false
+            fi
+          fi
+
+          # All PRs that have been triggered need local tests
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              local_tests=true
+          fi
+          
+          # If it's a push to develop
+          if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/develop" ]]; then
+            local_tests=true
+            remote_tests=true
+          fi
+
+          echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
+          echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
+          echo "local_tests=$local_tests"
+          echo "remote_tests=$remote_tests"
+  
   lint:
+    needs: determine-test-scope
+    if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
-    runs-on: ubuntu-latest
+    runs-on: [ dev1 ] 
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,15 +109,69 @@ jobs:
       - name: Run ruff check
         run: ruff check tidy3d
 
-  test:
-    # Run on internal PRs/pushes OR when manually triggered with run_tests=true
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository || (github.event_name == 'workflow_dispatch' && inputs.run_tests)
+  local-tests:
+    # Run on open PRs OR when manually triggered with local_tests=true
+    needs: determine-test-scope 
+    if: needs.determine-test-scope.outputs.local_tests == 'true'
+    name: Python ${{ matrix.python-version }} - self-hosted-runner 
+    runs-on: [ dev1 ] 
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.13']
+    defaults:
+      run:
+        shell: bash
+    env:  # Set environment variables for the whole job
+      PIP_ONLY_BINARY: gdstk
+      MPLBACKEND: agg
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 2.1.1
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install project
+      run: |
+        poetry --version
+        poetry env use python
+        poetry env info
+        poetry run pip install --upgrade pip wheel setuptools
+        poetry run pip install gdstk --only-binary gdstk
+        poetry install -E dev
+
+    - name: Run tests with coverage
+      env:
+        PYTHONUNBUFFERED: "1"
+      run: |
+        poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        poetry run pytest --cov=tidy3d -rF --tb=short tests
+        poetry run coverage report -m
+        TOTAL_COVERAGE=$(poetry run coverage report --format=total)
+        echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
+        echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+  remote-tests:
+    # Run tests on a push event OR a workflow dispatch with remote_tests
+    needs: determine-test-scope 
+    if: needs.determine-test-scope.outputs.remote_tests == 'true'
     name: Python ${{ matrix.python-version }} - ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
-        platform: [ubuntu-latest, windows-latest, macos-latest]
+        platform: [windows-latest, ubuntu-latest, macos-latest]
     defaults:
       run:
         shell: bash
@@ -103,3 +234,24 @@ jobs:
         maxColorRange: 95
         valColorRange: ${{ env.total }}
         style: "for-the-badge"
+  
+  pr-requirements-pass:
+    name: pr-requirements-pass
+    needs: [remote-tests, lint]
+    runs-on: [ dev1 ]
+    steps:
+      - name: check-passing-remote-tests
+        run: |
+          echo "Remote tests result: ${{ needs.remote-tests.result }}"
+
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "❌ Linting failed or was skipped."
+            exit 1
+          fi
+
+          if [[ "${{ needs.remote-tests.result }}" != "success" ]]; then
+            echo "❌ remote-tests failed or were skipped."
+            exit 1
+          fi
+
+          echo "✅ All required test jobs passed!"
