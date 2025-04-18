@@ -2,24 +2,15 @@ name: "test-develop-cli"
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: [ "tidy3d-frontend-tests" ]
-    types: [ completed ]
+  schedule:
+    - cron: '0 2 * * *'  # Runs every day at 2:00 AM UTC
+  push:
+    branches:
+      - develop
+      - latest
 
 jobs:
-  on-success:
-    runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    steps:
-      - run: echo 'The triggering workflow passed'
-  on-failure:
-    runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
-    steps:
-      - run: echo 'The triggering workflow failed'
-
   test-dev-commands:
-    needs: [on-success]
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -29,7 +20,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.workflow_run.head_commit.id }}
+        ref: develop
 
 
     - name: Set up Python
