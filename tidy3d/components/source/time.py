@@ -191,6 +191,48 @@ class GaussianPulse(Pulse):
         phase = np.angle(amp)
         return cls(amplitude=amplitude, phase=phase, **kwargs)
 
+    @classmethod
+    def from_frequency_range(
+        cls, fmin: pydantic.PositiveFloat, fmax: pydantic.PositiveFloat, **kwargs
+    ) -> GaussianPulse:
+        """Create a ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
+
+        Parameters
+        ----------
+        fmin : float
+            Lower bound of frequency of interest.
+        fmax : float
+            Upper bound of frequency of interest.
+        kwargs : dict
+            Keyword arguments passed to ``GaussianPulse()``, excluding ``freq0`` & ``fwidth``.
+
+        Returns
+        -------
+        GaussianPulse
+            A ``GaussianPulse`` that maximizes its amplitude in the frequency range [fmin, fmax].
+        """
+        # validate that fmin and fmax must positive, and fmax > fmin
+        if fmin <= 0:
+            raise ValidationError("'fmin' must be positive.")
+        if fmax <= fmin:
+            raise ValidationError("'fmax' must be greater than 'fmin'.")
+
+        # frequency range and center
+        freq_range = fmax - fmin
+        freq_center = (fmax + fmin) / 2.0
+
+        # If remove_dc_component=False, simply return the standard GaussianPulse parameters
+        if kwargs.get("remove_dc_component", True) is False:
+            return cls(freq0=freq_center, fwidth=freq_range / 2.0, **kwargs)
+
+        # If remove_dc_component=True, the Gaussian pulse is distorted
+        kwargs.update({"remove_dc_component": True})
+        log_ratio = np.log(fmax / fmin)
+        coeff = ((1 + log_ratio**2) ** 0.5 - 1) / 2.0
+        freq0 = freq_center - coeff / log_ratio * freq_range
+        fwidth = freq_range / log_ratio * coeff**0.5
+        return cls(freq0=freq0, fwidth=fwidth, **kwargs)
+
 
 class ContinuousWave(Pulse):
     """Source time dependence that ramps up to continuous oscillation
