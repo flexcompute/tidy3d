@@ -10,7 +10,7 @@ from ...exceptions import DataError
 
 # constants definition
 m_e_C_square = 0.51099895069e6  # (electron mass * C_0^2) in eV
-m_e_eV = 0.51099895069e6 / C_0 / C_0  # equivalent electron mass in eV
+m_e_eV = m_e_C_square / C_0 / C_0  # equivalent electron mass in eV
 um_3_to_cm_3 = 1e12  # conversion factor from micron^(-3) to cm^(-3)
 
 DOS_aux_const = 2.0 * np.power((m_e_eV * K_B) / (2 * np.pi * HBAR * HBAR), 1.5) * um_3_to_cm_3
@@ -20,12 +20,12 @@ class EffectiveDOS(Tidy3dBaseModel, ABC):
     """Abstract class for the effective density of states"""
 
     @abstractmethod
-    def _calc_eff_DOS(self, T: float):
+    def _calc_eff_dos(self, T: float):
         """Abstract method to calculate the effective density of states."""
         pass
 
     @abstractmethod
-    def _calc_eff_DOS_derivative(self, T: float):
+    def _calc_eff_dos_derivative(self, T: float):
         """Abstract method to calculate the temperature derivative of the effective density of states."""
         pass
 
@@ -35,7 +35,7 @@ class EffectiveDOS(Tidy3dBaseModel, ABC):
                 f"Incorrect temperature value ({T}) for the effectve density of states calculation."
             )
 
-        return self._calc_eff_DOS(T)
+        return self._calc_eff_dos(T)
 
     def get_effective_DOS_derivative(self, T: float):
         if T <= 0:
@@ -43,7 +43,7 @@ class EffectiveDOS(Tidy3dBaseModel, ABC):
                 f"Incorrect temperature value ({T}) for the effectve density of states calculation."
             )
 
-        return self._calc_eff_DOS_derivative(T)
+        return self._calc_eff_dos_derivative(T)
 
 
 class ConstantEffectiveDOS(EffectiveDOS):
@@ -53,10 +53,10 @@ class ConstantEffectiveDOS(EffectiveDOS):
         ..., title="Effective DOS", description="Effective density of states", units="cm^(-3)"
     )
 
-    def _calc_eff_DOS(self, T: float):
+    def _calc_eff_dos(self, T: float):
         return self.N
 
-    def _calc_eff_DOS_derivative(self, T: float):
+    def _calc_eff_dos_derivative(self, T: float):
         return 0.0
 
 
@@ -78,11 +78,11 @@ class IsotropicEffectiveDOS(EffectiveDOS):
         units="Electron mass",
     )
 
-    def _calc_eff_DOS(self, T: float):
+    def _calc_eff_dos(self, T: float):
         return np.power(self.m_eff * T, 1.5) * DOS_aux_const
 
-    def _calc_eff_DOS_derivative(self, T: float):
-        return self._calc_eff_DOS(T) * 1.5 / T
+    def _calc_eff_dos_derivative(self, T: float):
+        return self._calc_eff_dos(T) * 1.5 / T
 
 
 class MultiValleyEffectiveDOS(EffectiveDOS):
@@ -114,7 +114,7 @@ class MultiValleyEffectiveDOS(EffectiveDOS):
         ..., title="Number of valleys", description="Number of effective valleys"
     )
 
-    def _calc_eff_DOS(self, T: float):
+    def _calc_eff_dos(self, T: float):
         return (
             self.N_valley
             * np.power(self.m_eff_long * self.m_eff_trans * self.m_eff_trans, 0.5)
@@ -122,8 +122,8 @@ class MultiValleyEffectiveDOS(EffectiveDOS):
             * DOS_aux_const
         )
 
-    def _calc_eff_DOS_derivative(self, T: float):
-        return self._calc_eff_DOS(T) * 1.5 / T
+    def _calc_eff_dos_derivative(self, T: float):
+        return self._calc_eff_dos(T) * 1.5 / T
 
 
 class DualValleyEffectiveDOS(EffectiveDOS):
@@ -151,8 +151,8 @@ class DualValleyEffectiveDOS(EffectiveDOS):
         units="Electron mass",
     )
 
-    def _calc_eff_DOS(self, T: float):
+    def _calc_eff_dos(self, T: float):
         return (np.power(self.m_eff_lh * T, 1.5) + np.power(self.m_eff_hh * T, 1.5)) * DOS_aux_const
 
-    def _calc_eff_DOS_derivative(self, T: float):
-        return self._calc_eff_DOS(T) * 1.5 / T
+    def _calc_eff_dos_derivative(self, T: float):
+        return self._calc_eff_dos(T) * 1.5 / T
