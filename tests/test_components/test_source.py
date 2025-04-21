@@ -93,6 +93,47 @@ def test_source_times():
     assert abs(dc_comp) ** 2 > 1e-32
 
 
+def test_gaussian_from_frequency_range():
+    # error with negative fmin
+    with pytest.raises(ValueError):
+        _ = td.GaussianPulse.from_frequency_range(fmin=-1e10, fmax=1e10)
+    # error with fmin = 0
+    with pytest.raises(ValueError):
+        _ = td.GaussianPulse.from_frequency_range(fmin=0, fmax=1e10)
+    # error with fmin >= fmax
+    with pytest.raises(ValueError):
+        _ = td.GaussianPulse.from_frequency_range(fmin=1e10, fmax=0.9e10)
+
+    fmin = 1e9
+    fmax = 20e9
+    # dc component on
+    g = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax, remove_dc_component=False)
+    assert g.freq0 == 0.5 * (fmin + fmax)
+    assert g.fwidth == 0.5 * (fmax - fmin)
+
+    # dc component removed
+    g1 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax, remove_dc_component=True)
+    # default to dc removed
+    g2 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
+    assert g2.remove_dc_component
+
+    # 1) broadband: assert enough amplitude at fmin and fmax
+    time = np.linspace(0, 5 / fmin, 10001)
+    freqs = np.linspace(fmin, fmax, 101)
+    spectrum = np.abs(g2.spectrum(time, freqs, time[1] - time[0]))
+    max_amp = np.max(spectrum)
+    assert spectrum[0] / max_amp > 0.1
+    assert spectrum[-1] / max_amp > 0.1
+
+    # 2) narrow band: close to regular Gaussian result
+    fmin = 10e9
+    bandwidth = 1e6
+    fmax = fmin + 2 * bandwidth
+    g = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
+    assert abs(g.fwidth - bandwidth) / bandwidth < 1e-4
+    assert abs(g.freq0 - fmin) / fmin < 1e-4
+
+
 def test_dipole():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     _ = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=True)
