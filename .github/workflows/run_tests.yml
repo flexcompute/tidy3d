@@ -24,7 +24,7 @@ on:
 
 jobs:
   determine-test-scope:
-    runs-on: [ dev1 ] 
+    runs-on: [ inhouse ] 
     if: |
       github.event.pull_request.draft == false ||
       github.ref == 'refs/heads/develop' ||
@@ -96,7 +96,7 @@ jobs:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
-    runs-on: [ dev1 ] 
+    runs-on: [ inhouse ] 
     steps:
       - uses: actions/checkout@v4
         with:
@@ -114,7 +114,7 @@ jobs:
     needs: determine-test-scope 
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ dev1 ] 
+    runs-on: [ inhouse ] 
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
@@ -130,13 +130,6 @@ jobs:
       with:
         fetch-depth: 1
 
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: 2.1.1
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
@@ -144,21 +137,25 @@ jobs:
 
     - name: Install project
       run: |
-        poetry --version
-        poetry env use python
-        poetry env info
-        poetry run pip install --upgrade pip wheel setuptools
-        poetry run pip install gdstk --only-binary gdstk
-        poetry install -E dev
+        python -m venv ${GITHUB_WORKSPACE}/.venv
+        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        python --version
+        which python
+        which pip
+        pip list
+        pip install --upgrade pip wheel setuptools
+        pip install gdstk --only-binary gdstk
+        pip install -e ".[dev]"
 
     - name: Run tests with coverage
       env:
         PYTHONUNBUFFERED: "1"
       run: |
-        poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
-        poetry run pytest --cov=tidy3d -rF --tb=short tests
-        poetry run coverage report -m
-        TOTAL_COVERAGE=$(poetry run coverage report --format=total)
+        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        pytest --cov=tidy3d -rF --tb=short tests
+        coverage report -m
+        TOTAL_COVERAGE=$(coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
@@ -237,8 +234,9 @@ jobs:
   
   pr-requirements-pass:
     name: pr-requirements-pass
-    needs: [remote-tests, lint]
-    runs-on: [ dev1 ]
+    if: always()
+    needs: [local-tests, remote-tests, lint]
+    runs-on: [ inhouse ]
     steps:
       - name: check-passing-remote-tests
         run: |
@@ -251,6 +249,10 @@ jobs:
 
           if [[ "${{ needs.remote-tests.result }}" != "success" ]]; then
             echo "❌ remote-tests failed or were skipped."
+          fi
+
+          if [[ "${{ needs.local-tests.result }}" != "success" ]]; then
+            echo "❌ local-tests failed or were skipped."
             exit 1
           fi
 
