@@ -543,14 +543,12 @@ def setup_fwd(
     sim_original: td.Simulation,
     local_gradient: bool = LOCAL_GRADIENT,
 ) -> td.Simulation:
-    """Set up the combined forward simulation."""
+    """Return a forward simulation with adjoint monitors attached."""
 
-    # if local gradient, make and run a sim with combined original & adjoint monitors
-    if local_gradient:
-        return sim_original.with_adjoint_monitors(sim_fields)
-
-    # if remote gradient, add them later
-    return sim_original
+    # Always try to build the variant that includes adjoint monitors so that
+    # errors in monitor placement are caught early.
+    sim_with_adj_mon = sim_original.with_adjoint_monitors(sim_fields)
+    return sim_with_adj_mon if local_gradient else sim_original
 
 
 def postprocess_fwd(
