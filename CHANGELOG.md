@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pretty printing enabled with `rich.print` for the material library, materials, and their variants. In notebooks, this can be accessed using `rich.print` or `display`, or by evaluating the material library, a material, or a variant in a cell.
 - `FieldData` and `ModeData` support exporting E fields to a Zemax Beam File (ZBF) with `.to_zbf()` (warning: experimental feature).
 - `FieldDataset` supports reading E fields from a Zemax Beam File (ZBF) with `.from_zbf()` (warning: experimental feature).
+- Unstructured grid now supports 2D/3D box-shaped refinement regions and 1D refinement lines of arbitrary direction.
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
