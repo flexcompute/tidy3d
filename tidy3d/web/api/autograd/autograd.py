@@ -436,6 +436,9 @@ def _run_primitive(
 
     td.log.info("running primitive '_run_primitive()'")
 
+    # indicate this is a forward run. not exposed to user but used internally by pipeline.
+    run_kwargs["is_adjoint"] = False
+
     # compute the combined simulation for both local and remote, so we can validate it
     sim_combined = setup_fwd(
         sim_fields=sim_fields,
@@ -624,6 +627,9 @@ def _run_bwd(
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
 
+    # indicate this is an adjoint run
+    run_kwargs["is_adjoint"] = True
+
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
     sim_fields_keys = list(sim_fields_original.keys())
@@ -744,6 +750,9 @@ def _run_async_bwd(
     **run_async_kwargs,
 ) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
+
+    # indicate this is an adjoint run
+    run_async_kwargs["is_adjoint"] = True
 
     task_names = data_fields_original_dict.keys()
 
