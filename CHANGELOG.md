@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.3] - 2025-04-24
+
 ### Added
 - Ability to select payment option when submitting jobs from the Python client.
 - Periodic repetition of EME subgrids via `num_reps` or `EMEPeriodicitySweep`.
@@ -14,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 'ModeSimulation' now supports 'PermittivityMonitor'.
 - Classmethod `from_frequency_range` in `GaussianPulse` for generating a pulse whose amplitude in the frequency_range [fmin, fmax] is maximized, which is particularly useful for running broadband simulations.
 - Differentiable function `td.plugins.autograd.interpolate_spline` for 1D linear, quadratic, and cubic spline interpolation, supporting differentiation with respect to the interpolated values (`y_points`) and optional endpoint derivative constraints.
+- `SteadyEnergyBandMonitor` in the Charge solver.
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
@@ -1589,7 +1592,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...develop
+[2.8.3]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...v2.8.3
 [2.8.2]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.7.9...v2.8.0
