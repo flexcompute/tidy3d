@@ -114,7 +114,7 @@ jobs:
     needs: determine-test-scope 
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ inhouse ]
+    runs-on: [ deploynode ]
     container: ubuntu:latest
     strategy:
       matrix:
