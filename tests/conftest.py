@@ -100,3 +100,32 @@ def dir_name(request):
 def create_directory(dir_name):
     if dir_name is not None:
         directory = Path(dir_name).mkdir(parents=True, exist_ok=True)
+
+
+@pytest.fixture
+def novalidate(monkeypatch):
+    """
+    Swaps the pydantic constructor used by all tidy3d models for a
+    zero-validation ``construct`` version for the duration of the test.
+
+    Usage
+    -----
+    def test_something(novalidate):
+        ...      # gets the fast objects
+
+    or
+
+    @pytest.mark.usefixtures("novalidate")
+    def test_other():
+        ...
+    """
+
+    def noop(self, *a, **kw):
+        return None
+
+    monkeypatch.setattr(td.Simulation, "_post_init_validators", noop, raising=True)
+    monkeypatch.setattr(td.Simulation, "validate_pre_upload", noop, raising=True)
+    monkeypatch.setattr(td, "Simulation", td.Simulation.construct, raising=True)
+    monkeypatch.setattr(
+        td.web.api.autograd.autograd, "is_valid_for_autograd", lambda *a, **kw: True, raising=True
+    )

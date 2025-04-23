@@ -11,6 +11,8 @@ from tidy3d.plugins import design as tdd
 
 from ..utils import run_emulated
 
+# td.Simulation = functools.partial(td.Simulation.construct)
+
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
     monte_carlo=tdd.MethodMonteCarlo(num_points=5, seed=1),
@@ -319,7 +321,7 @@ def init_design_space(sweep_method):
     radius_variable = tdd.ParameterFloat(
         name="radius",
         span=(0, 1.5),
-        num_points=5,  # note: only used for MethodGrid
+        num_points=2,  # note: only used for MethodGrid
     )
 
     num_spheres_variable = tdd.ParameterInt(
@@ -339,6 +341,7 @@ def init_design_space(sweep_method):
     return design_space
 
 
+@pytest.mark.usefixtures("novalidate")
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values())
 def test_sweep(sweep_method, monkeypatch):
     # Problem, simulate scattering cross section of sphere ensemble

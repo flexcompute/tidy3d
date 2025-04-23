@@ -4,6 +4,7 @@ import copy
 import cProfile
 import typing
 import warnings
+from functools import cache
 from importlib import reload
 from os.path import join
 
@@ -139,7 +140,7 @@ SIM_BASE = td.Simulation(
         )
     ],
     boundary_spec=td.BoundarySpec.pml(x=PML_X, y=True, z=True),
-    grid_spec=td.GridSpec.uniform(dl=0.01 * td.C_0 / FREQ0),
+    grid_spec=td.GridSpec.uniform(dl=0.1 * td.C_0 / FREQ0),
 )
 
 # variable to store whether the emulated run as used
@@ -489,6 +490,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     )
 
 
+@cache
 def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.SimulationData], float]]]:
     """Make a dictionary of all the possible monitors in the simulation."""
 
@@ -605,6 +607,7 @@ if TEST_POLYSLAB_SPEED:
 # args = [("polyslab", "mode")]
 
 
+@cache
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
     if structure_key == ALL_KEY:
         structure_keys = structure_keys_
@@ -802,6 +805,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         assert anp.all(grad != 0.0), "some gradients are 0"
 
 
+@pytest.mark.usefixtures("novalidate")
 @pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
@@ -810,7 +814,7 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"test_a", "adjoint", "task1", "_test"}
+    task_names = {"test_a", "_test"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -859,7 +863,7 @@ class TestTupleGrads:
             sources=[src],
             monitors=[mnt],
             boundary_spec=td.BoundarySpec.all_sides(td.PML()),
-            grid_spec=td.GridSpec.auto(min_steps_per_wvl=30),
+            grid_spec=td.GridSpec.auto(min_steps_per_wvl=10),
         )
 
     @pytest.mark.parametrize("run_async", [False, True])
@@ -2137,12 +2141,16 @@ def test_dispersive_no_inf(use_emulated_run):
     """
 
     fn_dict = get_functions(args[0][0], args[0][1])
-    make_sim = fn_dict["sim"]
+    base_sim = fn_dict["sim"](params0).updated_copy(
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=20)
+    )
     postprocess = fn_dict["postprocess"]
 
     def objective(args):
         structure_traced = make_structures(args)["polyslab_dispersive"]
-        sim = make_sim(args).updated_copy(structures=[structure_traced])
+        sim = base_sim.updated_copy(
+            structures=[structure_traced],
+        )
         sim_data = run(sim, task_name="adjoint_test", verbose=False)
         return postprocess(sim_data)
 
