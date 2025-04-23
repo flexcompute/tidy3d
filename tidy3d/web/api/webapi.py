@@ -5,7 +5,7 @@ import os
 import tempfile
 import time
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Union
 
 import pytz
 from requests import HTTPError
@@ -86,7 +86,7 @@ def run(
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: PayType = PayType.AUTO,
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -119,7 +119,7 @@ def run(
         worker group
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: PayType = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
        Which method to pay the simulation.
 
     Returns
@@ -376,7 +376,7 @@ def start(
     task_id: TaskId,
     solver_version: str = None,
     worker_group: str = None,
-    pay_type: PayType = PayType.AUTO,
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -389,7 +389,7 @@ def start(
         target solver version.
     worker_group: str = None
         worker group
-    pay_type: PayType = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
         Which method to pay the simulation
     Note
     ----

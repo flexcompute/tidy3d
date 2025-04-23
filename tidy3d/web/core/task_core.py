@@ -6,7 +6,7 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 
 import pydantic.v1 as pd
 from botocore.exceptions import ClientError
@@ -413,7 +413,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         solver_version: str = None,
         worker_group: str = None,
-        pay_type: PayType = PayType.AUTO,
+        pay_type: Union[PayType, str] = PayType.AUTO,
     ):
         """Kick off this task.
 
@@ -427,9 +427,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             target solver version.
         worker_group: str = None
             worker group
-        pay_type: PayType = PayType.AUTO
+        pay_type: Union[PayType, str] = PayType.AUTO
             Which method to pay the simulation.
         """
+        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
         if solver_version:
             protocol_version = None

@@ -107,7 +107,7 @@ def run(
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: PayType = PayType.AUTO,
+    pay_type: typing.Union[PayType, str] = PayType.AUTO,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -145,7 +145,7 @@ def run(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: PayType = AUTO
+    pay_type: typing.Union[PayType, str] = PayType.AUTO
         Which method to pay for the simulation.
     Returns
     -------
@@ -191,7 +191,6 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
-
     if is_valid_for_autograd(simulation):
         return _run(
             simulation=simulation,
@@ -241,7 +240,7 @@ def run_async(
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: PayType = PayType.AUTO,
+    pay_type: typing.Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -270,7 +269,7 @@ def run_async(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: PayType = PayType.AUTO
+    pay_type: typing.Union[PayType, str] = PayType.AUTO
         Specify the payment method.
 
     Returns
@@ -288,7 +287,6 @@ def run_async(
     :class:`Batch`
         Interface for submitting several :class:`Simulation` objects to sever.
     """
-
     if is_valid_for_autograd_async(simulations):
         return _run_async(
             simulations=simulations,

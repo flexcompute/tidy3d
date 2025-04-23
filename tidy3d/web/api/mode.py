@@ -7,7 +7,7 @@ import pathlib
 import tempfile
 import time
 from datetime import datetime
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Union
 
 import pydantic.v1 as pydantic
 from botocore.exceptions import ClientError
@@ -56,7 +56,7 @@ def run(
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: PayType = PayType.AUTO,
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -82,14 +82,13 @@ def run(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Restrict simulation to mode solver region. If "auto", then simulation is automatically
         restricted if it contains custom mediums.
-    pay_type: PayType = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
         Which method to pay the simulation.
     Returns
     -------
     :class:`.ModeSolverData`
         Mode solver data with the calculated results.
     """
-
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
         console = get_logging_console()
@@ -466,13 +465,16 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
     def submit(
         self,
-        pay_type: PayType = PayType.AUTO,
+        pay_type: Union[PayType, str] = PayType.AUTO,
     ):
         """Start the execution of this task.
 
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
         """
+        # convert right before sending to API
+        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
+
         http.post(
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
             {
