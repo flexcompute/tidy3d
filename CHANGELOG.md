@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Simulation.precision` option allows to select `"double"` precision for very high-accuracy results. Note that this is very rarely needed, and doubles the simulation computational weight and correpsondingly FlexCredit cost.
 - Added material type `PMCMedium` for perfect magnetic conductor.
 - `ModeSimulation.plot()` method that plots the mode simulation plane by default, or the containing FDTD simulation if any of ``x``, ``y``, or ``z`` is passed. 
+- Enable singularity correction at PEC and lossy metal edges.
 
 ### Changed
 - Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
