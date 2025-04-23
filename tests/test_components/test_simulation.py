@@ -2385,6 +2385,27 @@ def test_conformal_dt():
     assert sim_heuristic.dt == dt
 
 
+def test_edge_correction():
+    """make sure edge correction can be enabled for PEC and lossy meal."""
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        structures=[],
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        subpixel=td.SubpixelSpec(
+            pec=td.PECConformal(edge_singularity_correction=False),
+            lossy_metal=td.SurfaceImpedance(edge_singularity_correction=False),
+        ),
+    )
+
+    sim = sim.updated_copy(
+        subpixel=td.SubpixelSpec(
+            pec=td.PECConformal(edge_singularity_correction=True),
+            lossy_metal=td.SurfaceImpedance(edge_singularity_correction=True),
+        )
+    )
+
+
 def test_sim_volumetric_structures(tmp_path):
     """Test volumetric equivalent of 2D materials."""
     sigma = 0.45
