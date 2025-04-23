@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
 - Auto grid in EME simulations with multiple `freqs` provided uses the largest instead of raising an error.
+- Increased maximum number of frequencies in an EME simulation from 20 to 500. Still warns if more than 20 frequencies are used, as this may lead to slower or more expensive simulations.
 
 ### Fixed
 - Fixed `reverse` property of `td.Scene.plot_structures_property()` to also reverse the colorbar.
