@@ -115,7 +115,7 @@ jobs:
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
     runs-on: [ deploynode ]
-    container: ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+    container: 
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
@@ -131,27 +131,24 @@ jobs:
       with:
         fetch-depth: 1
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-
     - name: Install project
+      env:
+        PYTHON_VERSION: ${{ matrix.python-version }}
       run: |
         if [ -f /.dockerenv ]; then
           echo "Running inside a Docker container (detected via /.dockerenv)"
         else
           echo "Not running inside a Docker container (/.dockerenv not found)"
         fi
-        python -m venv ${GITHUB_WORKSPACE}/.venv
+        uv venv -p $PYTHON_VERSION ${GITHUB_WORKSPACE}/.venv
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
-        python --version
         which python
+        which uv
         which pip
+        python --version
         pip list
-        pip install --upgrade pip wheel setuptools
-        pip install gdstk --only-binary gdstk
-        pip install -e ".[dev]"
+        uv pip install gdstk --only-binary gdstk
+        uv pip install -e ".[dev]"
 
     - name: Run tests with coverage
       env:
