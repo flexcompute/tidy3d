@@ -114,7 +114,8 @@ jobs:
     needs: determine-test-scope 
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ inhouse ] 
+    runs-on: [ inhouse ]
+    container: ubuntu:latest
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
@@ -137,6 +138,11 @@ jobs:
 
     - name: Install project
       run: |
+        if [ -f /.dockerenv ]; then
+          echo "Running inside a Docker container (detected via /.dockerenv)"
+        else
+          echo "Not running inside a Docker container (/.dockerenv not found)"
+        fi
         python -m venv ${GITHUB_WORKSPACE}/.venv
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         python --version
