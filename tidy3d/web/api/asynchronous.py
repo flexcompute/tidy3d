@@ -1,6 +1,6 @@
 """Interface to run several jobs in batch using simplified syntax."""
 
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Union
 
 from ...log import log
 from ..core.types import PayType
@@ -18,7 +18,7 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: Dict[str, List[str]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
-    pay_type: PayType = PayType.AUTO,
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -42,7 +42,7 @@ def run_async(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-    pay_type: PayType = PayType.AUTO
+    pay_type: Union[PayType, str] = PayType.AUTO
         Specify the payment method.
 
     Returns
@@ -60,7 +60,6 @@ def run_async(
     :class:`Batch`
         Interface for submitting several :class:`Simulation` objects to sever.
     """
-
     if simulation_type is None:
         simulation_type = "tidy3d"
 

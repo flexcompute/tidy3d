@@ -59,3 +59,11 @@ class TaskType(str, Enum):
 class PayType(str, Enum):
     CREDITS = "FLEX_CREDIT"
     AUTO = "AUTO"
+
+    @classmethod
+    def _missing_(cls, value: object) -> PayType:
+        if isinstance(value, str):
+            key = value.strip().replace(" ", "_").upper()
+            if key in cls.__members__:
+                return cls.__members__[key]
+        return super()._missing_(value)
