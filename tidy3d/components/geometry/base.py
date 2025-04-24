@@ -1686,8 +1686,8 @@ class SimplePlaneIntersection(Geometry, ABC):
         """
 
         # Check if normal is a special case, where the normal is aligned with an axis.
-        if normal.count(0.0) == 2:
-            axis = np.nonzero(normal)[0][0]
+        if np.sum(np.isclose(normal, 0.0)) == 2:
+            axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
             section = self.intersections_plane(**kwargs)
