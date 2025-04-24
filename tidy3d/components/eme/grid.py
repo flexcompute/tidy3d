@@ -8,7 +8,7 @@ from typing import Dict, List, Literal, Optional, Tuple, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ...constants import RADIAN, fp_eps
+from ...constants import RADIAN, fp_eps, inf
 from ...exceptions import SetupError, ValidationError
 from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ..geometry.base import Box
@@ -762,7 +762,7 @@ class EMEGrid(Box):
     @property
     def mode_planes(self) -> List[Box]:
         """Planes for mode solving, aligned with cell centers."""
-        size = list(self.size)
+        size = [inf, inf, inf]
         center = list(self.center)
         axis = self.axis
         size[axis] = 0

@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved error message and handling when attempting to load a non-existent task ID.
 - `ClipOperation` now fails validation if traced fields are detected.
 - Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
+- EME now supports 2D simulations.
 
 ## [2.8.3] - 2025-04-24
 
