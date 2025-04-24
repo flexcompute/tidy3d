@@ -17,7 +17,7 @@ from ..grid.grid import Grid
 from ..grid.grid_spec import GridSpec
 from ..mode_spec import ModeSpec
 from ..monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
-from ..simulation import AbstractYeeGridSimulation, Simulation
+from ..simulation import AbstractYeeGridSimulation, Simulation, validate_boundaries_for_zero_dims
 from ..source.field import ModeSource
 from ..types import (
     TYPE_TAG_STR,
@@ -513,3 +513,5 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def validate_pre_upload(self, source_required: bool = False):
         self._mode_solver.validate_pre_upload(source_required=source_required)
+
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
