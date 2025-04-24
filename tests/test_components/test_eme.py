@@ -166,7 +166,7 @@ def test_eme_grid():
                     assert mode_plane.size[dim] == 0
                 else:
                     assert mode_plane.center[dim] == sim_geom.center[dim]
-                    assert mode_plane.size[dim] == sim_geom.size[dim]
+                    assert mode_plane.size[dim] == td.inf
 
     # test that boundary planes span sim and lie at cell boundaries
     for grid in grids:
@@ -296,22 +296,6 @@ def test_eme_simulation():
     _ = sim2.plot(y=0, ax=AX)
     _ = sim2.plot(z=0, ax=AX)
 
-    # must be 3D
-    with pytest.raises(pd.ValidationError):
-        _ = td.EMESimulation(
-            size=(0, 2, 2),
-            freqs=[td.C_0],
-            axis=2,
-            eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec()),
-        )
-    with pytest.raises(pd.ValidationError):
-        _ = td.EMESimulation(
-            size=(2, 2, 0),
-            freqs=[td.C_0],
-            axis=2,
-            eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec()),
-        )
-
     # need at least one freq
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(freqs=[])
@@ -421,10 +405,6 @@ def test_eme_simulation():
     monitor = sim.monitors[-1].updated_copy(center=[0, 0, -sim.size[2] / 2])
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(monitors=[monitor])
-
-    # test boundary and source validation
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(boundary_spec=td.BoundarySpec.all_sides(td.Periodic()))
 
     # test max sim size and freqs
     sim_bad = sim.updated_copy(size=(1000, 1000, 1000))
@@ -1244,10 +1224,10 @@ def test_eme_sim_subsection():
     subsection = eme_sim.subsection(region=region, eme_grid_spec="identical")
     assert subsection.size[2] == 1
 
-    # 2d subsection errors
+    # 2d subsection
     region = td.Box(size=(2, 2, 0))
-    with pytest.raises(pd.ValidationError):
-        subsection = eme_sim.subsection(region=region)
+    subsection = eme_sim.subsection(region=region)
+    assert subsection.size[2] == 0
 
 
 def test_eme_periodicity():
@@ -1365,3 +1345,18 @@ def test_eme_grid_from_structures():
             names=[None, "wg", None],
             num_reps=[1, 2, 1],
         )
+
+
+def test_eme_sim_2d():
+    freq0 = td.C_0 / 1.55
+    sim_size = (3, 0, 3)
+    eme_grid_spec = td.EMEUniformGrid(num_cells=5, mode_spec=td.EMEModeSpec())
+    monitor = td.EMEFieldMonitor(size=(td.inf, td.inf, td.inf), name="field")
+    eme_sim = td.EMESimulation(
+        size=sim_size,
+        axis=2,
+        freqs=[freq0],
+        eme_grid_spec=eme_grid_spec,
+        monitors=[monitor],
+        port_offsets=(0.5, 0),
+    )

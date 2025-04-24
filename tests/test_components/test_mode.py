@@ -80,12 +80,16 @@ def get_mode_sim():
     permittivity_monitor = td.PermittivityMonitor(
         size=(1, 1, 0), center=(0, 0, 0), name="eps", freqs=FS
     )
+    boundary_spec = td.BoundarySpec(
+        x=td.Boundary.pml(), y=td.Boundary.periodic(), z=td.Boundary.pml()
+    )
     sim = td.ModeSimulation(
         size=SIZE_2D,
         freqs=FS,
         mode_spec=mode_spec,
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
         monitors=[permittivity_monitor],
+        boundary_spec=boundary_spec,
     )
     return sim
 
@@ -122,12 +126,12 @@ def test_mode_sim():
         _ = sim.updated_copy(freqs=FS[0], grid_spec=grid_spec)
     # multiple freqs are ok
     _ = sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[1e10] + list(sim.freqs))
-    _ = td.ModeSimulation(
+    _ = sim.updated_copy(
         size=sim.size, freqs=list(sim.freqs) + [1e10], grid_spec=grid_spec, mode_spec=MODE_SPEC
     )
 
     # size limit
-    sim_too_large = sim.updated_copy(size=(2000, 2000, 0), plane=None)
+    sim_too_large = sim.updated_copy(size=(2000, 0, 2000), plane=None)
     with pytest.raises(SetupError):
         sim_too_large.validate_pre_upload()
 
