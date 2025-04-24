@@ -1071,7 +1071,7 @@ def test_strict_types():
         _ = JaxBox(size=(1, 1, [1, 2]), center=(0, 0, 0))
 
 
-def _test_polyslab_box(use_emulated_run):
+def _test_polyslab_box(use_emulated_run, tmp_path):
     """Make sure box made with polyslab gives equivalent gradients.
     Note: doesn't pass now since JaxBox samples the permittivity inside and outside the box,
     and a random permittivity data is created by the emulated run function. JaxPolySlab just
@@ -1143,7 +1143,7 @@ def _test_polyslab_box(use_emulated_run):
             ],
         )
 
-        sim_data = run(sim, task_name="test")
+        sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -1171,7 +1171,7 @@ def _test_polyslab_box(use_emulated_run):
 
 
 @pytest.mark.parametrize("sim_size_axis", [0, 10])
-def test_polyslab_2d(sim_size_axis, use_emulated_run):
+def test_polyslab_2d(sim_size_axis, use_emulated_run, tmp_path):
     """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
 
     np.random.seed(0)
@@ -1239,7 +1239,7 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
             ],
         )
 
-        sim_data = run(sim, task_name="test")
+        sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -1325,14 +1325,14 @@ def test_diff_data_angles(axis):
     assert np.isclose(zeroth_order_theta, 0.0)
 
 
-def _test_error_regular_web():
+def _test_error_regular_web(tmp_path):
     """Test that a custom error is raised if running tidy3d through web.run()"""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     import tidy3d.web as web
 
     with pytest.raises(ValueError):
-        web.run(sim, task_name="test")
+        web.run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
 
 def test_value_filter():
@@ -1376,7 +1376,7 @@ def test_save_load_simdata(use_emulated_run, tmp_path):
     assert sim_data == sim_data2
 
 
-def _test_polyslab_scale(use_emulated_run):
+def _test_polyslab_scale(use_emulated_run, tmp_path):
     """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
 
     nums = np.logspace(np.log10(3), 3, 13)
@@ -1441,7 +1441,7 @@ def _test_polyslab_scale(use_emulated_run):
                 ],
             )
 
-            sim_data = run(sim, task_name="test")
+            sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
             amp = extract_amp(sim_data)
             return objective(amp)
 
@@ -1692,13 +1692,13 @@ def test_sim_data_plot_field(use_emulated_run, tmp_path):
     """Test splitting of regular simulation data into user and server data."""
 
     jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    jax_sim_data = run(jax_sim, task_name="test")
+    jax_sim_data = run(jax_sim, task_name="test", path=str(tmp_path / RUN_FILE))
     ax = jax_sim_data.plot_field("field", "Ez", "real", f=1e14)
     # plt.show()
     assert len(ax.collections) == 1
 
 
-def test_pytreedef_errors(use_emulated_run):
+def test_pytreedef_errors(use_emulated_run, tmp_path):
     """Fix errors that occur when jax doesnt know how to handle array types in aux_data."""
 
     vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
@@ -1758,7 +1758,7 @@ def test_pytreedef_errors(use_emulated_run):
             boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         )
 
-        sd = run(sim, task_name="test")
+        sd = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
         return jnp.sum(jnp.abs(jnp.array(sd["test"].amps.values)))
 
