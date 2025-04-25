@@ -439,6 +439,7 @@ def test_planar_transform(axis):
     geo = (
         td.Box(size=(3 * axis, 2 * abs(axis - 1), 4 * (2 - axis)))
         .rotated(2.0, axis)
+        .reflected((axis, 2 * (axis - 1), 3 * (axis - 2)))
         .translated(-1, 2, 3)
         .scaled(1.4, -1.2, 1.3)
     )
@@ -479,6 +480,30 @@ def test_transforms():
     assert len(geo.intersections_plane(x=0)) == 1
     assert len(geo.intersections_plane(z=0)) == 3
 
+    # Test reflection of a Box across the XY plane and verify point inclusion.
+    xyz = (np.array([1, 1, 1, 3]), np.array([1, 1, 1, 3]), np.array([1, -1, -1.5, 3]))
+    geo = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+    assert (geo.inside(*xyz) == (True, False, False, False)).all()
+    geo = geo.reflected((0, 0, 1))
+    assert (geo.inside(*xyz) == (False, True, True, False)).all()
+
+    # Test Sphere multiple reflections not influencing point inclusion.
+    xyz = (np.array([1, 2, 2, 1]), np.array([2, 1, 2, 3]), np.array([2, -2, -0.5, -2]))
+    geo = td.Sphere(radius=3.5)
+    assert (geo.inside(*xyz) == (True, True, True, False)).all()
+    geo = geo.reflected((2, 3, 1)).reflected((1, 2, 3))
+    assert (geo.inside(*xyz) == (True, True, True, False)).all()
+
+    # Test PolySlab reflection across non-axis plane and verify point inclusion.
+    xyz = (np.array([0, 1.5, -1.5, -1.5]), np.array([0, 1.5, -1.5, -2.5]), np.array([0, 0, 0, 0]))
+    geo = td.PolySlab(
+        vertices=[(1, 0), (3, 2), (2, 2), (0, 0), (2, -2), (3, -2)],
+        slab_bounds=(-1, 1),
+    )
+    assert (geo.inside(*xyz) == (True, True, False, False)).all()
+    geo = geo.reflected((1, 1, 0))
+    assert (geo.inside(*xyz) == (True, False, True, True)).all()
+
 
 def test_polyslab_transforms():
     # More tests on PolySlab tranforms matching direct Transformed
@@ -512,6 +537,21 @@ def test_general_rotation():
     assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(-0.1, [-2, 0, 0]))
     assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(-0.2, [0, -3, 0]))
     assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(-0.3, [0, 0, -4]))
+
+
+def test_general_reflection():
+    # Magnitude of normal direction does not affect the transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((5, 5, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((5, 0, 5)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, 5, 5)))
+    # Negative normal direction means the same transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((-1, -1, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((-1, 0, -1)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, -1, -1)))
+    # Magnitude and sign of normal direction does not affect the transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((-5, -5, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((-5, 0, -5)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, -5, -5)))
 
 
 def test_flattening():
