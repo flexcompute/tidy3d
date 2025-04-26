@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane.
+- The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
 
 ## [2.8.3] - 2025-04-24
 

@@ -526,6 +526,10 @@ def test_polyslab_transforms():
     geo = geo.rotated(0.3, (0, -0.2, 0))
     assert geo.type != geo_trans.type
     assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.reflection((1, 0, 2)))
+    geo = geo.reflected((1, 0, 2))
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
 
 
 def test_general_rotation():
