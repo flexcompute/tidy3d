@@ -147,7 +147,7 @@ html_title = "Tidy3D Electromagnetic Solver"
 html_theme_options = {
     "logo": {
         "image_light": "./_static/img/Tidy3D-logo.svg",
-        "image_dark": "./_static/img/Tidy3D-logo-white.svg",
+        "image_dark": "./_static/img/Tidy3D-logo-white.png",
     },
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
