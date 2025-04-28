@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Gradient computation for rotated boxes in Transformed.
 - Gradient computation for rotated angle of Transformed box.
+- Validation check for unit error in grid spacing.
 
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.

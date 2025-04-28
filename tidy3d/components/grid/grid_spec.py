@@ -276,6 +276,19 @@ class UniformGrid(GridSpec1d):
         units=MICROMETER,
     )
 
+    @pd.validator("dl", always=True)
+    def _validate_dl(cls, val):
+        """
+        Ensure 'dl' is not too small.
+        """
+        if val < 1e-7:
+            raise SetupError(
+                f"Uniform grid spacing 'dl' is {val} µm. "
+                "Please check your units! For more info on Tidy3D units, see: "
+                "https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/faq/What-are-the-units-used-in-the-simulation.html"
+            )
+        return val
+
     def _make_coords_initial(
         self,
         axis: Axis,
