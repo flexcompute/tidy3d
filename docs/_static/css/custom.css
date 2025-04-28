@@ -1,12 +1,12 @@
 /* FONTS */
 @font-face {
   font-family: 'flexcompute_title';
-  src: url('TWKEverett-Black.otf') format('truetype');
+  src: url('TWKEverett-Extrabold.otf') format('truetype');
 }
 
 @font-face {
   font-family: 'flexcompute_subtitle';
-  src: url('TWKEverett-Extrabold.otf') format('truetype');
+  src: url('TWKEverett-Bold.otf') format('truetype');
 }
 
 @font-face {
