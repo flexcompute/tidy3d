@@ -82,16 +82,22 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     Example
     -------
-    >>> from tidy3d import C_0, ModeSpec
+    >>> from tidy3d import C_0, ModeSpec, BoundarySpec, Boundary
     >>> lambda0 = 1
     >>> freq0 = C_0 / lambda0
     >>> freqs = [freq0]
     >>> sim_size = lambda0, lambda0, 0
     >>> mode_spec = ModeSpec(num_modes=4)
+    >>> boundary_spec = BoundarySpec(
+    ...     x=Boundary.pec(),
+    ...     y=Boundary.pec(),
+    ...     z=Boundary.periodic()
+    ... )
     >>> sim = ModeSimulation(
     ...     size=sim_size,
     ...     freqs=freqs,
-    ...     mode_spec=mode_spec
+    ...     mode_spec=mode_spec,
+    ...     boundary_spec=boundary_spec
     ... )
 
     See Also
