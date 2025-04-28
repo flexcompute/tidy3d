@@ -1,12 +1,17 @@
 /* FONTS */
 @font-face {
   font-family: 'flexcompute_title';
-  src: url('ornitons_bold.ttf') format('truetype');
+  src: url('TWKEverett-Black.otf') format('truetype');
 }
 
 @font-face {
   font-family: 'flexcompute_subtitle';
-  src: url('inter_var.woff2') format('truetype');
+  src: url('TWKEverett-Extrabold.otf') format('truetype');
+}
+
+@font-face {
+  font-family: 'flexcompute_regular';
+  src: url('TWKEverett-Regular.otf') format('truetype');
 }
 
 
@@ -21,7 +26,7 @@ body { line-height: 1.42857143; }
 .heading-style, h1, h2, h3, h4, h5, h6 {margin: 1.6rem 0 1rem;}
 h1 {font-family: 'flexcompute_title', sans-serif;}
 h2, h3, h4, h5, h6 {font-family: 'flexcompute_subtitle', sans-serif;}
-p {margin-bottom: 0.5rem; font-family: 'Roboto', sans-serif}
+p {margin-bottom: 0.5rem; font-family: 'flexcompute_regular', sans-serif}
 iframe {width: 100%;border: unset}
 
 .toctree-wrapper li[class^=toctree-l1]>a {font-size: 1.4em; text-decoration: none}
