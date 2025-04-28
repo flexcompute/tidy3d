@@ -8,7 +8,7 @@ from typing import Literal, Optional, Tuple, Union
 import pydantic.v1 as pd
 
 from ..base_sim.monitor import AbstractMonitor
-from ..monitor import AbstractFieldMonitor, ModeSolverMonitor
+from ..monitor import AbstractFieldMonitor, ModeSolverMonitor, PermittivityMonitor
 from ..types import FreqArray
 
 BYTES_COMPLEX = 8
@@ -298,5 +298,9 @@ class EMECoefficientMonitor(EMEMonitor):
 
 
 EMEMonitorType = Union[
-    EMEModeSolverMonitor, EMEFieldMonitor, EMECoefficientMonitor, ModeSolverMonitor
+    EMEModeSolverMonitor,
+    EMEFieldMonitor,
+    EMECoefficientMonitor,
+    ModeSolverMonitor,
+    PermittivityMonitor,
 ]
