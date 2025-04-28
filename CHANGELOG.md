@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Validation check for unit error in grid spacing.
+
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
 - Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.

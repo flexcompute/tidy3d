@@ -1,6 +1,7 @@
 """Tests GridSpec."""
 
 import numpy as np
+import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError
@@ -515,3 +516,28 @@ def test_domain_mismatch():
         boundary_spec=td.BoundarySpec.pml(),
     )
     z = sim.grid.boundaries.z
+
+
+@pytest.mark.parametrize(
+    ("dl", "expect_exception"),
+    [
+        (1e-8, True),  # Below 1e-7 => fail
+        (1e-7, False),  # Exactly at lower bound => pass
+        (0.0, True),  # Zero => fail
+    ],
+)
+def test_uniform_grid_dl_validation(dl, expect_exception):
+    """Test the validator that checks 'dl' is between 1e-7 and 3e8 µm."""
+    if expect_exception:
+        with pytest.raises(pydantic.ValidationError):
+            _ = td.Simulation(
+                size=(1, 1, 1),
+                grid_spec=td.GridSpec.uniform(dl=dl),
+                run_time=1e-12,
+            )
+    else:
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.uniform(dl=dl),
+            run_time=1e-12,
+        )
