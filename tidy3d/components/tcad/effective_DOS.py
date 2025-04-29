@@ -92,7 +92,7 @@ class MultiValleyEffectiveDOS(EffectiveDOS):
     .. math::
 
         \\begin{equation}
-             \\mathbf{N_eff} = 2 * N_valley (\\frac{(m_{eff_long} * m_{eff_trans} * m_{eff_trans})^(1/2) * m_e * k_B * T}{2 \\pi * \\hbar^2})^(3/2)
+             \\mathbf{N_eff} = 2 * N_valley * (m_{eff_long} * m_{eff_trans} * m_{eff_trans})^(1/2) *(\\frac{m_e * k_B * T}{2 \\pi * \\hbar^2})^(3/2)
         \\end{equation}
     """
 
