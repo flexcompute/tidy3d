@@ -10,6 +10,7 @@ from tidy3d.components.material.tcad.charge import SemiconductorMedium
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
+    ConstantEffectiveDOS,
     RadiativeRecombination,
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
@@ -1883,8 +1884,8 @@ cSi_MultiPhysics = VariantItem(
         optical=cSi_Green2008.medium,
         charge=SemiconductorMedium(
             permittivity=11.7,
-            N_c=2.86e19,
-            N_v=3.1e19,
+            N_c=ConstantEffectiveDOS(N=2.86e19),
+            N_v=ConstantEffectiveDOS(N=3.1e19),
             E_g=1.11,
             mobility_n=CaugheyThomasMobility(
                 mu_min=52.2,

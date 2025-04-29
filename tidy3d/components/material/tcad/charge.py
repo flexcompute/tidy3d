@@ -257,14 +257,14 @@ class SemiconductorMedium(AbstractChargeMedium):
 
     """
 
-    N_c: Union[pd.PositiveFloat, EffectiveDOSModelType] = pd.Field(
+    N_c: EffectiveDOSModelType = pd.Field(
         ...,
         title="Effective density of electron states",
         description=r"$N_c$ Effective density of states in the conduction band.",
         units="cm^(-3)",
     )
 
-    N_v: Union[pd.PositiveFloat, EffectiveDOSModelType] = pd.Field(
+    N_v: EffectiveDOSModelType = pd.Field(
         ...,
         title="Effective density of hole states",
         description=r"$N_v$ Effective density of states in the valence band.",
