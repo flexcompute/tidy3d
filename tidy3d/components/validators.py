@@ -2,9 +2,11 @@
 
 import numpy as np
 import pydantic.v1 as pydantic
+from autograd.tracer import isbox
 
 from ..exceptions import SetupError, ValidationError
 from ..log import log
+from .autograd.utils import get_static
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .data.dataset import Dataset, FieldDataset
 from .geometry.base import Box
@@ -464,3 +466,21 @@ def validate_mode_plane_radius(mode_spec: ModeSpec, plane: Box, msg_prefix: str 
             f"{msg_prefix} bend radius is smaller than half the mode plane size "
             "along the radial axis, which can produce wrong results."
         )
+
+
+def _warn_unsupported_traced_argument(name: str):
+    @pydantic.validator(name, always=True, allow_reuse=True)
+    def _warn_traced_arg(cls, val, values):
+        if isbox(val):
+            log.warning(
+                f"Field '{name}' of '{cls.__name__}' received an autograd tracer "
+                f"(i.e., a value being tracked for automatic differentiation). "
+                f"Automatic differentiation through this field is unsupported, "
+                f"so the tracer has been converted to its static value. "
+                f"If you want to avoid this warning, you manually unbox the value "
+                f"using the 'autograd.tracer.getval' function before passing it to Tidy3D."
+            )
+            return get_static(val)
+        return val
+
+    return _warn_traced_arg

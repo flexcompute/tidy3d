@@ -17,7 +17,11 @@ from ..medium import Medium, MediumType3D
 from ..scene import Scene
 from ..structure import Structure
 from ..types import TYPE_TAG_STR, Ax, Axis, Bound, LengthUnit, Symmetry
-from ..validators import assert_objects_in_sim_bounds, assert_unique_names
+from ..validators import (
+    _warn_unsupported_traced_argument,
+    assert_objects_in_sim_bounds,
+    assert_unique_names,
+)
 from ..viz import (
     PlotParams,
     add_ax_if_none,
@@ -136,6 +140,9 @@ class AbstractSimulation(Box, ABC):
 
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors", strict_inequality=True)
     _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
+
+    _warn_traced_center = _warn_unsupported_traced_argument("center")
+    _warn_traced_size = _warn_unsupported_traced_argument("size")
 
     @pd.validator("structures", always=True)
     @skip_if_fields_missing(["size", "center"])
