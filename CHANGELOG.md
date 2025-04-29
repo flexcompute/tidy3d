@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.
+
 ## [2.8.3] - 2025-04-24
 
 ### Added
