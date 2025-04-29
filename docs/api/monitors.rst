@@ -119,7 +119,7 @@ Mode
 
 The ``ModeMonitor`` records the mode coefficients of the incident field at specified frequency point(s).
 
-Behind the scene, a mode solver simulation is first performed to determine the eigenmodes in the ``ModeMonitor`` plane. A ``ModeSpec`` instance is necessary to provide the settings for this calculation. Then, the resulting modes are used to calculate the mode coefficients. The user does not need to explicitly perform the mode solver simulation, as it is automatically performed whenever a ``ModeSource`` or ``ModeMonitor`` is present in the simulation.
+Behind the scenes, a mode solver simulation is first performed to determine the eigenmodes in the ``ModeMonitor`` plane. A ``ModeSpec`` instance is necessary to provide the settings for this calculation. Then, the resulting modes are used to calculate the mode coefficients. The user does not need to explicitly perform the mode solver simulation, as it is automatically performed whenever a ``ModeSource`` or ``ModeMonitor`` is present in the simulation.
 
 .. code-block:: python
 
@@ -195,11 +195,62 @@ Far-field
    tidy3d.FieldProjectionKSpaceMonitor
    tidy3d.DirectivityMonitor
 
+The far-field monitor records the near-field within the simulation domain in order to project it to some far away location. This can be a very efficient way to simulate the scattering or radiative response of devices such as lenses and antenna.
+
+.. code-block:: python
+
+   # define a far-field monitor
+   my_far_field_monitor = FieldProjectionCartesianMonitor(
+       center=(0,0,10),
+       size=(td.inf, td.inf, 0),
+       name="My far field",
+       freqs=[f0],
+       far_field_approx=True,
+       proj_axis=2,
+       proj_distance=20,
+       x=np.linspace(-10,10,101),
+       y=np.linspace(-10,10,101),
+   )
+
+The ``far_field_approx`` parameter should be set to ``True`` (default) when the projection plane is far from the simulation domain. For intermediate distances, the user can set it to ``False`` for increased accuracy at the expense of slightly greater computational cost. 
+
+When including far-field projection monitors in the ``Simulation`` object, the far-field calculation is performed server-side. The computation is much faster and slightly more accurate than if performed locally. However, it will slightly increase the cost of the simulation.
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.FieldProjector
+   tidy3d.FieldProjectionSurface
+
+The user also has the option of performing the far-field calculation on their local machine using ``FieldProjector`` object. In that case, they should first set up one or more ``FieldMonitor`` in the simulation. After the simulation is completed, the ``FieldProjector`` object operates on the recorded field data.
+
+.. code-block:: python
+
+   # define a far-field projector from previously defined field monitors
+   my_far_field_projector = FieldProjector.from_near_field_monitors(
+       sim_data = simulation_data,    # previously computed simulation data
+       near_monitors = [monitor1],    # list of previously defined near field monitors
+       normal_dirs=['+'],             # projection direction relative to monitor
+       pts_per_wavelength=10          # controls sampling rate (reduce to speed up computation)
+   )
+
+   # project field based on previously defined far-field monitor
+   projected_field = my_far_field_projector.project_fields(my_far_field_monitor)
+
+Please see the learning center article below for detailed explanations on additional settings and usage scenarios. 
+
 .. seealso::
 
    For more details and examples, please refer to the following learning center article:
 
    + `Performing near field to far field projections <../notebooks/FieldProjections.html>`_
+
+   Example applications:
+
+   + `Mid-IR metalens based on silicon nanopillars <../notebooks/MidIRMetalens.html>`_
+   + `Spherical Fresnel lens <../notebooks/FresnelLens.html>`_
+   + `Directivity and S-parameters computation of patch antenna <../notebooks/AntennaCharacteristics.html>`_
 
 ~~~~
 
@@ -212,6 +263,23 @@ Permittivity
 
    tidy3d.PermittivityMonitor
 
+The ``PermittivityMonitor`` is used to record local relative permittivity data in the region of interest. This data can be useful for post-simulation calculations that require permittivity values, such as mode volume and absorption density.
+
+.. code-block:: python
+
+   my_permittivity_monitor = PermittivityMonitor(
+       center=(0,0,0),
+       size=(8,8,8),
+       freqs=[250e12, 300e12],
+       name='my permittivity monitor',
+   )
+
+.. seealso::
+
+   Example applications:
+
+   + `Bistability in photonic crystal microcavities <../notebooks/BistablePCCavity.html>`_
+
 ~~~~
 
 Apodization
@@ -222,5 +290,7 @@ Apodization
    :template: module.rst
 
    tidy3d.ApodizationSpec
+
+The ``ApodizationSpec`` is used to specify apodization specifications for frequency-domain monitors. Typically, the default Tidy3D settings are acceptable and it is not necessary to define a custom instance. Please refer to the documentation page for more details. 
 
 ~~~~

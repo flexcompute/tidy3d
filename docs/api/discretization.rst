@@ -6,15 +6,15 @@ Grid Discretization
 Overview
 --------
 
-Grid discretization lies at the heart of the FDTD algorithm. The simulation domain is rendered onto a finite grid of spatial points --- including material domains and boundary conditions. From the user's perspective, there are two general categories of length scales to be aware of when it comes to defining the grid:
+In FDTD, the simulation domain is rendered onto a finite spatial grid. Each grid cell, also known as a Yee cell, represents a location where the field solution is sampled. For the FDTD user, there are two general categories of length scales to be aware of when it comes to defining the grid:
 
-* Physical length scales: this primarily consists of the EM wavelength in the local medium, but depending on the application, could include other quantities like mode propagation and attenuation lengths, metallic skin depth etc.
+* Physical length scale: this primarily consists of the EM wavelength in the local medium, but depending on the application, could include other quantities like mode propagation and attenuation lengths, skin depth, sharp field gradients etc.
 
-* Geometric length scales: this refers to the feature sizes of the structure under simulation, such as minimum dimensions, radii of curvature, sharp points etc.
+* Geometric length scale: this refers to the minimum feature size of the structure. Common features include layer thickness, gaps, radii of curvature, sharp corners. 
 
-To obtain good results, the minimum grid size should be small enough to resolve length scales in both of the above categories.
+To obtain good results, the minimum grid size should be small enough to resolve both categories. Note that in typical photonics applications, the physical length scale would likely dominate in importance. In contrast, for deep subwavelength problems such as those in RF/microwave regime, the geometric length scale becomes a limiting factor, especially if metallic structures are involved.
 
-It is also important to keep in mind the CFL condition, which relates the maximum time step to the minimum grid size in the simulation. When using a very small grid size, the time step will also have to decrease, which can lead to a dramatic increase in simulation cost. Thus, the user should also ensure that they are not using an overly fine grid for their simulation.
+Tidy3D automatically ensures that the CFL condition is satistied. This means that the simulation time step is constrained by the minimum grid size.
 
 To learn how to provide a grid specification in a Tidy3D simulation, see the `Grid Specification`_ section below. The following sections cover more advanced topics, such as implementing additional grid `refinement`_, `subpixel averaging`_, and other `utility classes`_.
 

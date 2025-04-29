@@ -16,7 +16,6 @@ API |:computer:|
     sources
     analytic_beams
     monitors
-    field_projector
     lumped_elements
     output_data
     scene
@@ -44,7 +43,6 @@ API |:computer:|
 .. include:: /api/monitors.rst
 .. include:: /api/output_data.rst
 .. include:: /api/analytic_beams.rst
-.. include:: /api/field_projector.rst
 .. include:: /api/lumped_elements.rst
 .. include:: /api/logging.rst
 .. include:: /api/heat/index.rst

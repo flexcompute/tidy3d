@@ -6,11 +6,11 @@ Boundary Conditions
 Overview
 --------
 
-In numerical simulations, the simulation domain is necessarily truncated compared to physical reality due to computational limits. Boundary conditions specify the constraints on the field solution along the external boundaries of the simulation domain. In order to achieve good agreement with the physical scenario, it is important that the user specifies the appropriate boundary type for their application. 
+Boundary conditions specify the constraints on the field solution along the external boundaries of the simulation domain. In order to achieve good agreement with the physical problem, it is important that the user specifies the appropriate boundary type for their application. 
 
 The `Boundary Specification`_ section discusses how to set up simulation boundaries in a Tidy3D simulation.
 
-Each boundary type is discussed in their respective section. The currently supported types are:
+The sections below discuss the respective types of supported boundary conditions:
 
 + `PEC/PMC`_: Simulates a perfect electric or magnetic conductor
 + `Periodic`_: Simulates periodic boundary conditions in 1, 2, or 3-dimensions
@@ -32,13 +32,13 @@ The ``BoundarySpec`` object contains information on the boundary conditions on a
 
 There are several ways to specify boundaries with ``BoundarySpec``. To quickly specify a single boundary type for all six sides, use the ``BoundarySpec.all_sides()`` method.
 
-.. code-block::
+.. code-block:: python
 
    my_boundary_spec = BoundarySpec.all_sides(boundary=PML())
 
 To specify boundaries along each of the three axes:
 
-.. code-block::
+.. code-block:: python
 
    my_boundary_spec = BoundarySpec(
        x = Boundary.periodic(),
@@ -50,7 +50,7 @@ In the above example, built-in convenience methods such as ``pec()``, ``pml()``,
 
 Finally, for full control of each of the six sides:
 
-.. code-block::
+.. code-block:: python
 
    my_boundary_spec = BoundarySpec(
        x = Boundary(plus=PECBoundary(), minus=PMCBoundary()),
