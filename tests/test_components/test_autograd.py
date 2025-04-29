@@ -2167,3 +2167,21 @@ def test_dispersive_no_inf(use_emulated_run):
     # model is called without a frequency
     with AssertLogLevel("INFO"):
         grad = ag.grad(objective)(params0)
+
+
+def test_sim_traced_center_size(use_emulated_run):
+    fn_dict = get_functions(args[0][0], args[0][1])
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    base_sim = make_sim(params0)
+
+    def objective(center, size):
+        sim = base_sim.updated_copy(center=center, size=size)
+        sim_data = run_emulated(sim, task_name="adjoint_test")
+        return postprocess(sim_data)
+
+    with AssertLogLevel("WARNING", contains_str="autograd tracer"):
+        grad = ag.grad(objective, argnum=0)(base_sim.center, base_sim.size)
+
+    with AssertLogLevel("WARNING", contains_str="autograd tracer"):
+        grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
