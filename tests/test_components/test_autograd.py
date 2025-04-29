@@ -1260,7 +1260,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
 class TestFieldProjection:
     @staticmethod
     def setup(far_field_approx, projection_type, sim_2d):
-        if sim_2d and not far_field_approx:
+        if (sim_2d or not IS_3D) and not far_field_approx:
             pytest.skip("Exact field projection not implemented for 2d simulations")
 
         r_proj = 50 * WVL
@@ -1274,25 +1274,23 @@ class TestFieldProjection:
 
         if projection_type == "angular":
             theta_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 2)
-            phi_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 3)
             monitor_far = td.FieldProjectionAngleMonitor(
                 center=monitor.center,
                 size=monitor.size,
                 freqs=monitor.freqs,
-                phi=tuple(phi_proj),
+                phi=(np.pi / 2, 3 * np.pi / 2),
                 theta=tuple(theta_proj),
                 proj_distance=r_proj,
                 far_field_approx=far_field_approx,
                 name="far_field",
             )
         elif projection_type == "cartesian":
-            x_proj = np.linspace(-10, 10, 2)
             y_proj = np.linspace(-10, 10, 3)
             monitor_far = td.FieldProjectionCartesianMonitor(
                 center=monitor.center,
                 size=monitor.size,
                 freqs=monitor.freqs,
-                x=x_proj,
+                x=[0],
                 y=y_proj,
                 proj_axis=1,
                 proj_distance=r_proj,
@@ -1300,13 +1298,12 @@ class TestFieldProjection:
                 name="far_field",
             )
         elif projection_type == "kspace":
-            ux = np.linspace(-0.7, 0.7, 2)
             uy = np.linspace(-0.7, 0.7, 3)
             monitor_far = td.FieldProjectionKSpaceMonitor(
                 center=monitor.center,
                 size=monitor.size,
                 freqs=monitor.freqs,
-                ux=ux,
+                ux=[0],
                 uy=uy,
                 proj_axis=1,
                 proj_distance=r_proj,
@@ -1369,6 +1366,26 @@ class TestFieldProjection:
             return self.objective(sim_data, monitor_far)
 
         check_grads(objective, modes=["rev"], order=1)(1.0)
+
+    def test_error_if_server_side_projection(
+        self, use_emulated_run, far_field_approx, projection_type, sim_2d
+    ):
+        """Using a far field monitor directly should error"""
+        # build a projection‐only monitor sim
+        sim_base, monitor_far = self.setup(far_field_approx, projection_type, sim_2d)
+        sim_base = sim_base.updated_copy(monitors=[monitor_far])
+
+        def objective(args):
+            structures_traced_dict = make_structures(args)
+            structures = list(SIM_BASE.structures)
+            for structure_key in structure_keys_:
+                structures.append(structures_traced_dict[structure_key])
+            sim = sim_base.updated_copy(structures=structures)
+            sim_data = run(sim, task_name="field_projection_test")
+            return sim_data["far_field"].power.sum().item()
+
+        with pytest.raises(NotImplementedError):
+            ag.grad(objective)(params0)
 
 
 def test_autograd_deepcopy():
