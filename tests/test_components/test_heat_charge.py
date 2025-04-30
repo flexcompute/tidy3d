@@ -8,6 +8,7 @@ from matplotlib import pyplot as plt
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
+    ConstantEffectiveDOS,
     SlotboomBandGapNarrowing,
 )
 from tidy3d.exceptions import DataError
@@ -36,8 +37,8 @@ class CHARGE_SIMULATION:
             permittivity=11.7,
             N_d=0,
             N_a=0,
-            N_c=2.86e19,
-            N_v=3.1e19,
+            N_c=ConstantEffectiveDOS(N=2.86e19),
+            N_v=ConstantEffectiveDOS(N=3.1e19),
             E_g=1.11,
             mobility_n=CaugheyThomasMobility(
                 mu_min=52.2,
