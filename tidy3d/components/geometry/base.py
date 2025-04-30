@@ -10,7 +10,6 @@ from typing import Any, Callable, List, Tuple, Union
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
-import xarray as xr
 
 try:
     from matplotlib import patches
@@ -28,7 +27,10 @@ from ...exceptions import (
 from ...log import log
 from ...packaging import check_import, verify_packages_import
 from ..autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
-from ..autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
+from ..autograd.derivative_utils import (
+    DerivativeInfo,
+    DerivativeSurfaceMesh,
+)
 from ..base import Tidy3dBaseModel, cached_property
 from ..transformation import RotationAroundAxis
 from ..types import (
@@ -61,6 +63,7 @@ from ..viz import (
 )
 
 POLY_GRID_SIZE = 1e-12
+_NUM_PTS_DIM_BOX_FACE = 200
 
 
 _shapely_operations = {
@@ -1637,6 +1640,125 @@ class Geometry(Tidy3dBaseModel, ABC):
             operation="difference", geometry_a=Box(size=(inf, inf, inf)), geometry_b=self
         )
 
+    def build_box_face_mesh(
+        self,
+        center: np.ndarray,
+        size: np.ndarray,
+        axis_normal: int,  # 0,1,2  → x,y,z faces
+        min_max_index: int,  # 0 = − side, 1 = + side
+        rotation_matrix: np.ndarray | None = None,
+    ) -> tuple[DerivativeSurfaceMesh, np.ndarray, np.ndarray]:
+        """Build a mesh for the face of a box, given the center, size, axis normal, and min/max index.
+        The mesh is built in the local coordinate system of the box, and then transformed to the global
+        coordinate system using the rotation matrix."""
+
+        if axis_normal == 0:
+            canonical_normal = np.array([1.0, 0.0, 0.0])
+        elif axis_normal == 1:
+            canonical_normal = np.array([0.0, 1.0, 0.0])
+        elif axis_normal == 2:
+            canonical_normal = np.array([0.0, 0.0, 1.0])
+        else:
+            raise ValueError("Invalid axis_normal")
+
+        if min_max_index == 0:
+            canonical_normal *= -1.0
+
+        if rotation_matrix is None:
+            rotation_matrix = np.eye(3)
+
+        n_local = rotation_matrix @ canonical_normal
+        n_local = n_local / np.linalg.norm(n_local)
+
+        def compute_tangential_vectors(
+            normal: np.ndarray, eps: float = 1e-8
+        ) -> tuple[np.ndarray, np.ndarray]:
+            """Compute any two perpendicular tangential vectors t1, t2, given a normal."""
+            if abs(normal[0]) > abs(normal[2]):
+                t1 = np.array([-normal[1], normal[0], 0.0])
+            else:
+                t1 = np.array([0.0, -normal[2], normal[1]])
+            t1_norm = np.linalg.norm(t1)
+            if t1_norm < eps:
+                raise ValueError("Degenerate normal vector.")
+            t1 = t1 / t1_norm
+            t2 = np.cross(normal, t1)
+            t2 /= np.linalg.norm(t2)
+            return t1, t2
+
+        t1_local, t2_local = compute_tangential_vectors(n_local)
+
+        min_bound = np.array(center) - np.array(size) / 2.0
+        max_bound = np.array(center) + np.array(size) / 2.0
+        bounds_old = np.column_stack((min_bound, max_bound))
+
+        corners = np.array(
+            [
+                [bounds_old[0, i], bounds_old[1, j], bounds_old[2, k]]
+                for i in (0, 1)
+                for j in (0, 1)
+                for k in (0, 1)
+            ]
+        )
+
+        connectivity = {
+            0: {  # Faces perpendicular to x-axis
+                0: [0, 1, 3, 2],
+                1: [4, 5, 7, 6],
+            },
+            1: {  # Faces perpendicular to y-axis
+                0: [0, 1, 5, 4],
+                1: [2, 3, 7, 6],
+            },
+            2: {  # Faces perpendicular to z-axis
+                0: [0, 4, 6, 2],
+                1: [1, 5, 7, 3],
+            },
+        }
+
+        face_indices = connectivity[axis_normal][min_max_index]
+        face_corners = corners[face_indices, :]
+
+        rotated_corners = (rotation_matrix @ face_corners.T).T
+        p1, p2, p3, p4 = rotated_corners
+
+        num_s = _NUM_PTS_DIM_BOX_FACE
+        num_t = _NUM_PTS_DIM_BOX_FACE
+        s_vals = np.linspace(0, 1, 2 * num_s + 1)[1::2]
+        t_vals = np.linspace(0, 1, 2 * num_t + 1)[1::2]
+        S, T = np.meshgrid(s_vals, t_vals, indexing="ij")
+
+        X = (1 - S) * (1 - T) * p1[0] + S * (1 - T) * p2[0] + S * T * p3[0] + (1 - S) * T * p4[0]
+        Y = (1 - S) * (1 - T) * p1[1] + S * (1 - T) * p2[1] + S * T * p3[1] + (1 - S) * T * p4[1]
+        Z = (1 - S) * (1 - T) * p1[2] + S * (1 - T) * p2[2] + S * T * p3[2] + (1 - S) * T * p4[2]
+
+        centers = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])
+
+        tri1_area = 0.5 * np.linalg.norm(np.cross((p2 - p1), (p3 - p1)))
+        tri2_area = 0.5 * np.linalg.norm(np.cross((p4 - p1), (p3 - p1)))
+        face_area = tri1_area + tri2_area
+
+        num_cells = (num_s) * (num_t)
+        if num_cells > 0:
+            cell_area = face_area / num_cells
+        else:
+            cell_area = face_area
+
+        areas = cell_area * np.ones(centers.shape[0])
+
+        normals = np.tile(n_local, (centers.shape[0], 1))
+        perps1 = np.tile(t1_local, (centers.shape[0], 1))
+        perps2 = np.tile(t2_local, (centers.shape[0], 1))
+
+        surface_mesh = DerivativeSurfaceMesh(
+            centers=centers,
+            areas=areas,
+            normals=normals,
+            perps1=perps1,
+            perps2=perps2,
+        )
+        return surface_mesh, n_local
+
 
 """ Abstract subclasses """
 
@@ -1977,8 +2099,7 @@ class Box(SimplePlaneIntersection, Centered):
         """Axis normal to the Box. Errors if box is not planar."""
         if self.size.count(0.0) != 1:
             raise ValidationError(
-                "Tried to get 'normal_axis' of 'Box' that is not planar. "
-                f"Given 'size={self.size}.'"
+                f"Tried to get 'normal_axis' of 'Box' that is not planar. Given 'size={self.size}.'"
             )
         return self.size.index(0.0)
 
@@ -2480,11 +2601,15 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute the adjoint derivatives for this object."""
+    def compute_derivatives(
+        self, derivative_info: DerivativeInfo, rotation_matrix: np.ndarray = None
+    ) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object with optional rotation matrix."""
 
-        # get gradients w.r.t. each of the 6 faces (in normal direction)
-        vjps_faces = self.derivative_faces(derivative_info=derivative_info)
+        # Compute gradients w.r.t. each of the 6 faces using the rotation matrix (if any)
+        vjps_faces = self.derivative_faces(
+            derivative_info=derivative_info, rotation_matrix=rotation_matrix
+        )
 
         # post-process these values to give the gradients w.r.t. center and size
         vjps_center_size = self.derivatives_center_size(vjps_faces=vjps_faces)
@@ -2522,18 +2647,26 @@ class Box(SimplePlaneIntersection, Centered):
             size=tuple(vjp_size.tolist()),
         )
 
-    def derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
-        """Derivative with respect to normal position of 6 faces of ``Box``."""
+    def derivative_faces(
+        self, derivative_info: DerivativeInfo, rotation_matrix: np.ndarray = None
+    ) -> Bound:
+        """Compute derivatives with respect to the normal position of 6 faces of `Box`, using rotation matrix if provided."""
 
         # change in permittivity between inside and outside
         vjp_faces = np.zeros((2, 3))
 
         for min_max_index, _ in enumerate((0, -1)):
             for axis in range(3):
+                if rotation_matrix is not None:
+                    rotation_matrix = rotation_matrix
+                else:
+                    rotation_matrix = None
+
                 vjp_face = self.derivative_face(
                     min_max_index=min_max_index,
                     axis_normal=axis,
                     derivative_info=derivative_info,
+                    rotation_matrix=rotation_matrix,
                 )
 
                 # record vjp for this face
@@ -2544,105 +2677,23 @@ class Box(SimplePlaneIntersection, Centered):
     def derivative_face(
         self,
         min_max_index: int,
-        axis_normal: Axis,
+        axis_normal: int,
         derivative_info: DerivativeInfo,
+        rotation_matrix: np.ndarray = None,
     ) -> float:
-        """Compute the derivative w.r.t. shifting a face in the normal direction."""
-
-        # normal and tangential dims
-        dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal)
-        fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
-
-        # normal and tangential fields
-        D_normal = derivative_info.D_der_map[fld_normal].sel(f=derivative_info.frequency)
-        Es_perp = tuple(
-            derivative_info.E_der_map[key].sel(f=derivative_info.frequency) for key in flds_perp
+        """
+        Compute the derivative (VJP) with respect to shifting a face of a rotated box,
+        using full integration over that face.
+        """
+        mesh, _ = self.build_box_face_mesh(
+            center=np.asarray(self.center, float),
+            size=np.asarray(self.size, float),
+            axis_normal=axis_normal,
+            min_max_index=min_max_index,
+            rotation_matrix=rotation_matrix,
         )
-
-        # normal and tangential bounds
-        bounds_T = np.array(derivative_info.bounds).T  # put (xyz) first dimension
-        bounds_normal, bounds_perp = self.pop_axis(bounds_T, axis=axis_normal)
-
-        # define the integration plane
-        coord_normal_face = bounds_normal[min_max_index]
-        bounds_perp = np.array(bounds_perp).T  # put (min / max) first dimension for integrator
-
-        # normal field data coordinates
-        fld_coords_normal = D_normal.coords[dim_normal]
-
-        # condition: a face is entirely outside of the domain, skip!
-        sign = (-1, 1)[min_max_index]
-        normal_coord_positive = sign * coord_normal_face
-        fld_coords_positive = sign * fld_coords_normal
-        if all(fld_coords_positive < normal_coord_positive):
-            log.info(
-                f"skipping VJP for 'Box' face '{dim_normal}{'-+'[min_max_index]}' "
-                "as it is entirely outside of the simulation domain."
-            )
-            return 0.0
-
-        # grab permittivity data inside and outside edge in normal direction
-        eps_xyz = [
-            derivative_info.eps_data[f"eps_{dim}{dim}"].sel(f=derivative_info.frequency)
-            for dim in "xyz"
-        ]
-
-        # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
-        num_cells_in = 4
-
-        # if not enough data, just use best guess using eps in medium and simulation
-        needs_eps_approx = any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz)
-
-        if derivative_info.eps_approx or needs_eps_approx:
-            eps_xyz_inside = 3 * [derivative_info.eps_in]
-            eps_xyz_outside = 3 * [derivative_info.eps_out]
-            # TODO: not tested...
-
-        # otherwise, try to grab the data at the edges
-        else:
-            if min_max_index == 0:
-                index_out, index_in = (0, num_cells_in - 1)
-            else:
-                index_out, index_in = (-1, -num_cells_in)
-            eps_xyz_inside = [eps.isel(**{dim_normal: index_in}) for eps in eps_xyz]
-            eps_xyz_outside = [eps.isel(**{dim_normal: index_out}) for eps in eps_xyz]
-
-        # put in normal / tangential basis
-        eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal)
-        eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal)
-
-        # compute integration pre-factors
-        delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]
-        delta_eps_inv_normal = 1.0 / eps_in_normal - 1.0 / eps_out_normal
-
-        def integrate_face(arr: xr.DataArray) -> complex:
-            """Interpolate and integrate a scalar field data over the face using bounds."""
-
-            arr_at_face = arr.interp(**{dim_normal: float(coord_normal_face)}, assume_sorted=True)
-
-            integral_result = integrate_within_bounds(
-                arr=arr_at_face,
-                dims=dims_perp,
-                bounds=bounds_perp,
-            )
-
-            return complex(integral_result)
-
-        # put together VJP using D_normal and E_perp integration
-        vjp_value = 0.0
-
-        # perform D-normal integral
-        integrand_D = -delta_eps_inv_normal * D_normal
-        integral_D = integrate_face(integrand_D)
-        vjp_value += integral_D
-
-        # perform E-perpendicular integrals
-        for E_perp, delta_eps_perp in zip(Es_perp, delta_eps_perps):
-            integrand_E = E_perp * delta_eps_perp
-            integral_E = integrate_face(integrand_E)
-            vjp_value += integral_E
-
-        return np.real(vjp_value)
+        vjp = derivative_info.grad_surfaces(surface_mesh=mesh)
+        return float(np.real(np.sum(vjp)))
 
 
 """Compound subclasses"""
@@ -2669,7 +2720,15 @@ class Transformed(Geometry):
 
     @pydantic.validator("geometry")
     def _geometry_is_finite(cls, val):
-        if not np.isfinite(val.bounds).all():
+        def preprocess(value):
+            return value._value if isinstance(value, np.numpy_boxes.ArrayBox) else value
+
+        processed_bounds = tuple(
+            tuple(preprocess(coord) for coord in bound) for bound in val.bounds
+        )
+
+        # Ensure all values are finite
+        if not np.isfinite(processed_bounds).all():
             raise ValidationError(
                 "Transformations are only supported on geometries with finite dimensions. "
                 "Try using a large value instead of 'inf' when creating geometries that undergo "
@@ -2922,6 +2981,45 @@ class Transformed(Geometry):
         new_bounds.append(np.dot(self.inverse, max_bound)[axis])
         new_geometry = self.geometry._update_from_bounds(bounds=new_bounds, axis=axis)
         return self.updated_copy(geometry=new_geometry)
+
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """
+        Compute the adjoint derivatives for the transformed geometry by
+        transforming the base geometry.
+
+        """
+        derivative_map = {}
+
+        transform_paths = [path for path in derivative_info.paths if path[0] == "transform"]
+
+        if derivative_info.paths == [("transform",)]:
+            derivative_info = derivative_info.updated_copy(
+                paths=[("geometry", "center"), ("geometry", "size"), ("transform",)], deep=False
+            )
+        geometry_paths = [path for path in derivative_info.paths if path[0] == "geometry"]
+
+        if "transform" in [p[0] for p in transform_paths]:
+            transform_paths = [("transform", i, j) for i in range(4) for j in range(4)]
+
+        if geometry_paths:
+            T = self.transform
+            R = T[:3, :3]  # Rotation matrix
+
+            geo_info = derivative_info.updated_copy(
+                paths=[path[1:] for path in geometry_paths], deep=False
+            )
+            transformed_geometry_derivatives = self.geometry.compute_derivatives(geo_info, R)
+
+            transformed_center_gradient = np.array(
+                transformed_geometry_derivatives.get(("center",), (0.0, 0.0, 0.0))
+            )
+            transformed_size_gradient = np.array(
+                transformed_geometry_derivatives.get(("size",), (0.0, 0.0, 0.0))
+            )
+            derivative_map[("geometry", "center")] = transformed_center_gradient
+            derivative_map[("geometry", "size")] = transformed_size_gradient
+        derivative_map[("transform",)] = np.zeros((4, 4))
+        return derivative_map
 
 
 class ClipOperation(Geometry):
