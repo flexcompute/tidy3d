@@ -5,24 +5,25 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property, skip_if_fields_missing
-from ....components.data.data_array import FreqDataArray, FreqModeDataArray
-from ....components.data.monitor_data import ModeData
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.base import Box
-from ....components.grid.grid import Grid
-from ....components.monitor import ModeMonitor
-from ....components.simulation import Simulation
-from ....components.source.field import ModeSource, ModeSpec
-from ....components.source.time import GaussianPulse
-from ....components.types import Bound, Direction, FreqArray
-from ....exceptions import ValidationError
-from ...microwave import (
+from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
+from tidy3d.components.data.monitor_data import ModeData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.monitor import ModeMonitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.field import ModeSource, ModeSpec
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Bound, Direction, FreqArray
+from tidy3d.exceptions import ValidationError
+from tidy3d.plugins.microwave import (
     CurrentIntegralTypes,
     ImpedanceCalculator,
     VoltageIntegralTypes,
 )
-from ...mode import ModeSolver
+from tidy3d.plugins.mode import ModeSolver
+
 from .base_terminal import AbstractTerminalPort
 
 

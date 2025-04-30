@@ -1,10 +1,16 @@
 """Helpers for automatic setup of path integrals."""
 
-from ...components.geometry.base import Box
-from ...components.geometry.utils import SnapBehavior, SnapLocation, SnappingSpec, snap_box_to_grid
-from ...components.grid.grid import Grid
-from ...components.lumped_element import LinearLumpedElement
-from ...components.types import Direction
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.utils import (
+    SnapBehavior,
+    SnapLocation,
+    SnappingSpec,
+    snap_box_to_grid,
+)
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.lumped_element import LinearLumpedElement
+from tidy3d.components.types import Direction
+
 from .path_integrals import (
     CurrentIntegralAxisAligned,
     VoltageIntegralAxisAligned,

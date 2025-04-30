@@ -13,7 +13,7 @@ References
 
 import numpy as np
 
-from ....constants import ETA_0
+from tidy3d.constants import ETA_0
 
 
 def _f(normalized_width: float) -> float:

@@ -5,15 +5,15 @@ from typing import Union
 
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel, cached_property
-from ....components.data.data_array import FreqDataArray
-from ....components.data.sim_data import SimulationData
-from ....components.grid.grid import Grid
-from ....components.monitor import FieldMonitor, ModeMonitor
-from ....components.source.base import Source
-from ....components.source.time import GaussianPulse
-from ....components.types import FreqArray
-from ....log import log
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.monitor import FieldMonitor, ModeMonitor
+from tidy3d.components.source.base import Source
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import FreqArray
+from tidy3d.log import log
 
 
 class AbstractTerminalPort(Tidy3dBaseModel, ABC):

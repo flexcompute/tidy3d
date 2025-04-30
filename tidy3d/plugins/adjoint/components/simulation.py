@@ -10,24 +10,25 @@ import xarray as xr
 from jax.tree_util import register_pytree_node_class
 from joblib import Parallel, delayed
 
-from ....components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.geometry.base import Box
-from ....components.medium import AbstractMedium
-from ....components.monitor import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.data.monitor_data import FieldData, PermittivityData
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.medium import AbstractMedium
+from tidy3d.components.monitor import (
     DiffractionMonitor,
     FieldMonitor,
     ModeMonitor,
     Monitor,
     PermittivityMonitor,
 )
-from ....components.simulation import Simulation
-from ....components.structure import Structure
-from ....components.subpixel_spec import Staircasing, SubpixelSpec
-from ....components.types import Ax, annotate_type
-from ....constants import HERTZ, SECOND
-from ....exceptions import AdjointError
-from ....log import log
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.structure import Structure
+from tidy3d.components.subpixel_spec import Staircasing, SubpixelSpec
+from tidy3d.components.types import Ax, annotate_type
+from tidy3d.constants import HERTZ, SECOND
+from tidy3d.exceptions import AdjointError
+from tidy3d.log import log
+
 from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .geometry import JaxGeometryGroup, JaxPolySlab
 from .structure import (

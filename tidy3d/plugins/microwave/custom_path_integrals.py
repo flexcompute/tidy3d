@@ -9,12 +9,13 @@ import pydantic.v1 as pd
 import shapely
 import xarray as xr
 
-from ...components.base import cached_property
-from ...components.geometry.base import Geometry
-from ...components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
-from ...components.viz import add_ax_if_none
-from ...constants import MICROMETER, fp_eps
-from ...exceptions import SetupError
+from tidy3d.components.base import cached_property
+from tidy3d.components.geometry.base import Geometry
+from tidy3d.components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import MICROMETER, fp_eps
+from tidy3d.exceptions import SetupError
+
 from .path_integrals import (
     AbstractAxesRH,
     AxisAlignedPathIntegral,

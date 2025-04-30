@@ -7,24 +7,32 @@ import pydantic.v1 as pydantic
 from matplotlib import pyplot
 from typing_extensions import Annotated
 
-from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.boundary import BoundarySpec, Periodic
-from ...components.data.data_array import FreqModeDataArray, ModeIndexDataArray
-from ...components.geometry.base import Box
-from ...components.geometry.polyslab import PolySlab
-from ...components.grid.grid_spec import GridSpec
-from ...components.medium import Medium, MediumType
-from ...components.mode_spec import ModeSpec
-from ...components.simulation import Simulation
-from ...components.source.field import ModeSource
-from ...components.source.time import GaussianPulse
-from ...components.structure import Structure
-from ...components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D
-from ...components.viz import add_ax_if_none
-from ...constants import C_0, MICROMETER, RADIAN, inf
-from ...exceptions import Tidy3dError, ValidationError
-from ...log import log
-from ..mode.mode_solver import ModeSolver
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.boundary import BoundarySpec, Periodic
+from tidy3d.components.data.data_array import FreqModeDataArray, ModeIndexDataArray
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.polyslab import PolySlab
+from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.medium import Medium, MediumType
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.field import ModeSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import (
+    TYPE_TAG_STR,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Coordinate,
+    Literal,
+    Size1D,
+)
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
+from tidy3d.exceptions import Tidy3dError, ValidationError
+from tidy3d.log import log
+from tidy3d.plugins.mode.mode_solver import ModeSolver
 
 AnnotatedMedium = Annotated[MediumType, pydantic.Field(discriminator=TYPE_TAG_STR)]
 

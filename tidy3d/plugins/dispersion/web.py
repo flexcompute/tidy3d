@@ -10,15 +10,15 @@ import pydantic.v1 as pydantic
 import requests
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 
+from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.medium import PoleResidue
+from tidy3d.components.types import Literal
+from tidy3d.constants import HERTZ, MICROMETER
+from tidy3d.exceptions import SetupError, Tidy3dError, WebError
+from tidy3d.log import log
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.http_util import get_headers
 
-from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
-from ...components.medium import PoleResidue
-from ...components.types import Literal
-from ...constants import HERTZ, MICROMETER
-from ...exceptions import SetupError, Tidy3dError, WebError
-from ...log import log
 from .fit import DispersionFitter
 
 BOUND_MAX_FACTOR = 10

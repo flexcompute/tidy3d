@@ -7,9 +7,10 @@ from typing import Tuple
 import numpy as np
 from pydantic.v1 import NonNegativeFloat, PositiveInt
 
-from ...components.dispersion_fitter import AdvancedFastFitterParam, fit
-from ...components.medium import PoleResidue
-from ...constants import C_0, HBAR
+from tidy3d.components.dispersion_fitter import AdvancedFastFitterParam, fit
+from tidy3d.components.medium import PoleResidue
+from tidy3d.constants import C_0, HBAR
+
 from .fit import DispersionFitter
 
 # numerical tolerance for pole relocation for fast fitter

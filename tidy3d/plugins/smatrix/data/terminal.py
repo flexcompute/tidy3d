@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ....components.data.data_array import (
+from tidy3d.components.data.data_array import (
     DataArray,
 )
 

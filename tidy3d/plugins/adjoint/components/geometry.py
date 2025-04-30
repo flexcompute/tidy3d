@@ -14,21 +14,22 @@ import xarray as xr
 from jax.tree_util import register_pytree_node_class
 from joblib import Parallel, delayed
 
-from ....components.base import cached_property
-from ....components.data.data_array import ScalarFieldDataArray
-from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.geometry.base import Box, Geometry, GeometryGroup
-from ....components.geometry.polyslab import (
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.data.monitor_data import FieldData, PermittivityData
+from tidy3d.components.geometry.base import Box, Geometry, GeometryGroup
+from tidy3d.components.geometry.polyslab import (
     _COMPLEX_POLYSLAB_DIVISIONS_WARN,
     _IS_CLOSE_RTOL,
     PolySlab,
 )
-from ....components.monitor import FieldMonitor, PermittivityMonitor
-from ....components.types import ArrayFloat2D, Bound, Coordinate2D  # , annotate_type
-from ....constants import MICROMETER, fp_eps
-from ....exceptions import AdjointError
-from ....log import log
-from ...polyslab import ComplexPolySlab
+from tidy3d.components.monitor import FieldMonitor, PermittivityMonitor
+from tidy3d.components.types import ArrayFloat2D, Bound, Coordinate2D  # , annotate_type
+from tidy3d.constants import MICROMETER, fp_eps
+from tidy3d.exceptions import AdjointError
+from tidy3d.log import log
+from tidy3d.plugins.polyslab import ComplexPolySlab
+
 from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .types import JaxFloat
 

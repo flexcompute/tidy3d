@@ -7,8 +7,9 @@ import numpy as np
 import pydantic.v1 as pd
 import scipy.stats.qmc as qmc
 
-from ...components.base import Tidy3dBaseModel
-from ...constants import inf
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.constants import inf
+
 from .parameter import ParameterAny, ParameterFloat, ParameterInt, ParameterType
 
 DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube

@@ -12,15 +12,14 @@ import scipy.optimize as opt
 from pydantic.v1 import Field, validator
 from rich.progress import Progress
 
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.medium import AbstractMedium, PoleResidue
+from tidy3d.components.types import ArrayFloat1D, Ax
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import C_0, HBAR, MICROMETER
+from tidy3d.exceptions import SetupError, ValidationError, WebError
+from tidy3d.log import get_logging_console, log
 from tidy3d.web.core.environment import Env
-
-from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.medium import AbstractMedium, PoleResidue
-from ...components.types import ArrayFloat1D, Ax
-from ...components.viz import add_ax_if_none
-from ...constants import C_0, HBAR, MICROMETER
-from ...exceptions import SetupError, ValidationError, WebError
-from ...log import get_logging_console, log
 
 
 class DispersionFitter(Tidy3dBaseModel):

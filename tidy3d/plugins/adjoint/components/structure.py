@@ -8,13 +8,14 @@ import numpy as np
 import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
 
-from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.geometry.utils import GeometryType
-from ....components.medium import MediumType
-from ....components.monitor import FieldMonitor
-from ....components.structure import Structure
-from ....components.types import TYPE_TAG_STR, Bound
-from ....constants import C_0
+from tidy3d.components.data.monitor_data import FieldData, PermittivityData
+from tidy3d.components.geometry.utils import GeometryType
+from tidy3d.components.medium import MediumType
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import TYPE_TAG_STR, Bound
+from tidy3d.constants import C_0
+
 from .base import JaxObject
 from .geometry import JAX_GEOMETRY_MAP, JaxBox, JaxGeometryType
 from .medium import JAX_MEDIUM_MAP, JaxMediumType

@@ -9,15 +9,16 @@ from typing import Dict, Tuple, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel, cached_property
-from ....components.data.data_array import DataArray
-from ....components.data.sim_data import SimulationData
-from ....components.simulation import Simulation
-from ....components.types import FreqArray
-from ....config import config
-from ....constants import HERTZ
-from ....exceptions import SetupError, Tidy3dKeyError
-from ....web.api.container import Batch, BatchData
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.types import FreqArray
+from tidy3d.config import config
+from tidy3d.constants import HERTZ
+from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.web.api.container import Batch, BatchData
+
 from ..ports.coaxial_lumped import CoaxialLumpedPort
 from ..ports.modal import Port
 from ..ports.rectangular_lumped import LumpedPort

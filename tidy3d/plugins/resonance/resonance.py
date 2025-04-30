@@ -8,13 +8,13 @@ import scipy.linalg
 import xarray as xr
 from pydantic.v1 import Field, NonNegativeFloat, PositiveInt, validator
 
-from ...components.base import Tidy3dBaseModel
-from ...components.data.data_array import ScalarFieldTimeDataArray
-from ...components.data.monitor_data import FieldTimeData
-from ...components.types import ArrayComplex1D, ArrayComplex2D, ArrayComplex3D, ArrayFloat1D
-from ...constants import HERTZ
-from ...exceptions import SetupError, ValidationError
-from ...log import log
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
+from tidy3d.components.data.monitor_data import FieldTimeData
+from tidy3d.components.types import ArrayComplex1D, ArrayComplex2D, ArrayComplex3D, ArrayFloat1D
+from tidy3d.constants import HERTZ
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
 
 INIT_NUM_FREQS = 200
 

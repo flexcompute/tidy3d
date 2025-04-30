@@ -5,10 +5,11 @@ from abc import ABC, abstractmethod
 import jax.numpy as jnp
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel
-from ....components.types import ArrayFloat2D
-from ....constants import MICROMETER
-from ....log import log
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import ArrayFloat2D
+from tidy3d.constants import MICROMETER
+from tidy3d.log import log
+
 from .filter import BinaryProjector, ConicFilter
 
 # Radius of Curvature Calculation

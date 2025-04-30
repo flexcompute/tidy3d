@@ -11,7 +11,8 @@ import pydantic.v1 as pd
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
-from ....components.base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel
+
 from .data.data_array import JAX_DATA_ARRAY_TAG, JaxDataArray
 
 # end of the error message when a ``_validate_web_adjoint`` exception is raised

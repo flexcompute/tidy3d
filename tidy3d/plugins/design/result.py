@@ -8,7 +8,7 @@ import numpy as np
 import pandas
 import pydantic.v1 as pd
 
-from ...components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
 
 # NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming
 

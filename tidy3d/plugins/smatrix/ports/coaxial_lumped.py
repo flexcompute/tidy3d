@@ -3,23 +3,24 @@
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.data.data_array import FreqDataArray, ScalarFieldDataArray
-from ....components.data.dataset import FieldDataset
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.base import Box, Geometry
-from ....components.geometry.utils_2d import increment_float
-from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import CoaxialLumpedResistor
-from ....components.monitor import FieldMonitor
-from ....components.source.current import CustomCurrentSource
-from ....components.source.time import GaussianPulse
-from ....components.types import Axis, Coordinate, Direction, FreqArray, Size
-from ....components.validators import skip_if_fields_missing
-from ....constants import MICROMETER
-from ....exceptions import SetupError, ValidationError
-from ...microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
-from ...microwave.path_integrals import AbstractAxesRH
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
+from tidy3d.components.data.dataset import FieldDataset
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.geometry.utils_2d import increment_float
+from tidy3d.components.grid.grid import Grid, YeeGrid
+from tidy3d.components.lumped_element import CoaxialLumpedResistor
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.source.current import CustomCurrentSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Axis, Coordinate, Direction, FreqArray, Size
+from tidy3d.components.validators import skip_if_fields_missing
+from tidy3d.constants import MICROMETER
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
+from tidy3d.plugins.microwave.path_integrals import AbstractAxesRH
+
 from .base_lumped import AbstractLumpedPort
 
 DEFAULT_COAX_SOURCE_NUM_POINTS = 11

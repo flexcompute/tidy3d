@@ -7,20 +7,20 @@ import numpy as np
 import pydantic.v1 as pd
 from pydantic.v1 import NonNegativeFloat, PositiveInt
 
-from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
-from ...components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
-from ...components.data.sim_data import SimulationData
-from ...components.geometry.base import Box, Geometry
-from ...components.grid.grid_spec import GridSpec, LayerRefinementSpec
-from ...components.lumped_element import LumpedElement
-from ...components.medium import Medium, MediumType3D
-from ...components.monitor import AbstractFieldProjectionMonitor, MonitorType
-from ...components.simulation import Simulation
-from ...components.source.utils import SourceType
-from ...components.structure import MeshOverrideStructure, Structure
-from ...components.types import ArrayLike, Axis, Bound
-from ...constants import C_0, inf
-from ...log import log
+from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.grid.grid_spec import GridSpec, LayerRefinementSpec
+from tidy3d.components.lumped_element import LumpedElement
+from tidy3d.components.medium import Medium, MediumType3D
+from tidy3d.components.monitor import AbstractFieldProjectionMonitor, MonitorType
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.utils import SourceType
+from tidy3d.components.structure import MeshOverrideStructure, Structure
+from tidy3d.components.types import ArrayLike, Axis, Bound
+from tidy3d.constants import C_0, inf
+from tidy3d.log import log
 
 
 class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):

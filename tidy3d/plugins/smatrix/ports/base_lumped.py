@@ -5,13 +5,14 @@ from typing import Optional
 
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.geometry.utils_2d import snap_coordinate_to_grid
-from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import LumpedElementType
-from ....components.monitor import FieldMonitor
-from ....components.types import Complex, Coordinate, FreqArray
-from ....constants import OHM
+from tidy3d.components.base import cached_property
+from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
+from tidy3d.components.grid.grid import Grid, YeeGrid
+from tidy3d.components.lumped_element import LumpedElementType
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.types import Complex, Coordinate, FreqArray
+from tidy3d.constants import OHM
+
 from .base_terminal import AbstractTerminalPort
 
 DEFAULT_PORT_NUM_CELLS = 3

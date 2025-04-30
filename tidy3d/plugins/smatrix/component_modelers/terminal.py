@@ -7,25 +7,26 @@ from typing import Dict, Tuple, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.data.data_array import (
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import (
     DataArray,
     FreqDataArray,
 )
-from ....components.data.monitor_data import (
+from tidy3d.components.data.monitor_data import (
     MonitorData,
 )
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.utils_2d import snap_coordinate_to_grid
-from ....components.microwave.data.monitor_data import AntennaMetricsData
-from ....components.monitor import DirectivityMonitor
-from ....components.simulation import Simulation
-from ....components.source.time import GaussianPulse
-from ....components.types import Ax
-from ....components.viz import add_ax_if_none, equal_aspect
-from ....constants import C_0, OHM
-from ....exceptions import Tidy3dError, Tidy3dKeyError, ValidationError
-from ....web.api.container import BatchData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
+from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
+from tidy3d.components.monitor import DirectivityMonitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Ax
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.constants import C_0, OHM
+from tidy3d.exceptions import Tidy3dError, Tidy3dKeyError, ValidationError
+from tidy3d.web.api.container import BatchData
+
 from ..data.terminal import PortDataArray, TerminalPortDataArray
 from ..ports.base_lumped import AbstractLumpedPort
 from ..ports.coaxial_lumped import CoaxialLumpedPort

@@ -9,16 +9,17 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.data.sim_data import SimulationData
-from ....components.monitor import ModeMonitor
-from ....components.simulation import Simulation
-from ....components.source.field import ModeSource
-from ....components.source.time import GaussianPulse
-from ....components.types import Ax, Complex
-from ....components.viz import add_ax_if_none, equal_aspect
-from ....exceptions import SetupError
-from ....web.api.container import BatchData
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.monitor import ModeMonitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.field import ModeSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Ax, Complex
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.exceptions import SetupError
+from tidy3d.web.api.container import BatchData
+
 from ..ports.modal import ModalPortDataArray, Port
 from .base import FWIDTH_FRAC, AbstractComponentModeler
 

@@ -10,8 +10,8 @@ import pydantic.v1 as pd
 import shapely as shapely
 import xarray as xr
 
-from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.data.data_array import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import (
     FreqDataArray,
     FreqModeDataArray,
     ScalarFieldDataArray,
@@ -19,13 +19,14 @@ from ...components.data.data_array import (
     ScalarModeFieldDataArray,
     TimeDataArray,
 )
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
-from ...components.geometry.base import Box, Geometry
-from ...components.types import Ax, Axis, Coordinate2D, Direction
-from ...components.validators import assert_line, assert_plane
-from ...components.viz import add_ax_if_none
-from ...constants import AMP, VOLT, fp_eps
-from ...exceptions import DataError, Tidy3dError
+from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
+from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.types import Ax, Axis, Coordinate2D, Direction
+from tidy3d.components.validators import assert_line, assert_plane
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import AMP, VOLT, fp_eps
+from tidy3d.exceptions import DataError, Tidy3dError
+
 from .viz import (
     ARROW_CURRENT,
     plot_params_current_path,

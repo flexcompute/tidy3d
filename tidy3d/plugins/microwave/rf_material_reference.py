@@ -1,6 +1,6 @@
 """Holds the reference materials for Tidy3D material library."""
 
-from ...material_library.material_reference import ReferenceData
+from tidy3d.material_library.material_reference import ReferenceData
 
 rf_material_refs = dict(
     Rogers3003=ReferenceData(

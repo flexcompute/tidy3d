@@ -7,9 +7,9 @@ import jax.scipy as jsp
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel
-from ....constants import MICROMETER
-from ....log import log
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.constants import MICROMETER
+from tidy3d.log import log
 
 
 class Filter(Tidy3dBaseModel, ABC):

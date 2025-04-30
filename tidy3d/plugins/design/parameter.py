@@ -8,7 +8,7 @@ from typing import Any, List, Tuple, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ...components.base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel
 
 
 class Parameter(Tidy3dBaseModel, ABC):

@@ -2,7 +2,7 @@
 
 from numpy import inf
 
-from ...components.viz import PathPlotParams
+from tidy3d.components.viz import PathPlotParams
 
 """ Constants """
 VOLTAGE_COLOR = "red"

@@ -3,33 +3,34 @@
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.data.data_array import FreqDataArray
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.base import Box
-from ....components.geometry.utils import (
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.utils import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,
     snap_box_to_grid,
 )
-from ....components.geometry.utils_2d import increment_float
-from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import (
+from tidy3d.components.geometry.utils_2d import increment_float
+from tidy3d.components.grid.grid import Grid, YeeGrid
+from tidy3d.components.lumped_element import (
     LinearLumpedElement,
     LumpedResistor,
     RLCNetwork,
 )
-from ....components.monitor import FieldMonitor
-from ....components.source.current import UniformCurrentSource
-from ....components.source.time import GaussianPulse
-from ....components.types import Axis, FreqArray, LumpDistType
-from ....components.validators import assert_line_or_plane
-from ....exceptions import SetupError, ValidationError
-from ...microwave import (
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.source.current import UniformCurrentSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Axis, FreqArray, LumpDistType
+from tidy3d.components.validators import assert_line_or_plane
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.plugins.microwave import (
     CurrentIntegralAxisAligned,
     VoltageIntegralAxisAligned,
 )
+
 from .base_lumped import AbstractLumpedPort
 
 

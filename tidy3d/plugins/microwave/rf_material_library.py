@@ -1,8 +1,9 @@
 """Holds dispersive models for several commonly used RF materials."""
 
 # from ...components.base import Tidy3dBaseModel
-from ...components.medium import PoleResidue
-from ...material_library.material_library import MaterialItem, VariantItem
+from tidy3d.components.medium import PoleResidue
+from tidy3d.material_library.material_library import MaterialItem, VariantItem
+
 from .rf_material_reference import rf_material_refs
 
 Rogers3003_design = VariantItem(

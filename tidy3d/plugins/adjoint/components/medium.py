@@ -10,12 +10,13 @@ import pydantic.v1 as pd
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
 
-from ....components.data.monitor_data import FieldData
-from ....components.geometry.base import Geometry
-from ....components.medium import AnisotropicMedium, CustomMedium, Medium
-from ....components.types import Bound, Literal
-from ....constants import CONDUCTIVITY
-from ....exceptions import SetupError
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.geometry.base import Geometry
+from tidy3d.components.medium import AnisotropicMedium, CustomMedium, Medium
+from tidy3d.components.types import Bound, Literal
+from tidy3d.constants import CONDUCTIVITY
+from tidy3d.exceptions import SetupError
+
 from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset

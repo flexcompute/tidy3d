@@ -5,18 +5,17 @@ from typing import Dict, List, Union
 
 import pydantic.v1 as pd
 
-from tidy3d.components.material.multi_physics import MultiPhysicsMedium
-from tidy3d.components.material.tcad.charge import SemiconductorMedium
-from tidy3d.components.tcad.types import (
+from ..components.base import Tidy3dBaseModel
+from ..components.material.multi_physics import MultiPhysicsMedium
+from ..components.material.tcad.charge import SemiconductorMedium
+from ..components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
+from ..components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
     RadiativeRecombination,
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
 )
-
-from ..components.base import Tidy3dBaseModel
-from ..components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
 from ..components.types import Axis
 from ..exceptions import SetupError
 from ..log import log

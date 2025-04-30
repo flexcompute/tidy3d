@@ -3379,3 +3379,7 @@ class GeometryGroup(Geometry):
 
 
 from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402
+
+Transformed.update_forward_refs()
+ClipOperation.update_forward_refs()
+GeometryGroup.update_forward_refs()
