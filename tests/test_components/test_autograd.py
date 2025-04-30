@@ -2208,3 +2208,123 @@ def test_error_clip(use_emulated_run):
 
     with pytest.raises(ValueError):
         g = ag.grad(objective)(1.0)
+
+
+def make_sim_rotation(center: tuple, size: tuple, angle: float, axis: int):
+    wavelength = 1.5
+    L = 10 * wavelength
+    freq0 = td.C_0 / wavelength
+    buffer = 1.0 * wavelength
+
+    # Source
+    src = td.PointDipole(
+        center=(-L / 2 + buffer, 0, 0),
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10.0),
+        polarization="Ez",
+    )
+    # Monitor
+    mnt = td.FieldMonitor(
+        center=(
+            +L / 2 - buffer,
+            0.5 * buffer,
+            0.5 * buffer,
+        ),
+        size=(0.0, 0.0, 0.0),
+        freqs=[freq0],
+        name="point",
+    )
+    # The box geometry
+    base_box = td.Box(center=center, size=size)
+    if angle is not None:
+        base_box = base_box.rotated(angle, axis)
+
+    scatterer = td.Structure(
+        geometry=base_box,
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    sim = td.Simulation(
+        size=(L, L, L),
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=50),
+        structures=[scatterer],
+        sources=[src],
+        monitors=[mnt],
+        run_time=120 / freq0,
+    )
+    return sim
+
+
+def objective_fn(center, size, angle, axis):
+    sim = make_sim_rotation(center, size, angle, axis)
+    sim_data = web.run(sim, task_name="emulated_rot_test", local_gradient=True, verbose=False)
+    return anp.sum(sim_data.get_intensity("point").values)
+
+
+def get_grad(center, size, angle, axis):
+    def wrapped(c, s):
+        return objective_fn(c, s, angle, axis)
+
+    val, (grad_c, grad_s) = ag.value_and_grad(wrapped, argnum=(0, 1))(center, size)
+    return val, grad_c, grad_s
+
+
+@pytest.mark.numerical
+@pytest.mark.parametrize(
+    "angle_deg, axis",
+    [
+        (0.0, 1),
+        (180.0, 1),
+        (90.0, 1),
+        (270.0, 1),
+    ],
+)
+def test_box_rotation_gradients(use_emulated_run, angle_deg, axis):
+    center0 = (0.0, 0.0, 0.0)
+    size0 = (2.0, 2.0, 2.0)
+
+    angle_rad = np.deg2rad(angle_deg)
+    val, grad_c, grad_s = get_grad(center0, size0, angle=None, axis=None)
+    npx, npy, npz = grad_c
+    sSx, sSy, sSz = grad_s
+
+    assert not np.allclose(grad_c, 0.0), "center gradient is all zero."
+    assert not np.allclose(grad_s, 0.0), "size gradient is all zero."
+
+    if angle_deg == 180.0:
+        # rotating 180° about y => (x,z) become negated, y stays same
+        _, grad_c_ref, grad_s_ref = get_grad(center0, size0, angle_rad, axis)
+        rSx, rSy, rSz = grad_s_ref
+        rx, ry, rz = grad_c_ref
+
+        assert np.allclose(grad_c[0], -grad_c_ref[0], atol=1e-6), "center_x sign mismatch"
+        assert np.allclose(grad_c[1], grad_c_ref[1], atol=1e-6), "center_y mismatch"
+        assert np.allclose(grad_c[2], -grad_c_ref[2], atol=1e-6), "center_z sign mismatch"
+        assert np.allclose(grad_s, grad_s_ref, atol=1e-6), "size grads changed unexpectedly"
+
+    elif angle_deg == 90.0:
+        # rotating 90° about y => new x= old z, new z=- old x, y stays same
+        _, grad_c_ref, grad_s_ref = get_grad(center0, size0, angle_rad, axis)
+        rSx, rSy, rSz = grad_s_ref
+        rx, ry, rz = grad_c_ref
+
+        assert np.allclose(npx, rz, atol=1e-6), "center_x != old center_z"
+        assert np.allclose(npy, ry, atol=1e-6), "center_y changed unexpectedly"
+        assert np.allclose(npz, -rx, atol=1e-6), "center_z != - old center_x"
+
+        assert np.allclose(sSx, rSz, atol=1e-6), "size_x != old size_z"
+        assert np.allclose(sSy, rSy, atol=1e-6), "size_y changed unexpectedly"
+        assert np.allclose(sSz, rSx, atol=1e-6), "size_z != old size_x"
+
+    elif angle_deg == 270.0:
+        # rotating 270° about y => new x= - old z, new z= old x, y stays same
+        _, grad_c_ref, grad_s_ref = get_grad(center0, size0, angle_rad, axis)
+        rSx, rSy, rSz = grad_s_ref
+        rx, ry, rz = grad_c_ref
+
+        assert np.allclose(npx, -rz, atol=1e-6), "center_x != - old center_z"
+        assert np.allclose(npy, ry, atol=1e-6), "center_y changed unexpectedly"
+        assert np.allclose(npz, rx, atol=1e-6), "center_z != old center_x"
+
+        assert np.allclose(sSx, rSz, atol=1e-6), "size_x != old size_z"
+        assert np.allclose(sSy, rSy, atol=1e-6), "size_y changed unexpectedly"
+        assert np.allclose(sSz, rSx, atol=1e-6), "size_z != old size_x"
