@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
 - Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.
+- Improved error message and handling when attempting to load a non-existent task ID.
 
 ## [2.8.3] - 2025-04-24
 
