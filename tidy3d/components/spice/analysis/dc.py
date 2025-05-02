@@ -49,18 +49,10 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
     )
 
 
-class IsothermalSteadyChargeDCAnalysis(Tidy3dBaseModel):
+class SteadyChargeDCAnalysis(Tidy3dBaseModel):
     """
     Configures relevant steady-state DC simulation parameters for a charge simulation.
     """
-
-    temperature: pd.PositiveFloat = pd.Field(
-        300,
-        title="Temperature",
-        description="Lattice temperature. Assumed constant throughout the device. "
-        "Carriers are assumed to be at thermodynamic equilibrium with the lattice.",
-        units=KELVIN,
-    )
 
     tolerance_settings: ChargeToleranceSpec = pd.Field(
         default=ChargeToleranceSpec(), title="Tolerance settings"
@@ -82,4 +74,18 @@ class IsothermalSteadyChargeDCAnalysis(Tidy3dBaseModel):
         "Boltzmann statistics will be used. This can provide more accurate results in situations "
         "where very high doping may lead the pseudo-Fermi energy level to approach "
         "either the conduction or valence energy bands.",
+    )
+
+
+class IsothermalSteadyChargeDCAnalysis(SteadyChargeDCAnalysis):
+    """
+    Configures relevant steady-state DC simulation parameters for a charge simulation.
+    """
+
+    temperature: pd.PositiveFloat = pd.Field(
+        300,
+        title="Temperature",
+        description="Lattice temperature. Assumed constant throughout the device. "
+        "Carriers are assumed to be at thermodynamic equilibrium with the lattice.",
+        units=KELVIN,
     )
