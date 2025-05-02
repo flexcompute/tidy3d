@@ -2347,6 +2347,54 @@
       ],
       "type": "object"
     },
+    "ConstantEffectiveDOS": {
+      "additionalProperties": false,
+      "properties": {
+        "N": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "type": {
+          "default": "ConstantEffectiveDOS",
+          "enum": [
+            "ConstantEffectiveDOS"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "N"
+      ],
+      "type": "object"
+    },
+    "ConstantEnergyBandGap": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "eg": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "default": "ConstantEnergyBandGap",
+          "enum": [
+            "ConstantEnergyBandGap"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "eg"
+      ],
+      "type": "object"
+    },
     "ConstantMobilityModel": {
       "additionalProperties": false,
       "properties": {
@@ -5443,6 +5491,35 @@
       },
       "required": [
         "coeffs"
+      ],
+      "type": "object"
+    },
+    "DualValleyEffectiveDOS": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "m_eff_hh": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "m_eff_lh": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "default": "DualValleyEffectiveDOS",
+          "enum": [
+            "DualValleyEffectiveDOS"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "m_eff_hh",
+        "m_eff_lh"
       ],
       "type": "object"
     },
@@ -8581,6 +8658,30 @@
       ],
       "type": "object"
     },
+    "IsotropicEffectiveDOS": {
+      "additionalProperties": false,
+      "properties": {
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "m_eff": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "default": "IsotropicEffectiveDOS",
+          "enum": [
+            "IsotropicEffectiveDOS"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "m_eff"
+      ],
+      "type": "object"
+    },
     "KerrNonlinearity": {
       "additionalProperties": false,
       "properties": {
@@ -11435,6 +11536,40 @@
       },
       "type": "object"
     },
+    "MultiValleyEffectiveDOS": {
+      "additionalProperties": false,
+      "properties": {
+        "N_valley": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "m_eff_long": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "m_eff_trans": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "default": "MultiValleyEffectiveDOS",
+          "enum": [
+            "MultiValleyEffectiveDOS"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "N_valley",
+        "m_eff_long",
+        "m_eff_trans"
+      ],
+      "type": "object"
+    },
     "NonlinearSpec": {
       "additionalProperties": false,
       "properties": {
@@ -13396,8 +13531,14 @@
       "additionalProperties": false,
       "properties": {
         "E_g": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ConstantEnergyBandGap"
+            },
+            {
+              "$ref": "#/definitions/VarshniEnergyBandGap"
+            }
+          ]
         },
         "N_a": {
           "anyOf": [
@@ -13433,8 +13574,20 @@
           "default": 0
         },
         "N_c": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ConstantEffectiveDOS"
+            },
+            {
+              "$ref": "#/definitions/DualValleyEffectiveDOS"
+            },
+            {
+              "$ref": "#/definitions/IsotropicEffectiveDOS"
+            },
+            {
+              "$ref": "#/definitions/MultiValleyEffectiveDOS"
+            }
+          ]
         },
         "N_d": {
           "anyOf": [
@@ -13470,8 +13623,20 @@
           "default": 0
         },
         "N_v": {
-          "exclusiveMinimum": 0,
-          "type": "number"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ConstantEffectiveDOS"
+            },
+            {
+              "$ref": "#/definitions/DualValleyEffectiveDOS"
+            },
+            {
+              "$ref": "#/definitions/IsotropicEffectiveDOS"
+            },
+            {
+              "$ref": "#/definitions/MultiValleyEffectiveDOS"
+            }
+          ]
         },
         "R": {
           "default": [],
@@ -16079,6 +16244,40 @@
       },
       "required": [
         "dl"
+      ],
+      "type": "object"
+    },
+    "VarshniEnergyBandGap": {
+      "additionalProperties": false,
+      "properties": {
+        "alpha": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "attrs": {
+          "default": {},
+          "type": "object"
+        },
+        "beta": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "eg_0": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "type": {
+          "default": "VarshniEnergyBandGap",
+          "enum": [
+            "VarshniEnergyBandGap"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "alpha",
+        "beta",
+        "eg_0"
       ],
       "type": "object"
     },

@@ -58,6 +58,16 @@ GRAV_ACC = 9.80665 * 1e6
 Gravitational acceleration (g) [um/s^2].",
 """
 
+M_E_C_SQUARE = 0.51099895069e6
+"""
+Electron rest mass energy (m_e * c^2) [eV]
+"""
+
+M_E_EV = M_E_C_SQUARE / C_0**2
+"""
+Electron mass [eV*s^2/um^2]
+"""
+
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps
 """
