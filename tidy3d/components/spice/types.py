@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Union
 
-from tidy3d.components.spice.analysis.dc import IsothermalSteadyChargeDCAnalysis
+from tidy3d.components.spice.analysis.dc import (
+    IsothermalSteadyChargeDCAnalysis,
+    SteadyChargeDCAnalysis,
+)
 
-ElectricalAnalysisType = Union[IsothermalSteadyChargeDCAnalysis]
+ElectricalAnalysisType = Union[SteadyChargeDCAnalysis, IsothermalSteadyChargeDCAnalysis]

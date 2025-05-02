@@ -1170,23 +1170,30 @@ class TestCharge:
         semiconductor = CHARGE_SIMULATION.intrinsic_Si.charge
         semiconductor = semiconductor.updated_copy(
             N_a=CHARGE_SIMULATION.acceptors,
+        )
+        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(
+            charge=semiconductor,
+            heat=td.SolidMedium(conductivity=1),
             name="Si_p",
         )
-        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=semiconductor)
 
     @pytest.fixture(scope="class")
     def Si_n(self):
         semiconductor = CHARGE_SIMULATION.intrinsic_Si.charge
         semiconductor = semiconductor.updated_copy(
             N_d=CHARGE_SIMULATION.donors,
+        )
+        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(
+            charge=semiconductor,
+            heat=td.SolidMedium(conductivity=1),
             name="Si_n",
         )
-        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=semiconductor)
 
     @pytest.fixture(scope="class")
     def SiO2(self):
         return td.MultiPhysicsMedium(
             charge=td.ChargeInsulatorMedium(permittivity=3.9),
+            heat=td.SolidMedium(conductivity=2),
             name="SiO2",
         )
 
@@ -1267,18 +1274,13 @@ class TestCharge:
     # Define charge settings as fixtures within the class
     @pytest.fixture(scope="class")
     def charge_tolerance(self):
-        return td.IsothermalSteadyChargeDCAnalysis(
-            temperature=300,
-            tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400),
-            fermi_dirac=True,
-        )
-
-    @pytest.fixture(scope="class")
-    def charge_dc_regime(self):
-        return td.DCVoltageSource(voltage=[1])
+        return td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
 
     def test_charge_simulation(
         self,
+        Si_n,
+        Si_p,
+        SiO2,
         oxide,
         p_side,
         n_side,
@@ -1288,9 +1290,14 @@ class TestCharge:
         bc_n,
         bc_p,
         charge_tolerance,
-        charge_dc_regime,
     ):
         """Ensure charge simulation produces the correct errors when needed."""
+        # NOTE: start tests with isothermal spec
+        isothermal_spec = td.IsothermalSteadyChargeDCAnalysis(
+            temperature=300,
+            tolerance_settings=charge_tolerance,
+            fermi_dirac=True,
+        )
         sim = td.HeatChargeSimulation(
             structures=[oxide, p_side, n_side],
             medium=td.MultiPhysicsMedium(
@@ -1301,7 +1308,7 @@ class TestCharge:
             size=CHARGE_SIMULATION.sim_size,
             grid_spec=td.UniformUnstructuredGrid(dl=0.05),
             boundary_spec=[bc_n, bc_p],
-            analysis_spec=charge_tolerance,
+            analysis_spec=isothermal_spec,
         )
 
         # At least one ChargeSimulationMonitor should be added
@@ -1335,6 +1342,45 @@ class TestCharge:
                 condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1, 2]))
             )
             _ = sim.updated_copy(boundary_spec=[new_bc_p, bc_n])
+
+        # test non isothermal spec
+        non_isothermal_spec = td.SteadyChargeDCAnalysis(tolerance_settings=charge_tolerance)
+
+        sim = sim.updated_copy(analysis_spec=non_isothermal_spec)
+        with pytest.raises(pd.ValidationError):
+            # remove heat from mediums
+            new_structs = []
+            for struct in sim.structures:
+                new_structs.append(
+                    struct.updated_copy(medium=struct.medium.updated_copy(heat=None))
+                )
+            _ = sim.updated_copy(structures=new_structs)
+
+        with pytest.raises(pd.ValidationError):
+            # remove charge from mediums
+            new_structs = []
+            for struct in sim.structures:
+                new_structs.append(
+                    struct.updated_copy(medium=struct.medium.updated_copy(charge=None))
+                )
+            _ = sim.updated_copy(structures=new_structs)
+
+        with pytest.raises(pd.ValidationError):
+            # make sure there is at least one semiconductor
+            new_structs = []
+            for struct in sim.structures:
+                if isinstance(struct.medium.charge, td.SemiconductorMedium):
+                    new_structs.append(
+                        struct.updated_copy(
+                            medium=struct.medium.updated_copy(
+                                charge=td.ChargeInsulatorMedium(permittivity=1),
+                                heat=None,
+                            )
+                        )
+                    )
+                else:
+                    new_structs.append(struct)
+            _ = sim.updated_copy(structures=new_structs)
 
     def test_doping_distributions(self):
         """Test doping distributions."""
