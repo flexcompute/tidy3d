@@ -33,9 +33,9 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         >>> default_multiphysics_Si = td.MultiPhysicsMedium(
         ...     optical=td.material_library['cSi']['Green2008'],
         ...     charge=td.SemiconductorMedium(
-        ...         N_c=2.86e19,
-        ...         N_v=3.1e19,
-        ...         E_g=1.11,
+        ...         N_c=td.ConstantEffectiveDOS(N=2.86e19),
+        ...         N_v=td.ConstantEffectiveDOS(N=3.1e19),
+        ...         E_g=td.ConstantEnergyBandGap(eg=1.11),
         ...         mobility_n=td.CaugheyThomasMobility(
         ...             mu_min=52.2,
         ...             mu=1471.0,

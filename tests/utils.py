@@ -1013,9 +1013,9 @@ FULL_SEMICONDUCTOR = td.SemiconductorMedium(
     permittivity=11,
     N_d=0,
     N_a=0,
-    N_c=2e19,
-    N_v=2e19,
-    E_g=1.0,
+    N_c=td.ConstantEffectiveDOS(N=2e19),
+    N_v=td.ConstantEffectiveDOS(N=2e19),
+    E_g=td.ConstantEnergyBandGap(eg=1.0),
     mobility_n=td.ConstantMobilityModel(mu=1500),
     mobility_p=td.CaugheyThomasMobility(
         mu_min=44.9,

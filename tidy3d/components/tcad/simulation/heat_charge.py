@@ -36,7 +36,11 @@ from tidy3d.components.material.types import MultiPhysicsMedium, StructureMedium
 from tidy3d.components.medium import Medium
 from tidy3d.components.scene import Scene
 from tidy3d.components.spice.sources.dc import DCVoltageSource
-from tidy3d.components.spice.types import ElectricalAnalysisType
+from tidy3d.components.spice.types import (
+    ElectricalAnalysisType,
+    IsothermalSteadyChargeDCAnalysis,
+    SteadyChargeDCAnalysis,
+)
 from tidy3d.components.structure import Structure
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
 from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
@@ -1059,6 +1063,44 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
         return values
 
+    @pd.root_validator(skip_on_failure=True)
+    def check_non_isothermal_is_possible(cls, values):
+        """Make sure that when a non-isothermal case is defined the structrures
+        have both electrical and thermal properties."""
+
+        analysis_spec = values.get("analysis_spec")
+        if isinstance(analysis_spec, SteadyChargeDCAnalysis) and not isinstance(
+            analysis_spec, IsothermalSteadyChargeDCAnalysis
+        ):
+            has_heat = False
+            has_elec = False
+            structures = values.get("structures")
+            for struct in structures:
+                if isinstance(struct.medium, MultiPhysicsMedium):
+                    if struct.medium.heat is not None:
+                        if isinstance(struct.medium.heat, SolidMedium):
+                            has_heat = True
+                    if struct.medium.charge is not None:
+                        if isinstance(struct.medium.charge, SemiconductorMedium):
+                            has_elec = True
+
+            if not has_heat and has_elec:
+                raise SetupError(
+                    "The current simulation is defined as non-isothermal but no solid "
+                    "materials with heat properties have been defined. "
+                )
+            elif not has_elec and has_heat:
+                raise SetupError(
+                    "The current simulation is defined as non-isothermal but no "
+                    "semiconductor materials have been defined. "
+                )
+            elif not has_heat and not has_elec:
+                raise SetupError(
+                    "The current simulation is defined as non-isothermal but no "
+                    "solid or semiconductor materials have been defined. "
+                )
+        return values
+
     @equal_aspect
     @add_ax_if_none
     def plot_property(
@@ -1843,7 +1885,8 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # NOTE: for the time being, if a simulation has SemiconductorMedium
         # then we consider it of being a 'TCADAnalysisTypes.CHARGE'
-        if isinstance(self.analysis_spec, ElectricalAnalysisType):
+        ChargeTypes = (SteadyChargeDCAnalysis, IsothermalSteadyChargeDCAnalysis)
+        if isinstance(self.analysis_spec, ChargeTypes):
             if self._check_if_semiconductor_present(self.structures):
                 return [TCADAnalysisTypes.CHARGE]
 

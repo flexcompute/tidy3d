@@ -109,9 +109,21 @@
                 "heat_spec": null,
                 "type": "SemiconductorMedium",
                 "permittivity": 11.0,
-                "N_c": 2e+19,
-                "N_v": 2e+19,
-                "E_g": 1.0,
+                "N_c": {
+                    "attrs": {},
+                    "type": "ConstantEffectiveDOS",
+                    "N": 2e+19
+                },
+                "N_v": {
+                    "attrs": {},
+                    "type": "ConstantEffectiveDOS",
+                    "N": 2e+19
+                },
+                "E_g": {
+                    "attrs": {},
+                    "eg": 1.0,
+                    "type": "ConstantEnergyBandGap"
+                },
                 "mobility_n": {
                     "attrs": {},
                     "mu": 1500.0,
@@ -192,9 +204,21 @@
                 "heat_spec": null,
                 "type": "SemiconductorMedium",
                 "permittivity": 11.0,
-                "N_c": 2e+19,
-                "N_v": 2e+19,
-                "E_g": 1.0,
+                "N_c": {
+                    "attrs": {},
+                    "type": "ConstantEffectiveDOS",
+                    "N": 2e+19
+                },
+                "N_v": {
+                    "attrs": {},
+                    "type": "ConstantEffectiveDOS",
+                    "N": 2e+19
+                },
+                "E_g": {
+                    "attrs": {},
+                    "eg": 1.0,
+                    "type": "ConstantEnergyBandGap"
+                },
                 "mobility_n": {
                     "attrs": {},
                     "mu": 1500.0,
@@ -387,7 +411,6 @@
     "structure_priority_mode": "equal",
     "analysis_spec": {
         "attrs": {},
-        "temperature": 300.0,
         "tolerance_settings": {
             "attrs": {},
             "abs_tol": 1000000.0,
@@ -398,6 +421,7 @@
         },
         "convergence_dv": 0.1,
         "fermi_dirac": false,
-        "type": "IsothermalSteadyChargeDCAnalysis"
+        "type": "IsothermalSteadyChargeDCAnalysis",
+        "temperature": 300.0
     }
 }

@@ -11,6 +11,8 @@ import tidy3d as td
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
+    ConstantEffectiveDOS,
+    ConstantEnergyBandGap,
     SlotboomBandGapNarrowing,
 )
 from tidy3d.exceptions import DataError
@@ -39,9 +41,9 @@ class CHARGE_SIMULATION:
             permittivity=11.7,
             N_d=0,
             N_a=0,
-            N_c=2.86e19,
-            N_v=3.1e19,
-            E_g=1.11,
+            N_c=ConstantEffectiveDOS(N=2.86e19),
+            N_v=ConstantEffectiveDOS(N=3.1e19),
+            E_g=ConstantEnergyBandGap(eg=1.11),
             mobility_n=CaugheyThomasMobility(
                 mu_min=52.2,
                 mu=1471.0,
@@ -144,9 +146,9 @@ def mediums():
             ),
         ),
         charge=td.SemiconductorMedium(
-            N_c=1e10,
-            N_v=1e10,
-            E_g=1,
+            N_c=td.ConstantEffectiveDOS(N=1e10),
+            N_v=td.ConstantEffectiveDOS(N=1e10),
+            E_g=td.ConstantEnergyBandGap(eg=1),
             mobility_n=td.ConstantMobilityModel(mu=1500),
             mobility_p=td.ConstantMobilityModel(mu=1500),
         ),
@@ -1331,23 +1333,30 @@ class TestCharge:
         semiconductor = CHARGE_SIMULATION.intrinsic_Si.charge
         semiconductor = semiconductor.updated_copy(
             N_a=CHARGE_SIMULATION.acceptors,
+        )
+        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(
+            charge=semiconductor,
+            heat=td.SolidMedium(conductivity=1),
             name="Si_p",
         )
-        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=semiconductor)
 
     @pytest.fixture(scope="class")
     def Si_n(self):
         semiconductor = CHARGE_SIMULATION.intrinsic_Si.charge
         semiconductor = semiconductor.updated_copy(
             N_d=CHARGE_SIMULATION.donors,
+        )
+        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(
+            charge=semiconductor,
+            heat=td.SolidMedium(conductivity=1),
             name="Si_n",
         )
-        return CHARGE_SIMULATION.intrinsic_Si.updated_copy(charge=semiconductor)
 
     @pytest.fixture(scope="class")
     def SiO2(self):
         return td.MultiPhysicsMedium(
             charge=td.ChargeInsulatorMedium(permittivity=3.9),
+            heat=td.SolidMedium(conductivity=2),
             name="SiO2",
         )
 
@@ -1428,18 +1437,13 @@ class TestCharge:
     # Define charge settings as fixtures within the class
     @pytest.fixture(scope="class")
     def charge_tolerance(self):
-        return td.IsothermalSteadyChargeDCAnalysis(
-            temperature=300,
-            tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400),
-            fermi_dirac=True,
-        )
-
-    @pytest.fixture(scope="class")
-    def charge_dc_regime(self):
-        return td.DCVoltageSource(voltage=[1])
+        return td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400)
 
     def test_charge_simulation(
         self,
+        Si_n,
+        Si_p,
+        SiO2,
         oxide,
         p_side,
         n_side,
@@ -1449,9 +1453,14 @@ class TestCharge:
         bc_n,
         bc_p,
         charge_tolerance,
-        charge_dc_regime,
     ):
         """Ensure charge simulation produces the correct errors when needed."""
+        # NOTE: start tests with isothermal spec
+        isothermal_spec = td.IsothermalSteadyChargeDCAnalysis(
+            temperature=300,
+            tolerance_settings=charge_tolerance,
+            fermi_dirac=True,
+        )
         sim = td.HeatChargeSimulation(
             structures=[oxide, p_side, n_side],
             medium=td.MultiPhysicsMedium(
@@ -1462,7 +1471,7 @@ class TestCharge:
             size=CHARGE_SIMULATION.sim_size,
             grid_spec=td.UniformUnstructuredGrid(dl=0.05),
             boundary_spec=[bc_n, bc_p],
-            analysis_spec=charge_tolerance,
+            analysis_spec=isothermal_spec,
         )
 
         # At least one ChargeSimulationMonitor should be added
@@ -1497,6 +1506,45 @@ class TestCharge:
             )
             _ = sim.updated_copy(boundary_spec=[new_bc_p, bc_n])
 
+        # test non isothermal spec
+        non_isothermal_spec = td.SteadyChargeDCAnalysis(tolerance_settings=charge_tolerance)
+
+        sim = sim.updated_copy(analysis_spec=non_isothermal_spec)
+        with pytest.raises(pd.ValidationError):
+            # remove heat from mediums
+            new_structs = []
+            for struct in sim.structures:
+                new_structs.append(
+                    struct.updated_copy(medium=struct.medium.updated_copy(heat=None))
+                )
+            _ = sim.updated_copy(structures=new_structs)
+
+        with pytest.raises(pd.ValidationError):
+            # remove charge from mediums
+            new_structs = []
+            for struct in sim.structures:
+                new_structs.append(
+                    struct.updated_copy(medium=struct.medium.updated_copy(charge=None))
+                )
+            _ = sim.updated_copy(structures=new_structs)
+
+        with pytest.raises(pd.ValidationError):
+            # make sure there is at least one semiconductor
+            new_structs = []
+            for struct in sim.structures:
+                if isinstance(struct.medium.charge, td.SemiconductorMedium):
+                    new_structs.append(
+                        struct.updated_copy(
+                            medium=struct.medium.updated_copy(
+                                charge=td.ChargeInsulatorMedium(permittivity=1),
+                                heat=None,
+                            )
+                        )
+                    )
+                else:
+                    new_structs.append(struct)
+            _ = sim.updated_copy(structures=new_structs)
+
     def test_doping_distributions(self):
         """Test doping distributions."""
         # Implementation needed
@@ -1506,6 +1554,75 @@ class TestCharge:
 # --------------------------
 # Additional Tests
 # --------------------------
+def test_semiconductor_medium():
+    """Make sure we can create a semiconductor with different models."""
+    # Create a semiconductor medium with different mobility models
+    intrinsic_Si = td.SemiconductorMedium(
+        permittivity=11.7,
+        N_d=0,
+        N_a=0,
+        N_c=ConstantEffectiveDOS(N=2.86e19),
+        N_v=ConstantEffectiveDOS(N=3.1e19),
+        E_g=ConstantEnergyBandGap(eg=1.11),
+        mobility_n=td.ConstantMobilityModel(mu=1350),
+        mobility_p=td.ConstantMobilityModel(mu=480),
+        R=[],
+        delta_E_g=None,
+    )
+
+    ct_mobility = CaugheyThomasMobility(
+        mu_min=52.2,
+        mu=1471.0,
+        ref_N=9.68e16,
+        exp_N=0.68,
+        exp_1=-0.57,
+        exp_2=-2.33,
+        exp_3=2.4,
+        exp_4=-0.146,
+    )
+    # Try different mobility models
+    _ = intrinsic_Si.updated_copy(
+        mobility_n=ct_mobility,
+        mobility_p=ct_mobility,
+    )
+
+    fossum = td.FossumCarrierLifetime(
+        tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1
+    )
+    R = [
+        AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
+        td.RadiativeRecombination(r_const=1.6e-14),
+        td.ShockleyReedHallRecombination(
+            tau_n=3.3e-6,
+            tau_p=4e-6,
+        ),
+        td.ShockleyReedHallRecombination(
+            tau_n=fossum,
+            tau_p=fossum,
+        ),
+    ]
+    # try the different recombination models
+    _ = intrinsic_Si.updated_copy(R=R)
+
+    # Try band gap narrowing model
+    _ = intrinsic_Si.updated_copy(
+        delta_E_g=SlotboomBandGapNarrowing(
+            v1=6.92 * 1e-3,
+            n2=1.3e17,
+            c2=0.5,
+            min_N=1e15,
+        ),
+    )
+
+    # Try the different effective DOS models
+    N_models = [
+        ConstantEffectiveDOS(N=2.86e19),
+        td.IsotropicEffectiveDOS(m_eff=1.08),
+        td.MultiValleyEffectiveDOS(m_eff_long=1.08, m_eff_trans=0.19, N_valley=3),
+        td.DualValleyEffectiveDOS(m_eff_hh=0.49, m_eff_lh=0.16),
+    ]
+    for m in N_models:
+        _ = intrinsic_Si.updated_copy(N_c=m, N_v=m)
 
 
 @pytest.mark.parametrize("shift_amount, log_level", [(1, None), (2, "WARNING")])
@@ -2198,7 +2315,7 @@ def test_heat_conduction_simulations():
         )
 
     # this doesn't raise error
-    coupling_sim = sim.updated_copy(sources=[td.HeatFromElectricSource()])
+    _ = sim.updated_copy(sources=[td.HeatFromElectricSource()])
 
     with pytest.raises(pd.ValidationError):
         # This should error since the conduction simulation doesn't have a monitor
