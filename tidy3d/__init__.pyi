@@ -368,8 +368,8 @@ from .log import log, set_logging_console, set_logging_file
 
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
-from .material_lib.material_library import material_library
-from .material_lib.parametric_materials import Graphene
+from .material_library.material_library import material_library
+from .material_library.parametric_materials import Graphene
 
 # updater
 from .updater import Updater

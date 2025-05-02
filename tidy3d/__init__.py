@@ -50,7 +50,7 @@ def _build_lazy_map() -> dict[str, tuple[str, str]]:
 
 
 _lazy_map = _build_lazy_map()
-_lazy_map["material_library"] = (".material_lib.material_library", "material_library")
+print(_lazy_map["material_library"])
 
 __all__ = list(_lazy_map.keys())
 
