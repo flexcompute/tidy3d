@@ -39,6 +39,7 @@ from tidy3d.web.api.webapi import (
     upload,
 )
 from tidy3d.web.core.environment import Env
+from tidy3d.web.core.exceptions import WebNotFoundError
 from tidy3d.web.core.types import PayType, TaskType
 
 TASK_NAME = "task_name_test"
@@ -723,3 +724,18 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
                 "--inspect_sim",
             ]
         )
+
+
+@responses.activate
+def test_load_invalid_task_raises(mock_webapi):
+    """Ensure that load() raises TaskNotFoundError for a non-existent task ID."""
+    fake_id = "INVALID_TASK_ID"
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{fake_id}/detail",
+        json={"error": "Task not found"},
+        status=404,
+    )
+    with pytest.raises(WebNotFoundError, match="Resource not found"):
+        load(fake_id)

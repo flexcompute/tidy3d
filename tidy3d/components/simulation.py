@@ -4821,7 +4821,7 @@ class Simulation(AbstractYeeGridSimulation):
             Number of yee cells in the simulation.
         """
 
-        return np.prod(self.grid.num_cells, dtype=np.int64)
+        return int(np.prod([float(nc) for nc in self.grid.num_cells]))
 
     @property
     def _num_computational_grid_points_dim(self):

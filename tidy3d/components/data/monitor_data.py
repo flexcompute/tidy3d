@@ -2433,6 +2433,20 @@ class AbstractFieldProjectionData(MonitorData):
 
         return self.make_data_array(data=rcs_data)
 
+    def make_adjoint_sources(
+        self, dataset_names: list[str], fwidth: float
+    ) -> List[Union[CustomCurrentSource, PointDipole]]:
+        """Error if server-side field projection is used for autograd"""
+
+        raise NotImplementedError(
+            "Adjoint is currently not implemented for server-side field projections. "
+            "To compute derivatives with respect to field projection data, please use a 'FieldMonitor' "
+            "and use a local projection in your objective function via 'FieldProjector.from_near_field_monitors'. "
+            "Using field projection monitors directly is not supported as the full field information is required "
+            "to construct the adjoint source for this problem. The field projection data does not contain the "
+            "information necessary for gradient computation."
+        )
+
 
 class FieldProjectionAngleData(AbstractFieldProjectionData):
     """Data associated with a :class:`.FieldProjectionAngleMonitor`: components of projected fields.
