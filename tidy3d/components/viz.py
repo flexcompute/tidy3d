@@ -11,6 +11,7 @@ import pydantic.v1 as pd
 try:
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
+    from matplotlib import cycler
     from matplotlib.colors import is_color_like
     from matplotlib.patches import ArrowStyle, PathPatch
     from matplotlib.path import Path
@@ -24,6 +25,7 @@ from numpy import array, concatenate, inf, ones
 
 from ..constants import UnitScaling
 from ..exceptions import SetupError, Tidy3dKeyError
+from ..log import log
 from .base import Tidy3dBaseModel
 from .types import Ax, Axis, LengthUnit
 
@@ -32,21 +34,20 @@ from .types import Ax, Axis, LengthUnit
 # add this around extents of plots
 PLOT_BUFFER = 0.3
 
-ARROW_COLOR_MONITOR = "orange"
-ARROW_COLOR_SOURCE = "green"
-ARROW_COLOR_POLARIZATION = "brown"
 ARROW_ALPHA = 0.8
-
-# Arrow length in inches
 ARROW_LENGTH = 0.3
 
 FLEXCOMPUTE_COLORS = {
-    "brand_green": 0x00643C,
-    "brand_tan": 0xB8A18B,
-    "brand_blue": 0x6DB5DD,
-    "brand_purple": 0x8851AD,
-    "brand_black": 0x000000,
+    "brand_green": "#00643C",
+    "brand_tan": "#B8A18B",
+    "brand_blue": "#6DB5DD",
+    "brand_purple": "#8851AD",
+    "brand_black": "#000000",
+    "brand_orange": "#FC7A4C",
 }
+ARROW_COLOR_SOURCE = FLEXCOMPUTE_COLORS["brand_green"]
+ARROW_COLOR_POLARIZATION = FLEXCOMPUTE_COLORS["brand_tan"]
+ARROW_COLOR_MONITOR = FLEXCOMPUTE_COLORS["brand_orange"]
 
 """ Decorators """
 
@@ -222,6 +223,52 @@ class VisualizationSpec(Tidy3dBaseModel):
             return is_valid_color(values["facecolor"])
 
         return is_valid_color(value)
+
+
+# Tidy3D default plotting style parameters
+_TIDY3D_STYLE_PARAMS = {
+    "axes.prop_cycle": cycler(
+        color=[
+            FLEXCOMPUTE_COLORS["brand_green"],
+            FLEXCOMPUTE_COLORS["brand_tan"],
+            FLEXCOMPUTE_COLORS["brand_blue"],
+            FLEXCOMPUTE_COLORS["brand_purple"],
+        ]
+    ),
+    "axes.grid": True,
+    "grid.color": "#CDCDCD",
+    "grid.linestyle": ":",
+    "axes.edgecolor": "#ECEBEA",
+}
+
+# Store original parameters before applying Tidy3D style
+_ORIGINAL_PARAMS = {}
+
+try:
+    # Store only the parameters that Tidy3D style will modify
+    for key in _TIDY3D_STYLE_PARAMS:
+        if key in plt.rcParams:
+            _ORIGINAL_PARAMS[key] = plt.rcParams[key]
+    # Apply the Tidy3D style automatically on import
+    plt.rcParams.update(_TIDY3D_STYLE_PARAMS)
+except Exception as e:
+    log.error(f"Failed to apply Tidy3D plotting style on import. Error: {e}")
+    _ORIGINAL_PARAMS = {}  # Clear original params if application failed
+
+
+def reset_previous_style():
+    """
+    Resets matplotlib rcParams to the values they had before the Tidy3D
+    style was automatically applied on import.
+    """
+    if not _ORIGINAL_PARAMS:
+        log.warning("No previous Matplotlib style state found to reset to.")
+        return
+
+    try:
+        plt.rcParams.update(_ORIGINAL_PARAMS)
+    except Exception as e:
+        log.error(f"Failed to reset previous Matplotlib style. Error: {e}")
 
 
 """=================================================================================================
