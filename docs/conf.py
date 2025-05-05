@@ -106,6 +106,7 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
     "sphinx_copybutton",
+    "sphinx_design",
     "sphinx_favicon",
     "sphinx_sitemap",
     "sphinx_tabs.tabs",
@@ -188,6 +189,7 @@ mathjax3_config = {
 }
 myst_enable_extensions = [
     "amsmath",
+    "colon_fence",
     "dollarmath",
 ]
 nbsphinx_allow_errors = True  # Continue through Jupyter errors

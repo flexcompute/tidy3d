@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
+- Validation check for unit error in grid spacing.
+
+### Changed
+- Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
+- Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.
+- Improved error message and handling when attempting to load a non-existent task ID.
 
 ## [2.8.3] - 2025-04-24
 
@@ -20,10 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Classmethod `from_frequency_range` in `GaussianPulse` for generating a pulse whose amplitude in the frequency_range [fmin, fmax] is maximized, which is particularly useful for running broadband simulations.
 - Differentiable function `td.plugins.autograd.interpolate_spline` for 1D linear, quadratic, and cubic spline interpolation, supporting differentiation with respect to the interpolated values (`y_points`) and optional endpoint derivative constraints.
 - `SteadyEnergyBandMonitor` in the Charge solver.
+- Pretty printing enabled with `rich.print` for the material library, materials, and their variants. In notebooks, this can be accessed using `rich.print` or `display`, or by evaluating the material library, a material, or a variant in a cell.
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
 - Auto grid in EME simulations with multiple `freqs` provided uses the largest instead of raising an error.
+- Named mediums now display by name for brevity; materials/variants print concise summaries including references.
 
 ### Fixed
 - Fixed `reverse` property of `td.Scene.plot_structures_property()` to also reverse the colorbar.

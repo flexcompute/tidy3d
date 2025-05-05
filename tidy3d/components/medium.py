@@ -1418,6 +1418,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         return vjp_value.sum("f")
 
+    def __repr__(self):
+        """If the medium has a name, use it as the representation. Otherwise, use the default representation."""
+        if self.name:
+            return self.name
+        else:
+            return super().__repr__()
+
 
 class AbstractCustomMedium(AbstractMedium, ABC):
     """A spatially varying medium."""
@@ -7244,7 +7251,7 @@ class Medium2D(AbstractMedium):
             The 2D equivalent of the given 3D medium.
         """
         med = cls._weighted_avg([medium], [thickness])
-        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range)
+        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range, name=medium.name)
 
     @classmethod
     def from_anisotropic_medium(

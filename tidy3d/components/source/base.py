@@ -11,7 +11,7 @@ from ..base import cached_property
 from ..base_sim.source import AbstractSource
 from ..geometry.base import Box
 from ..types import TYPE_TAG_STR, Ax
-from ..validators import _assert_min_freq
+from ..validators import _assert_min_freq, _warn_unsupported_traced_argument
 from ..viz import (
     ARROW_ALPHA,
     ARROW_COLOR_POLARIZATION,
@@ -57,6 +57,9 @@ class Source(Box, AbstractSource, ABC):
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
+
+    _warn_traced_center = _warn_unsupported_traced_argument("center")
+    _warn_traced_size = _warn_unsupported_traced_argument("size")
 
     @pydantic.validator("source_time", always=True)
     def _freqs_lower_bound(cls, val):

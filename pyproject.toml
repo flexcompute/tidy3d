@@ -109,6 +109,7 @@ pydata-sphinx-theme = { version = ">=0.13.3", optional = true }
 # divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
 tmm = { version = "*", optional = true }
 grcwa = { version = "*", optional = true }
+sphinx-design = { version = "*", optional = true }
 sphinx-favicon = { version = "*", optional = true }
 sphinx-sitemap = { version = ">=2.5.1", optional = true }
 sphinx-notfound-page = { version = "*", optional = true }
@@ -165,6 +166,7 @@ dev = [
   'signac',
   'sphinx',
   'sphinx-book-theme',
+  'sphinx-design',
   'sphinx-copybutton',
   'sphinx-favicon',
   'sphinx-notfound-page',
@@ -187,6 +189,7 @@ docs = [
   "nbsphinx",
   "ipython",
   "divparams",
+  'sphinx-design',
   "sphinx-copybutton",
   'sphinx-favicon',
   "sphinx-book-theme",

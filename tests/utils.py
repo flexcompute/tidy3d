@@ -1092,6 +1092,112 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             projection_surfaces=monitor.projection_surfaces,
         )
 
+    def make_field_projection_angle_data(
+        monitor: td.FieldProjectionAngleMonitor,
+    ) -> td.FieldProjectionAngleData:
+        """Random FieldProjectionAngleData from a FieldProjectionAngleMonitor."""
+        f = list(monitor.freqs)
+        r = np.atleast_1d(getattr(monitor, "proj_distance", 1.0))
+        theta = list(monitor.theta)
+        phi = list(monitor.phi)
+
+        coords = dict(r=r, theta=theta, phi=phi, f=f)
+        scalar_field = make_data(
+            coords=coords,
+            data_array_type=td.FieldProjectionAngleDataArray,
+            is_complex=True,
+        )
+
+        return td.FieldProjectionAngleData(
+            monitor=monitor,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
+    def make_field_projection_cartesian_data(
+        monitor: td.FieldProjectionCartesianMonitor,
+    ) -> td.FieldProjectionCartesianData:
+        """Random FieldProjectionCartesianData from a FieldProjectionCartesianMonitor."""
+
+        f = list(monitor.freqs)
+        proj_distance = getattr(monitor, "proj_distance", 1.0)
+
+        # in-plane grids always come from monitor.x and monitor.y
+        x_plane = list(monitor.x)
+        y_plane = list(monitor.y)
+
+        # map the two planes to global (x, y, z) depending on the normal axis
+        if monitor.proj_axis == 0:  # (y, z)
+            coords = dict(
+                x=np.atleast_1d(proj_distance),
+                y=x_plane,
+                z=y_plane,
+                f=f,
+            )
+        elif monitor.proj_axis == 1:  # (x, z)
+            coords = dict(
+                x=x_plane,
+                y=np.atleast_1d(proj_distance),
+                z=y_plane,
+                f=f,
+            )
+        else:  # (x, y)
+            coords = dict(
+                x=x_plane,
+                y=y_plane,
+                z=np.atleast_1d(proj_distance),
+                f=f,
+            )
+
+        scalar_field = make_data(
+            coords=coords,
+            data_array_type=td.FieldProjectionCartesianDataArray,
+            is_complex=True,
+        )
+
+        return td.FieldProjectionCartesianData(
+            monitor=monitor,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
+    def make_field_projection_kspace_data(
+        monitor: td.FieldProjectionKSpaceMonitor,
+    ) -> td.FieldProjectionKSpaceData:
+        """Random FieldProjectionKSpaceData from a FieldProjectionKSpaceMonitor."""
+        f = list(monitor.freqs)
+        r = np.atleast_1d(getattr(monitor, "proj_distance", 1.0))
+        ux = list(monitor.ux)
+        uy = list(monitor.uy)
+
+        coords = dict(ux=ux, uy=uy, r=r, f=f)
+        scalar_field = make_data(
+            coords=coords,
+            data_array_type=td.FieldProjectionKSpaceDataArray,
+            is_complex=True,
+        )
+
+        return td.FieldProjectionKSpaceData(
+            monitor=monitor,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
         td.FieldTimeMonitor: make_field_time_data,
@@ -1101,6 +1207,9 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.DiffractionMonitor: make_diff_data,
         td.FluxMonitor: make_flux_data,
         td.DirectivityMonitor: make_directivity_data,
+        td.FieldProjectionAngleMonitor: make_field_projection_angle_data,
+        td.FieldProjectionCartesianMonitor: make_field_projection_cartesian_data,
+        td.FieldProjectionKSpaceMonitor: make_field_projection_kspace_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
