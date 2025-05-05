@@ -19,7 +19,7 @@ from ..autograd import AutogradFieldMap, TracedVertices, get_static
 from ..autograd.derivative_utils import DerivativeInfo, DerivativeSurfaceMesh
 from ..autograd.types import TracedFloat
 from ..base import cached_property, skip_if_fields_missing
-from ..transformation import RotationAroundAxis
+from ..transformation import ReflectionFromPlane, RotationAroundAxis
 from ..types import (
     ArrayFloat1D,
     ArrayFloat2D,
@@ -1725,6 +1725,33 @@ class PolySlab(base.Planar):
             return self.updated_copy(vertices=rotated_vertices)
 
         return super().rotated(angle=angle, axis=axis)
+
+    def reflected(self, normal: Coordinate) -> PolySlab:
+        """Return a reflected copy of this geometry.
+
+            Parameters
+            ----------
+            normal : Tuple[float, float, float]
+                The 3D normal vector of the plane of reflection. The plane is assumed
+                    to pass through the origin (0,0,0).
+
+            Returns
+            -------
+        -------
+        :class:`PolySlab`
+            Reflected copy of this ``PolySlab``.
+        """
+        if math.isclose(normal[self.axis], 0):
+            _, plane_axs = self.pop_axis((0, 1, 2), self.axis)
+            verts_3d = np.zeros((3, self.vertices.shape[0]))
+            verts_3d[plane_axs[0], :] = self.vertices[:, 0]
+            verts_3d[plane_axs[1], :] = self.vertices[:, 1]
+            reflection = ReflectionFromPlane(normal=normal)
+            reflected_vertices = reflection.reflect_vector(verts_3d)
+            reflected_vertices = reflected_vertices[plane_axs, :].T
+            return self.updated_copy(vertices=reflected_vertices)
+
+        return super().reflected(normal=normal)
 
 
 class ComplexPolySlabBase(PolySlab):
