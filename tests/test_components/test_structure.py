@@ -138,6 +138,31 @@ def test_invalid_polyslab(axis):
     geo7 = td.GeometryGroup(geometries=[(ps - box).rotated(np.pi / 4, j)]).rotated(-np.pi / 4, j)
     _ = td.Structure(geometry=geo7, medium=medium)
 
+    # normal with zero component along the slab axis
+    n1 = (axis, 2 * (axis - 1), 3 * (axis - 2))
+    # normal with non-zero component along the slab axis
+    n2 = (2 * (axis - 1), 3 * (axis - 2), axis)
+
+    geo8 = ps.reflected(n1)
+    _ = td.Structure(geometry=geo8, medium=medium)
+
+    geo9 = ps.reflected(n2).scaled(2, 2, 2).translated(-1, 0.5, 2).reflected(n2)
+    _ = td.Structure(geometry=geo9, medium=medium)
+
+    geo10 = ps.reflected(n1)
+    _ = td.Structure(geometry=geo10, medium=medium)
+
+    geo11 = ps.reflected(n2)
+    with pytest.raises(pd.ValidationError):
+        _ = td.Structure(geometry=geo11, medium=medium)
+
+    geo12 = td.GeometryGroup(geometries=[ps]).reflected(n2)
+    with pytest.raises(pd.ValidationError):
+        _ = td.Structure(geometry=geo12, medium=medium)
+
+    geo13 = td.GeometryGroup(geometries=[(ps - box).reflected(n2)]).reflected(n2)
+    _ = td.Structure(geometry=geo13, medium=medium)
+
 
 def test_validation_of_structures_with_2d_materials():
     med2d = td.Medium2D(ss=td.PEC, tt=td.PEC)
