@@ -2185,3 +2185,24 @@ def test_sim_traced_center_size(use_emulated_run):
 
     with AssertLogLevel("WARNING", contains_str="autograd tracer"):
         grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
+
+
+def test_error_clip(use_emulated_run):
+    """Make sure proper error raised if differentiating a ``ClipOperation``."""
+
+    def objective(x):
+        box1 = td.Box(center=(0, 0, 0), size=(x, x, x))
+        box2 = td.Box(center=(1, 1, 1), size=(x, x, x))
+        union = td.ClipOperation(operation="union", geometry_a=box1, geometry_b=box2)
+        structure = td.Structure(geometry=union, medium=td.Medium(permittivity=2))
+        sim = SIM_BASE.updated_copy(
+            structures=[structure],
+            monitors=[
+                td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
+            ],
+        )
+        data = run(sim, task_name="clip_error")
+        return anp.sum(data["field"].intensity.item())
+
+    with pytest.raises(ValueError):
+        g = ag.grad(objective)(1.0)

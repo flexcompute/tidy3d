@@ -2981,6 +2981,17 @@ class ClipOperation(Geometry):
         description="Second operand for the set operation. It can also be any geometry type.",
     )
 
+    @pydantic.validator("geometry_a", "geometry_b", always=True)
+    def _geometries_untraced(cls, val):
+        """Make sure that ``ClipOperation`` geometries do not contain tracers."""
+        traced = val.strip_traced_fields()
+        if traced:
+            raise ValidationError(
+                f"{val.type} contains traced fields {list(traced.keys())}. Note that "
+                "'ClipOperation' does not currently support automatic differentiation."
+            )
+        return val
+
     @staticmethod
     def to_polygon_list(base_geometry: Shapely) -> List[Shapely]:
         """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
