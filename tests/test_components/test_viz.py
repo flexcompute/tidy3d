@@ -1,12 +1,14 @@
 """Tests visualization operations."""
 
+import importlib
+import sys
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pydantic.v1 as pd
 import pytest
 import tidy3d as td
 from tidy3d import Box, Medium, Simulation, Structure
-from tidy3d.components.viz import Polygon, set_default_labels_and_title
+from tidy3d.components.viz import Polygon, set_default_labels_and_title, reset_previous_style
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
 
@@ -317,3 +319,8 @@ def test_sim_plot_structures_fill():
     for patch in structure_patches[:1]:
         assert patch.get_fill(), "Should be filled when True"
         assert patch.get_facecolor() != "none", "Face color should be set"
+
+def test_tidy3d_matplotlib_style_application_on_import():
+    assert mpl.rcParams.get("axes.edgecolor") == "#ECEBEA" 
+    reset_previous_style()
+    assert mpl.rcParams.get("axes.edgecolor") == mpl.rcParamsDefault.get("axes.edgecolor")
