@@ -321,6 +321,7 @@ def test_sim_plot_structures_fill():
         assert patch.get_facecolor() != "none", "Face color should be set"
 
 def test_tidy3d_matplotlib_style_application_on_import():
+    """ Test reset_previous_style() to reset the automatically applied matplotlib.rcParams"""
     assert mpl.rcParams.get("axes.edgecolor") == "#ECEBEA" 
     reset_previous_style()
     assert mpl.rcParams.get("axes.edgecolor") == mpl.rcParamsDefault.get("axes.edgecolor")
