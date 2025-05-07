@@ -103,7 +103,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         if self.optical is not None:
             return self.optical.is_pec
         else:
-            return True
+            return False
 
     @property
     def heat_spec(self):
