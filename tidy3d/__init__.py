@@ -360,7 +360,7 @@ from .components.time_modulation import (
     SpaceTimeModulation,
 )
 from .components.transformation import RotationAroundAxis
-from .components.viz import VisualizationSpec
+from .components.viz import VisualizationSpec, reset_previous_style
 
 # config
 from .config import config
@@ -649,6 +649,7 @@ __all__ = [
     "PECConformal",
     "SurfaceImpedance",
     "VisualizationSpec",
+    "reset_previous_style",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",
