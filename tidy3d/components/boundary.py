@@ -9,11 +9,14 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.constants import EPSILON_0, MU_0, PML_SIGMA
-from tidy3d.exceptions import DataError, SetupError
+from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.log import log
 
-from .base import Tidy3dBaseModel, cached_property
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .geometry.base import Box
 from .medium import Medium
+from .mode_spec import ModeSpec
+from .monitor import ModeMonitor, ModeSolverMonitor
 from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
 from .types import TYPE_TAG_STR, Axis, Complex
 
@@ -71,6 +74,174 @@ class PECBoundary(BoundaryEdge):
 # PMC keyword
 class PMCBoundary(BoundaryEdge):
     """Perfect magnetic conductor boundary condition class."""
+
+
+# ABC keyword
+class AbstractABCBoundary(BoundaryEdge, ABC):
+    """One-way wave equation absorbing boundary conditions abstract base class."""
+
+    small_conductivity_approx: bool = pd.Field(
+        True,
+        title="Small Conductivity Approximation",
+        description="If ``False`` then the effective permettivity ``eps`` in the one-wave equation"
+        " is modified such that the equation exactly satisfy wave propagation at the central "
+        "frequency.",
+    )
+
+
+class ABCBoundary(AbstractABCBoundary):
+    """One-way wave equation absorbing boundary conditions."""
+
+    permittivity: Optional[pd.PositiveFloat] = pd.Field(
+        None,
+        title="Effective Permittivity",
+        description="Enforced effective permittivity.",
+    )
+
+    conductivity: Optional[pd.NonNegativeFloat] = pd.Field(
+        None,
+        title="Effective Conductivity",
+        description="Enforced effective conductivity.",
+    )
+
+    @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["permittivity"])
+    def _conductivity_only_with_float_permittivity(cls, val, values):
+        """Validate that conductivity can be provided only with float permittivity."""
+        perm = values["permittivity"]
+        if val is not None and not isinstance(perm, float):
+            raise ValidationError(
+                "Field 'conductivity' in 'ABCBoundary' can only be provided "
+                "simultaneously with 'permittivity'."
+            )
+        return val
+
+
+class ModeABCBoundary(AbstractABCBoundary):
+    """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
+
+    small_conductivity_approx: bool = pd.Field(
+        False,
+        title="Small Conductivity Approximation",
+        description="If ``False`` then the effective permettivity ``eps`` in the one-wave equation"
+        " is modified such that the equation exactly satisfy wave propagation at the central"
+        " frequency.",
+    )
+
+    mode_spec: ModeSpec = pd.Field(
+        ModeSpec(),
+        title="Mode Specification",
+        description="Parameters to feed to mode solver which determine modes.",
+    )
+
+    mode_index: pd.NonNegativeInt = pd.Field(
+        0,
+        title="Mode Index",
+        description="Index into the collection of modes returned by mode solver. "
+        " Specifies which mode to absorbed using these boundary conditions. "
+        "If larger than ``mode_spec.num_modes``, "
+        "``num_modes`` in the solver will be set to ``mode_index + 1``.",
+    )
+
+    frequency: Optional[pd.PositiveFloat] = pd.Field(
+        None,
+        title="Frequency",
+        description="Frequency at which the absorbed mode is evaluated. If ``None``, then the central frequency of the source is used.",
+    )
+
+    plane: Box = pd.Field(
+        ...,
+        title="Plane",
+        description="Cross-sectional plane in which the absorbed mode will be computed.",
+    )
+
+    @pd.validator("plane", always=True)
+    def is_plane(cls, val):
+        """Raise validation error if not planar."""
+        if val.size.count(0.0) != 1:
+            raise ValidationError(
+                f"'ModeABCBoundary' target plane must be planar, given size={val.size}"
+            )
+        return val
+
+    @classmethod
+    def from_source(
+        cls, source: ModeSource, small_conductivity_approx: bool = False
+    ) -> ModeABCBoundary:
+        """Instantiate from a ``ModeSource``.
+
+        Parameters
+        ----------
+        source : :class:`ModeSource`
+            Mode source.
+        small_conductivity_approx : bool = False,
+            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
+            is modified such that the equation exactly satisfy wave propagation at the central
+            frequency.
+
+        Returns
+        -------
+        :class:`ModeABCBoundary`
+            Boundary conditions for absorbing the desired mode.
+
+        Example
+        -------
+        >>> from tidy3d import GaussianPulse, ModeSource, inf
+        >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+        >>> source = ModeSource(size=(1, 1, 0), source_time=pulse, direction='+')
+        >>> abc_boundary = ModeABCBoundary.from_source(source=source)
+        """
+
+        return cls(
+            plane=source.bounding_box,
+            mode_spec=source.mode_spec,
+            mode_index=source.mode_index,
+            frequency=source.source_time.freq0,
+            small_conductivity_approx=small_conductivity_approx,
+        )
+
+    @classmethod
+    def from_monitor(
+        cls,
+        monitor: Union[ModeMonitor, ModeSolverMonitor],
+        mode_index: pd.NonNengativeInt = 0,
+        frequency: Optional[pd.PositiveFloat] = None,
+        small_conductivity_approx: bool = False,
+    ) -> ModeABCBoundary:
+        """Instantiate from a ``ModeMonitor`` or ``ModeSolverMonitor``.
+
+        Parameters
+        ----------
+        monitor : Union[:class:`ModeMonitor`, :class:`ModeSolverMonitor`]
+            Mode monitor.
+        mode_index : pd.NonNengativeInt = 0
+            Mode index.
+        frequency : Optional[pd.PositiveFloat] = None
+            Frequency for estimating propagation index of absorbed mode.
+        small_conductivity_approx : bool = False,
+            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
+            is modified such that the equation exactly satisfy wave propagation at the central
+            frequency.
+
+        Returns
+        -------
+        :class:`ModeABCBoundary`
+            Boundary conditions for absorbing the desired mode.
+
+        Example
+        -------
+        >>> from tidy3d import ModeMonitor
+        >>> mnt = ModeMonitor(size=(1, 1, 0), freqs=[1e10], name="mnt")
+        >>> abc_boundary = ModeABCBoundary.from_monitor(monitor=mnt, mode_index=0)
+        """
+
+        return cls(
+            plane=monitor.bounding_box,
+            mode_spec=monitor.mode_spec,
+            mode_index=mode_index,
+            frequency=frequency,
+            small_conductivity_approx=small_conductivity_approx,
+        )
 
 
 # """ Bloch boundary """
@@ -530,7 +701,15 @@ PMLTypes = Union[PML, StablePML, Absorber, None]
 # types of boundaries that can be used in Simulation
 
 BoundaryEdgeType = Union[
-    Periodic, PECBoundary, PMCBoundary, PML, StablePML, Absorber, BlochBoundary
+    Periodic,
+    PECBoundary,
+    PMCBoundary,
+    PML,
+    StablePML,
+    Absorber,
+    BlochBoundary,
+    ABCBoundary,
+    ModeABCBoundary,
 ]
 
 
@@ -594,9 +773,9 @@ class Boundary(Tidy3dBaseModel):
         plus = values.get("plus")
         minus = values.get("minus")
         num_pbc = isinstance(plus, Periodic) + isinstance(minus, Periodic)
-        num_pml = isinstance(plus, (PML, StablePML, Absorber)) + isinstance(
-            minus, (PML, StablePML, Absorber)
-        )
+        num_pml = isinstance(
+            plus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary)
+        ) + isinstance(minus, (PML, StablePML, Absorber, ABCBoundary, ModeABCBoundary))
         if num_pbc == 1 and num_pml == 1:
             raise SetupError("Cannot have both PML and PBC along the same dimension.")
         return values
@@ -710,6 +889,138 @@ class Boundary(Tidy3dBaseModel):
         """
         plus = PMCBoundary()
         minus = PMCBoundary()
+        return cls(plus=plus, minus=minus)
+
+    @classmethod
+    def abc(
+        cls,
+        permittivity: Optional[pd.PositiveFloat] = None,
+        conductivity: Optional[pd.NonNegativeFloat] = None,
+        small_conductivity_approx: bool = True,
+    ):
+        """ABC boundary specification on both sides along a dimension.
+
+        Example
+        -------
+        >>> abc = Boundary.abc()
+        """
+        plus = ABCBoundary(
+            permittivity=permittivity,
+            conductivity=conductivity,
+            small_conductivity_approx=small_conductivity_approx,
+        )
+        minus = ABCBoundary(
+            permittivity=permittivity,
+            conductivity=conductivity,
+            small_conductivity_approx=small_conductivity_approx,
+        )
+        return cls(plus=plus, minus=minus)
+
+    @classmethod
+    def mode_abc(
+        cls,
+        plane: Box,
+        mode_spec: ModeSpec = ModeSpec(),
+        mode_index: pd.NonNegativeInt = 0,
+        frequency: Optional[pd.PositiveFloat] = None,
+        small_conductivity_approx: bool = False,
+    ):
+        """One-way wave equation mode ABC boundary specification on both sides along a dimension.
+
+        Parameters
+        ----------
+        plane: Box
+            Cross-sectional plane in which the absorbed mode will be computed.
+        mode_spec: ModeSpec = ModeSpec()
+            Parameters to feed to mode solver which determine modes.
+        mode_index : pd.NonNengativeInt = 0
+            Mode index.
+        frequency : Optional[pd.PositiveFloat] = None
+            Frequency for estimating propagation index of absorbed mode.
+        small_conductivity_approx : bool = False,
+            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
+            is modified such that the equation exactly satisfy wave propagation at the central
+            frequency.
+
+        Example
+        -------
+        >>> from tidy3d import Box
+        >>> abc = Boundary.mode_abc(plane=Box(size=(1, 1, 0)))
+        """
+
+        plus = ModeABCBoundary(
+            plane=plane,
+            mode_spec=mode_spec,
+            mode_index=mode_index,
+            frequency=frequency,
+            small_conductivity_approx=small_conductivity_approx,
+        )
+        minus = ModeABCBoundary(
+            plane=plane,
+            mode_spec=mode_spec,
+            mode_index=mode_index,
+            frequency=frequency,
+            small_conductivity_approx=small_conductivity_approx,
+        )
+
+        return cls(plus=plus, minus=minus)
+
+    @classmethod
+    def mode_abc_from_source(cls, source: ModeSource, small_conductivity_approx: bool = False):
+        """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode source.
+
+        Parameters
+        ----------
+        source : :class:`ModeSource`
+            Mode source.
+        small_conductivity_approx : bool = False,
+            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
+            is modified such that the equation exactly satisfy wave propagation at the central
+            frequency.
+
+        Example
+        -------
+        >>> from tidy3d import GaussianPulse, ModeSource, inf
+        >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+        >>> source = ModeSource(size=(1, 1, 0), source_time=pulse, direction='+')
+        >>> abc = Boundary.mode_abc_from_source(source=source)
+        """
+        plus = ModeABCBoundary.from_source(
+            source=source, small_conductivity_approx=small_conductivity_approx
+        )
+        minus = ModeABCBoundary.from_source(
+            source=source, small_conductivity_approx=small_conductivity_approx
+        )
+        return cls(plus=plus, minus=minus)
+
+    @classmethod
+    def mode_abc_from_monitor(
+        cls,
+        monitor: Union[ModeMonitor, ModeSolverMonitor],
+        mode_index: pd.NonNengativeInt = 0,
+        frequency: Optional[pd.PositiveFloat] = None,
+        small_conductivity_approx: bool = False,
+    ):
+        """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode monitor.
+
+        Example
+        -------
+        >>> from tidy3d import ModeMonitor
+        >>> mnt = ModeMonitor(size=(1, 1, 0), freqs=[1e10], name="mnt")
+        >>> abc = Boundary.mode_abc_from_monitor(monitor=mnt)
+        """
+        plus = ModeABCBoundary.from_monitor(
+            monitor=monitor,
+            mode_index=mode_index,
+            frequency=frequency,
+            small_conductivity_approx=small_conductivity_approx,
+        )
+        minus = ModeABCBoundary.from_monitor(
+            monitor=monitor,
+            mode_index=mode_index,
+            frequency=frequency,
+            small_conductivity_approx=small_conductivity_approx,
+        )
         return cls(plus=plus, minus=minus)
 
     @classmethod

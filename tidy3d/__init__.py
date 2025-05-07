@@ -103,6 +103,7 @@ from .components.beam import (
 # boundary
 from .components.boundary import (
     PML,
+    ABCBoundary,
     Absorber,
     AbsorberParams,
     BlochBoundary,
@@ -113,6 +114,7 @@ from .components.boundary import (
     DefaultAbsorberParameters,
     DefaultPMLParameters,
     DefaultStablePMLParameters,
+    ModeABCBoundary,
     PECBoundary,
     Periodic,
     PMCBoundary,
@@ -714,4 +716,6 @@ __all__ = [
     "set_logging_console",
     "set_logging_file",
     "wavelengths",
+    "ABCBoundary",
+    "ModeABCBoundary",
 ]
