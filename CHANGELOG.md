@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
 - Validation check for unit error in grid spacing.
+- Validation that when symmetry is imposed along a given axis, the boundary conditions on each side of the axis are identical.
 
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
