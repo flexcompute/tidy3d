@@ -1,12 +1,19 @@
 """Tests material library functions and pretty printing"""
 
 import tidy3d as td
+from rich.console import Console
 from tidy3d.material_library.material_library import MaterialItemUniaxial
 
 
 def test_material_library_summary():
     """Test to make sure we can print the material library without error."""
     print(td.material_library)
+    
+
+def test_material_library_rich_console():
+    """Test the rich representation of the material library which validates its styles etc."""
+    console = Console()
+    console.print(td.material_library)
 
 
 def test_material_summary():
