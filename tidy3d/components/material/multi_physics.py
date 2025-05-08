@@ -98,12 +98,14 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         None, title="Charge properties", description="Specifies properties for Charge simulations."
     )
 
-    @property
-    def is_pec(self):
+    def __getattr__(self, name: str):
+        """Delegates calls to missing attributes to the inner `optical` medium."""
         if self.optical is not None:
-            return self.optical.is_pec
+            return getattr(self.optical, name)
         else:
-            return False
+            raise ValueError(
+                f"Tried to access {name} of MultiPhysicsMedium without optical medium definition."
+            )
 
     @property
     def heat_spec(self):
