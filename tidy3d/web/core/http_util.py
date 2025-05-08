@@ -25,7 +25,7 @@ from .constants import (
 )
 from .core_config import get_logger
 from .environment import Env
-from .exceptions import WebError
+from .exceptions import WebError, WebNotFoundError
 
 REINITIALIZED = False
 
@@ -131,7 +131,7 @@ def http_interceptor(func):
 
         if resp.status_code != ResponseCodes.OK.value:
             if resp.status_code == ResponseCodes.NOT_FOUND.value:
-                return None
+                raise WebNotFoundError("Resource not found (HTTP 404).")
             json_resp = resp.json()
             if "error" in json_resp.keys():
                 raise WebError(json_resp["error"])

@@ -40,6 +40,26 @@ class SteadyFreeCarrierMonitor(HeatChargeMonitor):
     )
 
 
+class SteadyEnergyBandMonitor(HeatChargeMonitor):
+    """
+    Energy bands monitor for Charge simulations.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> energy_monitor_z0 = td.SteadyEnergyBandMonitor(
+    ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="bands_z0", unstructured=True,
+    ... )
+    """
+
+    # NOTE: for the time being supporting unstructured
+    unstructured: Literal[True] = pd.Field(
+        True,
+        title="Unstructured Grid",
+        description="Return data on the original unstructured grid.",
+    )
+
+
 class SteadyCapacitanceMonitor(HeatChargeMonitor):
     """
     Capacitance monitor associated with a charge simulation.

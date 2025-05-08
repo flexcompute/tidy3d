@@ -6,18 +6,20 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 
 import pydantic.v1 as pd
 from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
+
+import tidy3d as td
 
 from . import http_util
 from .cache import FOLDER_CACHE
 from .constants import SIM_ERROR_FILE, SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5_GZ
 from .core_config import get_logger_console
 from .environment import Env
-from .exceptions import WebError
+from .exceptions import WebError, WebNotFoundError
 from .file_util import read_simulation_from_hdf5
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
@@ -261,7 +263,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             :class:`.SimulationTask` object containing info about status,
              size, credits of task and others.
         """
-        resp = http.get(f"tidy3d/tasks/{task_id}/detail")
+        try:
+            resp = http.get(f"tidy3d/tasks/{task_id}/detail")
+        except WebNotFoundError as e:
+            td.log.error(f"The requested task ID '{task_id}' does not exist.")
+            raise e
+
         task = SimulationTask(**resp) if resp else None
         return task
 
@@ -413,7 +420,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         solver_version: str = None,
         worker_group: str = None,
-        pay_type: PayType = PayType.AUTO,
+        pay_type: Union[PayType, str] = PayType.AUTO,
     ):
         """Kick off this task.
 
@@ -427,9 +434,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             target solver version.
         worker_group: str = None
             worker group
-        pay_type: PayType = PayType.AUTO
+        pay_type: Union[PayType, str] = PayType.AUTO
             Which method to pay the simulation.
         """
+        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
         if solver_version:
             protocol_version = None

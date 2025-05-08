@@ -30,7 +30,7 @@ from ...packaging import check_import, verify_packages_import
 from ..autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
 from ..autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from ..base import Tidy3dBaseModel, cached_property
-from ..transformation import RotationAroundAxis
+from ..transformation import ReflectionFromPlane, RotationAroundAxis
 from ..types import (
     ArrayFloat2D,
     ArrayFloat3D,
@@ -975,6 +975,22 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return Transformed(geometry=self, transform=Transformed.rotation(angle, axis))
 
+    def reflected(self, normal: Coordinate) -> Geometry:
+        """Return a reflected copy of this geometry.
+
+        Parameters
+        ----------
+        normal : Tuple[float, float, float]
+            The 3D normal vector of the plane of reflection. The plane is assumed
+                to pass through the origin (0,0,0).
+
+        Returns
+        -------
+        :class:`Geometry`
+            Reflected copy of this geometry.
+        """
+        return Transformed(geometry=self, transform=Transformed.reflection(normal))
+
     """ Field and coordinate transformations """
 
     @staticmethod
@@ -1686,8 +1702,8 @@ class SimplePlaneIntersection(Geometry, ABC):
         """
 
         # Check if normal is a special case, where the normal is aligned with an axis.
-        if normal.count(0.0) == 2:
-            axis = np.nonzero(normal)[0][0]
+        if np.sum(np.isclose(normal, 0.0)) == 2:
+            axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
             section = self.intersections_plane(**kwargs)
@@ -2554,8 +2570,10 @@ class Box(SimplePlaneIntersection, Centered):
         fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
 
         # normal and tangential fields
-        D_normal = derivative_info.D_der_map[fld_normal]
-        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_perp)
+        D_normal = derivative_info.D_der_map[fld_normal].sel(f=derivative_info.frequency)
+        Es_perp = tuple(
+            derivative_info.E_der_map[key].sel(f=derivative_info.frequency) for key in flds_perp
+        )
 
         # normal and tangential bounds
         bounds_T = np.array(derivative_info.bounds).T  # put (xyz) first dimension
@@ -2580,7 +2598,10 @@ class Box(SimplePlaneIntersection, Centered):
             return 0.0
 
         # grab permittivity data inside and outside edge in normal direction
-        eps_xyz = [derivative_info.eps_data[f"eps_{dim}{dim}"] for dim in "xyz"]
+        eps_xyz = [
+            derivative_info.eps_data[f"eps_{dim}{dim}"].sel(f=derivative_info.frequency)
+            for dim in "xyz"
+        ]
 
         # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
         num_cells_in = 4
@@ -2621,7 +2642,7 @@ class Box(SimplePlaneIntersection, Centered):
                 bounds=bounds_perp,
             )
 
-            return complex(integral_result.sum(dim="f"))
+            return complex(integral_result)
 
         # put together VJP using D_normal and E_perp integration
         vjp_value = 0.0
@@ -2873,6 +2894,25 @@ class Transformed(Geometry):
         return transform
 
     @staticmethod
+    def reflection(normal: Coordinate) -> MatrixReal4x4:
+        """Return a reflection matrix.
+
+        Parameters
+        ----------
+        normal : Tuple[float, float, float]
+            Normal of the plane of reflection.
+
+        Returns
+        -------
+        numpy.ndarray
+            Transform matrix with shape (4, 4).
+        """
+
+        transform = np.eye(4)
+        transform[:3, :3] = ReflectionFromPlane(normal=normal).matrix
+        return transform
+
+    @staticmethod
     def preserves_axis(transform: MatrixReal4x4, axis: Axis) -> bool:
         """Indicate if the transform preserves the orientation of a given axis.
 
@@ -2940,6 +2980,17 @@ class ClipOperation(Geometry):
         title="Geometry B",
         description="Second operand for the set operation. It can also be any geometry type.",
     )
+
+    @pydantic.validator("geometry_a", "geometry_b", always=True)
+    def _geometries_untraced(cls, val):
+        """Make sure that ``ClipOperation`` geometries do not contain tracers."""
+        traced = val.strip_traced_fields()
+        if traced:
+            raise ValidationError(
+                f"{val.type} contains traced fields {list(traced.keys())}. Note that "
+                "'ClipOperation' does not currently support automatic differentiation."
+            )
+        return val
 
     @staticmethod
     def to_polygon_list(base_geometry: Shapely) -> List[Shapely]:

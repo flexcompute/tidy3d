@@ -31,6 +31,7 @@ else:
 if SHOW_PRINT_STATEMENTS:
     sys.stdout = sys.stderr
 
+
 FINITE_DIFF_PERM_SEED = 1.5**2
 MESH_FACTOR_DESIGN = 30.0
 
@@ -255,9 +256,6 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
         "test_number",
     )(field_data_test_parameters)
 
-    mesh_wvl_um = mesh_wvls_um[idx]
-    adj_wvl_um = adj_wvls_um[idx]
-
     dim_um = mesh_wvl_um
     dim_um = mesh_wvl_um
     thickness_um = 0.5 * mesh_wvl_um
@@ -296,7 +294,7 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
 
     obj_val_and_grad = ag.value_and_grad(objective)
 
-    perm_init = FINITE_DIFF_PERM_SEED**2 * np.ones((dim, dim, Nz))
+    perm_init = FINITE_DIFF_PERM_SEED * np.ones((dim, dim, Nz))
 
     obj, adj_grad = obj_val_and_grad([perm_init])
 

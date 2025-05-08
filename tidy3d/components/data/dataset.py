@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER
+from ...constants import C_0, PICOSECOND_PER_NANOMETER_PER_KILOMETER, UnitScaling
 from ...exceptions import DataError
 from ...log import log
 from ..base import Tidy3dBaseModel
-from ..types import Axis
+from ..types import Axis, xyz
 from .data_array import (
     DataArray,
     EMEScalarFieldDataArray,
@@ -28,6 +28,7 @@ from .data_array import (
     TimeDataArray,
     TriangleMeshDataArray,
 )
+from .zbf import ZBFData
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
@@ -256,6 +257,92 @@ class FieldDataset(ElectromagneticFieldDataset):
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
     )
+
+    def from_zbf(filename: str, dim1: xyz, dim2: xyz) -> FieldDataset:
+        """Creates a :class:`.FieldDataset` from a Zemax Beam File (``.zbf``).
+
+        Parameters
+        ----------
+        filename: str
+            The file name of the .zbf file to read.
+        dim1: xyz
+            Tangential field component to map the x-dimension of the zbf data to.
+            eg. ``dim1 = "z"`` sets ``FieldDataset.Ez`` to ``Ex`` of the zbf data.
+        dim2: xyz
+            Tangential field component to map the y-dimension of the zbf data to.
+            eg. ``dim2 = "z"`` sets ``FieldDataset.Ez`` to ``Ey`` of the zbf data.
+
+        Returns
+        -------
+        :class:`.FieldDataset`
+            A :class:`.FieldDataset` object with two tangential E field components populated
+            by zbf data.
+
+        See Also
+        --------
+        :class:`.ZBFData`:
+            A class containing data read in from a ``.zbf`` file.
+        """
+        log.warning(
+            "'FieldDataset.from_zbf()' is currently an experimental feature."
+            " If any issues are encountered, please contact Flexcompute support 'https://www.flexcompute.com/tidy3d/technical-support/'"
+        )
+
+        if dim1 not in get_args(xyz):
+            raise ValueError(f"'dim1' = '{dim1}' is not allowed, must be one of 'x', 'y', or 'z'.")
+        if dim2 not in get_args(xyz):
+            raise ValueError(f"'dim2' = '{dim2}' is not allowed, must be one of 'x', 'y', or 'z'.")
+        if dim1 == dim2:
+            raise ValueError("'dim1' and 'dim2' must be different.")
+
+        # get the third dimension
+        dim3 = list(set(get_args(xyz)) - {dim1, dim2})[0]
+        dims = {"x": 0, "y": 1, "z": 2}
+        dim2expand = dims[dim3]  # this is for expanding E field arrays
+
+        # load zbf data
+        zbfdata = ZBFData.read_zbf(filename)
+
+        # Grab E fields, dimensions, wavelength
+        edim1 = zbfdata.Ex
+        edim2 = zbfdata.Ey
+        n1 = zbfdata.nx
+        n2 = zbfdata.ny
+        d1 = zbfdata.dx / UnitScaling[zbfdata.unit]
+        d2 = zbfdata.dy / UnitScaling[zbfdata.unit]
+        wavelength = zbfdata.wavelength / UnitScaling[zbfdata.unit]
+
+        # make scalar field data arrays
+        len1 = d1 * (n1 - 1)
+        len2 = d2 * (n2 - 1)
+        coords1 = np.linspace(-len1 / 2, len1 / 2, n1)
+        coords2 = np.linspace(-len2 / 2, len2 / 2, n2)
+        f = [C_0 / wavelength]
+        Edim1 = ScalarFieldDataArray(
+            np.expand_dims(edim1, axis=(dim2expand, 3)),
+            coords={
+                dim1: coords1,
+                dim2: coords2,
+                dim3: [0],
+                "f": f,
+            },
+        )
+        Edim2 = ScalarFieldDataArray(
+            np.expand_dims(edim2, axis=(dim2expand, 3)),
+            coords={
+                dim1: coords1,
+                dim2: coords2,
+                dim3: [0],
+                "f": f,
+            },
+        )
+
+        return FieldDataset(
+            **{
+                f"E{dim1}": Edim1,
+                f"E{dim2}": Edim2,
+            }
+        )
 
 
 class FieldTimeDataset(ElectromagneticFieldDataset):

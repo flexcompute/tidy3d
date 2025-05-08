@@ -249,10 +249,18 @@ class DerivativeInfo(Tidy3dBaseModel):
         D_adj = self.D_adj
 
         # compute the E and D fields at the edge centers
-        E_fwd_at_coords = self.evaluate_flds_at(fld_dataset=E_fwd, spatial_coords=spatial_coords)
-        E_adj_at_coords = self.evaluate_flds_at(fld_dataset=E_adj, spatial_coords=spatial_coords)
-        D_fwd_at_coords = self.evaluate_flds_at(fld_dataset=D_fwd, spatial_coords=spatial_coords)
-        D_adj_at_coords = self.evaluate_flds_at(fld_dataset=D_adj, spatial_coords=spatial_coords)
+        E_fwd_at_coords = self.evaluate_flds_at(
+            fld_dataset=E_fwd, spatial_coords=spatial_coords, freq=self.frequency
+        )
+        E_adj_at_coords = self.evaluate_flds_at(
+            fld_dataset=E_adj, spatial_coords=spatial_coords, freq=self.frequency
+        )
+        D_fwd_at_coords = self.evaluate_flds_at(
+            fld_dataset=D_fwd, spatial_coords=spatial_coords, freq=self.frequency
+        )
+        D_adj_at_coords = self.evaluate_flds_at(
+            fld_dataset=D_adj, spatial_coords=spatial_coords, freq=self.frequency
+        )
 
         # project the relevant field quantities into their respective basis for gradient calculation
         D_fwd_norm = self.project_in_basis(D_fwd_at_coords, basis_vector=normals)
@@ -303,6 +311,7 @@ class DerivativeInfo(Tidy3dBaseModel):
         eps_out = self.evaluate_flds_at(
             fld_dataset={key: permittivity_array},
             spatial_coords=spatial_coords,
+            freq=self.frequency,
         )[key]
         return eps_out.values
 
@@ -310,6 +319,7 @@ class DerivativeInfo(Tidy3dBaseModel):
     def evaluate_flds_at(
         fld_dataset: dict[str, ScalarFieldDataArray],
         spatial_coords: np.ndarray,  # (N, 3)
+        freq: float,
     ) -> dict[str, ScalarFieldDataArray]:
         """Compute the value of an dict with keys Ex, Ey, Ez at a set of spatial locations."""
 
@@ -317,28 +327,18 @@ class DerivativeInfo(Tidy3dBaseModel):
 
         coords = np.nan_to_num(spatial_coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
         components = {}
+
         edge_index_dim = "edge_index"
         n_points = coords.shape[0]
 
         for fld_name, arr in fld_dataset.items():
-            data = arr.values
+            data = arr.sel(f=freq).values if "f" in arr.dims else arr.values
             points = tuple(arr.coords[dim].values for dim in "xyz")
-            interp_kwargs = {"method": "linear", "bounds_error": False, "fill_value": None}
 
-            if "f" in arr.dims:
-                f_dim_idx = arr.dims.index("f")
-                result = np.zeros(n_points, dtype=data.dtype)
-
-                for f_idx in range(data.shape[f_dim_idx]):
-                    slicer = [slice(None)] * data.ndim
-                    slicer[f_dim_idx] = f_idx
-                    interpolator = RegularGridInterpolator(
-                        points, data[tuple(slicer)], **interp_kwargs
-                    )
-                    result += interpolator(coords)
-            else:
-                interpolator = RegularGridInterpolator(points, data, **interp_kwargs)
-                result = interpolator(coords)
+            interpolator = RegularGridInterpolator(
+                points, data, method="linear", bounds_error=False, fill_value=None
+            )
+            result = interpolator(coords)
 
             components[fld_name] = xr.DataArray(
                 result,

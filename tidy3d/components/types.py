@@ -252,3 +252,8 @@ TrackFreq = Literal["central", "lowest", "highest"]
 """ lumped elements"""
 
 LumpDistType = Literal["off", "laterally_only", "on"]
+
+""" dataset """
+
+xyz = Literal["x", "y", "z"]
+UnitsZBF = Literal["mm", "cm", "in", "m"]

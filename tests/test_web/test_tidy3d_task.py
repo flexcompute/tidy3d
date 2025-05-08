@@ -257,6 +257,67 @@ def test_submit(set_api_key):
 
 
 @responses.activate
+def test_pay_type_case_insensitivity(set_api_key):
+    """Test PayType enum's case-insensitive behavior with different string formats."""
+    project_id = "1234"
+    TASK_ID = "5678"
+    task_name = "test pay type"
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        match=[matchers.query_param_matcher({"projectName": "test pay type folder"})],
+        json={"data": {"projectId": project_id, "projectName": "test pay type folder"}},
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{project_id}/tasks",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": task_name,
+                "createdAt": "2022-01-01T00:00:00.000Z",
+            }
+        },
+        status=200,
+    )
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": task_name,
+                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskBlockInfo": {
+                    "chargeType": "free",
+                    "maxFreeCount": 20,
+                    "maxGridPoints": 1000,
+                    "maxTimeSteps": 1000,
+                },
+            }
+        },
+        status=200,
+    )
+
+    task = SimulationTask.create(TaskType.FDTD, task_name, "test pay type folder")
+
+    valid_pay_types = [
+        "auto",
+        "AUTO",
+        PayType.AUTO,
+        "credits",
+        "CREDITS",
+        PayType.CREDITS,
+    ]
+
+    for pay_type in valid_pay_types:
+        task.submit(pay_type=pay_type)
+
+
+@responses.activate
 def test_estimate_cost(set_api_key):
     TASK_ID = "3eb06d16-208b-487b-864b-e9b1d3e010a7"
     responses.add(

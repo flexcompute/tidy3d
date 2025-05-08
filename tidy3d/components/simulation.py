@@ -361,6 +361,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             return sum(num_cells_in_monitor(mnt) for mnt in monitor.integration_surfaces)
         return num_cells_in_monitor(monitor)
 
+    @pydantic.validator("boundary_spec")
+    def _validate_boundary_spec_symmetry(cls, val, values):
+        """Error if symmetry is imposed along an axis but the boundary conditions are not the same
+        on both sides."""
+        boundaries = [val.x, val.y, val.z]
+        for ax, symmetry, ax_bounds in zip("xyz", values.get("symmetry"), boundaries):
+            if symmetry != 0 and ax_bounds.plus != ax_bounds.minus:
+                raise ValidationError(
+                    f"Symmetry '{symmetry}' along axis {ax} requires the same boundary "
+                    f"condition on both sides of the axis."
+                )
+        return val
+
     @cached_property
     def _subpixel(self) -> SubpixelSpec:
         """Subpixel averaging method evaluated based on self.subpixel."""
@@ -4821,7 +4834,7 @@ class Simulation(AbstractYeeGridSimulation):
             Number of yee cells in the simulation.
         """
 
-        return np.prod(self.grid.num_cells, dtype=np.int64)
+        return int(np.prod([float(nc) for nc in self.grid.num_cells]))
 
     @property
     def _num_computational_grid_points_dim(self):
