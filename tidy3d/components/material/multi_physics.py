@@ -99,13 +99,14 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     )
 
     def __getattr__(self, name: str):
-        """Delegates calls to missing attributes to the inner `optical` medium."""
-        if self.optical is not None:
+        """Delegates calls to missing attributes to the inner media."""
+        if self.optical is not None and hasattr(self.optical, name):
             return getattr(self.optical, name)
-        else:
-            raise ValueError(
-                f"Tried to access {name} of MultiPhysicsMedium without optical medium definition."
-            )
+        if self.heat is not None and hasattr(self.heat, name):
+            return getattr(self.heat, name)
+        if self.charge is not None and hasattr(self.charge, name):
+            return getattr(self.charge, name)
+        return None
 
     @property
     def heat_spec(self):
