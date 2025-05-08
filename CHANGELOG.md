@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.
 - Improved error message and handling when attempting to load a non-existent task ID.
 - `ClipOperation` now fails validation if traced fields are detected.
+- Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
 
 ## [2.8.3] - 2025-04-24
 
@@ -38,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
 - Auto grid in EME simulations with multiple `freqs` provided uses the largest instead of raising an error.
+- Increased maximum number of frequencies in an EME simulation from 20 to 500
 - Named mediums now display by name for brevity; materials/variants print concise summaries including references.
 
 ### Fixed
