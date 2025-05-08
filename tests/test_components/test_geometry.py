@@ -307,6 +307,37 @@ def test_polyslab_bounds():
         td.PolySlab(vertices=((0, 0), (1, 0), (1, 1)), slab_bounds=(0.5, -0.5), axis=2)
 
 
+@pytest.mark.parametrize("axis", (0, 1, 2))
+def test_polyslab_inf_to_finite_bounds(axis):
+    """Test that finite_length_axis for PolySlab first clips at LARGE_NUMBER and then computes the length."""
+    axis_bound = 20
+    ps_low_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-td.inf, axis_bound],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+    ps_high_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-axis_bound, td.inf],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+    ps_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-td.inf, td.inf],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+
+    assert ps_low_inf.finite_length_axis == (
+        LARGE_NUMBER + axis_bound
+    ), "Unexpected finite length for polyslab axis with -inf bound"
+    assert ps_high_inf.finite_length_axis == (
+        LARGE_NUMBER + axis_bound
+    ), "Unexpected finite length for polyslab axis with inf bound"
+    assert (
+        ps_inf.finite_length_axis == 2 * LARGE_NUMBER
+    ), "Unexpected finite length for polyslab axis with two inf bounds"
+
+
 def test_validate_polyslab_vertices_valid():
     with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))
