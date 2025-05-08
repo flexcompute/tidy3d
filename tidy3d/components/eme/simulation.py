@@ -45,7 +45,7 @@ WARN_MODE_NUM_CELLS = 1e5
 
 
 # eme specific simulation parameters
-WARN_NUM_FREQS = 100
+WARN_NUM_FREQS = 20
 MAX_NUM_FREQS = 500
 MAX_NUM_SWEEP = 100
 
