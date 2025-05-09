@@ -2186,7 +2186,7 @@ def test_sim_traced_center_size(use_emulated_run):
     with AssertLogLevel("WARNING", contains_str="autograd tracer"):
         grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
 
-        
+
 def test_error_clip(use_emulated_run):
     """Make sure proper error raised if differentiating a ``ClipOperation``."""
 
@@ -2206,7 +2206,7 @@ def test_error_clip(use_emulated_run):
 
     with pytest.raises(ValueError):
         g = ag.grad(objective)(1.0)
-        
+
 
 def make_sim_rotation(center: tuple, size: tuple, angle: float, axis: int):
     wavelength = 1.5
