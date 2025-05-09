@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Adjoint support for differentiating w.r.t. parameters (`center`, `size`) of transformed `td.Box`.
+- Adjoint support for differentiating w.r.t. rotation angle of `td.Transform`.
 
 ## [2.8.4] - 2025-05-15
 

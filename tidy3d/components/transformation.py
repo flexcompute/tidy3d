@@ -5,8 +5,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Union
 
+import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pd
+from autograd.numpy.numpy_boxes import ArrayBox
 
 from ..constants import RADIAN
 from ..exceptions import ValidationError
@@ -44,7 +46,6 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
 
         if self.isidentity:
             return vector
-
         if len(vector.shape) == 1:
             return self.matrix @ vector
 
@@ -66,7 +67,6 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
 
         if self.isidentity:
             return tensor
-
         return np.matmul(self.matrix, np.matmul(tensor, self.matrix.T))
 
 
@@ -114,15 +114,14 @@ class RotationAroundAxis(AbstractRotation):
     def matrix(self) -> TensorReal:
         """Rotation matrix."""
 
-        if self.isidentity:
+        if self.isidentity and not isinstance(self.angle, ArrayBox):
             return np.eye(3)
-
-        norm = np.linalg.norm(self.axis)
+        norm = anp.linalg.norm(self.axis)
         n = self.axis / norm
-        c = np.cos(self.angle)
-        s = np.sin(self.angle)
-        K = np.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
-        R = np.eye(3) + s * K + (1 - c) * K @ K
+        c = anp.cos(self.angle)
+        s = anp.sin(self.angle)
+        K = anp.array([[0, -n[2], n[1]], [n[2], 0, -n[0]], [-n[1], n[0], 0]])
+        R = anp.eye(3) + s * K + (1 - c) * K @ K
 
         return R
 
