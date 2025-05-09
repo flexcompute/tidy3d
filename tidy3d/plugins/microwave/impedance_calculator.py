@@ -11,6 +11,7 @@ from ...components.base import Tidy3dBaseModel
 from ...components.data.monitor_data import FieldTimeData
 from ...constants import OHM
 from ...exceptions import ValidationError
+from ...log import log
 from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegral2D
 from .path_integrals import (
     AxisAlignedPathIntegral,
@@ -101,3 +102,11 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         """Helper to set additional metadata for ``IntegralResultTypes``."""
         data_array.name = "Z0"
         return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values

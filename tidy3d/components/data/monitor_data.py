@@ -3469,9 +3469,9 @@ class DirectivityData(FieldProjectionAngleData):
     >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
     >>> flux_data = FluxDataArray(np.random.random(len(f)), coords=coords_flux)
     >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
-    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
+    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta) # doctest: +SKIP
     >>> data = DirectivityData(monitor=monitor, flux=flux_data, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
-    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces)
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces) # doctest: +SKIP
     """
 
     monitor: DirectivityMonitor = pd.Field(

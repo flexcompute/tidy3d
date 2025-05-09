@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
@@ -17,6 +17,7 @@ from ....components.types import FreqArray
 from ....config import config
 from ....constants import HERTZ
 from ....exceptions import SetupError, Tidy3dKeyError
+from ....log import log
 from ....web.api.container import Batch, BatchData
 from ..ports.coaxial_lumped import CoaxialLumpedPort
 from ..ports.modal import Port
@@ -112,6 +113,22 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError("'AbstractComponentModeler.simulation' must not have any sources.")
+        return val
+
+    @pd.validator("ports", always=True)
+    def _warn_rf_license(cls, val):
+        """Warn about new licensing requirements for RF ports."""
+        rf_port = False
+        TerminalPortTypeTuple = get_args(TerminalPortType)
+        for port in val:
+            if type(port) in TerminalPortTypeTuple:
+                rf_port = True
+                break
+        if rf_port:
+            log.warning(
+                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+                log_once=True,
+            )
         return val
 
     @staticmethod
