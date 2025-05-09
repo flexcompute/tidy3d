@@ -99,7 +99,35 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
     )
 
     def __getattr__(self, name: str):
-        """Delegates calls to a fixed set of missing attributes to their respective inner medium."""
+        """
+        Delegate attribute lookup to inner media or fail fast.
+
+        Parameters
+        ----------
+        name : str
+            The attribute that could not be found on the ``MultiPhysicsMedium`` itself.
+
+        Returns
+        -------
+        Any
+            * The attribute value obtained from a delegated sub-medium when
+            ``name`` is listed in ``DELEGATED_ATTRIBUTES``.
+            * ``None`` when ``name`` is explicitly ignored (e.g. ``"__deepcopy__"``).
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is neither ignored nor in the delegation map, signalling that
+            the caller may have intended to access ``optical``, ``heat``, or
+            ``charge`` directly.
+
+        Notes
+        -----
+        Only the attributes enumerated in the local ``DELEGATED_ATTRIBUTES`` dict are
+        forwarded.
+        Extend that mapping as additional cross-medium shim behaviour becomes
+        necessary.
+        """
         IGNORED_ATTRIBUTES = ["__deepcopy__"]
         if name in IGNORED_ATTRIBUTES:
             return None
@@ -109,7 +137,6 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             "_eps_plot": self.optical,
             "viz_spec": self.optical,
         }
-        # NOTE(frederikschubertflex): this dictionary might need to be extended as we transition our code towards using this `MultiPhysicsMedium`.
 
         if name in DELEGATED_ATTRIBUTES:
             return getattr(DELEGATED_ATTRIBUTES[name], name)
