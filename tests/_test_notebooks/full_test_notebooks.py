@@ -36,13 +36,15 @@ for _, path in enumerate(notebook_filenames_all):
 run_only = [
     "Autograd0Quickstart",
     "Autograd10YBranchLevelSet",
-    "Autograd12LightExtractor",
+    "ChargeSolver",
+    "EMESolver",
+    "FieldProjections",
     "HeatSolver",
     "ThermallyTunedRingResonator",
     "ThermoOpticDopedModulator",
     "VortexMetasurface",
-    "ChargeSolver",
     "MetalHeaterPhaseShifter",
+    "TFSF",
 ]
 
 skip = [
