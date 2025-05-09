@@ -23,11 +23,11 @@ except ImportError:
 
 from numpy import array, concatenate, inf, ones
 
-from ..constants import UnitScaling
-from ..exceptions import SetupError, Tidy3dKeyError
-from ..log import log
-from .base import Tidy3dBaseModel
-from .types import Ax, Axis, LengthUnit
+from ...constants import UnitScaling
+from ...exceptions import SetupError, Tidy3dKeyError
+from ...log import log
+from ..base import Tidy3dBaseModel
+from ..types import Ax, Axis, LengthUnit
 
 """ Constants """
 
