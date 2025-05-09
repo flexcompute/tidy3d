@@ -25,6 +25,7 @@ from ....components.types import Ax
 from ....components.viz import add_ax_if_none, equal_aspect
 from ....constants import C_0, OHM
 from ....exceptions import Tidy3dError, Tidy3dKeyError, ValidationError
+from ....log import log
 from ....web.api.container import BatchData
 from ..data.terminal import PortDataArray, TerminalPortDataArray
 from ..ports.base_lumped import AbstractLumpedPort
@@ -51,6 +52,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
         description="Facilitates the calculation of figures-of-merit for antennas. "
         "These monitor will be included in every simulation and record the radiated fields. ",
     )
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
 
     @equal_aspect
     @add_ax_if_none
