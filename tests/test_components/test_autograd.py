@@ -1433,7 +1433,9 @@ def test_pole_residue(monkeypatch):
     dJ_deps = ag.holomorphic_grad(J)(eps0)
 
     monkeypatch.setattr(
-        td.PoleResidue, "derivative_eps_complex_volume", lambda self, E_der_map, bounds: dJ_deps
+        td.PoleResidue,
+        "derivative_eps_complex_volume",
+        lambda self, E_der_map, bounds, freqs: dJ_deps,
     )
 
     import importlib
@@ -1516,7 +1518,7 @@ def test_custom_pole_residue(monkeypatch):
     monkeypatch.setattr(
         td.CustomPoleResidue,
         "_derivative_field_cmp",
-        lambda self, E_der_map, eps_data, dim: dJ_deps,
+        lambda self, E_der_map, eps_data, dim, freqs: dJ_deps,
     )
 
     import importlib
