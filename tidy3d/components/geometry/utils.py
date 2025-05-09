@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from math import isclose
-from typing import Any, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pydantic as pydantic
@@ -13,9 +13,11 @@ from ...constants import fp_eps
 from ...exceptions import SetupError, Tidy3dError
 from ..base import Tidy3dBaseModel
 from ..geometry.base import Box
-from ..grid.grid import Grid
 from ..types import ArrayFloat2D, Axis, Coordinate, MatrixReal4x4, PlanePosition, Shapely
 from . import base, mesh, polyslab, primitives
+
+if TYPE_CHECKING:
+    from ..grid.grid import Grid
 
 GeometryType = Union[
     base.Box,

@@ -231,7 +231,6 @@ from .components.lumped_element import (
 )
 
 # medium
-# for docs
 from .components.medium import (
     PEC,
     PEC2D,

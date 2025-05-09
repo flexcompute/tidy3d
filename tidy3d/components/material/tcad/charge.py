@@ -7,7 +7,7 @@ from typing import Tuple
 import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
-from tidy3d.components.medium import AbstractMedium
+from tidy3d.components.medium.base import AbstractMedium
 from tidy3d.components.tcad.doping import DopingBoxType
 from tidy3d.components.tcad.types import (
     BandGapNarrowingModelType,
