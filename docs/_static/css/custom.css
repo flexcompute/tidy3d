@@ -56,7 +56,7 @@ html[data-theme="light"] {
 html[data-theme="dark"] {
     --pst-color-primary: #B8A18B;
     --pst-color-secondary: #61B29C;
-    --tab-color: #61B29C;
+    --tab-color: #B8A18B;
     --pst-color-link: var(--pst-color-muted);
     --sd-color-info-bg:  #00643C;
     --pst-color-table-row-hover-bg: #8851AD;
