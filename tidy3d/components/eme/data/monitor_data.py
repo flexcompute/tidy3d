@@ -7,7 +7,7 @@ from typing import Union
 import pydantic.v1 as pd
 
 from ...base_sim.data.monitor_data import AbstractMonitorData
-from ...data.monitor_data import ElectromagneticFieldData, ModeSolverData
+from ...data.monitor_data import ElectromagneticFieldData, ModeSolverData, PermittivityData
 from ..monitor import EMECoefficientMonitor, EMEFieldMonitor, EMEModeSolverMonitor
 from .dataset import EMECoefficientDataset, EMEFieldDataset, EMEModeSolverDataset
 
@@ -40,4 +40,6 @@ class EMECoefficientData(AbstractMonitorData, EMECoefficientDataset):
     )
 
 
-EMEMonitorDataType = Union[EMEModeSolverData, EMEFieldData, EMECoefficientData, ModeSolverData]
+EMEMonitorDataType = Union[
+    EMEModeSolverData, EMEFieldData, EMECoefficientData, ModeSolverData, PermittivityData
+]

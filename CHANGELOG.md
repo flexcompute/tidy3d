@@ -8,12 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
+- Validation check for unit error in grid spacing.
+- Validation that when symmetry is imposed along a given axis, the boundary conditions on each side of the axis are identical.
 - Gradient computation for rotated boxes in Transformed.
 - Gradient computation for rotated angle of Transformed box.
 
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
 - Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.
+- Improved error message and handling when attempting to load a non-existent task ID.
+- `ClipOperation` now fails validation if traced fields are detected.
+- Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
+- EME now supports 2D simulations.
+- 'EMESimulation' now supports 'PermittivityMonitor'.
 
 ## [2.8.3] - 2025-04-24
 
@@ -26,10 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Differentiable function `td.plugins.autograd.interpolate_spline` for 1D linear, quadratic, and cubic spline interpolation, supporting differentiation with respect to the interpolated values (`y_points`) and optional endpoint derivative constraints.
 - `SteadyEnergyBandMonitor` in the Charge solver.
 - Pretty printing enabled with `rich.print` for the material library, materials, and their variants. In notebooks, this can be accessed using `rich.print` or `display`, or by evaluating the material library, a material, or a variant in a cell.
+- `FieldData` and `ModeData` support exporting E fields to a Zemax Beam File (ZBF) with `.to_zbf()` (warning: experimental feature).
+- `FieldDataset` supports reading E fields from a Zemax Beam File (ZBF) with `.from_zbf()` (warning: experimental feature).
+- Unstructured grid now supports 2D/3D box-shaped refinement regions and 1D refinement lines of arbitrary direction.
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
 - Auto grid in EME simulations with multiple `freqs` provided uses the largest instead of raising an error.
+- Increased maximum number of frequencies in an EME simulation from 20 to 500
 - Named mediums now display by name for brevity; materials/variants print concise summaries including references.
 
 ### Fixed

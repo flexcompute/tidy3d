@@ -126,4 +126,78 @@ class RotationAroundAxis(AbstractRotation):
         return R
 
 
+class AbstractReflection(ABC, Tidy3dBaseModel):
+    """Abstract reflection of vectors and tensors."""
+
+    @cached_property
+    @abstractmethod
+    def matrix(self) -> TensorReal:
+        """Reflection matrix."""
+
+    def reflect_vector(self, vector: ArrayFloat2D) -> ArrayFloat2D:
+        """Reflect a vector/point or a list of vectors/points.
+
+        Parameters
+        ----------
+        vector : ArrayLike[float]
+            Array of shape ``(3, ...)``.
+
+        Returns
+        -------
+        Coordinate
+            Reflected vector.
+        """
+
+        if len(vector.shape) == 1:
+            return self.matrix @ vector
+
+        return np.tensordot(self.matrix, vector, axes=1)
+
+    def reflect_tensor(self, tensor: TensorReal) -> TensorReal:
+        """Reflect a tensor.
+
+        Parameters
+        ----------
+        tensor : ArrayLike[float]
+            Array of shape ``(3, 3)``.
+
+        Returns
+        -------
+        TensorReal
+            Reflected tensor.
+        """
+
+        return np.matmul(self.matrix, np.matmul(tensor, self.matrix.T))
+
+
+class ReflectionFromPlane(AbstractReflection):
+    """Reflection of vectors and tensors around a given vector."""
+
+    normal: Coordinate = pd.Field(
+        (1, 0, 0),
+        title="Normal of the reflecting plane",
+        description="A vector that specifies the normal of the plane of reflection",
+    )
+
+    @pd.validator("normal")
+    def _guarantee_nonzero_normal(cls, val):
+        norm = np.linalg.norm(val)
+        if np.isclose(norm, 0):
+            raise ValidationError(
+                "The norm of vector 'normal' cannot be zero. Please provide a proper normal vector."
+            )
+        return val
+
+    @cached_property
+    def matrix(self) -> TensorReal:
+        """Reflection matrix."""
+
+        norm = np.linalg.norm(self.normal)
+        n = self.normal / norm
+        R = np.eye(3) - 2 * np.outer(n, n)
+
+        return R
+
+
 RotationType = Union[RotationAroundAxis]
+ReflectionType = Union[ReflectionFromPlane]

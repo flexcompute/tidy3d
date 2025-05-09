@@ -17,7 +17,7 @@ from ..grid.grid import Grid
 from ..grid.grid_spec import GridSpec
 from ..mode_spec import ModeSpec
 from ..monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
-from ..simulation import AbstractYeeGridSimulation, Simulation
+from ..simulation import AbstractYeeGridSimulation, Simulation, validate_boundaries_for_zero_dims
 from ..source.field import ModeSource
 from ..types import (
     TYPE_TAG_STR,
@@ -82,16 +82,22 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     Example
     -------
-    >>> from tidy3d import C_0, ModeSpec
+    >>> from tidy3d import C_0, ModeSpec, BoundarySpec, Boundary
     >>> lambda0 = 1
     >>> freq0 = C_0 / lambda0
     >>> freqs = [freq0]
     >>> sim_size = lambda0, lambda0, 0
     >>> mode_spec = ModeSpec(num_modes=4)
+    >>> boundary_spec = BoundarySpec(
+    ...     x=Boundary.pec(),
+    ...     y=Boundary.pec(),
+    ...     z=Boundary.periodic()
+    ... )
     >>> sim = ModeSimulation(
     ...     size=sim_size,
     ...     freqs=freqs,
-    ...     mode_spec=mode_spec
+    ...     mode_spec=mode_spec,
+    ...     boundary_spec=boundary_spec
     ... )
 
     See Also
@@ -513,3 +519,5 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def validate_pre_upload(self, source_required: bool = False):
         self._mode_solver.validate_pre_upload(source_required=source_required)
+
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()

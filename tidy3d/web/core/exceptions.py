@@ -11,3 +11,9 @@ class WebError(Exception):
         log = get_logger()
         super().__init__(message)
         log.error(message)
+
+
+class WebNotFoundError(WebError):
+    """A generic error indicating an HTTP 404 (resource not found)."""
+
+    pass

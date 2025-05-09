@@ -175,6 +175,59 @@ PML_HEIGHT_FOR_0_DIMS = inf
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 
+def validate_boundaries_for_zero_dims():
+    """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
+
+    @pydantic.validator("boundary_spec", allow_reuse=True, always=True)
+    @skip_if_fields_missing(["size", "symmetry"])
+    def boundaries_for_zero_dims(cls, val, values):
+        """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
+        boundaries = val.to_list
+        size = values.get("size")
+        symmetry = values.get("symmetry")
+        axis_names = "xyz"
+
+        for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
+            if size_dim == 0:
+                axis = axis_names[dim]
+                num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+                num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+
+                if num_absorbing_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using a PML or absorbing boundary along that axis is incorrect. "
+                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
+                    )
+
+                if num_bloch_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, "
+                        "using a Bloch boundary along such an axis is not supported because of "
+                        "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
+                        "but nonzero size along the dimension instead."
+                    )
+
+                if symmetry_dim != 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using symmetry along that axis is incorrect. Use 'PECBoundary' "
+                        "or 'PMCBoundary' to select source polarization if needed and set "
+                        f"Simulation.symmetry to 0 along {axis}."
+                    )
+
+                if boundary[0] != boundary[1]:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis. "
+                        f"The boundary condition for {axis} plus and {axis} "
+                        "minus must be the same."
+                    )
+
+        return val
+
+    return boundaries_for_zero_dims
+
+
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     """
     Abstract class for a simulation involving electromagnetic fields defined on a Yee grid.
@@ -360,6 +413,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         if isinstance(monitor, SurfaceIntegrationMonitor):
             return sum(num_cells_in_monitor(mnt) for mnt in monitor.integration_surfaces)
         return num_cells_in_monitor(monitor)
+
+    @pydantic.validator("boundary_spec")
+    def _validate_boundary_spec_symmetry(cls, val, values):
+        """Error if symmetry is imposed along an axis but the boundary conditions are not the same
+        on both sides."""
+        boundaries = [val.x, val.y, val.z]
+        for ax, symmetry, ax_bounds in zip("xyz", values.get("symmetry"), boundaries):
+            if symmetry != 0 and ax_bounds.plus != ax_bounds.minus:
+                raise ValidationError(
+                    f"Symmetry '{symmetry}' along axis {ax} requires the same boundary "
+                    f"condition on both sides of the axis."
+                )
+        return val
 
     @cached_property
     def _subpixel(self) -> SubpixelSpec:
@@ -2790,53 +2856,6 @@ class Simulation(AbstractYeeGridSimulation):
 
         return values
 
-    @pydantic.validator("boundary_spec", always=True)
-    @skip_if_fields_missing(["size", "symmetry"])
-    def boundaries_for_zero_dims(cls, val, values):
-        """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
-        boundaries = val.to_list
-        size = values.get("size")
-        symmetry = values.get("symmetry")
-        axis_names = "xyz"
-
-        for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
-            if size_dim == 0:
-                axis = axis_names[dim]
-                num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
-                num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
-
-                if num_absorbing_bdries > 0:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis, so "
-                        "using a PML or absorbing boundary along that axis is incorrect. "
-                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
-                    )
-
-                if num_bloch_bdries > 0:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis, "
-                        "using a Bloch boundary along such an axis is not supported because of "
-                        "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
-                        "but nonzero size along the dimension instead."
-                    )
-
-                if symmetry_dim != 0:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis, so "
-                        "using symmetry along that axis is incorrect. Use 'PECBoundary' "
-                        "or 'PMCBoundary' to select source polarization if needed and set "
-                        f"Simulation.symmetry to 0 along {axis}."
-                    )
-
-                if boundary[0] != boundary[1]:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis. "
-                        f"The boundary condition for {axis} plus and {axis} "
-                        "minus must be the same."
-                    )
-
-        return val
-
     @pydantic.validator("sources", always=True)
     def _validate_num_sources(cls, val):
         """Error if too many sources present."""
@@ -5188,3 +5207,5 @@ class Simulation(AbstractYeeGridSimulation):
             medium=scene.medium,
             **kwargs,
         )
+
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
