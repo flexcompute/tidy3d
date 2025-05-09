@@ -64,6 +64,7 @@ pytest-timeout = { version = "*", optional = true }
 pytest-xdist = "^3.6.1"
 pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
+nbmake = "^1.5.5"
 tox = { version = "*", optional = true }
 
 # gdspy
@@ -290,7 +291,6 @@ norecursedirs = [
   "tests/_test_data",
   "tests/_test_notebooks",
   "tidy3d/web",
-  "docs/notebooks",
   "docs/faq",
 ]
 filterwarnings = "ignore::DeprecationWarning"
