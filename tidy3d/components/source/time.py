@@ -140,17 +140,37 @@ class GaussianPulse(Pulse):
         "pulse spectrum which can have a nonzero DC component.",
     )
 
+    remove_negative_frequencies: bool = pydantic.Field(
+        False,
+        title="Remove negative frequency components",
+        description="If ``True``, apply a Hilbert transform to the Gaussian pulse spectrum. This "
+        "should have no effect unless the pulse is broad enough to extend into negative "
+        "frequencies and is useful when the source time is used in combination with a complex "
+        "amplitude, e.g. in a ``CustomCurrentSource``, as it will ensure that the injected "
+        "amplitudes at the postive frequencies are what is specified by the source. Otherwise, "
+        "negative frequencies interfere due to the fact that only the real part of the source "
+        "signal is injected. The transform can however add slowly decaying tails to the time "
+        "signal, so this option should be used with caution as it might lead to fields not "
+        "decaying past the shutoff value, and a larger ``offset`` may be needed. The issue is "
+        "exacerbated by DC-component in the original signal, which is why it is only allowed in "
+        "combination with ``remove_dc_component=True``.",
+    )
+
     def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time."""
+
+        if self.remove_negative_frequencies:
+            # Double the time grid by mirroring around the first point
+            time = np.concatenate((2 * time[0] - time[:0:-1], time))
 
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * self.twidth
 
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
-        amp = np.exp(-(time_shifted**2) / 2 / self.twidth**2) * self.amplitude
+        amp = np.exp(-(time_shifted**2) / 2 / self.twidth**2)
 
-        pulse_amp = offset * oscillation * amp
+        pulse_amp = oscillation * amp
 
         # subtract out DC component
         if self.remove_dc_component:
@@ -159,7 +179,13 @@ class GaussianPulse(Pulse):
             # 1j to make it agree in large omega0 limit
             pulse_amp = pulse_amp * 1j
 
-        return pulse_amp
+        if self.remove_negative_frequencies:
+            import scipy.signal as sps
+
+            pulse_amp = sps.hilbert(np.real(pulse_amp)).conj()
+            pulse_amp = pulse_amp[pulse_amp.size // 2 :]
+
+        return pulse_amp * self.amplitude * offset
 
     def end_time(self) -> Optional[float]:
         """Time after which the source is effectively turned off / close to zero amplitude."""

@@ -48,6 +48,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         times: ArrayFloat1D,
         freqs: ArrayFloat1D,
         dt: float,
+        use_real: bool = True,
     ) -> complex:
         """Complex-valued spectrum as a function of frequency.
         Note: Only the real part of the time signal is used.
@@ -62,6 +63,9 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         dt : float or np.ndarray
             Time step to weight FT integral with.
             If array, use to weigh each of the time intervals in ``times``.
+        use_real : bool
+            Whether to use the real part of the time signal only, which is default as the real part
+            is injected in an FDTD simulation.
 
         Returns
         -------
@@ -71,7 +75,9 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
 
         times = np.array(times)
         freqs = np.array(freqs)
-        time_amps = np.real(self.amp_time(times))
+        time_amps = self.amp_time(times)
+        if use_real:
+            time_amps = np.real(time_amps)
 
         # if all time amplitudes are zero, just return (complex-valued) zeros for spectrum
         if np.all(np.equal(time_amps, 0.0)):
