@@ -174,6 +174,9 @@ PML_HEIGHT_FOR_0_DIMS = inf
 # additional (safety) time step reduction factor for fixed angle simulations
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
+# RF frequency warning
+RF_FREQ_WARNING = 1e12
+
 
 def validate_boundaries_for_zero_dims():
     """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
@@ -3596,6 +3599,38 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_custom_source_time()
         self._validate_mode_object_bends()
         self._warn_mode_object_pml()
+        self._warn_rf_simulation()
+
+    def _warn_rf_simulation(self) -> None:
+        """Warn about new licensing requirements for RF simulations."""
+
+        # RF component messages
+        comp_msg = []
+        # 1) lossy metal
+        for mat in self.scene.mediums:
+            if isinstance(mat, LossyMetalMedium):
+                comp_msg += ["it contains 'LossyMetalMedium'"]
+                break
+
+        # 2) lumped elements
+        if len(self.lumped_elements) > 0:
+            comp_msg += ["it contains lumped elements"]
+
+        # 3) source frequency is in RF range
+        if self.frequency_range[0] < RF_FREQ_WARNING:
+            comp_msg += ["frequency of some sources is in the RF range"]
+
+        # 4) monitor frequency is in RF range
+        for monitor in self.monitors:
+            if isinstance(monitor, FreqMonitor) and monitor.frequency_range[0] < RF_FREQ_WARNING:
+                comp_msg += ["frequency of some monitors is in the RF range"]
+                break
+
+        # issue warning
+        if len(comp_msg) > 0:
+            msg = "This is an RF simulation because " + ", and ".join(comp_msg)
+            msg += ". Please note that RF simulations are subject to new licensing requirements in the future."
+            log.warning(msg)
 
     def _warn_mode_object_pml(self) -> None:
         """Warn if any mode objects have large pml."""

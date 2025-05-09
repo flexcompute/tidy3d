@@ -17,6 +17,7 @@ from ....components.types import FreqArray
 from ....config import config
 from ....constants import HERTZ
 from ....exceptions import SetupError, Tidy3dKeyError
+from ....log import log
 from ....web.api.container import Batch, BatchData
 from ..ports.coaxial_lumped import CoaxialLumpedPort
 from ..ports.modal import Port
@@ -112,6 +113,21 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
             raise SetupError("'AbstractComponentModeler.simulation' must not have any sources.")
+        return val
+
+    @pd.validator("ports", always=True)
+    def _RF_ports_warning(cls, val):
+        """Warn about new licensing requirements for RF ports."""
+        rf_port = False
+        for port in val:
+            if isinstance(port, TerminalPortType):
+                rf_port = True
+                break
+        if rf_port:
+            log.warning(
+                "This is an RF modeling because it contains RF ports. "
+                "Please note that RF simulations are subject to new licensing requirements in the future."
+            )
         return val
 
     @staticmethod
