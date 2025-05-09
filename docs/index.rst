@@ -1,5 +1,5 @@
 *************************************
-Electromagnetics Simulation Platform
+Electromagnetics Platform
 *************************************
 
 .. role:: raw-html(raw)
