@@ -24,7 +24,7 @@ on:
 
 jobs:
   determine-test-scope:
-    runs-on: [slurm-runner, 1xcpu]  
+    runs-on: [ inhouse ] 
     if: |
       github.event.pull_request.draft == false ||
       github.ref == 'refs/heads/develop' ||
@@ -96,7 +96,7 @@ jobs:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
-    runs-on: [slurm-runner, 1xcpu] 
+    runs-on: [ inhouse ] 
     steps:
       - uses: actions/checkout@v4
         with:
@@ -114,7 +114,7 @@ jobs:
     needs: determine-test-scope 
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [slurm-runner, 10xcpu]
+    runs-on: [ inhouse ] 
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
