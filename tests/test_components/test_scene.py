@@ -66,6 +66,7 @@ def test_plot_eps_multiphysics():
             )
         ]
     )
+    assert s.structures[0].medium.name == "SiO2"
     s.plot_eps(x=0)
 
 
