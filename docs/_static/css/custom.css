@@ -58,7 +58,7 @@ html[data-theme="dark"] {
     --pst-color-secondary: #61B29C;
     --tab-color: #61B29C;
     --pst-color-link: var(--pst-color-muted);
-    --sd-color-info-bg:  var(--pst-color-primary);
+    --sd-color-info-bg:  #00643C;
     --pst-color-table-row-hover-bg: #8851AD;
     --pst-color-inline-code-links: #6DB5DD;
     --pst-color-inline-code:#FED88B;
