@@ -9,3 +9,5 @@ Grid Specification
 
    tidy3d.UniformUnstructuredGrid
    tidy3d.DistanceUnstructuredGrid
+   tidy3d.GridRefinementRegion
+   tidy3d.GridRefinementLine
