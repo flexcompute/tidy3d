@@ -107,7 +107,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             return getattr(DELEGATED_ATTRIBUTES[name], name)
         else:
             raise ValueError(
-                f"MultiPhysicsMedium has no attribute called {name}. Did you meant to access the attribute of one of the optical, heat or charge media?"
+                f"MultiPhysicsMedium has no attribute called {name}. Did you mean to access the attribute of one of the optical, heat or charge media?"
             )
 
     @property
