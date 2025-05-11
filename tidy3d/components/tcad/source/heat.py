@@ -8,6 +8,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.tcad.source.abstract import StructureBasedHeatChargeSource
 from tidy3d.constants import VOLUMETRIC_HEAT_RATE
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.log import log
 
 
@@ -20,7 +21,7 @@ class HeatSource(StructureBasedHeatChargeSource):
     >>> heat_source = HeatSource(rate=1, structures=["box"])
     """
 
-    rate: Union[float] = pd.Field(
+    rate: Union[float, SpatialDataArray] = pd.Field(
         title="Volumetric Heat Rate",
         description="Volumetric rate of heating or cooling (if negative) in units of "
         f"{VOLUMETRIC_HEAT_RATE}.",
