@@ -98,6 +98,53 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         None, title="Charge properties", description="Specifies properties for Charge simulations."
     )
 
+    def __getattr__(self, name: str):
+        """
+        Delegate attribute lookup to inner media or fail fast.
+
+        Parameters
+        ----------
+        name : str
+            The attribute that could not be found on the ``MultiPhysicsMedium`` itself.
+
+        Returns
+        -------
+        Any
+            * The attribute value obtained from a delegated sub-medium when
+            ``name`` is listed in ``DELEGATED_ATTRIBUTES``.
+            * ``None`` when ``name`` is explicitly ignored (e.g. ``"__deepcopy__"``).
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is neither ignored nor in the delegation map, signalling that
+            the caller may have intended to access ``optical``, ``heat``, or
+            ``charge`` directly.
+
+        Notes
+        -----
+        Only the attributes enumerated in the local ``DELEGATED_ATTRIBUTES`` dict are
+        forwarded.
+        Extend that mapping as additional cross-medium shim behaviour becomes
+        necessary.
+        """
+        IGNORED_ATTRIBUTES = ["__deepcopy__"]
+        if name in IGNORED_ATTRIBUTES:
+            return None
+
+        DELEGATED_ATTRIBUTES = {
+            "is_pec": self.optical,
+            "_eps_plot": self.optical,
+            "viz_spec": self.optical,
+        }
+
+        if name in DELEGATED_ATTRIBUTES:
+            return getattr(DELEGATED_ATTRIBUTES[name], name)
+        else:
+            raise ValueError(
+                f"MultiPhysicsMedium has no attribute called {name}. Did you mean to access the attribute of one of the optical, heat or charge media?"
+            )
+
     @property
     def heat_spec(self):
         if self.heat is not None:
