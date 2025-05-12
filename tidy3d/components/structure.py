@@ -10,6 +10,8 @@ import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 
+import tidy3d as td
+
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
 from ..log import log
@@ -255,27 +257,69 @@ class Structure(AbstractStructure):
 
         return monitor_name_map[data_type]
 
+    def _poly_bbox(self, polyslab: PolySlab):
+        """Axis‑aligned bbox (min,max) ∈ ℝ³ for a single PolySlab."""
+        axis = polyslab.axis  # 0,1,2
+        planar = [i for i in range(3) if i != axis]
+
+        lo = np.zeros(3)
+        hi = np.zeros(3)
+
+        # planar coordinates come from the 2‑D vertices
+        lo[planar[0]] = polyslab.vertices[:, 0].min()
+        hi[planar[0]] = polyslab.vertices[:, 0].max()
+        lo[planar[1]] = polyslab.vertices[:, 1].min()
+        hi[planar[1]] = polyslab.vertices[:, 1].max()
+
+        # slab thickness along the extrusion axis
+        lo[axis] = polyslab.slab_bounds[0]
+        hi[axis] = polyslab.slab_bounds[1]
+        return lo, hi
+
     def make_adjoint_monitors(
-        self, freqs: list[float], index: int, field_keys: list[str]
-    ) -> (FieldMonitor, PermittivityMonitor):
-        """Generate the field and permittivity monitor for this structure."""
+        self,
+        freqs: list[float],
+        index: int,
+        field_keys: list[str],
+    ) -> tuple[FieldMonitor, PermittivityMonitor]:
+        """
+        Generate field & permittivity monitors with optional padding for ClipOperation.
+        """
 
         geometry = self.geometry
-        box = geometry.bounding_box
 
-        # we dont want these fields getting traced by autograd, otherwise it messes stuff up
+        # Construct bounding box (with padding if ClipOperation)
+        if isinstance(geometry, td.ClipOperation):
+            lo_a, hi_a = self._poly_bbox(geometry.geometry_a)
+            lo_b, hi_b = self._poly_bbox(geometry.geometry_b)
 
-        size = [get_static(x) for x in box.size]
-        center = [get_static(x) for x in box.center]
+            lo = np.minimum(lo_a, lo_b)
+            hi = np.maximum(hi_a, hi_b)
 
-        # polyslab only needs fields at the midpoint along axis
-        if (
-            isinstance(geometry, PolySlab)
-            and not isinstance(self.medium, AbstractCustomMedium)
-            and field_keys == [("vertices",)]
-        ):
-            size[geometry.axis] = 0
+            lengths = hi - lo  # [Lx, Ly, Lz]
+            pad_vec = 0.05 * lengths  # 5 % on every side
 
+            lo -= pad_vec
+            hi += pad_vec
+
+            size = (hi - lo).tolist()
+            center = ((hi + lo) * 0.5).tolist()
+
+        else:
+            # --- original behaviour --------------------------------------
+            box = geometry.bounding_box
+            # we dont want these fields getting traced by autograd, otherwise it messes stuff up
+            size = [get_static(v) for v in box.size]
+            center = [get_static(v) for v in box.center]
+            # polyslab only needs fields at the midpoint along axis
+            if (
+                isinstance(geometry, PolySlab)
+                and not isinstance(self.medium, AbstractCustomMedium)
+                and field_keys == [("vertices",)]
+            ):
+                size[geometry.axis] = 0.0
+
+        # Build monitors
         mnt_fld = FieldMonitor(
             size=size,
             center=center,

@@ -11,11 +11,15 @@ import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 import xarray as xr
+from autograd import grad
+from autograd.scipy.special import logsumexp
 
 try:
     from matplotlib import patches
 except ImportError:
     pass
+
+import tidy3d as td
 
 from ...constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
 from ...exceptions import (
@@ -1993,8 +1997,7 @@ class Box(SimplePlaneIntersection, Centered):
         """Axis normal to the Box. Errors if box is not planar."""
         if self.size.count(0.0) != 1:
             raise ValidationError(
-                "Tried to get 'normal_axis' of 'Box' that is not planar. "
-                f"Given 'size={self.size}.'"
+                f"Tried to get 'normal_axis' of 'Box' that is not planar. Given 'size={self.size}.'"
             )
         return self.size.index(0.0)
 
@@ -2959,6 +2962,135 @@ class Transformed(Geometry):
         return self.updated_copy(geometry=new_geometry)
 
 
+def softmin(x, axis=1, lam=30.0):
+    return -1.0 / lam * logsumexp(-lam * x, axis=axis)
+
+
+def _point_segment_dist(
+    px: np.ndarray,
+    py: np.ndarray,
+    x1: np.ndarray,
+    y1: np.ndarray,
+    x2: np.ndarray,
+    y2: np.ndarray,
+    eps: float = 1e-12,
+) -> np.ndarray:
+    """Distance from a batch of points (px,py) to a batch of line segments (x1,y1)->(x2,y2)."""
+    vx = x2 - x1
+    vy = y2 - y1
+    seg_len_sq = vx * vx + vy * vy
+
+    wx = px - x1
+    wy = py - y1
+    t = (wx * vx + wy * vy) / (seg_len_sq + eps)
+    t_clamped = np.clip(t, 0.0, 1.0)
+
+    cx = x1 + t_clamped * vx
+    cy = y1 + t_clamped * vy
+    dx = px - cx
+    dy = py - cy
+
+    return np.sqrt(dx * dx + dy * dy + eps)
+
+
+def _winding_angle(verts: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """Total winding angle around each point in 'points' for polygon 'verts'"""
+    # expand dims for broadcast
+    points_expanded = points[:, np.newaxis, :]  # (M,1,2)
+    verts_expanded = verts[np.newaxis, :, :]  # (1,N,2)
+
+    # edges (v[i], v[i+1])
+    verts_shifted = np.roll(verts_expanded, shift=-1, axis=1)  # (1,N,2)
+
+    # v1, v2 have shape (M,N,2)
+    v1 = verts_expanded - points_expanded
+    v2 = verts_shifted - points_expanded
+
+    cross = v1[:, :, 0] * v2[:, :, 1] - v1[:, :, 1] * v2[:, :, 0]  # (M,N)
+    dot = v1[:, :, 0] * v2[:, :, 0] + v1[:, :, 1] * v2[:, :, 1]  # (M,N)
+
+    angles = np.arctan2(cross, dot)  # (M,N)
+    angle_sum = np.sum(angles, axis=1)  # (M,)
+    return angle_sum
+
+
+def polygon_soft_membership_2d(
+    verts: np.ndarray,
+    points: np.ndarray,
+    alpha: float = 20.0,
+    beta: float = 5.0,
+) -> np.ndarray:
+    """Vectorized "soft membership" for polygon 'verts' on 'points'.
+
+    Steps:
+      1) dist_min = min. distance from each point to polygon edges
+      2) angle_sum => sign = -tanh[ beta*(angle_sum - pi) ]
+      3) signed_dist = dist_min * sign
+      4) membership = 1 / (1 + exp(alpha * signed_dist))
+    """
+    # prepare shapes for broadcasting
+    points_exp = points[:, np.newaxis, :]  # (M,1,2)
+    verts_exp = verts[np.newaxis, :, :]  # (1,N,2)
+    verts_shifted = np.roll(verts_exp, shift=-1, axis=1)
+
+    # distances to each edge
+    x1 = verts_exp[:, :, 0]  # shape (1,N)
+    y1 = verts_exp[:, :, 1]  # shape (1,N)
+    x2 = verts_shifted[:, :, 0]  # shape (1,N)
+    y2 = verts_shifted[:, :, 1]  # shape (1,N)
+
+    px = points_exp[:, :, 0]  # shape (M,1)
+    py = points_exp[:, :, 1]  # shape (M,1)
+
+    dist_each_edge = _point_segment_dist(px, py, x1, y1, x2, y2)  # (M,N)
+    dist_min = softmin(dist_each_edge, axis=1, lam=alpha)  # shape (M,)
+
+    # winding angle => sign
+    angle_sum = _winding_angle(verts, points)  # shape (M,)
+    s = -np.tanh(beta * (angle_sum - np.pi))  # shape (M,)
+
+    signed_dist = dist_min * s  # shape (M,)
+    membership = 1 / (1 + np.exp(alpha * signed_dist))  # shape (M,)
+
+    return membership
+
+
+def slab_1d_soft_membership(
+    coords: np.ndarray, slab_bounds: np.ndarray, *, alpha_slab: float = 20.0
+) -> np.ndarray:
+    """
+    coords      : (M,)   points along the slab axis
+    slab_bounds : (2,)   (min_b, max_b)
+    Returns     : (M,)   smooth indicator in [0,1]
+    """
+    min_b, max_b = slab_bounds
+
+    # two opposing sigmoids
+    mem_min = 1.0 / (1.0 + np.exp(-alpha_slab * (coords - min_b)))
+    mem_max = 1.0 / (1.0 + np.exp(alpha_slab * (coords - max_b)))
+    return mem_min * mem_max
+
+
+def _boolean_coeff(
+    mask_a: np.ndarray,
+    mask_b: np.ndarray,
+    op: ClipOperationType,
+) -> tuple[np.ndarray, np.ndarray]:
+    coeffs = {
+        "intersection": (mask_b, mask_a),  # M = ρ_a ρ_b
+        "union": (1.0 - mask_b, 1.0 - mask_a),  # M = ρ_a + ρ_b – ρ_a ρ_b
+        "difference": (1.0 - mask_b, -mask_a),  # M = ρ_a – ρ_a ρ_b
+        "symmetric_difference": (
+            1.0 - 2.0 * mask_b,
+            1.0 - 2.0 * mask_a,
+        ),  # M = ρ_a + ρ_b – 2 ρ_a ρ_b
+    }
+    try:
+        return coeffs[op]
+    except KeyError:
+        raise ValueError(f"Unsupported clip operation {op!r}")
+
+
 class ClipOperation(Geometry):
     """Class representing the result of a set operation between geometries."""
 
@@ -2980,17 +3112,6 @@ class ClipOperation(Geometry):
         title="Geometry B",
         description="Second operand for the set operation. It can also be any geometry type.",
     )
-
-    @pydantic.validator("geometry_a", "geometry_b", always=True)
-    def _geometries_untraced(cls, val):
-        """Make sure that ``ClipOperation`` geometries do not contain tracers."""
-        traced = val.strip_traced_fields()
-        if traced:
-            raise ValidationError(
-                f"{val.type} contains traced fields {list(traced.keys())}. Note that "
-                "'ClipOperation' does not currently support automatic differentiation."
-            )
-        return val
 
     @staticmethod
     def to_polygon_list(base_geometry: Shapely) -> List[Shapely]:
@@ -3209,6 +3330,124 @@ class ClipOperation(Geometry):
         new_geom_a = self.geometry_a._update_from_bounds(bounds=bounds, axis=axis)
         new_geom_b = self.geometry_b._update_from_bounds(bounds=bounds, axis=axis)
         return self.updated_copy(geometry_a=new_geom_a, geometry_b=new_geom_b)
+
+    # compute_derivatives
+    def compute_derivatives(
+        self: ClipOperation,
+        derivative_info: DerivativeInfo,
+    ) -> AutogradFieldMap:
+        """
+        Derivatives for Boolean‑combined geometries.
+        """
+
+        # gather Yee‑grid data component‑wise ----------------------------
+        component_map = {"x": "eps_xx", "y": "eps_yy", "z": "eps_zz"}
+        grids: dict[str, dict[str, Any]] = {}
+
+        for dim in "xyz":
+            eps_da = derivative_info.eps_data[component_map[dim]]
+            xg, yg, zg = (eps_da.coords[c].values for c in ("x", "y", "z"))
+            X, Y, Z = np.meshgrid(xg, yg, zg, indexing="ij", sparse=True)
+            Xb, Yb, Zb = np.broadcast_arrays(X, Y, Z)
+            axis_cols = (Xb.ravel(), Yb.ravel(), Zb.ravel())
+            planar_pts = {
+                0: np.stack([axis_cols[1], axis_cols[2]], axis=1),  # (y,z)
+                1: np.stack([axis_cols[0], axis_cols[2]], axis=1),  # (x,z)
+                2: np.stack([axis_cols[0], axis_cols[1]], axis=1),  # (x,y)
+            }
+
+            grids[dim] = {
+                "shape": Xb.shape,
+                "axis_cols": axis_cols,
+                "planar_pts": planar_pts,
+                "Δε": derivative_info.delta_eps(np.stack(axis_cols, axis=1))
+                .real.astype(np.float32)
+                .reshape(Xb.shape),
+                "G": td.CustomMedium._derivative_field_cmp(
+                    self,
+                    E_der_map=derivative_info.E_der_map,
+                    eps_data=eps_da,
+                    dim=dim,
+                    freqs=np.atleast_1d(derivative_info.frequency),
+                )
+                .real.astype(np.float32)
+                .reshape(Xb.shape),
+            }
+
+        def _membership_3d(vertices, bounds, axis, dim):
+            """Compute the soft membership function for a 3D polyslab."""
+            axis_coord = grids[dim]["axis_cols"][axis]
+            planar_pts = grids[dim]["planar_pts"][axis]
+
+            mem2d = polygon_soft_membership_2d(
+                vertices,
+                planar_pts,
+            )
+            mem1d = slab_1d_soft_membership(axis_coord, bounds)
+
+            return (mem2d * mem1d).reshape(grids[dim]["shape"])
+
+        verts_a, bounds_a, axis_a = (
+            self.geometry_a.vertices,
+            np.asarray(self.geometry_a.slab_bounds),
+            self.geometry_a.axis,
+        )
+        verts_b, bounds_b, axis_b = (
+            self.geometry_b.vertices,
+            np.asarray(self.geometry_b.slab_bounds),
+            self.geometry_b.axis,
+        )
+
+        mem_fix_a, mem_fix_b = {}, {}
+        der_var_a, der_var_b = {}, {}
+
+        for d in "xyz":
+            # membership of the *fixed* slabs on each Yee grid
+            mem_fix_a[d] = _membership_3d(verts_a, bounds_a, axis_a, d)
+            mem_fix_b[d] = _membership_3d(verts_b, bounds_b, axis_b, d)
+            der_var_a[d], der_var_b[d] = _boolean_coeff(mem_fix_a[d], mem_fix_b[d], self.operation)
+
+        def _obj_vertices(v, bounds_var, axis_var, der_bool):
+            total = 0.0
+            for d in "xyz":
+                mask_var = _membership_3d(v, bounds_var, axis_var, d)
+
+                integrand = der_bool[d] * mask_var
+
+                total = total + np.sum(grids[d]["G"] * grids[d]["Δε"] * integrand)
+            return np.real(total)
+
+        def _obj_bounds(
+            b,
+            verts_var,
+            axis_var,
+            der_bool,
+        ):
+            total = 0.0
+            for d in "xyz":
+                mask_var = _membership_3d(verts_var, b, axis_var, d)
+                integrand = der_bool[d] * mask_var
+
+                total = total + np.sum(grids[d]["G"] * grids[d]["Δε"] * integrand)
+            return np.real(total)
+
+        # --- Autograd gradients ---------------------------------------------
+        dL_dv_a = grad(lambda v: _obj_vertices(v, bounds_a, axis_a, der_var_a))(verts_a)
+
+        dL_dv_b = grad(lambda v: _obj_vertices(v, bounds_b, axis_b, der_var_b))(verts_b)
+
+        dL_db_a = grad(lambda b: _obj_bounds(b, verts_a, axis_a, der_var_a))(bounds_a)
+
+        dL_db_b = grad(lambda b: _obj_bounds(b, verts_b, axis_b, der_var_b))(bounds_b)
+
+        vjps: AutogradFieldMap = {}
+        vjps[("geometry_a", "vertices")] = dL_dv_a
+        vjps[("geometry_a", "slab_bounds", 0)] = dL_db_a[0]
+        vjps[("geometry_a", "slab_bounds", 1)] = dL_db_a[1]
+        vjps[("geometry_b", "vertices")] = dL_dv_b
+        vjps[("geometry_b", "slab_bounds", 0)] = dL_db_b[0]
+        vjps[("geometry_b", "slab_bounds", 1)] = dL_db_b[1]
+        return vjps
 
 
 class GeometryGroup(Geometry):
