@@ -1,5 +1,6 @@
 """Class and custom data array for representing a scattering-matrix port, which is defined by a pair of terminals."""
 
+import warnings
 from abc import ABC, abstractmethod
 from typing import Union
 
@@ -63,3 +64,10 @@ class AbstractTerminalPort(Tidy3dBaseModel, ABC):
     @abstractmethod
     def compute_current(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute current flowing into the port."""
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            f"ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using the RF-specific component: {cls}."
+        )
+        return values

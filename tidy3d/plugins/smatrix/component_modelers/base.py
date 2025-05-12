@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Union
 
@@ -307,3 +308,10 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         sim_data = self.batch_data[task_name]
         config.logging_level = log_level_cache
         return sim_data
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            f"ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using the RF-specific component: {cls}.",
+        )
+        return values
