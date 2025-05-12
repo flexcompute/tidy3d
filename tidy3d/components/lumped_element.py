@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
 from math import isclose
 from typing import Annotated, Literal, Optional, Union
@@ -109,6 +110,14 @@ class LumpedElement(Tidy3dBaseModel, ABC):
         """Converts the :class:`.LumpedElement` object to a list of :class:`.Structure`
         which are ready to be added to the :class:`.Simulation`"""
         return [self.to_structure(grid)]
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
 
 
 class RectangularLumpedElement(LumpedElement, Box):
@@ -543,6 +552,14 @@ class NetworkConversions(Tidy3dBaseModel):
         sigma = NetworkConversions.complex_conductivity(a, b, freqs)
         return 1j * sigma / (2 * np.pi * freqs * EPSILON_0)
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
+
 
 class RLCNetwork(Tidy3dBaseModel):
     """Class for representing a simple network consisting of a resistor, capacitor, and inductor.
@@ -794,6 +811,14 @@ class RLCNetwork(Tidy3dBaseModel):
             raise ValueError("At least one element must be defined in the 'RLCNetwork'.")
         return val
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
+
 
 class AdmittanceNetwork(Tidy3dBaseModel):
     """Class for representing a network consisting of an arbitrary number of resistors,
@@ -870,6 +895,14 @@ class AdmittanceNetwork(Tidy3dBaseModel):
         admittance of the network in the Laplace domain.
         """
         return (self.a, self.b)
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
 
 
 class LinearLumpedElement(RectangularLumpedElement):

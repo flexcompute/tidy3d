@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
 from typing import Union
 
@@ -71,6 +72,14 @@ class AbstractAxesRH(Tidy3dBaseModel, ABC):
         """Get in-plane dimensions with in-plane dims first, followed by the `main_axis` dimension."""
         dim3 = "xyz"[self.main_axis]
         return self.remaining_dims + tuple(dim3)
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
 
 
 class AxisAlignedPathIntegral(AbstractAxesRH, Box):

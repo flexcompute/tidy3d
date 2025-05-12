@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Optional, Union
 
 import numpy as np
@@ -101,3 +102,11 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         """Helper to set additional metadata for ``IntegralResultTypes``."""
         data_array.name = "Z0"
         return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values

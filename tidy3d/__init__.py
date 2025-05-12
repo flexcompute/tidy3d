@@ -1,5 +1,7 @@
 """Tidy3d package imports"""
 
+import warnings
+
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
@@ -379,6 +381,9 @@ from .updater import Updater
 
 # version
 from .version import __version__
+
+# Consolidate all overarching warning settings here.
+warnings.filterwarnings("once", category=FutureWarning)
 
 
 def set_logging_level(level: str) -> None:

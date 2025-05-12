@@ -30,7 +30,7 @@ class PortDataArray(DataArray):
     @pd.root_validator(pre=False)
     def _warn_rf_license(cls, values):
         warnings.warn(
-            f"ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using the RF-specific component: {cls}.",
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
             FutureWarning,
         )
         return values
@@ -57,7 +57,7 @@ class TerminalPortDataArray(DataArray):
     @pd.root_validator(pre=False)
     def _warn_rf_license(cls, values):
         warnings.warn(
-            f"ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using the RF-specific component: {cls}.",
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
             FutureWarning,
         )
         return values

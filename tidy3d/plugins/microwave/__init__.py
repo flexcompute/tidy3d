@@ -1,5 +1,7 @@
 """Imports from microwave plugin."""
 
+import warnings
+
 from . import models
 from .array_factor import (
     RectangularAntennaArrayCalculator,
@@ -19,6 +21,8 @@ from .path_integrals import (
 )
 from .rf_material_library import rf_material_library
 
+# Instantiate on plugin import till we unite with toplevel
+warnings.filterwarnings("once", category=FutureWarning)
 __all__ = [
     "AxisAlignedPathIntegral",
     "CustomPathIntegral2D",
