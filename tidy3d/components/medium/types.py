@@ -1,6 +1,20 @@
 from typing import Union
 
-NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
+from .dispersionless import CustomIsotropicMedium, Medium, PECMedium
+from .dispersive import (
+    CustomDebye,
+    CustomDrude,
+    CustomLorentz,
+    CustomPoleResidue,
+    CustomSellmeier,
+    Debye,
+    Drude,
+    Lorentz,
+    PoleResidue,
+    Sellmeier,
+)
+from .lossy_metal import LossyMetalMedium
+
 IsotropicUniformMediumType = Union[
     Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
 ]
@@ -13,25 +27,3 @@ IsotropicCustomMediumType = Union[
 ]
 IsotropicCustomMediumInternalType = Union[IsotropicCustomMediumType, CustomIsotropicMedium]
 IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumType]
-MediumType3D = Union[
-    Medium,
-    AnisotropicMedium,
-    PECMedium,
-    PoleResidue,
-    Sellmeier,
-    Lorentz,
-    Debye,
-    Drude,
-    FullyAnisotropicMedium,
-    CustomMedium,
-    CustomPoleResidue,
-    CustomSellmeier,
-    CustomLorentz,
-    CustomDebye,
-    CustomDrude,
-    CustomAnisotropicMedium,
-    PerturbationMedium,
-    PerturbationPoleResidue,
-    LossyMetalMedium,
-]
-MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]

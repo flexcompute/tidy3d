@@ -13,11 +13,8 @@ from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
 from .constants import NONLINEAR_DEFAULT_NUM_ITERS, NONLINEAR_MAX_NUM_ITERS
-from .dispersionless import Medium
-from .dispersive import DispersiveMedium
 
 if TYPE_CHECKING:
-    from . import NonlinearModelType
     from .base import AbstractMedium
 
 
@@ -27,6 +24,8 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
 
     def _validate_medium_type(self, medium: AbstractMedium):
         from .base import AbstractCustomMedium
+        from .dispersionless import Medium
+        from .dispersive import DispersiveMedium
 
         """Check that the model is compatible with the medium."""
         if isinstance(medium, AbstractCustomMedium):
@@ -514,6 +513,9 @@ class KerrNonlinearity(NonlinearModel):
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
         return self.use_complex_fields
+
+
+NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
 
 
 class NonlinearSpec(ABC, Tidy3dBaseModel):

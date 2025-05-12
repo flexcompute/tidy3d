@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 from .nonlinear import (
     KerrNonlinearity,
     NonlinearModel,
@@ -12,8 +10,8 @@ from .nonlinear import (
     NonlinearSusceptibility,
     TwoPhotonAbsorption,
 )
-from .base import AbstractMedium
-from .dispersionless import Medium, PECMedium, CustomMedium, CustomIsotropicMedium
+from .base import AbstractMedium, AbstractCustomMedium
+from .dispersionless import Medium, PECMedium, CustomMedium, PEC
 from .anisotropic import (
     AnisotropicMedium,
     CustomAnisotropicMedium,
@@ -39,54 +37,17 @@ from .lossy_metal import (
     LossyMetalMedium,
     SurfaceImpedanceFitterParam,
 )
-from .medium_2d import Medium2D
-from .perturbation import PerturbationMedium, PerturbationPoleResidue
+from .medium_2d import Medium2D, MediumType, MediumType3D, PEC2D
+from .perturbation import PerturbationMedium, PerturbationPoleResidue, AbstractPerturbationMedium
 
-
-NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
-IsotropicUniformMediumType = Union[
-    Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
-]
-IsotropicCustomMediumType = Union[
-    CustomPoleResidue,
-    CustomSellmeier,
-    CustomLorentz,
-    CustomDebye,
-    CustomDrude,
-]
-IsotropicCustomMediumInternalType = Union[IsotropicCustomMediumType, CustomIsotropicMedium]
-IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumType]
-MediumType3D = Union[
-    Medium,
-    AnisotropicMedium,
-    PECMedium,
-    PoleResidue,
-    Sellmeier,
-    Lorentz,
-    Debye,
-    Drude,
-    FullyAnisotropicMedium,
-    CustomMedium,
-    CustomPoleResidue,
-    CustomSellmeier,
-    CustomLorentz,
-    CustomDebye,
-    CustomDrude,
-    CustomAnisotropicMedium,
-    PerturbationMedium,
-    PerturbationPoleResidue,
-    LossyMetalMedium,
-]
-MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]
-
-PEC = PECMedium(name="PEC")
-PEC2D = Medium2D(ss=PEC, tt=PEC)
-
+AnisotropicMedium.update_forward_refs()
 
 __all__ = [
     "PEC",
     "PEC2D",
     "AbstractMedium",
+    "AbstractCustomMedium",
+    "AbstractPerturbationMedium",
     "AnisotropicMedium",
     "AnisotropicMediumFromMedium2D",
     "CustomAnisotropicMedium",
@@ -106,6 +67,8 @@ __all__ = [
     "LossyMetalMedium",
     "Medium",
     "Medium2D",
+    "MediumType",
+    "MediumType3D",
     "NonlinearModel",
     "NonlinearSpec",
     "NonlinearSusceptibility",

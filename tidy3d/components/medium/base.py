@@ -38,6 +38,7 @@ from tidy3d.constants import EPSILON_0, HBAR, HERTZ
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
+from .nonlinear import NonlinearModel, NonlinearSpec, NonlinearSusceptibility
 from .utils import ensure_freq_in_range
 
 
@@ -223,6 +224,8 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     @cached_property
     def is_fully_anisotropic(self) -> bool:
         """Whether the medium is fully anisotropic."""
+        from .anisotropic import FullyAnisotropicMedium
+
         return isinstance(self, FullyAnisotropicMedium)
 
     @cached_property

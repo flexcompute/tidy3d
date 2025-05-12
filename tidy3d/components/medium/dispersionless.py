@@ -752,6 +752,8 @@ class CustomMedium(AbstractCustomMedium):
         """Internal representation in the form of
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
+        from .anisotropic import CustomAnisotropicMediumInternal
+
         self_dict = self.dict(exclude={"type", "eps_dataset"})
         # isotropic
         if self.eps_dataset is None:
@@ -1235,3 +1237,7 @@ class CustomMedium(AbstractCustomMedium):
         vjp_array = vjp_array.reshape(eps_data.shape)
 
         return vjp_array
+
+
+PECMedium.update_forward_refs()
+PEC = PECMedium(name="PEC")

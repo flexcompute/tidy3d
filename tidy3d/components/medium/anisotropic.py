@@ -24,6 +24,11 @@ from tidy3d.log import log
 
 from .base import AbstractCustomMedium, AbstractMedium
 from .dispersionless import CustomMedium, Medium, PECMedium
+from .types import (
+    IsotropicCustomMediumInternalType,
+    IsotropicCustomMediumType,
+    IsotropicUniformMediumType,
+)
 from .utils import ensure_freq_in_range
 
 

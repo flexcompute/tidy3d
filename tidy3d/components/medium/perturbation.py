@@ -20,8 +20,9 @@ from tidy3d.constants import CONDUCTIVITY, EPSILON_0, PERMITTIVITY, RADPERSEC
 from tidy3d.exceptions import SetupError
 
 from .base import AbstractCustomMedium, AbstractMedium
-from .dispersionless import Medium
-from .dispersive import PoleResidue
+from .dispersionless import CustomMedium, Medium
+from .dispersive import CustomPoleResidue, PoleResidue
+from .dispersive_abc import DispersiveMedium
 
 
 class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):

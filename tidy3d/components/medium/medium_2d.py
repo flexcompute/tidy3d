@@ -12,12 +12,53 @@ from tidy3d.components.viz import add_ax_if_none
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
 
-from .anisotropic import AnisotropicMedium, AnisotropicMediumFromMedium2D
+from .anisotropic import (
+    AnisotropicMedium,
+    AnisotropicMediumFromMedium2D,
+    CustomAnisotropicMedium,
+    FullyAnisotropicMedium,
+)
 from .base import AbstractMedium
-from .dispersionless import Medium, PECMedium
-from .dispersive import PoleResidue
+from .dispersionless import PEC, CustomMedium, Medium, PECMedium
+from .dispersive import (
+    CustomDebye,
+    CustomDrude,
+    CustomLorentz,
+    CustomPoleResidue,
+    CustomSellmeier,
+    Debye,
+    Drude,
+    Lorentz,
+    PoleResidue,
+    Sellmeier,
+)
 from .dispersive_abc import DispersiveMedium
+from .lossy_metal import LossyMetalMedium
+from .perturbation import PerturbationMedium, PerturbationPoleResidue
+from .types import IsotropicUniformMediumType
 from .utils import ensure_freq_in_range
+
+MediumType3D = Union[
+    Medium,
+    AnisotropicMedium,
+    PECMedium,
+    PoleResidue,
+    Sellmeier,
+    Lorentz,
+    Debye,
+    Drude,
+    FullyAnisotropicMedium,
+    CustomMedium,
+    CustomPoleResidue,
+    CustomSellmeier,
+    CustomLorentz,
+    CustomDebye,
+    CustomDrude,
+    CustomAnisotropicMedium,
+    PerturbationMedium,
+    PerturbationPoleResidue,
+    LossyMetalMedium,
+]
 
 
 class Medium2D(AbstractMedium):
@@ -421,3 +462,7 @@ class Medium2D(AbstractMedium):
             ax_coord=Medium(), plane_coords=self.elements.values(), axis=axis
         )
         return isinstance(elements_3d[comp], PECMedium)
+
+
+MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]
+PEC2D = Medium2D(ss=PEC, tt=PEC)
