@@ -1689,6 +1689,12 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
         storage += BYTES_REAL * num_cells * 7 * 4
 
         return storage
+    
+
+SurfaceMonitorType = Union[
+    SurfaceFieldMonitor,
+    SurfaceFieldTimeMonitor,
+]
 
 
 # types of monitors that are accepted by simulation

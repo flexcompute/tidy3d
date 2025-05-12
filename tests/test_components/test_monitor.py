@@ -444,3 +444,30 @@ def test_monitor_surfaces_from_volume():
     # z+ surface
     assert monitor_surfaces[5].center == (center[0], center[1], center[2] + size[2] / 2.0)
     assert monitor_surfaces[5].size == (size[0], size[1], 0.0)
+
+
+def test_surface_monitors():
+    
+    pec_sphere = td.Structure(geometry=td.Sphere(radius=0.5), medium=td.PECMedium())
+
+    surf_mnt = td.SurfaceFieldMonitor(size=(1, 1, 1), freqs=[td.C_0], name="surface")
+
+    _ = td.Simulation(
+        size=(2, 2, 2),
+        structures=[pec_sphere],
+        monitors=[surf_mnt],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1),
+    )
+
+    # monitor doesn't overlap any pec structure
+    with pytest.raises(pydantic.ValidationError):
+        surf_mnt = td.SurfaceFieldMonitor(size=(0.2, 1, 1), center=(0.8, 0, 0), freqs=[td.C_0], name="surface")
+
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            structures=[pec_sphere],
+            monitors=[surf_mnt],
+            run_time=1e-12,
+            grid_spec=td.GridSpec.auto(wavelength=1),
+        )
