@@ -313,5 +313,6 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     def _warn_rf_license(cls, values):
         warnings.warn(
             f"ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using the RF-specific component: {cls}.",
+            FutureWarning,
         )
         return values
