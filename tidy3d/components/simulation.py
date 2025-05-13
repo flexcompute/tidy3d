@@ -3614,29 +3614,27 @@ class Simulation(AbstractYeeGridSimulation):
         # 1) lossy metal
         for mat in self.scene.mediums:
             if isinstance(mat, LossyMetalMedium):
-                rf_component_breakdown_msg += "\n - Contains a 'LossyMetalMedium'"
+                rf_component_breakdown_msg += "\n - Contains a 'LossyMetalMedium'."
                 break
 
         # 2) lumped elements
         if len(self.lumped_elements) > 0:
-            rf_component_breakdown_msg += "\n - Contains a 'LossyMetalMedium'"
+            rf_component_breakdown_msg += "\n - Contains a 'LumpedElement'."
 
         # 3) source frequency is in RF range
         if self.frequency_range[0] < RF_FREQ_WARNING:
-            rf_component_breakdown_msg += (
-                f"\n - Contains a sources defined for RF wavelengths: below {RF_FREQ_WARNING} Hz."
-            )
+            rf_component_breakdown_msg += "\n - Contains sources defined for RF wavelengths."
 
         # 4) monitor frequency is in RF range
         for monitor in self.monitors:
             if isinstance(monitor, FreqMonitor) and monitor.frequency_range[0] < RF_FREQ_WARNING:
-                rf_component_breakdown_msg += f"\n - Contains a monitors defined for RF wavelengths: below {RF_FREQ_WARNING} Hz."
+                rf_component_breakdown_msg += "\n - Contains monitors defined for RF wavelengths."
                 break
 
         # issue warning
         if rf_component_breakdown_msg != "":
             warnings.warn(
-                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using RF-specific components in this simulation. See details in log.",
+                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using RF-specific components in this simulation. Full details in log.",
                 FutureWarning,
             )
 
