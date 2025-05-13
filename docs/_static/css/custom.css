@@ -45,7 +45,7 @@ iframe {width: 100%;border: unset}
 html[data-theme="light"] {
     --pst-color-primary: #B8A18B;
     --pst-color-secondary: #00643C;
-    --tab-color: #61B29C;
+    --tab-color:  #00643C;
     --pst-color-link: var(--pst-color-muted);
     --sd-color-info-bg:  #B8A18B;
     --pst-color-table-row-hover-bg: var(--pst-color-primary);
