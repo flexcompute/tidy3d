@@ -228,6 +228,29 @@ def validate_boundaries_for_zero_dims():
     return boundaries_for_zero_dims
 
 
+def _validate_min_grid_spacing(grid, threshold=1e-7, msg_prefix=""):
+    """
+    Ensure that the smallest grid spacing in any direction of the simulation grid
+    is not below `threshold` (µm).
+    """
+    # grab the 1D cell‐boundary arrays
+    xs, ys, zs = grid.boundaries.x, grid.boundaries.y, grid.boundaries.z
+    dx = np.diff(xs)
+    dy = np.diff(ys)
+    dz = np.diff(zs)
+    # ignore zero‐length dims
+    min_dx = dx[dx > 0].min() if np.any(dx > 0) else np.inf
+    min_dy = dy[dy > 0].min() if np.any(dy > 0) else np.inf
+    min_dz = dz[dz > 0].min() if np.any(dz > 0) else np.inf
+    overall = min(min_dx, min_dy, min_dz)
+    if (overall < threshold) and not np.isclose(overall, threshold, rtol=1e-6):
+        raise SetupError(
+            f"{msg_prefix} grid spacing is {overall:.2e} µm. "
+            "Please check your units! For more info on Tidy3D units, see: "
+            "https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/faq/What-are-the-units-used-in-the-simulation.html"
+        )
+
+
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     """
     Abstract class for a simulation involving electromagnetic fields defined on a Yee grid.
@@ -3596,6 +3619,9 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_custom_source_time()
         self._validate_mode_object_bends()
         self._warn_mode_object_pml()
+        _validate_min_grid_spacing(
+            self.grid, threshold=1e-7, msg_prefix=f"'{self.__class__.__name__}'"
+        )
 
     def _warn_mode_object_pml(self) -> None:
         """Warn if any mode objects have large pml."""

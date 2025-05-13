@@ -541,3 +541,41 @@ def test_uniform_grid_dl_validation(dl, expect_exception):
             grid_spec=td.GridSpec.uniform(dl=dl),
             run_time=1e-12,
         )
+
+
+@pytest.mark.parametrize(
+    ("freq0", "expect_error"),
+    [
+        (3e21, True),  # dl<1e-6 → fail
+        (1e14, False),  # dl>1e-7 → pass
+    ],
+)
+def test_autogrid_min_spacing(freq0, expect_error):
+    """
+    Test that Simulation.post_init catches too‐fine spacing produced by AutoGrid
+    (i.e. min grid spacing < 1e-7 µm).
+    """
+    L = 10.0
+    buffer = 1.0
+    source = td.PointDipole(
+        center=(-L / 2 + buffer, 0, 0),
+        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10.0),
+        polarization="Ez",
+    )
+
+    kwargs = dict(
+        size=(L, L, L),
+        sources=[source],
+        grid_spec=td.GridSpec(
+            grid_x=td.AutoGrid(min_steps_per_wvl=10),
+            grid_y=td.AutoGrid(min_steps_per_wvl=10),
+            grid_z=td.AutoGrid(min_steps_per_wvl=10),
+        ),
+        run_time=1e-11,
+    )
+
+    if expect_error:
+        with pytest.raises(SetupError):
+            _ = td.Simulation(**kwargs)
+    else:
+        _ = td.Simulation(**kwargs)
