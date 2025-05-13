@@ -1,6 +1,6 @@
 """Find corners of structures on a 2D plane."""
 
-from typing import List, Literal, Optional, Tuple
+from typing import Any, List, Literal, Optional, Tuple
 
 import numpy as np
 import pydantic.v1 as pd
@@ -11,7 +11,7 @@ from ..geometry.base import Box, ClipOperation
 from ..geometry.utils import merging_geometries_on_plane
 from ..medium import PEC, LossyMetalMedium
 from ..structure import Structure
-from ..types import ArrayFloat1D, ArrayFloat2D, Axis
+from ..types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 
 CORNER_ANGLE_THRESOLD = 0.1 * np.pi
 
@@ -75,6 +75,56 @@ class CornerFinderSpec(Tidy3dBaseModel):
             )
         )
 
+    @classmethod
+    def _merged_pec_on_plane(
+        cls,
+        normal_axis: Axis,
+        coord: float,
+        structure_list: List[Structure],
+        center: Tuple[float, float] = [0, 0, 0],
+        size: Tuple[float, float, float] = [inf, inf, inf],
+    ) -> List[Tuple[Any, Shapely]]:
+        """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, merge geometries made of PEC.
+
+        Parameters
+        ----------
+        normal_axis : Axis
+            Axis normal to the 2D plane.
+        coord : float
+            Position of plane along the normal axis.
+        structure_list : List[Structure]
+            List of structures present in simulation.
+        center : Tuple[float, float] = [0, 0, 0]
+            Center of the 2D plane (coordinate along ``axis`` is ignored)
+        size : Tuple[float, float, float] = [inf, inf, inf]
+            Size of the 2D plane (size along ``axis`` is ignored)
+
+        Returns
+        -------
+        List[Tuple[Any, Shapely]]
+            List of shapes and their property value on the plane after merging.
+        """
+
+        # Construct plane
+        slice_center = list(center)
+        slice_size = list(size)
+        slice_center[normal_axis] = coord
+        slice_size[normal_axis] = 0
+        plane = Box(center=slice_center, size=slice_size)
+
+        # prepare geometry and medium list
+        geometry_list = [structure.geometry for structure in structure_list]
+        # For metal, we don't distinguish between LossyMetal and PEC,
+        # so they'll be merged to PEC. Other materials are considered as dielectric.
+        medium_list = (structure.medium for structure in structure_list)
+        medium_list = [
+            PEC if (mat.is_pec or isinstance(mat, LossyMetalMedium)) else mat for mat in medium_list
+        ]
+        # merge geometries
+        merged_geos = merging_geometries_on_plane(geometry_list, plane, medium_list)
+
+        return merged_geos
+
     def _corners_and_convexity(
         self,
         normal_axis: Axis,
@@ -83,7 +133,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         ravel: bool,
     ) -> Tuple[ArrayFloat2D, ArrayFloat1D]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
-        geometries made of `medium`.
+        geometries made of PEC.
 
 
         Parameters
@@ -99,27 +149,14 @@ class CornerFinderSpec(Tidy3dBaseModel):
 
         Returns
         -------
-        ArrayFloat2D
-            Corner coordinates.
+        Tuple[ArrayFloat2D, ArrayFloat1D]
+            Corner coordinates and their convexity.
         """
 
-        # Construct plane
-        center = [0, 0, 0]
-        size = [inf, inf, inf]
-        center[normal_axis] = coord
-        size[normal_axis] = 0
-        plane = Box(center=center, size=size)
-
-        # prepare geometry and medium list
-        geometry_list = [structure.geometry for structure in structure_list]
-        # For metal, we don't distinguish between LossyMetal and PEC,
-        # so they'll be merged to PEC. Other materials are considered as dielectric.
-        medium_list = (structure.medium for structure in structure_list)
-        medium_list = [
-            PEC if (mat.is_pec or isinstance(mat, LossyMetalMedium)) else mat for mat in medium_list
-        ]
         # merge geometries
-        merged_geos = merging_geometries_on_plane(geometry_list, plane, medium_list)
+        merged_geos = self._merged_pec_on_plane(
+            normal_axis=normal_axis, coord=coord, structure_list=structure_list
+        )
 
         # corner finder
         corner_list = []

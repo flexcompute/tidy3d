@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validation check for unit error in grid spacing.
 - Validation that when symmetry is imposed along a given axis, the boundary conditions on each side of the axis are identical.
 - Fields `convex_resolution`, `concave_resolution`, and `mixed_resolution` in `CornerFinderSpec` can be used to take into account the dimensions of autodetected convex, concave, or mixed geometric features when `dl_min` is automatically inferred during automatic grid generation.
+- `LayerRefinementSpec` now supports automatic thin gap meshing through fields `gap_meshing_iters` and `dl_min_from_gap_width`.
 
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
