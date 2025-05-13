@@ -63,7 +63,7 @@ from ..viz import (
 )
 
 POLY_GRID_SIZE = 1e-12
-_NUM_PTS_DIM_BOX_FACE = 200
+_BOX_FACE_GRID_SIZE = 1e-3
 
 
 _shapely_operations = {
@@ -1722,8 +1722,14 @@ class Geometry(Tidy3dBaseModel, ABC):
         rotated_corners = (rotation_matrix @ face_corners.T).T
         p1, p2, p3, p4 = rotated_corners
 
-        num_s = _NUM_PTS_DIM_BOX_FACE
-        num_t = _NUM_PTS_DIM_BOX_FACE
+        # Determine number of points along each face edge based on _BOX_FACE_GRID_SIZE
+        edge1 = rotated_corners[1] - rotated_corners[0]
+        edge2 = rotated_corners[2] - rotated_corners[0]
+        len_s = np.linalg.norm(edge1)
+        len_t = np.linalg.norm(edge2)
+        num_s = max(1, int(np.ceil(len_s / _BOX_FACE_GRID_SIZE)))
+        num_t = max(1, int(np.ceil(len_t / _BOX_FACE_GRID_SIZE)))
+
         s_vals = np.linspace(0, 1, 2 * num_s + 1)[1::2]
         t_vals = np.linspace(0, 1, 2 * num_t + 1)[1::2]
         S, T = np.meshgrid(s_vals, t_vals, indexing="ij")
@@ -1757,7 +1763,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             perps1=perps1,
             perps2=perps2,
         )
-        return surface_mesh, n_local
+        return surface_mesh
 
 
 """ Abstract subclasses """
@@ -2657,11 +2663,6 @@ class Box(SimplePlaneIntersection, Centered):
 
         for min_max_index, _ in enumerate((0, -1)):
             for axis in range(3):
-                if rotation_matrix is not None:
-                    rotation_matrix = rotation_matrix
-                else:
-                    rotation_matrix = None
-
                 vjp_face = self.derivative_face(
                     min_max_index=min_max_index,
                     axis_normal=axis,
@@ -2685,7 +2686,7 @@ class Box(SimplePlaneIntersection, Centered):
         Compute the derivative (VJP) with respect to shifting a face of a rotated box,
         using full integration over that face.
         """
-        mesh, _ = self.build_box_face_mesh(
+        mesh = self.build_box_face_mesh(
             center=np.asarray(self.center, float),
             size=np.asarray(self.size, float),
             axis_normal=axis_normal,
@@ -3018,7 +3019,6 @@ class Transformed(Geometry):
             )
             derivative_map[("geometry", "center")] = transformed_center_gradient
             derivative_map[("geometry", "size")] = transformed_size_gradient
-        derivative_map[("transform",)] = np.zeros((4, 4))
         return derivative_map
 
 
