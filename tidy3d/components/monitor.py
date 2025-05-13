@@ -1,5 +1,6 @@
 """Objects that define how data is recorded from simulation."""
 
+import warnings
 from abc import ABC, abstractmethod
 from typing import Tuple, Union
 
@@ -1205,6 +1206,14 @@ class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(
             self.freqs
         ) * 6 + BYTES_REAL * len(self.freqs)
+
+    @pydantic.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
 
 
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):

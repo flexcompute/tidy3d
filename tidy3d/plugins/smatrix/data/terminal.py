@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import warnings
+
+import pydantic.v1 as pd
+
 from ....components.data.data_array import (
     DataArray,
 )
@@ -23,6 +27,14 @@ class PortDataArray(DataArray):
     __slots__ = ()
     _dims = ("f", "port")
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
+
 
 class TerminalPortDataArray(DataArray):
     """Port parameter matrix elements for terminal-based ports.
@@ -41,3 +53,11 @@ class TerminalPortDataArray(DataArray):
     __slots__ = ()
     _dims = ("f", "port_out", "port_in")
     _data_attrs = {"long_name": "terminal-based port matrix element"}
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values

@@ -1,5 +1,6 @@
 """Convenience functions for estimating antenna radiation by applying array factor."""
 
+import warnings
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, Union
 
@@ -582,6 +583,14 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
         return SimulationData(
             simulation=sim_array.updated_copy(monitors=good_monitors), data=data_array
         )
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
 
 
 class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):

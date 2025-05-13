@@ -15,6 +15,8 @@ try:
 except ImportError:
     pass
 
+import warnings
+
 import pydantic.v1 as pydantic
 import xarray as xr
 
@@ -173,6 +175,9 @@ PML_HEIGHT_FOR_0_DIMS = inf
 
 # additional (safety) time step reduction factor for fixed angle simulations
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
+
+# RF frequency warning
+RF_FREQ_WARNING = 1e12
 
 
 def validate_boundaries_for_zero_dims():
@@ -3596,6 +3601,46 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_custom_source_time()
         self._validate_mode_object_bends()
         self._warn_mode_object_pml()
+        self._warn_rf_license()
+
+    def _warn_rf_license(self):
+        """
+        Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
+        simulation is categorised as RF simulation at the backend.
+        """
+        # RF component messages
+        rf_component_breakdown_msg = ""
+
+        # 1) lossy metal
+        for mat in self.scene.mediums:
+            if isinstance(mat, LossyMetalMedium):
+                rf_component_breakdown_msg += "\n - Contains a 'LossyMetalMedium'."
+                break
+
+        # 2) lumped elements
+        if len(self.lumped_elements) > 0:
+            rf_component_breakdown_msg += "\n - Contains a 'LumpedElement'."
+
+        # 3) source frequency is in RF range
+        if self.frequency_range[0] < RF_FREQ_WARNING:
+            rf_component_breakdown_msg += "\n - Contains sources defined for RF wavelengths."
+
+        # 4) monitor frequency is in RF range
+        for monitor in self.monitors:
+            if isinstance(monitor, FreqMonitor) and monitor.frequency_range[0] < RF_FREQ_WARNING:
+                rf_component_breakdown_msg += "\n - Contains monitors defined for RF wavelengths."
+                break
+
+        # issue warning
+        if rf_component_breakdown_msg != "":
+            warnings.warn(
+                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using RF-specific components in this simulation. Full details in log.",
+                FutureWarning,
+            )
+
+            msg = " ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using RF-specific components in this simulation."
+            msg += rf_component_breakdown_msg
+            log.warning(msg)
 
     def _warn_mode_object_pml(self) -> None:
         """Warn if any mode objects have large pml."""

@@ -1,5 +1,6 @@
 """Tool for finding and characterizing lobes in antenna radiation patterns."""
 
+import warnings
 from math import isclose, isnan
 from typing import Optional
 
@@ -342,3 +343,11 @@ class LobeMeasurer(Tidy3dBaseModel):
             ax.axvline(FNBW_bounds[1], **plot_params_lobe_FNBW.to_kwargs())
 
         return ax
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values

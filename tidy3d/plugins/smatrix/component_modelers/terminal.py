@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Dict, Tuple, Union
 
 import numpy as np
@@ -51,6 +52,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
         description="Facilitates the calculation of figures-of-merit for antennas. "
         "These monitor will be included in every simulation and record the radiated fields. ",
     )
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        warnings.warn(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated a RF-specific component.",
+            FutureWarning,
+        )
+        return values
 
     @equal_aspect
     @add_ax_if_none
