@@ -528,9 +528,10 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
 
     Example
     -------
-    >>> nonlinear_susceptibility = NonlinearSusceptibility(chi3=1)
-    >>> nonlinear_spec = NonlinearSpec(models=[nonlinear_susceptibility])
-    >>> medium = Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
+    >>> import tidy3d as td
+    >>> nonlinear_susceptibility = td.NonlinearSusceptibility(chi3=1)
+    >>> nonlinear_spec = td.NonlinearSpec(models=[nonlinear_susceptibility])
+    >>> medium = td.Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
     """
 
     models: Tuple[NonlinearModelType, ...] = pd.Field(

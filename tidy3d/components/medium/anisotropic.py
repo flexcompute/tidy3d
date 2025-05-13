@@ -556,20 +556,22 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
     Example
     -------
+    >>> import numpy as np
+    >>> import tidy3d as td
     >>> Nx, Ny, Nz = 10, 9, 8
     >>> x = np.linspace(-1, 1, Nx)
     >>> y = np.linspace(-1, 1, Ny)
     >>> z = np.linspace(-1, 1, Nz)
     >>> coords = dict(x=x, y=y, z=z)
-    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
-    >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
-    >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
-    >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+    >>> permittivity= td.SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> conductivity= td.SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> medium_xx = td.CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> medium_yy = td.CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> d_epsilon = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> f = td.SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> delta = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> medium_zz = td.CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
+    >>> anisotropic_dielectric = td.CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
 
     See Also
     --------
@@ -772,20 +774,22 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
 
     Example
     -------
+    >>> import numpy as np
+    >>> import tidy3d as td
     >>> Nx, Ny, Nz = 10, 9, 8
     >>> X = np.linspace(-1, 1, Nx)
     >>> Y = np.linspace(-1, 1, Ny)
     >>> Z = np.linspace(-1, 1, Nz)
     >>> coords = dict(x=X, y=Y, z=Z)
-    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
-    >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
-    >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
-    >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+    >>> permittivity= td.SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> conductivity= td.SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> medium_xx = td.CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> medium_yy = td.CustomMedium(permittivity=permittivity, conductivity=conductivity)
+    >>> d_epsilon = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> f = td.SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> delta = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> medium_zz = td.CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
+    >>> anisotropic_dielectric = td.CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
 
     xx: Union[IsotropicCustomMediumInternalType, CustomMedium] = pd.Field(
