@@ -59,6 +59,7 @@ from ..viz import (
     polygon_patch,
     set_default_labels_and_title,
 )
+from .bound_ops import bounds_intersection, bounds_union
 
 POLY_GRID_SIZE = 1e-12
 
@@ -408,20 +409,12 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def bounds_intersection(bounds1: Bound, bounds2: Bound) -> Bound:
         """Return the bounds that are the intersection of two bounds."""
-        rmin1, rmax1 = bounds1
-        rmin2, rmax2 = bounds2
-        rmin = tuple(max(v1, v2) for v1, v2 in zip(rmin1, rmin2))
-        rmax = tuple(min(v1, v2) for v1, v2 in zip(rmax1, rmax2))
-        return (rmin, rmax)
+        return bounds_intersection(bounds1, bounds2)
 
     @staticmethod
     def bounds_union(bounds1: Bound, bounds2: Bound) -> Bound:
         """Return the bounds that are the union of two bounds."""
-        rmin1, rmax1 = bounds1
-        rmin2, rmax2 = bounds2
-        rmin = tuple(min(v1, v2) for v1, v2 in zip(rmin1, rmin2))
-        rmax = tuple(max(v1, v2) for v1, v2 in zip(rmax1, rmax2))
-        return (rmin, rmax)
+        return bounds_union(bounds1, bounds2)
 
     @cached_property
     def bounding_box(self):
