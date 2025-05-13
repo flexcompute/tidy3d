@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `eps_lim` keyword argument to `Simulation.plot_eps()` for manual control over the permittivity color limits.
 
+### Changed
+- Relaxed bounds checking of path integrals during `WavePort` validation.
+
 ## [2.8.4] - 2025-05-15
 
 ### Added

@@ -564,6 +564,21 @@ def test_wave_port_path_integral_validation():
             current_integral=custom_current_path,
         )
 
+    # Test integral path only slightly larger than port bounds
+    wave_port = WavePort(
+        center=(0, 10000, 115.00000022351743),
+        size=(500, 0, 160.00000000000003),
+        name="wave_port_1",
+        mode_spec=mode_spec,
+        direction="+",
+        voltage_integral=voltage_path.updated_copy(
+            size=(0, 0, 70.000000298023424), center=(0, 10000, 70.000000298023424)
+        ),
+        current_integral=None,
+    )
+    # Make sure validation would have failed if a strict comparison was used
+    assert wave_port.bounds[0][2] > wave_port.voltage_integral.bounds[0][2]
+
 
 def test_wave_port_to_mode_solver(tmp_path):
     """Checks that wave port can be converted to a mode solver."""
