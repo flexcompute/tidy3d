@@ -44,7 +44,7 @@ from .data.dataset import Dataset
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
 from .data.utils import CustomSpatialDataType
-from .geometry.base import Box, Geometry
+from .geometry.base import Box, ClipOperation, Geometry
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
@@ -62,6 +62,7 @@ from .medium import (
     Medium2D,
     MediumType,
     MediumType3D,
+    PECMedium,
 )
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -173,6 +174,10 @@ PML_HEIGHT_FOR_0_DIMS = inf
 
 # additional (safety) time step reduction factor for fixed angle simulations
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
+
+# length and thickness of optional PEC frames around mode sources (in cells)
+MODE_PEC_FRAME_LENGTH = 2
+MODE_PEC_FRAME_THICKNESS = 1e-3
 
 
 def validate_boundaries_for_zero_dims():
@@ -5209,3 +5214,70 @@ class Simulation(AbstractYeeGridSimulation):
         )
 
     _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
+
+    def _make_pec_frame(self, mode_source) -> Structure:
+        """Make a pec frame around a mode source."""
+
+        coords = self.grid.boundaries.to_list
+        axis = mode_source.injection_axis
+        direction = mode_source.direction
+
+        span_inds = np.array(self.grid.discretize_inds(mode_source))
+        if direction == "+":
+            span_inds[axis][1] += MODE_PEC_FRAME_LENGTH - 1
+        else:
+            span_inds[axis][0] -= MODE_PEC_FRAME_LENGTH - 1
+        bounds_outer = [
+            [
+                (1 - MODE_PEC_FRAME_THICKNESS) * c[beg]
+                + MODE_PEC_FRAME_THICKNESS * c[max(0, beg - 1)],
+                (1 - MODE_PEC_FRAME_THICKNESS) * c[end]
+                + MODE_PEC_FRAME_THICKNESS * c[min(len(c) - 1, end + 1)],
+            ]
+            for c, (beg, end) in zip(coords, span_inds)
+        ]
+        bounds_inner = [
+            [
+                (1 - MODE_PEC_FRAME_THICKNESS) * c[beg] + MODE_PEC_FRAME_THICKNESS * c[beg + 1],
+                (1 - MODE_PEC_FRAME_THICKNESS) * c[end] + MODE_PEC_FRAME_THICKNESS * c[end - 1],
+            ]
+            for c, (beg, end) in zip(coords, span_inds)
+        ]
+        bounds_inner[axis] = [-inf, inf]
+        structure = Structure(
+            geometry=ClipOperation(
+                geometry_a=Box.from_bounds(*np.transpose(bounds_outer)),
+                geometry_b=Box.from_bounds(*np.transpose(bounds_inner)),
+                operation="difference",
+            ),
+            medium=PECMedium(),
+        )
+        return structure
+
+    @cached_property
+    def with_mode_source_pec_frames(self) -> Simulation:
+        """Return an instance with added pec frames around mode sources."""
+
+        pec_frames = [
+            self._make_pec_frame(src)
+            for src in self.sources
+            if isinstance(src, ModeSource) and src.pec_frame
+        ]
+
+        if len(pec_frames) == 0:
+            return self
+
+        return self.updated_copy(
+            grid_spec=GridSpec.from_grid(self.grid), structures=list(self.structures) + pec_frames
+        )
+
+    def _validate_with_mode_source_pec_frames(self):
+        """Validate that after adding pec frames simulation setup is still valid."""
+
+        try:
+            _ = self.with_mode_source_pec_frames
+        except Exception:
+            log.error(
+                "Simulation fails after requested mode source PEC frames are added. "
+                "Please inspec '.with_mode_source_pec_frames'."
+            )
