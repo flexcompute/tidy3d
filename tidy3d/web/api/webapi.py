@@ -4,10 +4,8 @@ import json
 import os
 import tempfile
 import time
-from datetime import datetime, timedelta
 from typing import Callable, Dict, List, Union
 
-import pytz
 from requests import HTTPError
 from rich.progress import Progress
 
@@ -867,15 +865,7 @@ def delete_old(
     folder = Folder.get(folder)
     if not folder:
         return 0
-    tasks = folder.list_tasks()
-    if not tasks:
-        return 0
-    tasks = list(
-        filter(lambda t: t.created_at < datetime.now(pytz.utc) - timedelta(days=days_old), tasks)
-    )
-    for task in tasks:
-        task.delete()
-    return len(tasks)
+    return folder.delete_old(days_old)
 
 
 @wait_for_connection
