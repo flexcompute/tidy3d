@@ -101,6 +101,14 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
         http.delete(f"tidy3d/projects/{self.folder_id}")
 
+    def delete_old(self, days_old: int) -> int:
+        """Remove folder contents older than ``days_old``."""
+
+        return http.delete(
+            f"tidy3d/tasks/{self.folder_id}/tasks",
+            params={"daysOld": days_old},
+        )
+
     def list_tasks(self) -> List[Tidy3DResource]:
         """List all tasks in this folder.
 
