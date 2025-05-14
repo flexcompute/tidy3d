@@ -60,9 +60,11 @@ from ..types import (
 from ..validators import (
     validate_freqs_min,
     validate_freqs_not_empty,
-    validate_mode_plane_radius,
 )
 from ..viz import make_ax, plot_params_pml
+from .validators import (
+    validate_mode_plane_radius,
+)
 
 # Importing the local solver may not work if e.g. scipy is not installed
 IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed

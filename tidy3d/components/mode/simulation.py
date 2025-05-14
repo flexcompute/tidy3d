@@ -26,8 +26,10 @@ from ..types import (
     EMField,
     FreqArray,
 )
-from ..validators import validate_mode_plane_radius
 from .mode_solver import ModeSolver
+from .validators import (
+    validate_mode_plane_radius,
+)
 
 ModeSimulationMonitorType = PermittivityMonitor
 

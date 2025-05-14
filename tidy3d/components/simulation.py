@@ -64,6 +64,9 @@ from .medium import (
     MediumType,
     MediumType3D,
 )
+from .mode.validators import (
+    validate_mode_plane_radius,
+)
 from .monitor import (
     AbstractFieldProjectionMonitor,
     AbstractModeMonitor,
@@ -117,7 +120,6 @@ from .validators import (
     assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
     validate_mode_objects_symmetry,
-    validate_mode_plane_radius,
 )
 from .viz import (
     PlotParams,
