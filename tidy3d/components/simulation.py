@@ -176,7 +176,7 @@ PML_HEIGHT_FOR_0_DIMS = inf
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 # RF frequency warning
-RF_FREQ_WARNING = 1e12
+RF_FREQ_WARNING = 300e9
 
 
 def validate_boundaries_for_zero_dims():
