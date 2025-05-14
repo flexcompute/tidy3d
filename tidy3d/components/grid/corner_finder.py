@@ -1,17 +1,17 @@
 """Find corners of structures on a 2D plane."""
 
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Tuple
 
 import numpy as np
 import pydantic.v1 as pd
 
 from ...constants import inf
-from ..base import Tidy3dBaseModel
+from ..base import Tidy3dBaseModel, cached_property
 from ..geometry.base import Box, ClipOperation
 from ..geometry.utils import merging_geometries_on_plane
 from ..medium import PEC, LossyMetalMedium
 from ..structure import Structure
-from ..types import ArrayFloat2D, Axis
+from ..types import ArrayFloat1D, ArrayFloat2D, Axis
 
 CORNER_ANGLE_THRESOLD = 0.1 * np.pi
 
@@ -44,12 +44,44 @@ class CornerFinderSpec(Tidy3dBaseModel):
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",
     )
 
-    def corners(
+    concave_resolution: Optional[pd.PositiveInt] = pd.Field(
+        None,
+        title="Concave Region Resolution.",
+        description="Specifies number of steps to use for determining `dl_min` based on concave featues."
+        "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
+    )
+
+    convex_resolution: Optional[pd.PositiveInt] = pd.Field(
+        None,
+        title="Convex Region Resolution.",
+        description="Specifies number of steps to use for determining `dl_min` based on convex featues."
+        "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
+    )
+
+    mixed_resolution: Optional[pd.PositiveInt] = pd.Field(
+        None,
+        title="Mixed Region Resolution.",
+        description="Specifies number of steps to use for determining `dl_min` based on mixed featues."
+        "If set to ``None``, then the corresponding `dl_min` reduction is not applied.",
+    )
+
+    @cached_property
+    def _no_min_dl_override(self):
+        return all(
+            (
+                self.concave_resolution is None,
+                self.convex_resolution is None,
+                self.mixed_resolution is None,
+            )
+        )
+
+    def _corners_and_convexity(
         self,
         normal_axis: Axis,
         coord: float,
         structure_list: List[Structure],
-    ) -> ArrayFloat2D:
+        ravel: bool,
+    ) -> Tuple[ArrayFloat2D, ArrayFloat1D]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
         geometries made of `medium`.
 
@@ -62,6 +94,8 @@ class CornerFinderSpec(Tidy3dBaseModel):
             Position of plane along the normal axis.
         structure_list : List[Structure]
             List of structures present in simulation.
+        ravel : bool
+            Whether to put the resulting corners in a single list or per polygon.
 
         Returns
         -------
@@ -89,6 +123,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
 
         # corner finder
         corner_list = []
+        convexity_list = []
         for mat, shapes in merged_geos:
             if self.medium != "all" and mat.is_pec != (self.medium == "metal"):
                 continue
@@ -97,17 +132,59 @@ class CornerFinderSpec(Tidy3dBaseModel):
                 poly = poly.normalize().buffer(0)
                 if self.distance_threshold is not None:
                     poly = poly.simplify(self.distance_threshold, preserve_topology=True)
-                corner_list.append(self._filter_collinear_vertices(list(poly.exterior.coords)))
+                corners_xy, corners_convexity = self._filter_collinear_vertices(
+                    list(poly.exterior.coords)
+                )
+                corner_list.append(corners_xy)
+                convexity_list.append(corners_convexity)
                 # in case the polygon has holes
                 for poly_inner in poly.interiors:
-                    corner_list.append(self._filter_collinear_vertices(list(poly_inner.coords)))
+                    corners_xy, corners_convexity = self._filter_collinear_vertices(
+                        list(poly_inner.coords)
+                    )
+                    corner_list.append(corners_xy)
+                    convexity_list.append(corners_convexity)
 
-        if len(corner_list) > 0:
+        if ravel and len(corner_list) > 0:
             corner_list = np.concatenate(corner_list)
+            convexity_list = np.concatenate(convexity_list)
+
+        return corner_list, convexity_list
+
+    def corners(
+        self,
+        normal_axis: Axis,
+        coord: float,
+        structure_list: List[Structure],
+    ) -> ArrayFloat2D:
+        """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
+        geometries made of `medium`.
+
+
+        Parameters
+        ----------
+        normal_axis : Axis
+            Axis normal to the 2D plane.
+        coord : float
+            Position of plane along the normal axis.
+        structure_list : List[Structure]
+            List of structures present in simulation.
+
+        Returns
+        -------
+        ArrayFloat2D
+            Corner coordinates.
+        """
+
+        corner_list, _ = self._corners_and_convexity(
+            normal_axis=normal_axis, coord=coord, structure_list=structure_list, ravel=True
+        )
         return corner_list
 
-    def _filter_collinear_vertices(self, vertices: ArrayFloat2D) -> ArrayFloat2D:
-        """Filter collinear vertices of a polygon, and return corners.
+    def _filter_collinear_vertices(
+        self, vertices: ArrayFloat2D
+    ) -> Tuple[ArrayFloat2D, ArrayFloat1D]:
+        """Filter collinear vertices of a polygon, and return corners locations and their convexity.
 
         Parameters
         ----------
@@ -119,6 +196,8 @@ class CornerFinderSpec(Tidy3dBaseModel):
         -------
         ArrayFloat2D
             Corner coordinates.
+        ArrayFloat1D
+            Convexity of corners: True for outer corners, False for inner corners.
         """
 
         def normalize(v):
@@ -136,5 +215,12 @@ class CornerFinderSpec(Tidy3dBaseModel):
         inner_product = np.where(inner_product > 1, 1, inner_product)
         inner_product = np.where(inner_product < -1, -1, inner_product)
         angle = np.arccos(inner_product)
+        num_vs = len(vs_orig)
+        cross_product = np.cross(
+            np.hstack([unit_next, np.zeros((num_vs, 1))]),
+            np.hstack([unit_previous, np.zeros((num_vs, 1))]),
+            axis=-1,
+        )
+        convexity = cross_product[:, 2] < 0
         ind_filter = angle <= np.pi - self.angle_threshold
-        return vs_orig[ind_filter]
+        return vs_orig[ind_filter], convexity[ind_filter]

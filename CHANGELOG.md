@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
 - Validation check for unit error in grid spacing.
 - Validation that when symmetry is imposed along a given axis, the boundary conditions on each side of the axis are identical.
+- Fields `convex_resolution`, `concave_resolution`, and `mixed_resolution` in `CornerFinderSpec` can be used to take into account the dimensions of autodetected convex, concave, or mixed geometric features when `dl_min` is automatically inferred during automatic grid generation.
 
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.

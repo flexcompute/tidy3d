@@ -1262,7 +1262,7 @@ class LayerRefinementSpec(Box):
         """
         return self.unpop_axis(ax_coord, [plane_coord, plane_coord], self.axis)
 
-    def suggested_dl_min(self, grid_size_in_vacuum: float) -> float:
+    def suggested_dl_min(self, grid_size_in_vacuum: float, structures: List[Structure]) -> float:
         """Suggested lower bound of grid step size for this layer.
 
         Parameters
@@ -1293,6 +1293,12 @@ class LayerRefinementSpec(Box):
         # inplane dimension
         if self.corner_finder is not None and self.corner_refinement is not None:
             dl_min = min(dl_min, self.corner_refinement._grid_size(grid_size_in_vacuum))
+
+        # min feature size
+        if self.corner_finder is not None and not self.corner_finder._no_min_dl_override:
+            dl_suggested = self._dl_min_from_smallest_feature(structures)
+            dl_min = min(dl_min, dl_suggested)
+
         return dl_min
 
     def generate_snapping_points(self, structure_list: List[Structure]) -> List[CoordinateOptional]:
@@ -1329,22 +1335,80 @@ class LayerRefinementSpec(Box):
         )
         return self.inside(point_3d[0], point_3d[1], point_3d[2])
 
-    def _corners(self, structure_list: List[Structure]) -> List[CoordinateOptional]:
-        """Inplane corners in 3D coordinate."""
+    def _corners_and_convexity_2d(
+        self, structure_list: List[Structure], ravel: bool
+    ) -> List[CoordinateOptional]:
+        """Raw inplane corners and their convexity."""
         if self.corner_finder is None:
-            return []
+            return [], []
 
         # filter structures outside the layer
         structures_intersect = structure_list
         if self._is_inplane_bounded:
             structures_intersect = [s for s in structure_list if self.intersects(s.geometry)]
-        inplane_points = self.corner_finder.corners(
-            self.axis, self.center_axis, structures_intersect
+        inplane_points, convexity = self.corner_finder._corners_and_convexity(
+            self.axis, self.center_axis, structures_intersect, ravel
         )
 
         # filter corners outside the inplane bounds
-        if self._is_inplane_bounded:
-            inplane_points = [point for point in inplane_points if self._inplane_inside(point)]
+        if self._is_inplane_bounded and len(inplane_points) > 0:
+            # flatten temporary list of arrays for faster processing
+            if not ravel:
+                split_inds = np.cumsum([len(pts) for pts in inplane_points])[:-1]
+                inplane_points = np.concatenate(inplane_points)
+                convexity = np.concatenate(convexity)
+            inds = [self._inplane_inside(point) for point in inplane_points]
+            inplane_points = inplane_points[inds]
+            convexity = convexity[inds]
+            if not ravel:
+                inplane_points = np.split(inplane_points, split_inds)
+                convexity = np.split(convexity, split_inds)
+
+        return inplane_points, convexity
+
+    def _dl_min_from_smallest_feature(self, structure_list: List[Structure]):
+        """Calculate `dl_min` suggestion based on smallest feature size."""
+
+        inplane_points, convexity = self._corners_and_convexity_2d(
+            structure_list=structure_list, ravel=False
+        )
+
+        dl_min = inf
+
+        if self.corner_finder is None or self.corner_finder._no_min_dl_override:
+            return dl_min
+
+        finder = self.corner_finder
+
+        for points, conv in zip(inplane_points, convexity):
+            conv_nei = np.roll(conv, -1)
+            lengths = np.linalg.norm(points - np.roll(points, axis=0, shift=-1), axis=-1)
+
+            if finder.convex_resolution is not None:
+                convex_features = np.logical_and(conv, conv_nei)
+                if np.any(convex_features):
+                    min_convex_size = np.min(lengths[convex_features])
+                    dl_min = min(dl_min, min_convex_size / finder.convex_resolution)
+
+            if finder.concave_resolution is not None:
+                concave_features = np.logical_not(np.logical_or(conv, conv_nei))
+                if np.any(concave_features):
+                    min_concave_size = np.min(lengths[concave_features])
+                    dl_min = min(dl_min, min_concave_size / finder.concave_resolution)
+
+            if finder.mixed_resolution is not None:
+                mixed_features = np.logical_xor(conv, conv_nei)
+                if np.any(mixed_features):
+                    min_mixed_size = np.min(lengths[mixed_features])
+                    dl_min = min(dl_min, min_mixed_size / finder.mixed_resolution)
+
+        return dl_min
+
+    def _corners(self, structure_list: List[Structure]) -> List[CoordinateOptional]:
+        """Inplane corners in 3D coordinate."""
+        inplane_points, _ = self._corners_and_convexity_2d(
+            structure_list=structure_list, ravel=True
+        )
 
         # convert 2d points to 3d
         return [
@@ -1817,7 +1881,7 @@ class GridSpec(Tidy3dBaseModel):
         if self.layer_refinement_used:
             min_vacuum_dl = self._min_vacuum_dl_in_autogrid(wavelength, sim_size)
             for layer in self.layer_refinement_specs:
-                min_dl = min(min_dl, layer.suggested_dl_min(min_vacuum_dl))
+                min_dl = min(min_dl, layer.suggested_dl_min(min_vacuum_dl, structures))
         # from lumped elements
         for lumped_element in lumped_elements:
             for override_structure in lumped_element.to_mesh_overrides():
