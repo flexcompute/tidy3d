@@ -62,6 +62,12 @@ class WavePort(AbstractTerminalPort, Box):
         description="Definition of current integral used to compute current and the characteristic impedance.",
     )
 
+    pec_frame: bool = pd.Field(
+        False,
+        title="PEC Frame.",
+        description="Add a thin pec frame around the source during FDTD run.",
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.
@@ -109,6 +115,7 @@ class WavePort(AbstractTerminalPort, Box):
             mode_index=self.mode_index,
             direction=self.direction,
             name=self.name,
+            pec_frame=self.pec_frame,
         )
 
     def to_monitors(
