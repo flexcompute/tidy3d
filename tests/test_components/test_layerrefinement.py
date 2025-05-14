@@ -339,3 +339,66 @@ def test_corner_refinement_outside_domain():
     layer = layer.updated_copy(refinement_inside_sim_only=False)
     sim = sim.updated_copy(grid_spec=td.GridSpec.auto(wavelength=1, layer_refinement_specs=[layer]))
     assert count_grids_within_gap(sim) > 2
+
+
+def test_dl_min_from_smallest_feature():
+    structure = td.Structure(
+        geometry=td.PolySlab(
+            vertices=[
+                [0, 0],
+                [2, 0],
+                [2, 1],
+                [1, 1],
+                [1, 1.1],
+                [2, 1.1],
+                [2, 2],
+                [1, 2],
+                [1, 2.2],
+                [0.7, 2.2],
+                [0.7, 2],
+                [0, 2],
+            ],
+            slab_bounds=[-1, 1],
+            axis=2,
+        ),
+        medium=td.PECMedium(),
+    )
+
+    # check expected dl_min
+    layer_spec = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=td.CornerFinderSpec(
+            convex_resolution=10,
+        ),
+    )
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    assert np.allclose(0.3 / 10, dl_min)
+
+    layer_spec = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=td.CornerFinderSpec(mixed_resolution=10),
+    )
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    assert np.allclose(0.2 / 10, dl_min)
+
+    layer_spec = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=td.CornerFinderSpec(
+            concave_resolution=10,
+        ),
+    )
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    assert np.allclose(0.1 / 10, dl_min)
+
+    # check grid is generated succesfully
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        structures=[structure],
+        grid_spec=td.GridSpec.auto(layer_refinement_specs=[layer_spec], wavelength=100 * td.C_0),
+        run_time=1e-20,
+    )
+
+    _ = sim.grid
