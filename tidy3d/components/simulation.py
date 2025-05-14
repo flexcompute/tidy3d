@@ -541,6 +541,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Tuple[float, float] = None,
         ax: Ax = None,
         eps_component: Optional[PermittivityComponent] = None,
+        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -577,6 +578,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
 
         Returns
         -------
@@ -614,6 +617,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             hlim=hlim,
             vlim=vlim,
             eps_component=eps_component,
+            eps_lim=eps_lim,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
@@ -643,6 +647,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         eps_component: Optional[PermittivityComponent] = None,
+        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -678,6 +683,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
 
         Returns
         -------
@@ -713,6 +720,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             grid=self.grid,
             reverse=reverse,
             eps_component=eps_component,
+            eps_lim=eps_lim,
         )
 
     @equal_aspect
