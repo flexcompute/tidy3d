@@ -126,7 +126,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
                 break
         if rf_port:
             log.warning(
-                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
                 log_once=True,
             )
         return val

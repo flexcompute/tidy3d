@@ -115,7 +115,7 @@ class LumpedElement(Tidy3dBaseModel, ABC):
     @pd.root_validator(pre=False)
     def _warn_rf_license(cls, values):
         log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
         return values
@@ -556,7 +556,7 @@ class NetworkConversions(Tidy3dBaseModel):
     @pd.root_validator(pre=False)
     def _warn_rf_license(cls, values):
         log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
         return values
@@ -815,7 +815,7 @@ class RLCNetwork(Tidy3dBaseModel):
     @pd.root_validator(pre=False)
     def _warn_rf_license(cls, values):
         log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
         return values
@@ -900,7 +900,7 @@ class AdmittanceNetwork(Tidy3dBaseModel):
     @pd.root_validator(pre=False)
     def _warn_rf_license(cls, values):
         log.warning(
-            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are have instantiated at least one RF-specific component.",
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
             log_once=True,
         )
         return values
