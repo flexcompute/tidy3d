@@ -128,6 +128,12 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         Extend that mapping as additional cross-medium shim behaviour becomes
         necessary.
         """
+        # first check whether the attribute is already present
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            pass
+
         IGNORED_ATTRIBUTES = ["__deepcopy__"]
         if name in IGNORED_ATTRIBUTES:
             return None
@@ -139,11 +145,18 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         }
 
         if name in DELEGATED_ATTRIBUTES:
-            return getattr(DELEGATED_ATTRIBUTES[name], name)
-        else:
-            raise ValueError(
-                f"MultiPhysicsMedium has no attribute called {name}. Did you mean to access the attribute of one of the optical, heat or charge media?"
-            )
+            sub = DELEGATED_ATTRIBUTES[name]
+            if sub is None:
+                raise AttributeError(
+                    f"Requested attribute {name!r}, but the optical medium is 'None' "
+                    " on this 'MultiPhysicsMedium' instance."
+                )
+            return getattr(sub, name)
+
+        raise AttributeError(
+            f"MultiPhysicsMedium has no attribute called {name}. "
+            "Did you mean to access the attribute of one of the optical, heat or charge media?"
+        )
 
     @property
     def heat_spec(self):
