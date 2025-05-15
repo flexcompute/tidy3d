@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.4] - 2025-05-14
+
 ### Added
 - The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
 - Validation check for unit error in grid spacing.
@@ -1616,7 +1618,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.4...develop
+[2.8.4]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...v2.8.4
 [2.8.3]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...v2.8.3
 [2.8.2]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
