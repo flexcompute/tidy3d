@@ -62,8 +62,8 @@ class WavePort(AbstractTerminalPort, Box):
         description="Definition of current integral used to compute current and the characteristic impedance.",
     )
 
-    pec_frame: bool = pd.Field(
-        False,
+    pec_frame: pd.NonNegativeInt = pd.Field(
+        0,
         title="PEC Frame.",
         description="Add a thin pec frame around the source during FDTD run.",
     )

@@ -5221,12 +5221,13 @@ class Simulation(AbstractYeeGridSimulation):
         coords = self.grid.boundaries.to_list
         axis = mode_source.injection_axis
         direction = mode_source.direction
+        length = mode_source.pec_frame
 
         span_inds = np.array(self.grid.discretize_inds(mode_source))
         if direction == "+":
-            span_inds[axis][1] += MODE_PEC_FRAME_LENGTH - 1
+            span_inds[axis][1] += length - 1
         else:
-            span_inds[axis][0] -= MODE_PEC_FRAME_LENGTH - 1
+            span_inds[axis][0] -= length - 1
         bounds_outer = [
             [
                 (1 - MODE_PEC_FRAME_THICKNESS) * c[beg]
@@ -5261,7 +5262,7 @@ class Simulation(AbstractYeeGridSimulation):
         pec_frames = [
             self._make_pec_frame(src)
             for src in self.sources
-            if isinstance(src, ModeSource) and src.pec_frame
+            if isinstance(src, ModeSource) and src.pec_frame > 0
         ]
 
         if len(pec_frames) == 0:

@@ -437,8 +437,8 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         le=99,
     )
 
-    pec_frame: bool = pydantic.Field(
-        False,
+    pec_frame: pydantic.NonNegativeInt = pydantic.Field(
+        0,
         title="PEC Frame.",
         description="Add a thin pec frame around the source during FDTD run.",
     )
