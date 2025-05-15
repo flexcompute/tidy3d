@@ -53,6 +53,23 @@ def test_plot_eps():
     plt.close()
 
 
+def test_plot_eps_multiphysics():
+    s = td.Scene(
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
+                medium=td.MultiPhysicsMedium(
+                    optical=td.Medium(permittivity=3.9),
+                    charge=td.ChargeInsulatorMedium(permittivity=3.9),
+                    name="SiO2",
+                ),
+            )
+        ]
+    )
+    assert s.structures[0].medium.name == "SiO2"
+    s.plot_eps(x=0)
+
+
 def test_plot_eps_bounds():
     _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45])
     plt.close()

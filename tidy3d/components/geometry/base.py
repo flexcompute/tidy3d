@@ -30,7 +30,7 @@ from ...packaging import check_import, verify_packages_import
 from ..autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
 from ..autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from ..base import Tidy3dBaseModel, cached_property
-from ..transformation import RotationAroundAxis
+from ..transformation import ReflectionFromPlane, RotationAroundAxis
 from ..types import (
     ArrayFloat2D,
     ArrayFloat3D,
@@ -974,6 +974,22 @@ class Geometry(Tidy3dBaseModel, ABC):
             Rotated copy of this geometry.
         """
         return Transformed(geometry=self, transform=Transformed.rotation(angle, axis))
+
+    def reflected(self, normal: Coordinate) -> Geometry:
+        """Return a reflected copy of this geometry.
+
+        Parameters
+        ----------
+        normal : Tuple[float, float, float]
+            The 3D normal vector of the plane of reflection. The plane is assumed
+                to pass through the origin (0,0,0).
+
+        Returns
+        -------
+        :class:`Geometry`
+            Reflected copy of this geometry.
+        """
+        return Transformed(geometry=self, transform=Transformed.reflection(normal))
 
     """ Field and coordinate transformations """
 
@@ -2878,6 +2894,25 @@ class Transformed(Geometry):
         return transform
 
     @staticmethod
+    def reflection(normal: Coordinate) -> MatrixReal4x4:
+        """Return a reflection matrix.
+
+        Parameters
+        ----------
+        normal : Tuple[float, float, float]
+            Normal of the plane of reflection.
+
+        Returns
+        -------
+        numpy.ndarray
+            Transform matrix with shape (4, 4).
+        """
+
+        transform = np.eye(4)
+        transform[:3, :3] = ReflectionFromPlane(normal=normal).matrix
+        return transform
+
+    @staticmethod
     def preserves_axis(transform: MatrixReal4x4, axis: Axis) -> bool:
         """Indicate if the transform preserves the orientation of a given axis.
 
@@ -2945,6 +2980,17 @@ class ClipOperation(Geometry):
         title="Geometry B",
         description="Second operand for the set operation. It can also be any geometry type.",
     )
+
+    @pydantic.validator("geometry_a", "geometry_b", always=True)
+    def _geometries_untraced(cls, val):
+        """Make sure that ``ClipOperation`` geometries do not contain tracers."""
+        traced = val.strip_traced_fields()
+        if traced:
+            raise ValidationError(
+                f"{val.type} contains traced fields {list(traced.keys())}. Note that "
+                "'ClipOperation' does not currently support automatic differentiation."
+            )
+        return val
 
     @staticmethod
     def to_polygon_list(base_geometry: Shapely) -> List[Shapely]:

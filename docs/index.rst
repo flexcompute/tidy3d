@@ -1,6 +1,6 @@
-******************************
-Tidy3D Electromagnetic Solver
-******************************
+*************************************
+Electromagnetics Platform
+*************************************
 
 .. role:: raw-html(raw)
     :format: html

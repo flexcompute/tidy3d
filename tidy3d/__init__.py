@@ -39,7 +39,12 @@ from tidy3d.components.tcad.data.types import (
 )
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.generation_recombination import FossumCarrierLifetime
-from tidy3d.components.tcad.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from tidy3d.components.tcad.grid import (
+    DistanceUnstructuredGrid,
+    GridRefinementLine,
+    GridRefinementRegion,
+    UniformUnstructuredGrid,
+)
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyEnergyBandMonitor,
@@ -600,6 +605,8 @@ __all__ = [
     "HeatFromElectricSource",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",
+    "GridRefinementRegion",
+    "GridRefinementLine",
     "TemperatureData",
     "TemperatureMonitor",
     "HeatChargeSimulation",

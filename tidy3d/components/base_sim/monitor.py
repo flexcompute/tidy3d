@@ -9,6 +9,7 @@ import pydantic.v1 as pd
 from ..base import cached_property
 from ..geometry.base import Box
 from ..types import ArrayFloat1D, Axis, Numpy
+from ..validators import _warn_unsupported_traced_argument
 from ..viz import PlotParams, plot_params_monitor
 
 
@@ -21,6 +22,9 @@ class AbstractMonitor(Box, ABC):
         description="Unique name for monitor.",
         min_length=1,
     )
+
+    _warn_traced_center = _warn_unsupported_traced_argument("center")
+    _warn_traced_size = _warn_unsupported_traced_argument("size")
 
     @cached_property
     def plot_params(self) -> PlotParams:

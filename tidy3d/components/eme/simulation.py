@@ -22,9 +22,13 @@ from ..grid.grid_spec import GridSpec
 from ..medium import FullyAnisotropicMedium
 from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor, MonitorType
 from ..scene import Scene
-from ..simulation import AbstractYeeGridSimulation, Simulation
+from ..simulation import AbstractYeeGridSimulation, Simulation, validate_boundaries_for_zero_dims
 from ..types import Ax, Axis, FreqArray, Symmetry, annotate_type
-from ..validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
+from ..validators import (
+    MIN_FREQUENCY,
+    validate_freqs_min,
+    validate_freqs_not_empty,
+)
 from ..viz import add_ax_if_none, equal_aspect
 from .grid import EMECompositeGrid, EMEExplicitGrid, EMEGrid, EMEGridSpec, EMEGridSpecType
 from .monitor import (
@@ -45,7 +49,7 @@ WARN_MODE_NUM_CELLS = 1e5
 
 
 # eme specific simulation parameters
-WARN_NUM_FREQS = 100
+WARN_NUM_FREQS = 20
 MAX_NUM_FREQS = 500
 MAX_NUM_SWEEP = 100
 
@@ -118,7 +122,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     >>> from tidy3d import Box, Medium, Structure, C_0, inf
     >>> from tidy3d import EMEModeSpec, EMEUniformGrid, GridSpec
     >>> from tidy3d import EMEFieldMonitor
-    >>> lambda0 = 1
+    >>> lambda0 = 1550e-9
     >>> freq0 = C_0 / lambda0
     >>> sim_size = 3*lambda0, 3*lambda0, 3*lambda0
     >>> waveguide_size = (lambda0/2, lambda0, inf)
@@ -187,12 +191,12 @@ class EMESimulation(AbstractYeeGridSimulation):
     boundary_spec: BoundarySpec = pd.Field(
         BoundarySpec.all_sides(PECBoundary()),
         title="Boundaries",
-        description="Specification of boundary conditions along each dimension. If ``None``, "
-        "PML boundary conditions are applied on all sides. NOTE: for EME simulations, this "
-        "is required to be PECBoundary on all sides. To capture radiative effects, "
-        "move the boundary farther away from the waveguide in the tangential directions, "
-        "and increase the number of modes. The 'ModeSpec' can also be used to try "
-        "different boundary conditions.",
+        description="Specification of boundary conditions along each dimension. "
+        "By default, PEC boundary conditions are applied on all sides. "
+        "This field is for consistency with FDTD simulations; however, please note that "
+        "regardless of the 'boundary_spec', the mode solver terminates the mode plane "
+        "with PEC boundary. The 'EMEModeSpec' can be used to "
+        "apply PML layers in the mode solver.",
     )
 
     sources: Tuple[None, ...] = pd.Field(
@@ -255,16 +259,6 @@ class EMESimulation(AbstractYeeGridSimulation):
 
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
-
-    @pd.validator("size", always=True)
-    def _validate_fully_3d(cls, val):
-        """An EME simulation must be fully 3D."""
-        if val.count(0.0) != 0:
-            raise ValidationError(
-                "'EMESimulation' cannot have any component of 'size' equal to "
-                f"zero, given 'size={val}'."
-            )
-        return val
 
     @pd.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
@@ -587,7 +581,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         self._validate_sweep_spec()
         self._validate_symmetry()
         self._validate_monitor_setup()
-        self._validate_sources_and_boundary()
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized EME simulation is ok for upload to our servers."""
@@ -794,25 +787,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                         "which is not compatible with periodic repetition "
                         "('num_reps != 1' in any 'EMEGridSpec'.)"
                     )
-
-    def _validate_sources_and_boundary(self):
-        """Disallow sources and boundary."""
-        if self.boundary_spec != BoundarySpec.all_sides(PECBoundary()):
-            raise SetupError(
-                "In an EME simulation, the 'boundary_spec' must be `PECBoundary` "
-                "on all sides (the default value). The boundary condition along "
-                "the propagation axis is always transparent; boundary conditions "
-                "in the tangential directions are imposed in 'mode_spec' in the "
-                "EME grid."
-            )
-        # commented because sources has type Tuple[None, ...]
-        # if self.sources != ():
-        #    raise SetupError(
-        #        "EME simulations do not currently support sources. "
-        #        "The simulation performs full bidirectional propagation in the "
-        #        "'port_mode' basis. After running the simulation, use "
-        #        "'smatrix_in_basis' to use another set of modes. "
-        #    )
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -1206,3 +1180,5 @@ class EMESimulation(AbstractYeeGridSimulation):
         else:
             pairs = set(self.eme_grid_spec._cell_index_pairs)
         return list(pairs)
+
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()

@@ -585,6 +585,33 @@ def test_validate_zero_dim_boundaries():
     )
 
 
+def test_validate_symmetry_boundaries():
+    # simulation with symmetry along an axis should have the same boundaries defined on both sides
+    td.Simulation(
+        size=(1, 1, 1),
+        symmetry=(0, 1, 0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        ),
+    )
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 1),
+            symmetry=(0, 1, 0),
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            run_time=1e-12,
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.periodic(),
+                y=td.Boundary(plus=td.Boundary.pml(), minus=td.Boundary.periodic()),
+                z=td.Boundary.pml(),
+            ),
+        )
+
+
 def test_validate_components_none():
     assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None
     assert SIM._validate_num_sources(val=None) is None
@@ -2757,7 +2784,16 @@ def test_sim_subsection(unstructured, nz):
     # Ensure that in this first test case the lumped element is safely excluded
     assert len(sim_red.lumped_elements) == 0
     assert sim_red.structures != SIM_FULL.structures
-    sim_red = SIM_FULL.subsection(
+
+    sim_full_sym = SIM_FULL.updated_copy(
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        )
+    )
+    # Need to update BCs to be symmetrice when we include symmetries
+    sim_red = sim_full_sym.subsection(
         region=region,
         symmetry=(1, 0, -1),
         monitors=[mnt for mnt in SIM_FULL.monitors if not isinstance(mnt, td.ModeMonitor)],
@@ -2807,7 +2843,7 @@ def test_sim_subsection(unstructured, nz):
     sim_red = sim.subsection(region=region, remove_outside_custom_mediums=True)
 
     # check automatic symmetry expansion
-    sim_sym = SIM_FULL.updated_copy(
+    sim_sym = sim_full_sym.updated_copy(
         symmetry=(-1, 0, 1),
         sources=[src for src in SIM_FULL.sources if not isinstance(src, td.TFSF)],
     )
