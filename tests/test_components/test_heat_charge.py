@@ -1559,3 +1559,43 @@ def test_fossum():
     """Check that fossum model can be defined."""
 
     _ = td.FossumCarrierLifetime(tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1)
+
+
+@pytest.mark.parametrize("symmetry", [(0, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0)])
+def test_symmetry_capacitance(symmetry):
+    """Check that symmetry_expanded_copy works as expected"""
+
+    data = [1, 2, 3]
+    voltages = [0, 1, 2]
+
+    hole_capacitance = td.SteadyVoltageDataArray(
+        data=data,
+        coords={"v": voltages},
+    )
+
+    electron_capacitance = td.SteadyVoltageDataArray(
+        data=data,
+        coords={"v": voltages},
+    )
+
+    monitor = td.SteadyCapacitanceMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 1),
+        name="test_monitor",
+    )
+
+    mnt_data = td.SteadyCapacitanceData(
+        monitor=monitor,
+        hole_capacitance=hole_capacitance,
+        electron_capacitance=electron_capacitance,
+        symmetry=symmetry,
+    )
+
+    num_symmetries = np.sum(np.array([1 if d > 0 else 0 for d in symmetry]))
+    scaling_factor = np.power(2, num_symmetries)
+
+    for n in range(len(data)):
+        assert mnt_data.symmetry_expanded_copy.hole_capacitance.data[n] == data[n] * scaling_factor
+        assert (
+            mnt_data.symmetry_expanded_copy.electron_capacitance.data[n] == data[n] * scaling_factor
+        )

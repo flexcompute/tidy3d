@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, Union
 
+import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import skip_if_fields_missing
@@ -435,4 +436,27 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     @property
     def symmetry_expanded_copy(self) -> SteadyCapacitanceData:
         """Return copy of self with symmetry applied."""
-        return self
+        num_symmetries = np.sum(np.array([1 if d > 0 else 0 for d in self.symmetry]))
+        scaling_factor = np.power(2, num_symmetries)
+
+        if self.hole_capacitance is None:
+            new_hole_capacitance = None
+        else:
+            new_values = self.hole_capacitance.values * scaling_factor
+            new_hole_capacitance = SteadyVoltageDataArray(
+                data=new_values, coords=self.hole_capacitance.coords
+            )
+
+        if self.electron_capacitance is None:
+            new_electron_capacitance = None
+        else:
+            new_values = self.electron_capacitance.values * scaling_factor
+            new_electron_capacitance = SteadyVoltageDataArray(
+                data=new_values, coords=self.electron_capacitance.coords
+            )
+
+        return self.updated_copy(
+            hole_capacitance=new_hole_capacitance,
+            electron_capacitance=new_electron_capacitance,
+            symmetry=(0, 0, 0),
+        )
