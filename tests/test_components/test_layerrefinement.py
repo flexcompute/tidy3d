@@ -500,9 +500,9 @@ def test_gap_meshing():
     )
 
     reentry_gap = td.Structure(
-        geometry=td.Box(size=(0.3, 0.4, 0.3))
-        .rotated(axis=1, angle=np.pi / 4)
-        .translated(x=0, y=0, z=0.5),
+        geometry=td.PolySlab(
+            slab_bounds=[-0.2, 0.2], axis=1, vertices=[(-0.3, 0.52), (-0.05, 0.3), (0.2, 0.52)]
+        ),
         medium=td.Medium(),
     )
 
