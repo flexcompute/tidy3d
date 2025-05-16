@@ -2706,8 +2706,10 @@ class Box(SimplePlaneIntersection, Centered):
         Compute the derivative (VJP) with respect to shifting a face of a rotated box,
         using full integration over that face.
         """
-        L_f = transform_matrix[:3, :3]
-        t_f = transform_matrix[:3, 3]
+        if transform_matrix is None:
+            L_f = np.eye(3)  # linear part (no rotation/scale/shear)
+            t_f = np.zeros(3)  # translation
+
         mesh, _ = self.build_box_face_mesh(
             center=np.asarray(self.center, float),
             size=np.asarray(self.size, float),
