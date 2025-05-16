@@ -560,7 +560,7 @@ def test_validate_zero_dim_boundaries():
         pol_angle=0.0,
     )
 
-    with pytest.raises(pydantic.ValidationError):
+    with AssertLogLevel("WARNING", contains_str="Periodic"):
         td.Simulation(
             size=(1, 1, 0),
             run_time=1e-12,

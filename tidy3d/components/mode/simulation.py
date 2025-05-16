@@ -193,13 +193,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
         if val is None:
             sim_center = values.get("center")
             sim_size = values.get("size")
-            val = Box(size=sim_size, center=sim_center)
-            if val.size.count(0.0) != 1:
-                raise ValidationError(
-                    "If the 'ModeSimulation' geometry is not planar, "
-                    "then 'plane' must be specified."
-                )
-            return val
+            sim_geom = Box(size=sim_size, center=sim_center)
+            val = ModeSolver._infer_plane(sim_geom=sim_geom)
         if val.size.count(0.0) != 1:
             raise ValidationError(f"'ModeSimulation.plane' must be planar, given 'size={val}'")
         return val

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Zero-size dimensions automatically receive periodic boundary conditions, raising a warning where previously they would error.
+- Plane used for mode solving can be automatically inferred for 1D and 2D simulations.
+
 ## [2.8.4] - 2025-05-15
 
 ### Added

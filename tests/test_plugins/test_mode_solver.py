@@ -1244,3 +1244,17 @@ def test_translated_dot():
 
     assert np.allclose(data2.outer_dot(data_translated), data2.outer_dot(data2), atol=atol)
     assert np.allclose(data_translated.outer_dot(data2), data2.outer_dot(data2), atol=atol)
+
+
+def test_mode_solver_1d():
+    lda0 = 1.55
+    freq0 = td.C_0 / lda0
+    fwidth = 0.1 * freq0
+    run_time = 30 / fwidth
+
+    sim_size = (lda0, 0, 0)
+    sim = td.Simulation(
+        size=sim_size, run_time=run_time, grid_spec=td.GridSpec.auto(wavelength=lda0)
+    )
+    mode_solver = ModeSolver(simulation=sim, mode_spec=td.ModeSpec(), freqs=[freq0])
+    _ = mode_solver.data

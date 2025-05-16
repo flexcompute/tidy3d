@@ -95,8 +95,9 @@ def get_mode_sim():
 
 
 def test_mode_sim():
-    with AssertLogLevel(None):
+    with AssertLogLevel("WARNING", contains_str="2D"):
         sim = get_mode_sim()
+    with AssertLogLevel(None):
         _ = sim.plot(y=0, ax=AX)
         _ = sim.plot_mode_plane(ax=AX)
         _ = sim.plot_eps_mode_plane(ax=AX)
@@ -244,3 +245,53 @@ def get_mode_sim_data():
 def test_mode_sim_data():
     sim_data = get_mode_sim_data()
     _ = sim_data.plot_field("Ey", ax=AX, mode_index=0, f=FS[0])
+
+
+def test_mode_sim_infer_plane():
+    # 3d sim cannot infer plane
+    with pytest.raises(pydantic.ValidationError):
+        sim = td.ModeSimulation(
+            size=(1, 1, 1),
+            freqs=FS,
+            mode_spec=MODE_SPEC,
+            grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
+            monitors=[],
+        )
+    # 2d sim plane defaults to whole sim geometry
+    sim = td.ModeSimulation(
+        size=(1, 1, 0),
+        freqs=FS,
+        mode_spec=MODE_SPEC,
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
+        monitors=[],
+    )
+    assert sim.plane.size.index(0.0) == 2
+    # but can manually set it to a 1D cross-section
+    sim = td.ModeSimulation(
+        size=(1, 1, 0),
+        freqs=FS,
+        mode_spec=MODE_SPEC,
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
+        monitors=[],
+        plane=td.Box(size=(td.inf, 0, td.inf), center=(0, 0, 0)),
+    )
+    assert sim.plane.size.index(0.0) == 1
+    # 1d sim plane defaults to extending first zero dim
+    sim = td.ModeSimulation(
+        size=(1, 0, 0),
+        freqs=FS,
+        mode_spec=MODE_SPEC,
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
+        monitors=[],
+    )
+    assert sim.plane.size.index(0.0) == 2
+    # but can manually set it differently
+    sim = td.ModeSimulation(
+        size=(1, 0, 0),
+        freqs=FS,
+        mode_spec=MODE_SPEC,
+        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
+        monitors=[],
+        plane=td.Box(size=(td.inf, 0, td.inf), center=(0, 0, 0)),
+    )
+    assert sim.plane.size.index(0.0) == 1

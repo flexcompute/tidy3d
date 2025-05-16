@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -14,7 +14,7 @@ import xarray as xr
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
 
-from ...constants import C_0
+from ...constants import C_0, inf
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
@@ -138,8 +138,8 @@ class ModeSolver(Tidy3dBaseModel):
         discriminator="type",
     )
 
-    plane: MODE_PLANE_TYPE = pydantic.Field(
-        ...,
+    plane: Optional[MODE_PLANE_TYPE] = pydantic.Field(
+        None,
         title="Plane",
         description="Cross-sectional plane in which the mode will be computed.",
         discriminator=TYPE_TAG_STR,
@@ -188,9 +188,45 @@ class ModeSolver(Tidy3dBaseModel):
             )
         return val
 
+    @classmethod
+    def _infer_plane(cls, sim_geom: Box) -> Box:
+        """If the mode plane is not explicitly specified,
+        we infer it from the simulation geometry. This only works
+        when the simulation is 2D or 1D."""
+        new_size = list(sim_geom.size)
+        num_zero_dims = new_size.count(0.0)
+        nonzero_dims = list("xyz")
+        if num_zero_dims == 0:
+            raise ValidationError(
+                "The simulation geometry is 3D, so 'plane' cannot be inferred "
+                "and must be specified explicitly."
+            )
+        elif num_zero_dims == 1:
+            nonzero_dims.pop(new_size.index(0.0))
+            log.warning(
+                "The simulation geometry is 2D; the mode solver 'plane' "
+                "is taken by default to be the entire simulation geometry "
+                f"(the {nonzero_dims}-plane)."
+            )
+        elif num_zero_dims == 2:
+            new_size[new_size.index(0.0)] = inf
+            nonzero_dims.pop(new_size.index(0.0))
+            log.warning(
+                "The simulation geometry is 1D; the mode solver 'plane' "
+                "is taken by default as the span of the nonzero-size dimension "
+                "together with the first zero-size dimension "
+                f"(the {nonzero_dims}-plane)."
+            )
+        sim_geom = sim_geom.updated_copy(size=new_size)
+        num_zero_dims = sim_geom.size.count(0.0)
+        return sim_geom
+
     @pydantic.validator("plane", always=True)
-    def is_plane(cls, val):
+    @skip_if_fields_missing(["simulation"])
+    def is_plane(cls, val, values):
         """Raise validation error if not planar."""
+        if val is None:
+            val = cls._infer_plane(sim_geom=values.get("simulation").geometry)
         if val.size.count(0.0) != 1:
             raise ValidationError(f"ModeSolver plane must be planar, given size={val}")
         return val

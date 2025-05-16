@@ -198,10 +198,13 @@ def validate_boundaries_for_zero_dims():
                 num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
 
                 if num_absorbing_bdries > 0:
-                    raise SetupError(
+                    pbc = Boundary(minus=Periodic(), plus=Periodic())
+                    val = val.updated_copy(**{axis: pbc})
+                    log.warning(
                         f"The simulation has zero size along the {axis} axis, so "
                         "using a PML or absorbing boundary along that axis is incorrect. "
-                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
+                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}. "
+                        "Using 'Periodic' boundary by default."
                     )
 
                 if num_bloch_bdries > 0:
