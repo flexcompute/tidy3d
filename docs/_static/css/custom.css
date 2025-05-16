@@ -45,7 +45,7 @@ iframe {width: 100%;border: unset}
 html[data-theme="light"] {
     --pst-color-primary: #B8A18B;
     --pst-color-secondary: #00643C;
-    --tab-color: #61B29C;
+    --tab-color:  #00643C;
     --pst-color-link: var(--pst-color-muted);
     --sd-color-info-bg:  #B8A18B;
     --pst-color-table-row-hover-bg: var(--pst-color-primary);
@@ -56,9 +56,9 @@ html[data-theme="light"] {
 html[data-theme="dark"] {
     --pst-color-primary: #B8A18B;
     --pst-color-secondary: #61B29C;
-    --tab-color: #61B29C;
+    --tab-color: #B8A18B;
     --pst-color-link: var(--pst-color-muted);
-    --sd-color-info-bg:  var(--pst-color-primary);
+    --sd-color-info-bg:  #00643C;
     --pst-color-table-row-hover-bg: #8851AD;
     --pst-color-inline-code-links: #6DB5DD;
     --pst-color-inline-code:#FED88B;
@@ -97,10 +97,12 @@ img {
     border-top-right-radius: 0.1em;
     border: 0;
     font-weight: bold;
+    color: var(--pst-color-primary-text);
 }
 
 .sphinx-tabs-tab[aria-selected="true"] {
     background-color: var(--sd-color-info-bg);
+    color: var(--pst-color-text-base);
 }
 
 html[data-theme=dark] .dataframe {

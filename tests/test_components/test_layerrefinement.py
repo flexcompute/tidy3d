@@ -285,7 +285,8 @@ def test_grid_spec_with_layers():
     )
 
 
-def test_corner_refinement_outside_domain():
+@pytest.mark.parametrize("gap_meshing_iters", [0, 1])
+def test_corner_refinement_outside_domain(gap_meshing_iters):
     """Test the behavior of corner refinement if corners are outside the simulation domain."""
 
     # CPW waveguides that goes through the simulation domain along x-axis, so that the corners
@@ -313,6 +314,7 @@ def test_corner_refinement_outside_domain():
         axis=2,
         corner_refinement=td.GridRefinement(refinement_factor=5),
         refinement_inside_sim_only=True,
+        gap_meshing_iters=gap_meshing_iters,
     )
 
     sim = td.Simulation(
@@ -333,9 +335,466 @@ def test_corner_refinement_outside_domain():
         return len(y)
 
     # just 2 grids sampling the gap
-    assert count_grids_within_gap(sim) == 2
+    assert count_grids_within_gap(sim) == gap_meshing_iters + 2
 
     # 2) refined if corners outside simulation domain is accounted for.
     layer = layer.updated_copy(refinement_inside_sim_only=False)
     sim = sim.updated_copy(grid_spec=td.GridSpec.auto(wavelength=1, layer_refinement_specs=[layer]))
+
     assert count_grids_within_gap(sim) > 2
+
+
+def test_dl_min_from_smallest_feature():
+    structure = td.Structure(
+        geometry=td.PolySlab(
+            vertices=[
+                [0, 0],
+                [2, 0],
+                [2, 1],
+                [1, 1],
+                [1, 1.1],
+                [2, 1.1],
+                [2, 2],
+                [1, 2],
+                [1, 2.2],
+                [0.7, 2.2],
+                [0.7, 2],
+                [0, 2],
+            ],
+            slab_bounds=[-1, 1],
+            axis=2,
+        ),
+        medium=td.PECMedium(),
+    )
+
+    # check expected dl_min
+    layer_spec = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=td.CornerFinderSpec(
+            convex_resolution=10,
+        ),
+    )
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    assert np.allclose(0.3 / 10, dl_min)
+
+    layer_spec = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=td.CornerFinderSpec(mixed_resolution=10),
+    )
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    assert np.allclose(0.2 / 10, dl_min)
+
+    layer_spec = td.LayerRefinementSpec(
+        axis=2,
+        size=(td.inf, td.inf, 2),
+        corner_finder=td.CornerFinderSpec(
+            concave_resolution=10,
+        ),
+    )
+    dl_min = layer_spec._dl_min_from_smallest_feature([structure])
+    assert np.allclose(0.1 / 10, dl_min)
+
+    # check grid is generated succesfully
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        structures=[structure],
+        grid_spec=td.GridSpec.auto(layer_refinement_specs=[layer_spec], wavelength=100 * td.C_0),
+        run_time=1e-20,
+    )
+
+    _ = sim.grid
+
+
+def test_gap_meshing():
+    w = 1
+    length = 10
+
+    l_shape_1 = td.Structure(
+        medium=td.PECMedium(),
+        geometry=td.PolySlab(
+            axis=2,
+            slab_bounds=[0, 2],
+            vertices=[
+                [0, 0],
+                [length, 0],
+                [length, w],
+                [w, w],
+                [w, length],
+                [0, length],
+            ],
+        ),
+    )
+
+    gap = 0.1
+    l_shape_2 = td.Structure(
+        medium=td.PECMedium(),
+        geometry=td.PolySlab(
+            axis=2,
+            slab_bounds=[0, 2],
+            vertices=[
+                [w + gap, w + gap],
+                [w + gap + length, w + gap],
+                [w + gap + length, w + gap + w],
+                [w + gap + w, w + gap + w],
+                [w + gap + w, w + gap + length],
+                [w + gap, w + gap + length],
+                [0, w + gap + length],
+                [0, gap + length],
+                [w + gap, gap + length],
+            ],
+        ),
+    )
+
+    # ax = l_shape_1.plot(z=1)
+    # l_shape_2.plot(z=1, ax=ax)
+
+    for num_iters in range(2):
+        grid_spec = td.GridSpec(
+            grid_x=td.AutoGrid(min_steps_per_wvl=10),
+            grid_y=td.AutoGrid(min_steps_per_wvl=10),
+            grid_z=td.AutoGrid(min_steps_per_wvl=10),
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=2,
+                    corner_finder=None,
+                    gap_meshing_iters=num_iters,
+                    size=[td.inf, td.inf, 2],
+                    center=[0, 0, 1],
+                )
+            ],
+            wavelength=7,
+        )
+
+        sim = td.Simulation(
+            structures=[l_shape_1, l_shape_2],
+            grid_spec=grid_spec,
+            size=(1.2 * length, 1.2 * length, 2),
+            center=(0.5 * length, 0.5 * length, 0),
+            run_time=1e-15,
+        )
+
+        # ax = sim.plot(z=1)
+        # sim.plot_grid(z=1, ax=ax)
+        # ax.set_xlim([0, 2])
+        # ax.set_ylim([0, 2])
+
+        resolved_x = np.any(
+            np.logical_and(sim.grid.boundaries.x > w, sim.grid.boundaries.x < w + gap)
+        )
+        resolved_y = np.any(
+            np.logical_and(sim.grid.boundaries.y > w, sim.grid.boundaries.y < w + gap)
+        )
+
+        if num_iters == 0:
+            assert (not resolved_x) and (not resolved_y)
+        else:
+            assert resolved_x and resolved_y
+
+    # test ingored small feature
+    sim_size = (1, 1, 1)
+    box = td.Structure(
+        geometry=td.Box(size=(0.95, 0.2, 0.95)),
+        medium=td.PECMedium(),
+    )
+
+    reentry_gap = td.Structure(
+        geometry=td.Box(size=(0.3, 0.4, 0.3))
+        .rotated(axis=1, angle=np.pi / 4)
+        .translated(x=0, y=0, z=0.5),
+        medium=td.Medium(),
+    )
+
+    aux = td.Structure(
+        geometry=td.Box(center=(0.0, 0, 0.5), size=(2, 0.4, 0.23)),
+        medium=td.Medium(),
+    )
+
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
+        structures=[box, reentry_gap, aux],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(td.inf, 0.2, td.inf),
+                    corner_finder=None,
+                    gap_meshing_iters=1,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+    assert not any(
+        np.isclose(sim.grid.boundaries.x, reentry_gap.geometry.bounding_box.center[0], rtol=1e-2)
+    )
+    # _, ax = plt.subplots(1, 1, figsize=(10, 10))
+    # sim.plot(y=0, ax=ax)
+    # sim.plot_grid(y=0, ax=ax)
+    # plt.show()
+
+    # test internal polygon
+
+    gap_z = td.Structure(
+        geometry=td.Box(center=(0.3, 0, 0.1), size=(0.05, 0.4, 0.5)),
+        medium=td.Medium(),
+    )
+
+    gap_x = td.Structure(
+        geometry=td.Box(center=(0.03, 0, 0.07), size=(0.3, 0.4, 0.05)),
+        medium=td.Medium(),
+    )
+
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.periodic(),
+        ),
+        structures=[box, gap_x, gap_z],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(td.inf, 0.2, td.inf),
+                    corner_finder=None,
+                    gap_meshing_iters=2,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+    assert any(np.isclose(sim.grid.boundaries.x, gap_z.geometry.center[0], atol=1e-4))
+    assert any(np.isclose(sim.grid.boundaries.z, gap_x.geometry.center[2], atol=1e-4))
+    # _, ax = plt.subplots(1, 1, figsize=(10, 10))
+    # sim.plot(y=0, ax=ax)
+    # sim.plot_grid(y=0, ax=ax)
+    # plt.show()
+
+    # test gaps near pec/pmc
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pmc(),
+        ),
+        structures=[box],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(td.inf, 0.2, td.inf),
+                    corner_finder=None,
+                    gap_meshing_iters=1,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+
+    expected_grid_line = box.geometry.size[0] / 2 + (sim_size[0] - box.geometry.size[0]) / 4
+    assert any(np.isclose(sim.grid.boundaries.x, expected_grid_line))
+    assert any(np.isclose(sim.grid.boundaries.x, -expected_grid_line))
+
+    expected_grid_line = box.geometry.size[2] / 2 + (sim_size[2] - box.geometry.size[2]) / 4
+    assert any(np.isclose(sim.grid.boundaries.z, expected_grid_line))
+    assert any(np.isclose(sim.grid.boundaries.z, -expected_grid_line))
+
+    # _, ax = plt.subplots(1, 1, figsize=(10, 10))
+    # sim.plot(y=0, ax=ax)
+    # sim.plot_grid(y=0, ax=ax)
+    # plt.show()
+
+    # test limited size of layer spec
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pmc(),
+        ),
+        structures=[box],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(0.5, 0.2, 0.5),
+                    center=(0.5, 0, -0.5),
+                    corner_finder=None,
+                    gap_meshing_iters=1,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+
+    expected_grid_line = box.geometry.size[0] / 2 + (sim_size[0] - box.geometry.size[0]) / 4
+    assert any(np.isclose(sim.grid.boundaries.x, expected_grid_line))
+    assert not any(np.isclose(sim.grid.boundaries.x, -expected_grid_line, atol=1e-2))
+
+    expected_grid_line = box.geometry.size[2] / 2 + (sim_size[2] - box.geometry.size[2]) / 4
+    assert not any(np.isclose(sim.grid.boundaries.z, expected_grid_line, atol=1e-2))
+    assert any(np.isclose(sim.grid.boundaries.z, -expected_grid_line))
+
+    # pretty much zero size layer spec
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pmc(),
+        ),
+        structures=[box],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(0.05, 0.2, 0.05),
+                    center=(0.05, 0, 0.05),
+                    corner_finder=None,
+                    gap_meshing_iters=2,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+
+    expected_grid_line = box.geometry.size[0] / 2 + (sim_size[0] - box.geometry.size[0]) / 4
+    assert not any(np.isclose(sim.grid.boundaries.x, expected_grid_line))
+    assert not any(np.isclose(sim.grid.boundaries.x, -expected_grid_line, atol=1e-2))
+
+    expected_grid_line = box.geometry.size[2] / 2 + (sim_size[2] - box.geometry.size[2]) / 4
+    assert not any(np.isclose(sim.grid.boundaries.z, expected_grid_line, atol=1e-2))
+    assert not any(np.isclose(sim.grid.boundaries.z, -expected_grid_line))
+
+    # layer spec is outside
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.pml(),
+            z=td.Boundary.pmc(),
+        ),
+        structures=[box],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(0.01, 0.2, 0.01),
+                    center=(10.0, 0, 10.0),
+                    corner_finder=None,
+                    gap_meshing_iters=1,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+
+    expected_grid_line = box.geometry.size[0] / 2 + (sim_size[0] - box.geometry.size[0]) / 4
+    assert not any(np.isclose(sim.grid.boundaries.x, expected_grid_line))
+    assert not any(np.isclose(sim.grid.boundaries.x, -expected_grid_line, atol=1e-2))
+
+    expected_grid_line = box.geometry.size[2] / 2 + (sim_size[2] - box.geometry.size[2]) / 4
+    assert not any(np.isclose(sim.grid.boundaries.z, expected_grid_line, atol=1e-2))
+    assert not any(np.isclose(sim.grid.boundaries.z, -expected_grid_line))
+
+    # _, ax = plt.subplots(1, 1, figsize=(10, 10))
+    # sim.plot(y=0, ax=ax)
+    # sim.plot_grid(y=0, ax=ax)
+    # plt.show()
+
+    # test gap near periodic
+    sim = td.Simulation(
+        size=sim_size,
+        center=(0.025, -0.25, 0),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.periodic(),
+            y=td.Boundary.pec(),
+            z=td.Boundary.periodic(),
+        ),
+        structures=[box],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=1,
+                    size=(td.inf, 0.2, td.inf),
+                    corner_finder=None,
+                    gap_meshing_iters=1,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+
+    # _, ax = plt.subplots(1, 1, figsize=(10, 10))
+    # sim.plot(y=0, ax=ax)
+    # sim.plot_grid(y=0, ax=ax)
+    # plt.show()
+
+    assert any(np.isclose(sim.grid.boundaries.x, 0.5, atol=1e-4))
+    assert any(np.isclose(sim.grid.boundaries.z, -0.5, atol=1e-4))
+
+    # test a thin strip near periodic
+    strip = td.Structure(
+        geometry=td.Box(center=(0, 0.5, 0), size=(0.2, 0.05, 0.6)),
+        medium=td.PECMedium(),
+    )
+
+    sim = td.Simulation(
+        size=sim_size,
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pec(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pmc(),
+        ),
+        structures=[strip],
+        grid_spec=td.GridSpec.auto(
+            layer_refinement_specs=[
+                td.LayerRefinementSpec(
+                    axis=0,
+                    size=(0.2, td.inf, td.inf),
+                    corner_finder=None,
+                    gap_meshing_iters=1,
+                    dl_min_from_gap_width=True,
+                )
+            ],
+            min_steps_per_wvl=10,
+            wavelength=1,
+        ),
+        run_time=1e-15,
+    )
+
+    assert any(np.isclose(sim.grid.boundaries.y, strip.geometry.center[1], atol=1e-4))
+    # _, ax = plt.subplots(1, 1, figsize=(10, 10))
+    # sim.plot(x=0, ax=ax)
+    # sim.plot_grid(x=0, ax=ax)
+    # plt.show()

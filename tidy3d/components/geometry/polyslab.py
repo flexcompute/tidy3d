@@ -388,6 +388,16 @@ class PolySlab(base.Planar):
         zmin, zmax = self.slab_bounds
         return zmax - zmin
 
+    @property
+    def finite_length_axis(self) -> float:
+        """Gets the length of the PolySlab along the out of plane dimension.
+        First clips the slab bounds to LARGE_NUMBER and then returns difference.
+        """
+        zmin, zmax = self.slab_bounds
+        zmin = max(zmin, -LARGE_NUMBER)
+        zmax = min(zmax, LARGE_NUMBER)
+        return zmax - zmin
+
     @cached_property
     def reference_polygon(self) -> np.ndarray:
         """The polygon at the reference plane.

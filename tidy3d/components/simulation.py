@@ -15,6 +15,7 @@ try:
 except ImportError:
     pass
 
+
 import pydantic.v1 as pydantic
 import xarray as xr
 
@@ -173,6 +174,9 @@ PML_HEIGHT_FOR_0_DIMS = inf
 
 # additional (safety) time step reduction factor for fixed angle simulations
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
+
+# RF frequency warning
+RF_FREQ_WARNING = 300e9
 
 
 def validate_boundaries_for_zero_dims():
@@ -984,7 +988,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 edgecolor=kwargs["colors"],
                 alpha=override_structures_alpha,
             ),
-        ] * 2
+        ] * 3
         plot_params[0] = plot_params[0].include_kwargs(edgecolor=kwargs["colors_internal"])
 
         if self.grid_spec.auto_grid_used:
@@ -1010,7 +1014,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Plot snapping points
         for points, plot_param in zip(
-            [self.internal_snapping_points, self.grid_spec.snapping_points], plot_params
+            [
+                self.internal_snapping_points,
+                self.grid_spec.snapping_points,
+                self._gap_meshing_snapping_lines,
+            ],
+            plot_params,
         ):
             for point in points:
                 _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
@@ -1184,6 +1193,47 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     #    return plot_sim_3d(self, width=width, height=height)
 
     @cached_property
+    def _grid_and_snapping_lines(self) -> Tuple[Grid, List[CoordinateOptional]]:
+        """FDTD grid spatial locations and information.
+
+        Returns
+        -------
+        Tuple[:class:`.Grid`, List[CoordinateOptional]]
+            :class:`.Grid` storing the spatial locations relevant to the simulation
+            the list of snapping points generated during iterative gap meshing.
+        """
+
+        # Add a simulation Box as the first structure
+        structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        structures += self.static_structures
+
+        # Get boundary types (relevant for gap meshing)
+        boundary_types = [[None] * 2] * 3
+
+        for dim, boundary in enumerate(self.boundary_spec.to_list):
+            for side, edge in enumerate(boundary):
+                if isinstance(edge, (PECBoundary, PMCBoundary)):
+                    boundary_types[dim][side] = "pec/pmc"
+                elif isinstance(edge, (Periodic, BlochBoundary)):
+                    boundary_types[dim][side] = "periodic"
+
+        grid, lines = self.grid_spec._make_grid_and_snapping_lines(
+            structures=structures,
+            symmetry=self.symmetry,
+            periodic=self._periodic,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
+            lumped_elements=self.lumped_elements,
+            internal_snapping_points=self.internal_snapping_points,
+            internal_override_structures=self.internal_override_structures,
+            boundary_types=boundary_types,
+        )
+
+        # This would AutoGrid the in-plane directions of the 2D materials
+        # return self._grid_corrections_2dmaterials(grid)
+        return grid, lines
+
+    @cached_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
@@ -1193,24 +1243,25 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             :class:`.Grid` storing the spatial locations relevant to the simulation.
         """
 
-        # Add a simulation Box as the first structure
-        structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.static_structures
-
-        grid = self.grid_spec.make_grid(
-            structures=structures,
-            symmetry=self.symmetry,
-            periodic=self._periodic,
-            sources=self.sources,
-            num_pml_layers=self.num_pml_layers,
-            lumped_elements=self.lumped_elements,
-            internal_snapping_points=self.internal_snapping_points,
-            internal_override_structures=self.internal_override_structures,
-        )
+        grid, _ = self._grid_and_snapping_lines
 
         # This would AutoGrid the in-plane directions of the 2D materials
         # return self._grid_corrections_2dmaterials(grid)
         return grid
+
+    @cached_property
+    def _gap_meshing_snapping_lines(self) -> List[CoordinateOptional]:
+        """Snapping points resulted from iterative gap meshing.
+
+        Returns
+        -------
+        List[CoordinateOptional]
+            List of snapping lines resolving thin gaps and strips.
+        """
+
+        _, lines = self._grid_and_snapping_lines
+
+        return lines
 
     @cached_property
     def static_structures(self) -> list[Structure]:
@@ -3596,6 +3647,41 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_custom_source_time()
         self._validate_mode_object_bends()
         self._warn_mode_object_pml()
+        self._warn_rf_license()
+
+    def _warn_rf_license(self):
+        """
+        Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
+        simulation is categorised as RF simulation at the backend.
+        """
+        # RF component messages
+        rf_component_breakdown_msg = ""
+
+        # 1) lossy metal
+        for mat in self.scene.mediums:
+            if isinstance(mat, LossyMetalMedium):
+                rf_component_breakdown_msg += "\n - Contains a 'LossyMetalMedium'."
+                break
+
+        # 2) lumped elements
+        if len(self.lumped_elements) > 0:
+            rf_component_breakdown_msg += "\n - Contains a 'LumpedElement'."
+
+        # 3) source frequency is in RF range
+        if (self.frequency_range[0] < RF_FREQ_WARNING) & (self.frequency_range[0] != 0):
+            rf_component_breakdown_msg += "\n - Contains sources defined for RF wavelengths."
+
+        # 4) monitor frequency is in RF range
+        for monitor in self.monitors:
+            if isinstance(monitor, FreqMonitor) and monitor.frequency_range[0] < RF_FREQ_WARNING:
+                rf_component_breakdown_msg += "\n - Contains monitors defined for RF wavelengths."
+                break
+
+        # issue warning
+        if rf_component_breakdown_msg != "":
+            msg = " ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using RF-specific components in this simulation."
+            msg += rf_component_breakdown_msg
+            log.warning(msg, log_once=True)
 
     def _warn_mode_object_pml(self) -> None:
         """Warn if any mode objects have large pml."""

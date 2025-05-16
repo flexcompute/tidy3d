@@ -8,11 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Gradient computation for rotated boxes in Transformed.
+- Gradient computation for rotated angle of Transformed box.
+- Gradient computation for chained transformation of box.
+
+## [2.8.4] - 2025-05-15
+
+### Added
 - The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
 - Validation check for unit error in grid spacing.
 - Validation that when symmetry is imposed along a given axis, the boundary conditions on each side of the axis are identical.
-- Gradient computation for rotated boxes in Transformed.
-- Gradient computation for rotated angle of Transformed box.
+- Fields `convex_resolution`, `concave_resolution`, and `mixed_resolution` in `CornerFinderSpec` can be used to take into account the dimensions of autodetected convex, concave, or mixed geometric features when `dl_min` is automatically inferred during automatic grid generation.
+- `LayerRefinementSpec` now supports automatic thin gap meshing through fields `gap_meshing_iters` and `dl_min_from_gap_width`.
 
 ### Changed
 - Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
@@ -22,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
 - EME now supports 2D simulations.
 - 'EMESimulation' now supports 'PermittivityMonitor'.
+
+### Fixed
+- Fixed issue with `CustomMedium` gradients where other frequencies would wrongly contribute to the gradient.
+- Fixed bug when computing `PolySlab` bounds in plotting functions.
+- Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
 
 ## [2.8.3] - 2025-04-24
 
@@ -1614,7 +1626,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.4...develop
+[2.8.4]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...v2.8.4
 [2.8.3]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...v2.8.3
 [2.8.2]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1

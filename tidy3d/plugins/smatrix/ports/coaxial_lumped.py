@@ -37,7 +37,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     ...             direction="+",
     ...             name="coax_port_1",
     ...             impedance=50
-    ...         )
+    ...         ) # doctest: +SKIP
     """
 
     center: Coordinate = pd.Field(

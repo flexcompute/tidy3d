@@ -43,7 +43,7 @@ class LumpedPort(AbstractLumpedPort, Box):
     ...             voltage_axis=2,
     ...             name="port_1",
     ...             impedance=50
-    ...         )
+    ...         ) # doctest: +SKIP
 
     See Also
     --------
