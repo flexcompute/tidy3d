@@ -10,7 +10,6 @@ from typing import Any, Callable, List, Tuple, Union
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
-from scipy.spatial.transform import Rotation as scipy_R
 
 try:
     from matplotlib import patches
@@ -64,7 +63,7 @@ from ..viz import (
 )
 
 POLY_GRID_SIZE = 1e-12
-_NUM_PTS_DIM_BOX_FACE = 200
+_BOX_FACE_GRID_SIZE = 1e-3
 
 
 _shapely_operations = {
@@ -978,14 +977,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Rotated copy of this geometry.
         """
         T = Transformed.rotation(angle, axis)
-
-        # Create history of the transformation
-        def preprocess(value):
-            return value._value if isinstance(value, np.numpy_boxes.ArrayBox) else value
-
-        axis_entry = axis if isinstance(axis, (int, np.integer)) else tuple(float(a) for a in axis)
-        hist = [("rotate", {"angle": preprocess(angle), "axis": axis_entry})]
-        rotated_geom = Transformed(geometry=self, transform=T, transform_history=hist)
+        rotated_geom = Transformed(geometry=self, transform=T)
         return rotated_geom
 
     def reflected(self, normal: Coordinate) -> Geometry:
@@ -1672,11 +1664,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         size: np.ndarray,
         axis_normal: int,  # 0,1,2  → x,y,z faces
         min_max_index: int,  # 0 = − side, 1 = + side
-        rotation_matrix: np.ndarray | None = None,
-    ) -> tuple[DerivativeSurfaceMesh, np.ndarray, np.ndarray]:
+        linear_matrix: np.ndarray | None = None,  # 3×3 rotation/scale/shear
+        translation: np.ndarray | None = None,
+    ) -> tuple[DerivativeSurfaceMesh, np.ndarray]:
         """Build a mesh for the face of a box, given the center, size, axis normal, and min/max index.
         The mesh is built in the local coordinate system of the box, and then transformed to the global
-        coordinate system using the rotation matrix."""
+        coordinate system using the transformation matrix."""
 
         if axis_normal == 0:
             canonical_normal = np.array([1.0, 0.0, 0.0])
@@ -1690,10 +1683,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         if min_max_index == 0:
             canonical_normal *= -1.0
 
-        if rotation_matrix is None:
-            rotation_matrix = np.eye(3)
+        if linear_matrix is None:
+            linear_matrix = np.eye(3)
+        if translation is None:
+            translation = np.zeros(3)
 
-        n_local = rotation_matrix @ canonical_normal
+        n_local = np.linalg.inv(linear_matrix).T @ canonical_normal
         n_local = n_local / np.linalg.norm(n_local)
 
         def compute_tangential_vectors(
@@ -1745,11 +1740,16 @@ class Geometry(Tidy3dBaseModel, ABC):
         face_indices = connectivity[axis_normal][min_max_index]
         face_corners = corners[face_indices, :]
 
-        rotated_corners = (rotation_matrix @ face_corners.T).T
-        p1, p2, p3, p4 = rotated_corners
+        transformed_corners = (linear_matrix @ face_corners.T).T + translation
+        p1, p2, p3, p4 = transformed_corners
 
-        num_s = _NUM_PTS_DIM_BOX_FACE
-        num_t = _NUM_PTS_DIM_BOX_FACE
+        # Determine number of points along each face edge based on _BOX_FACE_GRID_SIZE
+        edge1 = transformed_corners[1] - transformed_corners[0]
+        edge2 = transformed_corners[2] - transformed_corners[0]
+        len_s = np.linalg.norm(edge1)
+        len_t = np.linalg.norm(edge2)
+        num_s = max(1, int(np.ceil(len_s / _BOX_FACE_GRID_SIZE)))
+        num_t = max(1, int(np.ceil(len_t / _BOX_FACE_GRID_SIZE)))
         s_vals = np.linspace(0, 1, 2 * num_s + 1)[1::2]
         t_vals = np.linspace(0, 1, 2 * num_t + 1)[1::2]
         S, T = np.meshgrid(s_vals, t_vals, indexing="ij")
@@ -2628,13 +2628,13 @@ class Box(SimplePlaneIntersection, Centered):
     """ Autograd code """
 
     def compute_derivatives(
-        self, derivative_info: DerivativeInfo, rotation_matrix: np.ndarray = None
+        self, derivative_info: DerivativeInfo, transform_matrix: np.ndarray = None
     ) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object with optional rotation matrix."""
 
         # Compute gradients w.r.t. each of the 6 faces using the rotation matrix (if any)
         vjps_faces = self.derivative_faces(
-            derivative_info=derivative_info, rotation_matrix=rotation_matrix
+            derivative_info=derivative_info, transform_matrix=transform_matrix
         )
 
         # post-process these values to give the gradients w.r.t. center and size
@@ -2674,7 +2674,7 @@ class Box(SimplePlaneIntersection, Centered):
         )
 
     def derivative_faces(
-        self, derivative_info: DerivativeInfo, rotation_matrix: np.ndarray = None
+        self, derivative_info: DerivativeInfo, transform_matrix: np.ndarray = None
     ) -> Bound:
         """Compute derivatives with respect to the normal position of 6 faces of `Box`, using rotation matrix if provided."""
 
@@ -2687,7 +2687,7 @@ class Box(SimplePlaneIntersection, Centered):
                     min_max_index=min_max_index,
                     axis_normal=axis,
                     derivative_info=derivative_info,
-                    rotation_matrix=rotation_matrix,
+                    transform_matrix=transform_matrix,
                 )
 
                 # record vjp for this face
@@ -2700,18 +2700,21 @@ class Box(SimplePlaneIntersection, Centered):
         min_max_index: int,
         axis_normal: int,
         derivative_info: DerivativeInfo,
-        rotation_matrix: np.ndarray = None,
+        transform_matrix: np.ndarray = None,
     ) -> float:
         """
         Compute the derivative (VJP) with respect to shifting a face of a rotated box,
         using full integration over that face.
         """
+        L_f = transform_matrix[:3, :3]
+        t_f = transform_matrix[:3, 3]
         mesh, _ = self.build_box_face_mesh(
             center=np.asarray(self.center, float),
             size=np.asarray(self.size, float),
             axis_normal=axis_normal,
             min_max_index=min_max_index,
-            rotation_matrix=rotation_matrix,
+            linear_matrix=L_f,
+            translation=t_f,
         )
         vjp = derivative_info.grad_surfaces(surface_mesh=mesh)
         return float(np.real(np.sum(vjp)))
@@ -2731,16 +2734,6 @@ class Transformed(Geometry):
         np.eye(4).tolist(),
         title="Transform",
         description="Transform matrix applied to the base geometry.",
-    )
-    # In future we want to compute derivatives using transform params rather than the final transformation matrix.
-    transform_history: list[tuple[str, dict]] = pydantic.Field(
-        default_factory=list,
-        title="Transform history",
-        description=(
-            "Optional record of the sequence of transforms applied to the "
-            "inner geometry.  Each entry is `(name, params_dict)`."
-        ),
-        exclude=True,
     )
 
     @pydantic.validator("transform")
@@ -2769,29 +2762,10 @@ class Transformed(Geometry):
 
     @pydantic.root_validator(skip_on_failure=True)
     def _apply_transforms(cls, values):
-        # --- pull any already-stored history ---------------------------------
-        hist_field = list(values.get("transform_history", []))  ### <-- changed
-        hist_attrs = list(values.get("attrs", {}).get("transform_history", []))  ### <-- changed
-        hist = hist_attrs + hist_field
-
-        geom = values["geometry"]
-        T = values["transform"]
-
-        while isinstance(geom, Transformed):
-            hist = geom.transform_history + hist
-            T = np.dot(T, geom.transform)
-            geom = geom.geometry
-
-        # write merged results
-        values["geometry"] = geom
-        values["transform"] = T
-        values["transform_history"] = hist
-
-        # keep a copy inside attrs so the list survives
-        attrs = dict(values.get("attrs", {}))
-        attrs["transform_history"] = hist
-        values["attrs"] = attrs
-
+        while isinstance(values["geometry"], Transformed):
+            inner = values["geometry"]
+            values["geometry"] = inner.geometry
+            values["transform"] = np.dot(values["transform"], inner.transform)
         return values
 
     @cached_property
@@ -3059,43 +3033,47 @@ class Transformed(Geometry):
         new_geometry = self.geometry._update_from_bounds(bounds=new_bounds, axis=axis)
         return self.updated_copy(geometry=new_geometry)
 
-    def _compute_rotate_derivative(self, derivative_info: DerivativeInfo, params):
+    def _compute_transform_derivative(self, derivative_info: DerivativeInfo):
         """Return the 3×3 tensor ∂J/∂R accumulated over all six faces.
 
         The rotation matrix **R** is reconstructed from the first entry in
         ``self.transform_history`` (which must be a *rotate* operation).
         """
-        # ---- build the rotation matrix --------------------------------------
+        # --------- pull the final affine map once --------------------------------
+        L_f = self.transform[:3, :3]  # no assumption on orthogonality
+        t_f = self.transform[:3, 3]
+        L_f_inv = np.linalg.inv(L_f)
 
-        theta = float(params["angle"])
-        raw_axis = params["axis"]
-        axis = np.eye(3)[raw_axis] if isinstance(raw_axis, int) else np.asarray(raw_axis, float)
-        axis /= np.linalg.norm(axis)
-        R = scipy_R.from_rotvec(theta * axis).as_matrix()
-
-        # ---- accumulate face contributions ----------------------------------
-        center = np.asarray(self.geometry.center, float)
+        center = np.asarray(self.geometry.center, float)  # local box frame
         size = np.asarray(self.geometry.size, float)
-        dJ_dR = np.zeros((3, 3), dtype=float)
+
+        dJ_dL_f = np.zeros((3, 3))
+        dJ_dt_f = np.zeros(3)
 
         for ax in (0, 1, 2):  # x-, y-, z-faces
-            for side in (0, 1):  # min / max faces
-                mesh, n_local = self.build_box_face_mesh(
+            for side in (0, 1):  # − / +
+                mesh, n_face = self.build_box_face_mesh(
                     center=center,
                     size=size,
                     axis_normal=ax,
                     min_max_index=side,
-                    rotation_matrix=R,
+                    linear_matrix=L_f,
+                    translation=t_f,
                 )
 
-                g = np.real(derivative_info.grad_surfaces(mesh).values).ravel()
-                X_rot = mesh.centers
-                X_ref = (R.T @ X_rot.T).T
+                g = derivative_info.grad_surfaces(mesh).values.real.ravel()  # (N,)
 
-                outer = g[:, None] * X_ref
-                dJ_dR += n_local[:, None] * outer.sum(axis=0)
+                # ---- linear part ------------------------------------------------
+                X_ref = (L_f_inv @ (mesh.centers - t_f).T).T  # (N,3)
+                dJ_dL_f += n_face[:, None] * (g[:, None] * X_ref).sum(axis=0)
 
-        return dJ_dR
+                # ---- translation part ------------------------------------------
+                dJ_dt_f += n_face * g.sum()  # g_i n_i
+
+        dJ_dT = np.zeros((4, 4))
+        dJ_dT[:3, :3] = dJ_dL_f
+        dJ_dT[:3, 3] = dJ_dt_f
+        return dJ_dT
 
     def compute_derivatives(self, derivative_info: DerivativeInfo):
         """Compute adjoint derivatives for the transformed geometry."""
@@ -3115,11 +3093,10 @@ class Transformed(Geometry):
 
         # ---------- geometry-level derivatives ------------------------------
         if geometry_paths:
-            R_geo = self.transform[:3, :3]
             geo_info = derivative_info.updated_copy(
                 paths=[p[1:] for p in geometry_paths], deep=False
             )
-            geo_derivs = self.geometry.compute_derivatives(geo_info, R_geo)
+            geo_derivs = self.geometry.compute_derivatives(geo_info, self.transform)
 
             derivative_map[("geometry", "center")] = np.asarray(
                 geo_derivs.get(("center",), (0.0, 0.0, 0.0)), float
@@ -3130,12 +3107,7 @@ class Transformed(Geometry):
 
         # ---------- transform-level derivatives -----------------------------
         if any(p[0] == "transform" for p in derivative_info.paths):
-            op, params = self.transform_history[0]
-            if op != "rotate":
-                raise RuntimeError("Expected the first transform_history entry to be 'rotate'.")
-            dJ_dR = self._compute_rotate_derivative(derivative_info, params)
-            dJ_dT = np.zeros((4, 4), dtype=float)
-            dJ_dT[:3, :3] = dJ_dR
+            dJ_dT = self._compute_transform_derivative(derivative_info)
             derivative_map[("transform",)] = dJ_dT
 
         return derivative_map
