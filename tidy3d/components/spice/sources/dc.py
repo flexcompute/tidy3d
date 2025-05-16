@@ -19,12 +19,14 @@ Examples:
 
 """
 
-from typing import Optional, Union
+from typing import Optional
 
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.constants import AMP, VOLT
+from tidy3d.constants import inf as td_inf
 
 
 class DCVoltageSource(Tidy3dBaseModel):
@@ -45,11 +47,19 @@ class DCVoltageSource(Tidy3dBaseModel):
     """
 
     name: Optional[str]
-    voltage: Union[pd.FiniteFloat, list[pd.FiniteFloat]] = pd.Field(
+    voltage: ArrayFloat1D = pd.Field(
+        ...,
         title="Voltage",
         description="DC voltage usually used as source in 'VoltageBC' boundary conditions.",
+        units=VOLT,
     )
-    units: str = VOLT
+
+    @pd.validator("voltage")
+    def check_voltage(cls, val):
+        for v in val:
+            if v == td_inf:
+                raise ValueError(f"Voltages must be finite. Currently  voltage={val}.")
+        return val
 
 
 class DCCurrentSource(Tidy3dBaseModel):
