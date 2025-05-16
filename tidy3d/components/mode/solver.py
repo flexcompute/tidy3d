@@ -203,7 +203,8 @@ class EigSolver(Tidy3dBaseModel):
         always impose PEC boundary at the xmax and ymax interfaces, and on the xmin and ymin
         interfaces unless PMC symmetry is present. If so, the PMC boundary is imposed through the
         backward derivative matrices."""
-        dmin_pmc = [sym == 1 for sym in symmetry]
+        dmax_pmc = mode_spec.boundary == "PMC"
+        dmin_pmc = [sym == 1 or (sym == 0 and dmax_pmc) for sym in symmetry]
 
         # Primal grid steps for E-field derivatives
         dl_f = [new_cs[1:] - new_cs[:-1] for new_cs in new_coords]
@@ -213,7 +214,7 @@ class EigSolver(Tidy3dBaseModel):
         dls = (dl_f, dl_b)
 
         # Derivative matrices with PEC boundaries by default and optional PMC at the near end
-        der_mats_tmp = d_mats(Nxy, dls, dmin_pmc)
+        der_mats_tmp = d_mats(Nxy, dls, dmin_pmc, dmax_pmc)
 
         # PML matrices; do not impose PML on the bottom when symmetry present
         dmin_pml = np.array(symmetry) == 0

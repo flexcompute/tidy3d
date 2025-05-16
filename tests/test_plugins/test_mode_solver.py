@@ -167,11 +167,12 @@ def mock_remote_api(monkeypatch):
     )
 
 
-def test_compute_modes():
+@pytest.mark.parametrize("boundary", ("PEC", "PMC"))
+def test_compute_modes(boundary):
     """Test direct call to `compute_modes`."""
     eps_cross = np.random.rand(10, 10)
     coords = np.arange(11)
-    mode_spec = td.ModeSpec(num_modes=3, target_neff=2.0)
+    mode_spec = td.ModeSpec(num_modes=3, target_neff=2.0, boundary=boundary)
     _ = compute_modes(
         eps_cross=[eps_cross] * 9,
         coords=[coords, coords],
@@ -736,14 +737,16 @@ def test_mode_bend_radius():
     assert np.allclose(data1.n_complex, data2.n_complex * 5.5 / 5.0)
 
 
-def test_mode_solver_2D():
+@pytest.mark.parametrize("boundary", ("PEC", "PMC"))
+def test_mode_solver_2D(boundary):
     """Run mode solver in 2D simulations."""
     mode_spec = td.ModeSpec(
         num_modes=3,
-        filter_pol="te",
+        filter_pol="te" if boundary == "PEC" else "tm",
         precision="double",
         num_pml=(0, 10),
         track_freq="central",
+        boundary=boundary,
     )
     simulation = td.Simulation(
         size=(0, SIM_SIZE[1], SIM_SIZE[2]),
@@ -764,9 +767,10 @@ def test_mode_solver_2D():
 
     mode_spec = td.ModeSpec(
         num_modes=3,
-        filter_pol="te",
+        filter_pol="te" if boundary == "PEC" else "tm",
         precision="double",
         num_pml=(10, 0),
+        boundary=boundary,
     )
     simulation = td.Simulation(
         size=(SIM_SIZE[0], SIM_SIZE[1], 0),

@@ -244,3 +244,10 @@ def get_mode_sim_data():
 def test_mode_sim_data():
     sim_data = get_mode_sim_data()
     _ = sim_data.plot_field("Ey", ax=AX, mode_index=0, f=FS[0])
+
+
+def test_mode_boundary():
+    _ = td.ModeSpec(boundary="PEC")
+    _ = td.ModeSpec(boundary="PMC")
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.ModeSpec(boundary="PBC")

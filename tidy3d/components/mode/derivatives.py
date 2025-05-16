@@ -6,13 +6,15 @@ import scipy.sparse as sp
 from ...constants import EPSILON_0, ETA_0
 
 
-def make_dxf(dls, shape, pmc):
+def make_dxf(dls, shape, pmc_neg, pmc_pos):
     """Forward derivative in x."""
     Nx, Ny = shape
     if Nx == 1:
         return sp.csr_matrix((Ny, Ny))
     dxf = sp.csr_matrix(sp.diags([-1, 1], [0, 1], shape=(Nx, Nx)))
-    if not pmc:
+    if pmc_pos:
+        dxf[-1, -1] = 0.0
+    if not pmc_neg:
         dxf[0, 0] = 0.0
     dxf = sp.diags(1 / dls).dot(dxf)
     dxf = sp.kron(dxf, sp.eye(Ny))
@@ -34,13 +36,15 @@ def make_dxb(dls, shape, pmc):
     return dxb
 
 
-def make_dyf(dls, shape, pmc):
+def make_dyf(dls, shape, pmc_neg, pmc_pos):
     """Forward derivative in y."""
     Nx, Ny = shape
     if Ny == 1:
         return sp.csr_matrix((Nx, Nx))
     dyf = sp.csr_matrix(sp.diags([-1, 1], [0, 1], shape=(Ny, Ny)))
-    if not pmc:
+    if pmc_pos:
+        dyf[-1, -1] = 0.0
+    if not pmc_neg:
         dyf[0, 0] = 0.0
     dyf = sp.diags(1 / dls).dot(dyf)
     dyf = sp.kron(sp.eye(Nx), dyf)
@@ -62,15 +66,15 @@ def make_dyb(dls, shape, pmc):
     return dyb
 
 
-def create_d_matrices(shape, dls, dmin_pmc=(False, False)):
+def create_d_matrices(shape, dls, dmin_pmc=(False, False), dmax_pmc=False):
     """Make the derivative matrices without PML. If dmin_pmc is True, the
     'backward' derivative in that dimension will be set to implement PMC
     boundary, otherwise it will be set to PEC."""
 
     dlf, dlb = dls
-    dxf = make_dxf(dlf[0], shape, dmin_pmc[0])
+    dxf = make_dxf(dlf[0], shape, dmin_pmc[0], dmax_pmc)
     dxb = make_dxb(dlb[0], shape, dmin_pmc[0])
-    dyf = make_dyf(dlf[1], shape, dmin_pmc[1])
+    dyf = make_dyf(dlf[1], shape, dmin_pmc[1], dmax_pmc)
     dyb = make_dyb(dlb[1], shape, dmin_pmc[1])
 
     return (dxf, dxb, dyf, dyb)

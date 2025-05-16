@@ -160,6 +160,12 @@ class ModeSpec(Tidy3dBaseModel):
         f"default of {GROUP_INDEX_STEP} is used.",
     )
 
+    boundary: Literal["PEC", "PMC"] = pd.Field(
+        "PEC",
+        title="Boundary Conditions",
+        description="Boundary conditions to impose at the edges of the mode plane.",
+    )
+
     @pd.validator("bend_axis", always=True)
     @skip_if_fields_missing(["bend_radius"])
     def bend_axis_given(cls, val, values):
