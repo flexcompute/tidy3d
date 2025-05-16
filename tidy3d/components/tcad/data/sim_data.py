@@ -73,6 +73,14 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         description="Device steady DC current-voltage relation for the device.",
     )
 
+    steady_dc_resistance_voltage: Optional[SteadyVoltageDataArray] = pd.Field(
+        None,
+        title="Small signal resistance",
+        description="Steady DC computation of the small signal resistance. This is computed "
+        "as the derivative of the current-voltage relation, delta(V)/delta(I) and the result "
+        "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
+    )
+
 
 class HeatChargeSimulationData(AbstractSimulationData):
     """Stores results of a :class:`HeatChargeSimulation`.
