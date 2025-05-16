@@ -187,7 +187,6 @@ Tidy3D has several optional dependencies that provide additional functionality. 
 
 Where ``dependency_group`` is one of the following:
 
-- ``gdspy``: Adds support for GDS export using `gdspy <https://github.com/heitzmann/gdspy>`_.
 - ``gdstk``: Adds support for GDS export using `gdstk <https://github.com/heitzmann/gdstk>`_.
 - ``trimesh``: Support for more complex mesh handling and manipulation.
 - ``vtk``: Support for working with unstructured data.

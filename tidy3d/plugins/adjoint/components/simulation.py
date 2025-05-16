@@ -457,7 +457,7 @@ class JaxSimulation(Simulation, JaxObject):
         """Append the simulation structures to a .gds cell.
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -525,34 +525,6 @@ class JaxSimulation(Simulation, JaxObject):
             frequency=frequency,
             gds_layer_dtype_map=gds_layer_dtype_map,
         )
-
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
-        ] = None,
-    ) -> List:
-        """Convert a simulation's planar slice to a .gds type polygon list.
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-        Return
-        ------
-        List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
-        """
-        sim, _ = self.to_simulation()
-        return sim.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
 
     def plot(
         self,

@@ -11,7 +11,7 @@ import numpy as np
 import pydantic.v1 as pydantic
 
 from ..constants import MICROMETER
-from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
+from ..exceptions import SetupError, Tidy3dImportError
 from ..log import log
 from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap
@@ -33,14 +33,8 @@ from .viz import add_ax_if_none, equal_aspect
 try:
     gdstk_available = True
     import gdstk
-except ImportError:
+except ImportError:  # pragma: no cover
     gdstk_available = False
-
-try:
-    gdspy_available = True
-    import gdspy
-except ImportError:
-    gdspy_available = False
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -421,43 +415,6 @@ class Structure(AbstractStructure):
 
         return polygons
 
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
-    ) -> None:
-        """Convert a structure's planar slice to a .gds type polygon.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer : int = 0
-            Layer index to use for the shapes stored in the .gds file.
-        gds_dtype : int = 0
-            Data-type index to use for the shapes stored in the .gds file.
-
-        Return
-        ------
-        List
-            List of ``gdspy.Polygon`` and ``gdspy.PolygonSet``.
-        """
-
-        if isinstance(self.medium, AbstractCustomMedium):
-            raise Tidy3dError(
-                "Structures with custom medium are not supported by 'gdspy'. They can only be "
-                "exported using 'to_gdstk'."
-            )
-
-        return self.geometry.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-
     def to_gds(
         self,
         cell,
@@ -473,7 +430,7 @@ class Structure(AbstractStructure):
 
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -491,36 +448,24 @@ class Structure(AbstractStructure):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        if gdstk_available and isinstance(cell, gdstk.Cell):
-            polygons = self.to_gdstk(
-                x=x,
-                y=y,
-                z=z,
-                permittivity_threshold=permittivity_threshold,
-                frequency=frequency,
-                gds_layer=gds_layer,
-                gds_dtype=gds_dtype,
-            )
-            if len(polygons) > 0:
-                cell.add(*polygons)
+        if not isinstance(cell, gdstk.Cell):  # type: ignore[misc]
+            if "gdstk" in cell.__class__.__name__.lower() and not gdstk_available:  # type: ignore[attr-defined]
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+                )
+            raise Tidy3dImportError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
-        elif gdspy_available and isinstance(cell, gdspy.Cell):
-            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-            if len(polygons) > 0:
-                cell.add(polygons)
-
-        elif "gdstk" in cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
-            )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
+        polygons = self.to_gdstk(
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer=gds_layer,
+            gds_dtype=gds_dtype,
+        )
+        if polygons:  # Check if the list is not empty
+            cell.add(*polygons)
 
     def to_gds_file(
         self,
@@ -558,15 +503,15 @@ class Structure(AbstractStructure):
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
         """
-        if gdstk_available:
+        try:
+            import gdstk  # type: ignore[import-untyped]
+
             library = gdstk.Library()
-        elif gdspy_available:
-            library = gdspy.GdsLibrary()
-        else:
+        except ImportError as e:
             raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
-            )
+                "Python module 'gdstk' not found. To export geometries to .gds "
+                "files, please install it."
+            ) from e
         cell = library.new_cell(gds_cell_name)
         self.to_gds(
             cell,

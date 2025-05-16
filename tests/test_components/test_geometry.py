@@ -3,7 +3,6 @@
 import math
 import warnings
 
-import gdspy
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
@@ -377,14 +376,6 @@ def test_gdstk_cell():
         td.PolySlab.from_gds(
             gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1, gds_dtype=0
         )
-
-
-def test_gdspy_cell():
-    gds_cell = gdspy.Cell("name")
-    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
-    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
-    with pytest.raises(Tidy3dKeyError):
-        td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
 
 
 def make_geo_group():

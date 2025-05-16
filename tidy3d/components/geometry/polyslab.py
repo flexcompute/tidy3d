@@ -12,7 +12,7 @@ import shapely
 from autograd.tracer import getval, isbox
 
 from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
-from ...exceptions import SetupError, ValidationError
+from ...exceptions import SetupError, Tidy3dImportError, ValidationError
 from ...log import log
 from ...packaging import verify_packages_import
 from ..autograd import AutogradFieldMap, TracedVertices, get_static
@@ -260,12 +260,12 @@ class PolySlab(base.Planar):
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
     ) -> List[PolySlab]:
-        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
+        """Import :class:`PolySlab` from a ``gdstk.Cell``.
 
         Parameters
         ----------
-        gds_cell : Union[gdstk.Cell, gdspy.Cell]
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
         axis : int
             Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z).
         slab_bounds: Tuple[float, float]
@@ -319,12 +319,12 @@ class PolySlab(base.Planar):
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
     ) -> List[ArrayFloat2D]:
-        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
+        """Import :class:`PolySlab` from a ``gdstk.Cell``.
 
         Parameters
         ----------
-        gds_cell : Union[gdstk.Cell, gdspy.Cell]
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
         gds_layer : int
             Layer index in the ``gds_cell``.
         gds_dtype : int = None
@@ -340,25 +340,23 @@ class PolySlab(base.Planar):
         List[ArrayFloat2D]
             List of :class:`.ArrayFloat2D`
         """
+        import gdstk  # type: ignore[import-untyped]
 
-        # switch the GDS cell loader function based on the class name string
-        # TODO: make this more robust in future releases
         gds_cell_class_name = str(gds_cell.__class__)
-
-        if "gdstk" in gds_cell_class_name:
-            gds_loader_fn = base.Geometry.load_gds_vertices_gdstk
-
-        elif "gdspy" in gds_cell_class_name:
-            gds_loader_fn = base.Geometry.load_gds_vertices_gdspy
-
-        else:
+        if not isinstance(gds_cell, gdstk.Cell):
+            if (
+                "gdstk" in gds_cell_class_name
+            ):  # Check if it might be a gdstk cell but gdstk is not found
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to import gdstk cells."
+                )
             raise ValueError(
                 f"validate 'gds_cell' of type '{gds_cell_class_name}' "
-                "does not seem to be associated with 'gdstk' or 'gdspy' packages "
+                "does not seem to be associated with 'gdstk' package "
                 "and therefore can't be loaded by Tidy3D."
             )
 
-        all_vertices = gds_loader_fn(
+        all_vertices = base.Geometry.load_gds_vertices_gdstk(  # type: ignore[attr-defined]
             gds_cell=gds_cell, gds_layer=gds_layer, gds_dtype=gds_dtype, gds_scale=gds_scale
         )
 
