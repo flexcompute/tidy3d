@@ -1163,3 +1163,86 @@ def test_triangulation_with_collinear_vertices():
     xr = np.linspace(0, 1, 6)
     a = np.array([[x, -0.5] for x in xr] + [[x, 0.5] for x in xr[::-1]])
     assert len(td.components.geometry.triangulation.triangulate(a)) == 10
+
+
+def test_triangle_mesh_from_height():
+    """Test the TriangleMesh.from_height_function and from_height_grid constructors."""
+
+    # Test successful creation with a valid height function
+    def valid_height_func(x, y):
+        return 0.5 + 0.2 * np.sin(4 * (x + 1)) * np.cos(3 * y)
+
+    axis = 2
+    direction = "+"
+    base = 0.0
+    center = [0, 0]
+    size = [1.5, 2]
+    grid_size = [20, 15]
+
+    geometry_from_func = td.TriangleMesh.from_height_function(
+        axis=axis,
+        direction=direction,
+        base=base,
+        center=center,
+        size=size,
+        grid_size=grid_size,
+        height_func=valid_height_func,
+    )
+
+    assert isinstance(geometry_from_func, td.TriangleMesh)
+
+    # Test equivalence with from_height_grid method
+    x = np.linspace(center[0] - 0.5 * size[0], center[0] + 0.5 * size[0], grid_size[0])
+    y = np.linspace(center[1] - 0.5 * size[1], center[1] + 0.5 * size[1], grid_size[1])
+    x_mesh, y_mesh = np.meshgrid(x, y, indexing="ij")
+
+    geometry_from_grid = td.TriangleMesh.from_height_grid(
+        axis=axis,
+        direction=direction,
+        base=base,
+        grid=(x, y),
+        height=valid_height_func(x_mesh, y_mesh),
+    )
+
+    # Check if the two TriangleMesh objects are equivalent
+    assert geometry_from_func == geometry_from_grid
+
+    # Test ValueError for negative height values
+    def negative_height_func(x, y):
+        return 0.5 + 0.2 * np.sin(4 * (x + 1)) * np.cos(3 * y) - 2
+
+    with pytest.raises(
+        ValueError,
+        match="All height values must be non-negative.",
+    ):
+        td.TriangleMesh.from_height_function(
+            axis=axis,
+            direction=direction,
+            base=base,
+            center=center,
+            size=size,
+            grid_size=grid_size,
+            height_func=negative_height_func,
+        )
+
+    # Test ValueError for height_func returning ndarray with wrong shape
+    def wrong_shape_height_func(x, y):
+        return np.zeros((3, 3))  # Incorrect shape
+
+    expected_shape = (grid_size[0], grid_size[1])
+
+    # Test for the presence of key parts of the error message
+    with pytest.raises(ValueError) as excinfo:
+        td.TriangleMesh.from_height_function(
+            axis=axis,
+            direction=direction,
+            base=base,
+            center=center,
+            size=size,
+            grid_size=grid_size,
+            height_func=wrong_shape_height_func,
+        )
+    # Check that the error message contains the expected information
+    error_message = str(excinfo.value)
+    assert f"shape {expected_shape}" in error_message
+    assert "shape (3, 3)" in error_message
