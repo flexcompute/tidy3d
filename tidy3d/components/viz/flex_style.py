@@ -1,4 +1,6 @@
-from ...log import log
+from __future__ import annotations
+
+from tidy3d.log import log
 
 _ORIGINAL_PARAMS = None
 

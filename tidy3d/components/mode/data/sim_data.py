@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal, Tuple
+from typing import Literal, Optional
 
 import pydantic.v1 as pd
 
-from ...base import cached_property
-from ...data.monitor_data import ModeSolverData, PermittivityData
-from ...data.sim_data import AbstractYeeGridSimulationData
-from ...types import (
-    Ax,
-    PlotScale,
-)
-from ..simulation import ModeSimulation
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.monitor_data import ModeSolverData, PermittivityData
+from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
+from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.components.types import Ax, PlotScale
 
 ModeSimulationMonitorDataType = PermittivityData
 
@@ -31,7 +28,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         description=":class:`.ModeSolverData` containing the field and effective index on unexpanded grid.",
     )
 
-    data: Tuple[ModeSimulationMonitorDataType, ...] = pd.Field(
+    data: tuple[ModeSimulationMonitorDataType, ...] = pd.Field(
         (),
         title="Monitor Data",
         description="List of monitor data "
@@ -50,8 +47,8 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:

@@ -1,5 +1,7 @@
 """Imports from scattering matrix plugin."""
 
+from __future__ import annotations
+
 import warnings
 
 from .component_modelers.modal import AbstractComponentModeler, ComponentModeler, ModalPortDataArray
@@ -20,13 +22,13 @@ warnings.filterwarnings(
 
 __all__ = [
     "AbstractComponentModeler",
-    "ComponentModeler",
-    "Port",
-    "ModalPortDataArray",
-    "TerminalComponentModeler",
     "CoaxialLumpedPort",
+    "ComponentModeler",
     "LumpedPort",
-    "WavePort",
-    "TerminalPortDataArray",
+    "ModalPortDataArray",
+    "Port",
     "PortDataArray",
+    "TerminalComponentModeler",
+    "TerminalPortDataArray",
+    "WavePort",
 ]

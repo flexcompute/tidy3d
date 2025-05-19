@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
+from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -34,7 +34,7 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
         description="Monitor associated with the data.",
     )
 
-    symmetry: Tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
+    symmetry: tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetry",
         description="Symmetry of the original simulation in x, y, and z.",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple
 
 import pydantic.v1 as pd
 
@@ -28,7 +27,7 @@ class StructureBasedHeatChargeSource(AbstractHeatChargeSource):
     """Abstract class associated with structures. Sources associated
     to structures must derive from this class"""
 
-    structures: Tuple[str, ...] = pd.Field(
+    structures: tuple[str, ...] = pd.Field(
         title="Target Structures",
         description="Names of structures where to apply heat source.",
     )

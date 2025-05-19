@@ -1,5 +1,7 @@
 """Generates schema for Simulation, saves it to file."""
 
+from __future__ import annotations
+
 import json
 
 import tidy3d

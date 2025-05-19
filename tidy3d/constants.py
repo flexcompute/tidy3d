@@ -10,6 +10,8 @@ Attributes:
     Q_e (float): funamental charge [C]
 """
 
+from __future__ import annotations
+
 from types import MappingProxyType
 
 import numpy as np

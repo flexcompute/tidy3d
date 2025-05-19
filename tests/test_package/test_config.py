@@ -1,7 +1,10 @@
 """test the grid operations"""
 
+from __future__ import annotations
+
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.log import DEFAULT_LEVEL, _level_value
 

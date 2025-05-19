@@ -1,8 +1,11 @@
 """Tests mediums."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 
 from ..utils import AssertLogLevel, cartesian_to_unstructured
@@ -11,7 +14,7 @@ from ..utils import AssertLogLevel, cartesian_to_unstructured
 @pytest.mark.parametrize("unstructured", [False, True])
 def test_perturbation_medium(unstructured):
     # fields to sample at
-    coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
+    coords = {"x": [1, 2], "y": [3, 4], "z": [5, 6]}
     temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
     electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
     hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
@@ -297,7 +300,7 @@ def test_correct_values(dispersive):
         ),
     )
 
-    t_arr = td.SpatialDataArray([[[333]]], coords=dict(x=[0], y=[0], z=[0]))
+    t_arr = td.SpatialDataArray([[[333]]], coords={"x": [0], "y": [0], "z": [0]})
 
     pp_large_sampled = pp_large.apply_data(temperature=t_arr).values[0, 0, 0]
     pp_small_sampled = pp_small.apply_data(temperature=t_arr).values[0, 0, 0]

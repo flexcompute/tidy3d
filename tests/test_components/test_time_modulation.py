@@ -1,10 +1,13 @@
 """Tests space time modulation."""
 
+from __future__ import annotations
+
 from math import isclose
 
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 
 from ..utils import cartesian_to_unstructured
@@ -16,7 +19,7 @@ NX, NY, NZ = 10, 9, 8
 X = np.linspace(-1, 1, NX)
 Y = np.linspace(-1, 1, NY)
 Z = np.linspace(-1, 1, NZ)
-COORDS = dict(x=X, y=Y, z=Z)
+COORDS = {"x": X, "y": Y, "z": Z}
 ARRAY_CMP = td.SpatialDataArray(np.random.random((NX, NY, NZ)) + 0.1j, coords=COORDS)
 ARRAY = td.SpatialDataArray(np.random.random((NX, NY, NZ)), coords=COORDS)
 
@@ -261,7 +264,7 @@ def test_supported_modulated_medium_types(unstructured, z):
 
     # custom
     permittivity = td.SpatialDataArray(
-        np.ones((2, 2, len(z))) * 2, coords=dict(x=[1, 2], y=[1, 3], z=z)
+        np.ones((2, 2, len(z))) * 2, coords={"x": [1, 2], "y": [1, 3], "z": z}
     )
     if unstructured:
         permittivity = cartesian_to_unstructured(permittivity, seed=345)

@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 import cProfile
 
 import jax
 import jax.numpy as jnp
 import pytest
+from memory_profiler import profile
+
 import tidy3d as td
 import tidy3d.plugins.adjoint as tda
-from memory_profiler import profile
 from tidy3d.plugins.adjoint.web import run_local as run
 
 from ..utils import run_emulated

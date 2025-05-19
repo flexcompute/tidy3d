@@ -1,4 +1,5 @@
 # test_compat.py
+from __future__ import annotations
 
 import importlib
 import sys

@@ -1,6 +1,8 @@
 """Objects that define how data is recorded from simulation."""
 
-import pydantic.v1 as pd
+from __future__ import annotations
+
+from pydantic.v1 import Field, PositiveInt
 
 from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
 
@@ -8,7 +10,7 @@ from tidy3d.components.tcad.monitors.abstract import HeatChargeMonitor
 class TemperatureMonitor(HeatChargeMonitor):
     """Temperature monitor."""
 
-    interval: pd.PositiveInt = pd.Field(
+    interval: PositiveInt = Field(
         1,
         title="Interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "

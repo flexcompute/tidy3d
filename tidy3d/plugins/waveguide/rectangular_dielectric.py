@@ -1,30 +1,31 @@
 """Rectangular dielectric waveguide utilities."""
 
-from typing import Any, List, Tuple, Union
+from __future__ import annotations
+
+from typing import Annotated, Any, Literal, Optional, Union
 
 import numpy
 import pydantic.v1 as pydantic
 from matplotlib import pyplot
-from typing_extensions import Annotated
 
-from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.boundary import BoundarySpec, Periodic
-from ...components.data.data_array import FreqModeDataArray, ModeIndexDataArray
-from ...components.geometry.base import Box
-from ...components.geometry.polyslab import PolySlab
-from ...components.grid.grid_spec import GridSpec
-from ...components.medium import Medium, MediumType
-from ...components.mode_spec import ModeSpec
-from ...components.simulation import Simulation
-from ...components.source.field import ModeSource
-from ...components.source.time import GaussianPulse
-from ...components.structure import Structure
-from ...components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D
-from ...components.viz import add_ax_if_none
-from ...constants import C_0, MICROMETER, RADIAN, inf
-from ...exceptions import Tidy3dError, ValidationError
-from ...log import log
-from ..mode.mode_solver import ModeSolver
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.boundary import BoundarySpec, Periodic
+from tidy3d.components.data.data_array import FreqModeDataArray, ModeIndexDataArray
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.polyslab import PolySlab
+from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.medium import Medium, MediumType
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.field import ModeSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Size1D
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
+from tidy3d.exceptions import Tidy3dError, ValidationError
+from tidy3d.log import log
+from tidy3d.plugins.mode.mode_solver import ModeSolver
 
 AnnotatedMedium = Annotated[MediumType, pydantic.Field(discriminator=TYPE_TAG_STR)]
 
@@ -72,14 +73,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    clad_medium: Union[AnnotatedMedium, Tuple[AnnotatedMedium, ...]] = pydantic.Field(
+    clad_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = pydantic.Field(
         ...,
         title="Clad Medium",
         description="Medium associated with the upper cladding layer. A sequence of mediums can "
         "be used to create a layered clad.",
     )
 
-    box_medium: Union[AnnotatedMedium, Tuple[AnnotatedMedium, ...]] = pydantic.Field(
+    box_medium: Union[AnnotatedMedium, tuple[AnnotatedMedium, ...]] = pydantic.Field(
         None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer. A sequence of mediums can "
@@ -339,14 +340,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         return values
 
     @property
-    def _clad_medium(self) -> Tuple[MediumType, ...]:
+    def _clad_medium(self) -> tuple[MediumType, ...]:
         """Normalize data type to tuple."""
         if not isinstance(self.clad_medium, tuple):
             return (self.clad_medium,)
         return self.clad_medium
 
     @property
-    def _box_medium(self) -> Tuple[MediumType, ...]:
+    def _box_medium(self) -> tuple[MediumType, ...]:
         """Normalize data type to tuple."""
         if not isinstance(self.box_medium, tuple):
             return (self.box_medium,)
@@ -373,7 +374,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def _swap_axis(
         self, lateral_coord: Any, normal_coord: Any, propagation_coord: Any
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Swap the model coordinates to desired axes."""
         result = [None, None, None]
         result[self.lateral_axis] = lateral_coord
@@ -383,13 +384,13 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def _translate(
         self, lateral_coord: float, normal_coord: float, propagation_coord: float
-    ) -> List[float]:
+    ) -> list[float]:
         """Swap the model coordinates to desired axes and translate to origin."""
         coordinates = self._swap_axis(lateral_coord, normal_coord, propagation_coord)
         result = [a + b for a, b in zip(self.origin, coordinates)]
         return result
 
-    def _transform_in_plane(self, lateral_coord: float, propagation_coord: float) -> List[float]:
+    def _transform_in_plane(self, lateral_coord: float, propagation_coord: float) -> list[float]:
         """Swap the model coordinates to desired axes in the substrate plane."""
         result = self._translate(lateral_coord, 0, propagation_coord)
         _, result = Box.pop_axis(result, self.normal_axis)
@@ -409,14 +410,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         return w
 
     @property
-    def _core_starts(self) -> List[float]:
+    def _core_starts(self) -> list[float]:
         """Starting positions of each waveguide (x is the position in the lateral direction)."""
         core_x = [-0.5 * (self.core_width.sum() + self.gap.sum())]
         core_x.extend(core_x[0] + numpy.cumsum(self.core_width[:-1]) + numpy.cumsum(self.gap))
         return core_x
 
     @property
-    def _override_structures(self) -> List[Structure]:
+    def _override_structures(self) -> list[Structure]:
         """Build override structures to define the simulation grid."""
 
         # Grid resolution factor applied to the materials (increase for waveguide corners
@@ -547,7 +548,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return grid_spec
 
     @cached_property
-    def structures(self) -> List[Structure]:
+    def structures(self) -> list[Structure]:
         """Waveguide structures for simulation, including the core(s), slabs (if any), and bottom
         cladding, if different from the top. For bend modes, the structure is a 270 degree bend
         regardless of :attr:`length`."""
@@ -815,12 +816,12 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -857,13 +858,13 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_eps(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -907,7 +908,11 @@ class RectangularDielectric(Tidy3dBaseModel):
         )
 
     def plot_structures(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -936,11 +941,11 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_structures_eps(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
@@ -988,9 +993,9 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def plot_grid(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -1090,10 +1095,10 @@ class RectangularDielectric(Tidy3dBaseModel):
         val: Literal["real", "imag", "abs"] = "real",
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
-        geometry_edges: str = None,
+        geometry_edges: Optional[str] = None,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.

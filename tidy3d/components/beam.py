@@ -1,13 +1,16 @@
 """Classes for creating data based on analytic beams like plane wave, Gaussian beam, and
 astigmatic Gaussian beam."""
 
+from __future__ import annotations
+
 from abc import abstractmethod
-from typing import Optional, Tuple, Union
+from typing import Literal, Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pd
 
-from ..constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
+from tidy3d.constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
+
 from .base import cached_property
 from .data.data_array import ScalarFieldDataArray
 from .data.monitor_data import FieldData
@@ -16,7 +19,7 @@ from .grid.grid import Coords, Grid
 from .medium import Medium, MediumType
 from .monitor import FieldMonitor
 from .source.field import FixedAngleSpec, FixedInPlaneKSpec
-from .types import TYPE_TAG_STR, Direction, FreqArray, Literal, Numpy
+from .types import TYPE_TAG_STR, Direction, FreqArray, Numpy
 from .validators import assert_plane
 
 DEFAULT_RESOLUTION = 200
@@ -156,7 +159,7 @@ class BeamProfile(Box):
             # Get the current field component
             field_vals = field_vals[comp % 3]
             # Make the ScalarFieldDataArray for the current component
-            coords = dict(x=x, y=y, z=z, f=np.array(self.freqs))
+            coords = {"x": x, "y": y, "z": z, "f": np.array(self.freqs)}
             field_data = ScalarFieldDataArray(field_vals, coords=coords)
             scalar_fields[field] = field_data
 
@@ -167,7 +170,6 @@ class BeamProfile(Box):
         """Scalar field corresponding to the analytic beam in coordinate system such that the
         propagation direction is z and the ``E``-field is entirely ``x``-polarized. The field is
         computed on an unstructured array ``points`` of shape ``(3, ...)``."""
-        pass
 
     def analytic_beam_z_normal(
         self, points: Numpy, background_n: float, field: Literal["E", "H"]
@@ -323,7 +325,7 @@ class PlaneWaveBeamProfile(BeamProfile):
         if self.as_fixed_angle_source:
             # For fixed-angle, we do not rotate the points
             return points
-        elif isinstance(self.angular_spec, FixedInPlaneKSpec):
+        if isinstance(self.angular_spec, FixedInPlaneKSpec):
             # For fixed in-plane k, the rotation is angle-dependent
             points = self.rotate_points(points, [0, 0, 1], -self.angle_phi)
             angle_theta_actual = self._angle_theta_actual(background_n=background_n)
@@ -373,7 +375,7 @@ class GaussianBeamProfile(BeamProfile):
         units=MICROMETER,
     )
 
-    def beam_params(self, z: Numpy, k0: Numpy) -> Tuple[Numpy, Numpy, Numpy]:
+    def beam_params(self, z: Numpy, k0: Numpy) -> tuple[Numpy, Numpy, Numpy]:
         """Compute the parameters needed to evaluate a Gaussian beam at z.
 
         Parameters
@@ -420,14 +422,14 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
     See also :class:`.AstigmaticGaussianBeam`.
     """
 
-    waist_sizes: Tuple[pd.PositiveFloat, pd.PositiveFloat] = pd.Field(
+    waist_sizes: tuple[pd.PositiveFloat, pd.PositiveFloat] = pd.Field(
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         units=MICROMETER,
     )
 
-    waist_distances: Tuple[float, float] = pd.Field(
+    waist_distances: tuple[float, float] = pd.Field(
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
@@ -439,7 +441,7 @@ class AstigmaticGaussianBeamProfile(BeamProfile):
         units=MICROMETER,
     )
 
-    def beam_params(self, z: Numpy, k0: Numpy) -> Tuple[Numpy, Numpy, Numpy, Numpy]:
+    def beam_params(self, z: Numpy, k0: Numpy) -> tuple[Numpy, Numpy, Numpy, Numpy]:
         """Compute the parameters needed to evaluate an astigmatic Gaussian beam at z.
 
         Parameters

@@ -4,8 +4,8 @@ invariance along a given propagation axis.
 
 from __future__ import annotations
 
-from ...components.data.monitor_data import ModeSolverData
-from ...components.mode.mode_solver import MODE_MONITOR_NAME, MODE_PLANE_TYPE, ModeSolver
+from tidy3d.components.data.monitor_data import ModeSolverData
+from tidy3d.components.mode.mode_solver import MODE_MONITOR_NAME, MODE_PLANE_TYPE, ModeSolver
 
 _ = ModeSolver
 _ = ModeSolverData

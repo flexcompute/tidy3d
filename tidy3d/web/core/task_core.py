@@ -6,7 +6,7 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Optional, Union
 
 import pydantic.v1 as pd
 from botocore.exceptions import ClientError
@@ -47,7 +47,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         resp = http.get("tidy3d/projects")
         return (
             parse_obj_as(
-                List[Folder],
+                list[Folder],
                 resp,
             )
             if resp
@@ -109,7 +109,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
             params={"daysOld": days_old},
         )
 
-    def list_tasks(self) -> List[Tidy3DResource]:
+    def list_tasks(self) -> list[Tidy3DResource]:
         """List all tasks in this folder.
 
         Returns
@@ -120,7 +120,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
         return (
             parse_obj_as(
-                List[SimulationTask],
+                list[SimulationTask],
                 resp,
             )
             if resp
@@ -204,9 +204,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         task_type: str,
         task_name: str,
         folder_name: str = "default",
-        callback_url: str = None,
+        callback_url: Optional[str] = None,
         simulation_type: str = "tidy3d",
-        parent_tasks: List[str] = None,
+        parent_tasks: Optional[list[str]] = None,
         file_type: str = "Gz",
     ) -> SimulationTask:
         """Create a new task on the server.
@@ -281,7 +281,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return task
 
     @classmethod
-    def get_running_tasks(cls) -> List[SimulationTask]:
+    def get_running_tasks(cls) -> list[SimulationTask]:
         """Get a list of running tasks from the server"
 
         Returns
@@ -293,7 +293,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         resp = http.get("tidy3d/py/tasks")
         if not resp:
             return []
-        return parse_obj_as(List[SimulationTask], resp)
+        return parse_obj_as(list[SimulationTask], resp)
 
     def delete(self, versions: bool = False):
         """Delete current task from server.
@@ -357,7 +357,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         stub: TaskStub,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
         remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
@@ -397,7 +397,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         local_file: str,
         remote_filename: str,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> None:
         """
         Upload file to platform. Using this method when the json file is too large to parse
@@ -426,8 +426,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def submit(
         self,
-        solver_version: str = None,
-        worker_group: str = None,
+        solver_version: Optional[str] = None,
+        worker_group: Optional[str] = None,
         pay_type: Union[PayType, str] = PayType.AUTO,
     ):
         """Kick off this task.
@@ -498,7 +498,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
         remote_data_file: str = SIMULATION_DATA_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation data file from Server.
@@ -555,7 +555,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
         remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation.hdf5 file from Server.
@@ -585,7 +585,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             progress_callback=progress_callback,
         )
 
-    def get_running_info(self) -> Tuple[float, float]:
+    def get_running_info(self) -> tuple[float, float]:
         """Gets the % done and field_decay for a running task.
 
         Returns
@@ -606,7 +606,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return perc_done, field_decay
 
     def get_log(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self,
+        to_file: str,
+        verbose: bool = True,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> pathlib.Path:
         """Get log file from Server.
 

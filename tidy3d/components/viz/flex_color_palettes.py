@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 SEQUENTIAL_PALETTES_HEX = {
     "flex_turquoise_seq": [
         "#ffffff",

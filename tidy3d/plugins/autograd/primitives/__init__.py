@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .interpolate import interpolate_spline
 from .misc import gaussian_filter
 

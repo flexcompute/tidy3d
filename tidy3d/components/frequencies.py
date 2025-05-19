@@ -1,9 +1,12 @@
 """Frequency utilities."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic as pd
 
-from ..constants import C_0
+from tidy3d.constants import C_0
+
 from .base import Tidy3dBaseModel
 
 O_BAND = (1.260, 1.360)
@@ -44,54 +47,54 @@ class FrequencyUtils(Tidy3dBaseModel):
             value = C_0 / value
         if value < 3:
             return ("near static",)
-        elif value < 300e6:
+        if value < 300e6:
             if value < 30:
                 return ("radio wave", "ELF")
-            elif value < 300:
+            if value < 300:
                 return ("radio wave", "SLF")
-            elif value < 3e3:
+            if value < 3e3:
                 return ("radio wave", "ULF")
-            elif value < 30e3:
+            if value < 30e3:
                 return ("radio wave", "VLF")
-            elif value < 300e3:
+            if value < 300e3:
                 return ("radio wave", "LF")
-            elif value < 3e6:
+            if value < 3e6:
                 return ("radio wave", "MF")
-            elif value < 30e6:
+            if value < 30e6:
                 return ("radio wave", "HF")
             return ("radio wave", "VHF")
-        elif value < 300e9:
+        if value < 300e9:
             if value < 3e9:
                 return ("microwave", "UHF")
-            elif value < 30e9:
+            if value < 30e9:
                 return ("microwave", "SHF")
             return ("microwave", "EHF")
-        elif value < 400e12:
+        if value < 400e12:
             if value < 6e12:
                 return ("infrared", "FIR")
-            elif value < 100e12:
+            if value < 100e12:
                 return ("infrared", "MIR")
             return ("infrared", "NIR")
-        elif value < 790e12:
+        if value < 790e12:
             if value < 480e12:
                 return ("visible", "red")
-            elif value < 510e12:
+            if value < 510e12:
                 return ("visible", "orange")
-            elif value < 530e12:
+            if value < 530e12:
                 return ("visible", "yellow")
-            elif value < 600e12:
+            if value < 600e12:
                 return ("visible", "green")
-            elif value < 620e12:
+            if value < 620e12:
                 return ("visible", "cyan")
-            elif value < 670e12:
+            if value < 670e12:
                 return ("visible", "blue")
             return ("visible", "violet")
-        elif value < 30e15:
+        if value < 30e15:
             if value < 1e15:
                 return ("ultraviolet", "NUV")
-            elif value < 1.5e15:
+            if value < 1.5e15:
                 return ("ultraviolet", "MUV")
-            elif value < 2.47e15:
+            if value < 2.47e15:
                 return ("ultraviolet", "FUV")
             return ("ultraviolet", "EUV")
         if value < 30e18:

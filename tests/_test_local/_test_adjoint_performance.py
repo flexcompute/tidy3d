@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import sys
 import time
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-import tidy3d as td
 from jax import grad
 from memory_profiler import profile
+
+import tidy3d as td
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.components.geometry import JaxBox
@@ -52,12 +55,12 @@ def make_sim(eps_values: np.ndarray) -> JaxSimulation:
 
     # custom medium
     (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
-    coords = dict(
-        x=np.linspace(xmin, xmax, Nx).tolist(),
-        y=np.linspace(ymin, ymax, Ny).tolist(),
-        z=np.linspace(zmin, zmax, Nz).tolist(),
-        f=[FREQ0],
-    )
+    coords = {
+        "x": np.linspace(xmin, xmax, Nx).tolist(),
+        "y": np.linspace(ymin, ymax, Ny).tolist(),
+        "z": np.linspace(zmin, zmax, Nz).tolist(),
+        "f": [FREQ0],
+    }
 
     eps_ii = JaxDataArray(values=eps_values, coords=coords)
     field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}

@@ -1,5 +1,7 @@
 """connect util for webapi."""
 
+from __future__ import annotations
+
 import time
 from functools import wraps
 
@@ -8,8 +10,8 @@ from requests.exceptions import ConnectionError as ConnErr
 from requests.exceptions import JSONDecodeError
 from urllib3.exceptions import NewConnectionError
 
-from ...exceptions import WebError
-from ...log import log
+from tidy3d.exceptions import WebError
+from tidy3d.log import log
 
 # number of seconds to keep re-trying connection before erroring
 CONNECTION_RETRY_TIME = 180

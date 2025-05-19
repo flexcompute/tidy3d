@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import gdstk
 import numpy as np
+
 import tidy3d as td
 from tidy3d.plugins.polyslab import ComplexPolySlab
 
@@ -37,7 +40,7 @@ def test_many_sub_polyslabs():
     num_subpoly = 200
     dl_list = np.linspace(0, 0.1, num_subpoly)
     vertices = [(sum(dl_list[: i + 1]), 0) for i in range(num_subpoly)]
-    vertices = vertices + [(5, 20)]
+    vertices = [*vertices, (5, 20)]
 
     s = ComplexPolySlab(
         vertices=vertices,

@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
 import xarray as xr
+
+import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
@@ -73,9 +76,9 @@ def test_validate_no_sources(tmp_path):
     source = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
-    sim_w_source = modeler.simulation.copy(update=dict(sources=(source,)))
+    sim_w_source = modeler.simulation.copy(update={"sources": (source,)})
     with pytest.raises(pd.ValidationError):
-        _ = modeler.copy(update=dict(simulation=sim_w_source))
+        _ = modeler.copy(update={"simulation": sim_w_source})
 
 
 def test_validate_3D_sim(tmp_path):
@@ -137,13 +140,13 @@ def test_run_component_modeler(monkeypatch, tmp_path):
 
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
             assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(
-                s_matrix.sel(**coords_in).sel(**coords_out) != 0
-            ), "monitor index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
+                "monitor index not present in S matrix"
+            )
 
 
 def test_s_to_z_component_modeler():
@@ -173,11 +176,11 @@ def test_s_to_z_component_modeler():
         dtype=complex,
     )
     # Put coords in opposite order to check reordering
-    coords = dict(
-        f=np.array(freqs),
-        port_out=port_names,
-        port_in=port_names,
-    )
+    coords = {
+        "f": np.array(freqs),
+        "port_out": port_names,
+        "port_in": port_names,
+    }
 
     s_matrix = TerminalPortDataArray(data=values, coords=coords)
     z_matrix = TerminalComponentModeler.s_to_z(s_matrix, reference=Z0)
@@ -189,10 +192,10 @@ def test_s_to_z_component_modeler():
 
     # test version with different port reference impedances
     values = np.full((len(freqs), len(port_names)), Z0)
-    coords = dict(
-        f=np.array(freqs),
-        port=port_names,
-    )
+    coords = {
+        "f": np.array(freqs),
+        "port": port_names,
+    }
     z_port_matrix = PortDataArray(data=values, coords=coords)
     z_matrix = TerminalComponentModeler.s_to_z(s_matrix, reference=z_port_matrix)
     z_matrix_at_f = z_matrix.sel(f=1e8)
@@ -203,11 +206,11 @@ def test_s_to_z_component_modeler():
 
 
 def test_ab_to_s_component_modeler():
-    coords = dict(
-        f=np.array([1e8]),
-        port_out=["lumped_port_1", "lumped_port_2"],
-        port_in=["lumped_port_1", "lumped_port_2"],
-    )
+    coords = {
+        "f": np.array([1e8]),
+        "port_out": ["lumped_port_1", "lumped_port_2"],
+        "port_in": ["lumped_port_1", "lumped_port_2"],
+    }
     # Common case is reference impedance matched to loads, which means ideally
     # the a matrix would be an identity matrix, and as a result the s matrix will be
     # given directly by the b_matrix
@@ -273,13 +276,13 @@ def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
 
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
             assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(
-                s_matrix.sel(**coords_in).sel(**coords_out) != 0
-            ), "monitor index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
+                "monitor index not present in S matrix"
+            )
 
 
 def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path):
@@ -376,10 +379,10 @@ def test_power_delivered_helper(monkeypatch, tmp_path):
     current = np.ones_like(freqs) * current_amplitude
 
     def compute_voltage_patch(self, sim_data):
-        return FreqDataArray(voltage, coords=dict(f=freqs))
+        return FreqDataArray(voltage, coords={"f": freqs})
 
     def compute_current_patch(self, sim_data):
-        return FreqDataArray(current, coords=dict(f=freqs))
+        return FreqDataArray(current, coords={"f": freqs})
 
     monkeypatch.setattr(CoaxialLumpedPort, "compute_voltage", compute_voltage_patch)
     monkeypatch.setattr(CoaxialLumpedPort, "compute_current", compute_current_patch)
@@ -452,12 +455,12 @@ def test_run_coaxial_component_modeler_with_wave_ports(
     shape_both_ports = (len(modeler.freqs),)
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
-            assert np.all(
-                s_matrix.sel(**coords_in).values.shape == shape_one_port
-            ), "source index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
+                "source index not present in S matrix"
+            )
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
             ), "monitor index not present in S matrix"
@@ -477,12 +480,12 @@ def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
     shape_both_ports = (len(modeler.freqs),)
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
-            assert np.all(
-                s_matrix.sel(**coords_in).values.shape == shape_one_port
-            ), "source index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
+                "source index not present in S matrix"
+            )
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
             ), "monitor index not present in S matrix"
@@ -683,7 +686,7 @@ def test_antenna_helpers(monkeypatch, tmp_path):
         modeler.get_radiation_monitor_by_name("invalid")
 
     # Test monitor data normalization with different amplitude types
-    a_array = FreqDataArray(np.ones(len(modeler.freqs)), dict(f=modeler.freqs))
+    a_array = FreqDataArray(np.ones(len(modeler.freqs)), {"f": modeler.freqs})
     normalized_data_array = modeler._monitor_data_at_port_amplitude(
         modeler.ports[0], sim_data, rad_mon_data, a_array
     )

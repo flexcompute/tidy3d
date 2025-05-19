@@ -1,5 +1,7 @@
 """Tests Geometry objects."""
 
+from __future__ import annotations
+
 import math
 import warnings
 
@@ -9,8 +11,9 @@ import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import shapely
-import tidy3d as td
 import trimesh
+
+import tidy3d as td
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -182,7 +185,7 @@ def test_zero_dims():
 
 
 def test_inside_polyslab_sidewall():
-    ps = POLYSLAB.copy(update=dict(sidewall_angle=0.1))
+    ps = POLYSLAB.copy(update={"sidewall_angle": 0.1})
     ps.inside(x=0, y=0, z=0)
 
 
@@ -283,7 +286,7 @@ def test_box_from_bounds():
 
 def test_polyslab_center_axis():
     """Test the handling of center_axis in a polyslab having (-td.inf, td.inf) bounds."""
-    ps = POLYSLAB.copy(update=dict(slab_bounds=(-td.inf, td.inf)))
+    ps = POLYSLAB.copy(update={"slab_bounds": (-td.inf, td.inf)})
     assert ps.center_axis == 0
 
 
@@ -292,7 +295,7 @@ def test_polyslab_center_axis():
 )
 def test_polyslab_inf_bounds(lower_bound, upper_bound):
     """Test the handling of various operations in a polyslab having inf bounds."""
-    ps = POLYSLAB.copy(update=dict(slab_bounds=(lower_bound, upper_bound)))
+    ps = POLYSLAB.copy(update={"slab_bounds": (lower_bound, upper_bound)})
     # catch any runtime warning related to inf operations
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -326,28 +329,28 @@ def test_polyslab_inf_to_finite_bounds(axis):
         vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
     )
 
-    assert ps_low_inf.finite_length_axis == (
-        LARGE_NUMBER + axis_bound
-    ), "Unexpected finite length for polyslab axis with -inf bound"
-    assert ps_high_inf.finite_length_axis == (
-        LARGE_NUMBER + axis_bound
-    ), "Unexpected finite length for polyslab axis with inf bound"
-    assert (
-        ps_inf.finite_length_axis == 2 * LARGE_NUMBER
-    ), "Unexpected finite length for polyslab axis with two inf bounds"
+    assert ps_low_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
+        "Unexpected finite length for polyslab axis with -inf bound"
+    )
+    assert ps_high_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
+        "Unexpected finite length for polyslab axis with inf bound"
+    )
+    assert ps_inf.finite_length_axis == 2 * LARGE_NUMBER, (
+        "Unexpected finite length for polyslab axis with two inf bounds"
+    )
 
 
 def test_validate_polyslab_vertices_valid():
     with pytest.raises(pydantic.ValidationError):
-        POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))
+        POLYSLAB.copy(update={"vertices": (1, 2, 3)})
     with pytest.raises(pydantic.ValidationError):
         crossing_verts = ((0, 0), (1, 1), (0, 1), (1, 0))
-        POLYSLAB.copy(update=dict(vertices=crossing_verts))
+        POLYSLAB.copy(update={"vertices": crossing_verts})
 
 
 def test_sidewall_failed_validation():
     with pytest.raises(pydantic.ValidationError):
-        POLYSLAB.copy(update=dict(sidewall_angle=1000))
+        POLYSLAB.copy(update={"sidewall_angle": 1000})
 
 
 def test_surfaces():
@@ -428,16 +431,16 @@ def test_geometryoperations():
     assert UNION + CYLINDER == td.GeometryGroup(
         geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
     )
-    assert BOX + GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
-    assert GROUP + CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+    assert BOX + GROUP == td.GeometryGroup(geometries=(BOX, *GROUP.geometries))
+    assert GROUP + CYLINDER == td.GeometryGroup(geometries=(*GROUP.geometries, CYLINDER))
 
     assert BOX | CYLINDER == td.GeometryGroup(geometries=(BOX, CYLINDER))
     assert BOX | UNION == td.GeometryGroup(geometries=(BOX, UNION.geometry_a, UNION.geometry_b))
     assert UNION | CYLINDER == td.GeometryGroup(
         geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
     )
-    assert BOX | GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
-    assert GROUP | CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+    assert BOX | GROUP == td.GeometryGroup(geometries=(BOX, *GROUP.geometries))
+    assert GROUP | CYLINDER == td.GeometryGroup(geometries=(*GROUP.geometries, CYLINDER))
 
     assert BOX * SPHERE == td.ClipOperation(
         operation="intersection", geometry_a=BOX, geometry_b=SPHERE
@@ -1040,7 +1043,7 @@ def test_custom_surface_geometry(tmp_path):
 def test_geo_group_sim():
     geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
     geos_orig = list(geo_grp.geometries)
-    geo_grp_full = geo_grp.updated_copy(geometries=geos_orig + [td.Box(size=(1, 1, 1))])
+    geo_grp_full = geo_grp.updated_copy(geometries=[*geos_orig, td.Box(size=(1, 1, 1))])
 
     sim = td.Simulation(
         size=(10, 10, 10),

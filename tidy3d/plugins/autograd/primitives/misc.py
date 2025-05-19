@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import scipy.ndimage
 from autograd.extend import defvjp, primitive
 

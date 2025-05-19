@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import scipy
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 from rich.progress import Progress
 
-from ..constants import fp_eps
-from ..exceptions import ValidationError
-from ..log import get_logging_console, log
+from tidy3d.constants import fp_eps
+from tidy3d.exceptions import ValidationError
+from tidy3d.log import get_logging_console, log
+
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
 
@@ -111,7 +112,7 @@ def imag_resp_extrema_locs(poles: ArrayComplex1D, residues: ArrayComplex1D) -> A
 class AdvancedFastFitterParam(Tidy3dBaseModel):
     """Advanced fast fitter parameters."""
 
-    loss_bounds: Tuple[float, float] = Field(
+    loss_bounds: tuple[float, float] = Field(
         (0, np.inf),
         title="Loss bounds",
         description="Bounds (lower, upper) on Im[resp]. Default corresponds to only passivity. "
@@ -121,7 +122,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         "A finite upper bound may be helpful when fitting lossless materials. "
         "In this case, consider also increasing the weight for fitting the imaginary part.",
     )
-    weights: Tuple[NonNegativeFloat, NonNegativeFloat] = Field(
+    weights: tuple[NonNegativeFloat, NonNegativeFloat] = Field(
         None,
         title="Weights",
         description="Weights (real, imag) in objective function for fitting. The weights "
@@ -350,7 +351,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return self.poles[np.iscomplex(self.poles)]
 
     @classmethod
-    def get_default_weights(cls, eps: ArrayComplex1D) -> Tuple[float, float]:
+    def get_default_weights(cls, eps: ArrayComplex1D) -> tuple[float, float]:
         """Default weights based on real and imaginary part of eps."""
         rms = np.array([np.sqrt(np.mean(x**2)) for x in (np.real(eps), np.imag(eps))])
         rms = np.maximum(RMS_MIN, rms)
@@ -360,7 +361,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return tuple(weights)
 
     @cached_property
-    def pole_residue(self) -> Tuple[float, ArrayComplex1D, ArrayComplex1D]:
+    def pole_residue(self) -> tuple[float, ArrayComplex1D, ArrayComplex1D]:
         """Parameters for pole-residue model in original units."""
         if self.eps_inf is None or self.poles is None:
             return 1, [], []
@@ -647,7 +648,7 @@ class FastFitterData(AdvancedFastFitterParam):
 
         return model
 
-    def iterate_passivity(self, passivity_omega: ArrayFloat1D) -> Tuple[FastFitterData, int]:
+    def iterate_passivity(self, passivity_omega: ArrayFloat1D) -> tuple[FastFitterData, int]:
         """Iterate passivity enforcement algorithm."""
 
         size = len(self.real_poles) + 2 * len(self.complex_poles)
@@ -724,7 +725,7 @@ class FastFitterData(AdvancedFastFitterParam):
 
 
 def _fit_fixed_parameters(
-    num_poles_range: Tuple[PositiveInt, PositiveInt], model: FastFitterData
+    num_poles_range: tuple[PositiveInt, PositiveInt], model: FastFitterData
 ) -> FastFitterData:
     def fit_non_passive(model: FastFitterData) -> FastFitterData:
         best_model = model
@@ -755,11 +756,11 @@ def fit(
     resp_data: ArrayComplex1D,
     min_num_poles: PositiveInt = 1,
     max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
-    resp_inf: float = None,
+    resp_inf: Optional[float] = None,
     tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
     advanced_param: AdvancedFastFitterParam = None,
     scale_factor: PositiveFloat = 1,
-) -> Tuple[Tuple[float, ArrayComplex1D, ArrayComplex1D], float]:
+) -> tuple[tuple[float, ArrayComplex1D, ArrayComplex1D], float]:
     """Fit data using a fast fitting algorithm.
 
     Note
@@ -840,7 +841,7 @@ def fit(
         advanced_param=advanced_param or AdvancedFastFitterParam(),
         scale_factor=scale_factor,
     )
-    log.info(f"Fitting weights=({init_model.weights[0]:.3g}, " f"{init_model.weights[1]:.3g}).")
+    log.info(f"Fitting weights=({init_model.weights[0]:.3g}, {init_model.weights[1]:.3g}).")
 
     def make_configs():
         configs = [[p] for p in range(max(min_num_poles // 2, 1), max_num_poles + 1)]
@@ -851,9 +852,9 @@ def fit(
             init_model.optimize_eps_inf,
         ]:
             if setting is None:
-                configs = [c + [r] for c in configs for r in [True, False]]
+                configs = [[*c, r] for c in configs for r in [True, False]]
             else:
-                configs = [c + [r] for c in configs for r in [setting]]
+                configs = [[*c, r] for c in configs for r in [setting]]
         return configs
 
     best_model = init_model

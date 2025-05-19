@@ -1,20 +1,21 @@
 """Class and custom data array for representing a scattering-matrix port, which is defined by a pair of terminals."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Optional, Union
 
 import pydantic.v1 as pd
 
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.monitor import FieldMonitor, ModeMonitor
+from tidy3d.components.source.base import Source
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import FreqArray
 from tidy3d.log import log
-
-from ....components.base import Tidy3dBaseModel, cached_property
-from ....components.data.data_array import FreqDataArray
-from ....components.data.sim_data import SimulationData
-from ....components.grid.grid import Grid
-from ....components.monitor import FieldMonitor, ModeMonitor
-from ....components.source.base import Source
-from ....components.source.time import GaussianPulse
-from ....components.types import FreqArray
 
 
 class AbstractTerminalPort(Tidy3dBaseModel, ABC):
@@ -37,12 +38,12 @@ class AbstractTerminalPort(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def to_source(
-        self, source_time: GaussianPulse, snap_center: float = None, grid: Grid = None
+        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
     ) -> Source:
         """Create a current source from a terminal-based port."""
 
     def to_field_monitors(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> Union[list[FieldMonitor], list[ModeMonitor]]:
         """DEPRECATED: Monitors used to compute the port voltage and current."""
         log.warning(
@@ -53,7 +54,7 @@ class AbstractTerminalPort(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def to_monitors(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> Union[list[FieldMonitor], list[ModeMonitor]]:
         """Monitors used to compute the port voltage and current."""
 

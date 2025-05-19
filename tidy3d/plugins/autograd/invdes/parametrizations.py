@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Callable, Tuple, Union
+from typing import Callable, Optional, Union
 
 import pydantic.v1 as pd
 from numpy.typing import NDArray
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.plugins.autograd.constants import BETA_DEFAULT, ETA_DEFAULT
+from tidy3d.plugins.autograd.types import KernelType, PaddingType
 
-from ..constants import BETA_DEFAULT, ETA_DEFAULT
-from ..types import KernelType, PaddingType
 from .filters import make_filter
 from .projections import tanh_projection
 
@@ -16,13 +16,13 @@ from .projections import tanh_projection
 class FilterAndProject(Tidy3dBaseModel):
     """A class that combines filtering and projection operations."""
 
-    radius: Union[float, Tuple[float, ...]] = pd.Field(
+    radius: Union[float, tuple[float, ...]] = pd.Field(
         ..., title="Radius", description="The radius of the kernel."
     )
-    dl: Union[float, Tuple[float, ...]] = pd.Field(
+    dl: Union[float, tuple[float, ...]] = pd.Field(
         ..., title="Grid Spacing", description="The grid spacing."
     )
-    size_px: Union[int, Tuple[int, ...]] = pd.Field(
+    size_px: Union[int, tuple[int, ...]] = pd.Field(
         None, title="Size in Pixels", description="The size of the kernel in pixels."
     )
     beta: pd.NonNegativeFloat = pd.Field(
@@ -38,7 +38,9 @@ class FilterAndProject(Tidy3dBaseModel):
         "reflect", title="Padding", description="The padding mode to use."
     )
 
-    def __call__(self, array: NDArray, beta: float = None, eta: float = None) -> NDArray:
+    def __call__(
+        self, array: NDArray, beta: Optional[float] = None, eta: Optional[float] = None
+    ) -> NDArray:
         """Apply the filter and projection to an input array.
 
         Parameters
@@ -70,10 +72,10 @@ class FilterAndProject(Tidy3dBaseModel):
 
 
 def make_filter_and_project(
-    radius: Union[float, Tuple[float, ...]] = None,
-    dl: Union[float, Tuple[float, ...]] = None,
+    radius: Optional[Union[float, tuple[float, ...]]] = None,
+    dl: Optional[Union[float, tuple[float, ...]]] = None,
     *,
-    size_px: Union[int, Tuple[int, ...]] = None,
+    size_px: Optional[Union[int, tuple[int, ...]]] = None,
     beta: float = BETA_DEFAULT,
     eta: float = ETA_DEFAULT,
     filter_type: KernelType = "conic",

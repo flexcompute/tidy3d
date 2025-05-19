@@ -3,31 +3,26 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ...constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
-from ...exceptions import SetupError
-from ...log import log
-from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ..data.dataset import FieldDataset
-from ..data.validators import validate_can_interpolate, validate_no_nans
-from ..mode_spec import ModeSpec
-from ..types import (
-    TYPE_TAG_STR,
-    Ax,
-    Axis,
-    Coordinate,
-    Direction,
-)
-from ..validators import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.data.dataset import FieldDataset
+from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
+from tidy3d.components.validators import (
     assert_plane,
     assert_single_freq_in_range,
     assert_volumetric,
     warn_if_dataset_none,
 )
+from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
+from tidy3d.exceptions import SetupError
+from tidy3d.log import log
+
 from .base import Source
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
@@ -83,7 +78,7 @@ class DirectionalSource(FieldSource, ABC):
     )
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         if self._injection_axis is None:
             return None
@@ -322,7 +317,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         return val
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
 
         # Propagation vector assuming propagation along z
@@ -335,7 +330,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
+    def _pol_vector(self) -> tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
 
         # Polarization vector assuming propagation along z
@@ -448,7 +443,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         return self.mode_spec.angle_phi
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         radius = 1.0 if self.direction == "+" else -1.0
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
@@ -628,14 +623,14 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     waist_distances = (3.0, 4.0))
     """
 
-    waist_sizes: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
+    waist_sizes: tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         units=MICROMETER,
     )
 
-    waist_distances: Tuple[float, float] = pydantic.Field(
+    waist_distances: tuple[float, float] = pydantic.Field(
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
@@ -705,9 +700,9 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
 
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:

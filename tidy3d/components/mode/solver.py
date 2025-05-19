@@ -1,15 +1,18 @@
 """Mode solver for propagating EM modes."""
 
-from typing import Tuple
+from __future__ import annotations
+
+from typing import Optional
 
 import numpy as np
 import scipy.linalg as linalg
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
-from ...constants import C_0, ETA_0, fp_eps, pec_val
-from ..base import Tidy3dBaseModel
-from ..types import EpsSpecType, ModeSolverType, Numpy
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import EpsSpecType, ModeSolverType, Numpy
+from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
+
 from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
 from .transforms import angled_transform, radial_transform
@@ -49,8 +52,8 @@ class EigSolver(Tidy3dBaseModel):
         symmetry=(0, 0),
         direction="+",
         solver_basis_fields=None,
-        plane_center: tuple[float, float] = None,
-    ) -> Tuple[Numpy, Numpy, EpsSpecType]:
+        plane_center: Optional[tuple[float, float]] = None,
+    ) -> tuple[Numpy, Numpy, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
 
@@ -249,7 +252,7 @@ class EigSolver(Tidy3dBaseModel):
                     "Shape mismatch between 'basis_fields' and requested mode data. "
                     "Make sure the mode solvers are set up the same, and that the "
                     "basis mode solver data has 'colocate=False'."
-                )
+                ) from None
             if split_curl_scaling is not None:
                 basis_E = cls.split_curl_field_postprocess_inverse(split_curl_scaling, basis_E)
             jac_e_inv = np.moveaxis(
@@ -469,8 +472,9 @@ class EigSolver(Tidy3dBaseModel):
         # code associated with these options is included below in case it's useful in the future
         enable_preconditioner = False
         analyze_conditioning = False
+        _threshold = 0.9 * np.abs(pec_val)
 
-        def incidence_matrix_for_pec(eps_vec, threshold=0.9 * np.abs(pec_val)):
+        def incidence_matrix_for_pec(eps_vec, threshold=_threshold):
             """Incidence matrix indicating non-PEC entries associated with 'eps_vec'."""
             nnz = eps_vec[np.abs(eps_vec) < threshold]
             eps_nz = eps_vec.copy()
@@ -595,10 +599,10 @@ class EigSolver(Tidy3dBaseModel):
             aac = mat * mat.conjugate().T
             diff = aca - aac
             print(
-                f"inf-norm: A*A: {spl.norm(aca, ord=np.inf)}, AA*: {spl.norm(aac, ord=np.inf)}, nonnormality: {spl.norm(diff, ord=np.inf)}, relative nonnormality: {spl.norm(diff, ord=np.inf)/spl.norm(aca, ord=np.inf)}"
+                f"inf-norm: A*A: {spl.norm(aca, ord=np.inf)}, AA*: {spl.norm(aac, ord=np.inf)}, nonnormality: {spl.norm(diff, ord=np.inf)}, relative nonnormality: {spl.norm(diff, ord=np.inf) / spl.norm(aca, ord=np.inf)}"
             )
             print(
-                f"fro-norm: A*A: {spl.norm(aca, ord='fro')}, AA*: {spl.norm(aac, ord='fro')}, nonnormality: {spl.norm(diff, ord='fro')}, relative nonnormality: {spl.norm(diff, ord='fro')/spl.norm(aca, ord='fro')}"
+                f"fro-norm: A*A: {spl.norm(aca, ord='fro')}, AA*: {spl.norm(aac, ord='fro')}, nonnormality: {spl.norm(diff, ord='fro')}, relative nonnormality: {spl.norm(diff, ord='fro') / spl.norm(aca, ord='fro')}"
             )
 
         # preprocess basis modes
@@ -1044,6 +1048,6 @@ class EigSolver(Tidy3dBaseModel):
         return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
 
 
-def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:
+def compute_modes(*args, **kwargs) -> tuple[Numpy, Numpy, str]:
     """A wrapper around ``EigSolver.compute_modes``, which is used in ``ModeSolver``."""
     return EigSolver.compute_modes(*args, **kwargs)

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Union
+from typing import Union
 
 import pydantic.v1 as pd
 
-from ...exceptions import SetupError
-from ..base import Tidy3dBaseModel
-from ..types import ArrayFloat1D, ArrayInt1D, ArrayLike
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import ArrayFloat1D, ArrayInt1D, ArrayLike
+from tidy3d.exceptions import SetupError
+
 from .grid import MAX_NUM_REPS
 
 
@@ -99,7 +100,7 @@ class EMEPeriodicitySweep(EMESweepSpec):
     >>> sweep_spec = EMEPeriodicitySweep(num_reps=[{"unit_cell": n} for n in n_list])
     """
 
-    num_reps: List[Dict[str, pd.PositiveInt]] = pd.Field(
+    num_reps: list[dict[str, pd.PositiveInt]] = pd.Field(
         ...,
         title="Number of Repetitions",
         description="Number of periodic repetitions of named subgrids in this EME grid. "

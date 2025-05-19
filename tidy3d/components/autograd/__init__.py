@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .boxes import TidyArrayBox
 from .functions import interpn
 from .types import (
@@ -12,18 +14,18 @@ from .types import (
 from .utils import get_static, is_tidy_box, split_list
 
 __all__ = [
-    "TidyArrayBox",
-    "TracedFloat",
-    "TracedSize1D",
-    "TracedSize",
-    "TracedCoordinate",
-    "TracedVertices",
-    "AutogradTraced",
     "AutogradFieldMap",
+    "AutogradTraced",
+    "TidyArrayBox",
+    "TracedCoordinate",
+    "TracedFloat",
+    "TracedSize",
+    "TracedSize1D",
+    "TracedVertices",
+    "add_at",
     "get_static",
     "interpn",
-    "split_list",
     "is_tidy_box",
+    "split_list",
     "trapz",
-    "add_at",
 ]

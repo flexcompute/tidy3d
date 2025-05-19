@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import responses
+
 import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import ScalarFieldDataArray
@@ -457,7 +460,9 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
     freq0 = td.C_0 / 1.0
     n = np.array([1.5, 5])
     n = n[:, None, None, None]
-    n_data = ScalarFieldDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom, f=[freq0]))
+    n_data = ScalarFieldDataArray(
+        n, coords={"x": x_custom, "y": y_custom, "z": z_custom, "f": [freq0]}
+    )
     mat_custom = td.CustomMedium.from_nk(n_data, interp_method="nearest")
 
     waveguide = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=mat_custom)
@@ -520,7 +525,7 @@ def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tm
     n = 2.5 + (x_custom[:, None, None] + 0.6) / 1.2 * np.sin(y_custom[None, :, None]) * np.cos(
         z_custom[None, None, :]
     )
-    n_data = td.SpatialDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom))
+    n_data = td.SpatialDataArray(n, coords={"x": x_custom, "y": y_custom, "z": z_custom})
 
     # unperturbed unstructured grid
     n_data_u = cartesian_to_unstructured(n_data, pert=0, seed=987, method="direct")

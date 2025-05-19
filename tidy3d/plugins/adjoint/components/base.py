@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable, Optional
 
 import jax
 import numpy as np
@@ -11,7 +11,8 @@ import pydantic.v1 as pd
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
-from ....components.base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel
+
 from .data.data_array import JAX_DATA_ARRAY_TAG, JaxDataArray
 
 # end of the error message when a ``_validate_web_adjoint`` exception is raised
@@ -36,7 +37,7 @@ class JaxObject(Tidy3dBaseModel):
     """Shortcut to get names of fields with certain properties."""
 
     @classmethod
-    def _get_field_names(cls, field_key: str) -> List[str]:
+    def _get_field_names(cls, field_key: str) -> list[str]:
         """Get all fields where ``field_key`` defined in the ``pydantic.Field``."""
         fields = []
         for field_name, model_field in cls.__fields__.items():
@@ -46,17 +47,17 @@ class JaxObject(Tidy3dBaseModel):
         return fields
 
     @classmethod
-    def get_jax_field_names(cls) -> List[str]:
+    def get_jax_field_names(cls) -> list[str]:
         """Returns list of field names where ``jax_field=True``."""
         return cls._get_field_names("jax_field")
 
     @classmethod
-    def get_jax_leaf_names(cls) -> List[str]:
+    def get_jax_leaf_names(cls) -> list[str]:
         """Returns list of field names where ``stores_jax_for`` defined."""
         return cls._get_field_names("stores_jax_for")
 
     @classmethod
-    def get_jax_field_names_all(cls) -> List[str]:
+    def get_jax_field_names_all(cls) -> list[str]:
         """Returns list of field names where ``jax_field=True`` or ``stores_jax_for`` defined."""
         jax_field_names = cls.get_jax_field_names()
         jax_leaf_names = cls.get_jax_leaf_names()
@@ -72,11 +73,10 @@ class JaxObject(Tidy3dBaseModel):
 
     def _validate_web_adjoint(self) -> None:
         """Run validators for this component, only if using ``tda.web.run()``."""
-        pass
 
     """Methods needed for jax to register arbitrary classes."""
 
-    def tree_flatten(self) -> Tuple[list, dict]:
+    def tree_flatten(self) -> tuple[list, dict]:
         """How to flatten a :class:`.JaxObject` instance into a ``pytree``."""
         children = []
         aux_data = self.dict()
@@ -95,8 +95,7 @@ class JaxObject(Tidy3dBaseModel):
                 return value.tolist()
             if isinstance(value, dict):
                 return {key: fix_numpy(val) for key, val in value.items()}
-            else:
-                return value
+            return value
 
         aux_data = fix_numpy(aux_data)
 
@@ -153,7 +152,7 @@ class JaxObject(Tidy3dBaseModel):
     @property
     def exclude_fields_leafs_only(self) -> set:
         """Fields to exclude from ``self.dict()``, ``"type"`` and all ``jax`` leafs."""
-        return set(["type"] + self.get_jax_leaf_names())
+        return {"type", *self.get_jax_leaf_names()}
 
     """Accounting with jax and regular fields."""
 
@@ -208,7 +207,7 @@ class JaxObject(Tidy3dBaseModel):
                     return JAX_DATA_ARRAY_TAG
                 return {k: strip_data_array(v) for k, v in val.items()}
 
-            elif isinstance(val, (tuple, list)):
+            if isinstance(val, (tuple, list)):
                 return [strip_data_array(v) for v in val]
 
             return val
@@ -218,7 +217,7 @@ class JaxObject(Tidy3dBaseModel):
 
     # TODO: replace with implementing these in DataArray
 
-    def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+    def to_hdf5(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
         """Exports :class:`JaxObject` instance to .hdf5 file.
 
         Parameters
@@ -249,7 +248,7 @@ class JaxObject(Tidy3dBaseModel):
 
     @classmethod
     def dict_from_hdf5(
-        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+        cls, fname: str, group_path: str = "", custom_decoders: Optional[list[Callable]] = None
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 

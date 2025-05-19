@@ -1,5 +1,7 @@
 """Defines information about a task"""
 
+from __future__ import annotations
+
 from abc import ABC
 from datetime import datetime
 from enum import Enum

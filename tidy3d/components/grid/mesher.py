@@ -1,10 +1,12 @@
 """Collection of functions for automatically generating a nonuniform grid."""
 
+from __future__ import annotations
+
 import warnings
 from abc import ABC, abstractmethod
 from itertools import compress
 from math import isclose
-from typing import Dict, List, Tuple, Union
+from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -13,12 +15,12 @@ from shapely.errors import ShapelyDeprecationWarning
 from shapely.geometry import box as shapely_box
 from shapely.strtree import STRtree
 
-from ...constants import C_0, fp_eps
-from ...exceptions import SetupError, ValidationError
-from ...log import log
-from ..base import Tidy3dBaseModel
-from ..structure import MeshOverrideStructure, Structure, StructureType
-from ..types import ArrayFloat1D, Axis, Bound, CoordinateOptional
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
+from tidy3d.components.types import ArrayFloat1D, Axis, Bound, CoordinateOptional
+from tidy3d.constants import C_0, fp_eps
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
 
 _ROOTS_TOL = 1e-10
 
@@ -35,12 +37,12 @@ class Mesher(Tidy3dBaseModel, ABC):
     def parse_structures(
         self,
         axis: Axis,
-        structures: List[StructureType],
+        structures: list[StructureType],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
         dl_min: pd.NonNegativeFloat,
         dl_max: pd.NonNegativeFloat,
-    ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
+    ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
     @abstractmethod
@@ -50,8 +52,8 @@ class Mesher(Tidy3dBaseModel, ABC):
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
-        snapping_points: List[CoordinateOptional],
-    ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
+        snapping_points: list[CoordinateOptional],
+    ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Insert snapping_points to the intervals."""
 
     @abstractmethod
@@ -61,7 +63,7 @@ class Mesher(Tidy3dBaseModel, ABC):
         len_interval_list: ArrayFloat1D,
         max_scale: float,
         is_periodic: bool,
-    ) -> List[ArrayFloat1D]:
+    ) -> list[ArrayFloat1D]:
         """Create grid steps in multiple connecting intervals."""
 
     @staticmethod
@@ -100,8 +102,8 @@ class GradedMesher(Mesher):
         axis: Axis,
         interval_coords: ArrayFloat1D,
         max_dl_list: ArrayFloat1D,
-        snapping_points: List[CoordinateOptional],
-    ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
+        snapping_points: list[CoordinateOptional],
+    ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Insert snapping_points to the intervals.
 
         Parameters
@@ -158,7 +160,7 @@ class GradedMesher(Mesher):
                 continue
             # or, if the snapping point is near the first interval boundary,
             # give priority to the snapping_point and replace
-            elif d_1 < min_step:
+            if d_1 < min_step:
                 # Don't replace if the boundary is the simulation boundary
                 if ind == 1:
                     continue
@@ -166,7 +168,7 @@ class GradedMesher(Mesher):
                 continue
             # or, if the snapping point is near the second interval boundary,
             # give priority to the snapping_point and replace
-            elif d_2 < min_step:
+            if d_2 < min_step:
                 # Don't replace if the boundary is the simulation boundary
                 if ind == len(interval_coords) - 1:
                     continue
@@ -180,12 +182,12 @@ class GradedMesher(Mesher):
     def parse_structures(
         self,
         axis: Axis,
-        structures: List[StructureType],
+        structures: list[StructureType],
         wavelength: pd.PositiveFloat,
         min_steps_per_wvl: pd.NonNegativeInt,
         dl_min: pd.NonNegativeFloat,
         dl_max: pd.NonNegativeFloat,
-    ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
+    ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Calculate the positions of all bounding box interfaces along a given axis.
         In this implementation, in most cases the complexity should be O(len(structures)**2),
         although the worst-case complexity may approach O(len(structures)**3).
@@ -382,14 +384,14 @@ class GradedMesher(Mesher):
 
     def insert_bbox(
         self,
-        intervals: Dict[str, List],
+        intervals: dict[str, list],
         str_ind: int,
         str_bbox: ArrayFloat1D,
-        bbox_contained_2d: List[ArrayFloat1D],
+        bbox_contained_2d: list[ArrayFloat1D],
         min_step: float,
         structure_steps: ArrayFloat1D,
         unshadowed: bool,
-    ) -> Dict[str, List]:
+    ) -> dict[str, list]:
         """Figure out where to place the bounding box coordinates of current structure.
         For both the left and the right bounds of the structure along the meshing direction,
         we check if they are not too close to an already existing coordinate, if the
@@ -508,8 +510,8 @@ class GradedMesher(Mesher):
 
     @staticmethod
     def reorder_structures(
-        structures: List[StructureType],
-    ) -> Tuple[int, List[StructureType]]:
+        structures: list[StructureType],
+    ) -> tuple[int, list[StructureType]]:
         """Reorder structure list to order as follows:
         1). simulation structure `str[0]` remains as the first structure;
         2). MeshOverrideStructures with ``shadow=False``;
@@ -565,8 +567,8 @@ class GradedMesher(Mesher):
 
     @staticmethod
     def filter_structures_effective_dl(
-        structures: List[StructureType], axis: Axis
-    ) -> List[StructureType]:
+        structures: list[StructureType], axis: Axis
+    ) -> list[StructureType]:
         """For :class:`.MeshOverrideStructure`, we allow ``dl`` along some axis
         to be ``None`` so that no override occurs along this axis.Here those
         structures with ``dl[axis]=None`` is filtered.
@@ -623,7 +625,7 @@ class GradedMesher(Mesher):
 
     @staticmethod
     def structure_steps(
-        structures: List[StructureType],
+        structures: list[StructureType],
         wavelength: float,
         min_steps_per_wvl: float,
         dl_min: pd.NonNegativeFloat,
@@ -662,7 +664,7 @@ class GradedMesher(Mesher):
         return np.where(min_steps < dl_min, dl_min, min_steps)
 
     @staticmethod
-    def rotate_structure_bounds(structures: List[StructureType], axis: Axis) -> List[ArrayFloat1D]:
+    def rotate_structure_bounds(structures: list[StructureType], axis: Axis) -> list[ArrayFloat1D]:
         """Get structure bounding boxes with a given ``axis`` rotated to z.
 
         Parameters
@@ -684,12 +686,12 @@ class GradedMesher(Mesher):
             bmin, bmax = structure.geometry.bounds
             bmin_ax, bmin_plane = structure.geometry.pop_axis(bmin, axis=axis)
             bmax_ax, bmax_plane = structure.geometry.pop_axis(bmax, axis=axis)
-            bounds = np.array([list(bmin_plane) + [bmin_ax], list(bmax_plane) + [bmax_ax]])
+            bounds = np.array([[*list(bmin_plane), bmin_ax], [*list(bmax_plane), bmax_ax]])
             struct_bbox.append(bounds)
         return struct_bbox
 
     @staticmethod
-    def bounds_2d_tree(struct_bbox: List[ArrayFloat1D]):
+    def bounds_2d_tree(struct_bbox: list[ArrayFloat1D]):
         """Make a shapely Rtree for the 2D bounding boxes of all structures in the plane
         perpendicular to the meshing axis."""
 
@@ -704,7 +706,7 @@ class GradedMesher(Mesher):
         return stree
 
     @staticmethod
-    def contained_2d(bbox0: ArrayFloat1D, query_bbox: List[ArrayFloat1D]) -> List[ArrayFloat1D]:
+    def contained_2d(bbox0: ArrayFloat1D, query_bbox: list[ArrayFloat1D]) -> list[ArrayFloat1D]:
         """Return a list of all bounding boxes among ``query_bbox`` that contain ``bbox0`` in 2D."""
         return [
             bbox
@@ -720,7 +722,7 @@ class GradedMesher(Mesher):
         ]
 
     @staticmethod
-    def contains_3d(bbox0: ArrayFloat1D, query_bbox: List[ArrayFloat1D]) -> List[int]:
+    def contains_3d(bbox0: ArrayFloat1D, query_bbox: list[ArrayFloat1D]) -> list[int]:
         """Return a list of all indexes of bounding boxes in the ``query_bbox`` list that ``bbox0``
         fully contains."""
         return [
@@ -739,7 +741,7 @@ class GradedMesher(Mesher):
         ]
 
     @staticmethod
-    def is_close(coord: float, interval_coords: List[float], coord_ind: int, atol: float) -> bool:
+    def is_close(coord: float, interval_coords: list[float], coord_ind: int, atol: float) -> bool:
         """Check if a given ``coord`` is within ``atol`` of an interval coordinate at a given
         interval index. If the index is out of bounds, return ``False``."""
         return (
@@ -749,7 +751,7 @@ class GradedMesher(Mesher):
         )
 
     @staticmethod
-    def is_contained(normal_pos: float, contained_2d: List[ArrayFloat1D]) -> bool:
+    def is_contained(normal_pos: float, contained_2d: list[ArrayFloat1D]) -> bool:
         """Check if a given ``normal_pos`` along the meshing direction is contained inside any
         of the bounding boxes that are in the ``contained_2d`` list.
         """
@@ -759,8 +761,8 @@ class GradedMesher(Mesher):
 
     @staticmethod
     def filter_min_step(
-        interval_coords: List[float], max_steps: List[float]
-    ) -> Tuple[List[float], List[float]]:
+        interval_coords: list[float], max_steps: list[float]
+    ) -> tuple[list[float], list[float]]:
         """Filter intervals that are smaller than the absolute smallest of the ``max_steps``."""
 
         # Re-compute minimum step in case some high-index structures were completely covered
@@ -784,7 +786,7 @@ class GradedMesher(Mesher):
         len_interval_list: ArrayFloat1D,
         max_scale: float,
         is_periodic: bool,
-    ) -> List[ArrayFloat1D]:
+    ) -> list[ArrayFloat1D]:
         """Create grid steps in multiple connecting intervals of length specified by
         ``len_interval_list``. The maximal allowed step size in each interval is given by
         ``max_dl_list``. The maximum ratio between neighboring steps is bounded by ``max_scale``.
@@ -880,7 +882,7 @@ class GradedMesher(Mesher):
         len_interval_list: ArrayFloat1D,
         max_scale: float,
         is_periodic: bool,
-    ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
+    ) -> tuple[ArrayFloat1D, ArrayFloat1D]:
         """Analytical refinement for multiple intervals. "analytical" meaning we allow
         non-integar step sizes, so that we don't consider snapping here.
 

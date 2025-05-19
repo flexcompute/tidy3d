@@ -9,8 +9,9 @@ from typing import Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ..constants import HERTZ, RADIAN
-from ..exceptions import ValidationError
+from tidy3d.constants import HERTZ, RADIAN
+from tidy3d.exceptions import ValidationError
+
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import SpatialDataArray
 from .data.validators import validate_no_nans

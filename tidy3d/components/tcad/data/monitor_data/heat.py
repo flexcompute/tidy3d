@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Union
+from typing import Optional, Union
 
 import pydantic.v1 as pd
 
@@ -58,9 +58,9 @@ class TemperatureData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
-        return dict(temperature=self.temperature)
+        return {"temperature": self.temperature}
 
     @pd.validator("temperature", always=True)
     @skip_if_fields_missing(["monitor"])

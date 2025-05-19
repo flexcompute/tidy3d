@@ -1,17 +1,21 @@
 """Defines various validation functions that get used to ensure inputs are legit"""
 
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy as np
 import pydantic.v1 as pydantic
 from autograd.tracer import isbox
 
-from ..exceptions import SetupError, ValidationError
-from ..log import log
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .autograd.utils import get_static
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .data.dataset import Dataset, FieldDataset
 from .geometry.base import Box
 from .mode_spec import ModeSpec
-from .types import Tuple
 
 """ Explanation of pydantic validators:
 
@@ -333,9 +337,9 @@ def assert_single_freq_in_range(field_name: str):
 def _warn_potential_error(
     field_name: str,
     base_value: float,
-    val_change_range: Tuple[float, float],
-    allowed_real_range: Tuple[float, float],
-    allowed_imag_range: Tuple[float, float],
+    val_change_range: tuple[float, float],
+    allowed_real_range: tuple[float, float],
+    allowed_imag_range: tuple[float, float],
 ):
     """Basic validation that perturbations do not drive a parameter out of physical bounds."""
 
@@ -368,8 +372,8 @@ def _warn_potential_error(
 def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
-    allowed_real_range: Tuple[Tuple[float, float], ...],
-    allowed_imag_range: Tuple[Tuple[float, float], ...] = None,
+    allowed_real_range: tuple[tuple[float, float], ...],
+    allowed_imag_range: Optional[tuple[tuple[float, float], ...]] = None,
     allowed_complex: bool = True,
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""

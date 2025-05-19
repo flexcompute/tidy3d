@@ -1,5 +1,7 @@
 """Environment Setup."""
 
+from __future__ import annotations
+
 import os
 import ssl
 
@@ -12,7 +14,7 @@ class EnvironmentConfig(BaseSettings):
     """Basic Configuration for definition environment."""
 
     def __hash__(self):
-        return hash((type(self),) + tuple(self.__dict__.values()))
+        return hash((type(self), *tuple(self.__dict__.values())))
 
     name: str
     web_api_endpoint: str
@@ -82,11 +84,11 @@ class Environment:
     ...
     """
 
-    env_map = dict(
-        dev=dev,
-        uat=uat,
-        prod=prod,
-    )
+    env_map = {
+        "dev": dev,
+        "uat": uat,
+        "prod": prod,
+    }
 
     def __init__(self):
         log = get_logger()

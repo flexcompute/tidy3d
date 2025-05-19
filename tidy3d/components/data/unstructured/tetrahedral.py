@@ -118,14 +118,15 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         cells = CellDataArray(
             cells_numpy,
-            coords=dict(
-                cell_index=np.arange(num_cells), vertex_index=np.arange(cls._cell_num_vertices())
-            ),
+            coords={
+                "cell_index": np.arange(num_cells),
+                "vertex_index": np.arange(cls._cell_num_vertices()),
+            },
         )
 
         points = PointDataArray(
             points_numpy,
-            coords=dict(index=np.arange(len(points_numpy)), axis=np.arange(cls._point_dims())),
+            coords={"index": np.arange(len(points_numpy)), "axis": np.arange(cls._point_dims())},
         )
 
         if remove_degenerate_cells:
