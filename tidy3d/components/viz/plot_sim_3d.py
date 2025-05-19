@@ -86,6 +86,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
                         var frame = document.createElement("iframe");
                         frame.width = node.dataset.width || 800;
                         frame.height = node.dataset.height || 800;
+                        frame.style.cssText = `width:${frame.width}px;height:${frame.height}px;max-width:none;border:0;display:block`
                         frame.src = VIEWER_URL + "?uuid=" + uuid;
 
                         var postMessageToViewer;
@@ -114,7 +115,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
         })();
     """
     html_code = f"""
-    <div class="simulation-viewer" data-width="{escape(str(width))}" data-height="{escape(str(height))}" data-simulation="{escape(base64)}" />
+    <div class="simulation-viewer" data-width="{escape(str(width))}" data-height="{escape(str(height))}" data-simulation="{escape(base64)}" ></div>
     <script>
         {js_code}
     </script>
