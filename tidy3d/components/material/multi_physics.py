@@ -142,6 +142,9 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             "is_pec": self.optical,
             "_eps_plot": self.optical,
             "viz_spec": self.optical,
+            "eps_diagonal_numerical": self.optical,
+            "eps_complex_to_nk": self.optical,
+            "nonlinear_spec": self.optical,
         }
 
         if name == "_has_incompatibilities":

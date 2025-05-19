@@ -3573,7 +3573,7 @@ def test_sim_multiphysics():
         run_time=1e-12,
         size=(10, 10, 10),
         grid_spec=td.GridSpec(wavelength=1.0),
-        medium=td.MultiPhysicsMedium(optical=td.Medium(permittivity=1.0)),
+        medium=td.Medium(permittivity=1.0),
         structures=[
             td.Structure(
                 geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
