@@ -259,7 +259,7 @@ def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
 
 @responses.activate
 def test_download_json(monkeypatch, mock_get_info, tmp_path):
-    sim = make_heat_sim()
+    sim = make_heat_sim(include_custom_source=False)
 
     def mock_download(*args, **kwargs):
         pass
@@ -278,7 +278,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
 @responses.activate
 def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
     def mock_download(*args, **kwargs):
-        make_heat_sim().to_file(args[1])
+        make_heat_sim(include_custom_source=False).to_file(args[1])
 
     monkeypatch.setattr(f"{task_core_path}.SimulationTask.get_simulation_json", mock_download)
 
