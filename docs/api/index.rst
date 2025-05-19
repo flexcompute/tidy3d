@@ -33,6 +33,7 @@ API |:computer:|
     constants
     abstract_base
     abstract_models
+    viz
 
 .. include:: /api/simulation.rst
 .. include:: /api/boundary_conditions.rst
@@ -59,3 +60,4 @@ API |:computer:|
 .. include:: /api/constants.rst
 .. include:: /api/abstract_base.rst
 .. include:: /api/abstract_models.rst
+.. include:: /api/viz.rst
