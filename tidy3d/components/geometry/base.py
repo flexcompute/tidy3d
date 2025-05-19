@@ -1394,7 +1394,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             raise Tidy3dImportError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
         polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-        if polygons:  # Check if the list is not empty
+        if polygons:
             cell.add(*polygons)
 
     @verify_packages_import(["gdstk"])
