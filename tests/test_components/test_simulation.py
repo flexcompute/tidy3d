@@ -3566,3 +3566,22 @@ def test_sim_volumetric_structures_with_lumped_elements(tmp_path):
         vol_structures = sim.volumetric_structures
         assert len(vol_structures) == 2
         assert np.isclose(vol_structures[1].geometry.bounding_box.size[0], 0, rtol=RTOL)
+
+
+def test_sim_multiphysics():
+    s = td.Simulation(
+        run_time=1e-12,
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        medium=td.MultiPhysicsMedium(optical=td.Medium(permittivity=1.0)),
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
+                medium=td.MultiPhysicsMedium(
+                    optical=td.Medium(permittivity=3.9),
+                    charge=td.ChargeInsulatorMedium(permittivity=3.9),
+                    name="SiO2",
+                ),
+            )
+        ],
+    )

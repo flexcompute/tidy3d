@@ -144,6 +144,11 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             "viz_spec": self.optical,
         }
 
+        if name == "_has_incompatibilities":
+            return (self.optical and self.optical._has_incompatibilities) or (
+                self.charge and self.charge._has_incompatibilities
+            )
+
         if name in DELEGATED_ATTRIBUTES:
             sub = DELEGATED_ATTRIBUTES[name]
             if sub is None:
