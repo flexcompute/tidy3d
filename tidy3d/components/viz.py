@@ -7,7 +7,15 @@ from html import escape
 from typing import Any, Dict, Optional
 
 import pydantic.v1 as pd
+from numpy import array, concatenate, inf, ones
 
+from ..constants import UnitScaling
+from ..exceptions import SetupError, Tidy3dKeyError
+from ..log import log
+from .base import Tidy3dBaseModel
+from .types import Ax, Axis, LengthUnit
+
+MATPLOTLIB_IMPORTED = True
 try:
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
@@ -19,13 +27,7 @@ try:
     arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
 except ImportError:
     arrow_style = None
-
-from numpy import array, concatenate, inf, ones
-
-from ..constants import UnitScaling
-from ..exceptions import SetupError, Tidy3dKeyError
-from .base import Tidy3dBaseModel
-from .types import Ax, Axis, LengthUnit
+    MATPLOTLIB_IMPORTED = False
 
 """ Constants """
 
@@ -185,8 +187,15 @@ STRUCTURE_HEAT_COND_CMAP = "gist_yarg"
 
 
 def is_valid_color(value: str) -> str:
-    if not is_color_like(value):
-        raise pd.ValidationError(f"{value} is not a valid plotting color")
+    if not MATPLOTLIB_IMPORTED:
+        log.warning(
+            "matplotlib was not successfully imported, but is required "
+            "to validate colors in the VisualizationSpec. The specified colors "
+            "have not been validated."
+        )
+    else:
+        if not is_color_like(value):
+            raise ValueError(f"{value} is not a valid plotting color")
 
     return value
 
