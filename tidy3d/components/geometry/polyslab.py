@@ -340,7 +340,7 @@ class PolySlab(base.Planar):
         List[ArrayFloat2D]
             List of :class:`.ArrayFloat2D`
         """
-        import gdstk  # type: ignore[import-untyped]
+        import gdstk
 
         gds_cell_class_name = str(gds_cell.__class__)
         if not isinstance(gds_cell, gdstk.Cell):
@@ -356,7 +356,7 @@ class PolySlab(base.Planar):
                 "and therefore can't be loaded by Tidy3D."
             )
 
-        all_vertices = base.Geometry.load_gds_vertices_gdstk(  # type: ignore[attr-defined]
+        all_vertices = base.Geometry.load_gds_vertices_gdstk(
             gds_cell=gds_cell, gds_layer=gds_layer, gds_dtype=gds_dtype, gds_scale=gds_scale
         )
 
