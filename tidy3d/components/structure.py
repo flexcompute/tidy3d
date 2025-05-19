@@ -33,7 +33,7 @@ from .viz import add_ax_if_none, equal_aspect
 try:
     gdstk_available = True
     import gdstk
-except ImportError:  # pragma: no cover
+except ImportError:
     gdstk_available = False
 
 

@@ -1245,7 +1245,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         if not isinstance(gds_cell, gdstk.Cell):
             # Check if it might be a gdstk cell but gdstk is not found (should be caught by decorator)
             # or if it's an entirely different type.
-            if "gdstk" in gds_cell.__class__.__name__.lower():  # type: ignore[attr-defined]
+            if "gdstk" in gds_cell.__class__.__name__.lower():
                 raise Tidy3dImportError(
                     "Module 'gdstk' not found. It is required to import gdstk cells."
                 )
@@ -1254,7 +1254,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_loader_fn = Geometry.load_gds_vertices_gdstk
         geometries = []
         with log as consolidated_logger:
-            for vertices in gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale):  # type: ignore[attr-defined]
+            for vertices in gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale):
                 # buffer(0) is necessary to merge self-intersections
                 shape = shapely.set_precision(shapely.Polygon(vertices).buffer(0), POLY_GRID_SIZE)
                 try:
@@ -1308,7 +1308,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return from_shapely(shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane)
 
-    @verify_packages_import(["gdstk"])  # type: ignore[misc]
+    @verify_packages_import(["gdstk"])
     def to_gdstk(
         self,
         x: float = None,
