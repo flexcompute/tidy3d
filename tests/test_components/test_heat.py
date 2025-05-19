@@ -11,6 +11,7 @@ from tidy3d import (
     HeatFluxBC,
     HeatSimulation,
     HeatSimulationData,
+    HeatSource,
     MediumMediumInterface,
     SimulationBoundary,
     SolidSpec,
@@ -20,7 +21,6 @@ from tidy3d import (
     TemperatureBC,
     TemperatureData,
     TemperatureMonitor,
-    UniformHeatSource,
     UniformUnstructuredGrid,
 )
 from tidy3d.exceptions import DataError
@@ -251,20 +251,30 @@ def test_grid_spec():
 
 
 def make_heat_source():
-    return UniformHeatSource(structures=["solid_structure"], rate=100)
+    return HeatSource(structures=["solid_structure"], rate=100)
+
+
+def make_custom_heat_source():
+    return HeatSource(
+        structures=["solid_structure"],
+        rate=td.SpatialDataArray(np.ones((1, 2, 3)), coords=dict(x=[0], y=[1, 2], z=[3, 4, 5])),
+    )
 
 
 def test_heat_source():
     source = make_heat_source()
+    source = make_custom_heat_source()
     with pytest.raises(pd.ValidationError):
         _ = source.updated_copy(structures=[])
 
 
-def make_heat_sim():
+def make_heat_sim(include_custom_source: bool = True):
     fluid_medium, solid_medium = make_heat_mediums()
     fluid_structure, solid_structure = make_heat_structures()
     bc_temp, bc_flux, bc_conv = make_heat_bcs()
-    heat_source = make_heat_source()
+    sources = [make_heat_source()]
+    if include_custom_source:
+        sources += [make_custom_heat_source()]
 
     pl1 = HeatBoundarySpec(
         condition=bc_conv, placement=MediumMediumInterface(mediums=["fluid_medium", "solid_medium"])
@@ -292,7 +302,7 @@ def make_heat_sim():
         size=(2, 2, 2),
         boundary_spec=[pl1, pl2, pl3, pl4, pl5],
         grid_spec=grid_spec,
-        sources=[heat_source],
+        sources=sources,
         monitors=temp_mnts,
     )
 
@@ -323,7 +333,7 @@ def test_heat_sim():
             _ = heat_sim.updated_copy(boundary_spec=[pl])
 
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(sources=[UniformHeatSource(structures=["noname"])], rate=-10)
+        _ = heat_sim.updated_copy(sources=[HeatSource(structures=["noname"])], rate=-10)
 
     # run 2D case
     _ = heat_sim.updated_copy(center=(0.7, 0, 0), size=(0, 2, 2), monitors=heat_sim.monitors[:5])

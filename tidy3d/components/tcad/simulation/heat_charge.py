@@ -1498,28 +1498,16 @@ class HeatChargeSimulation(AbstractSimulation):
             ax=ax,
         )
 
-    def _safe_float_conversion(self, string) -> float:
-        """Function to deal with failed string2float conversion when using
-        expressions in 'HeatSource'"""
-        try:
-            return float(string)
-        except ValueError:
-            return None
-
     def source_bounds(self, property: str = "heat_conductivity") -> Tuple[float, float]:
         """Compute range of heat sources present in the simulation."""
 
         if property == "heat_conductivity" or property == "source":
             rate_list = [
-                self._safe_float_conversion(source.rate)
-                for source in self.sources
-                if isinstance(source, HeatSource)
+                np.mean(source.rate) for source in self.sources if isinstance(source, HeatSource)
             ]
         elif property == "electric_conductivity":
             rate_list = [
-                self._safe_float_conversion(source.rate)
-                for source in self.sources
-                if isinstance(source, ChargeSourceTypes)
+                source.rate for source in self.sources if isinstance(source, ChargeSourceTypes)
             ]  # this is currently an empty list
 
         rate_list.append(0)
@@ -1541,7 +1529,7 @@ class HeatChargeSimulation(AbstractSimulation):
             plot_params = plot_params.copy(update={"alpha": alpha})
 
         if isinstance(source, HeatSource):
-            rate = self._safe_float_conversion(source.rate)
+            rate = np.mean(source.rate)
             if rate is not None:
                 delta_rate = rate - source_min
                 delta_rate_max = source_max - source_min + 1e-5
