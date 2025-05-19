@@ -3569,6 +3569,17 @@ def test_sim_volumetric_structures_with_lumped_elements(tmp_path):
 
 
 def test_sim_multiphysics():
+    FREQ_MODULATE = 1e12
+    AMP_TIME = 1.1
+    PHASE_TIME = 0
+    CW = td.ContinuousWaveTimeModulation(freq0=FREQ_MODULATE, amplitude=AMP_TIME, phase=PHASE_TIME)
+    ST = td.SpaceTimeModulation(
+        time_modulation=CW,
+    )
+    MODULATION_SPEC = td.ModulationSpec()
+    modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
+    modulated = td.Medium(permittivity=2, modulation_spec=modulation_spec)
+    assert modulated._has_incompatibilities
     s = td.Simulation(
         run_time=1e-12,
         size=(10, 10, 10),
@@ -3578,8 +3589,8 @@ def test_sim_multiphysics():
             td.Structure(
                 geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
                 medium=td.MultiPhysicsMedium(
-                    optical=td.Medium(permittivity=3.9),
-                    charge=td.ChargeInsulatorMedium(permittivity=3.9),
+                    optical=modulated,
+                    charge=td.ChargeInsulatorMedium(permittivity=2),
                     name="SiO2",
                 ),
             )
