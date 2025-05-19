@@ -448,8 +448,8 @@ class Structure(AbstractStructure):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        if not isinstance(cell, gdstk.Cell):  # type: ignore[misc]
-            if "gdstk" in cell.__class__.__name__.lower() and not gdstk_available:  # type: ignore[attr-defined]
+        if not isinstance(cell, gdstk.Cell):
+            if "gdstk" in cell.__class__.__name__.lower() and not gdstk_available:
                 raise Tidy3dImportError(
                     "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
                 )
@@ -464,7 +464,7 @@ class Structure(AbstractStructure):
             gds_layer=gds_layer,
             gds_dtype=gds_dtype,
         )
-        if polygons:  # Check if the list is not empty
+        if polygons:
             cell.add(*polygons)
 
     def to_gds_file(
@@ -504,7 +504,7 @@ class Structure(AbstractStructure):
             Name of the cell created in the .gds file to store the geometry.
         """
         try:
-            import gdstk  # type: ignore[import-untyped]
+            import gdstk
 
             library = gdstk.Library()
         except ImportError as e:
