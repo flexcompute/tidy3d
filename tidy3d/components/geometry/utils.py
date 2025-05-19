@@ -4,17 +4,25 @@ from __future__ import annotations
 
 from enum import Enum
 from math import isclose
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic as pydantic
+import pydantic
 
-from ...constants import fp_eps
-from ...exceptions import SetupError, Tidy3dError
-from ..base import Tidy3dBaseModel
-from ..geometry.base import Box
-from ..grid.grid import Grid
-from ..types import ArrayFloat2D, Axis, Coordinate, MatrixReal4x4, PlanePosition, Shapely
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.types import (
+    ArrayFloat2D,
+    Axis,
+    Coordinate,
+    MatrixReal4x4,
+    PlanePosition,
+    Shapely,
+)
+from tidy3d.constants import fp_eps
+from tidy3d.exceptions import SetupError, Tidy3dError
+
 from . import base, mesh, polyslab, primitives
 
 GeometryType = Union[
@@ -31,10 +39,10 @@ GeometryType = Union[
 
 
 def merging_geometries_on_plane(
-    geometries: List[GeometryType],
+    geometries: list[GeometryType],
     plane: Box,
-    property_list: List[Any],
-) -> List[Tuple[Any, Shapely]]:
+    property_list: list[Any],
+) -> list[tuple[Any, Shapely]]:
     """Compute list of shapes on plane. Overlaps are removed or merged depending on
     provided property_list.
 
@@ -191,7 +199,7 @@ def traverse_geometries(geometry: GeometryType) -> GeometryType:
 def from_shapely(
     shape: Shapely,
     axis: Axis,
-    slab_bounds: Tuple[float, float],
+    slab_bounds: tuple[float, float],
     dilation: float = 0.0,
     sidewall_angle: float = 0,
     reference_plane: PlanePosition = "middle",
@@ -284,7 +292,7 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
     if shape.geom_type == "LinearRing":
         return [(shape.coords[:-1],)]
     if shape.geom_type == "Polygon":
-        return [(shape.exterior.coords[:-1],) + tuple(hole.coords[:-1] for hole in shape.interiors)]
+        return [(shape.exterior.coords[:-1], *tuple(hole.coords[:-1] for hole in shape.interiors))]
     if shape.geom_type in {"MultiPolygon", "GeometryCollection"}:
         return sum(vertices_from_shapely(geo) for geo in shape.geoms)
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional
 
 import pydantic.v1 as pd
@@ -182,5 +184,4 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
 
         if self.optical is not None:
             return self.optical.heat_spec
-        else:
-            return None
+        return None

@@ -4,6 +4,8 @@ This file contains a set of functions relating to packaging tidy3d for distribut
 This section should only depend on the standard core installation in the pyproject.toml, and should not depend on any other part of the codebase optional imports.
 """
 
+from __future__ import annotations
+
 import functools
 from importlib import import_module
 from typing import Literal
@@ -89,7 +91,7 @@ def verify_packages_import(modules: list, required: Literal["any", "all"] = "all
                             f"Please install the '{module}' dependencies using, for example, "
                             f"'pip install tidy3d[<see_options_in_pyproject.toml>]"
                         )
-                    elif required == "any":
+                    if required == "any":
                         # Means we need to verify that at least one of the modules is available
                         if (
                             not any(available_modules_status)
@@ -140,12 +142,12 @@ def requires_vtk(fn):
                 if vtk["mod"].vtkIdTypeArray().GetDataTypeSize() == 4:
                     vtk["id_type"] = np.int32
 
-            except ImportError:
+            except ImportError as exc:
                 raise Tidy3dImportError(
                     "The package 'vtk' is required for this operation, but it was not found. "
                     "Please install the 'vtk' dependencies using, for example, "
                     "'pip install .[vtk]'."
-                )
+                ) from exc
 
         return fn(*args, **kwargs)
 

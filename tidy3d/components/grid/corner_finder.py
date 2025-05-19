@@ -1,17 +1,19 @@
 """Find corners of structures on a 2D plane."""
 
-from typing import Any, List, Literal, Optional, Tuple
+from __future__ import annotations
+
+from typing import Any, Literal, Optional
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ...constants import inf
-from ..base import Tidy3dBaseModel, cached_property
-from ..geometry.base import Box, ClipOperation
-from ..geometry.utils import merging_geometries_on_plane
-from ..medium import PEC, LossyMetalMedium
-from ..structure import Structure
-from ..types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.geometry.base import Box, ClipOperation
+from tidy3d.components.geometry.utils import merging_geometries_on_plane
+from tidy3d.components.medium import PEC, LossyMetalMedium
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
+from tidy3d.constants import inf
 
 CORNER_ANGLE_THRESOLD = 0.1 * np.pi
 
@@ -80,10 +82,10 @@ class CornerFinderSpec(Tidy3dBaseModel):
         cls,
         normal_axis: Axis,
         coord: float,
-        structure_list: List[Structure],
-        center: Tuple[float, float] = [0, 0, 0],
-        size: Tuple[float, float, float] = [inf, inf, inf],
-    ) -> List[Tuple[Any, Shapely]]:
+        structure_list: list[Structure],
+        center: tuple[float, float] = [0, 0, 0],
+        size: tuple[float, float, float] = [inf, inf, inf],
+    ) -> list[tuple[Any, Shapely]]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, merge geometries made of PEC.
 
         Parameters
@@ -129,9 +131,9 @@ class CornerFinderSpec(Tidy3dBaseModel):
         self,
         normal_axis: Axis,
         coord: float,
-        structure_list: List[Structure],
+        structure_list: list[Structure],
         ravel: bool,
-    ) -> Tuple[ArrayFloat2D, ArrayFloat1D]:
+    ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
         geometries made of PEC.
 
@@ -192,7 +194,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         self,
         normal_axis: Axis,
         coord: float,
-        structure_list: List[Structure],
+        structure_list: list[Structure],
     ) -> ArrayFloat2D:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
         geometries made of `medium`.
@@ -220,7 +222,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
 
     def _filter_collinear_vertices(
         self, vertices: ArrayFloat2D
-    ) -> Tuple[ArrayFloat2D, ArrayFloat1D]:
+    ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
         """Filter collinear vertices of a polygon, and return corners locations and their convexity.
 
         Parameters

@@ -1,14 +1,15 @@
 """File containing classes required for the setup of a DEVSIM case."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.types import Union
+from tidy3d.constants import PERCMCUBE
 from tidy3d.exceptions import SetupError
-
-from ...constants import PERCMCUBE
 
 
 class AbstractDopingBox(Box):
@@ -33,7 +34,7 @@ class AbstractDopingBox(Box):
         dim_missing = len(list(coords.keys())) < 3
         if dim_missing:
             for var_name in "xyz":
-                if var_name not in coords.keys():
+                if var_name not in coords:
                     coords[var_name] = [0]
 
         # work out whether the dimensions are 2D
@@ -63,11 +64,11 @@ class AbstractDopingBox(Box):
                 new_bounds[1][d] = np.inf
 
         # let's assume some of these coordinates may lay outside the box
-        indices_in_box = np.logical_and(X >= new_bounds[0][0], X <= new_bounds[1][0])
-        indices_in_box = np.logical_and(indices_in_box, Y >= new_bounds[0][1])
-        indices_in_box = np.logical_and(indices_in_box, Y <= new_bounds[1][1])
-        indices_in_box = np.logical_and(indices_in_box, Z >= new_bounds[0][2])
-        indices_in_box = np.logical_and(indices_in_box, Z <= new_bounds[1][2])
+        indices_in_box = np.logical_and(new_bounds[0][0] <= X, new_bounds[1][0] >= X)
+        indices_in_box = np.logical_and(indices_in_box, new_bounds[0][1] <= Y)
+        indices_in_box = np.logical_and(indices_in_box, new_bounds[1][1] >= Y)
+        indices_in_box = np.logical_and(indices_in_box, new_bounds[0][2] <= Z)
+        indices_in_box = np.logical_and(indices_in_box, new_bounds[1][2] >= Z)
 
         return indices_in_box, X, Y, Z, normal_axis
 
@@ -129,8 +130,7 @@ class ConstantDoping(AbstractDopingBox):
             slices = [slice(None)] * X.ndim
             slices[normal_axis] = 0
             return contrib[tuple(slices)]
-        else:
-            return contrib
+        return contrib
 
 
 class GaussianDoping(AbstractDopingBox):
@@ -230,7 +230,7 @@ class GaussianDoping(AbstractDopingBox):
             # lower x face
             if self.source != "xmin":
                 x0 = self.bounds[0][0]
-                indices = np.logical_and(X >= x0, X <= x0 + self.width)
+                indices = np.logical_and(x0 <= X, x0 + self.width >= X)
                 indices = np.logical_and(indices, indices_in_box)
                 x_contrib[indices] = np.exp(
                     -(X[indices] - x0 - self.width)
@@ -242,7 +242,7 @@ class GaussianDoping(AbstractDopingBox):
             # higher x face
             if self.source != "xmax":
                 x1 = self.bounds[1][0]
-                indices = np.logical_and(X >= x1 - self.width, X <= x1)
+                indices = np.logical_and(x1 - self.width <= X, x1 >= X)
                 indices = np.logical_and(indices, indices_in_box)
                 x_contrib[indices] = np.exp(
                     -(X[indices] - x1 + self.width)
@@ -259,7 +259,7 @@ class GaussianDoping(AbstractDopingBox):
             # lower y face
             if self.source != "ymin":
                 y0 = self.bounds[0][1]
-                indices = np.logical_and(Y >= y0, Y <= y0 + self.width)
+                indices = np.logical_and(y0 <= Y, y0 + self.width >= Y)
                 indices = np.logical_and(indices, indices_in_box)
                 y_contrib[indices] = np.exp(
                     -(Y[indices] - y0 - self.width)
@@ -271,7 +271,7 @@ class GaussianDoping(AbstractDopingBox):
             # higher y face
             if self.source != "ymax":
                 y1 = self.bounds[1][1]
-                indices = np.logical_and(Y >= y1 - self.width, Y <= y1)
+                indices = np.logical_and(y1 - self.width <= Y, y1 >= Y)
                 indices = np.logical_and(indices, indices_in_box)
                 y_contrib[indices] = np.exp(
                     -(Y[indices] - y1 + self.width)
@@ -288,7 +288,7 @@ class GaussianDoping(AbstractDopingBox):
             # lower z face
             if self.source != "zmin":
                 z0 = self.bounds[0][2]
-                indices = np.logical_and(Z >= z0, Z <= z0 + self.width)
+                indices = np.logical_and(z0 <= Z, z0 + self.width >= Z)
                 indices = np.logical_and(indices, indices_in_box)
                 z_contrib[indices] = np.exp(
                     -(Z[indices] - z0 - self.width)
@@ -300,7 +300,7 @@ class GaussianDoping(AbstractDopingBox):
             # higher z face
             if self.source != "zmax":
                 z1 = self.bounds[1][2]
-                indices = np.logical_and(Z >= z1 - self.width, Z <= z1)
+                indices = np.logical_and(z1 - self.width <= Z, z1 >= Z)
                 indices = np.logical_and(indices, indices_in_box)
                 z_contrib[indices] = np.exp(
                     -(Z[indices] - z1 + self.width)
@@ -316,8 +316,7 @@ class GaussianDoping(AbstractDopingBox):
             slices = [slice(None)] * X.ndim
             slices[normal_axis] = 0
             return total_contrib[tuple(slices)]
-        else:
-            return total_contrib
+        return total_contrib
 
 
 DopingBoxType = Union[ConstantDoping, GaussianDoping]

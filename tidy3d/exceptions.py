@@ -1,12 +1,16 @@
 """Custom Tidy3D exceptions"""
 
+from __future__ import annotations
+
+from typing import Optional
+
 from .log import log
 
 
 class Tidy3dError(ValueError):
     """Any error in tidy3d"""
 
-    def __init__(self, message: str = None):
+    def __init__(self, message: Optional[str] = None):
         """Log just the error message and then raise the Exception."""
         super().__init__(message)
         log.error(message)

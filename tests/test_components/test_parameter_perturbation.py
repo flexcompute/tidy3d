@@ -1,16 +1,23 @@
 """Tests parameter perturbations."""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 
 from ..utils import AssertLogLevel, cartesian_to_unstructured
 
-sp_arr = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6]))
+sp_arr = td.SpatialDataArray(
+    300 * np.ones((2, 2, 2)), coords={"x": [1, 2], "y": [3, 4], "z": [5, 6]}
+)
 sp_arr_u = cartesian_to_unstructured(sp_arr)
-sp_arr_2d = td.SpatialDataArray(300 * np.ones((2, 1, 2)), coords=dict(x=[1, 2], y=[3.5], z=[5, 6]))
+sp_arr_2d = td.SpatialDataArray(
+    300 * np.ones((2, 1, 2)), coords={"x": [1, 2], "y": [3.5], "z": [5, 6]}
+)
 sp_arr_2d_u = cartesian_to_unstructured(sp_arr_2d)
 
 sp_arrs = [sp_arr, sp_arr_u, sp_arr_2d, sp_arr_2d_u]
@@ -77,7 +84,7 @@ def test_heat_perturbation():
         _ = perturb.plot(temperature=np.linspace(200, 400, 10), val="angle")
 
     # test custom heat perturbation
-    perturb_data = td.HeatDataArray([1 + 1j, 3 + 1j, 1j], coords=dict(T=[200, 300, 400]))
+    perturb_data = td.HeatDataArray([1 + 1j, 3 + 1j, 1j], coords={"T": [200, 300, 400]})
 
     for interp_method in ["linear", "nearest"]:
         perturb = td.CustomHeatPerturbation(
@@ -257,7 +264,7 @@ def test_charge_perturbation():
     # test custom charge perturbation
     perturb_data = td.ChargeDataArray(
         [[1 + 1j, 3 + 1j, 1j], [2 + 2j, 2j, 2 + 2j]],
-        coords=dict(n=[2e17, 2e18], p=[1e16, 1e17, 1e18]),
+        coords={"n": [2e17, 2e18], "p": [1e16, 1e17, 1e18]},
     )
 
     for interp_method in ["linear", "nearest"]:
@@ -369,13 +376,13 @@ def test_parameter_perturbation(unstructured):
 
     perturb_data = td.ChargeDataArray(
         [[1 + 1j, 3 + 1j, 1j], [2 + 2j, 2j, 2 + 2j]],
-        coords=dict(n=[2e17, 2e18], p=[1e16, 1e17, 1e18]),
+        coords={"n": [2e17, 2e18], "p": [1e16, 1e17, 1e18]},
     )
 
     charge = td.CustomChargePerturbation(perturbation_values=perturb_data, interp_method="linear")
 
-    coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
-    coords2 = dict(x=[1, 2], y=[3, 4], z=[5])
+    coords = {"x": [1, 2], "y": [3, 4], "z": [5, 6]}
+    coords2 = {"x": [1, 2], "y": [3, 4], "z": [5]}
     temperature = td.SpatialDataArray(300 * np.random.random((2, 2, 2)), coords=coords)
     electron_density = td.SpatialDataArray(1e18 * np.random.random((2, 2, 2)), coords=coords)
     hole_density = td.SpatialDataArray(2e18 * np.random.random((2, 2, 2)), coords=coords)
@@ -440,9 +447,9 @@ def test_permittivity_perturbation():
         hole_range=[0, 2e19],
     )
 
-    t_arr = td.SpatialDataArray([[[350]]], coords=dict(x=[0], y=[0], z=[0]))
-    n_arr = td.SpatialDataArray([[[1e18]]], coords=dict(x=[0], y=[0], z=[0]))
-    p_arr = td.SpatialDataArray([[[2e18]]], coords=dict(x=[0], y=[0], z=[0]))
+    t_arr = td.SpatialDataArray([[[350]]], coords={"x": [0], "y": [0], "z": [0]})
+    n_arr = td.SpatialDataArray([[[1e18]]], coords={"x": [0], "y": [0], "z": [0]})
+    p_arr = td.SpatialDataArray([[[2e18]]], coords={"x": [0], "y": [0], "z": [0]})
 
     # basic make
     perm_pb = td.PermittivityPerturbation(delta_eps=td.ParameterPerturbation(heat=heat_pb))
@@ -533,9 +540,9 @@ def test_index_perturbation():
 
     freq0 = td.C_0
 
-    t_arr = td.SpatialDataArray([[[350]]], coords=dict(x=[0], y=[0], z=[0]))
-    n_arr = td.SpatialDataArray([[[1e18]]], coords=dict(x=[0], y=[0], z=[0]))
-    p_arr = td.SpatialDataArray([[[2e18]]], coords=dict(x=[0], y=[0], z=[0]))
+    t_arr = td.SpatialDataArray([[[350]]], coords={"x": [0], "y": [0], "z": [0]})
+    n_arr = td.SpatialDataArray([[[1e18]]], coords={"x": [0], "y": [0], "z": [0]})
+    p_arr = td.SpatialDataArray([[[2e18]]], coords={"x": [0], "y": [0], "z": [0]})
 
     # basic make
     index_pb = td.IndexPerturbation(delta_n=td.ParameterPerturbation(heat=heat_pb), freq=freq0)

@@ -1,10 +1,13 @@
 """Tests type definitions."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayLike, Complex, Tuple, constrained_array
+from tidy3d.components.types import ArrayLike, Complex, constrained_array
 
 
 def _test_validate_array_like():
@@ -89,7 +92,7 @@ def test_hash():
     class MyClass(Tidy3dBaseModel):
         a: ArrayLike
         b: constrained_array(ndim=1)
-        c: Tuple[ArrayLike, ...]
+        c: tuple[ArrayLike, ...]
 
     c = MyClass(a=[1.0], b=[2.0, 1.0], c=([2.0, 1.0]))
     hash(c.json())

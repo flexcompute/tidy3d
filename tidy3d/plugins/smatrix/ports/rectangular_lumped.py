@@ -1,35 +1,33 @@
 """Lumped port specialization with a rectangular geometry."""
 
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.data.data_array import FreqDataArray
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.base import Box
-from ....components.geometry.utils import (
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.utils import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,
     snap_box_to_grid,
 )
-from ....components.geometry.utils_2d import increment_float
-from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import (
-    LinearLumpedElement,
-    LumpedResistor,
-    RLCNetwork,
-)
-from ....components.monitor import FieldMonitor
-from ....components.source.current import UniformCurrentSource
-from ....components.source.time import GaussianPulse
-from ....components.types import Axis, FreqArray, LumpDistType
-from ....components.validators import assert_line_or_plane
-from ....exceptions import SetupError, ValidationError
-from ...microwave import (
-    CurrentIntegralAxisAligned,
-    VoltageIntegralAxisAligned,
-)
+from tidy3d.components.geometry.utils_2d import increment_float
+from tidy3d.components.grid.grid import Grid, YeeGrid
+from tidy3d.components.lumped_element import LinearLumpedElement, LumpedResistor, RLCNetwork
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.source.current import UniformCurrentSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Axis, FreqArray, LumpDistType
+from tidy3d.components.validators import assert_line_or_plane
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.plugins.microwave import CurrentIntegralAxisAligned, VoltageIntegralAxisAligned
+
 from .base_lumped import AbstractLumpedPort
 
 
@@ -99,7 +97,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         return 3 - self.injection_axis - self.voltage_axis
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: float = None, grid: Grid = None
+        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
     ) -> UniformCurrentSource:
         """Create a current source from the lumped port."""
         if grid:
@@ -126,7 +124,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             confine_to_bounds=True,
         )
 
-    def to_load(self, snap_center: float = None) -> LumpedResistor:
+    def to_load(self, snap_center: Optional[float] = None) -> LumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # It is done here so plots of the simulation will more accurately portray the setup
@@ -148,7 +146,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         if grid:
@@ -176,7 +174,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         if grid:

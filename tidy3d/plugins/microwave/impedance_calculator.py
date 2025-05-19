@@ -7,11 +7,12 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ...components.base import Tidy3dBaseModel
-from ...components.data.monitor_data import FieldTimeData
-from ...constants import OHM
-from ...exceptions import ValidationError
-from ...log import log
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.monitor_data import FieldTimeData
+from tidy3d.constants import OHM
+from tidy3d.exceptions import ValidationError
+from tidy3d.log import log
+
 from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegral2D
 from .path_integrals import (
     AxisAlignedPathIntegral,

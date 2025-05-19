@@ -1,10 +1,13 @@
 """Test the logging."""
 
+from __future__ import annotations
+
 import json
 
 import numpy as np
 import pydantic.v1 as pd
 import pytest
+
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
@@ -77,7 +80,7 @@ def test_logging_warning_capture():
         center=(0, 0, 0),
         size=(domain_size, 0, domain_size),
         # additional frequency is outside the source range, but is inside the allowed validator range
-        freqs=list(freqs) + [0.1 * f0],
+        freqs=[*list(freqs), 0.1 * f0],
         mode_spec=td.ModeSpec(num_modes=3),
         name="mode",
     )

@@ -1,8 +1,10 @@
 """Logging for Tidy3d."""
 
+from __future__ import annotations
+
 import inspect
 from datetime import datetime
-from typing import Callable, List, Tuple, Union
+from typing import Callable, Optional, Union
 
 from rich.console import Console
 from rich.text import Text
@@ -42,7 +44,7 @@ DEFAULT_LOG_STYLES = {
 CONSOLE_WIDTH = 80
 
 
-def _default_log_level_format(level: str, message: str) -> Tuple[str, str]:
+def _default_log_level_format(level: str, message: str) -> tuple[str, str]:
     """By default just return unformatted prefix and message."""
     return level, message
 
@@ -214,7 +216,7 @@ class Logger:
                     new_loc = current_loc + list(field)
                 else:
                     # single field
-                    new_loc = current_loc + [field]
+                    new_loc = [*current_loc, field]
 
                 # process current level warnings
                 for level, msg, custom_loc in stack_item["messages"]:
@@ -242,7 +244,7 @@ class Logger:
         message: str,
         *args,
         log_once: bool = False,
-        custom_loc: List = None,
+        custom_loc: Optional[list] = None,
         capture: bool = True,
     ) -> None:
         """Distribute log messages to all handlers"""
@@ -311,7 +313,7 @@ class Logger:
         message: str,
         *args,
         log_once: bool = False,
-        custom_loc: List = None,
+        custom_loc: Optional[list] = None,
         capture: bool = True,
     ) -> None:
         """Log (message) % (args) at warning level"""

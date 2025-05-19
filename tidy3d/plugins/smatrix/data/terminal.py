@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import pydantic.v1 as pd
 
+from tidy3d.components.data.data_array import DataArray
 from tidy3d.log import log
-
-from ....components.data.data_array import (
-    DataArray,
-)
 
 
 class PortDataArray(DataArray):

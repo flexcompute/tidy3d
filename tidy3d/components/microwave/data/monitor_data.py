@@ -4,6 +4,8 @@ reflection efficiency, gain, and realized gain.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import pydantic.v1 as pd
 import xarray as xr
 
@@ -119,7 +121,7 @@ class AntennaMetricsData(DirectivityData):
         return reflection_efficiency
 
     def partial_gain(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
     ) -> xr.Dataset:
         """The partial gain figures of merit for antennas. The partial gains are computed
         in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,
@@ -161,7 +163,7 @@ class AntennaMetricsData(DirectivityData):
         return partial_G.Gtheta + partial_G.Gphi
 
     def partial_realized_gain(
-        self, pol_basis: PolarizationBasis = "linear", tilt_angle: float = None
+        self, pol_basis: PolarizationBasis = "linear", tilt_angle: Optional[float] = None
     ) -> xr.Dataset:
         """The partial realized gain figures of merit for antennas. The partial gains are computed
         in the ``linear`` or ``circular`` polarization bases. If ``tilt_angle`` is not ``None``,

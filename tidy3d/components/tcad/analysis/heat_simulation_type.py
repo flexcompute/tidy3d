@@ -1,9 +1,11 @@
 """Dealing with time specifications for DeviceSimulation"""
 
+from __future__ import annotations
+
 import pydantic.v1 as pd
 
-from ....constants import KELVIN, SECOND
-from ...base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.constants import KELVIN, SECOND
 
 
 class UnsteadySpec(Tidy3dBaseModel):

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import copy
 
 import pytest
+
 import tidy3d as td
 
 

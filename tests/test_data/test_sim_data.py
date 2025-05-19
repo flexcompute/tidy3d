@@ -1,9 +1,12 @@
 """Tests SimulationData"""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
@@ -388,12 +391,12 @@ def test_run_time_lt_start(tmp_path):
         normalize_index=None,
     )
 
-    coords = dict(
-        x=np.linspace(-0.6, 0.6, 10),
-        y=np.linspace(-0.6, 0.6, 10),
-        z=[0.1],
-        t=[],
-    )
+    coords = {
+        "x": np.linspace(-0.6, 0.6, 10),
+        "y": np.linspace(-0.6, 0.6, 10),
+        "z": [0.1],
+        "t": [],
+    }
 
     field_components = {
         field_name: ScalarFieldTimeDataArray(np.zeros((10, 10, 1, 0)), coords=coords)
@@ -429,9 +432,9 @@ def test_plot_field_title():
 def test_missing_monitor():
     sim_data = make_sim_data()
     new_monitors = list(sim_data.simulation.monitors)[:-1]
-    new_sim = sim_data.simulation.copy(update=dict(monitors=new_monitors))
+    new_sim = sim_data.simulation.copy(update={"monitors": new_monitors})
     with pytest.raises(pydantic.ValidationError):
-        _ = sim_data.copy(update=dict(simulation=new_sim))
+        _ = sim_data.copy(update={"simulation": new_sim})
 
 
 def test_loading_non_field_data():

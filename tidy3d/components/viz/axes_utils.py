@@ -6,9 +6,9 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
-from ...constants import UnitScaling
-from ...exceptions import Tidy3dKeyError
-from ..types import Ax, Axis, LengthUnit
+from tidy3d.components.types import Ax, Axis, LengthUnit
+from tidy3d.constants import UnitScaling
+from tidy3d.exceptions import Tidy3dKeyError
 
 
 def make_ax() -> Ax:

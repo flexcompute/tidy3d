@@ -1,16 +1,17 @@
 """Parametric material models."""
 
+from __future__ import annotations
+
 import warnings
 from abc import ABC, abstractmethod
-from typing import List, Tuple
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ..components.base import Tidy3dBaseModel
-from ..components.medium import Drude, Medium2D, PoleResidue
-from ..constants import ELECTRON_VOLT, EPSILON_0, HBAR, K_B, KELVIN, Q_e
-from ..log import log
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.medium import Drude, Medium2D, PoleResidue
+from tidy3d.constants import ELECTRON_VOLT, EPSILON_0, HBAR, K_B, KELVIN, Q_e
+from tidy3d.log import log
 
 try:
     from scipy import integrate
@@ -102,7 +103,7 @@ class Graphene(ParametricVariantItem2D):
         "Otherwise, the intraband terms only give a simpler Drude-type model relevant "
         "only at low frequency (THz).",
     )
-    interband_fit_freq_nodes: List[Tuple[float, float]] = pd.Field(
+    interband_fit_freq_nodes: list[tuple[float, float]] = pd.Field(
         None,
         title="Interband fitting frequency nodes",
         description="Frequency nodes for fitting interband term. "
@@ -199,7 +200,7 @@ class Graphene(ParametricVariantItem2D):
             )
         return pole_residue_filtered
 
-    def numerical_conductivity(self, freqs: List[float]) -> List[complex]:
+    def numerical_conductivity(self, freqs: list[float]) -> list[complex]:
         """Numerically calculate the conductivity. If this differs from the
         conductivity of the :class:`.Medium2D`, it is due to error while
         fitting the interband term, and you may try values of ``interband_fit_freq_nodes``
@@ -219,7 +220,7 @@ class Graphene(ParametricVariantItem2D):
         inter_sigma = self.interband_conductivity(freqs)
         return intra_sigma + inter_sigma
 
-    def interband_conductivity(self, freqs: List[float]) -> List[complex]:
+    def interband_conductivity(self, freqs: list[float]) -> list[complex]:
         """Numerically integrate interband term.
 
         Parameters
@@ -271,9 +272,9 @@ class Graphene(ParametricVariantItem2D):
 
     def _fit_interband_conductivity(
         self,
-        freqs: List[float],
-        sigma: List[complex],
-        indslist: List[Tuple[int, int]],
+        freqs: list[float],
+        sigma: list[complex],
+        indslist: list[tuple[int, int]],
     ):
         """Fit the interband conductivity with a Pade approximation, as described in
 
@@ -296,7 +297,7 @@ class Graphene(ParametricVariantItem2D):
             A pole-residue model approximating the interband conductivity.
         """
 
-        def evaluate_coeffslist(omega: List[float], coeffslist: List[List[float]]) -> List[float]:
+        def evaluate_coeffslist(omega: list[float], coeffslist: list[list[float]]) -> list[float]:
             """Evaluate the Pade approximants given by ``coeffslist` to ``omega``.
             Each item in ``coeffslist`` is a list of four coefficients corresponding to
             a single Pade term."""
@@ -308,8 +309,8 @@ class Graphene(ParametricVariantItem2D):
             return res
 
         def fit_single(
-            omega: List[float], sigma: List[complex], inds: Tuple[int, int]
-        ) -> List[float]:
+            omega: list[float], sigma: list[complex], inds: tuple[int, int]
+        ) -> list[float]:
             """Fit a single Pade approximant of degree (1, 2) to ``sigma``
             as a real function of i ``omega``. The method is described in
 
@@ -331,11 +332,11 @@ class Graphene(ParametricVariantItem2D):
             return np.linalg.pinv(matrix) @ np.array([gamma[0], eta[0], gamma[1], eta[1]])
 
         def optimize(
-            omega: List[float],
-            sigma: List[complex],
-            indslist: List[Tuple[int, int]],
-            coeffslist: List[List[float]],
-        ) -> List[float]:
+            omega: list[float],
+            sigma: list[complex],
+            indslist: list[tuple[int, int]],
+            coeffslist: list[list[float]],
+        ) -> list[float]:
             """Optimize the coefficients in ``coeffslist`` by sampling ``omega`` and ``sigma``
             at the indices in ``indslist``."""
             for _ in range(self.interband_fit_num_iters):
@@ -346,7 +347,7 @@ class Graphene(ParametricVariantItem2D):
                     coeffslist[j] = fit_single(omega, curr_res, indslist[j])
             return coeffslist
 
-        def get_pole_residue(coeffslist: List[List[float]]) -> PoleResidue:
+        def get_pole_residue(coeffslist: list[list[float]]) -> PoleResidue:
             """Convert a list of Pade coefficients into a :class:`.PoleResidue` model."""
             poles = []
             for alpha0, alpha1, beta1, beta2 in coeffslist:
@@ -398,6 +399,6 @@ class Graphene(ParametricVariantItem2D):
             else:
                 poles += [(a, c)]
         return PoleResidue(
-            poles=poles + [(0, zero_res)],
+            poles=[*poles, (0, zero_res)],
             frequency_range=(0, GRAPHENE_FIT_FREQ_MAX),
         )

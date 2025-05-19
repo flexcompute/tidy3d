@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Dict, List, Mapping, Union
+from collections.abc import Mapping
+from typing import Any, Optional, Union
 
 import autograd.numpy as anp
 import h5py
@@ -17,8 +18,11 @@ from xarray.core.types import InterpOptions, Self
 from xarray.core.utils import OrderedSet, either_dict_or_kwargs
 from xarray.core.variable import as_variable
 
-from ...compat import alignment
-from ...constants import (
+from tidy3d.compat import alignment
+from tidy3d.components.autograd import TidyArrayBox, get_static, interpn, is_tidy_box
+from tidy3d.components.geometry.bound_ops import bounds_contains
+from tidy3d.components.types import Axis, Bound
+from tidy3d.constants import (
     HERTZ,
     MICROMETER,
     PICOSECOND_PER_NANOMETER_PER_KILOMETER,
@@ -26,10 +30,7 @@ from ...constants import (
     SECOND,
     WATT,
 )
-from ...exceptions import DataError, FileError
-from ..autograd import TidyArrayBox, get_static, interpn, is_tidy_box
-from ..geometry.bound_ops import bounds_contains
-from ..types import Axis, Bound
+from tidy3d.exceptions import DataError, FileError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -69,7 +70,7 @@ class DataArray(xr.DataArray):
     # stores an ordered tuple of strings corresponding to the data dimensions
     _dims = ()
     # stores a dictionary of attributes corresponding to the data values
-    _data_attrs: Dict[str, str] = {}
+    _data_attrs: dict[str, str] = {}
 
     def __init__(self, data, *args, **kwargs):
         # if data is a vanilla autograd box, convert to our box
@@ -118,7 +119,7 @@ class DataArray(xr.DataArray):
             val.attrs[attr_name] = attr
         return val
 
-    def _interp_validator(self, field_name: str = None) -> None:
+    def _interp_validator(self, field_name: Optional[str] = None) -> None:
         """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
 
         NOTE
@@ -152,17 +153,17 @@ class DataArray(xr.DataArray):
     def __modify_schema__(cls, field_schema):
         """Sets the schema of DataArray object."""
 
-        schema = dict(
-            title="DataArray",
-            type="xr.DataArray",
-            properties=dict(
-                _dims=dict(
-                    title="_dims",
-                    type="Tuple[str, ...]",
-                ),
-            ),
-            required=["_dims"],
-        )
+        schema = {
+            "title": "DataArray",
+            "type": "xr.DataArray",
+            "properties": {
+                "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]",
+                },
+            },
+            "required": ["_dims"],
+        }
         field_schema.update(schema)
 
     @classmethod
@@ -261,7 +262,7 @@ class DataArray(xr.DataArray):
         token_str = dask.base.tokenize(self)
         return hash(token_str)
 
-    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> Self:
+    def multiply_at(self, value: complex, coord_name: str, indices: list[int]) -> Self:
         """Multiply self by value at indices."""
         if isbox(self.data) or isbox(value):
             return self._ag_multiply_at(value, coord_name, indices)
@@ -270,7 +271,7 @@ class DataArray(xr.DataArray):
         self_mult[{coord_name: indices}] *= value
         return self_mult
 
-    def _ag_multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> Self:
+    def _ag_multiply_at(self, value: complex, coord_name: str, indices: list[int]) -> Self:
         """Autograd multiply_at override when tracing."""
         key = {coord_name: indices}
         _, index_tuple, _ = self.variable._broadcast_indexes(key)

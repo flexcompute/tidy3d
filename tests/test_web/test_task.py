@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from tidy3d.web.core.task_info import RunInfo
 
 

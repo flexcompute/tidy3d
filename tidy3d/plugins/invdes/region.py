@@ -1,4 +1,5 @@
 # container for specification fully defining the inverse design problem
+from __future__ import annotations
 
 import abc
 import typing
@@ -38,14 +39,14 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         units=td.constants.MICROMETER,
     )
 
-    eps_bounds: typing.Tuple[float, float] = pd.Field(
+    eps_bounds: tuple[float, float] = pd.Field(
         ...,
         ge=1.0,
         title="Relative Permittivity Bounds",
         description="Minimum and maximum relative permittivity expressed to the design region.",
     )
 
-    transformations: typing.Tuple[TransformationType, ...] = pd.Field(
+    transformations: tuple[TransformationType, ...] = pd.Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -55,7 +56,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
 
-    penalties: typing.Tuple[PenaltyType, ...] = pd.Field(
+    penalties: tuple[PenaltyType, ...] = pd.Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -149,7 +150,7 @@ class TopologyDesignRegion(DesignRegion):
         "is assumed to be uniform, i.e. invariant, in the z direction.",
     )
 
-    transformations: typing.Tuple[TransformationType, ...] = pd.Field(
+    transformations: tuple[TransformationType, ...] = pd.Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -158,7 +159,7 @@ class TopologyDesignRegion(DesignRegion):
         "permittivity and 1 corresponds to the maximum relative permittivity. "
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
-    penalties: typing.Tuple[PenaltyType, ...] = pd.Field(
+    penalties: tuple[PenaltyType, ...] = pd.Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -183,7 +184,7 @@ class TopologyDesignRegion(DesignRegion):
             x = self.initial_parameters
             self.eps_values(x)
         except Exception as e:
-            raise ValidationError(f"Could not evaluate transformations: {str(e)}") from e
+            raise ValidationError(f"Could not evaluate transformations: {e!s}") from e
 
     def _validate_penalty_value(self):
         """Validate the penalty values by evaluating the penalties."""
@@ -191,7 +192,7 @@ class TopologyDesignRegion(DesignRegion):
             x = self.initial_parameters
             self.penalty_value(x)
         except Exception as e:
-            raise ValidationError(f"Could not evaluate penalties: {str(e)}") from e
+            raise ValidationError(f"Could not evaluate penalties: {e!s}") from e
 
     def _validate_gradients(self):
         """Validate the gradients of the penalties and transformations."""
@@ -219,7 +220,7 @@ class TopologyDesignRegion(DesignRegion):
                 "This indicates that the optimization will not function correctly. "
                 "Please double-check the definitions of both the penalties and transformations."
             )
-        elif penalty_independent:
+        if penalty_independent:
             td.log.warning(
                 "Penalty gradient seems independent of input, meaning that it "
                 "will not contribute to the objective gradient during optimization. "
@@ -244,7 +245,7 @@ class TopologyDesignRegion(DesignRegion):
             )
 
     @property
-    def params_shape(self) -> typing.Tuple[int, int, int]:
+    def params_shape(self) -> tuple[int, int, int]:
         """Shape of the parameters array in (x, y, z), given the ``pixel_size`` and bounds."""
         side_lengths = np.array(self.size)
         num_pixels = np.ceil(side_lengths / self.pixel_size)
@@ -289,7 +290,7 @@ class TopologyDesignRegion(DesignRegion):
         return self.params_uniform(1.0)
 
     @property
-    def coords(self) -> typing.Dict[str, typing.List[float]]:
+    def coords(self) -> dict[str, list[float]]:
         """Coordinates for the custom medium corresponding to this design region."""
 
         lengths = np.array(self.size)
@@ -297,7 +298,7 @@ class TopologyDesignRegion(DesignRegion):
         rmin, rmax = self.geometry.bounds
         params_shape = self.params_shape
 
-        coords = dict()
+        coords = {}
         for dim, ptmin, ptmax, length, num_pts in zip("xyz", rmin, rmax, lengths, params_shape):
             step_size = length / num_pts
             if np.isinf(length):

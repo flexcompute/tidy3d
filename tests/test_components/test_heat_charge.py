@@ -1,10 +1,13 @@
 """Test suite for heat-charge simulation objects and data using pytest fixtures."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
 from matplotlib import pyplot as plt
+
+import tidy3d as td
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
@@ -411,7 +414,7 @@ def temperature_monitor_data(monitors):
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     temperature_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data1 = td.TemperatureData(monitor=temp_mnt1, temperature=temperature_field)
@@ -489,7 +492,7 @@ def voltage_monitor_data(monitors):
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(-5, 5, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     voltage_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data1 = td.SteadyPotentialData(monitor=volt_mnt1, potential=voltage_field)
@@ -832,14 +835,14 @@ def test_heat_charge_simulation(simulation_data):
     assert cond_sim is not None, "Conduction simulation should be created successfully."
 
     voltage_capacitance_sim = voltage_capacitance_sim_data.simulation
-    assert (
-        voltage_capacitance_sim is not None
-    ), "Voltage-Capacitance simulation should be created successfully."
+    assert voltage_capacitance_sim is not None, (
+        "Voltage-Capacitance simulation should be created successfully."
+    )
 
     current_voltage_sim = current_voltage_simulation_data.simulation
-    assert (
-        current_voltage_sim is not None
-    ), "Current-Voltage simulation should be created successfully."
+    assert current_voltage_sim is not None, (
+        "Current-Voltage simulation should be created successfully."
+    )
 
 
 def test_sim_data_plotting(simulation_data):
@@ -1087,7 +1090,6 @@ class TestCharge:
         """Test doping distributions."""
         # Implementation needed
         # This test was empty in the original code.
-        pass
 
 
 # --------------------------
@@ -1361,7 +1363,7 @@ def test_dynamic_simulation_updates(heat_simulation):
     # Add a new monitor
     new_monitor = td.TemperatureMonitor(size=(1, 1, 1), name="new_temp_mnt")
     updated_sim = heat_simulation.updated_copy(
-        monitors=tuple(list(heat_simulation.monitors) + [new_monitor])
+        monitors=(*list(heat_simulation.monitors), new_monitor)
     )
     assert len(updated_sim.monitors) == len(heat_simulation.monitors) + 1
     assert updated_sim.monitors[-1].name == "new_temp_mnt"
@@ -1402,13 +1404,13 @@ def test_bandgap_monitor():
 
     tri_grid_values_single_voltage = td.IndexedVoltageDataArray(
         [[0.0], [0], [3], [3]],
-        coords=dict(index=np.arange(4), voltage=[1]),
+        coords={"index": np.arange(4), "voltage": [1]},
         name="test",
     )
 
     tri_grid_values_multi_voltage = td.IndexedVoltageDataArray(
         [[0.0, 0.0], [0, 0], [3, -3], [3, -3]],
-        coords=dict(index=np.arange(4), voltage=[-1, 1]),
+        coords={"index": np.arange(4), "voltage": [-1, 1]},
         name="test",
     )
 
@@ -1450,7 +1452,7 @@ def test_bandgap_monitor():
 
     tet_grid_values_single_voltage = td.IndexedVoltageDataArray(
         [[0.0], [0.0], [0.0], [0.0], [3.0], [3.0], [3.0], [3.0]],
-        coords=dict(index=np.arange(8), voltage=[1]),
+        coords={"index": np.arange(8), "voltage": [1]},
         name="test_tet",
     )
 
@@ -1465,7 +1467,7 @@ def test_bandgap_monitor():
             [3.0, 3.5],
             [3.0, 3.5],
         ],
-        coords=dict(index=np.arange(8), voltage=[-1, 1]),
+        coords={"index": np.arange(8), "voltage": [-1, 1]},
         name="test_tet",
     )
 

@@ -1,6 +1,9 @@
-from typing import Union
+from __future__ import annotations
+
+from typing import Optional, Union
 
 import numpy as np
+
 import tidy3d as td
 import tidy3d.plugins.microwave as microwave
 from tidy3d.plugins.smatrix import (
@@ -33,7 +36,9 @@ Rinner = 0.2768 * mm
 Router = 1.0 * mm
 
 
-def make_simulation(planar_pec: bool, length: float = None, grid_spec: td.GridSpec = None):
+def make_simulation(
+    planar_pec: bool, length: Optional[float] = None, grid_spec: td.GridSpec = None
+):
     if length:
         strip_length = length
     else:
@@ -109,7 +114,7 @@ def make_simulation(planar_pec: bool, length: float = None, grid_spec: td.GridSp
 def make_component_modeler(
     planar_pec: bool,
     reference_impedance: complex = 50,
-    length: float = None,
+    length: Optional[float] = None,
     port_refinement: bool = True,
     port_snapping: bool = True,
     grid_spec: td.GridSpec = None,
@@ -167,7 +172,7 @@ def make_component_modeler(
     return modeler
 
 
-def make_coaxial_simulation(length: float = None, grid_spec: td.GridSpec = None):
+def make_coaxial_simulation(length: Optional[float] = None, grid_spec: td.GridSpec = None):
     if not length:
         length = default_strip_length
 
@@ -244,7 +249,7 @@ def make_coaxial_simulation(length: float = None, grid_spec: td.GridSpec = None)
 
 def make_coaxial_component_modeler(
     reference_impedance: complex = 50,
-    length: float = None,
+    length: Optional[float] = None,
     port_refinement: bool = True,
     grid_spec: td.GridSpec = None,
     port_types: tuple[Union[CoaxialLumpedPort, WavePort], Union[CoaxialLumpedPort, WavePort]] = (

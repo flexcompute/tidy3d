@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional
 
 import numpy as np
@@ -606,13 +608,12 @@ def compute_spline_coeffs(
     """
     if order == 1:
         return compute_linear_coefficients(x_points, y_points)
-    elif order == 2:
+    if order == 2:
         left_deriv = endpoint_derivatives[0]
         return compute_quadratic_coefficients(x_points, y_points, left_deriv)
-    elif order == 3:
+    if order == 3:
         return compute_spline_coefficients(x_points, y_points, endpoint_derivatives)
-    else:
-        raise NotImplementedError(f"Spline order '{order}' not implemented.")
+    raise NotImplementedError(f"Spline order '{order}' not implemented.")
 
 
 def evaluate_spline(x_points: NDArray, coeffs: tuple, x_eval: NDArray) -> NDArray:
@@ -636,12 +637,11 @@ def evaluate_spline(x_points: NDArray, coeffs: tuple, x_eval: NDArray) -> NDArra
 
     if order == 1:
         return evaluate_linear_spline(x_points, coeffs, x_eval)
-    elif order == 2:
+    if order == 2:
         return evaluate_quadratic_spline(x_points, coeffs, x_eval)
-    elif order == 3:
+    if order == 3:
         return evaluate_cubic_spline(x_points, coeffs, x_eval)
-    else:
-        raise NotImplementedError(f"Spline order '{order}' not implemented.")
+    raise NotImplementedError(f"Spline order '{order}' not implemented.")
 
 
 def get_spline_derivatives_wrt_y(
@@ -672,13 +672,12 @@ def get_spline_derivatives_wrt_y(
     """
     if order == 1:
         return get_linear_derivative_wrt_y(x_points, y_points)
-    elif order == 2:
+    if order == 2:
         left_deriv = endpoint_derivatives[0]
         return get_quadratic_derivative_wrt_y(x_points, y_points, left_deriv)
-    elif order == 3:
+    if order == 3:
         return get_cubic_derivative_wrt_y(x_points, y_points, endpoint_derivatives)
-    else:
-        raise NotImplementedError(f"Derivatives for spline order '{order}' not implemented.")
+    raise NotImplementedError(f"Derivatives for spline order '{order}' not implemented.")
 
 
 @primitive

@@ -1,5 +1,7 @@
 """Tidy3d core log, need init config from Tidy3d api"""
 
+from __future__ import annotations
+
 import logging as log
 
 # default setting

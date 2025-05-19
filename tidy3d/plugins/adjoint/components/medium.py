@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
 
-from ....components.data.monitor_data import FieldData
-from ....components.geometry.base import Geometry
-from ....components.medium import AnisotropicMedium, CustomMedium, Medium
-from ....components.types import Bound, Literal
-from ....constants import CONDUCTIVITY
-from ....exceptions import SetupError
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.geometry.base import Geometry
+from tidy3d.components.medium import AnisotropicMedium, CustomMedium, Medium
+from tidy3d.components.types import Bound
+from tidy3d.constants import CONDUCTIVITY
+from tidy3d.exceptions import SetupError
+
 from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
@@ -33,7 +34,7 @@ class AbstractJaxMedium(ABC, JaxObject):
 
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
-    ) -> Tuple[Dict[str, np.ndarray], float]:
+    ) -> tuple[dict[str, np.ndarray], float]:
         """Get the coordinates and volume element for the inside of the corresponding structure."""
 
         # find intersecting volume between structure and simulation
@@ -63,7 +64,7 @@ class AbstractJaxMedium(ABC, JaxObject):
         return vol_coords, d_vol
 
     @staticmethod
-    def make_inside_mask(vol_coords: Dict[str, np.ndarray], inside_fn: Callable) -> xr.DataArray:
+    def make_inside_mask(vol_coords: dict[str, np.ndarray], inside_fn: Callable) -> xr.DataArray:
         """Make a 3D mask of where the volume coordinates are inside a supplied function."""
 
         meshgrid_args = [vol_coords[dim] for dim in "xyz" if dim in vol_coords]
@@ -77,7 +78,7 @@ class AbstractJaxMedium(ABC, JaxObject):
         field: Literal["Ex", "Ey", "Ez"],
         grad_data_fwd: FieldData,
         grad_data_adj: FieldData,
-        vol_coords: Dict[str, np.ndarray],
+        vol_coords: dict[str, np.ndarray],
         d_vol: float,
         inside_fn: Callable,
     ) -> xr.DataArray:
@@ -188,10 +189,10 @@ class JaxMedium(Medium, AbstractJaxMedium):
             vjp_sigma += _vjp_sigma
 
         return self.copy(
-            update=dict(
-                permittivity_jax=vjp_eps,
-                conductivity_jax=vjp_sigma,
-            )
+            update={
+                "permittivity_jax": vjp_eps,
+                "conductivity_jax": vjp_sigma,
+            }
         )
 
 
@@ -444,7 +445,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
         # package everything into dataset
         vjp_eps_dataset = JaxPermittivityDataset(**vjp_field_components)
-        return self.copy(update=dict(eps_dataset=vjp_eps_dataset))
+        return self.copy(update={"eps_dataset": vjp_eps_dataset})
 
 
 JaxMediumType = Union[JaxMedium, JaxAnisotropicMedium, JaxCustomMedium]

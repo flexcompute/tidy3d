@@ -1,12 +1,13 @@
 # Tests webapi and things that depend on it
-
+from __future__ import annotations
 
 import numpy as np
 import pytest
 import responses
-import tidy3d as td
 from _pytest import monkeypatch
 from responses import matchers
+
+import tidy3d as td
 from tidy3d import Simulation
 from tidy3d.__main__ import main
 from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -85,7 +86,7 @@ def make_sim_data(file_size_gb=FILE_SIZE_GB):
     src = PointDipole(
         center=(0, 0, 0), source_time=GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
     )
-    coords = dict(x=x, y=y, z=z, f=f)
+    coords = {"x": x, "y": y, "z": z, "f": f}
     Ex = ScalarFieldDataArray(data, coords=coords)
     monitor = FieldMonitor(size=(2, 2, 2), freqs=f, name="test", fields=["Ex"])
     field_data = FieldData(monitor=monitor, Ex=Ex)

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Literal, Optional
 
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
     SpatialDataArray,
@@ -24,12 +25,10 @@ from tidy3d.components.tcad.data.types import (
 )
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import Ax, Literal, RealFieldVal, annotate_type
+from tidy3d.components.types import Ax, RealFieldVal, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError
 from tidy3d.log import log
-
-from ...base import Tidy3dBaseModel
 
 
 class DeviceCharacteristics(Tidy3dBaseModel):
@@ -131,7 +130,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
         description="Original :class:`.HeatChargeSimulation` associated with the data.",
     )
 
-    data: Tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
+    data: tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
@@ -155,8 +154,8 @@ class HeatChargeSimulationData(AbstractSimulationData):
         scale: Literal["lin", "log"] = "lin",
         structures_alpha: float = 0.2,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
@@ -278,7 +277,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
                 if field_data.coords[axis].size <= 1:
                     field_data = field_data.sel(**{axis: pos}, method="nearest")
                 else:
-                    field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
+                    field_data = field_data.interp(**{axis: pos}, kwargs={"bounds_error": True})
 
             # select the extra coordinates out of the data from user-specified kwargs
             for coord_name, coord_val in sel_kwargs.items():
@@ -286,7 +285,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
                     field_data = field_data.sel(**{coord_name: coord_val}, method=None)
                 else:
                     field_data = field_data.interp(
-                        **{coord_name: coord_val}, kwargs=dict(bounds_error=True)
+                        **{coord_name: coord_val}, kwargs={"bounds_error": True}
                     )
 
             field_data = field_data.squeeze(drop=True)

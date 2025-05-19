@@ -1,5 +1,7 @@
 """Tool for finding and characterizing lobes in antenna radiation patterns."""
 
+from __future__ import annotations
+
 from math import isclose, isnan
 from typing import Optional
 
@@ -8,11 +10,12 @@ import pydantic.v1 as pd
 from pandas import DataFrame
 from scipy.signal import find_peaks, peak_widths
 
-from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.types import ArrayFloat1D, ArrayLike, Ax
-from ...constants import fp_eps
-from ...exceptions import ValidationError
-from ...log import log
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.types import ArrayFloat1D, ArrayLike, Ax
+from tidy3d.constants import fp_eps
+from tidy3d.exceptions import ValidationError
+from tidy3d.log import log
+
 from .viz import plot_params_lobe_FNBW, plot_params_lobe_peak, plot_params_lobe_width
 
 # The minimum plateau size for peak finding, which is set to 0 to ensure that all peaks are found.

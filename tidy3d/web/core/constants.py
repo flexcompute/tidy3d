@@ -1,6 +1,8 @@
 """Defines constants for core."""
 
 # HTTP Header key and value
+from __future__ import annotations
+
 HEADER_APIKEY = "simcloud-api-key"
 HEADER_VERSION = "tidy3d-python-version"
 HEADER_SOURCE = "source"

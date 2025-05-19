@@ -21,7 +21,6 @@ class TaskStubData(ABC):
             An instance of the component class calling ``load``.
 
         """
-        pass
 
     @abstractmethod
     def to_file(self, file_path):
@@ -37,7 +36,6 @@ class TaskStubData(ABC):
         :class:`Stub`
             An instance of the component class calling ``load``.
         """
-        pass
 
 
 class TaskStub(ABC):
@@ -55,7 +53,6 @@ class TaskStub(ABC):
         :class:`TaskStubData`
             An instance of the component class calling ``load``.
         """
-        pass
 
     @abstractmethod
     def to_file(self, file_path):
@@ -71,7 +68,6 @@ class TaskStub(ABC):
         :class:`Stub`
             An instance of the component class calling ``load``.
         """
-        pass
 
     @abstractmethod
     def to_hdf5_gz(self, fname: str) -> None:
@@ -82,4 +78,3 @@ class TaskStub(ABC):
         fname : str
             Full path to the .hdf5.gz file to save the :class:`TaskStub` to.
         """
-        pass

@@ -5,10 +5,11 @@ import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from ...constants import LARGE_NUMBER
-from ..base import Tidy3dBaseModel
-from ..data.data_array import ScalarFieldDataArray, SpatialDataArray
-from ..types import ArrayLike, Bound, tidycomplex
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
+from tidy3d.components.types import ArrayLike, Bound, tidycomplex
+from tidy3d.constants import LARGE_NUMBER
+
 from .types import PathType
 from .utils import get_static
 
@@ -390,6 +391,6 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
 
 
 __all__ = [
-    "integrate_within_bounds",
     "DerivativeInfo",
+    "integrate_within_bounds",
 ]

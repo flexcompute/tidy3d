@@ -1,22 +1,23 @@
 """Provides lowest level, user-facing interface to server."""
 
+from __future__ import annotations
+
 import json
 import os
 import tempfile
 import time
-from typing import Callable, Dict, List, Union
+from typing import Callable, Literal, Optional, Union
 
 from requests import HTTPError
 from rich.progress import Progress
 
-from ...components.medium import AbstractCustomMedium
-from ...components.mode.mode_solver import ModeSolver
-from ...components.mode.simulation import ModeSimulation
-from ...components.types import Literal
-from ...exceptions import WebError
-from ...log import get_logging_console, log
-from ..core.account import Account
-from ..core.constants import (
+from tidy3d.components.medium import AbstractCustomMedium
+from tidy3d.components.mode.mode_solver import ModeSolver
+from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.exceptions import WebError
+from tidy3d.log import get_logging_console, log
+from tidy3d.web.core.account import Account
+from tidy3d.web.core.constants import (
     MODE_DATA_HDF5_GZ,
     MODE_FILE_HDF5_GZ,
     SIM_FILE_HDF5,
@@ -24,16 +25,12 @@ from ..core.constants import (
     SIMULATION_DATA_HDF5_GZ,
     TaskId,
 )
-from ..core.environment import Env
-from ..core.task_core import Folder, SimulationTask
-from ..core.task_info import ChargeType, TaskInfo
-from ..core.types import PayType
-from .connect_util import (
-    REFRESH_TIME,
-    get_grid_points_str,
-    get_time_steps_str,
-    wait_for_connection,
-)
+from tidy3d.web.core.environment import Env
+from tidy3d.web.core.task_core import Folder, SimulationTask
+from tidy3d.web.core.task_info import ChargeType, TaskInfo
+from tidy3d.web.core.types import PayType
+
+from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
 from .tidy3d_stub import SimulationDataType, SimulationType, Tidy3dStub, Tidy3dStubData
 
 # time between checking run status
@@ -75,14 +72,14 @@ def run(
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: str = None,
+    callback_url: Optional[str] = None,
     verbose: bool = True,
-    progress_callback_upload: Callable[[float], None] = None,
-    progress_callback_download: Callable[[float], None] = None,
-    solver_version: str = None,
-    worker_group: str = None,
+    progress_callback_upload: Optional[Callable[[float], None]] = None,
+    progress_callback_download: Optional[Callable[[float], None]] = None,
+    solver_version: Optional[str] = None,
+    worker_group: Optional[str] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: list[str] = None,
+    parent_tasks: Optional[list[str]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> SimulationDataType:
@@ -196,13 +193,13 @@ def upload(
     simulation: SimulationType,
     task_name: str,
     folder_name: str = "default",
-    callback_url: str = None,
+    callback_url: Optional[str] = None,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: List[str] = None,
+    parent_tasks: Optional[list[str]] = None,
     source_required: bool = True,
-    solver_version: str = None,
+    solver_version: Optional[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> TaskId:
     """
@@ -372,8 +369,8 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
 @wait_for_connection
 def start(
     task_id: TaskId,
-    solver_version: str = None,
-    worker_group: str = None,
+    solver_version: Optional[str] = None,
+    worker_group: Optional[str] = None,
     pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> None:
     """Start running the simulation associated with task.
@@ -628,7 +625,7 @@ def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
     """Download results of task to file.
 
@@ -685,7 +682,7 @@ def download_hdf5(
     task_id: TaskId,
     path: str = SIM_FILE_HDF5,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
     """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
 
@@ -745,7 +742,7 @@ def download_log(
     task_id: TaskId,
     path: str = "tidy3d.log",
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
     """Download the tidy3d log file associated with a task.
 
@@ -774,7 +771,7 @@ def load(
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> SimulationDataType:
     """
     Download and Load simulation results into :class:`.SimulationData` object.
@@ -886,20 +883,19 @@ def abort(task_id: TaskId):
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    else:
-        task.abort()
-        console = get_logging_console()
-        url = _get_url(task.task_id)
-        console.log(
-            f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
-        )
-        return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    task.abort()
+    console = get_logging_console()
+    url = _get_url(task.task_id)
+    console.log(
+        f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+    )
+    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 @wait_for_connection
 def get_tasks(
-    num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
-) -> List[Dict]:
+    num_tasks: Optional[int] = None, order: Literal["new", "old"] = "new", folder: str = "default"
+) -> list[dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
     Parameters
@@ -930,7 +926,9 @@ def get_tasks(
 
 
 @wait_for_connection
-def estimate_cost(task_id: str, verbose: bool = True, solver_version: str = None) -> float:
+def estimate_cost(
+    task_id: str, verbose: bool = True, solver_version: Optional[str] = None
+) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters

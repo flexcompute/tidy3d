@@ -1,12 +1,16 @@
 """Holds dispersive models for several commonly used optical materials."""
 
+from __future__ import annotations
+
 import json
-from typing import Dict, List, Union
+from typing import Union
 
 import pydantic.v1 as pd
 
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import SemiconductorMedium
+from tidy3d.components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
@@ -14,12 +18,10 @@ from tidy3d.components.tcad.types import (
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
 )
+from tidy3d.components.types import Axis
+from tidy3d.exceptions import SetupError
+from tidy3d.log import log
 
-from ..components.base import Tidy3dBaseModel
-from ..components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
-from ..components.types import Axis
-from ..exceptions import SetupError
-from ..log import log
 from .material_reference import ReferenceData, material_refs
 from .parametric_materials import Graphene
 from .util import (
@@ -66,7 +68,7 @@ def export_matlib_to_file(fname: str = "matlib.json") -> None:
 class AbstractVariantItem(Tidy3dBaseModel):
     """Reference, and data_source for a variant of a material."""
 
-    reference: List[ReferenceData] = pd.Field(
+    reference: list[ReferenceData] = pd.Field(
         None,
         title="Reference information",
         description="A list of references related to this variant model.",
@@ -80,7 +82,7 @@ class AbstractVariantItem(Tidy3dBaseModel):
     )
 
     @property
-    def summarize_mediums(self) -> Dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
         return {}
 
     def __str__(self):
@@ -103,7 +105,7 @@ class VariantItem(AbstractVariantItem):
     )
 
     @property
-    def summarize_mediums(self) -> Dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
         return {"medium": self.medium}
 
 
@@ -111,7 +113,7 @@ class MaterialItem(Tidy3dBaseModel):
     """A material that includes several variants."""
 
     name: str = pd.Field(..., title="Name", description="Unique name for the medium.")
-    variants: Dict[str, VariantItem] = pd.Field(
+    variants: dict[str, VariantItem] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -167,14 +169,14 @@ class VariantItem2D(AbstractVariantItem):
     )
 
     @property
-    def summarize_mediums(self) -> Dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
         return {"medium": self.medium}
 
 
 class MaterialItem2D(MaterialItem):
     """A 2D material that includes several variants."""
 
-    variants: Dict[str, VariantItem2D] = pd.Field(
+    variants: dict[str, VariantItem2D] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -213,19 +215,19 @@ class VariantItemUniaxial(AbstractVariantItem):
         """
 
         components = ["xx", "yy", "zz"]
-        mat_dict = {comp: self.ordinary for comp in components}
+        mat_dict = dict.fromkeys(components, self.ordinary)
         mat_dict.update({components[optical_axis]: self.extraordinary})
         return AnisotropicMedium.parse_obj(mat_dict)
 
     @property
-    def summarize_mediums(self) -> Dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
         return {"ordinary": self.ordinary, "extraordinary": self.extraordinary}
 
 
 class MaterialItemUniaxial(MaterialItem):
     """A material that includes several variants."""
 
-    variants: Dict[str, VariantItemUniaxial] = pd.Field(
+    variants: dict[str, VariantItemUniaxial] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -352,8 +354,7 @@ Ag_Yang2015Drude = VariantItem(
         frequency_range=(154771532566312.25, 1595489401708072.2),
     ),
     reference=[material_refs["Yang2015"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
-    "main/Ag/Yang.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Yang.yml",
 )
 
 Al_Rakic1995 = VariantItem(
@@ -2083,447 +2084,447 @@ class MaterialLibrary(dict):
 material_library = MaterialLibrary(
     Ag=MaterialItem(
         name="Silver",
-        variants=dict(
-            Rakic1998BB=Ag_Rakic1998BB,
-            JohnsonChristy1972=Ag_JohnsonChristy1972,
-            RakicLorentzDrude1998=Ag_RakicLorentzDrude1998,
-            Yang2015Drude=Ag_Yang2015Drude,
-        ),
+        variants={
+            "Rakic1998BB": Ag_Rakic1998BB,
+            "JohnsonChristy1972": Ag_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Ag_RakicLorentzDrude1998,
+            "Yang2015Drude": Ag_Yang2015Drude,
+        },
         default="Rakic1998BB",
     ),
     Al=MaterialItem(
         name="Aluminum",
-        variants=dict(
-            Rakic1995=Al_Rakic1995,
-            RakicLorentzDrude1998=Al_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Rakic1995": Al_Rakic1995,
+            "RakicLorentzDrude1998": Al_RakicLorentzDrude1998,
+        },
         default="Rakic1995",
     ),
     Al2O3=MaterialItem(
         name="Alumina",
-        variants=dict(
-            Horiba=Al2O3_Horiba,
-        ),
+        variants={
+            "Horiba": Al2O3_Horiba,
+        },
         default="Horiba",
     ),
     AlAs=MaterialItem(
         name="Aluminum Arsenide",
-        variants=dict(
-            Horiba=AlAs_Horiba,
-            FernOnton1971=AlAs_FernOnton1971,
-        ),
+        variants={
+            "Horiba": AlAs_Horiba,
+            "FernOnton1971": AlAs_FernOnton1971,
+        },
         default="Horiba",
     ),
     AlGaN=MaterialItem(
         name="Aluminum Gallium Nitride",
-        variants=dict(
-            Horiba=AlGaN_Horiba,
-        ),
+        variants={
+            "Horiba": AlGaN_Horiba,
+        },
         default="Horiba",
     ),
     AlN=MaterialItem(
         name="Aluminum Nitride",
-        variants=dict(
-            Horiba=AlN_Horiba,
-        ),
+        variants={
+            "Horiba": AlN_Horiba,
+        },
         default="Horiba",
     ),
     AlxOy=MaterialItem(
         name="Aluminum Oxide",
-        variants=dict(
-            Horiba=AlxOy_Horiba,
-        ),
+        variants={
+            "Horiba": AlxOy_Horiba,
+        },
         default="Horiba",
     ),
     Aminoacid=MaterialItem(
         name="Amino Acid",
-        variants=dict(
-            Horiba=Aminoacid_Horiba,
-        ),
+        variants={
+            "Horiba": Aminoacid_Horiba,
+        },
         default="Horiba",
     ),
     Au=MaterialItem(
         name="Gold",
-        variants=dict(
-            Olmon2012crystal=Au_Olmon2012crystal,
-            Olmon2012stripped=Au_Olmon2012stripped,
-            Olmon2012evaporated=Au_Olmon2012evaporated,
-            Olmon2012Drude=Au_Olmon2012Drude,
-            JohnsonChristy1972=Au_JohnsonChristy1972,
-            RakicLorentzDrude1998=Au_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Olmon2012crystal": Au_Olmon2012crystal,
+            "Olmon2012stripped": Au_Olmon2012stripped,
+            "Olmon2012evaporated": Au_Olmon2012evaporated,
+            "Olmon2012Drude": Au_Olmon2012Drude,
+            "JohnsonChristy1972": Au_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Au_RakicLorentzDrude1998,
+        },
         default="Olmon2012evaporated",
     ),
     BK7=MaterialItem(
         name="N-BK7 Borosilicate Glass",
-        variants=dict(
-            Zemax=BK7_Zemax,
-        ),
+        variants={
+            "Zemax": BK7_Zemax,
+        },
         default="Zemax",
     ),
     Be=MaterialItem(
         name="Beryllium",
-        variants=dict(
-            Rakic1998BB=Be_Rakic1998BB,
-            RakicLorentzDrude1998=Be_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Rakic1998BB": Be_Rakic1998BB,
+            "RakicLorentzDrude1998": Be_RakicLorentzDrude1998,
+        },
         default="Rakic1998BB",
     ),
     CaF2=MaterialItem(
         name="Calcium Fluoride",
-        variants=dict(
-            Horiba=CaF2_Horiba,
-        ),
+        variants={
+            "Horiba": CaF2_Horiba,
+        },
         default="Horiba",
     ),
     Cellulose=MaterialItem(
         name="Cellulose",
-        variants=dict(
-            Sultanova2009=Cellulose_Sultanova2009,
-        ),
+        variants={
+            "Sultanova2009": Cellulose_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     Cr=MaterialItem(
         name="Chromium",
-        variants=dict(
-            Rakic1998BB=Cr_Rakic1998BB,
-            RakicLorentzDrude1998=Cr_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Rakic1998BB": Cr_Rakic1998BB,
+            "RakicLorentzDrude1998": Cr_RakicLorentzDrude1998,
+        },
         default="Rakic1998BB",
     ),
     Cu=MaterialItem(
         name="Copper",
-        variants=dict(
-            JohnsonChristy1972=Cu_JohnsonChristy1972,
-            RakicLorentzDrude1998=Cu_RakicLorentzDrude1998,
-        ),
+        variants={
+            "JohnsonChristy1972": Cu_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Cu_RakicLorentzDrude1998,
+        },
         default="JohnsonChristy1972",
     ),
     FusedSilica=MaterialItem(
         name="Fused Silica",
-        variants=dict(
-            ZemaxSellmeier=FusedSilica_Zemax,
-            ZemaxVisiblePMLStable=FusedSilica_Zemax_Visible_PMLStable,
-            ZemaxPMLStable=FusedSilica_Zemax_PMLStable,
-        ),
+        variants={
+            "ZemaxSellmeier": FusedSilica_Zemax,
+            "ZemaxVisiblePMLStable": FusedSilica_Zemax_Visible_PMLStable,
+            "ZemaxPMLStable": FusedSilica_Zemax_PMLStable,
+        },
         default="ZemaxPMLStable",
     ),
     GaAs=MaterialItem(
         name="Gallium Arsenide",
-        variants=dict(
-            Palik_Lossless=GaAs_Palik_Lossless,
-            Palik_Lossy=GaAs_Palik_Lossy,
-            Skauli2003=GaAs_Skauli2003,
-        ),
+        variants={
+            "Palik_Lossless": GaAs_Palik_Lossless,
+            "Palik_Lossy": GaAs_Palik_Lossy,
+            "Skauli2003": GaAs_Skauli2003,
+        },
         default="Skauli2003",
     ),
     Ge=MaterialItem(
         name="Germanium",
-        variants=dict(
-            Palik_Lossless=Ge_Palik_Lossless,
-            Palik_Lossy=Ge_Palik_Lossy,
-            Icenogle1976=Ge_Icenogle1976,
-        ),
+        variants={
+            "Palik_Lossless": Ge_Palik_Lossless,
+            "Palik_Lossy": Ge_Palik_Lossy,
+            "Icenogle1976": Ge_Icenogle1976,
+        },
         default="Icenogle1976",
     ),
     GeOx=MaterialItem(
         name="Germanium Oxide",
-        variants=dict(
-            Horiba=GeOx_Horiba,
-        ),
+        variants={
+            "Horiba": GeOx_Horiba,
+        },
         default="Horiba",
     ),
     H2O=MaterialItem(
         name="Water",
-        variants=dict(
-            Horiba=H2O_Horiba,
-        ),
+        variants={
+            "Horiba": H2O_Horiba,
+        },
         default="Horiba",
     ),
     HMDS=MaterialItem(
         name="Hexamethyldisilazane, or Bis(trimethylsilyl)amine",
-        variants=dict(
-            Horiba=HMDS_Horiba,
-        ),
+        variants={
+            "Horiba": HMDS_Horiba,
+        },
         default="Horiba",
     ),
     HfO2=MaterialItem(
         name="Hafnium Oxide",
-        variants=dict(
-            Horiba=HfO2_Horiba,
-        ),
+        variants={
+            "Horiba": HfO2_Horiba,
+        },
         default="Horiba",
     ),
     ITO=MaterialItem(
         name="Indium Tin Oxide",
-        variants=dict(
-            Horiba=ITO_Horiba,
-        ),
+        variants={
+            "Horiba": ITO_Horiba,
+        },
         default="Horiba",
     ),
     InAs=MaterialItem(
         name="Indium Arsenide",
-        variants=dict(
-            Palik=InAs_Palik,
-        ),
+        variants={
+            "Palik": InAs_Palik,
+        },
         default="Palik",
     ),
     InP=MaterialItem(
         name="Indium Phosphide",
-        variants=dict(
-            Palik_Lossless=InP_Palik_Lossless,
-            Palik_Lossy=InP_Palik_Lossy,
-            Pettit1965=InP_Pettit1965,
-        ),
+        variants={
+            "Palik_Lossless": InP_Palik_Lossless,
+            "Palik_Lossy": InP_Palik_Lossy,
+            "Pettit1965": InP_Pettit1965,
+        },
         default="Pettit1965",
     ),
     MgF2=MaterialItem(
         name="Magnesium Fluoride",
-        variants=dict(
-            Horiba=MgF2_Horiba,
-        ),
+        variants={
+            "Horiba": MgF2_Horiba,
+        },
         default="Horiba",
     ),
     MgO=MaterialItem(
         name="Magnesium Oxide",
-        variants=dict(
-            StephensMalitson1952=MgO_StephensMalitson1952,
-        ),
+        variants={
+            "StephensMalitson1952": MgO_StephensMalitson1952,
+        },
         default="StephensMalitson1952",
     ),
     MoS2=MaterialItem2D(
         name="Molybdenum Disulfide",
-        variants=dict(
-            Li2014=MoS2_Li2014,
-        ),
+        variants={
+            "Li2014": MoS2_Li2014,
+        },
         default="Li2014",
     ),
     MoSe2=MaterialItem2D(
         name="Molybdenum Diselenide",
-        variants=dict(
-            Li2014=MoSe2_Li2014,
-        ),
+        variants={
+            "Li2014": MoSe2_Li2014,
+        },
         default="Li2014",
     ),
     Ni=MaterialItem(
         name="Nickel",
-        variants=dict(
-            JohnsonChristy1972=Ni_JohnsonChristy1972,
-            RakicLorentzDrude1998=Ni_RakicLorentzDrude1998,
-        ),
+        variants={
+            "JohnsonChristy1972": Ni_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Ni_RakicLorentzDrude1998,
+        },
         default="JohnsonChristy1972",
     ),
     PEI=MaterialItem(
         name="Polyetherimide",
-        variants=dict(
-            Horiba=PEI_Horiba,
-        ),
+        variants={
+            "Horiba": PEI_Horiba,
+        },
         default="Horiba",
     ),
     PEN=MaterialItem(
         name="Polyethylene Naphthalate",
-        variants=dict(
-            Horiba=PEN_Horiba,
-        ),
+        variants={
+            "Horiba": PEN_Horiba,
+        },
         default="Horiba",
     ),
     PET=MaterialItem(
         name="Polyethylene Terephthalate",
-        variants=dict(
-            Horiba=PET_Horiba,
-        ),
+        variants={
+            "Horiba": PET_Horiba,
+        },
         default="Horiba",
     ),
     PMMA=MaterialItem(
         name="Poly(methyl Methacrylate)",
-        variants=dict(
-            Horiba=PMMA_Horiba,
-            Sultanova2009=PMMA_Sultanova2009,
-        ),
+        variants={
+            "Horiba": PMMA_Horiba,
+            "Sultanova2009": PMMA_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     PTFE=MaterialItem(
         name="Polytetrafluoroethylene, or Teflon",
-        variants=dict(
-            Horiba=PTFE_Horiba,
-        ),
+        variants={
+            "Horiba": PTFE_Horiba,
+        },
         default="Horiba",
     ),
     PVC=MaterialItem(
         name="Polyvinyl Chloride",
-        variants=dict(
-            Horiba=PVC_Horiba,
-        ),
+        variants={
+            "Horiba": PVC_Horiba,
+        },
         default="Horiba",
     ),
     Pd=MaterialItem(
         name="Palladium",
-        variants=dict(
-            JohnsonChristy1972=Pd_JohnsonChristy1972,
-            RakicLorentzDrude1998=Pd_RakicLorentzDrude1998,
-        ),
+        variants={
+            "JohnsonChristy1972": Pd_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Pd_RakicLorentzDrude1998,
+        },
         default="JohnsonChristy1972",
     ),
     Polycarbonate=MaterialItem(
         name="Polycarbonate",
-        variants=dict(
-            Horiba=Polycarbonate_Horiba,
-            Sultanova2009=Polycarbonate_Sultanova2009,
-        ),
+        variants={
+            "Horiba": Polycarbonate_Horiba,
+            "Sultanova2009": Polycarbonate_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     Polystyrene=MaterialItem(
         name="Polystyrene",
-        variants=dict(
-            Sultanova2009=Polystyrene_Sultanova2009,
-        ),
+        variants={
+            "Sultanova2009": Polystyrene_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     Pt=MaterialItem(
         name="Platinum",
-        variants=dict(
-            Werner2009=Pt_Werner2009,
-            RakicLorentzDrude1998=Pt_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Werner2009": Pt_Werner2009,
+            "RakicLorentzDrude1998": Pt_RakicLorentzDrude1998,
+        },
         default="Werner2009",
     ),
     Sapphire=MaterialItem(
         name="Sapphire",
-        variants=dict(
-            Horiba=Sapphire_Horiba,
-        ),
+        variants={
+            "Horiba": Sapphire_Horiba,
+        },
         default="Horiba",
     ),
     Si3N4=MaterialItem(
         name="Silicon Nitride",
-        variants=dict(
-            Horiba=Si3N4_Horiba,
-            Luke2015Sellmeier=Si3N4_Luke2015,
-            Luke2015PMLStable=Si3N4_Luke2015_PMLStable,
-            Philipp1973Sellmeier=Si3N4_Philipp1973,
-        ),
+        variants={
+            "Horiba": Si3N4_Horiba,
+            "Luke2015Sellmeier": Si3N4_Luke2015,
+            "Luke2015PMLStable": Si3N4_Luke2015_PMLStable,
+            "Philipp1973Sellmeier": Si3N4_Philipp1973,
+        },
         default="Horiba",
     ),
     SiC=MaterialItem(
         name="Silicon Carbide",
-        variants=dict(
-            Horiba=SiC_Horiba,
-        ),
+        variants={
+            "Horiba": SiC_Horiba,
+        },
         default="Horiba",
     ),
     SiN=MaterialItem(
         name="Silicon Mononitride",
-        variants=dict(
-            Horiba=SiN_Horiba,
-        ),
+        variants={
+            "Horiba": SiN_Horiba,
+        },
         default="Horiba",
     ),
     SiO2=MaterialItem(
         name="Silicon Dioxide",
-        variants=dict(
-            Palik_Lossless=SiO2_Palik_Lossless,
-            Palik_Lossy=SiO2_Palik_Lossy,
-            Horiba=SiO2_Horiba,
-        ),
+        variants={
+            "Palik_Lossless": SiO2_Palik_Lossless,
+            "Palik_Lossy": SiO2_Palik_Lossy,
+            "Horiba": SiO2_Horiba,
+        },
         default="Palik_Lossless",
     ),
     SiON=MaterialItem(
         name="Silicon Oxynitride",
-        variants=dict(
-            Horiba=SiON_Horiba,
-        ),
+        variants={
+            "Horiba": SiON_Horiba,
+        },
         default="Horiba",
     ),
     Ta2O5=MaterialItem(
         name="Tantalum Pentoxide",
-        variants=dict(
-            Horiba=Ta2O5_Horiba,
-        ),
+        variants={
+            "Horiba": Ta2O5_Horiba,
+        },
         default="Horiba",
     ),
     Ti=MaterialItem(
         name="Titanium",
-        variants=dict(
-            Werner2009=Ti_Werner2009,
-            RakicLorentzDrude1998=Ti_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Werner2009": Ti_Werner2009,
+            "RakicLorentzDrude1998": Ti_RakicLorentzDrude1998,
+        },
         default="Werner2009",
     ),
     TiOx=MaterialItem(
         name="Titanium Oxide",
-        variants=dict(
-            Horiba=TiOx_Horiba,
-            HorbiaStable=TiOx_HoribaStable,
-        ),
+        variants={
+            "Horiba": TiOx_Horiba,
+            "HorbiaStable": TiOx_HoribaStable,
+        },
         default="Horiba",
     ),
     W=MaterialItem(
         name="Tungsten",
-        variants=dict(
-            Werner2009=W_Werner2009,
-            RakicLorentzDrude1998=W_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Werner2009": W_Werner2009,
+            "RakicLorentzDrude1998": W_RakicLorentzDrude1998,
+        },
         default="Werner2009",
     ),
     WS2=MaterialItem2D(
         name="Tungsten Disulfide",
-        variants=dict(
-            Li2014=WS2_Li2014,
-        ),
+        variants={
+            "Li2014": WS2_Li2014,
+        },
         default="Li2014",
     ),
     WSe2=MaterialItem2D(
         name="Tungsten Diselenide",
-        variants=dict(
-            Li2014=WSe2_Li2014,
-        ),
+        variants={
+            "Li2014": WSe2_Li2014,
+        },
         default="Li2014",
     ),
     Y2O3=MaterialItem(
         name="Yttrium Oxide",
-        variants=dict(
-            Horiba=Y2O3_Horiba,
-            Nigara1968=Y2O3_Nigara1968,
-        ),
+        variants={
+            "Horiba": Y2O3_Horiba,
+            "Nigara1968": Y2O3_Nigara1968,
+        },
         default="Horiba",
     ),
     YAG=MaterialItem(
         name="Yttrium Aluminium Garnet",
-        variants=dict(
-            Zelmon1998=YAG_Zelmon1998,
-        ),
+        variants={
+            "Zelmon1998": YAG_Zelmon1998,
+        },
         default="Zelmon1998",
     ),
     ZrO2=MaterialItem(
         name="Zirconium Oxide",
-        variants=dict(
-            Horiba=ZrO2_Horiba,
-        ),
+        variants={
+            "Horiba": ZrO2_Horiba,
+        },
         default="Horiba",
     ),
     aSi=MaterialItem(
         name="Silicon (Amorphous)",
-        variants=dict(
-            Horiba=aSi_Horiba,
-        ),
+        variants={
+            "Horiba": aSi_Horiba,
+        },
         default="Horiba",
     ),
     cSi=MaterialItem(
         name="Silicon (Crystalline)",
-        variants=dict(
-            Palik_Lossless=cSi_PalikLossless,
-            Palik_Lossy=cSi_PalikLossy,
-            SalzbergVilla1957=cSi_SalzbergVilla1957,
-            Li1993_293K=cSi_Li1993_293K,
-            Green2008=cSi_Green2008,
-            Green2008_Lossless=cSi_Green2008Lossless,
-            Si_MultiPhysics=cSi_MultiPhysics,
-        ),
+        variants={
+            "Palik_Lossless": cSi_PalikLossless,
+            "Palik_Lossy": cSi_PalikLossy,
+            "SalzbergVilla1957": cSi_SalzbergVilla1957,
+            "Li1993_293K": cSi_Li1993_293K,
+            "Green2008": cSi_Green2008,
+            "Green2008_Lossless": cSi_Green2008Lossless,
+            "Si_MultiPhysics": cSi_MultiPhysics,
+        },
         default="Green2008",
     ),
     LiNbO3=MaterialItemUniaxial(
         name="Lithium niobate",
-        variants=dict(Zelmon1997=LiNbO3_Zelmon1997),
+        variants={"Zelmon1997": LiNbO3_Zelmon1997},
         default="Zelmon1997",
     ),
     graphene=Graphene,

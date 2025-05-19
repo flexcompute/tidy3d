@@ -1,5 +1,7 @@
 """Tests file export and loading."""
 
+from __future__ import annotations
+
 import json
 import os
 from time import time
@@ -8,6 +10,7 @@ import dill as pickle
 import h5py
 import numpy as np
 import pytest
+
 import tidy3d as td
 from tidy3d import __version__
 from tidy3d.components.base import DATA_ARRAY_MAP
@@ -70,9 +73,9 @@ def test_simulation_load_export(split_string, tmp_path):
     SIM.to_hdf5(path_hdf5)
     SIM2 = td.Simulation.from_file(path)
     SIM_HDF5 = td.Simulation.from_hdf5(path_hdf5)
-    assert (
-        set_datasets_to_none(SIM)._json_string == SIM2._json_string
-    ), "original and loaded simulations are not the same"
+    assert set_datasets_to_none(SIM)._json_string == SIM2._json_string, (
+        "original and loaded simulations are not the same"
+    )
     assert SIM == SIM_HDF5, "original and loaded from hdf5 simulations are not the same"
 
 
@@ -80,9 +83,9 @@ def test_simulation_load_export_yaml(tmp_path):
     path = str(tmp_path / "simulation.yaml")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert (
-        set_datasets_to_none(SIM)._json_string == SIM2._json_string
-    ), "original and loaded simulations are not the same"
+    assert set_datasets_to_none(SIM)._json_string == SIM2._json_string, (
+        "original and loaded simulations are not the same"
+    )
 
 
 def test_component_load_export(tmp_path):
@@ -189,7 +192,7 @@ def test_validation_speed(tmp_path):
         for i in range(n):
             new_structure = SIM.structures[0].copy(update={"name": str(i)})
             new_structures.append(new_structure)
-        S = SIM.copy(update=dict(structures=new_structures))
+        S = SIM.copy(update={"structures": new_structures})
 
         S.to_file(path)
         time_start = time()
@@ -324,7 +327,7 @@ def test_monitor_data_from_file():
 
 def test_data_array_to_hdf5(tmp_path):
     values = np.linspace(0, 1, 10)
-    coords = dict(f=values)
+    coords = {"f": values}
     flux = td.FluxDataArray(values, coords=coords)
 
     path = str(tmp_path / "flux.hdf5")

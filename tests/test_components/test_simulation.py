@@ -1,5 +1,7 @@
 """Tests the simulation and its validators."""
 
+from __future__ import annotations
+
 import uuid
 
 import gdstk
@@ -7,8 +9,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
-import tidy3d as td
 from matplotlib.testing.compare import compare_images
+
+import tidy3d as td
 from tidy3d.components import simulation
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
 from tidy3d.components.simulation import MAX_NUM_SOURCES
@@ -631,21 +634,21 @@ def test_sources_edge_case_validation():
 def test_validate_size_run_time(monkeypatch):
     monkeypatch.setattr(simulation, "MAX_TIME_STEPS", 1)
     with pytest.raises(SetupError):
-        s = SIM.copy(update=dict(run_time=1e-12))
+        s = SIM.copy(update={"run_time": 1e-12})
         s._validate_size()
 
 
 def test_validate_size_spatial_and_time(monkeypatch):
     monkeypatch.setattr(simulation, "MAX_CELLS_TIMES_STEPS", 1)
     with pytest.raises(SetupError):
-        s = SIM.copy(update=dict(run_time=1e-12))
+        s = SIM.copy(update={"run_time": 1e-12})
         s._validate_size()
 
 
 def test_validate_mnt_size(monkeypatch):
     # warning for monitor size
     monkeypatch.setattr(simulation, "WARN_MONITOR_DATA_SIZE_GB", 1 / 2**30)
-    s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),)))
+    s = SIM.copy(update={"monitors": (td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),)})
     with AssertLogLevel("WARNING"):
         s._validate_monitor_size()
 
@@ -653,7 +656,7 @@ def test_validate_mnt_size(monkeypatch):
     monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", 1 / 2**30)
     with pytest.raises(SetupError):
         s = SIM.copy(
-            update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),))
+            update={"monitors": (td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),)}
         )
         s._validate_monitor_size()
 
@@ -746,7 +749,7 @@ class TestAnisotropicPlotting:
         x = np.linspace(-1, 1, Nx)
         y = np.linspace(-1, 1, Ny)
         z = np.linspace(-1, 1, Nz)
-        coords = dict(x=x, y=y, z=z)
+        coords = {"x": x, "y": y, "z": z}
         permittivity = td.SpatialDataArray(2 * np.ones((Nx, Ny, Nz)), coords=coords)
         conductivity = td.SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
         medium_xx = td.CustomMedium(permittivity=permittivity, conductivity=conductivity)
@@ -765,7 +768,7 @@ class TestAnisotropicPlotting:
         r = 1
         n_data[r_mesh <= r] = n0 * (1 - A * r_mesh[r_mesh <= r] ** 2)
         # convert to dataset array
-        n_dataset = td.SpatialDataArray(n_data, coords=dict(x=x, y=y, z=z))
+        n_dataset = td.SpatialDataArray(n_data, coords={"x": x, "y": y, "z": z})
         medium_zz = td.CustomMedium.from_nk(n_dataset, interp_method="nearest")
 
         return td.CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
@@ -819,10 +822,7 @@ class TestAnisotropicPlotting:
 
     @pytest.mark.parametrize(
         "eps_comp",
-        [
-            None,
-        ]
-        + diag_comps,
+        [None, *diag_comps],
     )
     def test_plot_anisotropic_medium(self, eps_comp):
         """Test plotting diagonal components of a diagonally anisotropic medium succeeds or not.
@@ -853,11 +853,7 @@ class TestAnisotropicPlotting:
 
     @pytest.mark.parametrize(
         "eps_comp",
-        [
-            None,
-        ]
-        + diag_comps
-        + offdiag_comps,
+        [None, *diag_comps, *offdiag_comps],
     )
     def test_plot_fully_anisotropic_medium(self, eps_comp):
         """Test plotting all components of a fully anisotropic medium.
@@ -884,10 +880,7 @@ class TestAnisotropicPlotting:
 
     @pytest.mark.parametrize(
         "eps_comp",
-        [
-            None,
-        ]
-        + diag_comps,
+        [None, *diag_comps],
     )
     def test_plot_customanisotropic_medium(self, eps_comp, medium_customani):
         """Test plotting diagonal components of a diagonally anisotropic custom medium.
@@ -970,7 +963,7 @@ def test_structure_alpha():
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SIM_FULL.medium) for s in SIM_FULL.structures
     ]
-    S2 = SIM_FULL.copy(update=dict(structures=new_structs))
+    S2 = SIM_FULL.copy(update={"structures": new_structs})
     _ = S2.plot_structures_eps(x=0, alpha=0.5)
     plt.close()
 
@@ -1012,7 +1005,7 @@ def test_plot_eps_with_default_frequency():
 
 
 def test_plot_symmetries():
-    S2 = SIM.copy(update=dict(symmetry=(1, 0, -1)))
+    S2 = SIM.copy(update={"symmetry": (1, 0, -1)})
     S2.plot_symmetries(x=0)
     plt.close()
 
@@ -1020,7 +1013,7 @@ def test_plot_symmetries():
 def test_plot_grid():
     override = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium())
     S2 = SIM_FULL.copy(
-        update=dict(grid_spec=td.GridSpec(wavelength=1.0, override_structures=[override]))
+        update={"grid_spec": td.GridSpec(wavelength=1.0, override_structures=[override])}
     )
     S2.plot_grid(x=0)
     plt.close()
@@ -1035,7 +1028,7 @@ def test_plot_boundaries():
         ),
         z=td.Boundary(plus=td.Periodic(), minus=td.Periodic()),
     )
-    S2 = SIM_FULL.copy(update=dict(boundary_spec=bound_spec))
+    S2 = SIM_FULL.copy(update={"boundary_spec": bound_spec})
     S2.plot_boundaries(z=0)
     plt.close()
 
@@ -1063,25 +1056,25 @@ def test_complex_fields():
         ),
         z=td.Boundary(plus=td.Periodic(), minus=td.Periodic()),
     )
-    S2 = SIM_FULL.copy(update=dict(boundary_spec=bound_spec))
+    S2 = SIM_FULL.copy(update={"boundary_spec": bound_spec})
     assert S2.complex_fields
 
 
 def test_nyquist():
     S = SIM.copy(
-        update=dict(
-            sources=(
+        update={
+            "sources": (
                 td.PointDipole(
                     polarization="Ex", source_time=td.GaussianPulse(freq0=2e14, fwidth=1e11)
                 ),
             ),
-        )
+        }
     )
     assert S.nyquist_step > 1
 
     # nyquist step decreses to 1 when the frequency-domain monitor is at high frequency
     S_MONITOR = S.copy(
-        update=dict(monitors=[td.FluxMonitor(size=(1, 1, 0), freqs=[1e14, 1e20], name="flux")])
+        update={"monitors": [td.FluxMonitor(size=(1, 1, 0), freqs=[1e14, 1e20], name="flux")]}
     )
     assert S_MONITOR.nyquist_step == 1
 
@@ -1104,15 +1097,15 @@ def test_discretize_non_intersect():
 def test_warn_sim_background_medium_freq_range():
     with AssertLogLevel("WARNING"):
         _ = SIM.copy(
-            update=dict(
-                sources=(
+            update={
+                "sources": (
                     td.PointDipole(
                         polarization="Ex", source_time=td.GaussianPulse(freq0=2e14, fwidth=1e11)
                     ),
                 ),
-                monitors=(td.FluxMonitor(name="test", freqs=[2e12], size=(1, 1, 0)),),
-                medium=td.Medium(frequency_range=(0, 1e12)),
-            )
+                "monitors": (td.FluxMonitor(name="test", freqs=[2e12], size=(1, 1, 0)),),
+                "medium": td.Medium(frequency_range=(0, 1e12)),
+            }
         )
 
 
@@ -1415,49 +1408,49 @@ def test_proj_monitor_distance():
         # Cartesian monitor projecting backwards
         (
             td.FieldProjectionCartesianMonitor,
-            dict(x=[4], y=[5], proj_distance=-1e5, proj_axis=2),
+            {"x": [4], "y": [5], "proj_distance": -1e5, "proj_axis": 2},
             None,
             "+",
         ),
         # Cartesian monitor with custom origin projecting backwards
         (
             td.FieldProjectionCartesianMonitor,
-            dict(x=[4], y=[5], proj_distance=39, proj_axis=2),
+            {"x": [4], "y": [5], "proj_distance": 39, "proj_axis": 2},
             (1, 2, -40),
             "+",
         ),
         # Cartesian monitor with custom origin projecting backwards with normal_dir '-'
         (
             td.FieldProjectionCartesianMonitor,
-            dict(x=[4], y=[5], proj_distance=41, proj_axis=2),
+            {"x": [4], "y": [5], "proj_distance": 41, "proj_axis": 2},
             (1, 2, -40),
             "-",
         ),
         # Angle monitor projecting backwards
         (
             td.FieldProjectionAngleMonitor,
-            dict(theta=[np.pi / 2 + 1e-2], phi=[0], proj_distance=1e3),
+            {"theta": [np.pi / 2 + 1e-2], "phi": [0], "proj_distance": 1e3},
             None,
             "+",
         ),
         # Angle monitor projecting backwards with custom origin
         (
             td.FieldProjectionAngleMonitor,
-            dict(theta=[np.pi / 2 - 0.02], phi=[0], proj_distance=10),
+            {"theta": [np.pi / 2 - 0.02], "phi": [0], "proj_distance": 10},
             (0, 0, -0.5),
             "+",
         ),
         # Angle monitor projecting backwards with custom origin and normal_dir '-'
         (
             td.FieldProjectionAngleMonitor,
-            dict(theta=[np.pi / 2 + 0.02], phi=[0], proj_distance=10),
+            {"theta": [np.pi / 2 + 0.02], "phi": [0], "proj_distance": 10},
             (0, 0, 0.5),
             "-",
         ),
         # Cartesian monitor using approximations but too short proj_distance
         (
             td.FieldProjectionCartesianMonitor,
-            dict(x=[4], y=[5], proj_distance=9, proj_axis=2),
+            {"x": [4], "y": [5], "proj_distance": 9, "proj_axis": 2},
             None,
             "+",
         ),
@@ -2104,7 +2097,9 @@ def test_tfsf_structures_grid():
     Y = np.linspace(-1, 1, Ny)
     Z = np.linspace(-1, 1, Nz)
     data = np.ones((Nx, Ny, Nz, 1))
-    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=[td.C_0]))
+    eps_diagonal_data = td.ScalarFieldDataArray(
+        data, coords={"x": X, "y": Y, "z": Z, "f": [td.C_0]}
+    )
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
     eps_dataset = td.PermittivityDataset(**eps_components)
     custom_medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
@@ -2353,7 +2348,7 @@ def test_dt():
         geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
         medium=td.PoleResidue(eps_inf=0.16, poles=[(-1 + 1j, 2 + 2j)]),
     )
-    sim_new = sim.copy(update=dict(structures=[structure]))
+    sim_new = sim.copy(update={"structures": [structure]})
     assert sim_new.dt == 0.4 * dt
 
 
@@ -2670,7 +2665,7 @@ def test_perturbed_mediums_copy(unstructured, z):
         ),
     )
 
-    coords = dict(x=[1, 2], y=[3, 4], z=z)
+    coords = {"x": [1, 2], "y": [3, 4], "z": z}
     temperature = td.SpatialDataArray(300 * np.ones((2, 2, len(z))), coords=coords)
     electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, len(z))), coords=coords)
     hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, len(z))), coords=coords)
@@ -2838,11 +2833,11 @@ def test_sim_subsection(unstructured, nz):
 
     perm = td.SpatialDataArray(
         1 + np.random.random((11, 12, nz)),
-        coords=dict(
-            x=np.linspace(-0.51, 0.52, 11),
-            y=np.linspace(-1.02, 1.04, 12),
-            z=np.linspace(-1.51, 1.51, nz),
-        ),
+        coords={
+            "x": np.linspace(-0.51, 0.52, 11),
+            "y": np.linspace(-1.02, 1.04, 12),
+            "z": np.linspace(-1.51, 1.51, nz),
+        },
     )
 
     if unstructured:
@@ -3094,7 +3089,9 @@ def test_advanced_material_intersection():
     Y = np.linspace(-1, 1, Ny)
     Z = np.linspace(-1, 1, Nz)
     data = np.ones((Nx, Ny, Nz, 1))
-    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=[td.C_0]))
+    eps_diagonal_data = td.ScalarFieldDataArray(
+        data, coords={"x": X, "y": Y, "z": Z, "f": [td.C_0]}
+    )
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
     eps_dataset = td.PermittivityDataset(**eps_components)
     custom_medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")

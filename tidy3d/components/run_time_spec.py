@@ -1,4 +1,6 @@
 # Defines specifications for how long to run a simulation
+from __future__ import annotations
+
 import pydantic.v1 as pd
 
 from .base import Tidy3dBaseModel
