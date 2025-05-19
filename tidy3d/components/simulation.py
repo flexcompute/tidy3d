@@ -170,7 +170,7 @@ PML_HEIGHT_FOR_0_DIMS = inf
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 # RF frequency warning
-RF_FREQ_WARNING = 1e12
+RF_FREQ_WARNING = 300e9
 
 
 def validate_boundaries_for_zero_dims():
@@ -982,7 +982,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 edgecolor=kwargs["colors"],
                 alpha=override_structures_alpha,
             ),
-        ] * 2
+        ] * 3
         plot_params[0] = plot_params[0].include_kwargs(edgecolor=kwargs["colors_internal"])
 
         if self.grid_spec.auto_grid_used:
@@ -1008,7 +1008,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Plot snapping points
         for points, plot_param in zip(
-            [self.internal_snapping_points, self.grid_spec.snapping_points], plot_params
+            [
+                self.internal_snapping_points,
+                self.grid_spec.snapping_points,
+                self._gap_meshing_snapping_lines,
+            ],
+            plot_params,
         ):
             for point in points:
                 _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
@@ -1182,6 +1187,47 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     #    return plot_sim_3d(self, width=width, height=height)
 
     @cached_property
+    def _grid_and_snapping_lines(self) -> Tuple[Grid, List[CoordinateOptional]]:
+        """FDTD grid spatial locations and information.
+
+        Returns
+        -------
+        Tuple[:class:`.Grid`, List[CoordinateOptional]]
+            :class:`.Grid` storing the spatial locations relevant to the simulation
+            the list of snapping points generated during iterative gap meshing.
+        """
+
+        # Add a simulation Box as the first structure
+        structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        structures += self.static_structures
+
+        # Get boundary types (relevant for gap meshing)
+        boundary_types = [[None] * 2] * 3
+
+        for dim, boundary in enumerate(self.boundary_spec.to_list):
+            for side, edge in enumerate(boundary):
+                if isinstance(edge, (PECBoundary, PMCBoundary)):
+                    boundary_types[dim][side] = "pec/pmc"
+                elif isinstance(edge, (Periodic, BlochBoundary)):
+                    boundary_types[dim][side] = "periodic"
+
+        grid, lines = self.grid_spec._make_grid_and_snapping_lines(
+            structures=structures,
+            symmetry=self.symmetry,
+            periodic=self._periodic,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
+            lumped_elements=self.lumped_elements,
+            internal_snapping_points=self.internal_snapping_points,
+            internal_override_structures=self.internal_override_structures,
+            boundary_types=boundary_types,
+        )
+
+        # This would AutoGrid the in-plane directions of the 2D materials
+        # return self._grid_corrections_2dmaterials(grid)
+        return grid, lines
+
+    @cached_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
@@ -1191,24 +1237,25 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             :class:`.Grid` storing the spatial locations relevant to the simulation.
         """
 
-        # Add a simulation Box as the first structure
-        structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.static_structures
-
-        grid = self.grid_spec.make_grid(
-            structures=structures,
-            symmetry=self.symmetry,
-            periodic=self._periodic,
-            sources=self.sources,
-            num_pml_layers=self.num_pml_layers,
-            lumped_elements=self.lumped_elements,
-            internal_snapping_points=self.internal_snapping_points,
-            internal_override_structures=self.internal_override_structures,
-        )
+        grid, _ = self._grid_and_snapping_lines
 
         # This would AutoGrid the in-plane directions of the 2D materials
         # return self._grid_corrections_2dmaterials(grid)
         return grid
+
+    @cached_property
+    def _gap_meshing_snapping_lines(self) -> List[CoordinateOptional]:
+        """Snapping points resulted from iterative gap meshing.
+
+        Returns
+        -------
+        List[CoordinateOptional]
+            List of snapping lines resolving thin gaps and strips.
+        """
+
+        _, lines = self._grid_and_snapping_lines
+
+        return lines
 
     @cached_property
     def static_structures(self) -> list[Structure]:

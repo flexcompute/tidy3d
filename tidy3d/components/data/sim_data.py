@@ -1188,7 +1188,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         """Make a broadband source for a set of adjoint sources."""
 
         source_index = self.simulation.normalize_index or 0
-        src_time_base = self.simulation.sources[source_index].source_time.copy()
+        src_time_base = self.simulation.sources[source_index].source_time.updated_copy(
+            amplitude=1.0, phase=0.0
+        )
         src_broadband = adj_srcs[0].updated_copy(source_time=src_time_base)
 
         return src_broadband

@@ -8,11 +8,11 @@ from typing import Any, List, Literal, Optional, Tuple, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ...constants import C_0, MICROMETER, inf
+from ...constants import C_0, MICROMETER, dp_eps, inf
 from ...exceptions import SetupError
 from ...log import log
 from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ..geometry.base import Box
+from ..geometry.base import Box, ClipOperation
 from ..lumped_element import LumpedElementType
 from ..source.utils import SourceType
 from ..structure import MeshOverrideStructure, Structure, StructureType
@@ -35,6 +35,9 @@ MIN_STEP_BOUND_SCALE = 0.5
 
 # Default refinement factor in GridRefinement when both dl and refinement_factor are not defined
 DEFAULT_REFINEMENT_FACTOR = 2
+
+# Tolerance for distinguishing pec/grid intersections
+GAP_MESHING_TOL = 1e-3
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
@@ -62,6 +65,9 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         symmetry : Tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
+        periodic : bool
+            Apply periodic boundary condition or not.
+            Only relevant for autogrids.
         wavelength : float
             Free-space wavelength.
         num_pml_layers : Tuple[int, int]
@@ -1037,6 +1043,20 @@ class LayerRefinementSpec(Box):
         "and the projection of the simulation domain overlaps.",
     )
 
+    gap_meshing_iters: pd.NonNegativeInt = pd.Field(
+        1,
+        title="Gap Meshing Iterations",
+        description="Number of recursive iterations for resolving thin gaps. "
+        "The underlying algorithm detects gaps contained in a single cell and places a snapping plane at the gaps's centers.",
+    )
+
+    dl_min_from_gap_width: bool = pd.Field(
+        True,
+        title="Set ``dl_min`` from Estimated Gap Width",
+        description="Take into account autodetected minimal PEC gap width when determining ``dl_min``. "
+        "This only applies if ``dl_min`` in ``AutoGrid`` specification is not set.",
+    )
+
     @pd.validator("axis", always=True)
     @skip_if_fields_missing(["size"])
     def _finite_size_along_axis(cls, val, values):
@@ -1057,6 +1077,8 @@ class LayerRefinementSpec(Box):
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = GridRefinement(),
         refinement_inside_sim_only: bool = True,
+        gap_meshing_iters: pd.NonNegativeInt = 1,
+        dl_min_from_gap_width: bool = True,
     ):
         """Constructs a :class:`LayerRefiementSpec` that is unbounded in inplane dimensions from bounds along
         layer thickness dimension.
@@ -1082,6 +1104,10 @@ class LayerRefinementSpec(Box):
             Inplane mesh refinement factor around corners.
         refinement_inside_sim_only : bool = True
             Apply refinement only to features inside simulation domain.
+        gap_meshing_iters : bool = True
+            Number of recursive iterations for resolving thin gaps.
+        dl_min_from_gap_width : bool = True
+            Take into account autodetected minimal PEC gap width when determining ``dl_min``.
 
 
         Example
@@ -1103,6 +1129,8 @@ class LayerRefinementSpec(Box):
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
             refinement_inside_sim_only=refinement_inside_sim_only,
+            gap_meshing_iters=gap_meshing_iters,
+            dl_min_from_gap_width=dl_min_from_gap_width,
         )
 
     @classmethod
@@ -1118,6 +1146,8 @@ class LayerRefinementSpec(Box):
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = GridRefinement(),
         refinement_inside_sim_only: bool = True,
+        gap_meshing_iters: pd.NonNegativeInt = 1,
+        dl_min_from_gap_width: bool = True,
     ):
         """Constructs a :class:`LayerRefiementSpec` from minimum and maximum coordinate bounds.
 
@@ -1145,6 +1175,10 @@ class LayerRefinementSpec(Box):
             Inplane mesh refinement factor around corners.
         refinement_inside_sim_only : bool = True
             Apply refinement only to features inside simulation domain.
+        gap_meshing_iters : bool = True
+            Number of recursive iterations for resolving thin gaps.
+        dl_min_from_gap_width : bool = True
+            Take into account autodetected minimal PEC gap width when determining ``dl_min``.
 
 
         Example
@@ -1166,6 +1200,8 @@ class LayerRefinementSpec(Box):
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
             refinement_inside_sim_only=refinement_inside_sim_only,
+            gap_meshing_iters=gap_meshing_iters,
+            dl_min_from_gap_width=dl_min_from_gap_width,
         )
 
     @classmethod
@@ -1180,6 +1216,8 @@ class LayerRefinementSpec(Box):
         corner_snapping: bool = True,
         corner_refinement: GridRefinement = GridRefinement(),
         refinement_inside_sim_only: bool = True,
+        gap_meshing_iters: pd.NonNegativeInt = 1,
+        dl_min_from_gap_width: bool = True,
     ):
         """Constructs a :class:`LayerRefiementSpec` from the bounding box of a list of structures.
 
@@ -1205,6 +1243,10 @@ class LayerRefinementSpec(Box):
             Inplane mesh refinement factor around corners.
         refinement_inside_sim_only : bool = True
             Apply refinement only to features inside simulation domain.
+        gap_meshing_iters : bool = True
+            Number of recursive iterations for resolving thin gaps.
+        dl_min_from_gap_width : bool = True
+            Take into account autodetected minimal PEC gap width when determining ``dl_min``.
 
         """
 
@@ -1226,6 +1268,8 @@ class LayerRefinementSpec(Box):
             corner_snapping=corner_snapping,
             corner_refinement=corner_refinement,
             refinement_inside_sim_only=refinement_inside_sim_only,
+            gap_meshing_iters=gap_meshing_iters,
+            dl_min_from_gap_width=dl_min_from_gap_width,
         )
 
     @cached_property
@@ -1262,7 +1306,7 @@ class LayerRefinementSpec(Box):
         """
         return self.unpop_axis(ax_coord, [plane_coord, plane_coord], self.axis)
 
-    def suggested_dl_min(self, grid_size_in_vacuum: float) -> float:
+    def suggested_dl_min(self, grid_size_in_vacuum: float, structures: List[Structure]) -> float:
         """Suggested lower bound of grid step size for this layer.
 
         Parameters
@@ -1293,6 +1337,12 @@ class LayerRefinementSpec(Box):
         # inplane dimension
         if self.corner_finder is not None and self.corner_refinement is not None:
             dl_min = min(dl_min, self.corner_refinement._grid_size(grid_size_in_vacuum))
+
+        # min feature size
+        if self.corner_finder is not None and not self.corner_finder._no_min_dl_override:
+            dl_suggested = self._dl_min_from_smallest_feature(structures)
+            dl_min = min(dl_min, dl_suggested)
+
         return dl_min
 
     def generate_snapping_points(self, structure_list: List[Structure]) -> List[CoordinateOptional]:
@@ -1329,22 +1379,80 @@ class LayerRefinementSpec(Box):
         )
         return self.inside(point_3d[0], point_3d[1], point_3d[2])
 
-    def _corners(self, structure_list: List[Structure]) -> List[CoordinateOptional]:
-        """Inplane corners in 3D coordinate."""
+    def _corners_and_convexity_2d(
+        self, structure_list: List[Structure], ravel: bool
+    ) -> List[CoordinateOptional]:
+        """Raw inplane corners and their convexity."""
         if self.corner_finder is None:
-            return []
+            return [], []
 
         # filter structures outside the layer
         structures_intersect = structure_list
         if self._is_inplane_bounded:
             structures_intersect = [s for s in structure_list if self.intersects(s.geometry)]
-        inplane_points = self.corner_finder.corners(
-            self.axis, self.center_axis, structures_intersect
+        inplane_points, convexity = self.corner_finder._corners_and_convexity(
+            self.axis, self.center_axis, structures_intersect, ravel
         )
 
         # filter corners outside the inplane bounds
-        if self._is_inplane_bounded:
-            inplane_points = [point for point in inplane_points if self._inplane_inside(point)]
+        if self._is_inplane_bounded and len(inplane_points) > 0:
+            # flatten temporary list of arrays for faster processing
+            if not ravel:
+                split_inds = np.cumsum([len(pts) for pts in inplane_points])[:-1]
+                inplane_points = np.concatenate(inplane_points)
+                convexity = np.concatenate(convexity)
+            inds = [self._inplane_inside(point) for point in inplane_points]
+            inplane_points = inplane_points[inds]
+            convexity = convexity[inds]
+            if not ravel:
+                inplane_points = np.split(inplane_points, split_inds)
+                convexity = np.split(convexity, split_inds)
+
+        return inplane_points, convexity
+
+    def _dl_min_from_smallest_feature(self, structure_list: List[Structure]):
+        """Calculate `dl_min` suggestion based on smallest feature size."""
+
+        inplane_points, convexity = self._corners_and_convexity_2d(
+            structure_list=structure_list, ravel=False
+        )
+
+        dl_min = inf
+
+        if self.corner_finder is None or self.corner_finder._no_min_dl_override:
+            return dl_min
+
+        finder = self.corner_finder
+
+        for points, conv in zip(inplane_points, convexity):
+            conv_nei = np.roll(conv, -1)
+            lengths = np.linalg.norm(points - np.roll(points, axis=0, shift=-1), axis=-1)
+
+            if finder.convex_resolution is not None:
+                convex_features = np.logical_and(conv, conv_nei)
+                if np.any(convex_features):
+                    min_convex_size = np.min(lengths[convex_features])
+                    dl_min = min(dl_min, min_convex_size / finder.convex_resolution)
+
+            if finder.concave_resolution is not None:
+                concave_features = np.logical_not(np.logical_or(conv, conv_nei))
+                if np.any(concave_features):
+                    min_concave_size = np.min(lengths[concave_features])
+                    dl_min = min(dl_min, min_concave_size / finder.concave_resolution)
+
+            if finder.mixed_resolution is not None:
+                mixed_features = np.logical_xor(conv, conv_nei)
+                if np.any(mixed_features):
+                    min_mixed_size = np.min(lengths[mixed_features])
+                    dl_min = min(dl_min, min_mixed_size / finder.mixed_resolution)
+
+        return dl_min
+
+    def _corners(self, structure_list: List[Structure]) -> List[CoordinateOptional]:
+        """Inplane corners in 3D coordinate."""
+        inplane_points, _ = self._corners_and_convexity_2d(
+            structure_list=structure_list, ravel=True
+        )
 
         # convert 2d points to 3d
         return [
@@ -1445,6 +1553,449 @@ class LayerRefinementSpec(Box):
             if refinement_structures[0].dl[self.axis] <= dl:
                 override_structures += refinement_structures
         return override_structures
+
+    def _find_vertical_intersections(
+        self, grid_x_coords, grid_y_coords, poly_vertices, boundary
+    ) -> Tuple[List[Tuple[int, int]], List[float]]:
+        """Detect intersection points of single polygon and vertical grid lines."""
+
+        # indices of cells that contain intersection with grid lines (left edge of a cell)
+        cells_ij = []
+        # relative displacements of intersection from the bottom of the cell along y axis
+        cells_dy = []
+
+        # for each polygon vertex find the index of the first grid line on the right
+        grid_lines_on_right = np.argmax(grid_x_coords[:, None] >= poly_vertices[None, :, 0], axis=0)
+        grid_lines_on_right[poly_vertices[:, 0] >= grid_x_coords[-1]] = len(grid_x_coords)
+        # once we know these indices then we can find grid lines intersected by the i-th
+        # segment of the polygon as
+        # [grid_lines_on_right[i], grid_lines_on_right[i+1]) for grid_lines_on_right[i] > grid_lines_on_right[i+1]
+        # or
+        # [grid_lines_on_right[i+1], grid_lines_on_right[i]) for grid_lines_on_right[i] < grid_lines_on_right[i+1]
+
+        # loop over segments of the polygon and determine in which cells and where exactly they cross grid lines
+        # v_beg and v_end are the starting and ending points of the segment
+        # ind_beg and ind_end are starting and ending indices of vertical grid lines that the segment intersects
+        # as described above
+        for ind_beg, ind_end, v_beg, v_end in zip(
+            grid_lines_on_right,
+            np.roll(grid_lines_on_right, -1),
+            poly_vertices,
+            np.roll(poly_vertices, axis=0, shift=-1),
+        ):
+            # no intersections
+            if ind_end == ind_beg:
+                continue
+
+            # sort vertices in ascending order to make treatmeant unifrom
+            reverse = False
+            if ind_beg > ind_end:
+                reverse = True
+                ind_beg, ind_end, v_beg, v_end = ind_end, ind_beg, v_end, v_beg
+
+            # x coordinates are simply x coordinates of intersected vertical grid lines
+            intersections_x = grid_x_coords[ind_beg:ind_end]
+
+            # y coordinates can be found from line equation
+            intersections_y = v_beg[1] + (v_end[1] - v_beg[1]) / (v_end[0] - v_beg[0]) * (
+                intersections_x - v_beg[0]
+            )
+
+            # however, some of the vertical lines might be crossed
+            # outside of computational domain
+            # so we need to see which ones are actually inside along y axis
+            inds_inside_grid = np.logical_and(
+                intersections_y >= grid_y_coords[0], intersections_y <= grid_y_coords[-1]
+            )
+
+            intersections_y = intersections_y[inds_inside_grid]
+
+            # find i and j indices of cells which contain these intersections
+
+            # i indices are simply indices of crossed vertical grid lines
+            cell_is = np.arange(ind_beg, ind_end)[inds_inside_grid]
+
+            # j indices can be computed by finding insertion indices
+            # of y coordinates of intersection points into array of y coordinates
+            # of the grid lines that preserve sorting
+            cell_js = np.searchsorted(grid_y_coords, intersections_y) - 1
+
+            # find local dy, that is, the distance between the intersection point
+            # and the bottom edge of the cell
+            dy = (intersections_y - grid_y_coords[cell_js]) / (
+                grid_y_coords[cell_js + 1] - grid_y_coords[cell_js]
+            )
+
+            # preserve uniform ordering along perimeter of the polygon
+            if reverse:
+                cell_is = cell_is[::-1]
+                cell_js = cell_js[::-1]
+                dy = dy[::-1]
+
+            # record info
+            cells_ij.append(np.transpose([cell_is, cell_js]))
+            cells_dy.append(dy)
+
+        if len(cells_ij) > 0:
+            cells_ij = np.concatenate(cells_ij)
+            cells_dy = np.concatenate(cells_dy)
+
+            # Filter from re-entering subcell features. That is, we discard any consecutive
+            # intersections if they are crossing the same edge. This happens, for example,
+            # when a tiny feature pokes through an edge. This helps not to set dl_min
+            # to a very low value, and take into account only actual gaps and strips.
+
+            # To do that we use the fact that intersection points are recorded and stored
+            # in the order as they appear along the border of the polygon.
+
+            # first we calculate linearized indices of edges (cells) they cross
+            linear_index = cells_ij[:, 0] * len(grid_y_coords) + cells_ij[:, 1]
+
+            # then look at the differences with next and previous neighbors
+            fwd_diff = linear_index - np.roll(linear_index, -1)
+            bwd_diff = np.roll(fwd_diff, 1)
+
+            # an intersection point is not a part of a "re-entering subcell feature"
+            # if it doesn't cross the same edges as its neighbors
+            valid = np.logical_and(fwd_diff != 0, bwd_diff != 0)
+
+            cells_dy = cells_dy[valid]
+            cells_ij = cells_ij[valid]
+
+            # Now we are duplicating intersection points very close to cell boundaries
+            # to corresponding adjacent cells. Basically, if we have a line crossing
+            # very close to a grid node, we consider that it crosses edges on both sides
+            # from that node. That is, this serves as a tolerance allowance.
+            # Note that duplicated intersections and their originals will be snapped to
+            # cell boundaries during quantization later.
+            close_to_zero = cells_dy < GAP_MESHING_TOL
+            close_to_one = (1.0 - cells_dy) < GAP_MESHING_TOL
+
+            points_to_duplicate_near_zero = cells_ij[close_to_zero]
+            points_to_duplicate_near_one = cells_ij[close_to_one]
+
+            # if we go beyond simulation domain boundary, either ignore
+            # or wrap periodically depending on boundary conditions
+            cells_ij_zero_side = points_to_duplicate_near_zero - np.array([0, 1])
+            cells_zero_side_out = cells_ij_zero_side[:, 1] == -1
+            if boundary[0] == "periodic":
+                cells_ij_zero_side[cells_zero_side_out, 1] = len(grid_y_coords) - 2
+            else:
+                cells_ij_zero_side = cells_ij_zero_side[cells_zero_side_out == 0]
+
+            cells_ij_one_side = points_to_duplicate_near_one + np.array([0, 1])
+            cells_one_side_out = cells_ij_one_side[:, 1] == len(grid_y_coords) - 1
+            if boundary[1] == "periodic":
+                cells_ij_one_side[cells_one_side_out, 1] = 0
+            else:
+                cells_ij_one_side = cells_ij_one_side[cells_one_side_out == 0]
+
+            cells_ij = np.concatenate(
+                [
+                    cells_ij,
+                    cells_ij_zero_side,
+                    cells_ij_one_side,
+                ]
+            )
+            cells_dy = np.concatenate(
+                [
+                    cells_dy,
+                    np.ones(len(cells_ij_zero_side)),
+                    np.zeros(len(cells_ij_one_side)),
+                ]
+            )
+
+        return cells_ij, cells_dy
+
+    def _process_poly(
+        self, grid_x_coords, grid_y_coords, poly_vertices, boundaries
+    ) -> Tuple[List[Tuple[int, int]], List[float], List[Tuple[int, int]], List[float]]:
+        """Detect intersection points of single polygon and grid lines."""
+
+        # find cells that contain intersections of vertical grid lines
+        # and relative locations of those intersections (along y axis)
+        v_cells_ij, v_cells_dy = self._find_vertical_intersections(
+            grid_x_coords, grid_y_coords, poly_vertices, boundaries[1]
+        )
+
+        # find cells that contain intersections of horizontal grid lines
+        # and relative locations of those intersections (along x axis)
+        # reuse the same command but flip dimensions
+        h_cells_ij, h_cells_dx = self._find_vertical_intersections(
+            grid_y_coords, grid_x_coords, np.flip(poly_vertices, axis=1), boundaries[0]
+        )
+        if len(h_cells_ij) > 0:
+            # flip dimensions back
+            h_cells_ij = np.roll(h_cells_ij, axis=1, shift=1)
+
+        return v_cells_ij, v_cells_dy, h_cells_ij, h_cells_dx
+
+    def _process_slice(
+        self, x, y, merged_geos, boundaries
+    ) -> Tuple[List[Tuple[int, int]], List[float], List[Tuple[int, int]], List[float]]:
+        """Detect intersection points of geometries boundaries and grid lines."""
+
+        # cells that contain intersections of vertical grid lines
+        v_cells_ij = []
+        # relative locations of those intersections (along y axis)
+        v_cells_dy = []
+
+        # cells that contain intersections of horizontal grid lines
+        h_cells_ij = []
+        # relative locations of those intersections (along x axis)
+        h_cells_dx = []
+
+        # for PEC and PMC boundary - treat them as PEC structure
+        # so that gaps are resolved near boundaries if any
+        nx = len(x)
+        ny = len(y)
+
+        if boundaries[0][0] == "pec/pmc":
+            h_cells_ij.append(np.transpose([np.zeros(ny), np.arange(ny)]).astype(int))
+            h_cells_dx.append(np.zeros(ny))
+
+        if boundaries[0][1] == "pec/pmc":
+            h_cells_ij.append(np.transpose([(nx - 2) * np.ones(ny), np.arange(ny)]).astype(int))
+            h_cells_dx.append(np.ones(ny))
+
+        if boundaries[1][0] == "pec/pmc":
+            v_cells_ij.append(np.transpose([np.arange(nx), np.zeros(nx)]).astype(int))
+            v_cells_dy.append(np.zeros(nx, dtype=int))
+
+        if boundaries[1][1] == "pec/pmc":
+            v_cells_ij.append(np.transpose([np.arange(nx), (ny - 2) * np.ones(nx)]).astype(int))
+            v_cells_dy.append(np.ones(nx))
+
+        # loop over all shapes
+        for mat, shapes in merged_geos:
+            if not mat.is_pec:
+                # note that we expect LossyMetal's converted into PEC in merged_geos
+                # that is why we are not checking for that separately
+                continue
+            polygon_list = ClipOperation.to_polygon_list(shapes)
+            for poly in polygon_list:
+                poly = poly.normalize().buffer(0)
+
+                # find intersections of a polygon with grid lines
+                # specifically:
+                # 0. cells that contain intersections of vertical grid lines
+                # 1. relative locations of those intersections along y axis
+                # 2. cells that contain intersections of horizontal grid lines
+                # 3. relative locations of those intersections along x axis
+                data = self._process_poly(x, y, np.array(poly.exterior.coords)[:-1], boundaries)
+
+                if len(data[0]) > 0:
+                    v_cells_ij.append(data[0])
+                    v_cells_dy.append(data[1])
+
+                if len(data[2]) > 0:
+                    h_cells_ij.append(data[2])
+                    h_cells_dx.append(data[3])
+
+                # in case the polygon has holes
+                for poly_inner in poly.interiors:
+                    data = self._process_poly(x, y, np.array(poly_inner.coords)[:-1], boundaries)
+                    if len(data[0]) > 0:
+                        v_cells_ij.append(data[0])
+                        v_cells_dy.append(data[1])
+
+                    if len(data[2]) > 0:
+                        h_cells_ij.append(data[2])
+                        h_cells_dx.append(data[3])
+
+        if len(v_cells_ij) > 0:
+            v_cells_ij = np.concatenate(v_cells_ij)
+            v_cells_dy = np.concatenate(v_cells_dy)
+
+        if len(h_cells_ij) > 0:
+            h_cells_ij = np.concatenate(h_cells_ij)
+            h_cells_dx = np.concatenate(h_cells_dx)
+
+        return v_cells_ij, v_cells_dy, h_cells_ij, h_cells_dx
+
+    def _generate_horizontal_snapping_lines(
+        self, grid_y_coords, intersected_cells_ij, relative_vert_disp
+    ) -> Tuple[List[CoordinateOptional], float]:
+        """Convert a list of intersections of vertical grid lines, given as coordinates of cells
+        and relative vertical displacement inside each cell, into locations of snapping lines that
+        resolve thin gaps and strips.
+        """
+        min_gap_width = inf
+
+        snapping_lines_y = []
+        if len(intersected_cells_ij) > 0:
+            # quantize intersection locations
+            relative_vert_disp = np.round(relative_vert_disp / GAP_MESHING_TOL).astype(int)
+            cell_linear_inds = (
+                intersected_cells_ij[:, 0] * len(grid_y_coords) + intersected_cells_ij[:, 1]
+            )
+            cell_linear_inds_and_disps = np.transpose([cell_linear_inds, relative_vert_disp])
+            # remove duplicates
+            cell_linear_inds_and_disps_unique = np.unique(cell_linear_inds_and_disps, axis=0)
+
+            # count intersections of vertical grid lines in each cell
+            cell_linear_inds_unique, counts = np.unique(
+                cell_linear_inds_and_disps_unique[:, 0], return_counts=True
+            )
+            # when we count intersections we use linearized 2d index because we really
+            # need to count intersections in each cell separately
+
+            # but when we need to decide about refinement, due to cartesian nature of grid
+            # we will need to consider all cells with a given j index at a time
+
+            # so, let's compute j index for each cell in the unique list
+            cell_linear_inds_unique_j = cell_linear_inds_unique % len(grid_y_coords)
+
+            # loop through all j rows that contain intersections
+            for ind_j in np.unique(cell_linear_inds_unique_j):
+                # we need to refine between two grid lines corresponding to index j
+                # if at least one cell with given j contains > 1 intersections
+
+                # get all intersected cells with given j index
+                j_selection = cell_linear_inds_unique_j == ind_j
+                # and number intersections in each of them
+                counts_j = counts[j_selection]
+
+                # find cell with max intersections
+                max_count_el = np.argmax(counts_j)
+                max_count = counts_j[max_count_el]
+                if max_count > 1:
+                    # get its linear index
+                    target_cell_linear_ind = cell_linear_inds_unique[j_selection][max_count_el]
+                    # look up relative positions of intersections in that cells
+                    target_disps = np.sort(
+                        cell_linear_inds_and_disps_unique[
+                            cell_linear_inds_and_disps_unique[:, 0] == target_cell_linear_ind, 1
+                        ]
+                    )
+
+                    # place a snapping line between any two neighboring intersections (in relative units)
+                    relative_snap_lines_pos = (
+                        0.5 * (target_disps[1:] + target_disps[:-1]) * GAP_MESHING_TOL
+                    )
+                    # convert relative positions to absolute ones
+                    snapping_lines_y += [
+                        grid_y_coords[ind_j]
+                        + rel_pos * (grid_y_coords[ind_j + 1] - grid_y_coords[ind_j])
+                        for rel_pos in relative_snap_lines_pos
+                    ]
+
+                    # compute minimal gap/strip width
+                    min_gap_width_current = (
+                        np.min(target_disps[1:] - target_disps[:-1]) * GAP_MESHING_TOL
+                    )
+                    min_gap_width = min(
+                        min_gap_width,
+                        min_gap_width_current * (grid_y_coords[ind_j + 1] - grid_y_coords[ind_j]),
+                    )
+
+        return snapping_lines_y, min_gap_width
+
+    def _resolve_gaps(
+        self, structures: List[Structure], grid: Grid, boundaries: Tuple, center, size
+    ) -> Tuple[List[CoordinateOptional], float]:
+        """Detect underresolved gaps and place snapping lines in them. Also return the detected minimal gap width."""
+
+        # get x and y coordinates of grid lines
+        _, tan_dims = Box.pop_axis([0, 1, 2], self.axis)
+        x = grid.boundaries.to_list[tan_dims[0]]
+        y = grid.boundaries.to_list[tan_dims[1]]
+
+        _, boundaries_tan = Box.pop_axis(boundaries, self.axis)
+
+        # restrict to the size of layer spec
+        rmin, rmax = self.bounds
+        _, rmin = Box.pop_axis(rmin, self.axis)
+        _, rmax = Box.pop_axis(rmax, self.axis)
+
+        new_coords = []
+        new_boundaries = []
+        for coord, cmin, cmax, bdry in zip([x, y], rmin, rmax, boundaries_tan):
+            if cmax <= coord[0] or cmin >= coord[-1]:
+                return [], inf
+            else:
+                if cmin < coord[0]:
+                    ind_min = 0
+                else:
+                    ind_min = max(0, np.argmax(coord >= cmin) - 1)
+
+                if cmax > coord[-1]:
+                    ind_max = len(coord) - 1
+                else:
+                    ind_max = np.argmax(coord >= cmax)
+
+                if ind_min >= ind_max - 1:
+                    return [], inf
+
+                new_coords.append(coord[ind_min : (ind_max + 1)])
+                # ignore boundary conditions if we are not touching them
+                new_boundaries.append(
+                    [
+                        None if ind_min > 0 else bdry[0],
+                        None if ind_max < len(coord) - 1 else bdry[1],
+                    ]
+                )
+
+        x, y = new_coords
+
+        # restrict size of the plane where pec polygons are found in case of periodic boundary conditions
+        # this is to make sure gaps across periodic boundary conditions are resolved
+        # (if there is a PEC structure going into periodic boundary, now it will generate a grid line
+        # intersection next to that boundary and it will be propagated to the other side)
+        restricted_size_tan = [
+            s * (1.0 - dp_eps) if b[0] == "periodic" else inf
+            for b, s in zip(
+                new_boundaries,
+                size,
+            )
+        ]
+        restricted_size = Box.unpop_axis(size[self.axis], restricted_size_tan, self.axis)
+
+        # get merged pec structures on plane
+        # note that we expect this function to also convert all LossyMetal's into PEC
+        plane_slice = CornerFinderSpec._merged_pec_on_plane(
+            coord=self.center_axis,
+            normal_axis=self.axis,
+            structure_list=structures,
+            center=center,
+            size=restricted_size,
+        )
+
+        # find intersections of pec polygons with grid lines
+        # specifically:
+        # 0. cells that contain intersections of vertical grid lines
+        # 1. relative locations of those intersections along y axis
+        # 2. cells that contain intersections of horizontal grid lines
+        # 3. relative locations of those intersections along x axis
+        v_cells_ij, v_cells_dy, h_cells_ij, h_cells_dx = self._process_slice(
+            x, y, plane_slice, new_boundaries
+        )
+
+        # generate horizontal snapping lines
+        snapping_lines_y, min_gap_width_along_y = self._generate_horizontal_snapping_lines(
+            y, v_cells_ij, v_cells_dy
+        )
+        detected_gap_width = min_gap_width_along_y
+
+        # generate vertical snapping lines
+        if len(h_cells_ij) > 0:  # check, otherwise np.roll fails
+            snapping_lines_x, min_gap_width_along_x = self._generate_horizontal_snapping_lines(
+                x, np.roll(h_cells_ij, shift=1, axis=1), h_cells_dx
+            )
+
+            detected_gap_width = min(detected_gap_width, min_gap_width_along_x)
+        else:
+            snapping_lines_x = []
+
+        # convert snapping lines' coordinates into 3d coordinates
+        snapping_lines_y_3d = [
+            Box.unpop_axis(Y, (None, None), axis=tan_dims[1]) for Y in snapping_lines_y
+        ]
+        snapping_lines_x_3d = [
+            Box.unpop_axis(X, (None, None), axis=tan_dims[0]) for X in snapping_lines_x
+        ]
+
+        return snapping_lines_x_3d + snapping_lines_y_3d, detected_gap_width
 
 
 class GridSpec(Tidy3dBaseModel):
@@ -1817,7 +2368,7 @@ class GridSpec(Tidy3dBaseModel):
         if self.layer_refinement_used:
             min_vacuum_dl = self._min_vacuum_dl_in_autogrid(wavelength, sim_size)
             for layer in self.layer_refinement_specs:
-                min_dl = min(min_dl, layer.suggested_dl_min(min_vacuum_dl))
+                min_dl = min(min_dl, layer.suggested_dl_min(min_vacuum_dl, structures))
         # from lumped elements
         for lumped_element in lumped_elements:
             for override_structure in lumped_element.to_mesh_overrides():
@@ -1842,6 +2393,11 @@ class GridSpec(Tidy3dBaseModel):
         lumped_elements: List[LumpedElementType] = (),
         internal_override_structures: List[MeshOverrideStructure] = None,
         internal_snapping_points: List[CoordinateOptional] = None,
+        boundary_types: Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [
+            [None, None],
+            [None, None],
+            [None, None],
+        ],
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
@@ -1853,6 +2409,9 @@ class GridSpec(Tidy3dBaseModel):
         symmetry : Tuple[Symmetry, Symmetry, Symmetry]
             Reflection symmetry across a plane bisecting the simulation domain
             normal to each of the three axes.
+        periodic: Tuple[bool, bool, bool]
+            Apply periodic boundary condition or not along each of the dimensions.
+            Only relevant for autogrids.
         sources : List[SourceType]
             List of sources.
         num_pml_layers : List[Tuple[float, float]]
@@ -1863,6 +2422,186 @@ class GridSpec(Tidy3dBaseModel):
             If `None`, recomputes internal override structures.
         internal_snapping_points : List[CoordinateOptional]
             If `None`, recomputes internal snapping points.
+        boundary_types : Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [[None, None], [None, None], [None, None]]
+            Type of boundary conditions along each dimension: "pec/pmc", "periodic", or
+            None for any other. This is relevant only for gap meshing.
+
+        Returns
+        -------
+        Grid:
+            Entire simulation grid.
+        """
+
+        grid, _ = self._make_grid_and_snapping_lines(
+            structures=structures,
+            symmetry=symmetry,
+            periodic=periodic,
+            sources=sources,
+            num_pml_layers=num_pml_layers,
+            lumped_elements=lumped_elements,
+            internal_override_structures=internal_override_structures,
+            internal_snapping_points=internal_snapping_points,
+        )
+
+        return grid
+
+    def _make_grid_and_snapping_lines(
+        self,
+        structures: List[Structure],
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        periodic: Tuple[bool, bool, bool],
+        sources: List[SourceType],
+        num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
+        lumped_elements: List[LumpedElementType] = (),
+        internal_override_structures: List[MeshOverrideStructure] = None,
+        internal_snapping_points: List[CoordinateOptional] = None,
+        boundary_types: Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [
+            [None, None],
+            [None, None],
+            [None, None],
+        ],
+    ) -> Tuple[Grid, List[CoordinateOptional]]:
+        """Make the entire simulation grid based on some simulation parameters.
+        Also return snappiung point resulted from iterative gap meshing.
+
+        Parameters
+        ----------
+        structures : List[Structure]
+            List of structures present in the simulation. The first structure must be the
+            simulation geometry with the simulation background medium.
+        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+            Reflection symmetry across a plane bisecting the simulation domain
+            normal to each of the three axes.
+        periodic: Tuple[bool, bool, bool]
+            Apply periodic boundary condition or not along each of the dimensions.
+            Only relevant for autogrids.
+        sources : List[SourceType]
+            List of sources.
+        num_pml_layers : List[Tuple[float, float]]
+            List containing the number of absorber layers in - and + boundaries.
+        lumped_elements : List[LumpedElementType]
+            List of lumped elements.
+        internal_override_structures : List[MeshOverrideStructure]
+            If `None`, recomputes internal override structures.
+        internal_snapping_points : List[CoordinateOptional]
+            If `None`, recomputes internal snapping points.
+        boundary_types : Tuple[Tuple[str, str], Tuple[str, str], Tuple[str, str]] = [[None, None], [None, None], [None, None]]
+            Type of boundary conditions along each dimension: "pec/pmc", "periodic", or
+            None for any other. This is relevant only for gap meshing.
+
+        Returns
+        -------
+        Tuple[Grid, List[CoordinateOptional]]:
+            Entire simulation grid and snapping points generated during iterative gap meshing.
+        """
+
+        old_grid = self._make_grid_one_iteration(
+            structures=structures,
+            symmetry=symmetry,
+            periodic=periodic,
+            sources=sources,
+            num_pml_layers=num_pml_layers,
+            lumped_elements=lumped_elements,
+            internal_override_structures=internal_override_structures,
+            internal_snapping_points=internal_snapping_points,
+        )
+
+        sim_geometry = structures[0].geometry
+
+        snapping_lines = []
+        if len(self.layer_refinement_specs) > 0:
+            num_iters = max(
+                layer_spec.gap_meshing_iters for layer_spec in self.layer_refinement_specs
+            )
+
+            min_gap_width = inf
+            for ind in range(num_iters):
+                new_snapping_lines = []
+                for layer_spec in self.layer_refinement_specs:
+                    if layer_spec.gap_meshing_iters > ind:
+                        one_layer_snapping_lines, gap_width = layer_spec._resolve_gaps(
+                            structures,
+                            old_grid,
+                            boundary_types,
+                            center=sim_geometry.center,
+                            size=sim_geometry.size,
+                        )
+                        new_snapping_lines = new_snapping_lines + one_layer_snapping_lines
+                        if layer_spec.dl_min_from_gap_width:
+                            min_gap_width = min(min_gap_width, gap_width)
+
+                if len(new_snapping_lines) == 0:
+                    log.info(
+                        "Grid is no longer changing. "
+                        f"Stopping iterative gap meshing after {ind+1}/{num_iters} iterations."
+                    )
+                    break
+
+                snapping_lines = snapping_lines + new_snapping_lines
+
+                new_grid = self._make_grid_one_iteration(
+                    structures=structures,
+                    symmetry=symmetry,
+                    periodic=periodic,
+                    sources=sources,
+                    num_pml_layers=num_pml_layers,
+                    lumped_elements=lumped_elements,
+                    internal_override_structures=internal_override_structures,
+                    internal_snapping_points=snapping_lines + internal_snapping_points,
+                    dl_min_from_gaps=0.45 * min_gap_width,
+                )
+
+                same = old_grid == new_grid
+
+                if same:
+                    log.info(
+                        "Grid is no longer changing. "
+                        f"Stopping iterative gap meshing after {ind+1}/{num_iters} iterations."
+                    )
+                    break
+
+                old_grid = new_grid
+
+        return old_grid, snapping_lines
+
+    def _make_grid_one_iteration(
+        self,
+        structures: List[Structure],
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        periodic: Tuple[bool, bool, bool],
+        sources: List[SourceType],
+        num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
+        lumped_elements: List[LumpedElementType] = (),
+        internal_override_structures: List[MeshOverrideStructure] = None,
+        internal_snapping_points: List[CoordinateOptional] = None,
+        dl_min_from_gaps: pd.PositiveFloat = inf,
+    ) -> Grid:
+        """Make the entire simulation grid based on some simulation parameters.
+
+        Parameters
+        ----------
+        structures : List[Structure]
+            List of structures present in the simulation. The first structure must be the
+            simulation geometry with the simulation background medium.
+        symmetry : Tuple[Symmetry, Symmetry, Symmetry]
+            Reflection symmetry across a plane bisecting the simulation domain
+            normal to each of the three axes.
+        periodic: Tuple[bool, bool, bool]
+            Apply periodic boundary condition or not along each of the dimensions.
+            Only relevant for autogrids.
+        sources : List[SourceType]
+            List of sources.
+        num_pml_layers : List[Tuple[float, float]]
+            List containing the number of absorber layers in - and + boundaries.
+        lumped_elements : List[LumpedElementType]
+            List of lumped elements.
+        internal_override_structures : List[MeshOverrideStructure]
+            If `None`, recomputes internal override structures.
+        internal_snapping_points : List[CoordinateOptional]
+            If `None`, recomputes internal snapping points.
+        dl_min_from_gaps : pd.PositiveFloat
+            Minimal grid size computed based on autodetected gaps.
+
 
         Returns
         -------
@@ -1941,6 +2680,7 @@ class GridSpec(Tidy3dBaseModel):
                 sim_size,
                 lumped_elements,
             )
+            new_dl_min = min(new_dl_min, dl_min_from_gaps)
             for ind, grid in enumerate(grids_1d):
                 if isinstance(grid, AutoGrid) and grid._undefined_dl_min:
                     grids_1d[ind] = grid.updated_copy(dl_min=new_dl_min)
