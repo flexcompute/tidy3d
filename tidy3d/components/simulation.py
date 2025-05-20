@@ -4228,14 +4228,14 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    def with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
+    def _with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
-        mnts_fld, mnts_eps = self.make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
+        mnts_fld, mnts_eps = self._make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
         return self.copy(update=dict(monitors=monitors))
 
-    def make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
+    def _make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
 
         index_to_keys = defaultdict(list)
@@ -4243,7 +4243,7 @@ class Simulation(AbstractYeeGridSimulation):
         for _, index, *fields in sim_fields_keys:
             index_to_keys[index].append(fields)
 
-        freqs = self.freqs_adjoint
+        freqs = self._freqs_adjoint
 
         adjoint_monitors_fld = []
         adjoint_monitors_eps = []
@@ -4252,7 +4252,7 @@ class Simulation(AbstractYeeGridSimulation):
         for i, field_keys in index_to_keys.items():
             structure = self.structures[i]
 
-            mnt_fld, mnt_eps = structure.make_adjoint_monitors(
+            mnt_fld, mnt_eps = structure._make_adjoint_monitors(
                 freqs=freqs, index=i, field_keys=field_keys
             )
 
@@ -4262,7 +4262,7 @@ class Simulation(AbstractYeeGridSimulation):
         return adjoint_monitors_fld, adjoint_monitors_eps
 
     @property
-    def freqs_adjoint(self) -> list[float]:
+    def _freqs_adjoint(self) -> list[float]:
         """Unique list of all frequencies. For now should be only one."""
 
         freqs = set()

@@ -994,7 +994,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
 
-    def split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
+    def _split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
         """Split data list into original, adjoint field, and adjoint permittivity."""
 
         data_all = list(self.data)
@@ -1008,11 +1008,11 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return data_original, data_adjoint
 
-    def split_original_fwd(self, num_mnts_original: int) -> Tuple[SimulationData, SimulationData]:
+    def _split_original_fwd(self, num_mnts_original: int) -> Tuple[SimulationData, SimulationData]:
         """Split this simulation data into original and fwd data from number of original mnts."""
 
         # split the data and monitors into the original ones & adjoint gradient ones (for 'fwd')
-        data_original, data_fwd = self.split_adjoint_data(num_mnts_original=num_mnts_original)
+        data_original, data_fwd = self._split_adjoint_data(num_mnts_original=num_mnts_original)
         monitors_orig, monitors_fwd = split_list(self.simulation.monitors, index=num_mnts_original)
 
         # reconstruct the simulation data for the user, using original sim, and data for original mnts
@@ -1033,7 +1033,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return sim_data_original, sim_data_fwd
 
-    def make_adjoint_sims(
+    def _make_adjoint_sims(
         self,
         data_vjp_paths: set[tuple],
         adjoint_monitors: list[Monitor],
@@ -1046,7 +1046,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         sim_original = self.simulation
 
         # generate the adjoint sources {mnt_name : list[Source]}
-        sources_adj_dict = self.make_adjoint_sources(data_vjp_paths=data_vjp_paths)
+        sources_adj_dict = self._make_adjoint_sources(data_vjp_paths=data_vjp_paths)
         if not sources_adj_dict:
             return []
 
@@ -1054,7 +1054,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         for src_list in sources_adj_dict.values():
             adj_srcs += list(src_list)
 
-        adjoint_source_infos = self.process_adjoint_sources(adj_srcs=adj_srcs)
+        adjoint_source_infos = self._process_adjoint_sources(adj_srcs=adj_srcs)
 
         if not adjoint_source_infos:
             return []
@@ -1095,7 +1095,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return adj_sims
 
-    def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, SourceType]:
+    def _make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, SourceType]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
 
         # map of index into 'self.data' to the list of datasets we need adjoint sources for
@@ -1107,8 +1107,8 @@ class SimulationData(AbstractYeeGridSimulationData):
         sources_adj_all = defaultdict(list)
         for data_index, dataset_names in adj_src_map.items():
             mnt_data = self.data[data_index]
-            sources_adj = mnt_data.make_adjoint_sources(
-                dataset_names=dataset_names, fwidth=self.fwidth_adj
+            sources_adj = mnt_data._make_adjoint_sources(
+                dataset_names=dataset_names, fwidth=self._fwidth_adj
             )
             sources_adj_all[mnt_data.monitor.name] = sources_adj
             log.info(
@@ -1118,12 +1118,12 @@ class SimulationData(AbstractYeeGridSimulationData):
         return sources_adj_all
 
     @property
-    def fwidth_adj(self) -> float:
+    def _fwidth_adj(self) -> float:
         # fwidth of forward pass, try as default for adjoint
         normalize_index_fwd = self.simulation.normalize_index or 0
         return self.simulation.sources[normalize_index_fwd].source_time.fwidth
 
-    def process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
         """Compute list of final sources along with a post run normalization for adj fields."""
         # dictionary mapping hash of sources with same freq dependence to list of time-dependencies
         hashes_to_sources = defaultdict(None)
@@ -1157,7 +1157,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             for src_hash, src_times in hashes_to_src_times.items():
                 base_src = hashes_to_sources[src_hash]
                 group = [base_src.updated_copy(source_time=src_time) for src_time in src_times]
-                processed_srcs, post_norm = self.process_adjoint_sources_broadband(group)
+                processed_srcs, post_norm = self._process_adjoint_sources_broadband(group)
                 adjoint_infos.append(
                     AdjointSourceInfo(
                         sources=processed_srcs, post_norm=post_norm, normalize_sim=True
@@ -1167,7 +1167,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         log.info(f"Created {len(adjoint_infos)} adjoint source groups.")
         return adjoint_infos
 
-    def process_adjoint_sources_broadband(
+    def _process_adjoint_sources_broadband(
         self, adj_srcs: list[SourceType]
     ) -> tuple[list[SourceType], xr.DataArray]:
         """Process adjoint sources for the case of several sources at the same freq."""
@@ -1211,10 +1211,10 @@ class SimulationData(AbstractYeeGridSimulationData):
         amps_complex = np.array(amps_complex)
         return xr.DataArray(amps_complex, coords=coords)
 
-    def get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
+    def _get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
         """Grab the field or permittivity data for a given structure index."""
 
-        monitor_name = Structure.get_monitor_name(index=structure_index, data_type=data_type)
+        monitor_name = Structure._get_monitor_name(index=structure_index, data_type=data_type)
         return self[monitor_name]
 
     def to_mat_file(self, fname: str, **kwargs):
