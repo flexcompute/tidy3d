@@ -17,7 +17,12 @@ from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.mode.data.sim_data import ModeSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
+from tidy3d.components.tcad.data.sim_data import (
+    HeatChargeSimulationData,
+    HeatSimulationData,
+    VolumeMesherData,
+)
+from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.plugins.mode.mode_solver import ModeSolver
@@ -30,7 +35,13 @@ from tidy3d.web.core.stub import TaskStub, TaskStubData
 from tidy3d.web.core.types import TaskType
 
 SimulationType = Union[
-    Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation, ModeSolver, ModeSimulation
+    Simulation,
+    HeatChargeSimulation,
+    HeatSimulation,
+    EMESimulation,
+    ModeSolver,
+    ModeSimulation,
+    VolumeMesher,
 ]
 SimulationDataType = Union[
     SimulationData,
@@ -87,6 +98,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = EMESimulation.from_file(file_path)
         elif type_ == "ModeSimulation":
             sim = ModeSimulation.from_file(file_path)
+        elif type_ == "VolumeMesher":
+            sim = VolumeMesher.from_file(file_path)
 
         return sim
 
@@ -147,6 +160,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.EME.name
         if isinstance(self.simulation, ModeSimulation):
             return TaskType.MODE.name
+        elif isinstance(self.simulation, VolumeMesher):
+            return TaskType.VOLUME_MESH.name
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
@@ -199,6 +214,8 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             sim_data = EMESimulationData.from_file(file_path)
         elif type_ == "ModeSimulationData":
             sim_data = ModeSimulationData.from_file(file_path)
+        elif type_ == "VolumeMesherData":
+            sim_data = VolumeMesherData.from_file(file_path)
 
         return sim_data
 

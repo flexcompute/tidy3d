@@ -24,6 +24,7 @@ API |:computer:|
     scene
     logging
     submit_simulations
+    mesh/index
     heat/index
     charge/index
     eme/index
@@ -52,6 +53,7 @@ API |:computer:|
 .. include:: /api/scene.rst
 .. include:: /api/logging.rst
 .. include:: /api/submit_simulations.rst
+.. include:: /api/mesh/index.rst
 .. include:: /api/heat/index.rst
 .. include:: /api/charge/index.rst
 .. include:: /api/eme/index.rst

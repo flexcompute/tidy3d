@@ -105,6 +105,7 @@ class TCADAnalysisTypes(str, Enum):
     HEAT = "Heat"
     CONDUCTION = "Conduction"
     CHARGE = "Charge"
+    MESH = "Mesh"
 
 
 class HeatChargeSimulation(AbstractSimulation):

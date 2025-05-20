@@ -10,12 +10,12 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.base_sim.simulation import AbstractSimulation
 from tidy3d.components.data.utils import UnstructuredGridDatasetType
+from tidy3d.components.monitor import AbstractMonitor
 from tidy3d.components.types import FieldVal
 from tidy3d.exceptions import DataError, Tidy3dKeyError, ValidationError
-
-from .monitor_data import AbstractMonitorData
 
 
 class AbstractSimulationData(Tidy3dBaseModel, ABC):
@@ -128,3 +128,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             )
 
         return field_value
+
+    def get_monitor_by_name(self, name: str) -> AbstractMonitor:
+        """Return monitor named 'name'."""
+        return self.simulation.get_monitor_by_name(name)
