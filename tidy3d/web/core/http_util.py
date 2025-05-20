@@ -134,6 +134,7 @@ def http_interceptor(func):
                 raise WebNotFoundError("Resource not found (HTTP 404).")
             json_resp = resp.json()
             if "error" in json_resp.keys():
+                print(json_resp)
                 raise WebError(json_resp["error"])
             resp.raise_for_status()
 
