@@ -28,10 +28,12 @@ from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
 )
+from tidy3d.components.tcad.data.monitor_data.mesh import VolumeMeshData
 from tidy3d.components.tcad.data.sim_data import (
     DeviceCharacteristics,
     HeatChargeSimulationData,
     HeatSimulationData,
+    VolumeMesherData,
 )
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
@@ -48,15 +50,15 @@ from tidy3d.components.tcad.grid import (
     GridRefinementRegion,
     UniformUnstructuredGrid,
 )
+from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
 )
-from tidy3d.components.tcad.monitors.heat import (
-    TemperatureMonitor,
-)
+from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
+from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.components.tcad.types import (
@@ -683,6 +685,10 @@ __all__ = [
     "VisualizationSpec",
     "VoltageBC",
     "VoltageSourceType",
+    "VolumeMeshData",
+    "VolumeMeshMonitor",
+    "VolumeMesher",
+    "VolumeMesherData",
     "VolumetricAveraging",
     "YeeGrid",
     "__version__",

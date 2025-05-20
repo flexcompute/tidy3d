@@ -1,4 +1,4 @@
-"""Tests tidy3d/components/data/dataset.py"""
+"""Tests tidy3d/components/tests//dataset.py"""
 
 from __future__ import annotations
 
@@ -751,3 +751,19 @@ def test_cell_values():
     cell_values = tet_grid.get_cell_values()
     cell_vols = tet_grid.get_cell_volumes()
     assert np.dot(cell_values, cell_vols) == 1.5
+
+
+def test_from_vtk():
+    """Test that 2D and 3D vtk data can be loaded if `ignore_invalid_cells==True`."""
+    import tidy3d as td
+    from tidy3d.exceptions import DataError
+
+    _ = td.TetrahedralGridDataset.from_vtk("tests/data/gmsh.vtk", ignore_invalid_cells=True)
+
+    with pytest.raises(DataError):
+        _ = td.TetrahedralGridDataset.from_vtk("tests/data/gmsh.vtk")
+
+    _ = td.TriangularGridDataset.from_vtk("tests/data/gmsh_2d.vtk", ignore_invalid_cells=True)
+
+    with pytest.raises(DataError):
+        _ = td.TriangularGridDataset.from_vtk("tests/data/gmsh_2d.vtk")
