@@ -3568,18 +3568,7 @@ def test_sim_volumetric_structures_with_lumped_elements(tmp_path):
         assert np.isclose(vol_structures[1].geometry.bounding_box.size[0], 0, rtol=RTOL)
 
 
-def test_sim_multiphysics():
-    FREQ_MODULATE = 1e12
-    AMP_TIME = 1.1
-    PHASE_TIME = 0
-    CW = td.ContinuousWaveTimeModulation(freq0=FREQ_MODULATE, amplitude=AMP_TIME, phase=PHASE_TIME)
-    ST = td.SpaceTimeModulation(
-        time_modulation=CW,
-    )
-    MODULATION_SPEC = td.ModulationSpec()
-    modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
-    modulated = td.Medium(permittivity=2, modulation_spec=modulation_spec)
-    assert modulated._has_incompatibilities
+def test_create_sim_multiphysics():
     s = td.Simulation(
         run_time=1e-12,
         size=(10, 10, 10),
@@ -3589,10 +3578,54 @@ def test_sim_multiphysics():
             td.Structure(
                 geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
                 medium=td.MultiPhysicsMedium(
-                    optical=modulated,
+                    optical=td.Medium(permittivity=2.0),
                     charge=td.ChargeInsulatorMedium(permittivity=2),
                     name="SiO2",
                 ),
-            )
+            ),
         ],
     )
+
+
+def test_create_sim_multiphysics_with_incompatibilities():
+    modulated = td.Medium(
+        permittivity=2,
+        modulation_spec=td.ModulationSpec(
+            permittivity=td.SpaceTimeModulation(
+                time_modulation=td.ContinuousWaveTimeModulation(freq0=1e12, amplitude=1.1, phase=0),
+            )
+        ),
+    )
+    assert modulated._has_incompatibilities
+
+    nonlinear = td.Medium(
+        nonlinear_spec=td.NonlinearSpec(
+            models=[
+                td.NonlinearSusceptibility(chi3=1.5),
+                td.TwoPhotonAbsorption(beta=1, sigma=1, tau=1, e_e=1, e_h=0.8, c_e=1, c_h=1),
+                td.KerrNonlinearity(n2=1),
+            ],
+            num_iters=20,
+        )
+    )
+    with pytest.raises(pydantic.ValidationError):
+        s = td.Simulation(
+            run_time=1e-12,
+            size=(10, 10, 10),
+            grid_spec=td.GridSpec(wavelength=1.0),
+            medium=td.Medium(permittivity=1.0),
+            structures=[
+                td.Structure(
+                    geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
+                    medium=nonlinear,
+                ),
+                td.Structure(
+                    geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
+                    medium=td.MultiPhysicsMedium(
+                        optical=modulated,
+                        charge=td.ChargeInsulatorMedium(permittivity=2),
+                        name="SiO2",
+                    ),
+                ),
+            ],
+        )
