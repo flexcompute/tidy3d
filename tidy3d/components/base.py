@@ -948,7 +948,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = make_json_compatible(json_string)
         return json_string
 
-    def strip_traced_fields(
+    def _strip_traced_fields(
         self, starting_path: tuple[str] = (), include_untraced_data_arrays: bool = False
     ) -> AutogradFieldMap:
         """Extract a dictionary mapping paths in the model to the data traced by ``autograd``.
@@ -1004,7 +1004,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)
 
-    def insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
+    def _insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
 
         self_dict = self.dict()
@@ -1037,7 +1037,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """Version of object with all autograd-traced fields removed."""
 
         # get dictionary of all traced fields
-        field_mapping = self.strip_traced_fields()
+        field_mapping = self._strip_traced_fields()
 
         # shortcut to just return self if no tracers found, for performance
         if not field_mapping:
@@ -1047,7 +1047,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         field_mapping_static = {key: get_static(val) for key, val in field_mapping.items()}
 
         # insert the static values into a copy of self
-        return self.insert_traced_fields(field_mapping_static)
+        return self._insert_traced_fields(field_mapping_static)
 
     @classmethod
     def add_type_field(cls) -> None:
