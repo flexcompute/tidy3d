@@ -31,6 +31,7 @@ Collections of Data from single monitor
    tidy3d.FieldProjectionKSpaceData
    tidy3d.DiffractionData
    tidy3d.DirectivityData
+   tidy3d.AuxFieldTimeData
 
 Individual Datasets
 -------------------
