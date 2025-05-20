@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `eps_lim` keyword argument to `Simulation.plot_eps()` for manual control over the permittivity color limits.
+
 ## [2.8.4] - 2025-05-15
 
 ### Added
