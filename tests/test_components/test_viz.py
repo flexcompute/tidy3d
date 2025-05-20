@@ -10,6 +10,8 @@ from tidy3d.components.viz import Polygon, restore_matplotlib_rcparams, set_defa
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
 
+from ..utils import AssertLogLevel
+
 pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
 
@@ -216,6 +218,17 @@ def plot_with_multi_viz_spec(alphas, facecolors, edgecolors, rng, use_viz_spec=T
 
     sim.plot(z=0.0)
     plt.show()
+
+
+def test_no_matlab_install(monkeypatch):
+    """Test that the `VisualizationSpec` only throws a warning on validation if matplotlib is not installed."""
+    monkeypatch.setattr("tidy3d.components.viz.MATPLOTLIB_IMPORTED", False)
+
+    EXPECTED_WARNING_MSG_PIECE = (
+        "matplotlib was not successfully imported, but is required to validate colors"
+    )
+    with AssertLogLevel("WARNING", contains_str=EXPECTED_WARNING_MSG_PIECE):
+        viz_spec = td.VisualizationSpec(facecolor="green")
 
 
 @pytest.mark.skip(reason="Skipping test for CI, but useful for debugging locally with graphics.")

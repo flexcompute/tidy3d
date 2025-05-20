@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
 - EME now supports 2D simulations.
 - 'EMESimulation' now supports 'PermittivityMonitor'.
+- Change `VisualizationSpec` validator for checking validity of user specified colors to only issue a warning if matplotlib is not installed instead of an error.
 
 ### Fixed
 - Fixed issue with `CustomMedium` gradients where other frequencies would wrongly contribute to the gradient.
