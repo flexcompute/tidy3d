@@ -2709,6 +2709,9 @@ class Box(SimplePlaneIntersection, Centered):
         if transform_matrix is None:
             L_f = np.eye(3)  # linear part (no rotation/scale/shear)
             t_f = np.zeros(3)  # translation
+        else:
+            L_f = transform_matrix[:3, :3]
+            t_f = transform_matrix[:3, 3]
 
         mesh, _ = self.build_box_face_mesh(
             center=np.asarray(self.center, float),
