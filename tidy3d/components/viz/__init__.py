@@ -34,7 +34,7 @@ from .styles import (
     STRUCTURE_HEAT_COND_CMAP,
     arrow_style,
 )
-from .visualization_spec import VisualizationSpec
+from .visualization_spec import MATPLOTLIB_IMPORTED, VisualizationSpec
 
 apply_tidy3d_params()
 
@@ -44,6 +44,7 @@ __all__ = [
     "ARROW_LENGTH",
     "PLOT_BUFFER",
     "VisualizationSpec",
+    "MATPLOTLIB_IMPORTED",
     "plot_sim_3d",
     "FLEXCOMPUTE_COLORS",
     "ARROW_COLOR_SOURCE",

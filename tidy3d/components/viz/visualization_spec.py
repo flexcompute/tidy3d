@@ -4,18 +4,28 @@ from typing import Any, Dict, Optional
 
 import pydantic.v1 as pd
 
+MATPLOTLIB_IMPORTED = True
 try:
     from matplotlib.colors import is_color_like
 except ImportError:
     is_color_like = None
+    MATPLOTLIB_IMPORTED = False
 
 
+from ...log import log
 from ..base import Tidy3dBaseModel
 
 
 def is_valid_color(value: str) -> str:
-    if is_color_like is not None and not is_color_like(value):
-        raise pd.ValidationError(f"{value} is not a valid plotting color")
+    if not MATPLOTLIB_IMPORTED:
+        log.warning(
+            "matplotlib was not successfully imported, but is required "
+            "to validate colors in the VisualizationSpec. The specified colors "
+            "have not been validated."
+        )
+    else:
+        if is_color_like is not None and not is_color_like(value):
+            raise ValueError(f"{value} is not a valid plotting color")
 
     return value
 
