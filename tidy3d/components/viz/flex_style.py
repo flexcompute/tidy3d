@@ -1,5 +1,5 @@
 from ...log import log
-from .flex_color_palletes import CATEGORICAL_PALETTES_HEX
+from .flex_color_palettes import CATEGORICAL_PALETTES_HEX
 
 _ORIGINAL_PARAMS = {}
 
