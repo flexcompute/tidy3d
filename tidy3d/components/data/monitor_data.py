@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import struct
 import warnings
 from abc import ABC
 from math import isclose
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, get_args
 
 import autograd.numpy as np
 import pydantic.v1 as pd
@@ -13,7 +14,7 @@ import xarray as xr
 from pandas import DataFrame
 from xarray.core.types import Self
 
-from ...constants import C_0, EPSILON_0, ETA_0, MICROMETER
+from ...constants import C_0, EPSILON_0, ETA_0, MICROMETER, UnitScaling
 from ...exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
 from ...log import log
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
@@ -63,6 +64,7 @@ from ..types import (
     Size,
     Symmetry,
     TrackFreq,
+    UnitsZBF,
 )
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from .data_array import (
@@ -1065,6 +1067,177 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             **self._grid_correction_dict,
             **field_kwargs,
         )
+
+    def to_zbf(
+        self,
+        fname: str,
+        units: UnitsZBF = "mm",
+        background_refractive_index: float = 1,
+        n_x: Optional[int] = None,
+        n_y: Optional[int] = None,
+        freq: Optional[float] = None,
+        mode_index: Optional[int] = None,
+        r_x: float = 0,
+        r_y: float = 0,
+        z_x: float = 0,
+        z_y: float = 0,
+        rec_efficiency: float = 0,
+        sys_efficiency: float = 0,
+    ) -> Tuple[ScalarFieldDataArray, ScalarFieldDataArray]:
+        """For a 2D monitor, export the fields to a Zemax Beam File (``.zbf``).
+
+        The mode area is used to approximate the beam waist, which is only valid
+        if the beam profile approximates a Gaussian beam.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the ``.zbf`` file to be written.
+        units : UnitsZBF = "mm"
+            Spatial units used for the ``.zbf`` file. Options are ``"mm"``, ``"cm"``, ``"in"``, or ``"m"``.
+            Defaults to ``"mm"``.
+        background_refractive_index : float = 1
+            Refractive index of the medium surrounding the monitor. Defaults to ``1``.
+        n_x : Optional[int] = None
+            Number of field samples along x.
+            Must be a power of 2, between 2^5 and 2^13 inclusive per Zemax's requirements.
+            Defaults to ``None``, in which case a value is chosen for the user depending on the coordinates in the field data.
+        n_y : Optional[int] = None
+            Number of field samples along y.
+            Must be a power of 2, between 2^5 and 2^13 inclusive per Zemax's requirements.
+            Defaults to ``None``, in which case a value is chosen for the user depending on the coordinates in the field data.
+        freq : Optional[float] = None
+            Field frequency selection. If ``None``, the average of the recorded frequencies is used.
+        mode_index : Optional[int] = None
+            For :class:`.ModeData`, choose which mode to save.
+        r_x : float = 0
+            Pilot beam Rayleigh distance in x, um. Defaults to ``0``.
+        r_y : float = 0
+            Pilot beam Rayleigh distance in y, um. Defaults to ``0``.
+        z_x : float = 0
+            Pilot beam z position with respect to the waist in x, um. Defaults to ``0``.
+        z_y : float = 0
+            Pilot beam z position with respect to the waist in y, um. Defaults to ``0``.
+        rec_efficiency : float = 0
+            Receiver efficiency, zero if fiber coupling is not computed. Defaults to ``0``.
+        sys_efficiency : float = 0
+            System efficiency, zero if fiber coupling is not computed. Defaults to ``0``.
+
+        Returns
+        -------
+        Tuple[:class:`.ScalarFieldDataArray`,:class:`.ScalarFieldDataArray`]
+            The two E field components being exported to ``.zbf``.
+        """
+        log.warning(
+            "'FieldData.to_zbf()' is currently an experimental feature."
+            " If any issues are encountered, please contact Flexcompute support 'https://www.flexcompute.com/tidy3d/technical-support/'"
+        )
+
+        # Check that appropriate units are used
+        if units not in get_args(UnitsZBF):
+            raise ValueError("'units' must be either 'mm', 'cm', 'in', or 'm'.")
+
+        # Mode area calculation ensures all E components are present
+        mode_area = self.mode_area
+        dim1, dim2 = self._tangential_dims
+
+        # Using file-local coordinates x, y for the tangential components
+        e_x = self._tangential_fields["E" + dim1]
+        e_y = self._tangential_fields["E" + dim2]
+        x = e_x.coords[dim1].values
+        y = e_x.coords[dim2].values
+
+        # Use the mean frequency if freq is not specified
+        if freq is None:
+            log.warning(
+                "'freq' was not specified for 'FieldData.to_zbf()'. Defaulting to the mean frequency of the dataset."
+            )
+            freq = np.mean(e_x.coords["f"].values)
+
+        mode_area = mode_area.interp(f=freq)
+        e_x = e_x.interp(f=freq)
+        e_y = e_y.interp(f=freq)
+
+        # If the data is ModeData, choose one of the modes to save
+        if "mode_index" in e_x.coords:
+            if mode_index is None:
+                raise ValueError("'mode_index' is required for 'ModeData.to_zbf()'")
+            mode_area = mode_area.isel(mode_index=mode_index, drop=True)
+            e_x = e_x.isel(mode_index=mode_index, drop=True)
+            e_y = e_y.isel(mode_index=mode_index, drop=True)
+
+        # Header info
+        version = 1
+        polarized = 1
+        unit_mapping = {"mm": 0, "cm": 1, "in": 2, "m": 3}
+        unit_key = unit_mapping[units]
+        unit_scaling = UnitScaling[units]
+        lda = C_0 / freq * unit_scaling
+
+        # Pilot (reference) beam waist: use the mode area to approximate the expected value
+        w_x = (mode_area.item() / np.pi) ** 0.5 * unit_scaling
+        w_y = w_x
+
+        # Pilot beam Rayleigh distance (ignored on input)
+        r_x *= unit_scaling
+        r_y *= unit_scaling
+
+        # Pilot beam z position w.r.t. the waist
+        z_x *= unit_scaling
+        z_y *= unit_scaling
+
+        # defaults for n_x and n_y
+        if n_x is None:
+            n_x = 2 ** min(13, max(5, int(np.log2(x.size) + 1)))
+            log.warning(
+                f"'n_x' was not specified for 'FieldData.to_zbf()'. Defaulting to 'n_x' = {n_x}."
+            )
+        if n_y is None:
+            n_y = 2 ** min(13, max(5, int(np.log2(y.size) + 1)))
+            log.warning(
+                f"'n_y' was not specified for 'FieldData.to_zbf()'. Defaulting to 'n_y' = {n_y}."
+            )
+
+        # Check that requirements are met for n_x and n_y
+        # n_x and n_y must be powers of 2
+        if (n_x & (n_x - 1)) != 0:
+            raise ValueError("'n_x' must be a power of 2.")
+        if (n_y & (n_y - 1)) != 0:
+            raise ValueError("'n_y' must be a power of 2.")
+        # 32 <= n_x and n_y <= 2^13
+        if n_x < 32 or n_x > 2**13:
+            raise ValueError("'n_x' must be between 2^5 and 2^13, inclusive.")
+        if n_y < 32 or n_y > 2**13:
+            raise ValueError("'n_y' must be between 2^5 and 2^13, inclusive.")
+
+        # Interpolating coordinates
+        x = np.linspace(x.min(), x.max(), n_x)
+        y = np.linspace(y.min(), y.max(), n_y)
+
+        # Interpolate fields
+        coords = {dim1: x, dim2: y}
+        e_x = e_x.interp(coords, assume_sorted=True)
+        e_y = e_y.interp(coords, assume_sorted=True)
+
+        # Sampling distance
+        d_x = np.mean(np.diff(x)) * unit_scaling
+        d_y = np.mean(np.diff(y)) * unit_scaling
+
+        with open(fname, "wb") as fout:
+            fout.write(struct.pack("<5I", version, n_x, n_y, polarized, unit_key))
+            fout.write(struct.pack("<4I", 0, 0, 0, 0))  # unused values
+            fout.write(struct.pack("<8d", d_x, d_y, z_x, r_x, w_x, z_y, r_y, w_y))
+            fout.write(
+                struct.pack("<4d", lda, background_refractive_index, rec_efficiency, sys_efficiency)
+            )
+            fout.write(struct.pack("<8d", 0, 0, 0, 0, 0, 0, 0, 0))  # unused values
+            for e in (e_x, e_y):
+                e_flat = e.values.flatten(order="C")
+                # Interweave real and imaginary parts
+                e_values = np.ravel(np.column_stack((e_flat.real, e_flat.imag)))
+                fout.write(struct.pack(f"<{2 * n_x*n_y}d", *e_values))
+
+        return e_x, e_y
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
@@ -2433,6 +2606,20 @@ class AbstractFieldProjectionData(MonitorData):
 
         return self.make_data_array(data=rcs_data)
 
+    def make_adjoint_sources(
+        self, dataset_names: list[str], fwidth: float
+    ) -> List[Union[CustomCurrentSource, PointDipole]]:
+        """Error if server-side field projection is used for autograd"""
+
+        raise NotImplementedError(
+            "Adjoint is currently not implemented for server-side field projections. "
+            "To compute derivatives with respect to field projection data, please use a 'FieldMonitor' "
+            "and use a local projection in your objective function via 'FieldProjector.from_near_field_monitors'. "
+            "Using field projection monitors directly is not supported as the full field information is required "
+            "to construct the adjoint source for this problem. The field projection data does not contain the "
+            "information necessary for gradient computation."
+        )
+
 
 class FieldProjectionAngleData(AbstractFieldProjectionData):
     """Data associated with a :class:`.FieldProjectionAngleMonitor`: components of projected fields.
@@ -3282,9 +3469,9 @@ class DirectivityData(FieldProjectionAngleData):
     >>> values = (1+1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
     >>> flux_data = FluxDataArray(np.random.random(len(f)), coords=coords_flux)
     >>> scalar_field = FieldProjectionAngleDataArray(values, coords=coords)
-    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
+    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta) # doctest: +SKIP
     >>> data = DirectivityData(monitor=monitor, flux=flux_data, Er=scalar_field, Etheta=scalar_field, Ephi=scalar_field,
-    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces)
+    ...     Hr=scalar_field, Htheta=scalar_field, Hphi=scalar_field, projection_surfaces=monitor.projection_surfaces) # doctest: +SKIP
     """
 
     monitor: DirectivityMonitor = pd.Field(

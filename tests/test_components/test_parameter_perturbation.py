@@ -663,14 +663,15 @@ def test_delta_model():
     freq = td.C_0 / wvl
     delta_model = td.NedeljkovicSorefMashanovich(ref_freq=freq)
 
+    # make sure it serializes
+    delta_model.json()
+
     # make sure it's interpolating correctly
     coeffs_3_5 = np.array([3.10e-21, 1.210, 6.05e-20, 1.145, 6.95e-21, 0.986, 9.28e-18, 0.834])
     coeffs_4 = np.array([7.4e-22, 1.245, 5.43e-20, 1.153, 7.25e-21, 0.991, 9.99e-18, 0.839])
 
     averaged_vals = (coeffs_3_5 + coeffs_4) / 2
-    interpolated_results = [
-        value.item() for _, value in delta_model._coeffs_at_ref_freq.data_vars.items()
-    ]
+    interpolated_results = [v.item() for v in delta_model._coeffs_at_ref_freq.data.flat]
     error = np.abs(np.mean(averaged_vals - np.array(interpolated_results)))
 
     assert error < 1e-16

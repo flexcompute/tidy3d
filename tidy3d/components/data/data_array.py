@@ -1253,6 +1253,11 @@ class SpatialVoltageDataArray(AbstractSpatialDataArray):
     _dims = ("x", "y", "z", "voltage")
 
 
+class PerturbationCoefficientDataArray(DataArray):
+    __slots__ = ()
+    _dims = ("wvl", "coeff")
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
@@ -1286,6 +1291,8 @@ DATA_ARRAY_TYPES = [
     CellDataArray,
     IndexedDataArray,
     IndexedVoltageDataArray,
+    SpatialVoltageDataArray,
+    PerturbationCoefficientDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 

@@ -7,6 +7,8 @@ import numpy as np
 import pydantic.v1 as pd
 from pydantic.v1 import NonNegativeFloat, PositiveInt
 
+from tidy3d.log import log
+
 from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
 from ...components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
 from ...components.data.sim_data import SimulationData
@@ -20,7 +22,6 @@ from ...components.source.utils import SourceType
 from ...components.structure import MeshOverrideStructure, Structure
 from ...components.types import ArrayLike, Axis, Bound
 from ...constants import C_0, inf
-from ...log import log
 
 
 class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
@@ -583,6 +584,14 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
             simulation=sim_array.updated_copy(monitors=good_monitors), data=data_array
         )
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
+
 
 class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     """This class provides methods to calculate the array factor and far-field radiation patterns
@@ -607,7 +616,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     ...    array_size=(3, 4, 5),
     ...    spacings=(0.5, 0.5, 0.5),
     ...    phase_shifts=(0, 0, 0),
-    ... )
+    ... ) # doctest: +SKIP
     """
 
     array_size: Tuple[PositiveInt, PositiveInt, PositiveInt] = pd.Field(

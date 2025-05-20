@@ -26,6 +26,7 @@ from ...components.validators import assert_line, assert_plane
 from ...components.viz import add_ax_if_none
 from ...constants import AMP, VOLT, fp_eps
 from ...exceptions import DataError, Tidy3dError
+from ...log import log
 from .viz import (
     ARROW_CURRENT,
     plot_params_current_path,
@@ -71,6 +72,14 @@ class AbstractAxesRH(Tidy3dBaseModel, ABC):
         """Get in-plane dimensions with in-plane dims first, followed by the `main_axis` dimension."""
         dim3 = "xyz"[self.main_axis]
         return self.remaining_dims + tuple(dim3)
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
 
 
 class AxisAlignedPathIntegral(AbstractAxesRH, Box):

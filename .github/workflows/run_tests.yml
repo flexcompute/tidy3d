@@ -237,7 +237,7 @@ jobs:
   
   pr-requirements-pass:
     name: pr-requirements-pass
-    if: always()
+    if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     needs: [local-tests, remote-tests, lint]
     runs-on: [ inhouse ]
     steps:

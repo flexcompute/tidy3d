@@ -7,7 +7,15 @@ from html import escape
 from typing import Any, Dict, Optional
 
 import pydantic.v1 as pd
+from numpy import array, concatenate, inf, ones
 
+from ..constants import UnitScaling
+from ..exceptions import SetupError, Tidy3dKeyError
+from ..log import log
+from .base import Tidy3dBaseModel
+from .types import Ax, Axis, LengthUnit
+
+MATPLOTLIB_IMPORTED = True
 try:
     import matplotlib.pyplot as plt
     import matplotlib.ticker as ticker
@@ -19,13 +27,7 @@ try:
     arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
 except ImportError:
     arrow_style = None
-
-from numpy import array, concatenate, inf, ones
-
-from ..constants import UnitScaling
-from ..exceptions import SetupError, Tidy3dKeyError
-from .base import Tidy3dBaseModel
-from .types import Ax, Axis, LengthUnit
+    MATPLOTLIB_IMPORTED = False
 
 """ Constants """
 
@@ -39,6 +41,14 @@ ARROW_ALPHA = 0.8
 
 # Arrow length in inches
 ARROW_LENGTH = 0.3
+
+FLEXCOMPUTE_COLORS = {
+    "brand_green": 0x00643C,
+    "brand_tan": 0xB8A18B,
+    "brand_blue": 0x6DB5DD,
+    "brand_purple": 0x8851AD,
+    "brand_black": 0x000000,
+}
 
 """ Decorators """
 
@@ -177,8 +187,15 @@ STRUCTURE_HEAT_COND_CMAP = "gist_yarg"
 
 
 def is_valid_color(value: str) -> str:
-    if not is_color_like(value):
-        raise pd.ValidationError(f"{value} is not a valid plotting color")
+    if not MATPLOTLIB_IMPORTED:
+        log.warning(
+            "matplotlib was not successfully imported, but is required "
+            "to validate colors in the VisualizationSpec. The specified colors "
+            "have not been validated."
+        )
+    else:
+        if not is_color_like(value):
+            raise ValueError(f"{value} is not a valid plotting color")
 
     return value
 
@@ -390,6 +407,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
                         var frame = document.createElement("iframe");
                         frame.width = node.dataset.width || 800;
                         frame.height = node.dataset.height || 800;
+                        frame.style.cssText = `width:${frame.width}px;height:${frame.height}px;max-width:none;border:0;display:block`
                         frame.src = VIEWER_URL + "?uuid=" + uuid;
 
                         var postMessageToViewer;
@@ -418,7 +436,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
         })();
     """
     html_code = f"""
-    <div class="simulation-viewer" data-width="{escape(str(width))}" data-height="{escape(str(height))}" data-simulation="{escape(base64)}" />
+    <div class="simulation-viewer" data-width="{escape(str(width))}" data-height="{escape(str(height))}" data-simulation="{escape(base64)}" ></div>
     <script>
         {js_code}
     </script>

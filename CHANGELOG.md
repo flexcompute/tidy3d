@@ -8,16 +8,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+- Added `eps_lim` keyword argument to `Simulation.plot_eps()` for manual control over the permittivity color limits.
+
+## [2.8.4] - 2025-05-15
+
+### Added
+- The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
+- Validation check for unit error in grid spacing.
+- Validation that when symmetry is imposed along a given axis, the boundary conditions on each side of the axis are identical.
+- Fields `convex_resolution`, `concave_resolution`, and `mixed_resolution` in `CornerFinderSpec` can be used to take into account the dimensions of autodetected convex, concave, or mixed geometric features when `dl_min` is automatically inferred during automatic grid generation.
+- `LayerRefinementSpec` now supports automatic thin gap meshing through fields `gap_meshing_iters` and `dl_min_from_gap_width`.
+
+### Changed
+- Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
+- Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.
+- Improved error message and handling when attempting to load a non-existent task ID.
+- `ClipOperation` now fails validation if traced fields are detected.
+- Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
+- EME now supports 2D simulations.
+- 'EMESimulation' now supports 'PermittivityMonitor'.
+- Change `VisualizationSpec` validator for checking validity of user specified colors to only issue a warning if matplotlib is not installed instead of an error.
+
+### Fixed
+- Fixed issue with `CustomMedium` gradients where other frequencies would wrongly contribute to the gradient.
+- Fixed bug when computing `PolySlab` bounds in plotting functions.
+- Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
+
+## [2.8.3] - 2025-04-24
+
+### Added
 - Ability to select payment option when submitting jobs from the Python client.
 - Periodic repetition of EME subgrids via `num_reps` or `EMEPeriodicitySweep`.
 - Methods `EMEExplicitGrid.from_structures` and `EMECompositeGrid.from_structure_groups` to place EME cell boundaries at structure bounds.
 - 'ModeSimulation' now supports 'PermittivityMonitor'.
 - Classmethod `from_frequency_range` in `GaussianPulse` for generating a pulse whose amplitude in the frequency_range [fmin, fmax] is maximized, which is particularly useful for running broadband simulations.
 - Differentiable function `td.plugins.autograd.interpolate_spline` for 1D linear, quadratic, and cubic spline interpolation, supporting differentiation with respect to the interpolated values (`y_points`) and optional endpoint derivative constraints.
+- `SteadyEnergyBandMonitor` in the Charge solver.
+- Pretty printing enabled with `rich.print` for the material library, materials, and their variants. In notebooks, this can be accessed using `rich.print` or `display`, or by evaluating the material library, a material, or a variant in a cell.
+- `FieldData` and `ModeData` support exporting E fields to a Zemax Beam File (ZBF) with `.to_zbf()` (warning: experimental feature).
+- `FieldDataset` supports reading E fields from a Zemax Beam File (ZBF) with `.from_zbf()` (warning: experimental feature).
+- Unstructured grid now supports 2D/3D box-shaped refinement regions and 1D refinement lines of arbitrary direction.
 
 ### Changed
 - Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
 - Auto grid in EME simulations with multiple `freqs` provided uses the largest instead of raising an error.
+- Increased maximum number of frequencies in an EME simulation from 20 to 500
+- Named mediums now display by name for brevity; materials/variants print concise summaries including references.
 
 ### Fixed
 - Fixed `reverse` property of `td.Scene.plot_structures_property()` to also reverse the colorbar.
@@ -1589,7 +1626,9 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.4...develop
+[2.8.4]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...v2.8.4
+[2.8.3]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...v2.8.3
 [2.8.2]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.7.9...v2.8.0

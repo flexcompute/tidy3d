@@ -307,6 +307,37 @@ def test_polyslab_bounds():
         td.PolySlab(vertices=((0, 0), (1, 0), (1, 1)), slab_bounds=(0.5, -0.5), axis=2)
 
 
+@pytest.mark.parametrize("axis", (0, 1, 2))
+def test_polyslab_inf_to_finite_bounds(axis):
+    """Test that finite_length_axis for PolySlab first clips at LARGE_NUMBER and then computes the length."""
+    axis_bound = 20
+    ps_low_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-td.inf, axis_bound],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+    ps_high_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-axis_bound, td.inf],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+    ps_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-td.inf, td.inf],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+
+    assert ps_low_inf.finite_length_axis == (
+        LARGE_NUMBER + axis_bound
+    ), "Unexpected finite length for polyslab axis with -inf bound"
+    assert ps_high_inf.finite_length_axis == (
+        LARGE_NUMBER + axis_bound
+    ), "Unexpected finite length for polyslab axis with inf bound"
+    assert (
+        ps_inf.finite_length_axis == 2 * LARGE_NUMBER
+    ), "Unexpected finite length for polyslab axis with two inf bounds"
+
+
 def test_validate_polyslab_vertices_valid():
     with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))
@@ -439,6 +470,7 @@ def test_planar_transform(axis):
     geo = (
         td.Box(size=(3 * axis, 2 * abs(axis - 1), 4 * (2 - axis)))
         .rotated(2.0, axis)
+        .reflected((axis, 2 * (axis - 1), 3 * (axis - 2)))
         .translated(-1, 2, 3)
         .scaled(1.4, -1.2, 1.3)
     )
@@ -479,6 +511,30 @@ def test_transforms():
     assert len(geo.intersections_plane(x=0)) == 1
     assert len(geo.intersections_plane(z=0)) == 3
 
+    # Test reflection of a Box across the XY plane and verify point inclusion.
+    xyz = (np.array([1, 1, 1, 3]), np.array([1, 1, 1, 3]), np.array([1, -1, -1.5, 3]))
+    geo = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+    assert (geo.inside(*xyz) == (True, False, False, False)).all()
+    geo = geo.reflected((0, 0, 1))
+    assert (geo.inside(*xyz) == (False, True, True, False)).all()
+
+    # Test Sphere multiple reflections not influencing point inclusion.
+    xyz = (np.array([1, 2, 2, 1]), np.array([2, 1, 2, 3]), np.array([2, -2, -0.5, -2]))
+    geo = td.Sphere(radius=3.5)
+    assert (geo.inside(*xyz) == (True, True, True, False)).all()
+    geo = geo.reflected((2, 3, 1)).reflected((1, 2, 3))
+    assert (geo.inside(*xyz) == (True, True, True, False)).all()
+
+    # Test PolySlab reflection across non-axis plane and verify point inclusion.
+    xyz = (np.array([0, 1.5, -1.5, -1.5]), np.array([0, 1.5, -1.5, -2.5]), np.array([0, 0, 0, 0]))
+    geo = td.PolySlab(
+        vertices=[(1, 0), (3, 2), (2, 2), (0, 0), (2, -2), (3, -2)],
+        slab_bounds=(-1, 1),
+    )
+    assert (geo.inside(*xyz) == (True, True, False, False)).all()
+    geo = geo.reflected((1, 1, 0))
+    assert (geo.inside(*xyz) == (True, False, True, True)).all()
+
 
 def test_polyslab_transforms():
     # More tests on PolySlab tranforms matching direct Transformed
@@ -501,6 +557,10 @@ def test_polyslab_transforms():
     geo = geo.rotated(0.3, (0, -0.2, 0))
     assert geo.type != geo_trans.type
     assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.reflection((1, 0, 2)))
+    geo = geo.reflected((1, 0, 2))
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
 
 
 def test_general_rotation():
@@ -512,6 +572,21 @@ def test_general_rotation():
     assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(-0.1, [-2, 0, 0]))
     assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(-0.2, [0, -3, 0]))
     assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(-0.3, [0, 0, -4]))
+
+
+def test_general_reflection():
+    # Magnitude of normal direction does not affect the transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((5, 5, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((5, 0, 5)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, 5, 5)))
+    # Negative normal direction means the same transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((-1, -1, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((-1, 0, -1)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, -1, -1)))
+    # Magnitude and sign of normal direction does not affect the transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((-5, -5, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((-5, 0, -5)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, -5, -5)))
 
 
 def test_flattening():

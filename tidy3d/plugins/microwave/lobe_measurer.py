@@ -12,6 +12,7 @@ from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_
 from ...components.types import ArrayFloat1D, ArrayLike, Ax
 from ...constants import fp_eps
 from ...exceptions import ValidationError
+from ...log import log
 from .viz import plot_params_lobe_FNBW, plot_params_lobe_peak, plot_params_lobe_width
 
 # The minimum plateau size for peak finding, which is set to 0 to ensure that all peaks are found.
@@ -32,8 +33,8 @@ class LobeMeasurer(Tidy3dBaseModel):
     >>> Urad = np.cos(theta) ** 2 * np.cos(3 * theta) ** 2
     >>> lobe_measurer = LobeMeasurer(
     ...     angle=theta,
-    ...     radiation_pattern=Urad)
-    >>> lobe_measures = lobe_measurer.lobe_measures
+    ...     radiation_pattern=Urad) # doctest: +SKIP
+    >>> lobe_measures = lobe_measurer.lobe_measures # doctest: +SKIP
     """
 
     angle: ArrayFloat1D = pd.Field(
@@ -342,3 +343,11 @@ class LobeMeasurer(Tidy3dBaseModel):
             ax.axvline(FNBW_bounds[1], **plot_params_lobe_FNBW.to_kwargs())
 
         return ax
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values

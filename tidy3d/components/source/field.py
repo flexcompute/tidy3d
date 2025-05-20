@@ -489,6 +489,14 @@ class FixedAngleSpec(AbstractAngularSpec):
 class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     """Uniform current distribution on an infinite extent plane. One element of size must be zero.
 
+    Notes
+    -----
+
+        For oblique incidence, there are two possible settings: fixed in-plane k-vector and fixed-angle mode.
+        The first requires Bloch periodic boundary conditions, and the incidence angle is exact only at the central wavelength.
+        The latter requires periodic boundary conditions and maintains a constant propagation angle over a broadband spectrum.
+        For more information and important notes, see this example: `Broadband PlaneWave With Constant Oblique Incident Angle <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/BroadbandPlaneWaveWithConstantObliqueIncidentAngle.html>`_.
+
     Example
     -------
     >>> from tidy3d import GaussianPulse

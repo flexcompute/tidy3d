@@ -1206,6 +1206,14 @@ class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
             self.freqs
         ) * 6 + BYTES_REAL * len(self.freqs)
 
+    @pydantic.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
+
 
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain

@@ -15,6 +15,7 @@ try:
 except ImportError:
     pass
 
+
 import pydantic.v1 as pydantic
 import xarray as xr
 
@@ -173,6 +174,62 @@ PML_HEIGHT_FOR_0_DIMS = inf
 
 # additional (safety) time step reduction factor for fixed angle simulations
 FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
+
+# RF frequency warning
+RF_FREQ_WARNING = 300e9
+
+
+def validate_boundaries_for_zero_dims():
+    """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
+
+    @pydantic.validator("boundary_spec", allow_reuse=True, always=True)
+    @skip_if_fields_missing(["size", "symmetry"])
+    def boundaries_for_zero_dims(cls, val, values):
+        """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
+        boundaries = val.to_list
+        size = values.get("size")
+        symmetry = values.get("symmetry")
+        axis_names = "xyz"
+
+        for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
+            if size_dim == 0:
+                axis = axis_names[dim]
+                num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+                num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+
+                if num_absorbing_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using a PML or absorbing boundary along that axis is incorrect. "
+                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
+                    )
+
+                if num_bloch_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, "
+                        "using a Bloch boundary along such an axis is not supported because of "
+                        "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
+                        "but nonzero size along the dimension instead."
+                    )
+
+                if symmetry_dim != 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using symmetry along that axis is incorrect. Use 'PECBoundary' "
+                        "or 'PMCBoundary' to select source polarization if needed and set "
+                        f"Simulation.symmetry to 0 along {axis}."
+                    )
+
+                if boundary[0] != boundary[1]:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis. "
+                        f"The boundary condition for {axis} plus and {axis} "
+                        "minus must be the same."
+                    )
+
+        return val
+
+    return boundaries_for_zero_dims
 
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
@@ -361,6 +418,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             return sum(num_cells_in_monitor(mnt) for mnt in monitor.integration_surfaces)
         return num_cells_in_monitor(monitor)
 
+    @pydantic.validator("boundary_spec")
+    def _validate_boundary_spec_symmetry(cls, val, values):
+        """Error if symmetry is imposed along an axis but the boundary conditions are not the same
+        on both sides."""
+        boundaries = [val.x, val.y, val.z]
+        for ax, symmetry, ax_bounds in zip("xyz", values.get("symmetry"), boundaries):
+            if symmetry != 0 and ax_bounds.plus != ax_bounds.minus:
+                raise ValidationError(
+                    f"Symmetry '{symmetry}' along axis {ax} requires the same boundary "
+                    f"condition on both sides of the axis."
+                )
+        return val
+
     @cached_property
     def _subpixel(self) -> SubpixelSpec:
         """Subpixel averaging method evaluated based on self.subpixel."""
@@ -471,6 +541,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Tuple[float, float] = None,
         ax: Ax = None,
         eps_component: Optional[PermittivityComponent] = None,
+        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -507,6 +578,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
 
         Returns
         -------
@@ -544,6 +617,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             hlim=hlim,
             vlim=vlim,
             eps_component=eps_component,
+            eps_lim=eps_lim,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
@@ -573,6 +647,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         eps_component: Optional[PermittivityComponent] = None,
+        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -608,6 +683,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
 
         Returns
         -------
@@ -643,6 +720,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             grid=self.grid,
             reverse=reverse,
             eps_component=eps_component,
+            eps_lim=eps_lim,
         )
 
     @equal_aspect
@@ -918,7 +996,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 edgecolor=kwargs["colors"],
                 alpha=override_structures_alpha,
             ),
-        ] * 2
+        ] * 3
         plot_params[0] = plot_params[0].include_kwargs(edgecolor=kwargs["colors_internal"])
 
         if self.grid_spec.auto_grid_used:
@@ -944,7 +1022,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Plot snapping points
         for points, plot_param in zip(
-            [self.internal_snapping_points, self.grid_spec.snapping_points], plot_params
+            [
+                self.internal_snapping_points,
+                self.grid_spec.snapping_points,
+                self._gap_meshing_snapping_lines,
+            ],
+            plot_params,
         ):
             for point in points:
                 _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
@@ -1118,6 +1201,47 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     #    return plot_sim_3d(self, width=width, height=height)
 
     @cached_property
+    def _grid_and_snapping_lines(self) -> Tuple[Grid, List[CoordinateOptional]]:
+        """FDTD grid spatial locations and information.
+
+        Returns
+        -------
+        Tuple[:class:`.Grid`, List[CoordinateOptional]]
+            :class:`.Grid` storing the spatial locations relevant to the simulation
+            the list of snapping points generated during iterative gap meshing.
+        """
+
+        # Add a simulation Box as the first structure
+        structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        structures += self.static_structures
+
+        # Get boundary types (relevant for gap meshing)
+        boundary_types = [[None] * 2] * 3
+
+        for dim, boundary in enumerate(self.boundary_spec.to_list):
+            for side, edge in enumerate(boundary):
+                if isinstance(edge, (PECBoundary, PMCBoundary)):
+                    boundary_types[dim][side] = "pec/pmc"
+                elif isinstance(edge, (Periodic, BlochBoundary)):
+                    boundary_types[dim][side] = "periodic"
+
+        grid, lines = self.grid_spec._make_grid_and_snapping_lines(
+            structures=structures,
+            symmetry=self.symmetry,
+            periodic=self._periodic,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
+            lumped_elements=self.lumped_elements,
+            internal_snapping_points=self.internal_snapping_points,
+            internal_override_structures=self.internal_override_structures,
+            boundary_types=boundary_types,
+        )
+
+        # This would AutoGrid the in-plane directions of the 2D materials
+        # return self._grid_corrections_2dmaterials(grid)
+        return grid, lines
+
+    @cached_property
     def grid(self) -> Grid:
         """FDTD grid spatial locations and information.
 
@@ -1127,24 +1251,25 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             :class:`.Grid` storing the spatial locations relevant to the simulation.
         """
 
-        # Add a simulation Box as the first structure
-        structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.static_structures
-
-        grid = self.grid_spec.make_grid(
-            structures=structures,
-            symmetry=self.symmetry,
-            periodic=self._periodic,
-            sources=self.sources,
-            num_pml_layers=self.num_pml_layers,
-            lumped_elements=self.lumped_elements,
-            internal_snapping_points=self.internal_snapping_points,
-            internal_override_structures=self.internal_override_structures,
-        )
+        grid, _ = self._grid_and_snapping_lines
 
         # This would AutoGrid the in-plane directions of the 2D materials
         # return self._grid_corrections_2dmaterials(grid)
         return grid
+
+    @cached_property
+    def _gap_meshing_snapping_lines(self) -> List[CoordinateOptional]:
+        """Snapping points resulted from iterative gap meshing.
+
+        Returns
+        -------
+        List[CoordinateOptional]
+            List of snapping lines resolving thin gaps and strips.
+        """
+
+        _, lines = self._grid_and_snapping_lines
+
+        return lines
 
     @cached_property
     def static_structures(self) -> list[Structure]:
@@ -2790,53 +2915,6 @@ class Simulation(AbstractYeeGridSimulation):
 
         return values
 
-    @pydantic.validator("boundary_spec", always=True)
-    @skip_if_fields_missing(["size", "symmetry"])
-    def boundaries_for_zero_dims(cls, val, values):
-        """Error if absorbing boundaries, bloch boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
-        boundaries = val.to_list
-        size = values.get("size")
-        symmetry = values.get("symmetry")
-        axis_names = "xyz"
-
-        for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
-            if size_dim == 0:
-                axis = axis_names[dim]
-                num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
-                num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
-
-                if num_absorbing_bdries > 0:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis, so "
-                        "using a PML or absorbing boundary along that axis is incorrect. "
-                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
-                    )
-
-                if num_bloch_bdries > 0:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis, "
-                        "using a Bloch boundary along such an axis is not supported because of "
-                        "the Bloch vector definition in units of '2 * pi / (size along dimension)'. Use a small "
-                        "but nonzero size along the dimension instead."
-                    )
-
-                if symmetry_dim != 0:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis, so "
-                        "using symmetry along that axis is incorrect. Use 'PECBoundary' "
-                        "or 'PMCBoundary' to select source polarization if needed and set "
-                        f"Simulation.symmetry to 0 along {axis}."
-                    )
-
-                if boundary[0] != boundary[1]:
-                    raise SetupError(
-                        f"The simulation has zero size along the {axis} axis. "
-                        f"The boundary condition for {axis} plus and {axis} "
-                        "minus must be the same."
-                    )
-
-        return val
-
     @pydantic.validator("sources", always=True)
     def _validate_num_sources(cls, val):
         """Error if too many sources present."""
@@ -3577,6 +3655,41 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_custom_source_time()
         self._validate_mode_object_bends()
         self._warn_mode_object_pml()
+        self._warn_rf_license()
+
+    def _warn_rf_license(self):
+        """
+        Warn about new licensing requirements for RF simulations. This function details all the conditions in which a
+        simulation is categorised as RF simulation at the backend.
+        """
+        # RF component messages
+        rf_component_breakdown_msg = ""
+
+        # 1) lossy metal
+        for mat in self.scene.mediums:
+            if isinstance(mat, LossyMetalMedium):
+                rf_component_breakdown_msg += "\n - Contains a 'LossyMetalMedium'."
+                break
+
+        # 2) lumped elements
+        if len(self.lumped_elements) > 0:
+            rf_component_breakdown_msg += "\n - Contains a 'LumpedElement'."
+
+        # 3) source frequency is in RF range
+        if (self.frequency_range[0] < RF_FREQ_WARNING) & (self.frequency_range[0] != 0):
+            rf_component_breakdown_msg += "\n - Contains sources defined for RF wavelengths."
+
+        # 4) monitor frequency is in RF range
+        for monitor in self.monitors:
+            if isinstance(monitor, FreqMonitor) and monitor.frequency_range[0] < RF_FREQ_WARNING:
+                rf_component_breakdown_msg += "\n - Contains monitors defined for RF wavelengths."
+                break
+
+        # issue warning
+        if rf_component_breakdown_msg != "":
+            msg = " ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You are using RF-specific components in this simulation."
+            msg += rf_component_breakdown_msg
+            log.warning(msg, log_once=True)
 
     def _warn_mode_object_pml(self) -> None:
         """Warn if any mode objects have large pml."""
@@ -4821,7 +4934,7 @@ class Simulation(AbstractYeeGridSimulation):
             Number of yee cells in the simulation.
         """
 
-        return np.prod(self.grid.num_cells, dtype=np.int64)
+        return int(np.prod([float(nc) for nc in self.grid.num_cells]))
 
     @property
     def _num_computational_grid_points_dim(self):
@@ -5188,3 +5301,5 @@ class Simulation(AbstractYeeGridSimulation):
             medium=scene.medium,
             **kwargs,
         )
+
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()

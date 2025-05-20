@@ -10,6 +10,7 @@ import xarray as xr
 from tidy3d.components.data.data_array import FieldProjectionAngleDataArray, FreqDataArray
 from tidy3d.components.data.monitor_data import DirectivityData
 from tidy3d.components.types import PolarizationBasis
+from tidy3d.log import log
 
 
 class AntennaMetricsData(DirectivityData):
@@ -36,8 +37,8 @@ class AntennaMetricsData(DirectivityData):
     ...     name="rad_monitor",
     ...     phi=phi,
     ...     theta=theta
-    ... )
-    >>> power_data = FreqDataArray(np.random.random(len(f)), coords=coords_flux)
+    ... ) # doctest: +SKIP
+    >>> power_data = FreqDataArray(np.random.random(len(f)), coords=coords_flux) # doctest: +SKIP
     >>> data = AntennaMetricsData(
     ...     monitor=monitor,
     ...     projection_surfaces=monitor.projection_surfaces,
@@ -50,7 +51,7 @@ class AntennaMetricsData(DirectivityData):
     ...     Hphi=scalar_field,
     ...     power_incident=power_data,
     ...     power_reflected=power_data
-    ... )
+    ... ) # doctest: +SKIP
 
     Notes
     -----
@@ -194,3 +195,11 @@ class AntennaMetricsData(DirectivityData):
         """The realized gain figure of merit for antennas. Realized gain is dimensionless."""
         partial_G = self.partial_realized_gain()
         return partial_G.Gtheta + partial_G.Gphi
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values

@@ -3,6 +3,11 @@
 Microwave
 ----------------------------
 
+.. warning::
+
+    RF simulations are subject to new license requirements in the future. These components are within the RF scope.
+
+
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst
