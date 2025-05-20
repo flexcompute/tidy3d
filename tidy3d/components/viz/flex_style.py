@@ -1,7 +1,6 @@
 from ...log import log
-from .flex_color_palettes import CATEGORICAL_PALETTES_HEX
 
-_ORIGINAL_PARAMS = {}
+_ORIGINAL_PARAMS = None
 
 
 def apply_tidy3d_params():
@@ -10,21 +9,13 @@ def apply_tidy3d_params():
     """
     global _ORIGINAL_PARAMS
     try:
+        import matplotlib as mpl
         import matplotlib.pyplot as plt
-        from matplotlib import cycler
 
-        _TIDY3D_STYLE_PARAMS = {
-            "axes.prop_cycle": cycler(color=CATEGORICAL_PALETTES_HEX["flex_distinct"]),
-            "axes.grid": True,
-            "grid.linestyle": ":",
-            "axes.edgecolor": "#ECEBEA",
-        }
+        _ORIGINAL_PARAMS = mpl.rcParams.copy()
 
         try:
-            for key in _TIDY3D_STYLE_PARAMS:
-                if key in plt.rcParams:
-                    _ORIGINAL_PARAMS[key] = plt.rcParams[key]
-            plt.rcParams.update(_TIDY3D_STYLE_PARAMS)
+            plt.style.use("tidy3d.style")
         except Exception as e:
             log.error(f"Failed to apply Tidy3D plotting style on import. Error: {e}")
             _ORIGINAL_PARAMS = {}
@@ -37,6 +28,7 @@ def restore_matplotlib_rcparams():
     Resets matplotlib rcParams to the values they had before the Tidy3D
     style was automatically applied on import.
     """
+    global _ORIGINAL_PARAMS
     try:
         import matplotlib.pyplot as plt
         from matplotlib import style

@@ -17,6 +17,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
+include = [{ path = "tidy3d/style.mplstyle", format = ["sdist", "wheel"] }]
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
@@ -85,8 +86,8 @@ pyswarms = { version = "*", optional = true }
 
 # pytorch
 torch = [
-    { version = "^2.2.0", source = "PyPI", platform = "darwin", optional = true },
-    { version = "^2.2.0", source = "torch-cpu", platform = "!=darwin", optional = true },
+  { version = "^2.2.0", source = "PyPI", platform = "darwin", optional = true },
+  { version = "^2.2.0", source = "torch-cpu", platform = "!=darwin", optional = true },
 ]
 
 # scikit-rf
@@ -245,7 +246,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 target-version = "py39"
-line-length = 100
+line-length = 101
 extend-exclude = ["docs/faq/", "docs/notebooks/"]
 
 [tool.ruff.lint]
@@ -280,7 +281,7 @@ ignore = [
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
 addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical' "
 markers = [
-    "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
+  "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
 ]
 env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
