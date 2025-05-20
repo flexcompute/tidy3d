@@ -7,5 +7,5 @@ Visualization and Plotting
     :toctree: _autosummary/
     :template: module.rst
 
-    tidy3d.reset_previous_style
+    tidy3d.restore_matplotlib_rcparams
     tidy3d.VisualizationSpec

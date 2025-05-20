@@ -1,5 +1,5 @@
 from ...log import log
-from .flex_color_paletes import CATEGORICAL_PALETTES_HEX
+from .flex_color_palletes import CATEGORICAL_PALETTES_HEX
 
 _ORIGINAL_PARAMS = {}
 
@@ -32,17 +32,18 @@ def apply_tidy3d_params():
         pass
 
 
-def reset_previous_style():
+def restore_matplotlib_rcparams():
     """
     Resets matplotlib rcParams to the values they had before the Tidy3D
     style was automatically applied on import.
     """
-    if not _ORIGINAL_PARAMS:
-        log.warning("No previous Matplotlib style state found to reset to.")
-        return
-
     try:
         import matplotlib.pyplot as plt
+        from matplotlib import style
+
+        if not _ORIGINAL_PARAMS:
+            style.use("default")
+            return
 
         plt.rcParams.update(_ORIGINAL_PARAMS)
     except ImportError:

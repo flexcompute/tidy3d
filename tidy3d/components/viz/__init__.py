@@ -1,6 +1,6 @@
 from .axes_utils import add_ax_if_none, equal_aspect, make_ax, set_default_labels_and_title
 from .descartes import Polygon, polygon_patch, polygon_path
-from .flex_style import apply_tidy3d_params, reset_previous_style
+from .flex_style import apply_tidy3d_params, restore_matplotlib_rcparams
 from .plot_params import (
     AbstractPlotParams,
     PathPlotParams,
@@ -53,7 +53,7 @@ __all__ = [
     "STRUCTURE_EPS_CMAP",
     "STRUCTURE_EPS_CMAP_R",
     "STRUCTURE_HEAT_COND_CMAP",
-    "reset_previous_style",
+    "restore_matplotlib_rcparams",
     "make_ax",
     "add_ax_if_none",
     "equal_aspect",

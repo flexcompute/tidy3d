@@ -6,7 +6,7 @@ import pydantic.v1 as pd
 import pytest
 import tidy3d as td
 from tidy3d import Box, Medium, Simulation, Structure
-from tidy3d.components.viz import Polygon, reset_previous_style, set_default_labels_and_title
+from tidy3d.components.viz import Polygon, restore_matplotlib_rcparams, set_default_labels_and_title
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
 
@@ -320,7 +320,7 @@ def test_sim_plot_structures_fill():
 
 
 def test_tidy3d_matplotlib_style_application_on_import():
-    """Test reset_previous_style() to reset the automatically applied matplotlib.rcParams"""
+    """Test restore_matplotlib_rcparams() to reset the automatically applied matplotlib.rcParams"""
     assert mpl.rcParams.get("axes.edgecolor") == "#ECEBEA"
-    reset_previous_style()
+    restore_matplotlib_rcparams()
     assert mpl.rcParams.get("axes.edgecolor") == mpl.rcParamsDefault.get("axes.edgecolor")
