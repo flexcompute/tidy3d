@@ -4,16 +4,15 @@ from typing import Any, Dict, Optional
 
 import pydantic.v1 as pd
 
+from ...log import log
+from ..base import Tidy3dBaseModel
+
 MATPLOTLIB_IMPORTED = True
 try:
     from matplotlib.colors import is_color_like
 except ImportError:
     is_color_like = None
     MATPLOTLIB_IMPORTED = False
-
-
-from ...log import log
-from ..base import Tidy3dBaseModel
 
 
 def is_valid_color(value: str) -> str:
