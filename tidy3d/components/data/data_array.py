@@ -28,6 +28,7 @@ from ...constants import (
 )
 from ...exceptions import DataError, FileError
 from ..autograd import TidyArrayBox, get_static, interpn, is_tidy_box
+from ..geometry.bound_ops import bounds_contains
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -627,7 +628,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
         return sorted_self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
 
-    def does_cover(self, bounds: Bound) -> bool:
+    def does_cover(self, bounds: Bound, rtol: float = 0.0, atol: float = 0.0) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
         only one point along a given direction, then it is assumed the data is constant along that
         direction and coverage is not checked.
@@ -637,6 +638,10 @@ class AbstractSpatialDataArray(DataArray, ABC):
         ----------
         bounds : Tuple[float, float, float], Tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        rtol : float = 0.0
+            Relative tolerance for comparing bounds
+        atol : float = 0.0
+            Absolute tolerance for comparing bounds
 
         Returns
         -------
@@ -647,12 +652,19 @@ class AbstractSpatialDataArray(DataArray, ABC):
             raise DataError(
                 "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
             )
-
-        coords = (self.x, self.y, self.z)
-        return all(
-            (np.min(coord) <= smin and np.max(coord) >= smax) or len(coord) == 1
-            for coord, smin, smax in zip(coords, bounds[0], bounds[1])
-        )
+        xyz = [self.x, self.y, self.z]
+        self_min = [0] * 3
+        self_max = [0] * 3
+        for dim in range(3):
+            coords = xyz[dim]
+            if len(coords) == 1:
+                self_min[dim] = bounds[0][dim]
+                self_max[dim] = bounds[1][dim]
+            else:
+                self_min[dim] = np.min(coords)
+                self_max[dim] = np.max(coords)
+        self_bounds = (tuple(self_min), tuple(self_max))
+        return bounds_contains(self_bounds, bounds, rtol=rtol, atol=atol)
 
 
 class SpatialDataArray(AbstractSpatialDataArray):
