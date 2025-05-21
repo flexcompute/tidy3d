@@ -664,6 +664,14 @@ SIM_FULL = td.Simulation(
             medium=td.Medium(permittivity=1.5),
             name="transformed_box",
         ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)),
+            medium=td.MultiPhysicsMedium(
+                optical=td.Medium(permittivity=4.0),
+                charge=td.ChargeInsulatorMedium(permittivity=2),
+                name="SiO2",
+            ),
+        ),
     ],
     sources=[
         td.UniformCurrentSource(

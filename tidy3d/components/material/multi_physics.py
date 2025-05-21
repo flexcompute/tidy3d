@@ -152,6 +152,8 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             "is_isotropic": self.optical,
             "is_spatially_uniform": self.optical,
             "_incompatible_material_types": self.optical,
+            "frequency_range": self.optical,
+            "eps_model": self.optical,
         }
 
         if name == "_has_incompatibilities":
