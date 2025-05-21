@@ -1413,19 +1413,19 @@ class PolySlab(base.Planar):
 
     """ Autograd code """
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         vjps = {}
 
         for key in derivative_info.paths:
             if key == ("vertices",):
-                vjp = self.compute_derivative_vertices(derivative_info=derivative_info)
+                vjp = self._compute_derivative_vertices(derivative_info=derivative_info)
                 vjps[key] = vjp
 
             elif key[0] == "slab_bounds":
                 min_max_index = key[1]
-                vjp_face = self.compute_derivative_slab_face(
+                vjp_face = self._compute_derivative_slab_face(
                     derivative_info=derivative_info, min_max_index=min_max_index
                 )
 
@@ -1441,7 +1441,7 @@ class PolySlab(base.Planar):
 
         return vjps
 
-    def compute_derivative_slab_face(
+    def _compute_derivative_slab_face(
         self, derivative_info: DerivativeInfo, min_max_index: int
     ) -> TracedVertices:
         """Derivative with respect to slab_bounds."""
@@ -1515,7 +1515,7 @@ class PolySlab(base.Planar):
 
         return get_grad(min_max_index)
 
-    def compute_derivative_slab_face_single_pt(
+    def _compute_derivative_slab_face_single_pt(
         self, derivative_info: DerivativeInfo, min_max_index: int
     ) -> TracedVertices:
         """Derivative with respect to slab faces (single point approximation)."""
@@ -1545,7 +1545,7 @@ class PolySlab(base.Planar):
 
         return vjp
 
-    def compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
+    def _compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
         # derivative w.r.t each edge
 
         vertices = np.array(self.vertices)

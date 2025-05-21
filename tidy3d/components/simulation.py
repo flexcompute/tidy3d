@@ -535,6 +535,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Tuple[float, float] = None,
         ax: Ax = None,
         eps_component: Optional[PermittivityComponent] = None,
+        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -571,6 +572,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
 
         Returns
         -------
@@ -608,6 +611,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             hlim=hlim,
             vlim=vlim,
             eps_component=eps_component,
+            eps_lim=eps_lim,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
@@ -637,6 +641,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         eps_component: Optional[PermittivityComponent] = None,
+        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -672,6 +677,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
 
         Returns
         -------
@@ -707,6 +714,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             grid=self.grid,
             reverse=reverse,
             eps_component=eps_component,
+            eps_lim=eps_lim,
         )
 
     @equal_aspect
@@ -4214,14 +4222,14 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    def with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
+    def _with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
-        mnts_fld, mnts_eps = self.make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
+        mnts_fld, mnts_eps = self._make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
         return self.copy(update=dict(monitors=monitors))
 
-    def make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
+    def _make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
 
         index_to_keys = defaultdict(list)
@@ -4229,7 +4237,7 @@ class Simulation(AbstractYeeGridSimulation):
         for _, index, *fields in sim_fields_keys:
             index_to_keys[index].append(fields)
 
-        freqs = self.freqs_adjoint
+        freqs = self._freqs_adjoint
 
         adjoint_monitors_fld = []
         adjoint_monitors_eps = []
@@ -4238,7 +4246,7 @@ class Simulation(AbstractYeeGridSimulation):
         for i, field_keys in index_to_keys.items():
             structure = self.structures[i]
 
-            mnt_fld, mnt_eps = structure.make_adjoint_monitors(
+            mnt_fld, mnt_eps = structure._make_adjoint_monitors(
                 freqs=freqs, index=i, field_keys=field_keys
             )
 
@@ -4248,7 +4256,7 @@ class Simulation(AbstractYeeGridSimulation):
         return adjoint_monitors_fld, adjoint_monitors_eps
 
     @property
-    def freqs_adjoint(self) -> list[float]:
+    def _freqs_adjoint(self) -> list[float]:
         """Unique list of all frequencies. For now should be only one."""
 
         freqs = set()

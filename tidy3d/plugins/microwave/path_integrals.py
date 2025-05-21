@@ -105,7 +105,7 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
     def compute_integral(self, scalar_field: EMScalarFieldType) -> IntegralResultTypes:
         """Computes the defined integral given the input ``scalar_field``."""
 
-        if not scalar_field.does_cover(self.bounds):
+        if not scalar_field.does_cover(self.bounds, fp_eps, np.finfo(np.float32).smallest_normal):
             raise DataError("Scalar field does not cover the integration domain.")
         coord = "xyz"[self.main_axis]
 

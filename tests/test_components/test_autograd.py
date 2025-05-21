@@ -175,7 +175,7 @@ def use_emulated_run(monkeypatch):
                 sim_original = simulation
                 sim_fields_keys = run_kwargs["sim_fields_keys"]
                 # add gradient monitors and make combined simulation
-                sim_combined = sim_original.with_adjoint_monitors(sim_fields_keys)
+                sim_combined = sim_original._with_adjoint_monitors(sim_fields_keys)
                 sim_data_combined = run_emulated(sim_combined, task_name=task_name)
 
                 # store both original and fwd data aux_data
@@ -1099,12 +1099,12 @@ def test_sim_full_ops(structure_key):
 
         sim_full_static = sim_full_traced.to_static()
 
-        sim_fields = sim_full_traced.strip_traced_fields()
+        sim_fields = sim_full_traced._strip_traced_fields()
 
         # note: there is one traced structure in SIM_FULL already with 6 fields + 1 = 7
         assert len(sim_fields) == 10
 
-        sim_traced = sim_full_static.insert_traced_fields(sim_fields)
+        sim_traced = sim_full_static._insert_traced_fields(sim_fields)
 
         assert sim_traced == sim_full_traced
 
@@ -1135,7 +1135,7 @@ def test_sim_fields_io(structure_key, tmp_path):
     s = make_structures(params0)[structure_key]
     s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
     sim_full_traced = SIM_FULL.updated_copy(structures=list(SIM_FULL.structures) + [s])
-    sim_fields = sim_full_traced.strip_traced_fields()
+    sim_fields = sim_full_traced._strip_traced_fields()
 
     field_map = FieldMap.from_autograd_field_map(sim_fields)
     field_map_file = join(tmp_path, "test_sim_fields.hdf5.gz")
@@ -1434,7 +1434,7 @@ def test_pole_residue(monkeypatch):
 
     monkeypatch.setattr(
         td.PoleResidue,
-        "derivative_eps_complex_volume",
+        "_derivative_eps_complex_volume",
         lambda self, E_der_map, bounds, freqs: dJ_deps,
     )
 
@@ -1467,7 +1467,7 @@ def test_pole_residue(monkeypatch):
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
-    grads_computed = pr.compute_derivatives(derivative_info=info)
+    grads_computed = pr._compute_derivatives(derivative_info=info)
 
     def f(eps_inf, poles):
         eps = td.PoleResidue._eps_model(eps_inf, poles, freq)
@@ -1549,7 +1549,7 @@ def test_custom_pole_residue(monkeypatch):
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
-    grads_computed = pr.compute_derivatives(derivative_info=info)
+    grads_computed = pr._compute_derivatives(derivative_info=info)
 
     poles_complex = [
         (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex)) for a, c in poles
@@ -2141,7 +2141,7 @@ def test_flux_monitor_freq_exclusion(use_emulated_run):
             structure_traced = make_structures(params)["medium"]
             sim = SIM_BASE.updated_copy(structures=[structure_traced], monitors=monitors)
             data = run(sim, task_name="adjoint_freq_test")
-            assert data.simulation.freqs_adjoint == [FREQ0]
+            assert data.simulation._freqs_adjoint == [FREQ0]
             return anp.sum(data["field"].flux.values)
 
         return objective

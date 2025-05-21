@@ -236,7 +236,7 @@ class Structure(AbstractStructure):
     """ Begin autograd code."""
 
     @staticmethod
-    def get_monitor_name(index: int, data_type: str) -> str:
+    def _get_monitor_name(index: int, data_type: str) -> str:
         """Get the monitor name for either a field or permittivity monitor at given index."""
 
         monitor_name_map = dict(
@@ -249,7 +249,7 @@ class Structure(AbstractStructure):
 
         return monitor_name_map[data_type]
 
-    def make_adjoint_monitors(
+    def _make_adjoint_monitors(
         self, freqs: list[float], index: int, field_keys: list[str]
     ) -> (FieldMonitor, PermittivityMonitor):
         """Generate the field and permittivity monitor for this structure."""
@@ -275,7 +275,7 @@ class Structure(AbstractStructure):
             center=center,
             freqs=freqs,
             fields=("Ex", "Ey", "Ez"),
-            name=self.get_monitor_name(index=index, data_type="fld"),
+            name=self._get_monitor_name(index=index, data_type="fld"),
             colocate=False,
         )
 
@@ -283,13 +283,13 @@ class Structure(AbstractStructure):
             size=size,
             center=center,
             freqs=freqs,
-            name=self.get_monitor_name(index=index, data_type="eps"),
+            name=self._get_monitor_name(index=index, data_type="eps"),
             colocate=False,
         )
 
         return mnt_fld, mnt_eps
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields"""
 
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
@@ -313,7 +313,7 @@ class Structure(AbstractStructure):
             # grab derivative values {field_name -> vjp_value}
             med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
             info = derivative_info.updated_copy(paths=field_paths, deep=False)
-            derivative_values_map = med_or_geo_field.compute_derivatives(derivative_info=info)
+            derivative_values_map = med_or_geo_field._compute_derivatives(derivative_info=info)
 
             # construct map of {field path -> derivative value}
             for field_path, derivative_value in derivative_values_map.items():

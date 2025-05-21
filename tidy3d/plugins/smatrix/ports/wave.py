@@ -10,12 +10,14 @@ from ....components.data.data_array import FreqDataArray, FreqModeDataArray
 from ....components.data.monitor_data import ModeData
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
+from ....components.geometry.bound_ops import bounds_contains
 from ....components.grid.grid import Grid
 from ....components.monitor import ModeMonitor
 from ....components.simulation import Simulation
 from ....components.source.field import ModeSource, ModeSpec
 from ....components.source.time import GaussianPulse
-from ....components.types import Bound, Direction, FreqArray
+from ....components.types import Direction, FreqArray
+from ....constants import fp_eps
 from ....exceptions import ValidationError
 from ...microwave import (
     CurrentIntegralTypes,
@@ -183,22 +185,15 @@ class WavePort(AbstractTerminalPort, Box):
         impedance_array = impedance_calc.compute_impedance(mode_data)
         return impedance_array
 
-    @staticmethod
-    def _within_port_bounds(path_bounds: Bound, port_bounds: Bound) -> bool:
-        """Helper to check if one bounding box is completely within the other."""
-        path_min = np.array(path_bounds[0])
-        path_max = np.array(path_bounds[1])
-        bound_min = np.array(port_bounds[0])
-        bound_max = np.array(port_bounds[1])
-        return (bound_min <= path_min).all() and (bound_max >= path_max).all()
-
     @pd.validator("voltage_integral", "current_integral")
     def _validate_path_integrals_within_port(cls, val, values):
         """Raise ``ValidationError`` when the supplied path integrals are not within the port bounds."""
         center = values["center"]
         size = values["size"]
         box = Box(center=center, size=size)
-        if val and not WavePort._within_port_bounds(val.bounds, box.bounds):
+        if val and not bounds_contains(
+            box.bounds, val.bounds, fp_eps, np.finfo(np.float32).smallest_normal
+        ):
             raise ValidationError(
                 f"'{cls.__name__}' must be setup with all path integrals defined within the bounds "
                 f"of the port. Path bounds are '{val.bounds}', but port bounds are '{box.bounds}'."

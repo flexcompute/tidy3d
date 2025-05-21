@@ -166,7 +166,7 @@ class MonitorData(AbstractMonitorData, ABC):
         data_dict.update(update)
         return type(self).parse_obj(data_dict)
 
-    def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[Source]:
         """Generate adjoint sources for this ``MonitorData`` instance."""
 
         # TODO: if there's data in the MonitorData, but no adjoint source, then
@@ -1235,7 +1235,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 e_flat = e.values.flatten(order="C")
                 # Interweave real and imaginary parts
                 e_values = np.ravel(np.column_stack((e_flat.real, e_flat.imag)))
-                fout.write(struct.pack(f"<{2 * n_x*n_y}d", *e_values))
+                fout.write(struct.pack(f"<{2 * n_x * n_y}d", *e_values))
 
         return e_x, e_y
 
@@ -1333,7 +1333,7 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
             field_dataset=dataset, source_time=source_time, center=center, size=size, **kwargs
         )
 
-    def make_adjoint_sources(
+    def _make_adjoint_sources(
         self, dataset_names: list[str], fwidth: float
     ) -> List[CustomCurrentSource]:
         """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
@@ -2068,14 +2068,14 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 "include the mode field profiles in the corresponding 'ModeData'."
             )
 
-    def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[ModeSource]:
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitorData``."""
 
         adjoint_sources = []
 
         for name in dataset_names:
             if name == "amps":
-                adjoint_sources += self.make_adjoint_sources_amps(fwidth=fwidth)
+                adjoint_sources += self._make_adjoint_sources_amps(fwidth=fwidth)
             elif not np.all(self.n_complex.values == 0.0):
                 log.warning(
                     f"Can't create adjoint source for 'ModeData.{type(self)}.{name}'. "
@@ -2086,7 +2086,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return adjoint_sources
 
-    def make_adjoint_sources_amps(self, fwidth: float) -> list[ModeSource]:
+    def _make_adjoint_sources_amps(self, fwidth: float) -> list[ModeSource]:
         """Generate adjoint sources for ``ModeMonitorData.amps``."""
 
         coords = self.amps.coords
@@ -2102,12 +2102,12 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                     if self.get_amplitude(amp_single) == 0.0:
                         continue
 
-                    adjoint_source = self.adjoint_source_amp(amp=amp_single, fwidth=fwidth)
+                    adjoint_source = self._adjoint_source_amp(amp=amp_single, fwidth=fwidth)
                     adjoint_sources.append(adjoint_source)
 
         return adjoint_sources
 
-    def adjoint_source_amp(self, amp: DataArray, fwidth: float) -> ModeSource:
+    def _adjoint_source_amp(self, amp: DataArray, fwidth: float) -> ModeSource:
         """Generate an adjoint ``ModeSource`` for a single amplitude."""
 
         monitor = self.monitor
@@ -2266,7 +2266,7 @@ class FluxData(MonitorData):
         ..., title="Flux", description="Flux values in the frequency-domain."
     )
 
-    def make_adjoint_sources(
+    def _make_adjoint_sources(
         self, dataset_names: list[str], fwidth: float
     ) -> List[Union[CustomCurrentSource, PointDipole]]:
         """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
@@ -2606,7 +2606,7 @@ class AbstractFieldProjectionData(MonitorData):
 
         return self.make_data_array(data=rcs_data)
 
-    def make_adjoint_sources(
+    def _make_adjoint_sources(
         self, dataset_names: list[str], fwidth: float
     ) -> List[Union[CustomCurrentSource, PointDipole]]:
         """Error if server-side field projection is used for autograd"""
@@ -2764,7 +2764,7 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
                 "There are not enough sampling points along `theta` or `phi` for accurate integration. "
                 f"Currently, {len(self.theta)} samples for `theta` and {len(self.phi)} samples for `phi`. "
                 f"Consider using, at the very least, {MIN_ANGULAR_SAMPLES_SPHERE} samples for `theta` and "
-                f"{2*MIN_ANGULAR_SAMPLES_SPHERE} samples for `phi`."
+                f"{2 * MIN_ANGULAR_SAMPLES_SPHERE} samples for `phi`."
             )
         self._check_coords_sorted(self.theta, "theta")
         self._check_coords_sorted(self.phi, "phi")
@@ -3359,13 +3359,13 @@ class DiffractionData(AbstractFieldProjectionData):
 
     """ Autograd code """
 
-    def make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[PlaneWave]:
+    def _make_adjoint_sources(self, dataset_names: list[str], fwidth: float) -> list[PlaneWave]:
         """Get all adjoint sources for the ``DiffractionMonitor.amps``."""
 
         # NOTE: everything just goes through `.amps`, any post-processing is encoded in E-fields
-        return self.make_adjoint_sources_amps(fwidth=fwidth)
+        return self._make_adjoint_sources_amps(fwidth=fwidth)
 
-    def make_adjoint_sources_amps(self, fwidth: float) -> list[PlaneWave]:
+    def _make_adjoint_sources_amps(self, fwidth: float) -> list[PlaneWave]:
         """Make adjoint sources for outputs that depend on DiffractionData.`amps`."""
 
         amps = self.amps

@@ -59,6 +59,7 @@ from ..viz import (
     polygon_patch,
     set_default_labels_and_title,
 )
+from .bound_ops import bounds_intersection, bounds_union
 
 POLY_GRID_SIZE = 1e-12
 
@@ -408,20 +409,12 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def bounds_intersection(bounds1: Bound, bounds2: Bound) -> Bound:
         """Return the bounds that are the intersection of two bounds."""
-        rmin1, rmax1 = bounds1
-        rmin2, rmax2 = bounds2
-        rmin = tuple(max(v1, v2) for v1, v2 in zip(rmin1, rmin2))
-        rmax = tuple(min(v1, v2) for v1, v2 in zip(rmax1, rmax2))
-        return (rmin, rmax)
+        return bounds_intersection(bounds1, bounds2)
 
     @staticmethod
     def bounds_union(bounds1: Bound, bounds2: Bound) -> Bound:
         """Return the bounds that are the union of two bounds."""
-        rmin1, rmax1 = bounds1
-        rmin2, rmax2 = bounds2
-        rmin = tuple(min(v1, v2) for v1, v2 in zip(rmin1, rmin2))
-        rmax = tuple(max(v1, v2) for v1, v2 in zip(rmax1, rmax2))
-        return (rmin, rmax)
+        return bounds_union(bounds1, bounds2)
 
     @cached_property
     def bounding_box(self):
@@ -1441,7 +1434,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
 
@@ -1858,8 +1851,7 @@ class Box(SimplePlaneIntersection, Centered):
         """Axis normal to the Box. Errors if box is not planar."""
         if self.size.count(0.0) != 1:
             raise ValidationError(
-                "Tried to get 'normal_axis' of 'Box' that is not planar. "
-                f"Given 'size={self.size}.'"
+                f"Tried to get 'normal_axis' of 'Box' that is not planar. Given 'size={self.size}.'"
             )
         return self.size.index(0.0)
 
@@ -2361,14 +2353,14 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # get gradients w.r.t. each of the 6 faces (in normal direction)
-        vjps_faces = self.derivative_faces(derivative_info=derivative_info)
+        vjps_faces = self._derivative_faces(derivative_info=derivative_info)
 
         # post-process these values to give the gradients w.r.t. center and size
-        vjps_center_size = self.derivatives_center_size(vjps_faces=vjps_faces)
+        vjps_center_size = self._derivatives_center_size(vjps_faces=vjps_faces)
 
         # store only the gradients asked for in 'field_paths'
         derivative_map = {}
@@ -2389,7 +2381,7 @@ class Box(SimplePlaneIntersection, Centered):
         return derivative_map
 
     @staticmethod
-    def derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
+    def _derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
         """Derivatives with respect to the ``center`` and ``size`` fields in the ``Box``."""
 
         vjps_faces_min, vjps_faces_max = np.array(vjps_faces)
@@ -2403,7 +2395,7 @@ class Box(SimplePlaneIntersection, Centered):
             size=tuple(vjp_size.tolist()),
         )
 
-    def derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
+    def _derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
         """Derivative with respect to normal position of 6 faces of ``Box``."""
 
         # change in permittivity between inside and outside
@@ -2411,7 +2403,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         for min_max_index, _ in enumerate((0, -1)):
             for axis in range(3):
-                vjp_face = self.derivative_face(
+                vjp_face = self._derivative_face(
                     min_max_index=min_max_index,
                     axis_normal=axis,
                     derivative_info=derivative_info,
@@ -2422,7 +2414,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         return vjp_faces
 
-    def derivative_face(
+    def _derivative_face(
         self,
         min_max_index: int,
         axis_normal: Axis,
@@ -2849,7 +2841,7 @@ class ClipOperation(Geometry):
     @pydantic.validator("geometry_a", "geometry_b", always=True)
     def _geometries_untraced(cls, val):
         """Make sure that ``ClipOperation`` geometries do not contain tracers."""
-        traced = val.strip_traced_fields()
+        traced = val._strip_traced_fields()
         if traced:
             raise ValidationError(
                 f"{val.type} contains traced fields {list(traced.keys())}. Note that "
@@ -3267,7 +3259,7 @@ class GeometryGroup(Geometry):
         ]
         return self.updated_copy(geometries=new_geometries)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         grad_vjps = {}
@@ -3278,7 +3270,7 @@ class GeometryGroup(Geometry):
             geo_info = derivative_info.updated_copy(
                 paths=[geo_path], bounds=geo.bounds, eps_approx=True, deep=False
             )
-            vjp_dict_geo = geo.compute_derivatives(geo_info)
+            vjp_dict_geo = geo._compute_derivatives(geo_info)
             grad_vjp_values = list(vjp_dict_geo.values())
 
             if len(grad_vjp_values) != 1:

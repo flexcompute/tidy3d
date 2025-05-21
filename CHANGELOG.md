@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `eps_lim` keyword argument to `Simulation.plot_eps()` for manual control over the permittivity color limits.
+
+### Changed
+- Relaxed bounds checking of path integrals during `WavePort` validation.
+- Internal adjoint helper methods are now prefixed with an underscore to separate them from the public API.
+- Drop the dependency on `gdspy`, which has been unmaintained for over two years. Interfaces previously relying on `gdspy` now use its maintained successor, `gdstk`, with equivalent functionality.
+- Change `VisualizationSpec` validator for checking validity of user specified colors to only issue a warning if matplotlib is not installed instead of an error.
+
 ## [2.8.4] - 2025-05-15
 
 ### Added
@@ -24,7 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
 - EME now supports 2D simulations.
 - 'EMESimulation' now supports 'PermittivityMonitor'.
-- Dropped the dependency on `gdspy`, which has been unmaintained for over two years. Interfaces previously relying on `gdspy` now use its maintained successor, `gdstk`, with equivalent functionality.
 
 ### Fixed
 - Fixed issue with `CustomMedium` gradients where other frequencies would wrongly contribute to the gradient.
