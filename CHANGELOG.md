@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
 - Internal adjoint helper methods are now prefixed with an underscore to separate them from the public API.
+- Small (around 1e-4) numerical precision improvements in EME solver.
 
 ## [2.8.4] - 2025-05-15
 
