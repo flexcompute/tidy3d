@@ -682,7 +682,7 @@ def get_spline_derivatives_wrt_y(
 
 
 @primitive
-def interpolate_spline(
+def _interpolate_spline(
     x_points: NDArray,
     y_points: NDArray,
     num_points: int,
@@ -692,46 +692,9 @@ def interpolate_spline(
     """Primitive function to perform spline interpolation of a given order
     with optional endpoint derivatives.
 
-    Parameters
-    ----------
-    x_points : np.ndarray
-        X coordinates of the data points (must be strictly monotonic)
-    y_points : np.ndarray
-        Y coordinates of the data points
-    num_points : int
-        Number of points in the output interpolation
-    order : int
-        Order of the spline (1=linear, 2=quadratic, 3=cubic)
-    endpoint_derivatives : tuple[float, float] = (None, None)
-        Derivatives at the endpoints (left, right)
-        Note: For order=1 (linear), all endpoint derivatives are ignored.
-              For order=2 (quadratic), only the left endpoint derivative is used.
-              For order=3 (cubic), both endpoint derivatives are used if provided.
-
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray]
-        Tuple of (x_interpolated, y_interpolated) values
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> x = np.array([0, 1, 2])
-    >>> y = np.array([0, 1, 0])
-    >>> # Linear interpolation
-    >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, order=1)
-    >>> print(y_interp)
-    [0.   0.5  1.   0.5  0. ]
-
-    >>> # Quadratic interpolation with left endpoint derivative
-    >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, endpoint_derivatives=(0, None), order=2)
-    >>> print(np.round(y_interp, 3))
-    [0.    0.75  1.    0.5   0.  ]
-
-    >>> # Cubic interpolation with both endpoint derivatives
-    >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, endpoint_derivatives=(0, 0), order=3)
-    >>> print(np.round(y_interp, 3))
-    [0.    0.75  1.    0.75  0.  ]
+    Autograd requires that arguments to primitives are passed in positionally.
+    ``interpolate_spline`` is the public-facing wrapper for this function,
+    which allows keyword arguments in case users pass in kwargs.
     """
     if order not in (1, 2, 3):
         raise NotImplementedError(f"Spline order '{order}' not implemented.")
@@ -810,4 +773,64 @@ def interpolate_spline_y_vjp(ans, x_points, y_points, num_points, order, endpoin
     return vjp
 
 
-defvjp(interpolate_spline, None, interpolate_spline_y_vjp)
+defvjp(_interpolate_spline, None, interpolate_spline_y_vjp)
+
+
+def interpolate_spline(
+    x_points: NDArray,
+    y_points: NDArray,
+    num_points: int,
+    order: int,
+    endpoint_derivatives: tuple[Optional[float], Optional[float]] = (None, None),
+) -> tuple[NDArray, NDArray]:
+    """Differentiable spline interpolation of a given order
+    with optional endpoint derivatives.
+
+    Parameters
+    ----------
+    x_points : np.ndarray
+        X coordinates of the data points (must be strictly monotonic)
+    y_points : np.ndarray
+        Y coordinates of the data points
+    num_points : int
+        Number of points in the output interpolation
+    order : int
+        Order of the spline (1=linear, 2=quadratic, 3=cubic)
+    endpoint_derivatives : tuple[float, float] = (None, None)
+        Derivatives at the endpoints (left, right)
+        Note: For order=1 (linear), all endpoint derivatives are ignored.
+              For order=2 (quadratic), only the left endpoint derivative is used.
+              For order=3 (cubic), both endpoint derivatives are used if provided.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Tuple of (x_interpolated, y_interpolated) values
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> x = np.array([0, 1, 2])
+    >>> y = np.array([0, 1, 0])
+    >>> # Linear interpolation
+    >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, order=1)
+    >>> print(y_interp)
+    [0.   0.5  1.   0.5  0. ]
+
+    >>> # Quadratic interpolation with left endpoint derivative
+    >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, endpoint_derivatives=(0, None), order=2)
+    >>> print(np.round(y_interp, 3))
+    [0.    0.75  1.    0.5   0.  ]
+
+    >>> # Cubic interpolation with both endpoint derivatives
+    >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, endpoint_derivatives=(0, 0), order=3)
+    >>> print(np.round(y_interp, 3))
+    [0.    0.75  1.    0.75  0.  ]
+    """
+    return _interpolate_spline(
+        x_points,
+        y_points,
+        num_points,
+        order,
+        endpoint_derivatives,
+    )
