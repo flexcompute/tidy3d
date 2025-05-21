@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
 
 from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
-from tidy3d.components.tcad.mesher import VolumeMeshSpec
+from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 
@@ -32,7 +32,13 @@ from ..core.stub import TaskStub, TaskStubData
 from ..core.types import TaskType
 
 SimulationType = Union[
-    Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation, ModeSolver, ModeSimulation
+    Simulation,
+    HeatChargeSimulation,
+    HeatSimulation,
+    EMESimulation,
+    ModeSolver,
+    ModeSimulation,
+    VolumeMesher,
 ]
 SimulationDataType = Union[
     SimulationData,
@@ -89,8 +95,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = EMESimulation.from_file(file_path)
         elif "ModeSimulation" == type_:
             sim = ModeSimulation.from_file(file_path)
-        elif "VolumeMeshSpec" == type_:
-            sim = VolumeMeshSpec.from_file(file_path)
+        elif "VolumeMesher" == type_:
+            sim = VolumeMesher.from_file(file_path)
 
         return sim
 
@@ -151,7 +157,7 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.EME.name
         elif isinstance(self.simulation, ModeSimulation):
             return TaskType.MODE.name
-        elif isinstance(self.simulation, VolumeMeshSpec):
+        elif isinstance(self.simulation, VolumeMesher):
             return TaskType.VOLUME_MESH.name
 
     def validate_pre_upload(self, source_required) -> None:
