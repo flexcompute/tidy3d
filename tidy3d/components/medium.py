@@ -5509,6 +5509,14 @@ class LossyMetalMedium(Medium):
         discriminator=TYPE_TAG_STR,
     )
 
+    thickness: pd.PositiveFloat = pd.Field(
+        None,
+        title="Conductor Thickness",
+        description="When the thickness of the conductor is not much greater than skin depth, "
+        "1D transmission line model is applied to compute the surface impedance of the thin conductor.",
+        units=MICROMETER,
+    )
+
     frequency_range: FreqBound = pd.Field(
         ...,
         title="Frequency Range",
@@ -5594,6 +5602,10 @@ class LossyMetalMedium(Medium):
         if self.roughness is not None:
             skin_depths = 1 / np.sqrt(np.pi * frequencies * MU_0 * self.conductivity)
             correction = self.roughness.roughness_correction_factor(frequencies, skin_depths)
+
+        if self.thickness is not None:
+            k_wave = self.Hz_to_angular_freq(frequencies) / C_0 * (n + 1j * k)
+            correction /= -np.tanh(1j * k_wave * self.thickness)
 
         return correction * ETA_0 / (n + 1j * k)
 
