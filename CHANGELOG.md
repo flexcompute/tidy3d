@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
+- Fixed shaping of `CustomMedium` gradients when permittivity data includes a frequency dimension with multiple entries.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
@@ -25,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Drop the dependency on `gdspy`, which has been unmaintained for over two years. Interfaces previously relying on `gdspy` now use its maintained successor, `gdstk`, with equivalent functionality.
 - Small (around 1e-4) numerical precision improvements in EME solver.
 - Adjoint source frequency width is adjusted to decay sufficiently before zero frequency when possible to improve accuracy of simulation normalization when using custom current sources.
+- Change `VisualizationSpec` validator for checking validity of user specified colors to only issue a warning if matplotlib is not installed instead of an error.
 
 ## [2.8.4] - 2025-05-15
 

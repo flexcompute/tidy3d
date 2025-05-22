@@ -1672,6 +1672,8 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
         dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
 
+        eps_coordinate_shape = [len(eps_data.coords[dim]) for dim in eps_data.dims if dim in "xyz"]
+
         # compute sizes along each of the interpolation dimensions
         sizes_list = []
         for _, coords in coords_interp.items():
@@ -1703,7 +1705,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             E_der_dim.interp(**coords_interp, assume_sorted=True).fillna(0.0).sum(dims_sum).sum("f")
         )
         vjp_array = np.array(E_der_dim_interp.values).astype(complex)
-        vjp_array = vjp_array.reshape(eps_data.shape)
+        vjp_array = vjp_array.reshape(eps_coordinate_shape)
 
         # multiply by volume elements (if possible, being defensive here..)
         try:
@@ -2871,9 +2873,10 @@ class CustomMedium(AbstractCustomMedium):
         freqs: NDArray,
     ) -> np.ndarray:
         """Compute derivative with respect to the ``dim`` components within the custom medium."""
-
         coords_interp = {key: eps_data.coords[key] for key in "xyz"}
         coords_interp = {key: val for key, val in coords_interp.items() if len(val) > 1}
+
+        eps_coordinate_shape = [len(eps_data.coords[dim]) for dim in eps_data.dims if dim in "xyz"]
 
         E_der_dim_interp = E_der_map[f"E{dim}"].sel(f=freqs)
 
@@ -2928,7 +2931,7 @@ class CustomMedium(AbstractCustomMedium):
                 "message and some information about your simulation setup and we will investigate. "
             )
         vjp_array = E_der_dim_interp.values
-        vjp_array = vjp_array.reshape(eps_data.shape)
+        vjp_array = vjp_array.reshape(eps_coordinate_shape)
 
         return vjp_array
 
