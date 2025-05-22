@@ -172,6 +172,28 @@ jobs:
         diff-storage: _xml_coverage_reports
         coverage-summary-title: "Code Coverage Summary"
         togglable-report: true
+    
+    - name: Changed files
+      id: diff
+      uses: step-security/changed-files@v46
+      with:
+        files: '**/*.py'
+    
+    - name: Slice report down to changed files
+      env:
+        CHANGED: ${{ steps.diff.outputs.all_changed_files }}
+      run: |
+        printf '%s\n' $CHANGED | tr '\n' ',' | sed 's/,$//' > include.txt
+        coverage xml -i -o changed.xml --include="$(cat include.txt)"
+
+    
+    - name: Produce the changed files coverage report
+      uses: insightsengineering/coverage-action@v2
+      with:
+        path: changed.xml
+        publish: true
+        fail: false
+        coverage-summary-title: "Changed Files Coverage"
 
   remote-tests:
     # Run tests on a push event OR a workflow dispatch with remote_tests
