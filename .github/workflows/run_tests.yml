@@ -178,6 +178,7 @@ jobs:
       uses: step-security/changed-files@v46
       with:
         files: '**/*.py'
+  
     - name: Slice report down to changed files
       if: ${{ steps.diff.outputs.all_changed_files != '' }}
       env:
@@ -190,6 +191,7 @@ jobs:
       
     - name: Produce the changed files coverage report
       uses: insightsengineering/coverage-action@v2
+      if: ${{ steps.diff.outputs.all_changed_files != '' }}
       with:
         path: changed.xml
         publish: true
