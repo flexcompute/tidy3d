@@ -183,6 +183,7 @@ jobs:
       env:
         CHANGED: ${{ steps.diff.outputs.all_changed_files }}
       run: |
+        source ${GITHUB_WORKSPACE}/.venv/bin/activate
         printf '%s\n' $CHANGED | tr '\n' ',' | sed 's/,$//' > include.txt
         coverage xml -i -o changed.xml --include="$(cat include.txt)"
 
