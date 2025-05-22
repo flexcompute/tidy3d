@@ -26,7 +26,7 @@ from ...exceptions import (
     ValidationError,
 )
 from ...log import log
-from ...packaging import check_import, verify_packages_import
+from ...packaging import verify_packages_import
 from ..autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
 from ..autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from ..base import Tidy3dBaseModel, cached_property
@@ -1138,7 +1138,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return theta, phi
 
     @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def load_gds_vertices_gdstk(
         gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
     ) -> List[ArrayFloat2D]:
@@ -1147,7 +1147,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         Parameters
         ----------
         gds_cell : gdstk.Cell
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+            ``gdstk.Cell`` containing 2D geometric data.
         gds_layer : int
             Layer index in the ``gds_cell``.
         gds_dtype : int = None
@@ -1187,50 +1187,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
-    def load_gds_vertices_gdspy(
-        gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
-    ) -> List[ArrayFloat2D]:
-        """Load polygon vertices from a ``gdspy.Cell``.
-
-        Parameters
-        ----------
-        gds_cell : gdspy.Cell
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
-        gds_layer : int
-            Layer index in the ``gds_cell``.
-        gds_dtype : int = None
-            Data-type index in the ``gds_cell``. If ``None``, imports all data for this layer into
-            the returned list.
-        gds_scale : float = 1.0
-            Length scale used in GDS file in units of micrometer. For example, if gds file uses
-            nanometers, set ``gds_scale=1e-3``. Must be positive.
-
-        Returns
-        -------
-        List[ArrayFloat2D]
-            List of polygon vertices
-        """
-
-        # load the polygon vertices
-        vert_dict = gds_cell.get_polygons(by_spec=True)
-        all_vertices = []
-        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
-            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
-                all_vertices.extend(iter(vertices))
-        # make sure something got loaded, otherwise error
-        if not all_vertices:
-            raise Tidy3dKeyError(
-                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
-                f"with specified gds_dtype={gds_dtype}."
-            )
-
-        # apply scaling
-        all_vertices = [vertices * gds_scale for vertices in all_vertices]
-        return all_vertices
-
-    @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def from_gds(
         gds_cell,
         axis: Axis,
@@ -1242,12 +1199,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
     ) -> Geometry:
-        """Import a ``gdstk.Cell`` or a ``gdspy.Cell`` and extrude it into a GeometryGroup.
+        """Import a ``gdstk.Cell`` and extrude it into a GeometryGroup.
 
         Parameters
         ----------
-        gds_cell : Union[gdstk.Cell, gdspy.Cell]
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
         axis : int
             Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
         slab_bounds: Tuple[float, float]
@@ -1276,32 +1233,18 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Geometry`
             Geometries created from the 2D data.
         """
-        gdstk_available = check_import("gdstk")
-        gdspy_available = check_import("gdspy")
+        import gdstk
 
-        if gdstk_available:
-            import gdstk
+        if not isinstance(gds_cell, gdstk.Cell):
+            # Check if it might be a gdstk cell but gdstk is not found (should be caught by decorator)
+            # or if it's an entirely different type.
+            if "gdstk" in gds_cell.__class__.__name__.lower():
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to import gdstk cells."
+                )
+            raise Tidy3dImportError("Argument 'gds_cell' must be an instance of 'gdstk.Cell'.")
 
-            if isinstance(gds_cell, gdstk.Cell):
-                gds_loader_fn = Geometry.load_gds_vertices_gdstk
-        elif gdspy_available:
-            import gdspy
-
-            if isinstance(gds_cell, gdspy.Cell):
-                gds_loader_fn = Geometry.load_gds_vertices_gdspy
-        elif "gdstk" in gds_cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to import gdstk cells."
-            )
-        elif "gdspy" in gds_cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to import to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
-
+        gds_loader_fn = Geometry.load_gds_vertices_gdstk
         geometries = []
         with log as consolidated_logger:
             for vertices in gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale):
@@ -1407,56 +1350,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     )
         return polygons
 
-    @verify_packages_import(["gdspy"])
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
-    ) -> List:
-        """Convert a Geometry object's planar slice to a .gds type polygon.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer : int = 0
-            Layer index to use for the shapes stored in the .gds file.
-        gds_dtype : int = 0
-            Data-type index to use for the shapes stored in the .gds file.
-
-        Return
-        ------
-        List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
-        """
-        import gdspy
-
-        shapes = self.intersections_plane(x=x, y=y, z=z)
-        polygons = []
-        for shape in shapes:
-            for vertices in vertices_from_shapely(shape):
-                if len(vertices) == 1:
-                    polygons.append(gdspy.Polygon(vertices[0], gds_layer, gds_dtype))
-                else:
-                    polygons.append(
-                        gdspy.boolean(
-                            vertices[:1],
-                            vertices[1:],
-                            "not",
-                            layer=gds_layer,
-                            datatype=gds_dtype,
-                        )
-                    )
-        return polygons
-
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def to_gds(
         self,
         cell,
@@ -1470,7 +1364,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -1483,39 +1377,20 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        gdstk_available = check_import("gdstk")
-        gdspy_available = check_import("gdspy")
+        import gdstk
 
-        if gdstk_available:
-            import gdstk
+        if not isinstance(cell, gdstk.Cell):
+            if "gdstk" in cell.__class__.__name__.lower():  # type: ignore[attr-defined]
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+                )
+            raise Tidy3dImportError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
-            if isinstance(cell, gdstk.Cell):
-                polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-                if len(polygons) > 0:
-                    cell.add(*polygons)
+        polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+        if polygons:
+            cell.add(*polygons)
 
-        elif gdspy_available:
-            import gdspy
-
-            if isinstance(cell, gdspy.Cell):
-                polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-                if len(polygons) > 0:
-                    cell.add(polygons)
-
-        elif "gdstk" in cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
-            )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
-
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def to_gds_file(
         self,
         fname: str,
@@ -1545,25 +1420,15 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
         """
-
-        # Fundamental import structure for custom commands depending on which package is available.
-        gdstk_available = check_import("gdstk")
-        gdspy_available = check_import("gdspy")
-
-        if gdstk_available:
+        try:
             import gdstk
-
-            library = gdstk.Library()
-        elif gdspy_available:
-            import gdspy
-
-            library = gdspy.GdsLibrary()
-        else:
+        except ImportError as e:
             raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
-            )
+                "Python module 'gdstk' not found. To export geometries to .gds "
+                "files, please install it."
+            ) from e
 
+        library = gdstk.Library()
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)

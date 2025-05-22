@@ -137,12 +137,6 @@ try:
 except ImportError:
     gdstk_available = False
 
-try:
-    gdspy_available = True
-    import gdspy
-except ImportError:
-    gdspy_available = False
-
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
 
@@ -4565,65 +4559,6 @@ class Simulation(AbstractYeeGridSimulation):
 
         return polygons
 
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-        ] = None,
-    ) -> List:
-        """Convert a simulation's planar slice to a .gds type polygon list.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-
-        Return
-        ------
-        List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
-        """
-        if gds_layer_dtype_map is None:
-            gds_layer_dtype_map = {}
-
-        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, bmin = self.pop_axis(self.bounds[0], axis)
-        _, bmax = self.pop_axis(self.bounds[1], axis)
-
-        _, symmetry = self.pop_axis(self.symmetry, axis)
-        if symmetry[0] != 0:
-            bmin = (0, bmin[1])
-        if symmetry[1] != 0:
-            bmin = (bmin[0], 0)
-        clip = gdspy.Rectangle(bmin, bmax)
-
-        polygons = []
-        for structure in self.structures:
-            gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
-            for polygon in structure.to_gdspy(
-                x=x,
-                y=y,
-                z=z,
-                gds_layer=gds_layer,
-                gds_dtype=gds_dtype,
-            ):
-                pmin, pmax = polygon.get_bounding_box()
-                if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
-                    polygon = gdspy.boolean(
-                        clip, polygon, "and", layer=gds_layer, datatype=gds_dtype
-                    )
-                polygons.append(polygon)
-        return polygons
-
     def to_gds(
         self,
         cell,
@@ -4640,7 +4575,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -4671,23 +4606,12 @@ class Simulation(AbstractYeeGridSimulation):
             if len(polygons) > 0:
                 cell.add(*polygons)
 
-        elif gdspy_available and isinstance(cell, gdspy.Cell):
-            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
-            if len(polygons) > 0:
-                cell.add(polygons)
-
         elif "gdstk" in cell.__class__ and not gdstk_available:
             raise Tidy3dImportError(
                 "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
             )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
         else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
+            raise Tidy3dError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
     def to_gds_file(
         self,
@@ -4728,14 +4652,10 @@ class Simulation(AbstractYeeGridSimulation):
             library = gdstk.Library()
             reference = gdstk.Reference
             rotation = np.pi
-        elif gdspy_available:
-            library = gdspy.GdsLibrary()
-            reference = gdspy.CellReference
-            rotation = 180
         else:
             raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
+                "Python module 'gdstk' not found. To export geometries to .gds "
+                "files, please install 'gdstk'."
             )
         cell = library.new_cell(gds_cell_name)
 
