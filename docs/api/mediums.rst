@@ -16,6 +16,7 @@ Spatially uniform
    tidy3d.Medium
    tidy3d.LossyMetalMedium
    tidy3d.PECMedium
+   tidy3d.PMCMedium
    tidy3d.FullyAnisotropicMedium
 
 Spatially varying

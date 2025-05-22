@@ -1811,6 +1811,8 @@ class ModeSolver(Tidy3dBaseModel):
         for medium in sim.scene.mediums:
             if medium.is_pec:
                 return True
+            if medium.is_pmc:
+                return True
             if apply_sibc and isinstance(medium, LossyMetalMedium):
                 return True
         return False

@@ -215,6 +215,10 @@ def test_unsupported_modulated_medium_types():
     with pytest.raises(pydantic.ValidationError):
         td.PECMedium(modulation_spec=modulation_spec)
 
+    # PMC cannot be modulated
+    with pytest.raises(pydantic.ValidationError):
+        td.PMCMedium(modulation_spec=modulation_spec)
+
     # For Anisotropic medium, one should modulate the components, not the whole medium
     with pytest.raises(pydantic.ValidationError):
         td.AnisotropicMedium(

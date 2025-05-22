@@ -17,6 +17,7 @@ def test_delegated_attributes_work(dummy_optical):
 
     # delegated names resolve
     assert mp.is_pec is dummy_optical.is_pec
+    assert mp.is_pmc is dummy_optical.is_pmc
     assert mp._eps_plot == dummy_optical._eps_plot
     assert mp.viz_spec == dummy_optical.viz_spec
 
@@ -29,6 +30,9 @@ def test_delegated_attribute_without_optical_raises():
 
     with pytest.raises(AttributeError, match=r"optical medium is 'None'"):
         _ = mp_no_opt.is_pec
+
+    with pytest.raises(AttributeError, match=r"optical medium is 'None'"):
+        _ = mp_no_opt.is_pmc
 
 
 def test_has_cached_props(dummy_optical):

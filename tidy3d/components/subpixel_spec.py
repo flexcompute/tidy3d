@@ -129,6 +129,7 @@ class PECConformal(AbstractSubpixelAveragingMethod):
 
 
 PECSubpixelType = Union[Staircasing, HeuristicPECStaircasing, PECConformal]
+PMCSubpixelType = Union[Staircasing, HeuristicPECStaircasing]
 
 
 class SurfaceImpedance(PECConformal):
@@ -176,6 +177,13 @@ class SubpixelSpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    pmc: PMCSubpixelType = pd.Field(
+        Staircasing(),
+        title="Subpixel Averaging Method For PMC Interfaces",
+        description="Subpixel averaging method applied to PMC structure interfaces.",
+        discriminator=TYPE_TAG_STR,
+    )
+
     lossy_metal: LossyMetalSubpixelType = pd.Field(
         SurfaceImpedance(),
         title="Subpixel Averaging Method for Lossy Metal Interfaces",
@@ -190,6 +198,7 @@ class SubpixelSpec(Tidy3dBaseModel):
             dielectric=Staircasing(),
             metal=Staircasing(),
             pec=Staircasing(),
+            pmc=Staircasing(),
             lossy_metal=Staircasing(),
         )
 
