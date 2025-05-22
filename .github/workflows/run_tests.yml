@@ -193,7 +193,8 @@ jobs:
       uses: insightsengineering/coverage-action@v2
       if: ${{ steps.diff.outputs.all_changed_files != '' }}
       with:
-        path: changed.xml
+        path: ./changed.xml
+        threshold: 90.0
         publish: true
         fail: false
         coverage-summary-title: "Changed Files Coverage"
