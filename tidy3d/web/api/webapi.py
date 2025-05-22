@@ -19,8 +19,6 @@ from ...exceptions import WebError
 from ...log import get_logging_console, log
 from ..core.account import Account
 from ..core.constants import (
-    MESH_DATA_HDF5_GZ,
-    MESH_FILE_HDF5_GZ,
     MODE_DATA_HDF5_GZ,
     MODE_FILE_HDF5_GZ,
     SIM_FILE_HDF5,
@@ -287,8 +285,6 @@ def upload(
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
-    elif task_type == "VOLUME_MESH":
-        remote_sim_file = MESH_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER" or task_type == "MODE":
         simulation = get_reduced_simulation(simulation, reduce_simulation)
 
@@ -658,8 +654,6 @@ def download(
     remote_data_file = SIMULATION_DATA_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_data_file = MODE_DATA_HDF5_GZ
-    elif task_type == "VOLUME_MESH":
-        remote_data_file = MESH_DATA_HDF5_GZ
 
     task = SimulationTask(taskId=task_id)
     task.get_sim_data_hdf5(
