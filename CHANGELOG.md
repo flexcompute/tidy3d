@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `priority` parameter to `web.run()` and related functions to allow vGPU users to set task priority (1-10) in the queue.
 - `EMEFieldMonitor` now supports `interval_space`.
 - `Simulation.precision` option allows to select `"double"` precision for very high-accuracy results. Note that this is very rarely needed, and doubles the simulation computational weight and correpsondingly FlexCredit cost.
+- Added material type `PMCMedium` for perfect magnetic conductor.
 
 ### Changed
 - Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).

@@ -474,6 +474,10 @@ SIM_FULL = td.Simulation(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=td.AnisotropicMedium(xx=td.PEC, yy=td.Medium(), zz=td.Medium()),
         ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.AnisotropicMedium(xx=td.PMC, yy=td.Medium(), zz=td.Medium()),
+        ),
         # Test a fully anistropic medium
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -484,6 +488,10 @@ SIM_FULL = td.Simulation(
             geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),
             medium=td.PEC,
             name="pec_group",
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.PMC,
         ),
         td.Structure(
             geometry=td.Cylinder(radius=1.0, length=2.0, center=(1.0, 0.0, -1.0), axis=1),

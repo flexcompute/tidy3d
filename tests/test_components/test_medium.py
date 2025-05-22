@@ -15,12 +15,13 @@ from ..utils import AssertLogLevel
 MEDIUM = td.Medium()
 ANIS_MEDIUM = td.AnisotropicMedium(xx=MEDIUM, yy=MEDIUM, zz=MEDIUM)
 PEC = td.PECMedium()
+PMC = td.PMCMedium()
 PR = td.PoleResidue(poles=[(-1 + 1j, 2 + 2j)])
 SM = td.Sellmeier(coeffs=[(1, 2)])
 LZ = td.Lorentz(coeffs=[(1, 2, 3)])
 DR = td.Drude(coeffs=[(1, 2)])
 DB = td.Debye(coeffs=[(1, 2)])
-MEDIUMS = [MEDIUM, ANIS_MEDIUM, PEC, PR, SM, LZ, DR, DB]
+MEDIUMS = [MEDIUM, ANIS_MEDIUM, PEC, PR, SM, LZ, DR, DB, PMC]
 
 f, AX = plt.subplots()
 
@@ -140,6 +141,10 @@ def test_medium_from_nk():
 
 def test_PEC():
     _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
+
+
+def test_PMC():
+    _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PMC)
 
 
 def test_lossy_metal():
@@ -406,6 +411,8 @@ def test_n_cfl():
     assert material.n_cfl == 2
     # PEC
     assert PEC.n_cfl == 1
+    # PMC
+    assert PMC.n_cfl == 1
     # anisotropic
     material = td.AnisotropicMedium(xx=MEDIUM, yy=td.Medium(permittivity=4), zz=MEDIUM)
     assert material.n_cfl == 1

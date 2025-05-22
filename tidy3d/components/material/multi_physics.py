@@ -141,6 +141,7 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             return None
 
         DELEGATED_ATTRIBUTES = {
+            "is_pmc": self.optical,
             "_eps_plot": self.optical,
             "viz_spec": self.optical,
             "eps_diagonal_numerical": self.optical,

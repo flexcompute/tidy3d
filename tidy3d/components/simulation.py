@@ -3523,8 +3523,8 @@ class Simulation(AbstractYeeGridSimulation):
                 freq0 = source.source_time.freq0
 
                 for medium_index, medium in enumerate(mediums):
-                    # min wavelength in PEC is meaningless and we'll get divide by inf errors
-                    if medium.is_pec:
+                    # min wavelength in PEC/PMC is meaningless and we'll get divide by inf errors
+                    if medium.is_pec or medium.is_pmc:
                         continue
                     # min wavelength in Medium2D is meaningless
                     if isinstance(medium, Medium2D):
@@ -3536,8 +3536,10 @@ class Simulation(AbstractYeeGridSimulation):
                     for comp, (key, grid_spec) in enumerate(
                         zip("xyz", (val.grid_x, val.grid_y, val.grid_z))
                     ):
-                        if medium.is_pec or (
-                            isinstance(medium, AnisotropicMedium) and medium.is_comp_pec(comp)
+                        if (
+                            medium.is_pec
+                            or medium.is_pmc
+                            or (isinstance(medium, AnisotropicMedium) and medium.is_comp_pec(comp))
                         ):
                             n_material = 1.0
                         lambda_min = C_0 / freq0 / n_material
