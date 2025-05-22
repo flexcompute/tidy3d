@@ -178,16 +178,16 @@ jobs:
       uses: step-security/changed-files@v46
       with:
         files: '**/*.py'
-    
     - name: Slice report down to changed files
+      if: ${{ steps.diff.outputs.all_changed_files != '' }}
       env:
         CHANGED: ${{ steps.diff.outputs.all_changed_files }}
       run: |
+        echo $CHANGED
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
-        printf '%s\n' $CHANGED | tr '\n' ',' | sed 's/,$//' > include.txt
-        coverage xml -i -o changed.xml --include="$(cat include.txt)"
-
-    
+        include=$(printf '%s\n' $CHANGED | sed 's|^|**/|' | paste -sd, -)
+        coverage xml -i -o changed.xml --include="$include"
+      
     - name: Produce the changed files coverage report
       uses: insightsengineering/coverage-action@v2
       with:
