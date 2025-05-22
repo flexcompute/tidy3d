@@ -164,6 +164,7 @@ jobs:
       uses: insightsengineering/coverage-action@v2
       with:
         path: ./coverage.xml
+        threshold: 90.0
         fail: false
         publish: true
         diff: true
