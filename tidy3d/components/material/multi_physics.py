@@ -158,6 +158,8 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             "Did you mean to access the attribute of one of the optical, heat or charge media?"
         )
 
+        print("TMP UNREACHABLE")
+
     @property
     def heat_spec(self):
         if self.heat is not None:
