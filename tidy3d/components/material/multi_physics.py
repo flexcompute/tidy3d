@@ -139,10 +139,27 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
             return None
 
         DELEGATED_ATTRIBUTES = {
-            "is_pec": self.optical,
             "_eps_plot": self.optical,
             "viz_spec": self.optical,
+            "eps_diagonal_numerical": self.optical,
+            "eps_complex_to_nk": self.optical,
+            "nonlinear_spec": self.optical,
+            "is_pec": self.optical,
+            "is_time_modulated": self.optical,
+            "is_nonlinear": self.optical,
+            "is_fully_anisotropic": self.optical,
+            "is_custom": self.optical,
+            "is_isotropic": self.optical,
+            "is_spatially_uniform": self.optical,
+            "_incompatible_material_types": self.optical,
+            "frequency_range": self.optical,
+            "eps_model": self.optical,
         }
+
+        if name == "_has_incompatibilities":
+            return (self.optical and self.optical._has_incompatibilities) or (
+                self.charge and self.charge._has_incompatibilities
+            )
 
         if name in DELEGATED_ATTRIBUTES:
             sub = DELEGATED_ATTRIBUTES[name]
