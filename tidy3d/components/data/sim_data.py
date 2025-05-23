@@ -22,6 +22,7 @@ from ..base_sim.data.sim_data import AbstractSimulationData
 from ..file_util import replace_values
 from ..monitor import Monitor
 from ..simulation import Simulation
+from ..source.current import CustomCurrentSource
 from ..source.time import GaussianPulse
 from ..source.utils import SourceType
 from ..structure import Structure
@@ -42,6 +43,12 @@ DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in M
 
 # residuals below this are considered good fits for broadband adjoint source creation
 RESIDUAL_CUTOFF_ADJOINT = 1e-6
+
+# for adjoint source, the minimum number of FWIDTH between the center frequency and zero
+NUM_ADJOINT_FWIDTH_TO_ZERO = 3
+# for broadband adjoint source, the minimum number of FWIDTH to reach the lowest frequency
+# that is covered by the broadband pulse
+NUM_ADJOINT_FWIDTH_TO_FMIN = 0.5
 
 
 class AdjointSourceInfo(Tidy3dBaseModel):
@@ -1123,14 +1130,32 @@ class SimulationData(AbstractYeeGridSimulationData):
         normalize_index_fwd = self.simulation.normalize_index or 0
         return self.simulation.sources[normalize_index_fwd].source_time.fwidth
 
+    @staticmethod
+    def _adjoint_src_width_single(adj_srcs: list[SourceType]) -> list[SourceType]:
+        """Ensure the adjoint source sufficiently decays before zero frequency."""
+        adj_srcs_process_fwidth = []
+        for adj_src in adj_srcs:
+            source_time = adj_src.source_time
+            freq0 = source_time.freq0
+
+            fwidth = np.minimum(freq0 / NUM_ADJOINT_FWIDTH_TO_ZERO, source_time.fwidth)
+
+            adj_srcs_process_fwidth.append(
+                adj_src.updated_copy(source_time=source_time.updated_copy(fwidth=fwidth))
+            )
+
+        return adj_srcs_process_fwidth
+
     def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
         """Compute list of final sources along with a post run normalization for adj fields."""
         # dictionary mapping hash of sources with same freq dependence to list of time-dependencies
         hashes_to_sources = defaultdict(None)
         hashes_to_src_times = defaultdict(list)
 
+        adj_srcs_process_fwidth = self._adjoint_src_width_single(adj_srcs)
+
         tmp_src_time = GaussianPulse(freq0=C_0, fwidth=inf)
-        for src in adj_srcs:
+        for src in adj_srcs_process_fwidth:
             tmp_src = src.updated_copy(source_time=tmp_src_time)
             tmp_src_hash = tmp_src._hash_self()
             hashes_to_sources[tmp_src_hash] = src
@@ -1138,16 +1163,16 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         # Group sources by frequency or port, whichever gives fewer groups
         num_ports = len(hashes_to_src_times)
-        num_unique_freqs = len({src.source_time.freq0 for src in adj_srcs})
+        num_unique_freqs = len({src.source_time.freq0 for src in adj_srcs_process_fwidth})
 
         log.info(f"Found {num_ports} spatial ports and {num_unique_freqs} unique frequencies.")
 
         adjoint_infos = []
         if num_unique_freqs <= num_ports:
             log.info("Grouping adjoint sources by frequency.")
-            unique_freqs = {src.source_time.freq0 for src in adj_srcs}
+            unique_freqs = {src.source_time.freq0 for src in adj_srcs_process_fwidth}
             for freq0 in unique_freqs:
-                group = [src for src in adj_srcs if src.source_time.freq0 == freq0]
+                group = [src for src in adj_srcs_process_fwidth if src.source_time.freq0 == freq0]
                 post_norm = xr.DataArray(data=np.array([1 + 0j]), coords={"f": [freq0]})
                 adjoint_infos.append(
                     AdjointSourceInfo(sources=group, post_norm=post_norm, normalize_sim=True)
@@ -1184,14 +1209,48 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return [src_broadband], post_norm_amps
 
+    @staticmethod
+    def _adjoint_src_width_broadband(adj_srcs: list[SourceType]) -> float:
+        """Find the adjoint source fwidth that sufficiently covers all adjoint frequencies."""
+
+        adj_srcs_f0 = [adj_src.source_time.freq0 for adj_src in adj_srcs]
+        middle_f0 = 0.5 * (np.max(adj_srcs_f0) + np.min(adj_srcs_f0))
+        min_f0 = np.min(adj_srcs_f0)
+
+        # width of source to sufficiently decay by zero frequency
+        decay_by_f0_fwidth = middle_f0 / NUM_ADJOINT_FWIDTH_TO_ZERO
+        # width of source to sufficiently cover all adjoint frequencies
+        fwidth_to_min_f0 = (middle_f0 - min_f0) / NUM_ADJOINT_FWIDTH_TO_FMIN
+
+        # log warning if the adjoint pulse width is not sufficiently decayed by zero frequency
+        # which may cause some issues in the adjoint accuracy when using field sources
+        if (fwidth_to_min_f0 > decay_by_f0_fwidth) and isinstance(adj_srcs[0], CustomCurrentSource):
+            log.warning(
+                "Adjoint source generated with a frequency spectrum that extends to or overlaps with 0 Hz. "
+                "This can introduce errors into the gradient computation."
+            )
+
+        print(f"source widths: {decay_by_f0_fwidth}, {fwidth_to_min_f0}")
+
+        # Choose a wider pulse width in frequency especially when the min/max frequencies
+        # for the broadband pulse might be very close together
+        adj_src_fwidth = np.maximum(decay_by_f0_fwidth, fwidth_to_min_f0)
+
+        return middle_f0, adj_src_fwidth
+
     def _make_broadband_source(self, adj_srcs: list[SourceType]) -> SourceType:
         """Make a broadband source for a set of adjoint sources."""
 
+        adj_src_f0, adj_src_fwidth = self._adjoint_src_width_broadband(adj_srcs)
+
         source_index = self.simulation.normalize_index or 0
+
         src_time_base = self.simulation.sources[source_index].source_time.updated_copy(
             amplitude=1.0, phase=0.0
         )
-        src_broadband = adj_srcs[0].updated_copy(source_time=src_time_base)
+        src_broadband = adj_srcs[0].updated_copy(
+            source_time=src_time_base.updated_copy(freq0=adj_src_f0, fwidth=adj_src_fwidth)
+        )
 
         return src_broadband
 

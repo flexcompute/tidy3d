@@ -1225,6 +1225,147 @@ def test_no_freq_adjoint(monkeypatch, use_emulated_run):
         ag.grad(objective)(params0)
 
 
+def test_adjoint_src_width():
+    """Test the adjoint source width for single sources decays by f=0."""
+
+    f0 = td.C_0 / 1.55
+    fwidth = f0
+
+    fwidths = f0 * np.linspace(0.1, 1.0, 5)
+
+    adj_srcs = [
+        td.PointDipole(
+            center=(0, 0, 0),
+            source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth),
+            polarization="Ex",
+        )
+        for fwidth in fwidths
+    ]
+
+    adj_srcs_fwidth = td.SimulationData._adjoint_src_width_single(adj_srcs)
+
+    for src in adj_srcs_fwidth:
+        assert np.isclose(
+            (src.source_time.freq0 - f0) / f0, 0.0
+        ), "f0 of adjoint source should be centered on original f0"
+
+        check_fwidth = (
+            src.source_time.freq0
+            - td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_ZERO * src.source_time.fwidth
+        ) / src.source_time.freq0
+
+        assert np.isclose(check_fwidth, 0.0) or (
+            check_fwidth > 0.0
+        ), "fwidth of adjoint source should decay sufficiently before f=0"
+
+
+def test_broadband_adjoint_src_width():
+    """Test the broadband adjoint source handling for choosing fwidth."""
+
+    # Test the case where we have a custom current source and a wide adjoint source width that overlaps with zero.
+    # In this case, we want to issue a warning to the user about the adjoint accuracy of this setup.
+    f0_high = td.C_0 / 1.55
+    f0_low = 0.1 * f0_high
+
+    f0_adj_all = [f0_low, f0_high]
+
+    fwidth = 0.1 * f0_high
+
+    adj_srcs = []
+    x = np.array([0.0])
+    y = np.array([0.0])
+    z = np.array([0.0])
+    for f0 in f0_adj_all:
+        f = np.array([f0])
+
+        coords = dict(x=x, y=y, z=z, f=f)
+
+        dataset = td.FieldDataset(Ex=td.ScalarFieldDataArray(np.ones((1, 1, 1, 1)), coords=coords))
+
+        adj_srcs.append(
+            td.CustomCurrentSource(
+                center=(0, 0, 0),
+                size=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth),
+                current_dataset=dataset,
+            )
+        )
+
+    EXPECTED_WARNING_MSG_PIECE = (
+        "Adjoint source generated with a frequency spectrum that extends to or overlaps with 0 Hz"
+    )
+    with AssertLogLevel("WARNING", contains_str=EXPECTED_WARNING_MSG_PIECE):
+        broadband_f0, broadband_fwidth = td.SimulationData._adjoint_src_width_broadband(adj_srcs)
+
+        f0_expected = 0.5 * (np.max(f0_adj_all) + np.min(f0_adj_all))
+
+        fwidth_expected = (
+            f0_expected - np.min(f0_adj_all)
+        ) / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_FMIN
+
+        assert np.isclose(
+            (f0_expected - broadband_f0) / f0_expected, 0.0
+        ), "Expected freq0 not matching for broadband source"
+        assert np.isclose(
+            (fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0
+        ), "Expected fwidth not matching for broadband source"
+
+    # Test the case where we need a wider pulse to cover all the adjoint frequencies than we would otherwise choose for
+    # each individual adjoint source
+    f0_broadband = np.linspace(f0_low, f0_high, 10)
+    fwidth_broadband = 0.1 * np.mean(f0_broadband)
+
+    adj_srcs = [
+        td.PointDipole(
+            center=(0, 0, 0),
+            source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth_broadband),
+            polarization="Ex",
+        )
+        for f0 in f0_broadband
+    ]
+
+    broadband_f0, broadband_fwidth = td.SimulationData._adjoint_src_width_broadband(adj_srcs)
+
+    f0_expected = 0.5 * (np.max(f0_broadband) + np.min(f0_broadband))
+    fwidth_expected = (
+        f0_expected - np.min(f0_broadband)
+    ) / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_FMIN
+
+    assert np.isclose(
+        (f0_expected - broadband_f0) / f0_expected, 0.0
+    ), "Expected freq0 not matching for broadband source"
+    assert np.isclose(
+        (fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0
+    ), "Expected fwidth not matching for broadband source"
+
+    # Test the case where we have a narrow set of frequencies for the adjoint sources and so we can
+    # choose a wider overall source than is needed for covering those frequencies. This larger pulse width
+    # in frequency will shorten the time pulse.
+    f0_broadband = np.linspace(0.95 * f0_high, 1.05 * f0_high, 10)
+    fwidth_broadband = 0.1 * np.mean(f0_broadband)
+
+    adj_srcs = [
+        td.PointDipole(
+            center=(0, 0, 0),
+            source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth_broadband),
+            polarization="Ex",
+        )
+        for f0 in f0_broadband
+    ]
+
+    broadband_f0, broadband_fwidth = td.SimulationData._adjoint_src_width_broadband(adj_srcs)
+
+    f0_expected = 0.5 * (np.max(f0_broadband) + np.min(f0_broadband))
+    fwidth_expected = f0_expected / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_ZERO
+
+    assert np.isclose(
+        (f0_expected - broadband_f0) / f0_expected, 0.0
+    ), "Expected freq0 not matching for broadband source"
+    assert np.isclose(
+        (fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0
+    ), "Expected fwidth not matching for broadband source"
+
+
 @pytest.mark.parametrize("colocate", [True, False])
 @pytest.mark.parametrize("objtype", ["flux", "intensity"])
 def test_interp_objectives(use_emulated_run, colocate, objtype):

@@ -711,6 +711,9 @@ def test_heat_charge_bcs_validation(boundary_conditions):
     with pytest.raises(pd.ValidationError):
         td.CurrentBC(source=td.DCCurrentSource(current=td.inf))
 
+    with pytest.raises(pd.ValidationError):
+        td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([td.inf, 0, 1])))
+
 
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
@@ -790,6 +793,7 @@ def test_device_characteristics():
         steady_dc_hole_capacitance=capacitance,
         steady_dc_electron_capacitance=capacitance,
         steady_dc_current_voltage=current_voltage,
+        steady_dc_resistance_voltage=current_voltage,
     )
 
 

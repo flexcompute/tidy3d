@@ -434,11 +434,8 @@ class HeatChargeSimulation(AbstractSimulation):
             for bc in bounday_spec:
                 if isinstance(bc.condition, VoltageBC):
                     if isinstance(bc.condition.source, DCVoltageSource):
-                        if isinstance(bc.condition.source.voltage, list) or isinstance(
-                            bc.condition.source.voltage, tuple
-                        ):
-                            if len(bc.condition.source.voltage) > 1:
-                                voltage_array_present = True
+                        if len(bc.condition.source.voltage) > 1:
+                            voltage_array_present = True
         if is_capacitance_mnt and not voltage_array_present:
             raise SetupError(
                 "Monitors of type 'SteadyCapacitanceMonitor' have been defined but no array of voltages "
@@ -521,15 +518,14 @@ class HeatChargeSimulation(AbstractSimulation):
                 if isinstance(bc.condition.source, DCVoltageSource):
                     voltages = bc.condition.source.voltage
 
-                if isinstance(voltages, tuple):
-                    if len(voltages) > 1:
-                        if not array_already_provided:
-                            array_already_provided = True
-                        else:
-                            raise SetupError(
-                                "More than one voltage array has been provided. "
-                                "Currently voltage arrays are supported only for one of the BCs."
-                            )
+                if len(voltages) > 1:
+                    if not array_already_provided:
+                        array_already_provided = True
+                    else:
+                        raise SetupError(
+                            "More than one voltage array has been provided. "
+                            "Currently voltage arrays are supported only for one of the BCs."
+                        )
         return val
 
     @pd.root_validator(skip_on_failure=True)

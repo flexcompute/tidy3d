@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Internal adjoint helper methods are now prefixed with an underscore to separate them from the public API.
 - Drop the dependency on `gdspy`, which has been unmaintained for over two years. Interfaces previously relying on `gdspy` now use its maintained successor, `gdstk`, with equivalent functionality.
 - Small (around 1e-4) numerical precision improvements in EME solver.
+- Adjoint source frequency width is adjusted to decay sufficiently before zero frequency when possible to improve accuracy of simulation normalization when using custom current sources.
 
 ## [2.8.4] - 2025-05-15
 
