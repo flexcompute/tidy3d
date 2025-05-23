@@ -818,7 +818,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             comp.nonlinear_spec is not None for comp in [self.ss, self.tt]
         ):
             raise ValidationError(
-                "Nonlinearities are not currently supported for the components " "of a 2D medium."
+                "Nonlinearities are not currently supported for the components of a 2D medium."
             )
 
         if self.nonlinear_spec is None:
@@ -849,7 +849,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             comp.modulation_spec is not None for comp in [self.ss, self.tt]
         ):
             raise ValidationError(
-                "Time modulation is not currently supported for the components " "of a 2D medium."
+                "Time modulation is not currently supported for the components of a 2D medium."
             )
 
     heat_spec: Optional[ThermalSpecType] = pd.Field(
@@ -1379,16 +1379,16 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     """ Autograd code """
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
 
-    def derivative_eps_sigma_volume(
+    def _derivative_eps_sigma_volume(
         self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self.derivative_eps_complex_volume(
+        vjp_eps_complex = self._derivative_eps_complex_volume(
             E_der_map=E_der_map, bounds=bounds, freqs=freqs
         )
 
@@ -1401,7 +1401,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         return dict(permittivity=eps_vjp, conductivity=sigma_vjp)
 
-    def derivative_eps_complex_volume(
+    def _derivative_eps_complex_volume(
         self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
     ) -> xr.DataArray:
         """Get the derivative w.r.t complex-valued permittivity in the volume."""
@@ -1915,11 +1915,11 @@ class Medium(AbstractMedium):
             )
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # get vjps w.r.t. permittivity and conductivity of the bulk
-        vjps_volume = self.derivative_eps_sigma_volume(
+        vjps_volume = self._derivative_eps_sigma_volume(
             E_der_map=derivative_info.E_der_map,
             bounds=derivative_info.bounds,
             freqs=np.atleast_1d(derivative_info.frequency),
@@ -1934,12 +1934,12 @@ class Medium(AbstractMedium):
 
         return derivative_map
 
-    def derivative_eps_sigma_volume(
+    def _derivative_eps_sigma_volume(
         self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self.derivative_eps_complex_volume(
+        vjp_eps_complex = self._derivative_eps_complex_volume(
             E_der_map=E_der_map, bounds=bounds, freqs=freqs
         )
 
@@ -1955,7 +1955,7 @@ class Medium(AbstractMedium):
 
         return dict(permittivity=eps_vjp, conductivity=sigma_vjp)
 
-    def derivative_eps_complex_volume(
+    def _derivative_eps_complex_volume(
         self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
     ) -> xr.DataArray:
         """Get the derivative w.r.t complex-valued permittivity in the volume."""
@@ -2829,7 +2829,7 @@ class CustomMedium(AbstractCustomMedium):
             eps_dataset=eps_reduced,
         )
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         vjps = {}
@@ -3422,11 +3422,11 @@ class PoleResidue(DispersiveMedium):
         ep = ep[~np.isnan(ep)]
         return max(ep.imag)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
 
         # compute all derivatives beforehand
-        dJ_deps = self.derivative_eps_complex_volume(
+        dJ_deps = self._derivative_eps_complex_volume(
             E_der_map=derivative_info.E_der_map,
             bounds=derivative_info.bounds,
             freqs=np.atleast_1d(derivative_info.frequency),
@@ -3899,7 +3899,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
 
         dJ_deps = 0.0
@@ -5509,6 +5509,14 @@ class LossyMetalMedium(Medium):
         discriminator=TYPE_TAG_STR,
     )
 
+    thickness: pd.PositiveFloat = pd.Field(
+        None,
+        title="Conductor Thickness",
+        description="When the thickness of the conductor is not much greater than skin depth, "
+        "1D transmission line model is applied to compute the surface impedance of the thin conductor.",
+        units=MICROMETER,
+    )
+
     frequency_range: FreqBound = pd.Field(
         ...,
         title="Frequency Range",
@@ -5594,6 +5602,10 @@ class LossyMetalMedium(Medium):
         if self.roughness is not None:
             skin_depths = 1 / np.sqrt(np.pi * frequencies * MU_0 * self.conductivity)
             correction = self.roughness.roughness_correction_factor(frequencies, skin_depths)
+
+        if self.thickness is not None:
+            k_wave = self.Hz_to_angular_freq(frequencies) / C_0 * (n + 1j * k)
+            correction /= -np.tanh(1j * k_wave * self.thickness)
 
         return correction * ETA_0 / (n + 1j * k)
 

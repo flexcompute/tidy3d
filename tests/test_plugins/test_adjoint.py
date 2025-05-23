@@ -2022,20 +2022,6 @@ def test_to_gds(tmp_path):
     polys = sim.to_gdstk(z=0, permittivity_threshold=6, frequency=200e14)
     assert len(polys) > 0
 
-    # to_gdspy() does not support custom medium
-    sim = make_sim(
-        permittivity=EPS,
-        size=SIZE,
-        vertices=VERTICES,
-        base_eps_val=BASE_EPS_VAL,
-        custom_medium=False,
-    )
-    polys = sim.to_gdspy(z=0)
-    assert len(polys) > 0
-
-    polys = sim.to_gdspy(y=0)
-    assert len(polys) > 4
-
 
 @pytest.mark.parametrize(
     "base_vertices",

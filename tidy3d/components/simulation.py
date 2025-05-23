@@ -137,12 +137,6 @@ try:
 except ImportError:
     gdstk_available = False
 
-try:
-    gdspy_available = True
-    import gdspy
-except ImportError:
-    gdspy_available = False
-
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
 
@@ -1000,10 +994,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         plot_params[0] = plot_params[0].include_kwargs(edgecolor=kwargs["colors_internal"])
 
         if self.grid_spec.auto_grid_used:
+            # Internal and external override structures are visualized with different colors,
+            # so let's not sort them together.
             all_override_structures = [
-                self.internal_override_structures,
-                self.grid_spec.external_override_structures,
+                Structure._sort_structures(structures, self.scene.structure_priority_mode)
+                for structures in [
+                    self.internal_override_structures,
+                    self.grid_spec.external_override_structures,
+                ]
             ]
+
             for structures, plot_param in zip(all_override_structures, plot_params):
                 for structure in structures:
                     bounds = list(zip(*structure.geometry.bounds))
@@ -1235,6 +1235,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             internal_snapping_points=self.internal_snapping_points,
             internal_override_structures=self.internal_override_structures,
             boundary_types=boundary_types,
+            structure_priority_mode=self.scene.structure_priority_mode,
         )
 
         # This would AutoGrid the in-plane directions of the 2D materials
@@ -1274,7 +1275,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     @cached_property
     def static_structures(self) -> list[Structure]:
         """Structures in simulation with all autograd tracers removed."""
-        return [structure.to_static() for structure in self.structures]
+        return [structure.to_static() for structure in self.scene.sorted_structures]
 
     @cached_property
     def num_cells(self) -> int:
@@ -1575,7 +1576,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             not any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
             and not self.lumped_elements
         ):
-            return self.structures
+            return self.scene.sorted_structures
 
         def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> List[float]:
             """Get grid size around the 2D material."""
@@ -4228,14 +4229,14 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    def with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
+    def _with_adjoint_monitors(self, sim_fields_keys: list) -> Simulation:
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
-        mnts_fld, mnts_eps = self.make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
+        mnts_fld, mnts_eps = self._make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
         return self.copy(update=dict(monitors=monitors))
 
-    def make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
+    def _make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
 
         index_to_keys = defaultdict(list)
@@ -4243,7 +4244,7 @@ class Simulation(AbstractYeeGridSimulation):
         for _, index, *fields in sim_fields_keys:
             index_to_keys[index].append(fields)
 
-        freqs = self.freqs_adjoint
+        freqs = self._freqs_adjoint
 
         adjoint_monitors_fld = []
         adjoint_monitors_eps = []
@@ -4252,7 +4253,7 @@ class Simulation(AbstractYeeGridSimulation):
         for i, field_keys in index_to_keys.items():
             structure = self.structures[i]
 
-            mnt_fld, mnt_eps = structure.make_adjoint_monitors(
+            mnt_fld, mnt_eps = structure._make_adjoint_monitors(
                 freqs=freqs, index=i, field_keys=field_keys
             )
 
@@ -4262,7 +4263,7 @@ class Simulation(AbstractYeeGridSimulation):
         return adjoint_monitors_fld, adjoint_monitors_eps
 
     @property
-    def freqs_adjoint(self) -> list[float]:
+    def _freqs_adjoint(self) -> list[float]:
         """Unique list of all frequencies. For now should be only one."""
 
         freqs = set()
@@ -4544,7 +4545,7 @@ class Simulation(AbstractYeeGridSimulation):
         clip = gdstk.rectangle(bmin, bmax)
 
         polygons = []
-        for structure in self.structures:
+        for structure in self.scene.sorted_structures:
             gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
             for polygon in structure.to_gdstk(
                 x=x,
@@ -4565,65 +4566,6 @@ class Simulation(AbstractYeeGridSimulation):
 
         return polygons
 
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-        ] = None,
-    ) -> List:
-        """Convert a simulation's planar slice to a .gds type polygon list.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-
-        Return
-        ------
-        List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
-        """
-        if gds_layer_dtype_map is None:
-            gds_layer_dtype_map = {}
-
-        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, bmin = self.pop_axis(self.bounds[0], axis)
-        _, bmax = self.pop_axis(self.bounds[1], axis)
-
-        _, symmetry = self.pop_axis(self.symmetry, axis)
-        if symmetry[0] != 0:
-            bmin = (0, bmin[1])
-        if symmetry[1] != 0:
-            bmin = (bmin[0], 0)
-        clip = gdspy.Rectangle(bmin, bmax)
-
-        polygons = []
-        for structure in self.structures:
-            gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
-            for polygon in structure.to_gdspy(
-                x=x,
-                y=y,
-                z=z,
-                gds_layer=gds_layer,
-                gds_dtype=gds_dtype,
-            ):
-                pmin, pmax = polygon.get_bounding_box()
-                if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
-                    polygon = gdspy.boolean(
-                        clip, polygon, "and", layer=gds_layer, datatype=gds_dtype
-                    )
-                polygons.append(polygon)
-        return polygons
-
     def to_gds(
         self,
         cell,
@@ -4640,7 +4582,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -4671,23 +4613,12 @@ class Simulation(AbstractYeeGridSimulation):
             if len(polygons) > 0:
                 cell.add(*polygons)
 
-        elif gdspy_available and isinstance(cell, gdspy.Cell):
-            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
-            if len(polygons) > 0:
-                cell.add(polygons)
-
         elif "gdstk" in cell.__class__ and not gdstk_available:
             raise Tidy3dImportError(
                 "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
             )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
         else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
+            raise Tidy3dError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
     def to_gds_file(
         self,
@@ -4728,14 +4659,10 @@ class Simulation(AbstractYeeGridSimulation):
             library = gdstk.Library()
             reference = gdstk.Reference
             rotation = np.pi
-        elif gdspy_available:
-            library = gdspy.GdsLibrary()
-            reference = gdspy.CellReference
-            rotation = 180
         else:
             raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
+                "Python module 'gdstk' not found. To export geometries to .gds "
+                "files, please install 'gdstk'."
             )
         cell = library.new_cell(gds_cell_name)
 
@@ -5089,7 +5016,7 @@ class Simulation(AbstractYeeGridSimulation):
         ]
         datasets_geometry = []
 
-        for struct in self.structures:
+        for struct in self.scene.sorted_structures:
             for geometry in traverse_geometries(struct.geometry):
                 if isinstance(geometry, TriangleMesh):
                     datasets_geometry += [geometry.mesh_dataset]

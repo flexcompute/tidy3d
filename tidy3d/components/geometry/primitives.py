@@ -277,7 +277,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # compute number of points in the circumference of the polyslab using resolution info
@@ -298,7 +298,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         derivative_info_polyslab = derivative_info.updated_copy(
             paths=[("vertices",), ("slab_bounds", 0), ("slab_bounds", 1)], deep=False
         )
-        vjps_polyslab = polyslab.compute_derivatives(derivative_info_polyslab)
+        vjps_polyslab = polyslab._compute_derivatives(derivative_info_polyslab)
 
         vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
         vjp_top = vjps_polyslab[("slab_bounds", 0)]

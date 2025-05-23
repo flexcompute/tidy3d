@@ -16,7 +16,7 @@ from ..geometry.base import Box
 from ..medium import Medium, MediumType3D
 from ..scene import Scene
 from ..structure import Structure
-from ..types import TYPE_TAG_STR, Ax, Axis, Bound, LengthUnit, Symmetry
+from ..types import TYPE_TAG_STR, Ax, Axis, Bound, LengthUnit, PriorityMode, Symmetry
 from ..validators import (
     _warn_unsupported_traced_argument,
     assert_objects_in_sim_bounds,
@@ -119,6 +119,15 @@ class AbstractSimulation(Box, ABC):
         "include the desired unit specifier in labels.",
     )
 
+    structure_priority_mode: PriorityMode = pd.Field(
+        "equal",
+        title="Structure Priority Setting",
+        description="This field only affects structures of `priority=None`. "
+        "If `equal`, the priority of those structures is set to 0; if `conductor`, "
+        "the priority of structures made of `LossyMetalMedium` is set to 90, "
+        "`PECMedium` to 100, and others to 0.",
+    )
+
     """ Validating setup """
 
     @pd.root_validator(pre=True)
@@ -191,7 +200,10 @@ class AbstractSimulation(Box, ABC):
         """Scene instance associated with the simulation."""
 
         return Scene(
-            medium=self.medium, structures=self.structures, plot_length_units=self.plot_length_units
+            medium=self.medium,
+            structures=self.structures,
+            plot_length_units=self.plot_length_units,
+            structure_priority_mode=self.structure_priority_mode,
         )
 
     def get_monitor_by_name(self, name: str) -> AbstractMonitor:

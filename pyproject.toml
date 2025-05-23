@@ -67,9 +67,6 @@ pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
 
-# gdspy
-gdspy = { version = "*", optional = true }
-
 # gdstk
 gdstk = { version = ">=0.9.49", optional = true }
 
@@ -133,7 +130,6 @@ dev = [
   "coverage",
   'dill',
   'divparams',
-  'gdspy',
   'gdstk',
   'grcwa',
   'ipython',
@@ -211,7 +207,6 @@ docs = [
   "devsim",
   "cma",
 ]
-gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 scikit-rf = ["scikit-rf"]
 trimesh = ["trimesh", "networkx", "rtree"]

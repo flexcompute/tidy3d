@@ -174,6 +174,11 @@ def test_lossy_metal():
     model = mat.scaled_surface_impedance_model
     num_poles = mat.num_poles
 
+    # thickness
+    mat = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14), thickness=0.1)
+    model = mat.scaled_surface_impedance_model
+    num_poles = mat.num_poles
+
 
 def test_lossy_metal_surface_roughness():
     mat_orig = td.LossyMetalMedium(
