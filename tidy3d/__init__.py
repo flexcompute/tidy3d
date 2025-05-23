@@ -360,7 +360,7 @@ from .components.time_modulation import (
     SpaceTimeModulation,
 )
 from .components.transformation import RotationAroundAxis
-from .components.viz import VisualizationSpec
+from .components.viz import VisualizationSpec, restore_matplotlib_rcparams
 
 # config
 from .config import config
@@ -649,6 +649,7 @@ __all__ = [
     "PECConformal",
     "SurfaceImpedance",
     "VisualizationSpec",
+    "restore_matplotlib_rcparams",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",
