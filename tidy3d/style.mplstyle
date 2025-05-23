@@ -1,0 +1,4 @@
+axes.prop_cycle : cycler(color=["#176737", "#FF7B0D", "#979BAA", "#F44E6A", "#0062FF", "#26AB5B", "#6D3EF2", "#F59E0B"])
+axes.grid       : True
+grid.linestyle  : :
+axes.edgecolor  : "#ECEBEA"
