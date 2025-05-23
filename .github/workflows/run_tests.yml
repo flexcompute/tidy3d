@@ -155,9 +155,49 @@ jobs:
         pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
         pytest --cov=tidy3d -rF --tb=short tests
         coverage report -m
+        coverage xml -o coverage.xml
         TOTAL_COVERAGE=$(coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+    - name: Produce the coverage report
+      uses: insightsengineering/coverage-action@v2
+      with:
+        path: ./coverage.xml
+        threshold: 90.0
+        fail: false
+        publish: true
+        diff: true
+        diff-branch: develop
+        diff-storage: _xml_coverage_reports
+        coverage-summary-title: "Code Coverage Summary"
+        togglable-report: true
+    
+    - name: Changed files
+      id: diff
+      uses: step-security/changed-files@v46
+      with:
+        files: '**/*.py'
+  
+    - name: Slice report down to changed files
+      if: ${{ steps.diff.outputs.all_changed_files != '' }}
+      env:
+        CHANGED: ${{ steps.diff.outputs.all_changed_files }}
+      run: |
+        echo $CHANGED
+        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        include=$(printf '%s\n' $CHANGED | sed 's|^|**/|' | paste -sd, -)
+        coverage xml -i -o changed.xml --include="$include"
+      
+    - name: Produce the changed files coverage report
+      uses: insightsengineering/coverage-action@v2
+      if: ${{ steps.diff.outputs.all_changed_files != '' }}
+      with:
+        path: ./changed.xml
+        threshold: 90.0
+        publish: true
+        fail: false
+        coverage-summary-title: "Changed Files Coverage"
 
   remote-tests:
     # Run tests on a push event OR a workflow dispatch with remote_tests
