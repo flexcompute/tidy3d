@@ -222,6 +222,8 @@ def monitors():
 
     energy_band_mnt1 = td.SteadyEnergyBandMonitor(size=(1.6, 2, 3), name="bandgap_test")
 
+    mesh_mnt = td.VolumeMeshMonitor(size=(1.6, 2, 3), name="mesh_test")
+
     return [
         temp_mnt1,
         temp_mnt2,
@@ -234,6 +236,7 @@ def monitors():
         capacitance_mnt1,
         free_carrier_mnt1,
         energy_band_mnt1,
+        mesh_mnt,
     ]
 
 
@@ -481,7 +484,7 @@ def temperature_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def voltage_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _, _ = monitors
+    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _, _, _ = monitors
 
     # SpatialDataArray
     nx, ny, nz = 9, 6, 5
@@ -564,6 +567,40 @@ def capacitance_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def mesh_monitor_data(monitors):
+    """Creates different voltage monitor data."""
+    mesh_mnt = monitors[11]
+
+    # TetrahedralGridDataset
+    tet_grid_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values = td.IndexedDataArray(
+        np.zeros((tet_grid_points.shape[0],)),
+        dims=("index",),
+        name="Mesh",
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    # SpatialDataArray
+    mesh_data = td.VolumeMeshData(monitor=mesh_mnt, mesh=tet_grid)
+
+    return (mesh_data,)
+
+
+@pytest.fixture(scope="module")
 def free_carrier_monitor_data(monitors):
     """Creates different voltage monitor data."""
     fc_mnt = monitors[9]
@@ -618,6 +655,7 @@ def simulation_data(
     capacitance_monitor_data,
     free_carrier_monitor_data,
     energy_band_monitor_data,
+    mesh_monitor_data,
 ):
     """Creates 'HeatChargeSimulationData' for both Heat and Conduction simulations."""
     heat_sim_data = td.HeatChargeSimulationData(
@@ -640,7 +678,19 @@ def simulation_data(
         data=(voltage_monitor_data[0], free_carrier_monitor_data[0]),
     )
 
-    return [heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_sim_data]
+    mesh_monitor = mesh_monitor_data[0].monitor
+    mesh_data = td.VolumeMesherData(
+        simulation=td.VolumeMesher(simulation=conduction_simulation, monitors=[mesh_monitor]),
+        data=mesh_monitor_data,
+    )
+
+    return [
+        heat_sim_data,
+        cond_sim_data,
+        voltage_capacitance_sim_data,
+        current_voltage_sim_data,
+        mesh_data,
+    ]
 
 
 # --------------------------
@@ -819,9 +869,13 @@ def test_heat_charge_sources(structures):
 
 def test_heat_charge_simulation(simulation_data):
     """Tests 'HeatChargeSimulation' and 'ConductionSimulation' objects."""
-    heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_simulation_data = (
-        simulation_data
-    )
+    (
+        heat_sim_data,
+        cond_sim_data,
+        voltage_capacitance_sim_data,
+        current_voltage_simulation_data,
+        mesh_data,
+    ) = simulation_data
 
     # Test Heat Simulation
     heat_sim = heat_sim_data.simulation
@@ -840,6 +894,9 @@ def test_heat_charge_simulation(simulation_data):
     assert (
         current_voltage_sim is not None
     ), "Current-Voltage simulation should be created successfully."
+
+    mesher = mesh_data.mesher
+    assert mesher is not None, "VolumeMesher should be created successfully."
 
 
 def test_sim_data_plotting(simulation_data):

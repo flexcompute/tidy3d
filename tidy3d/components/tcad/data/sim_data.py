@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from abc import ABC
 from typing import Optional, Tuple
 
 import numpy as np
@@ -17,11 +18,13 @@ from tidy3d.components.data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
 )
+from tidy3d.components.tcad.data.monitor_data.mesh import VolumeMeshData
 from tidy3d.components.tcad.data.types import (
     SteadyPotentialData,
     TCADMonitorDataType,
     TemperatureData,
 )
+from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.components.types import Ax, Literal, RealFieldVal, annotate_type
@@ -82,7 +85,16 @@ class DeviceCharacteristics(Tidy3dBaseModel):
     )
 
 
-class HeatChargeSimulationData(AbstractSimulationData):
+class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
+    data: Tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
+        ...,
+        title="Monitor Data",
+        description="List of :class:`.MonitorData` instances "
+        "associated with the monitors of the original :class:`.Simulation`.",
+    )
+
+
+class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     """Stores results of a :class:`HeatChargeSimulation`.
 
     Example
@@ -129,13 +141,6 @@ class HeatChargeSimulationData(AbstractSimulationData):
     simulation: HeatChargeSimulation = pd.Field(
         title="Heat-Charge Simulation",
         description="Original :class:`.HeatChargeSimulation` associated with the data.",
-    )
-
-    data: Tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
-        ...,
-        title="Monitor Data",
-        description="List of :class:`.MonitorData` instances "
-        "associated with the monitors of the original :class:`.Simulation`.",
     )
 
     device_characteristics: Optional[DeviceCharacteristics] = pd.Field(
@@ -377,3 +382,24 @@ class HeatSimulationData(HeatChargeSimulationData):
             "'HeatChargeSimulationData' instead"
         )
         return values
+
+
+class VolumeMesherData(AbstractHeatChargeSimulationData):
+    """Stores results of a :class:`VolumeMesher`."""
+
+    simulation: VolumeMesher = pd.Field(
+        title="Volume mesher",
+        description="Original :class:`VolumeMesher` associated with the data.",
+    )
+
+    data: Tuple[VolumeMeshData, ...] = pd.Field(
+        ...,
+        title="Monitor Data",
+        description="List of :class:`.MonitorData` instances "
+        "associated with the monitors of the original :class:`.VolumeMesher`.",
+    )
+
+    # @property
+    # def simulation(self) -> HeatChargeSimulation:
+    #     """Get the simulation associated with this mesher data."""
+    #     return self.mesher.simulation
