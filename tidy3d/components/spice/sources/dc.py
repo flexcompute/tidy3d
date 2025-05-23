@@ -19,7 +19,7 @@ Examples:
 
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 import pydantic.v1 as pd
 
@@ -54,6 +54,10 @@ class DCVoltageSource(Tidy3dBaseModel):
         units=VOLT,
     )
 
+    # TODO: This should have always been in the field above but was introduced wrongly as a
+    # standalone field. Keeping for compatibility, remove in 3.0.
+    units: Literal[VOLT] = VOLT
+
     @pd.validator("voltage")
     def check_voltage(cls, val):
         for v in val:
@@ -76,5 +80,9 @@ class DCCurrentSource(Tidy3dBaseModel):
     current: pd.FiniteFloat = pd.Field(
         title="Current",
         description="DC current usually used as source in 'CurrentBC' boundary conditions.",
+        units=AMP,
     )
-    units: str = AMP
+
+    # TODO: This should have always been in the field above but was introduced wrongly as a
+    # standalone field. Keeping for compatibility, remove in 3.0.
+    units: Literal[AMP] = AMP
