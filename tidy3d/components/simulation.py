@@ -3332,6 +3332,8 @@ class Simulation(AbstractYeeGridSimulation):
                     if len(mediums) > 1:
                         raise SetupError(
                             f"{len(mediums)} different mediums detected on an 'ABCBoundary'. Boundary must be homogeneous."
+                            "Alternatively, effective permeability and conductivity can be directly provided as "
+                            "parameters for an 'ABCBoundary', in which case this medium check is skipped."
                         )
                     # 0 medium, something is wrong
                     if len(mediums) < 1:

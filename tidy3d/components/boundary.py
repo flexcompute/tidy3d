@@ -80,28 +80,26 @@ class PMCBoundary(BoundaryEdge):
 class AbstractABCBoundary(BoundaryEdge, ABC):
     """One-way wave equation absorbing boundary conditions abstract base class."""
 
-    small_conductivity_approx: bool = pd.Field(
-        True,
-        title="Small Conductivity Approximation",
-        description="If ``False`` then the effective permettivity ``eps`` in the one-wave equation"
-        " is modified such that the equation exactly satisfy wave propagation at the central "
-        "frequency.",
-    )
-
 
 class ABCBoundary(AbstractABCBoundary):
-    """One-way wave equation absorbing boundary conditions."""
+    """One-way wave equation absorbing boundary conditions.
+    See, for example, John B. Schneider, Understanding the Finite-Difference Time-Domain Method, Chapter 6.
+    """
 
     permittivity: Optional[pd.PositiveFloat] = pd.Field(
         None,
         title="Effective Permittivity",
-        description="Enforced effective permittivity.",
+        description="Effective permittivity for determining propagation constant. "
+        "If ``None``, this value will be automatically inferred from the medium at "
+        "the domain boundary and the central frequency of the source.",
     )
 
     conductivity: Optional[pd.NonNegativeFloat] = pd.Field(
         None,
         title="Effective Conductivity",
-        description="Enforced effective conductivity.",
+        description="Effective conductivity for determining propagation constant."
+        "If ``None``, this value will be automatically inferred from the medium at "
+        "the domain boundary and the central frequency of the source.",
     )
 
     @pd.validator("conductivity", always=True)
@@ -109,7 +107,7 @@ class ABCBoundary(AbstractABCBoundary):
     def _conductivity_only_with_float_permittivity(cls, val, values):
         """Validate that conductivity can be provided only with float permittivity."""
         perm = values["permittivity"]
-        if val is not None and not isinstance(perm, float):
+        if val is not None and perm is None:
             raise ValidationError(
                 "Field 'conductivity' in 'ABCBoundary' can only be provided "
                 "simultaneously with 'permittivity'."
@@ -120,25 +118,17 @@ class ABCBoundary(AbstractABCBoundary):
 class ModeABCBoundary(AbstractABCBoundary):
     """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
 
-    small_conductivity_approx: bool = pd.Field(
-        False,
-        title="Small Conductivity Approximation",
-        description="If ``False`` then the effective permettivity ``eps`` in the one-wave equation"
-        " is modified such that the equation exactly satisfy wave propagation at the central"
-        " frequency.",
-    )
-
     mode_spec: ModeSpec = pd.Field(
         ModeSpec(),
         title="Mode Specification",
-        description="Parameters to feed to mode solver which determine modes.",
+        description="Parameters that determine the modes computed by the mode solver.",
     )
 
     mode_index: pd.NonNegativeInt = pd.Field(
         0,
         title="Mode Index",
         description="Index into the collection of modes returned by mode solver. "
-        " Specifies which mode to absorbed using these boundary conditions. "
+        "The absorbing boundary conditions are configured to absorb the specified mode. "
         "If larger than ``mode_spec.num_modes``, "
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
@@ -165,19 +155,13 @@ class ModeABCBoundary(AbstractABCBoundary):
         return val
 
     @classmethod
-    def from_source(
-        cls, source: ModeSource, small_conductivity_approx: bool = False
-    ) -> ModeABCBoundary:
+    def from_source(cls, source: ModeSource) -> ModeABCBoundary:
         """Instantiate from a ``ModeSource``.
 
         Parameters
         ----------
         source : :class:`ModeSource`
             Mode source.
-        small_conductivity_approx : bool = False,
-            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
-            is modified such that the equation exactly satisfy wave propagation at the central
-            frequency.
 
         Returns
         -------
@@ -197,7 +181,6 @@ class ModeABCBoundary(AbstractABCBoundary):
             mode_spec=source.mode_spec,
             mode_index=source.mode_index,
             frequency=source.source_time.freq0,
-            small_conductivity_approx=small_conductivity_approx,
         )
 
     @classmethod
@@ -206,7 +189,6 @@ class ModeABCBoundary(AbstractABCBoundary):
         monitor: Union[ModeMonitor, ModeSolverMonitor],
         mode_index: pd.NonNengativeInt = 0,
         frequency: Optional[pd.PositiveFloat] = None,
-        small_conductivity_approx: bool = False,
     ) -> ModeABCBoundary:
         """Instantiate from a ``ModeMonitor`` or ``ModeSolverMonitor``.
 
@@ -218,10 +200,6 @@ class ModeABCBoundary(AbstractABCBoundary):
             Mode index.
         frequency : Optional[pd.PositiveFloat] = None
             Frequency for estimating propagation index of absorbed mode.
-        small_conductivity_approx : bool = False,
-            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
-            is modified such that the equation exactly satisfy wave propagation at the central
-            frequency.
 
         Returns
         -------
@@ -240,7 +218,6 @@ class ModeABCBoundary(AbstractABCBoundary):
             mode_spec=monitor.mode_spec,
             mode_index=mode_index,
             frequency=frequency,
-            small_conductivity_approx=small_conductivity_approx,
         )
 
 
@@ -896,7 +873,6 @@ class Boundary(Tidy3dBaseModel):
         cls,
         permittivity: Optional[pd.PositiveFloat] = None,
         conductivity: Optional[pd.NonNegativeFloat] = None,
-        small_conductivity_approx: bool = True,
     ):
         """ABC boundary specification on both sides along a dimension.
 
@@ -907,12 +883,10 @@ class Boundary(Tidy3dBaseModel):
         plus = ABCBoundary(
             permittivity=permittivity,
             conductivity=conductivity,
-            small_conductivity_approx=small_conductivity_approx,
         )
         minus = ABCBoundary(
             permittivity=permittivity,
             conductivity=conductivity,
-            small_conductivity_approx=small_conductivity_approx,
         )
         return cls(plus=plus, minus=minus)
 
@@ -923,7 +897,6 @@ class Boundary(Tidy3dBaseModel):
         mode_spec: ModeSpec = ModeSpec(),
         mode_index: pd.NonNegativeInt = 0,
         frequency: Optional[pd.PositiveFloat] = None,
-        small_conductivity_approx: bool = False,
     ):
         """One-way wave equation mode ABC boundary specification on both sides along a dimension.
 
@@ -932,15 +905,11 @@ class Boundary(Tidy3dBaseModel):
         plane: Box
             Cross-sectional plane in which the absorbed mode will be computed.
         mode_spec: ModeSpec = ModeSpec()
-            Parameters to feed to mode solver which determine modes.
+            Parameters that determine the modes computed by the mode solver.
         mode_index : pd.NonNengativeInt = 0
             Mode index.
         frequency : Optional[pd.PositiveFloat] = None
             Frequency for estimating propagation index of absorbed mode.
-        small_conductivity_approx : bool = False,
-            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
-            is modified such that the equation exactly satisfy wave propagation at the central
-            frequency.
 
         Example
         -------
@@ -953,30 +922,24 @@ class Boundary(Tidy3dBaseModel):
             mode_spec=mode_spec,
             mode_index=mode_index,
             frequency=frequency,
-            small_conductivity_approx=small_conductivity_approx,
         )
         minus = ModeABCBoundary(
             plane=plane,
             mode_spec=mode_spec,
             mode_index=mode_index,
             frequency=frequency,
-            small_conductivity_approx=small_conductivity_approx,
         )
 
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def mode_abc_from_source(cls, source: ModeSource, small_conductivity_approx: bool = False):
+    def mode_abc_from_source(cls, source: ModeSource):
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode source.
 
         Parameters
         ----------
         source : :class:`ModeSource`
             Mode source.
-        small_conductivity_approx : bool = False,
-            If ``False`` then the effective permettivity ``eps`` in the one-wave equation
-            is modified such that the equation exactly satisfy wave propagation at the central
-            frequency.
 
         Example
         -------
@@ -985,12 +948,8 @@ class Boundary(Tidy3dBaseModel):
         >>> source = ModeSource(size=(1, 1, 0), source_time=pulse, direction='+')
         >>> abc = Boundary.mode_abc_from_source(source=source)
         """
-        plus = ModeABCBoundary.from_source(
-            source=source, small_conductivity_approx=small_conductivity_approx
-        )
-        minus = ModeABCBoundary.from_source(
-            source=source, small_conductivity_approx=small_conductivity_approx
-        )
+        plus = ModeABCBoundary.from_source(source=source)
+        minus = ModeABCBoundary.from_source(source=source)
         return cls(plus=plus, minus=minus)
 
     @classmethod
@@ -999,7 +958,6 @@ class Boundary(Tidy3dBaseModel):
         monitor: Union[ModeMonitor, ModeSolverMonitor],
         mode_index: pd.NonNengativeInt = 0,
         frequency: Optional[pd.PositiveFloat] = None,
-        small_conductivity_approx: bool = False,
     ):
         """One-way wave equation mode ABC boundary specification on both sides along a dimension constructed from a mode monitor.
 
@@ -1013,13 +971,11 @@ class Boundary(Tidy3dBaseModel):
             monitor=monitor,
             mode_index=mode_index,
             frequency=frequency,
-            small_conductivity_approx=small_conductivity_approx,
         )
         minus = ModeABCBoundary.from_monitor(
             monitor=monitor,
             mode_index=mode_index,
             frequency=frequency,
-            small_conductivity_approx=small_conductivity_approx,
         )
         return cls(plus=plus, minus=minus)
 
