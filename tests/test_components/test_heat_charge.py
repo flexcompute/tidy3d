@@ -680,8 +680,9 @@ def simulation_data(
 
     mesh_monitor = mesh_monitor_data[0].monitor
     mesh_data = td.VolumeMesherData(
-        simulation=td.VolumeMesher(simulation=conduction_simulation, monitors=[mesh_monitor]),
+        simulation=conduction_simulation,
         data=mesh_monitor_data,
+        monitors=[mesh_monitor],
     )
 
     return [
@@ -901,7 +902,7 @@ def test_heat_charge_simulation(simulation_data):
 
 def test_sim_data_plotting(simulation_data):
     """Tests whether simulation data can be plotted and appropriate errors are raised."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Plotting temperature data
     heat_sim_data.plot_field("test", z=0)
@@ -1426,7 +1427,7 @@ def test_dynamic_simulation_updates(heat_simulation):
 
 def test_plotting_functions(simulation_data):
     """Test plotting functions with various data."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Valid plotting
     try:

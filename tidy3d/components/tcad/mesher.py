@@ -13,7 +13,7 @@ class VolumeMesher(Tidy3dBaseModel):
     )
 
     monitors: tuple[VolumeMeshMonitor, ...] = pd.Field(
-        ...,
+        (),
         title="Monitors",
         description="List of monitors to be used for the mesher.",
     )

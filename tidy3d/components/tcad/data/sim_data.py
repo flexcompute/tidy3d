@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
     SpatialDataArray,
@@ -25,11 +26,12 @@ from tidy3d.components.tcad.data.types import (
     TemperatureData,
 )
 from tidy3d.components.tcad.mesher import VolumeMesher
+from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.components.types import Ax, Literal, RealFieldVal, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.exceptions import DataError
+from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.log import log
 
 from ...base import Tidy3dBaseModel
@@ -387,7 +389,7 @@ class HeatSimulationData(HeatChargeSimulationData):
 class VolumeMesherData(AbstractHeatChargeSimulationData):
     """Stores results of a :class:`VolumeMesher`."""
 
-    simulation: VolumeMesher = pd.Field(
+    simulation: HeatChargeSimulation = pd.Field(
         title="Volume mesher",
         description="Original :class:`VolumeMesher` associated with the data.",
     )
@@ -399,7 +401,41 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
         "associated with the monitors of the original :class:`.VolumeMesher`.",
     )
 
-    # @property
-    # def simulation(self) -> HeatChargeSimulation:
-    #     """Get the simulation associated with this mesher data."""
-    #     return self.mesher.simulation
+    monitors: tuple[VolumeMeshMonitor, ...] = pd.Field(
+        ...,
+        title="Monitors",
+        description="List of monitors to be used for the mesher.",
+    )
+
+    @property
+    def mesher(self) -> VolumeMesher:
+        """Get the mesher associated with this mesher data."""
+        return VolumeMesher(
+            simulation=self.simulation,
+            monitors=self.monitors,
+        )
+
+    @pd.validator("data", always=True)
+    @skip_if_fields_missing(["monitors"])
+    def data_monitors_match_sim(cls, val, values):
+        """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
+        ``.simulation``.
+        """
+        monitors = values.get("monitors")
+        mnt_names = {mnt.name for mnt in monitors}
+
+        for mnt_data in val:
+            monitor_name = mnt_data.monitor.name
+            if monitor_name not in mnt_names:
+                raise DataError(
+                    f"Data with monitor name '{monitor_name}' supplied "
+                    f"but not found in the list of monitors."
+                )
+        return val
+
+    def get_monitor_by_name(self, name: str) -> VolumeMeshMonitor:
+        """Return monitor named 'name'."""
+        for monitor in self.monitors:
+            if monitor.name == name:
+                return monitor
+        raise Tidy3dKeyError(f"No monitor named '{name}'")

@@ -12,6 +12,7 @@ import xarray as xr
 from ....exceptions import DataError, Tidy3dKeyError, ValidationError
 from ...base import Tidy3dBaseModel, skip_if_fields_missing
 from ...data.utils import UnstructuredGridDatasetType
+from ...monitor import AbstractMonitor
 from ...types import FieldVal
 from ..simulation import AbstractSimulation
 from .monitor_data import AbstractMonitorData
@@ -127,3 +128,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             )
 
         return field_value
+
+    def get_monitor_by_name(self, name: str) -> AbstractMonitor:
+        """Return monitor named 'name'."""
+        return self.simulation.get_monitor_by_name(name)
