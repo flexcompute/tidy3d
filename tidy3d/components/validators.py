@@ -214,7 +214,10 @@ def assert_objects_in_sim_bounds(
 
 
 def assert_objects_contained_in_sim_bounds(
-    field_name: str, error: bool = True, strict_inequality: bool = False
+    field_name: str,
+    error: bool = True,
+    strict_inequality: bool = False,
+    strict_for_zero_size_dim: bool = False,
 ):
     """Makes sure all objects in field are completely inside the simulation bounds."""
 
@@ -228,10 +231,17 @@ def assert_objects_contained_in_sim_bounds(
 
         # Do a strict check, unless simulation is 0D along a dimension
         strict_ineq = [size != 0 and strict_inequality for size in sim_size]
-
         with log as consolidated_logger:
             for position_index, geometric_object in enumerate(val):
-                if not sim_box.contains(geometric_object.geometry, strict_inequality=strict_ineq):
+                geo_strict_ineq = list(strict_ineq)
+                # Optionally ensure that zero size dimensions are strictly contained
+                if strict_for_zero_size_dim:
+                    zero_dims = geometric_object.geometry.zero_dims
+                    for zero_dim in zero_dims:
+                        geo_strict_ineq[zero_dim] = True
+                if not sim_box.contains(
+                    geometric_object.geometry, strict_inequality=geo_strict_ineq
+                ):
                     message = (
                         f"'simulation.{field_name}[{position_index}]' "
                         "is not completely inside the simulation domain."
