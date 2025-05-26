@@ -66,6 +66,7 @@ pytest-xdist = "^3.6.1"
 pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
+diff-cover = { version = "*", optional = true }
 
 # gdstk
 gdstk = { version = ">=0.9.49", optional = true }
@@ -177,6 +178,7 @@ dev = [
   'vtk',
   'devsim',
   'cma',
+  'diff-cover'
 ]
 docs = [
   "jupyter",
