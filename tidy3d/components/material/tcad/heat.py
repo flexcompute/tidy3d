@@ -31,17 +31,15 @@ class AbstractHeatMedium(ABC, Tidy3dBaseModel):
 
     @property
     def charge(self):
-        return ValueError(f"A `charge` medium does not exist in this Medium definition: {self}")
+        raise ValueError(f"A `charge` medium does not exist in this Medium definition: {self}")
 
     @property
     def electrical(self):
-        return ValueError(
-            f"An `electrical` medium does not exist in this Medium definition: {self}"
-        )
+        raise ValueError(f"An `electrical` medium does not exist in this Medium definition: {self}")
 
     @property
     def optical(self):
-        return ValueError(f"An `optical` medium does not exist in this Medium definition: {self}")
+        raise ValueError(f"An `optical` medium does not exist in this Medium definition: {self}")
 
 
 class FluidMedium(AbstractHeatMedium):
