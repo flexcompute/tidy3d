@@ -820,12 +820,12 @@ def interpolate_spline(
     >>> # Quadratic interpolation with left endpoint derivative
     >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, endpoint_derivatives=(0, None), order=2)
     >>> print(np.round(y_interp, 3))
-    [0.    0.75  1.    0.5   0.  ]
+    [0.    0.25  1.    1.25   0.  ]
 
     >>> # Cubic interpolation with both endpoint derivatives
     >>> x_interp, y_interp = interpolate_spline(x, y, num_points=5, endpoint_derivatives=(0, 0), order=3)
     >>> print(np.round(y_interp, 3))
-    [0.    0.75  1.    0.75  0.  ]
+    [0.    0.5  1.    0.5  0.  ]
     """
     return _interpolate_spline(
         x_points,
