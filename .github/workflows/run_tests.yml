@@ -24,7 +24,7 @@ on:
 
 jobs:
   determine-test-scope:
-    runs-on: [ inhouse ] 
+    runs-on: [ inhouse ]
     if: |
       github.event.pull_request.draft == false ||
       github.ref == 'refs/heads/develop' ||
@@ -33,6 +33,22 @@ jobs:
       local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
       remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
     steps:
+      - name: check-current-approval-status
+        id: approval
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo
+            const number = context.payload.pull_request.number
+            const reviews = await github.rest.pulls.listReviews({owner, repo, pull_number: number})
+
+            const latestByUser = {}
+            reviews.data.forEach(r => latestByUser[r.user.id] = r)
+
+            const approved = Object.values(latestByUser)
+                                   .some(r => r.state === 'APPROVED')
+            core.setOutput('approved', approved ? 'true' : 'false')
       - name: determine-test-type
         id: determine-test-type
         env:
@@ -42,6 +58,7 @@ jobs:
           REF: ${{ github.ref }}
           INPUT_LOCAL: ${{ github.event.inputs.local_tests }}
           INPUT_REMOTE: ${{ github.event.inputs.remote_tests }}
+          APPROVED: ${{ steps.approval.outputs.approved }}
         run: |
           echo "Event: $EVENT_NAME"
           echo "Draft: $DRAFT_STATE"
@@ -49,17 +66,18 @@ jobs:
           echo "Git REF: $REF"
           echo "Input local: $INPUT_FAST"
           echo "Input remote: $INPUT_FULL"
+          echo "Approved: $APPROVED"
 
           remote_tests=false
           local_tests=false
           # Workflow_dispatch input override
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            
+
             # Each option is self contained
             if [[ "$INPUT_REMOTE" == "true" ]]; then
               remote_tests=true
             fi
-            
+
             if [[ "$INPUT_LOCAL" == "true" ]]; then
               local_tests=true
             fi
@@ -76,11 +94,12 @@ jobs:
             fi
           fi
 
-          # All PRs that have been triggered need local tests
+          # All PRs that have been triggered need local tests and approved ones need to re-run the remote tests
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
               local_tests=true
+              [[ "$APPROVED" == "true" ]] && remote_tests=true
           fi
-          
+
           # If it's a push to develop
           if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/develop" ]]; then
             local_tests=true
@@ -91,12 +110,12 @@ jobs:
           echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
           echo "local_tests=$local_tests"
           echo "remote_tests=$remote_tests"
-  
+
   lint:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
-    runs-on: [ inhouse ] 
+    runs-on: [ inhouse ]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -111,10 +130,10 @@ jobs:
 
   local-tests:
     # Run on open PRs OR when manually triggered with local_tests=true
-    needs: determine-test-scope 
+    needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
-    name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ inhouse ] 
+    name: Python ${{ matrix.python-version }} - self-hosted-runner
+    runs-on: [ inhouse ]
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
@@ -172,13 +191,13 @@ jobs:
         diff-storage: _xml_coverage_reports
         coverage-summary-title: "Code Coverage Summary"
         togglable-report: true
-    
+
     - name: Changed files
       id: diff
       uses: step-security/changed-files@v46
       with:
         files: '**/*.py'
-  
+
     - name: Slice report down to changed files
       if: ${{ steps.diff.outputs.all_changed_files != '' }}
       env:
@@ -188,7 +207,7 @@ jobs:
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         include=$(printf '%s\n' $CHANGED | sed 's|^|**/|' | paste -sd, -)
         coverage xml -i -o changed.xml --include="$include"
-      
+
     - name: Produce the changed files coverage report
       uses: insightsengineering/coverage-action@v2
       if: ${{ steps.diff.outputs.all_changed_files != '' }}
@@ -201,7 +220,7 @@ jobs:
 
   remote-tests:
     # Run tests on a push event OR a workflow dispatch with remote_tests
-    needs: determine-test-scope 
+    needs: determine-test-scope
     if: needs.determine-test-scope.outputs.remote_tests == 'true'
     name: Python ${{ matrix.python-version }} - ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
@@ -271,7 +290,7 @@ jobs:
         maxColorRange: 95
         valColorRange: ${{ env.total }}
         style: "for-the-badge"
-  
+
   pr-requirements-pass:
     name: pr-requirements-pass
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
