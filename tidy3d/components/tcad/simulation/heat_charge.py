@@ -85,6 +85,8 @@ from tidy3d.constants import VOLUMETRIC_HEAT_RATE, inf
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 
+from ..analysis.heat_simulation_type import UnsteadyHeatAnalysis
+
 HEAT_CHARGE_BACK_STRUCTURE_STR = "<<<HEAT_CHARGE_BACKGROUND_STRUCTURE>>>"
 
 HeatBCTypes = (TemperatureBC, HeatFluxBC, ConvectionBC)
@@ -92,7 +94,10 @@ HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
 
-AnalysisSpecType = ElectricalAnalysisType
+AnalysisSpecType = Union[ElectricalAnalysisType, UnsteadyHeatAnalysis]
+
+# define some limits for transient heat simulations
+TRANSIENT_HEAT_MAX_STEPS = 1000
 
 
 class TCADAnalysisTypes(str, Enum):
@@ -299,8 +304,8 @@ class HeatChargeSimulation(AbstractSimulation):
     analysis_spec: AnalysisSpecType = pd.Field(
         None,
         title="Analysis specification.",
-        description="The `analysis_spec` is used to validate that the simulation parameters and tolerance settings "
-        "are correctly configured as desired by the user.",
+        description="The `analysis_spec` is used to specify the type of simulation. Currently, it is used to "
+        "specify Charge simulations or transient Heat simulations.",
     )
 
     @pd.validator("structures", always=True)
@@ -358,8 +363,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     isinstance(medium.heat_spec, SolidMedium) for medium in medium_set
                 )
                 crosses_elec_spec = any(
-                    any([isinstance(medium.charge, medium_i)] for medium_i in valid_electric_medium)
-                    for medium in medium_set
+                    isinstance(medium.charge, valid_electric_medium) for medium in medium_set
                 )
             else:
                 # approximate check for volumetric objects based on bounding boxes
@@ -372,10 +376,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 crosses_elec_spec = any(
                     obj.intersects(structure.geometry)
                     for structure in total_structures
-                    if any(
-                        [isinstance(structure.medium.charge, medium_i)]
-                        for medium_i in valid_electric_medium
-                    )
+                    if isinstance(structure.medium.charge, valid_electric_medium)
                 )
 
             if not crosses_solid:
@@ -390,8 +391,8 @@ class HeatChargeSimulation(AbstractSimulation):
     def _monitors_cross_solids(cls, val, values):
         """Error if monitors does not cross any solid medium."""
 
-        if val is None:
-            return val
+        # if val is None:
+        #     return val
 
         failed_solid_idx, failed_elect_idx = cls._check_cross_solids(val, values)
 
@@ -828,6 +829,69 @@ class HeatChargeSimulation(AbstractSimulation):
                 "the pipeline will be stopped. If this happens the grid specification "
                 "may need to be modified."
             )
+        return values
+
+    @skip_if_fields_missing(["analysis_spec", "monitors", "structures", "size"])
+    @pd.root_validator(skip_on_failure=True)
+    def check_transient_heat(cls, values):
+        """Make sure transient heat simulations can run."""
+
+        analysis_type = values.get("analysis_spec")
+        if isinstance(analysis_type, UnsteadyHeatAnalysis):
+            monitors = values.get("monitors")
+            for mnt in monitors:
+                if isinstance(mnt, TemperatureMonitor):
+                    if not mnt.unstructured:
+                        raise SetupError(
+                            f"Unsteady simulations require the temperature monitor '{mnt.name}' to be unstructured."
+                        )
+            # additionaly check that the SolidSpec has capacity and density defined
+            capacities = []
+            densities = []
+            conductivities = []
+            structures = values.get("structures")
+            for structure in structures:
+                if isinstance(structure.medium.heat, SolidMedium):
+                    if structure.medium.heat_spec.capacity is None:
+                        raise SetupError(
+                            f"Unsteady simulations require the medium '{structure.medium.name}' to have capacity defined."
+                        )
+                    else:
+                        capacities.append(structure.medium.heat_spec.capacity)
+                    if structure.medium.heat_spec.density is None:
+                        raise SetupError(
+                            f"Unsteady simulations require the medium '{structure.medium.name}' to have density defined."
+                        )
+                    else:
+                        densities.append(structure.medium.heat_spec.density)
+
+                    conductivities.append(structure.medium.heat_spec.conductivity)
+
+            # check that we don't have too many time-steps
+            if analysis_type.unsteady_spec.total_time_steps > TRANSIENT_HEAT_MAX_STEPS:
+                raise SetupError(
+                    "Unsteady simulations require the number of time-steps to be less than "
+                    f"{TRANSIENT_HEAT_MAX_STEPS} but {analysis_type.unsteady_spec.total_time_steps} were provided."
+                )
+
+            # check simulation time
+            domain_length = np.max([d for d in values.get("size") if d != np.inf])
+            characteristic_time = (
+                domain_length**2
+                * np.mean(capacities)
+                * np.mean(densities)
+                / np.mean(conductivities)
+                * 1e-18
+            )
+            if (
+                analysis_type.unsteady_spec.time_step * analysis_type.unsteady_spec.total_time_steps
+                > 100 * characteristic_time
+            ):
+                log.warning(
+                    "The simulation time is larger than 100 times the estimated characteristic time of the system. "
+                    "This may lead to unnecessary long simulation times. "
+                    "Consider reducing the simulation time or the time step size."
+                )
         return values
 
     @equal_aspect
@@ -1613,8 +1677,13 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # NOTE: for the time being, if a simulation has SemiconductorMedium
         # then we consider it of being a 'TCADAnalysisTypes.CHARGE'
-        if self._check_if_semiconductor_present(self.structures):
-            return [TCADAnalysisTypes.CHARGE]
+        if isinstance(self.analysis_spec, ElectricalAnalysisType):
+            if self._check_if_semiconductor_present(self.structures):
+                return [TCADAnalysisTypes.CHARGE]
+
+        # check if unsteady heat
+        if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):
+            return [TCADAnalysisTypes.HEAT]
 
         heat_source_present = any(isinstance(s, HeatSourceTypes) for s in self.sources)
 

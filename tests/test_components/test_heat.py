@@ -40,6 +40,7 @@ def make_heat_mediums():
         heat_spec=SolidSpec(
             capacity=2,
             conductivity=3,
+            density=1,
         ),
         name="solid_medium",
     )
@@ -55,6 +56,26 @@ def test_heat_medium():
 
     with pytest.raises(pd.ValidationError):
         _ = solid_medium.heat_spec.updated_copy(conductivity=-1)
+
+    # check we can create solid medium from  SI units
+    solid_from_si = td.SolidMedium.from_si_units(
+        conductivity=1,
+        capacity=1,
+        density=1,
+    )
+    assert solid_from_si.conductivity == 1e-6
+    assert solid_from_si.density == 1e-18
+
+    assert solid_from_si == solid_from_si.heat
+
+    with pytest.raises(ValueError):
+        _ = solid_from_si.charge
+
+    with pytest.raises(ValueError):
+        _ = solid_from_si.electrical
+
+    with pytest.raises(ValueError):
+        _ = solid_from_si.optical
 
 
 def make_heat_structures():
@@ -632,8 +653,69 @@ def test_symmetry_expanded(zero_dim_axis):
     data_expanded_cart = mnt_data_cart_expanded.temperature
     data_expanded_ugrid = mnt_data_ugrid_expanded.temperature
 
-    print(data_expanded_ugrid.bounds)
-    print(mnt_bounds)
+    # print(data_expanded_ugrid.bounds)
+    # print(mnt_bounds)
 
     assert np.all(data_expanded_ugrid.bounds == mnt_bounds)
     assert data_expanded_cart.does_cover(mnt_bounds)
+
+
+def test_unsteady_setup():
+    """Test that unsteady setup works correctly."""
+
+    _, solid_medium = make_heat_mediums()
+    solid_structure = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+        medium=solid_medium,
+        name="solid_structure",
+    )
+
+    heat_sim = make_heat_sim(include_custom_source=False)
+    unsteady_spec = td.UnsteadyHeatAnalysis(
+        initial_temperature=300, unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=100)
+    )
+
+    temp_mnt = TemperatureMonitor(size=(1, 1, 1), name="mnt", unstructured=True)
+    bc = HeatBoundarySpec(
+        condition=td.TemperatureBC(temperature=300),
+        placement=StructureBoundary(structure="solid_structure"),
+    )
+
+    heat_sim = heat_sim.updated_copy(
+        structures=[solid_structure],
+        analysis_spec=unsteady_spec,
+        monitors=[temp_mnt],
+        boundary_spec=[bc],
+    )
+
+    with pytest.raises(pd.ValidationError):
+        solid_medium = td.MultiPhysicsMedium(
+            heat=td.SolidMedium(
+                conductivity=3,
+            ),
+            name="solid_medium",
+        )
+        new_struct = solid_structure.updated_copy(medium=solid_medium)
+        _ = heat_sim.updated_copy(structures=[new_struct])
+
+    with pytest.raises(pd.ValidationError):
+        solid_medium = td.MultiPhysicsMedium(
+            heat=td.SolidMedium(
+                conductivity=3,
+                capacity=2,
+            ),
+            name="solid_medium",
+        )
+        new_struct = solid_structure.updated_copy(medium=solid_medium)
+        _ = heat_sim.updated_copy(structures=[new_struct])
+
+    with pytest.raises(pd.ValidationError):
+        solid_medium = td.MultiPhysicsMedium(
+            heat=td.SolidMedium(
+                conductivity=3,
+                density=2,
+            ),
+            name="solid_medium",
+        )
+        new_struct = solid_structure.updated_copy(medium=solid_medium)
+        _ = heat_sim.updated_copy(structures=[new_struct])
