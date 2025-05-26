@@ -234,6 +234,10 @@ jobs:
     env:  # Set environment variables for the whole job
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
+    
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-remote
+      cancel-in-progress: true
 
     steps:
     - uses: actions/checkout@v4
