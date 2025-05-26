@@ -33,6 +33,22 @@ jobs:
       local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
       remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
     steps:
+      - name: check-current-approval-status
+        id: approval
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo
+            const number = context.payload.pull_request.number
+            const reviews = await github.rest.pulls.listReviews({owner, repo, pull_number: number})
+
+            const latestByUser = {}
+            reviews.data.forEach(r => latestByUser[r.user.id] = r)
+
+            const approved = Object.values(latestByUser)
+                                   .some(r => r.state === 'APPROVED')
+            core.setOutput('approved', approved ? 'true' : 'false')
       - name: determine-test-type
         id: determine-test-type
         env:
@@ -42,6 +58,7 @@ jobs:
           REF: ${{ github.ref }}
           INPUT_LOCAL: ${{ github.event.inputs.local_tests }}
           INPUT_REMOTE: ${{ github.event.inputs.remote_tests }}
+          APPROVED: ${{ steps.approval.outputs.approved }}
         run: |
           echo "Event: $EVENT_NAME"
           echo "Draft: $DRAFT_STATE"
@@ -49,6 +66,7 @@ jobs:
           echo "Git REF: $REF"
           echo "Input local: $INPUT_FAST"
           echo "Input remote: $INPUT_FULL"
+          echo "Approved: $APPROVED"
 
           remote_tests=false
           local_tests=false
@@ -76,9 +94,10 @@ jobs:
             fi
           fi
 
-          # All PRs that have been triggered need local tests
+          # All PRs that have been triggered need local tests and approved ones need to re-run the remote tests
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
               local_tests=true
+              [[ "$APPROVED" == "true" ]] && remote_tests=true
           fi
 
           # If it's a push to develop
@@ -227,6 +246,10 @@ jobs:
     env:  # Set environment variables for the whole job
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
+    
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ matrix.platform }}-${{ matrix.python-version }}-remote
+      cancel-in-progress: true
 
     steps:
     - uses: actions/checkout@v4
