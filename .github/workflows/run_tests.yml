@@ -236,7 +236,7 @@ jobs:
       MPLBACKEND: agg
     
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-remote
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ matrix.platform }}-remote
       cancel-in-progress: true
 
     steps:
