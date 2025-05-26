@@ -755,6 +755,11 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
             medium=solid_no_heat, structures=[solid_struct_no_heat], monitors=[temp_monitor]
         )
 
+    # check error is raised in voltage monitor doesn't cross a conducting medium
+    with pytest.raises(pd.ValidationError):
+        volt_mnt = td.SteadyPotentialMonitor(center=(0, 0, 0), size=(0, td.inf, td.inf))
+        _ = conduction_simulation.updated_copy(monitors=[volt_mnt])
+
 
 def test_heat_charge_mnt_data(
     temperature_monitor_data, voltage_monitor_data, capacitance_monitor_data
@@ -876,6 +881,26 @@ def test_sim_data_plotting(simulation_data):
 
     with pytest.raises(pd.ValidationError):
         heat_sim_data.updated_copy(simulation=sim)
+
+
+def test_conduction_simulation_has_conductors(conduction_simulation, structures):
+    """Test whether error is raised if conduction simulation has no conductors."""
+
+    with pytest.raises(pd.ValidationError):
+        _ = conduction_simulation.updated_copy(
+            monitors=[],
+            structures=[structures["insulator_structure"]],
+        )
+
+
+def test_coupling_source(conduction_simulation, heat_simulation):
+    """Test whether the coupling source can be applied."""
+
+    with pytest.raises(pd.ValidationError):
+        _ = conduction_simulation.updated_copy(sources=[td.HeatFromElectricSource()])
+
+    with pytest.raises(pd.ValidationError):
+        _ = heat_simulation.updated_copy(sources=[td.HeatFromElectricSource()])
 
 
 # --------------------------
@@ -1050,6 +1075,13 @@ class TestCharge:
                 condition=td.VoltageBC(source=td.DCVoltageSource(voltage=1))
             )
             _ = sim.updated_copy(boundary_spec=[bc_p, new_bc_n])
+
+        # test error is raised when more than one voltage array is provided
+        with pytest.raises(pd.ValidationError):
+            new_bc_p = bc_p.updated_copy(
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1, 2]))
+            )
+            _ = sim.updated_copy(boundary_spec=[new_bc_p, bc_n])
 
     def test_doping_distributions(self):
         """Test doping distributions."""

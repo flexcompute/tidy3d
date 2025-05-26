@@ -363,8 +363,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     isinstance(medium.heat_spec, SolidMedium) for medium in medium_set
                 )
                 crosses_elec_spec = any(
-                    any([isinstance(medium.charge, medium_i)] for medium_i in valid_electric_medium)
-                    for medium in medium_set
+                    isinstance(medium.charge, valid_electric_medium) for medium in medium_set
                 )
             else:
                 # approximate check for volumetric objects based on bounding boxes
@@ -377,10 +376,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 crosses_elec_spec = any(
                     obj.intersects(structure.geometry)
                     for structure in total_structures
-                    if any(
-                        [isinstance(structure.medium.charge, medium_i)]
-                        for medium_i in valid_electric_medium
-                    )
+                    if isinstance(structure.medium.charge, valid_electric_medium)
                 )
 
             if not crosses_solid:
@@ -395,8 +391,8 @@ class HeatChargeSimulation(AbstractSimulation):
     def _monitors_cross_solids(cls, val, values):
         """Error if monitors does not cross any solid medium."""
 
-        if val is None:
-            return val
+        # if val is None:
+        #     return val
 
         failed_solid_idx, failed_elect_idx = cls._check_cross_solids(val, values)
 
