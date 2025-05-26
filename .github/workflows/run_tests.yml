@@ -236,6 +236,9 @@ jobs:
     if: needs.determine-test-scope.outputs.remote_tests == 'true'
     name: Python ${{ matrix.python-version }} - ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
@@ -246,7 +249,7 @@ jobs:
     env:  # Set environment variables for the whole job
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
-    
+
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ matrix.platform }}-${{ matrix.python-version }}-remote
       cancel-in-progress: true
