@@ -160,7 +160,7 @@ class GradedMesher(Mesher):
             # give priority to the snapping_point and replace
             elif d_1 < min_step:
                 # Don't replace if the boundary is the simulation boundary
-                if ind == 0:
+                if ind == 1:
                     continue
                 interval_coords[ind - 1] = new_coord
                 continue
