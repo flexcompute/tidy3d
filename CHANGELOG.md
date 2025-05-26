@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
 - Fixed shaping of `CustomMedium` gradients when permittivity data includes a frequency dimension with multiple entries.
+- Bug when generating a grid with snapping points near the simulation boundaries.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.

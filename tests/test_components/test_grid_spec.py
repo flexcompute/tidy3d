@@ -83,7 +83,7 @@ def test_make_coords_with_snapping_points():
     # 3) snapping takes no effect if it's too close to interval boundaries
     # forming the simulation boundary
     coord = gs.grid_x.make_coords(
-        snapping_points=((0.98, 0, 0),),
+        snapping_points=((0.98, 0, 0), (-0.98, 0, 0)),
         **make_coords_args,
     )
     assert np.allclose(coord_original, coord)
