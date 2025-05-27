@@ -21,7 +21,6 @@ from tidy3d.components.simulation import (
 )
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
-from tidy3d.components.validators import validate_mode_plane_radius
 from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
@@ -228,8 +227,11 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def _post_init_validators(self) -> None:
         """Call validators taking `self` that get run after init."""
-        validate_mode_plane_radius(
-            mode_spec=self.mode_spec, plane=self.plane, msg_prefix="'ModeSimulation'"
+        ModeSolver._validate_mode_plane_radius(
+            mode_spec=self.mode_spec,
+            plane=self.plane,
+            sim_geom=self.geometry,
+            msg_prefix="'ModeSimulation'",
         )
         _ = self._mode_solver
         _ = self.grid
