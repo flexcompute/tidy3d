@@ -12,6 +12,7 @@ from typing import Literal
 
 import numpy as np
 
+from .config import config
 from .exceptions import Tidy3dImportError
 
 vtk = {
@@ -21,6 +22,8 @@ vtk = {
     "numpy_to_vtkIdTypeArray": None,
     "numpy_to_vtk": None,
 }
+
+tidy3d_extras = {"mod": None, "use_local_subpixel": False}
 
 
 def check_import(module_name: str) -> bool:
@@ -175,3 +178,37 @@ def get_numpy_major_version(module=np):
     major_version = int(module_version.split(".")[0])
 
     return major_version
+
+
+def supports_local_subpixel(fn):
+    """When decorating a method, checks that 'tidy3d-extras' is available,
+    conditioned on 'config.use_local_subpixel'."""
+
+    @functools.wraps(fn)
+    def _fn(*args, **kwargs):
+        if config.use_local_subpixel is False:
+            tidy3d_extras["use_local_subpixel"] = False
+            tidy3d_extras["mod"] = None
+        else:
+            # first try to import the module
+            if tidy3d_extras["mod"] is None:
+                try:
+                    import tidy3d_extras as tidy3d_extras_mod
+
+                    tidy3d_extras["mod"] = tidy3d_extras_mod
+                    tidy3d_extras["use_local_subpixel"] = True
+                except ImportError as exc:
+                    tidy3d_extras["mod"] = None
+                    tidy3d_extras["use_local_subpixel"] = False
+                    if config.use_local_subpixel is True:
+                        raise Tidy3dImportError(
+                            "The package 'tidy3d-extras' is required for this "
+                            "operation when 'config.use_local_subpixel' is 'True'. "
+                            "Please install the 'tidy3d-extras' package using, for "
+                            "example, 'pip install tidy3d-extras'. NOTE: This "
+                            "feature is not yet supported."
+                        ) from exc
+
+        return fn(*args, **kwargs)
+
+    return _fn
