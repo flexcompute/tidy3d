@@ -22,6 +22,7 @@ import xarray as xr
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
+from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 from tidy3d.updater import Updater
 
 from .base import cached_property, skip_if_fields_missing
@@ -1461,6 +1462,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         sub_grid = self.discretize(box)
         return self.epsilon_on_grid(grid=sub_grid, coord_key=coord_key, freq=freq)
 
+    @supports_local_subpixel
     def epsilon_on_grid(
         self,
         grid: Grid,
@@ -1504,6 +1506,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 f"Simulation contains {num_structures:.2e} structures. "
                 "Epsilon calculation may be slow."
             )
+
+        if tidy3d_extras["use_local_subpixel"]:
+            subpixel_sim = tidy3d_extras["mod"].SubpixelSimulation.from_simulation(self)
+            return subpixel_sim.epsilon_on_grid(grid=grid, coord_key=coord_key, freq=freq)
 
         def get_eps(structure: Structure, frequency: float, coords: Coords):
             """Select the correct epsilon component if field locations are requested."""
@@ -1954,6 +1960,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         new_sim = self.updated_copy(**new_sim_dict, deep=deep_copy, validate=True)
         # 2) Assemble the full simulation without validation
         return new_sim.updated_copy(structures=new_structures, deep=deep_copy, validate=False)
+
+    def _invalidate_solver_cache(self) -> None:
+        """Clear cached attributes that become stale when subpixel changes."""
+        self._cached_properties.pop("_mode_solver", None)
 
 
 class Simulation(AbstractYeeGridSimulation):

@@ -149,7 +149,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        fetch-depth: 1
+        fetch-depth: 0
 
     - name: Install project
       env:
@@ -190,44 +190,43 @@ jobs:
       run: |
         ls $GITHUB_WORKSPACE
 
-    - name: Produce the coverage report
-      uses: insightsengineering/coverage-action@v2
-      with:
-        path: coverage.xml
-        threshold: 90.0
-        fail: false
-        publish: true
-        diff: true
-        diff-branch: develop
-        diff-storage: _xml_coverage_reports
-        coverage-summary-title: "Code Coverage Summary"
-        togglable-report: true
-
-    - name: Changed files
-      id: diff
-      uses: step-security/changed-files@v46
-      with:
-        files: '**/*.py'
-
-    - name: Slice report down to changed files
-      if: ${{ steps.diff.outputs.all_changed_files != '' }}
-      env:
-        CHANGED: ${{ steps.diff.outputs.all_changed_files }}
+    - name: Produce the diff coverage report
+      if: ${{ matrix.python-version }} == "3.13"
       run: |
-        echo $CHANGED
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
-        include=$(printf '%s\n' $CHANGED | sed 's|^|**/|' | paste -sd, -)
-        coverage xml -i -o changed.xml --include="$include"
+        diff-cover ${GITHUB_WORKSPACE}/coverage.xml \
+          --compare-branch origin/${{ github.event.pull_request.base.ref }} \
+          --format markdown:diff-coverage.md
 
-    - name: Produce the changed files coverage report
-      uses: insightsengineering/coverage-action@v2
-      if: ${{ steps.diff.outputs.all_changed_files != '' }}
+    - uses: actions/github-script@v7
       with:
-        path: ./changed.xml
-        threshold: 90.0
-        publish: true
-        fail: false
-        coverage-summary-title: "Changed Files Coverage"
+        result-encoding: string
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- diff-cover-report -->';
+          const body = fs.readFileSync('diff-coverage.md','utf8');
+          const report = `${marker}\n${body}`;
+          const {data:comments}=await github.rest.issues.listComments({
+            owner:context.repo.owner,
+            repo:context.repo.repo,
+            issue_number:context.issue.number,
+          });
+          const existing = comments.find(c=>c.body.startsWith(marker));
+          if(existing) {
+            await github.rest.issues.updateComment({
+              owner:context.repo.owner,
+              repo:context.repo.repo,
+              comment_id:existing.id,
+              body:report,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner:context.repo.owner,
+              repo:context.repo.repo,
+              issue_number:context.issue.number,
+              body:report,
+            });
+          }
 
   remote-tests:
     # Run tests on a push event OR a workflow dispatch with remote_tests
@@ -235,6 +234,9 @@ jobs:
     if: needs.determine-test-scope.outputs.remote_tests == 'true'
     name: Python ${{ matrix.python-version }} - ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: read
+      pull-requests: write
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
@@ -245,7 +247,7 @@ jobs:
     env:  # Set environment variables for the whole job
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
-    
+
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ matrix.platform }}-${{ matrix.python-version }}-remote
       cancel-in-progress: true
