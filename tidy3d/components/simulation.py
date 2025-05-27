@@ -355,7 +355,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     """
 
     @field_validator("simulation_type")
-    def _validate_simulation_type_tidy3d(val, mode="before"):
+    def _validate_simulation_type_tidy3d(val):
         """Enforce the simulation_type is 'tidy3d' if passed as None for bkwrds compatibility."""
         return "tidy3d" if val is None else val
 
