@@ -178,19 +178,6 @@ jobs:
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
-    - name: Produce the coverage report
-      uses: insightsengineering/coverage-action@v2
-      with:
-        path: ./coverage.xml
-        threshold: 90.0
-        fail: false
-        publish: true
-        diff: true
-        diff-branch: develop
-        diff-storage: _xml_coverage_reports
-        coverage-summary-title: "Code Coverage Summary"
-        togglable-report: true
-
     - name: Produce the diff coverage report
       if: ${{ matrix.python-version }} == "3.13"
       run: |
