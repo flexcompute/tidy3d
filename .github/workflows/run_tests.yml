@@ -186,10 +186,14 @@ jobs:
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
+    - name: verify-coverage-report-location
+      run: |
+        ls $GITHUB_WORKSPACE
+
     - name: Produce the coverage report
       uses: insightsengineering/coverage-action@v2
       with:
-        path: $GITHUB_WORKSPACE/coverage.xml
+        path: ${{ GITHUB_WORKSPACE }}/coverage.xml
         threshold: 90.0
         fail: false
         publish: true
