@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import abc
 import warnings
-from typing import Literal, Optional, Self, Union
+from typing import Literal, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -11,6 +11,7 @@ from autograd import elementwise_grad, grad
 from pydantic import Field, PositiveFloat, field_validator, model_validator
 
 import tidy3d as td
+from tidy3d.compat import Self
 from tidy3d.components.types import TYPE_TAG_STR, Coordinate, Size
 from tidy3d.exceptions import ValidationError
 

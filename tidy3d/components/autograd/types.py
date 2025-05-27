@@ -75,23 +75,14 @@ def traced_alias(base_alias, *, name: Optional[str] = None) -> TypeAlias:
 
         raise ValueError("expected autograd tracer")
 
-    # auto-generate title if not explicitly passed
-    if name is None and hasattr(base_alias, "__name__"):
-        title = f"Traced{base_alias.__name__}"
-    else:
-        title = name
-
-    return Annotated[
-        Union[
-            base_alias,
-            Annotated[
-                Box,
-                BeforeValidator(_validate_box_or_container),
-                PlainSerializer(lambda a, _: _auto_serializer(get_static(a), _), when_used="json"),
-            ],
-            Annotated[object, BeforeValidator(_validate_box_or_container)],
+    return Union[
+        base_alias,
+        Annotated[
+            Box,
+            BeforeValidator(_validate_box_or_container),
+            PlainSerializer(lambda a, _: _auto_serializer(get_static(a), _), when_used="json"),
         ],
-        {} if title is None else {"title": title},
+        Annotated[object, BeforeValidator(_validate_box_or_container)],
     ]
 
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Self, Union
+from typing import Optional, Union
 
 import numpy as np
 from pydantic import Field, NonNegativeInt, PositiveFloat, field_validator, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans

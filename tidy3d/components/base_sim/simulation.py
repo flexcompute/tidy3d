@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Self
+from typing import Literal, Optional
 
 import autograd.numpy as anp
 from pydantic import Field, model_validator
 
+from tidy3d.compat import Self
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import Medium, MediumType3D

@@ -135,10 +135,6 @@ def array_alias(
         scalar_to_1d=scalar_to_1d,
         strict=strict,
     )
-    validators = [
-        BeforeValidator(_from_complex_dict),
-        BeforeValidator(lambda v: _coerce(v, constraints=constraints)),
-    ]
     serializer = PlainSerializer(_auto_serializer, when_used="json")
 
     base_schema = {
@@ -153,7 +149,8 @@ def array_alias(
 
     return Annotated[
         np.ndarray,
-        *validators,
+        BeforeValidator(_from_complex_dict),
+        BeforeValidator(lambda v: _coerce(v, constraints=constraints)),
         serializer,
         WithJsonSchema(base_schema),
     ]

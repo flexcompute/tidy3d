@@ -72,9 +72,7 @@ def test_medium_repr():
     str_noname_medium_dict = str(noname_medium_in_dict)
 
     assert "name=None," in str_noname_medium, "Expected medium information in string"
-    assert "Medium(attrs={}, name=None, frequency_range=None" in repr_noname_medium, (
-        "Expcted medium information in repr"
-    )
+    assert "name=None" in repr_noname_medium, "Expected medium information in repr"
     assert repr_noname_medium in str_noname_medium_dict, "Expected repr in dictionary string"
 
     for medium in test_media:

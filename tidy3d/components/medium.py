@@ -6,7 +6,7 @@ import functools
 import warnings
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Callable, Optional, Self, Union
+from typing import Callable, Optional, Union
 
 import autograd as ag
 import autograd.numpy as np
@@ -22,6 +22,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.compat import Self
 from tidy3d.constants import (
     C_0,
     CONDUCTIVITY,

@@ -6,7 +6,7 @@ import math
 import pathlib
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from typing import Literal, Optional, Self, Union, get_args
+from typing import Literal, Optional, Union, get_args
 
 import autograd.numpy as np
 import xarray as xr
@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from tidy3d.compat import Self
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
