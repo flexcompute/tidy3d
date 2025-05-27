@@ -191,9 +191,10 @@ jobs:
         ls $GITHUB_WORKSPACE
 
     - name: Produce the diff coverage report
-      if: ${{ matrix.python-version }} == "3.13"
+      if: ${{ matrix.python-version }} == '3.13'
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        git config --global --add safe.directory ${GITHUB_WORKSPACE}
         diff-cover ${GITHUB_WORKSPACE}/coverage.xml \
           --compare-branch origin/${{ github.event.pull_request.base.ref }} \
           --format markdown:diff-coverage.md
