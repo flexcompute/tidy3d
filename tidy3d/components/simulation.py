@@ -117,7 +117,6 @@ from .validators import (
     assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
     validate_mode_objects_symmetry,
-    validate_mode_plane_radius,
 )
 from .viz import (
     PlotParams,
@@ -3661,18 +3660,22 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_mode_object_bends(self) -> None:
         """Error if any mode sources or monitors with bends have a radius that is too small."""
+        from .mode.mode_solver import ModeSolver
+
         for imnt, monitor in enumerate(self.monitors):
             if isinstance(monitor, AbstractModeMonitor):
-                validate_mode_plane_radius(
+                ModeSolver._validate_mode_plane_radius(
                     mode_spec=monitor.mode_spec,
                     plane=monitor.geometry,
+                    sim_geom=self.geometry,
                     msg_prefix=f"Monitor at 'monitors[{imnt}]' ",
                 )
         for isrc, source in enumerate(self.sources):
             if isinstance(source, ModeSource):
-                validate_mode_plane_radius(
+                ModeSolver._validate_mode_plane_radius(
                     mode_spec=source.mode_spec,
                     plane=source.geometry,
+                    sim_geom=self.geometry,
                     msg_prefix=f"Source at 'sources[{isrc}]' ",
                 )
 

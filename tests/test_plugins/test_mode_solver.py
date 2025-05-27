@@ -1126,13 +1126,29 @@ def test_modes_eme_sim(mock_remote_api, local):
 
 def test_mode_small_bend_radius_fail():
     """Test that small bend radius fails."""
-
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(1, 0, -1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
     with pytest.raises(ValueError):
         ms = ModeSolver(
             plane=PLANE,
             freqs=np.linspace(1e14, 2e14, 100),
             mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=0),
+            simulation=simulation,
         )
+    # should work for infinite mode plane
+    ms = ModeSolver(
+        plane=td.Box(center=(0, 0, 0), size=(td.inf, 0, td.inf)),
+        freqs=np.linspace(1e14, 2e14, 100),
+        mode_spec=td.ModeSpec(num_modes=1, bend_radius=10000, bend_axis=0),
+        simulation=simulation,
+    )
 
 
 def make_high_order_mode_solver(sign, dim=3):
