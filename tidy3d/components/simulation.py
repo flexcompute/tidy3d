@@ -1613,8 +1613,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Convert lumped elements into structures
         lumped_structures = []
-        strict_ineq = 3 * [True]
         for lumped_element in self.lumped_elements:
+            strict_ineq = 3 * [False]
+            strict_ineq[lumped_element.normal_axis] = True
             if self.geometry.contains(lumped_element.geometry, strict_inequality=strict_ineq):
                 lumped_structures += lumped_element.to_structures(self.grid)
 
@@ -2660,7 +2661,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     _sources_in_bounds = assert_objects_in_sim_bounds("sources", strict_inequality=True)
     _lumped_elements_in_bounds = assert_objects_contained_in_sim_bounds(
-        "lumped_elements", error=False, strict_inequality=True
+        "lumped_elements", error=False, strict_inequality=False, strict_for_zero_size_dim=True
     )
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")

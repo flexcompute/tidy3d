@@ -1604,6 +1604,25 @@ def test_warn_lumped_elements_outside_sim_bounds():
         )
     assert len(sim_good.volumetric_structures) == 1
 
+    # Lumped element is touching the boundary along one of its nonzero dims
+    resistor_in = td.LumpedResistor(
+        size=(0.5, 1, 0),
+        center=(0, 0.5, 0),
+        voltage_axis=1,
+        resistance=50,
+        name="resistor_touching",
+    )
+    with AssertLogLevel("INFO"):
+        sim_good = td.Simulation(
+            size=sim_size,
+            center=sim_center,
+            sources=[src],
+            run_time=1e-12,
+            lumped_elements=[resistor_in],
+            boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        )
+    assert len(sim_good.volumetric_structures) == 1
+
     # Lumped element outside - should emit warning and not be added
     resistor_out = td.LumpedResistor(
         size=(0.5, 1, 0),
@@ -1616,16 +1635,16 @@ def test_warn_lumped_elements_outside_sim_bounds():
         sim_bad = sim_good.updated_copy(lumped_elements=[resistor_out])
     assert len(sim_bad.volumetric_structures) == 0
 
-    # Lumped element extends to boundary and is not strictly inside simulation
+    # Lumped element is flush against boundary along its zero size dimension
     resistor_edge = td.LumpedResistor(
         size=(0.5, 1, 0),
-        center=(0, 0.5, 0),
+        center=(0, 0.5, 1),
         voltage_axis=1,
         resistance=50,
         name="resistor_edge",
     )
     with AssertLogLevel("WARNING"):
-        _ = sim_good.updated_copy(lumped_elements=[resistor_edge])
+        sim_bad = sim_good.updated_copy(lumped_elements=[resistor_edge])
     assert len(sim_bad.volumetric_structures) == 0
 
 
