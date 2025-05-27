@@ -115,7 +115,8 @@ jobs:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
-    runs-on: [ deploynode ]
+    runs-on: [ deploynode ] 
+    container: ghcr.io/astral-sh/uv:python3.13-bookworm-slim 
     steps:
       - uses: actions/checkout@v4
         with:
