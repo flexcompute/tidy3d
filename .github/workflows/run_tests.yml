@@ -181,7 +181,7 @@ jobs:
         # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
         pytest --cov=tidy3d -rF --tb=short tests
         coverage report -m
-        coverage xml -o coverage.xml
+        coverage xml -o ${GITHUB_WORKSPACE}/coverage.xml
         TOTAL_COVERAGE=$(coverage report --format=total)
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
@@ -189,7 +189,7 @@ jobs:
     - name: Produce the coverage report
       uses: insightsengineering/coverage-action@v2
       with:
-        path: ./coverage.xml
+        path: ${GITHUB_WORKSPACE}/coverage.xml
         threshold: 90.0
         fail: false
         publish: true
