@@ -24,7 +24,7 @@ on:
 
 jobs:
   determine-test-scope:
-    runs-on: [ inhouse ]
+    runs-on: [ deploynode ]
     if: |
       github.event.pull_request.draft == false ||
       github.ref == 'refs/heads/develop' ||
@@ -115,7 +115,7 @@ jobs:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
-    runs-on: [ inhouse ]
+    runs-on: [ deploynode ]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,7 +133,7 @@ jobs:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ inhouse ]
+    runs-on: [ deploynode ]
     container: ghcr.io/astral-sh/uv:python3.13-bookworm-slim 
     strategy:
       matrix:
@@ -302,7 +302,7 @@ jobs:
     name: pr-requirements-pass
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     needs: [local-tests, remote-tests, lint]
-    runs-on: [ inhouse ]
+    runs-on: [ deploynode ]
     steps:
       - name: check-passing-remote-tests
         run: |
