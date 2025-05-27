@@ -161,8 +161,6 @@ jobs:
           echo "Not running inside a Docker container (/.dockerenv not found)"
         fi
         python -m venv ${GITHUB_WORKSPACE}/.venv
-        
-        uv venv -p $PYTHON_VERSION ${GITHUB_WORKSPACE}/.venv
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         which python
         which pip
