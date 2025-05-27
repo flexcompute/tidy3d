@@ -116,7 +116,7 @@ jobs:
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
     runs-on: [ deploynode ] 
-    container: ghcr.io/astral-sh/uv:debian-slim 
+    container: ghcr.io/astral-sh/uv:debian 
     steps:
       - uses: actions/checkout@v4
         with:
@@ -135,7 +135,7 @@ jobs:
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
     runs-on: [ deploynode ]
-    container: ghcr.io/astral-sh/uv:debian-slim 
+    container: ghcr.io/astral-sh/uv:debian 
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
