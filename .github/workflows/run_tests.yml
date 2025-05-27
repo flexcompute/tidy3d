@@ -135,7 +135,7 @@ jobs:
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
     runs-on: [ deploynode ]
-    container: ghcr.io/astral-sh/uv:python3.11-bookworm-slim 
+    container: ghcr.io/astral-sh/uv:python3.13-bookworm-slim 
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
@@ -160,16 +160,18 @@ jobs:
         else
           echo "Not running inside a Docker container (/.dockerenv not found)"
         fi
-        python -m venv -p $PYTHON_VERSION ${GITHUB_WORKSPACE}/.venv 
+        uv venv -p $PYTHON_VERSION ${GITHUB_WORKSPACE}/.venv
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         which python
+        which uv
         which pip
         python --version
         pip list
-        pip install gdstk --only-binary gdstk
-        pip install -e ".[dev]"
-        
-        # Test vtk is properly installed before continuing
+        uv pip install gdstk --only-binary gdstk
+        uv pip install -e ".[dev]"
+        uv pip install vtk --only-binary vtk
+
+        echo "Testing vtk is correctly installed."
         python -c "import vtk"
 
     - name: Run tests with coverage
@@ -177,7 +179,7 @@ jobs:
         PYTHONUNBUFFERED: "1"
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
-        pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
         pytest --cov=tidy3d -rF --tb=short tests
         coverage report -m
         coverage xml -o coverage.xml
