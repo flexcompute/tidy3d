@@ -1,8 +1,11 @@
 """Test the array factor functions."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 import tidy3d.plugins.microwave as mw
 import tidy3d.plugins.smatrix as smatrix
@@ -462,7 +465,7 @@ def test_rectangular_array_calculator_array_make_antenna_array():
     )
 
     sim_unit_with_sphere = sim_unit.updated_copy(
-        structures=[background_sphere] + list(sim_unit.structures)
+        structures=[background_sphere, *list(sim_unit.structures)]
     )
     # check correctness of the antenna bounds detection
     antenna_bounds_with_sphere = array_calculator._detect_antenna_bounds(sim_unit_with_sphere)
@@ -540,12 +543,12 @@ def test_rectangular_array_calculator_monitor_data_from_array_factor():
         far_field_approx=False,
     )
 
-    coords = dict(
-        r=[monitor.proj_distance],
-        theta=list(monitor.theta),
-        phi=list(monitor.phi),
-        f=list(monitor.freqs),
-    )
+    coords = {
+        "r": [monitor.proj_distance],
+        "theta": list(monitor.theta),
+        "phi": list(monitor.phi),
+        "f": list(monitor.freqs),
+    }
     values = (1 + 1j) * np.ones(
         (len(coords["r"]), len(coords["theta"]), len(coords["phi"]), len(coords["f"]))
     )
@@ -628,12 +631,12 @@ def test_rectangular_array_calculator_monitor_data_from_array_factor():
         theta=list(np.linspace(0, np.pi, 10)),
         far_field_approx=False,
     )
-    coords_under_sampled = dict(
-        r=[monitor_directivity_under_sampled.proj_distance],
-        theta=list(monitor_directivity_under_sampled.theta),
-        phi=list(monitor_directivity_under_sampled.phi),
-        f=list(monitor_directivity_under_sampled.freqs),
-    )
+    coords_under_sampled = {
+        "r": [monitor_directivity_under_sampled.proj_distance],
+        "theta": list(monitor_directivity_under_sampled.theta),
+        "phi": list(monitor_directivity_under_sampled.phi),
+        "f": list(monitor_directivity_under_sampled.freqs),
+    }
     values_under_sampled = (1 + 1j) * np.random.random(
         (
             len(coords_under_sampled["r"]),
@@ -678,12 +681,12 @@ def test_rectangular_array_calculator_simulation_data_from_array_factor():
 
     monitor = sim_unit.monitors[0]
     monitor_directivity = sim_unit.monitors[2]
-    coords = dict(
-        r=[monitor.proj_distance],
-        theta=list(monitor.theta),
-        phi=list(monitor.phi),
-        f=list(monitor.freqs),
-    )
+    coords = {
+        "r": [monitor.proj_distance],
+        "theta": list(monitor.theta),
+        "phi": list(monitor.phi),
+        "f": list(monitor.freqs),
+    }
     values = (1 + 1j) * np.ones(
         (len(coords["r"]), len(coords["theta"]), len(coords["phi"]), len(coords["f"]))
     )

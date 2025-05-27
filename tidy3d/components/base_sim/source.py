@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 
 import pydantic.v1 as pydantic
 
-from ..base import Tidy3dBaseModel
-from ..validators import validate_name_str
-from ..viz import PlotParams
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.validators import validate_name_str
+from tidy3d.components.viz import PlotParams
 
 
 class AbstractSource(Tidy3dBaseModel, ABC):

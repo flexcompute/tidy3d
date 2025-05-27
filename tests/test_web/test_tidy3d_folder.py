@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import pytest
 import responses
-import tidy3d as td
 from responses import matchers
+
+import tidy3d as td
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.task_core import Folder
 

@@ -1,28 +1,29 @@
 """Class and custom data array for representing a scattering matrix wave port."""
 
+from __future__ import annotations
+
 from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property, skip_if_fields_missing
-from ....components.data.data_array import FreqDataArray, FreqModeDataArray
-from ....components.data.monitor_data import ModeData
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.base import Box
-from ....components.grid.grid import Grid
-from ....components.monitor import ModeMonitor
-from ....components.simulation import Simulation
-from ....components.source.field import ModeSource, ModeSpec
-from ....components.source.time import GaussianPulse
-from ....components.types import Bound, Direction, FreqArray
-from ....exceptions import ValidationError
-from ...microwave import (
-    CurrentIntegralTypes,
-    ImpedanceCalculator,
-    VoltageIntegralTypes,
-)
-from ...mode import ModeSolver
+from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
+from tidy3d.components.data.monitor_data import ModeData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.geometry.bound_ops import bounds_contains
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.monitor import ModeMonitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.field import ModeSource, ModeSpec
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Direction, FreqArray
+from tidy3d.constants import fp_eps
+from tidy3d.exceptions import ValidationError
+from tidy3d.plugins.microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
+from tidy3d.plugins.mode import ModeSolver
+
 from .base_terminal import AbstractTerminalPort
 
 
@@ -96,7 +97,9 @@ class WavePort(AbstractTerminalPort, Box):
         """Return the name of the :class:`.ModeMonitor` associated with this port."""
         return f"{self.name}_mode"
 
-    def to_source(self, source_time: GaussianPulse, snap_center: float = None) -> ModeSource:
+    def to_source(
+        self, source_time: GaussianPulse, snap_center: Optional[float] = None
+    ) -> ModeSource:
         """Create a mode source from the wave port."""
         center = list(self.center)
         if snap_center:
@@ -112,7 +115,7 @@ class WavePort(AbstractTerminalPort, Box):
         )
 
     def to_monitors(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> list[ModeMonitor]:
         """The wave port uses a :class:`.ModeMonitor` to compute the characteristic impedance
         and the port voltages and currents."""
@@ -183,22 +186,15 @@ class WavePort(AbstractTerminalPort, Box):
         impedance_array = impedance_calc.compute_impedance(mode_data)
         return impedance_array
 
-    @staticmethod
-    def _within_port_bounds(path_bounds: Bound, port_bounds: Bound) -> bool:
-        """Helper to check if one bounding box is completely within the other."""
-        path_min = np.array(path_bounds[0])
-        path_max = np.array(path_bounds[1])
-        bound_min = np.array(port_bounds[0])
-        bound_max = np.array(port_bounds[1])
-        return (bound_min <= path_min).all() and (bound_max >= path_max).all()
-
     @pd.validator("voltage_integral", "current_integral")
     def _validate_path_integrals_within_port(cls, val, values):
         """Raise ``ValidationError`` when the supplied path integrals are not within the port bounds."""
         center = values["center"]
         size = values["size"]
         box = Box(center=center, size=size)
-        if val and not WavePort._within_port_bounds(val.bounds, box.bounds):
+        if val and not bounds_contains(
+            box.bounds, val.bounds, fp_eps, np.finfo(np.float32).smallest_normal
+        ):
             raise ValidationError(
                 f"'{cls.__name__}' must be setup with all path integrals defined within the bounds "
                 f"of the port. Path bounds are '{val.bounds}', but port bounds are '{box.bounds}'."

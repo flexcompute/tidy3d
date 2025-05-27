@@ -1,11 +1,14 @@
 """Tests tidy3d/components/data/monitor_data.py"""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
-import tidy3d as td
 import xarray as xr
+
+import tidy3d as td
 from tidy3d.components.data.data_array import (
     FreqDataArray,
     FreqModeDataArray,
@@ -239,17 +242,17 @@ def make_field_dataset_using_power_density(
         phi=phi,
     )
 
-    coords = dict(r=r_proj, theta=theta, phi=phi, f=freqs)
+    coords = {"r": r_proj, "theta": theta, "phi": phi, "f": freqs}
     field = td.FieldProjectionAngleDataArray(values, coords=coords)
 
-    field_components = dict(
-        Er=field,
-        Etheta=field,
-        Ephi=field,
-        Hr=field,
-        Htheta=-1.0 * field,
-        Hphi=field,
-    )
+    field_components = {
+        "Er": field,
+        "Etheta": field,
+        "Ephi": field,
+        "Hr": field,
+        "Htheta": -1.0 * field,
+        "Hphi": field,
+    }
     field_dataset = xr.Dataset(field_components)
     return monitor, field_dataset
 
@@ -398,7 +401,7 @@ def test_directivity_data(planar_monitor):
     _ = data.flux
     f = data.flux.f.values
     # make some dummy data to represent power supplied to antenna
-    power_in = FreqDataArray(np.abs(np.random.random(size=np.shape(f))), coords=dict(f=f))
+    power_in = FreqDataArray(np.abs(np.random.random(size=np.shape(f))), coords={"f": f})
     assert isinstance(data.partial_radiation_intensity(), xr.Dataset)
     assert isinstance(data.radiation_intensity, xr.DataArray)
     assert isinstance(data.partial_directivity(), xr.Dataset)
@@ -661,7 +664,7 @@ def test_data_array_hdf5_no_warnings(tmp_path):
 
 def test_diffraction_data_use_medium():
     data = make_diffraction_data()
-    data = data.copy(update=dict(medium=td.Medium(permittivity=4)))
+    data = data.copy(update={"medium": td.Medium(permittivity=4)})
     assert np.allclose(data.eta, np.real(td.ETA_0 / 2.0))
 
 
@@ -863,7 +866,7 @@ def test_no_nans():
     eps_nan = eps_data.eps_xx.isel(f=[0])
     eps_nan[:] = np.nan
     eps_dataset_nan = td.PermittivityDataset(
-        **{key: eps_nan for key in ["eps_xx", "eps_yy", "eps_zz"]}
+        **dict.fromkeys(["eps_xx", "eps_yy", "eps_zz"], eps_nan)
     )
     with pytest.raises(pydantic.ValidationError):
         td.CustomMedium(eps_dataset=eps_dataset_nan)
@@ -917,7 +920,7 @@ class TestZBF:
         return self.simdata(monitor)["modes"]
 
     @pytest.mark.parametrize("background_index", [1, 2, 3])
-    @pytest.mark.parametrize("freq", list(freqs) + [None])
+    @pytest.mark.parametrize("freq", [*list(freqs), None])
     @pytest.mark.parametrize("n_x", [2**5, 2**6])
     @pytest.mark.parametrize("n_y", [2**5, 2**6])
     @pytest.mark.parametrize("units", ["mm", "cm", "in", "m"])

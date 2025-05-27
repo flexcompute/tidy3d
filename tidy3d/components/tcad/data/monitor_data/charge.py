@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Union
+from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -50,9 +50,9 @@ class SteadyPotentialData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
-        return dict(potential=self.potential)
+        return {"potential": self.potential}
 
     @pd.validator("potential", always=True)
     @skip_if_fields_missing(["monitor"])
@@ -118,9 +118,9 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     # p = holes
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
-        return dict(electrons=self.electrons, holes=self.holes)
+        return {"electrons": self.electrons, "holes": self.holes}
 
     @pd.root_validator(skip_on_failure=True)
     def check_correct_data_type(cls, values):
@@ -234,9 +234,9 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
-        return dict(Ec=self.Ec, Ev=self.Ev, Ei=self.Ei, Efn=self.Efn, Efp=self.Efp)
+        return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
 
     @pd.root_validator(skip_on_failure=True)
     def check_correct_data_type(cls, values):
@@ -318,7 +318,7 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
             The supplied or created matplotlib axes.
         """
 
-        selection_data = dict()
+        selection_data = {}
 
         if ("voltage" not in sel_kwargs) and (self.Ec.values.coords.sizes["voltage"] > 1):
             raise DataError(

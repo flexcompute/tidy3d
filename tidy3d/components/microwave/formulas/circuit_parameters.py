@@ -11,11 +11,13 @@ References
         Foreign Technology Division Air Force Systems Command U.S. Air Force, 1971.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
-from ....constants import EPSILON_0
-from ...geometry.base import Geometry
-from ...types import Axis
+from tidy3d.components.geometry.base import Geometry
+from tidy3d.components.types import Axis
+from tidy3d.constants import EPSILON_0
 
 
 def inductance_straight_rectangular_wire(

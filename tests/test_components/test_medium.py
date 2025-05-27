@@ -1,11 +1,12 @@
 """Tests mediums."""
 
-from typing import Dict
+from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
@@ -174,6 +175,11 @@ def test_lossy_metal():
     model = mat.scaled_surface_impedance_model
     num_poles = mat.num_poles
 
+    # thickness
+    mat = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14), thickness=0.1)
+    model = mat.scaled_surface_impedance_model
+    num_poles = mat.num_poles
+
 
 def test_lossy_metal_surface_roughness():
     mat_orig = td.LossyMetalMedium(
@@ -287,7 +293,7 @@ def test_sellmeier_from_dispersion():
     assert np.allclose(-dn_df * td.C_0 / wvl**2, dn_dwvl)
 
 
-def eps_compare(medium: td.Medium, expected: Dict, tol: float = 1e-5):
+def eps_compare(medium: td.Medium, expected: dict, tol: float = 1e-5):
     for freq, val in expected.items():
         assert np.abs(medium.eps_model(freq) - val) < tol
 
@@ -828,7 +834,7 @@ def test_custom_medium():
     Z = [0]
     freqs = [2e14]
     n_data = np.ones((Nx, Ny, Nz, Nf))
-    n_dataset = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    n_dataset = td.ScalarFieldDataArray(n_data, coords={"x": X, "y": Y, "z": Z, "f": freqs})
 
     def create_mediums(n_dataset):
         ## Three equivalent ways of defining custom medium for the lens
@@ -837,7 +843,9 @@ def test_custom_medium():
         _ = td.CustomMedium.from_nk(n_dataset, interp_method="nearest")
 
         # define custom medium with permittivity data
-        eps_dataset = td.ScalarFieldDataArray(n_dataset**2, coords=dict(x=X, y=Y, z=Z, f=freqs))
+        eps_dataset = td.ScalarFieldDataArray(
+            n_dataset**2, coords={"x": X, "y": Y, "z": Z, "f": freqs}
+        )
         _ = td.CustomMedium.from_eps_raw(eps_dataset, interp_method="nearest")
 
         # define each component of permittivity via "PermittivityDataset"
@@ -851,9 +859,9 @@ def test_custom_medium():
 
     with pytest.raises(pydantic.ValidationError):
         # repeat some entries so data cannot be interpolated
-        X2 = [X[0]] + list(X)
+        X2 = [X[0], *list(X)]
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
-        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
+        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords={"x": X2, "y": Y, "z": Z, "f": freqs})
         create_mediums(n_dataset=n_dataset2)
 
 

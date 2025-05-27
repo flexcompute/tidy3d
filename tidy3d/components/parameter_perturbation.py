@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, Optional, Union
 
 try:
     import matplotlib.pyplot as plt
@@ -14,12 +14,13 @@ import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from ..components.data.validators import validate_no_nans
-from ..components.types import TYPE_TAG_STR, ArrayLike, Ax, Complex, FieldVal, InterpMethod
-from ..components.viz import add_ax_if_none
-from ..constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
-from ..exceptions import DataError
-from ..log import log
+from tidy3d.components.data.validators import validate_no_nans
+from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Ax, Complex, FieldVal, InterpMethod
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
+from tidy3d.exceptions import DataError
+from tidy3d.log import log
+
 from .base import Tidy3dBaseModel, cached_property
 from .data.data_array import (
     ChargeDataArray,
@@ -44,7 +45,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @cached_property
     @abstractmethod
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
         """Perturbation range."""
 
     @cached_property
@@ -53,7 +54,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
         """Whether perturbation is complex valued."""
 
     @staticmethod
-    def _linear_range(interval: Tuple[float, float], ref: float, coeff: Union[float, Complex]):
+    def _linear_range(interval: tuple[float, float], ref: float, coeff: Union[float, Complex]):
         """Find value range for a linear perturbation."""
         if coeff in (0, 0j):  # to avoid 0*inf
             return np.array([0, 0])
@@ -124,7 +125,7 @@ def ensure_temp_in_range(
 class HeatPerturbation(AbstractPerturbation):
     """Abstract class for heat perturbation."""
 
-    temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    temperature_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Temperature range",
         description="Temperature range in which perturbation model is valid.",
@@ -242,7 +243,7 @@ class LinearHeatPerturbation(HeatPerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
         """Range of possible perturbation values in the provided ``temperature_range``."""
         return self._linear_range(self.temperature_range, self.temperature_ref, self.coeff)
 
@@ -321,7 +322,7 @@ class CustomHeatPerturbation(HeatPerturbation):
         description="Sampled perturbation values.",
     )
 
-    temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    temperature_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Temperature range",
         description="Temperature range in which perturbation model is valid. For "
@@ -339,7 +340,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     _no_nans = validate_no_nans("perturbation_values")
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
         """Range of possible parameter perturbation values."""
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
@@ -486,13 +487,13 @@ def ensure_charge_in_range(
 class ChargePerturbation(AbstractPerturbation):
     """Abstract class for charge perturbation."""
 
-    electron_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    electron_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Electron Density Range",
         description="Range of electrons densities in which perturbation model is valid.",
     )
 
-    hole_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    hole_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Hole Density Range",
         description="Range of holes densities in which perturbation model is valid.",
@@ -664,7 +665,7 @@ class LinearChargePerturbation(ChargePerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
         """Range of possible perturbation values within provided ``electron_range`` and
         ``hole_range``.
         """
@@ -800,7 +801,7 @@ class CustomChargePerturbation(ChargePerturbation):
         description="2D array (vs electron and hole densities) of sampled perturbation values.",
     )
 
-    electron_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    electron_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Electron Density Range",
         description="Range of electrons densities in which perturbation model is valid. For "
@@ -808,7 +809,7 @@ class CustomChargePerturbation(ChargePerturbation):
         "provided ``perturbation_values``",
     )
 
-    hole_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    hole_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Hole Density Range",
         description="Range of holes densities in which perturbation model is valid. For "
@@ -825,7 +826,7 @@ class CustomChargePerturbation(ChargePerturbation):
     _no_nans = validate_no_nans("perturbation_values")
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[complex, complex]]:
+    def perturbation_range(self) -> Union[tuple[float, float], tuple[complex, complex]]:
         """Range of possible parameter perturbation values."""
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
@@ -1027,7 +1028,7 @@ class ParameterPerturbation(Tidy3dBaseModel):
         return values
 
     @cached_property
-    def perturbation_list(self) -> List[PerturbationType]:
+    def perturbation_list(self) -> list[PerturbationType]:
         """Provided perturbations as a list."""
         perturb_list = []
         for p in [self.heat, self.charge]:
@@ -1036,7 +1037,7 @@ class ParameterPerturbation(Tidy3dBaseModel):
         return perturb_list
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> Union[tuple[float, float], tuple[Complex, Complex]]:
         """Range of possible parameter perturbation values due to both heat and charge effects."""
         prange = np.zeros(2)
 
@@ -1498,7 +1499,7 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
             ),
             dims=("wvl", "coeff"),
             coords={
-                "wvl": np.array([1.3, 1.55] + list(np.arange(2, 14.5, 0.5))),
+                "wvl": np.array([1.3, 1.55, *list(np.arange(2, 14.5, 0.5))]),
                 "coeff": ["a", "b", "c", "d", "p", "q", "r", "s"],
             },
             name="perturb_coeffs",
@@ -1587,7 +1588,7 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
         dk_mesh = dk_mesh * k_factor
 
         # convert t ChargeDataArray
-        dk_data = ChargeDataArray(dk_mesh, coords=dict(n=Ne_range, p=Nh_range))
+        dk_data = ChargeDataArray(dk_mesh, coords={"n": Ne_range, "p": Nh_range})
 
         # create CustomChargePerturbation
         k_si_charge = CustomChargePerturbation(perturbation_values=dk_data)
@@ -1615,7 +1616,7 @@ class NedeljkovicSorefMashanovich(AbstractDeltaModel):
         dn_mesh = -ne_coeff * Ne_mesh**ne_pow - nh_coeff * Nh_mesh**nh_pow
 
         # create ChargeDataArray
-        dn_data = ChargeDataArray(dn_mesh, coords=dict(n=Ne_range, p=Nh_range))
+        dn_data = ChargeDataArray(dn_mesh, coords={"n": Ne_range, "p": Nh_range})
 
         # create CustomChargePerturbation
         n_si_charge = CustomChargePerturbation(perturbation_values=dn_data)
@@ -1677,8 +1678,7 @@ class IndexPerturbation(Tidy3dBaseModel):
 
         if dn_complex or dk_complex:
             raise DataError(
-                "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
-                "complex-valued."
+                "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be complex-valued."
             )
 
         return values

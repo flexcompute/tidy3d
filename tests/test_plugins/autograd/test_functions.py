@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import numpy as np
 import numpy.testing as npt
 import pytest
 import scipy.interpolate
 import scipy.ndimage
+from autograd import grad
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
+
 from tidy3d.plugins.autograd import (
     add_at,
     convolve,
@@ -385,6 +389,15 @@ class TestAddAt:
         x, y = self.generate_x_y(rng, shape, indices)
         check_grads(lambda x: add_at(x, indices, y), modes=["fwd", "rev"], order=2)(x)
         check_grads(lambda y: add_at(x, indices, y), modes=["fwd", "rev"], order=2)(y)
+
+
+def test_add_at_grad_kwargs(rng):
+    """Test add_at function for different array dimensions and indices, with kwargs."""
+    indices = (0,)
+    x = rng.uniform(-1, 1, (10,))
+    y = rng.uniform(-1, 1, x[tuple(indices)].shape)
+    # this should not error
+    grad(lambda y_: add_at(x=x, y=y_, indices_x=indices)[0])(y)
 
 
 @pytest.mark.parametrize("shape", [(5,), (5, 5), (5, 5, 5)])

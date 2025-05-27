@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pydantic.v1 as pd
 
-from ...data.data_array import (
+from tidy3d.components.data.data_array import (
     EMECoefficientDataArray,
     EMEModeIndexDataArray,
     EMEScalarFieldDataArray,
     EMEScalarModeFieldDataArray,
     EMESMatrixDataArray,
 )
-from ...data.dataset import Dataset, ElectromagneticFieldDataset
+from tidy3d.components.data.dataset import Dataset, ElectromagneticFieldDataset
 
 
 class EMESMatrixDataset(Dataset):

@@ -1,9 +1,13 @@
 # special validators for Datasets
+from __future__ import annotations
+
+from typing import Optional
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ...exceptions import ValidationError
+from tidy3d.exceptions import ValidationError
+
 from .data_array import DataArray
 from .dataset import AbstractFieldDataset, ScalarFieldDataArray
 
@@ -19,7 +23,7 @@ def validate_no_nans(field_name: str):
         if val is None:
             return val
 
-        def error_if_has_nans(value, identifier: str = None) -> None:
+        def error_if_has_nans(value, identifier: Optional[str] = None) -> None:
             """Recursively check if value (or iterable) has nans and error if so."""
 
             def has_nans(values) -> bool:

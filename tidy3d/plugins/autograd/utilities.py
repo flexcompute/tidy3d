@@ -1,5 +1,8 @@
+from __future__ import annotations
+
+from collections.abc import Iterable
 from functools import reduce, wraps
-from typing import Any, Callable, Iterable, List, Union
+from typing import Any, Callable, Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
@@ -83,8 +86,9 @@ def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = 
 
 
 def get_kernel_size_px(
-    radius: Union[float, Iterable[float]] = None, dl: Union[float, Iterable[float]] = None
-) -> Union[int, List[int]]:
+    radius: Optional[Union[float, Iterable[float]]] = None,
+    dl: Optional[Union[float, Iterable[float]]] = None,
+) -> Union[int, list[int]]:
     """Calculate the kernel size in pixels based on the provided radius and grid spacing.
 
     Parameters
@@ -164,7 +168,7 @@ def chain(*funcs: Union[Callable, Iterable[Callable]]):
     return chained
 
 
-def scalar_objective(func: Callable = None, *, has_aux: bool = False) -> Callable:
+def scalar_objective(func: Optional[Callable] = None, *, has_aux: bool = False) -> Callable:
     """Decorator to ensure the objective function returns a real scalar value.
 
     This decorator wraps an objective function to ensure that its return value is a real scalar.
@@ -202,8 +206,7 @@ def scalar_objective(func: Callable = None, *, has_aux: bool = False) -> Callabl
         if has_aux:
             if not isinstance(result, tuple) or len(result) != 2:
                 raise Tidy3dError(
-                    "If 'has_aux' is True, the objective function must return "
-                    "a tuple of length 2."
+                    "If 'has_aux' is True, the objective function must return a tuple of length 2."
                 )
             result, aux_data = result
 
@@ -223,7 +226,7 @@ def scalar_objective(func: Callable = None, *, has_aux: bool = False) -> Callabl
                 raise Tidy3dError(
                     "An objective function's return value must be a scalar, "
                     "a Python float/int, or an array containing a single element."
-                )
+                ) from None
         except ValueError as e:
             # Result contains more than one element
             raise Tidy3dError(

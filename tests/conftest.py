@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from pathlib import Path
 
@@ -7,9 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import psutil
 import pytest
-import tidy3d as td
 from autograd.test_util import check_grads
 from autograd.wrap_util import unary_to_nary
+
+import tidy3d as td
 from tidy3d.log import DEFAULT_LEVEL, set_logging_console, set_logging_level
 
 

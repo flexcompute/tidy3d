@@ -1,12 +1,13 @@
 # Tests webapi and things that depend on it
-
+from __future__ import annotations
 
 import numpy as np
 import pytest
 import responses
-import tidy3d as td
 from _pytest import monkeypatch
 from responses import matchers
+
+import tidy3d as td
 from tidy3d import Simulation
 from tidy3d.__main__ import main
 from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -85,7 +86,7 @@ def make_sim_data(file_size_gb=FILE_SIZE_GB):
     src = PointDipole(
         center=(0, 0, 0), source_time=GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
     )
-    coords = dict(x=x, y=y, z=z, f=f)
+    coords = {"x": x, "y": y, "z": z, "f": f}
     Ex = ScalarFieldDataArray(data, coords=coords)
     monitor = FieldMonitor(size=(2, 2, 2), freqs=f, name="test", fields=["Ex"])
     field_data = FieldData(monitor=monitor, Ex=Ex)
@@ -448,60 +449,14 @@ def test_delete_old(set_api_key):
         json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
-
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
-        json={"data": [{"taskId": TASK_ID, "createdAt": CREATED_AT}]},
-        status=200,
-    )
-
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "groupId": "group123",
-                "version": "v1",
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
-
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/group/group123/versions",
-        match=[
-            matchers.json_params_matcher(
-                {
-                    "versions": ["v1"],
-                }
-            )
-        ],
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "createdAt": CREATED_AT,
-            }
-        },
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{FOLDER_ID}/tasks",
+        json={"data": 0, "warning": "string"},
         status=200,
     )
 
-    responses.add(
-        responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
-
-    delete_old(100)
+    delete_old(days_old=100)
 
 
 @responses.activate

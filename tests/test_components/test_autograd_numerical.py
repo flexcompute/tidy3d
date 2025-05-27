@@ -1,4 +1,5 @@
 # test autograd and compares to numerically computed finite difference gradients
+from __future__ import annotations
 
 import operator
 import sys
@@ -7,9 +8,10 @@ import autograd as ag
 import matplotlib.pylab as plt
 import numpy as np
 import pytest
+from scipy.ndimage import gaussian_filter
+
 import tidy3d as td
 import tidy3d.web as web
-from scipy.ndimage import gaussian_filter
 
 PLOT_FD_ADJ_COMPARISON = False
 NUM_FINITE_DIFFERENCE = 10
@@ -95,7 +97,7 @@ def make_base_sim(
 
     monitor_index_block = td.Box(
         center=(0, 0, 0.25 * sim_size_um[2] + mesh_wvl_um),
-        size=tuple(2 * size for size in sim_size_um[0:2]) + (mesh_wvl_um + 0.5 * sim_size_um[2],),
+        size=(*tuple(2 * size for size in sim_size_um[0:2]), mesh_wvl_um + 0.5 * sim_size_um[2]),
     )
     monitor_index_block_structure = td.Structure(
         geometry=monitor_index_block, medium=td.Medium(permittivity=monitor_bg_index**2)
@@ -125,14 +127,14 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
         sim_base = create_sim_base()
 
         simulation_dict = {}
-        for idx in range(0, len(perm_arrays)):
+        for idx in range(len(perm_arrays)):
             block_structure = td.Structure.from_permittivity_array(
                 eps_data=perm_arrays[idx],
                 geometry=geometry,
             )
 
             sim_with_block = sim_base.updated_copy(
-                structures=sim_base.structures + (block_structure,)
+                structures=(*sim_base.structures, block_structure)
             )
 
             simulation_dict[f"numerical_field_testing_{idx}"] = sim_with_block.copy()
@@ -142,7 +144,7 @@ def create_objective_function(geometry, create_sim_base, eval_fn, sim_path_dir):
         )
 
         objective_vals = []
-        for idx in range(0, len(perm_arrays)):
+        for idx in range(len(perm_arrays)):
             objective_vals.append(eval_fn(sim_data[f"numerical_field_testing_{idx}"]))
 
         if len(perm_arrays) == 1:
@@ -191,7 +193,7 @@ monitor_sizes_3d_wvl = [(0.5, 0.5, 0), (0.5, 0.5, 0.5), (0.5, 0, 0), (0, 0.5, 0)
 field_data_test_parameters = []
 
 test_number = 0
-for idx in range(0, len(mesh_wvls_um)):
+for idx in range(len(mesh_wvls_um)):
     mesh_wvl_um = mesh_wvls_um[idx]
     adj_wvl_um = adj_wvls_um[idx]
 
@@ -305,7 +307,7 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
     all_perm = []
     pattern_dot_adj_gradient = np.zeros(NUM_FINITE_DIFFERENCE)
 
-    for fd_idx in range(0, NUM_FINITE_DIFFERENCE):
+    for fd_idx in range(NUM_FINITE_DIFFERENCE):
         random_pattern = rng.random((dim, dim, Nz)) - 0.5
         random_pattern = gaussian_filter(random_pattern, sigma=3)
         random_pattern /= np.linalg.norm(random_pattern)
@@ -321,7 +323,7 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
     all_obj = objective(all_perm)
 
     fd_grad = np.zeros(NUM_FINITE_DIFFERENCE)
-    for fd_idx in range(0, NUM_FINITE_DIFFERENCE):
+    for fd_idx in range(NUM_FINITE_DIFFERENCE):
         obj_up_location = 2 * fd_idx
         obj_down_location = 2 * fd_idx + 1
 

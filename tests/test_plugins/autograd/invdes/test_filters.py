@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import pytest
+
 from tidy3d.plugins.autograd.invdes.filters import (
     _get_kernel_size,
     make_circular_filter,

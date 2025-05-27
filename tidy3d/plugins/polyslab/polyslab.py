@@ -1,8 +1,10 @@
 """Divide a complex polyslab where self-intersecting polygon can occur during extrusion."""
 
-from ...components.geometry.polyslab import ComplexPolySlabBase
-from ...components.medium import MediumType
-from ...components.structure import Structure
+from __future__ import annotations
+
+from tidy3d.components.geometry.polyslab import ComplexPolySlabBase
+from tidy3d.components.medium import MediumType
+from tidy3d.components.structure import Structure
 
 
 class ComplexPolySlab(ComplexPolySlabBase):

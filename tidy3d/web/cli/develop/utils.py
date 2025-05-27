@@ -2,15 +2,17 @@
 Utility functions for the tidy3d develop CLI.
 """
 
+from __future__ import annotations
+
 import pathlib
 import subprocess
 
 import tidy3d
 
 __all__ = [
-    "get_install_directory",
-    "echo_and_run_subprocess",
     "echo_and_check_subprocess",
+    "echo_and_run_subprocess",
+    "get_install_directory",
 ]
 
 

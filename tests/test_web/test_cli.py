@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def test_tidy3d_cli():
     pass
     # if os.path.exists(CONFIG_FILE):

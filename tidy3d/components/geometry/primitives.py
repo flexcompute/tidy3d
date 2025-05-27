@@ -3,20 +3,21 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import List
+from typing import Optional
 
 import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 import shapely
 
-from ...constants import C_0, LARGE_NUMBER, MICROMETER
-from ...exceptions import SetupError, ValidationError
-from ...packaging import verify_packages_import
-from ..autograd import AutogradFieldMap, TracedSize1D
-from ..autograd.derivative_utils import DerivativeInfo
-from ..base import cached_property, skip_if_fields_missing
-from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, Tuple
+from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.constants import C_0, LARGE_NUMBER, MICROMETER
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.packaging import verify_packages_import
+
 from . import base
 from .polyslab import PolySlab
 
@@ -71,7 +72,7 @@ class Sphere(base.Centered, base.Circular):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -110,7 +111,9 @@ class Sphere(base.Centered, base.Circular):
         vertices = np.dot(np.hstack((circ, np.ones((angles.size, 1)))), to_2D.T)
         return [shapely.Polygon(vertices[:, :2])]
 
-    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -277,7 +280,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # compute number of points in the circumference of the polyslab using resolution info
@@ -298,7 +301,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         derivative_info_polyslab = derivative_info.updated_copy(
             paths=[("vertices",), ("slab_bounds", 0), ("slab_bounds", 1)], deep=False
         )
-        vjps_polyslab = polyslab.compute_derivatives(derivative_info_polyslab)
+        vjps_polyslab = polyslab._compute_derivatives(derivative_info_polyslab)
 
         vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
         vjp_top = vjps_polyslab[("slab_bounds", 0)]
@@ -354,7 +357,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
         return self.axis
 
-    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Cylinder:
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> Cylinder:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         if axis != self.axis:
@@ -370,7 +373,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -728,7 +731,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         return radius_middle - (z - self.center_axis) * self._tanq
 
-    def _local_to_global_side_cross_section(self, coords: List[float], axis: int) -> List[float]:
+    def _local_to_global_side_cross_section(self, coords: list[float], axis: int) -> list[float]:
         """Map a point (x,y) from local to global coordinate system in the
         side cross section.
 

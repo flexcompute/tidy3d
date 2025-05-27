@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import pathlib
 from collections import defaultdict
-from typing import Optional, Tuple, Union
+from functools import cmp_to_key
+from typing import Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ..constants import MICROMETER
-from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
-from ..log import log
+from tidy3d.constants import MICROMETER
+from tidy3d.exceptions import SetupError, Tidy3dImportError
+from tidy3d.log import log
+
 from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap
 from .autograd.types import Box as AutogradBox
@@ -24,9 +26,9 @@ from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
 from .material.types import StructureMediumType
-from .medium import AbstractCustomMedium, CustomMedium, Medium, Medium2D
+from .medium import AbstractCustomMedium, CustomMedium, LossyMetalMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
-from .types import TYPE_TAG_STR, Ax, Axis
+from .types import TYPE_TAG_STR, Ax, Axis, PriorityMode
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
 
@@ -35,12 +37,6 @@ try:
     import gdstk
 except ImportError:
     gdstk_available = False
-
-try:
-    gdspy_available = True
-    import gdspy
-except ImportError:
-    gdspy_available = False
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -73,6 +69,16 @@ class AbstractStructure(Tidy3dBaseModel):
         "when performing shape optimization with autograd. This is required when the "
         "structure is embedded in another structure as autograd will use the permittivity of the "
         "``Simulation`` by default to compute the shape derivatives.",
+    )
+
+    priority: int = pydantic.Field(
+        None,
+        title="Priority",
+        description="Priority of the structure applied in structure overlapping region. "
+        "The material property in the overlapping region is dictated by the structure "
+        "of higher priority. For structures of equal priority, "
+        "the structure added later to the structure list takes precedence. When `priority` is None, "
+        "the value is automatically assigned based on `structure_priority_mode` in the `Simulation`.",
     )
 
     @pydantic.root_validator(skip_on_failure=True)
@@ -110,6 +116,27 @@ class AbstractStructure(Tidy3dBaseModel):
         validate_no_transformed_polyslabs(val)
         return val
 
+    def _priority(self, priority_mode: PriorityMode) -> int:
+        """Priority of this structure. The priority value is set automatically based on `priority_modes,
+        if its original value is `None`.
+        """
+        if self.priority is not None:
+            return self.priority
+        return 0
+
+    @staticmethod
+    def _sort_structures(
+        structures: list[StructureType], structure_priority_mode: PriorityMode
+    ) -> list[StructureType]:
+        """Sort structure lists based on their priority values in ascending order."""
+
+        def structure_comparator(struct1, struct2):
+            return struct1._priority(structure_priority_mode) - struct2._priority(
+                structure_priority_mode
+            )
+
+        return sorted(structures, key=cmp_to_key(structure_comparator))
+
     @property
     def viz_spec(self):
         return None
@@ -117,7 +144,12 @@ class AbstractStructure(Tidy3dBaseModel):
     @equal_aspect
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **patch_kwargs,
     ) -> Ax:
         """Plot structure's geometric cross section at single (x,y,z) coordinate.
 
@@ -189,11 +221,25 @@ class Structure(AbstractStructure):
         discriminator=TYPE_TAG_STR,
     )
 
+    def _priority(self, priority_mode: PriorityMode) -> int:
+        """Priority of this structure. The priority value is set automatically based on `priority_modes,
+        if its original value is `None`.
+        """
+        if self.priority is not None:
+            return self.priority
+
+        if priority_mode == "conductor":
+            if self.medium.is_pec:
+                return 100
+            if isinstance(self.medium, LossyMetalMedium):
+                return 90
+        return 0
+
     @property
     def viz_spec(self):
         return self.medium.viz_spec
 
-    def eps_diagonal(self, frequency: float, coords: Coords) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
 
         Parameters
@@ -242,20 +288,20 @@ class Structure(AbstractStructure):
     """ Begin autograd code."""
 
     @staticmethod
-    def get_monitor_name(index: int, data_type: str) -> str:
+    def _get_monitor_name(index: int, data_type: str) -> str:
         """Get the monitor name for either a field or permittivity monitor at given index."""
 
-        monitor_name_map = dict(
-            fld=f"adjoint_fld_{index}",
-            eps=f"adjoint_eps_{index}",
-        )
+        monitor_name_map = {
+            "fld": f"adjoint_fld_{index}",
+            "eps": f"adjoint_eps_{index}",
+        }
 
         if data_type not in monitor_name_map:
             raise KeyError(f"'data_type' must be in {monitor_name_map.keys()}")
 
         return monitor_name_map[data_type]
 
-    def make_adjoint_monitors(
+    def _make_adjoint_monitors(
         self, freqs: list[float], index: int, field_keys: list[str]
     ) -> (FieldMonitor, PermittivityMonitor):
         """Generate the field and permittivity monitor for this structure."""
@@ -281,7 +327,7 @@ class Structure(AbstractStructure):
             center=center,
             freqs=freqs,
             fields=("Ex", "Ey", "Ez"),
-            name=self.get_monitor_name(index=index, data_type="fld"),
+            name=self._get_monitor_name(index=index, data_type="fld"),
             colocate=False,
         )
 
@@ -289,13 +335,13 @@ class Structure(AbstractStructure):
             size=size,
             center=center,
             freqs=freqs,
-            name=self.get_monitor_name(index=index, data_type="eps"),
+            name=self._get_monitor_name(index=index, data_type="eps"),
             colocate=False,
         )
 
         return mnt_fld, mnt_eps
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields"""
 
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
@@ -319,11 +365,11 @@ class Structure(AbstractStructure):
             # grab derivative values {field_name -> vjp_value}
             med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
             info = derivative_info.updated_copy(paths=field_paths, deep=False)
-            derivative_values_map = med_or_geo_field.compute_derivatives(derivative_info=info)
+            derivative_values_map = med_or_geo_field._compute_derivatives(derivative_info=info)
 
             # construct map of {field path -> derivative value}
             for field_path, derivative_value in derivative_values_map.items():
-                path = tuple([med_or_geo] + list(field_path))
+                path = (med_or_geo, *list(field_path))
                 derivative_map[path] = derivative_value
 
         return derivative_map
@@ -355,9 +401,9 @@ class Structure(AbstractStructure):
 
     def to_gdstk(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -421,49 +467,12 @@ class Structure(AbstractStructure):
 
         return polygons
 
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
-    ) -> None:
-        """Convert a structure's planar slice to a .gds type polygon.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer : int = 0
-            Layer index to use for the shapes stored in the .gds file.
-        gds_dtype : int = 0
-            Data-type index to use for the shapes stored in the .gds file.
-
-        Return
-        ------
-        List
-            List of ``gdspy.Polygon`` and ``gdspy.PolygonSet``.
-        """
-
-        if isinstance(self.medium, AbstractCustomMedium):
-            raise Tidy3dError(
-                "Structures with custom medium are not supported by 'gdspy'. They can only be "
-                "exported using 'to_gdstk'."
-            )
-
-        return self.geometry.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-
     def to_gds(
         self,
         cell,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -473,7 +482,7 @@ class Structure(AbstractStructure):
 
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -491,43 +500,31 @@ class Structure(AbstractStructure):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        if gdstk_available and isinstance(cell, gdstk.Cell):
-            polygons = self.to_gdstk(
-                x=x,
-                y=y,
-                z=z,
-                permittivity_threshold=permittivity_threshold,
-                frequency=frequency,
-                gds_layer=gds_layer,
-                gds_dtype=gds_dtype,
-            )
-            if len(polygons) > 0:
-                cell.add(*polygons)
+        if not isinstance(cell, gdstk.Cell):
+            if "gdstk" in cell.__class__.__name__.lower() and not gdstk_available:
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+                )
+            raise Tidy3dImportError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
-        elif gdspy_available and isinstance(cell, gdspy.Cell):
-            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-            if len(polygons) > 0:
-                cell.add(polygons)
-
-        elif "gdstk" in cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
-            )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
+        polygons = self.to_gdstk(
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer=gds_layer,
+            gds_dtype=gds_dtype,
+        )
+        if polygons:
+            cell.add(*polygons)
 
     def to_gds_file(
         self,
         fname: str,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -558,15 +555,15 @@ class Structure(AbstractStructure):
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
         """
-        if gdstk_available:
+        try:
+            import gdstk
+
             library = gdstk.Library()
-        elif gdspy_available:
-            library = gdspy.GdsLibrary()
-        else:
+        except ImportError as e:
             raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
-            )
+                "Python module 'gdstk' not found. To export geometries to .gds "
+                "files, please install it."
+            ) from e
         cell = library.new_cell(gds_cell_name)
         self.to_gds(
             cell,
@@ -659,7 +656,7 @@ class MeshOverrideStructure(AbstractStructure):
     >>> struct_override = MeshOverrideStructure(geometry=box, dl=(0.1,0.2,0.3), name='override_box')
     """
 
-    dl: Tuple[
+    dl: tuple[
         Optional[pydantic.PositiveFloat],
         Optional[pydantic.PositiveFloat],
         Optional[pydantic.PositiveFloat],
@@ -668,6 +665,13 @@ class MeshOverrideStructure(AbstractStructure):
         title="Grid Size",
         description="Grid size along x, y, z directions.",
         units=MICROMETER,
+    )
+
+    priority: int = pydantic.Field(
+        0,
+        title="Priority",
+        description="Priority of the structure applied in mesh override structure overlapping region. "
+        "The priority of internal override structures is ``-1``.",
     )
 
     enforce: bool = pydantic.Field(

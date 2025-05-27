@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numbers
 from abc import ABC, abstractmethod
-from typing import Literal, Tuple, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -169,7 +169,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 raise ValidationError(
                     "Cell connections array uses undefined point indices in the range "
                     f"[{min_index_used}, {max_index_used}]. The valid range of point indices is "
-                    f"[0, {num_points-1}]."
+                    f"[0, {num_points - 1}]."
                 )
         return val
 
@@ -312,7 +312,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             data = np.delete(cells.values, list(degenerate_cells), axis=0)
             cell_index = np.delete(cells.cell_index.values, list(degenerate_cells))
             return CellDataArray(
-                data=data, coords=dict(cell_index=cell_index, vertex_index=cells.vertex_index)
+                data=data, coords={"cell_index": cell_index, "vertex_index": cells.vertex_index}
             )
         return cells
 
@@ -489,7 +489,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def _from_vtk_obj(
         cls,
         vtk_obj,
-        field: str = None,
+        field: Optional[str] = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
         values_type=IndexedDataArray,
@@ -521,7 +521,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def from_vtu(
         cls,
         file: str,
-        field: str = None,
+        field: Optional[str] = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
     ) -> UnstructuredGridDataset:
@@ -572,7 +572,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         cls,
         vtk_obj,
         num_points: pd.PositiveInt,
-        field: str = None,
+        field: Optional[str] = None,
         values_type=IndexedDataArray,
         expect_complex=None,
     ) -> IndexedDataArray:
@@ -633,7 +633,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     "'.values' while the rest will be ignored."
                 )
 
-            values_coords = dict(index=np.arange(num_points))
+            values_coords = {"index": np.arange(num_points)}
             if isinstance(field, dict):
                 values_coords.update(field)
 
@@ -796,8 +796,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-        fill_value: Union[
-            float, Literal["extrapolate"]
+        fill_value: Optional[
+            Union[float, Literal["extrapolate"]]
         ] = None,  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
@@ -909,7 +909,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             values=self.values.interp(
                 **coords_kwargs_only_lists,
                 method="linear",
-                kwargs=dict(fill_value=fill_value),
+                kwargs={"fill_value": fill_value},
             )
         )
 
@@ -918,8 +918,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Union[
-            float, Literal["extrapolate"]
+        fill_value: Optional[
+            Union[float, Literal["extrapolate"]]
         ] = None,  # TODO: an array if multiple fields?
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
@@ -1001,7 +1001,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     interpolated_values, x=x, y=y, z=z
                 )
 
-        coords_dict = dict(x=x, y=y, z=z)
+        coords_dict = {"x": x, "y": y, "z": z}
         coords_dict.update(self._values_coords_dict)
 
         if len(self._values_coords_dict) == 0:
@@ -1370,7 +1370,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # in case of 2d grid broadcast results along normal direction assuming translational
         # invariance
         if num_dims == 2:
-            orig_shape = [len(x), len(y), len(z)] + self._fields_shape
+            orig_shape = [len(x), len(y), len(z), *self._fields_shape]
             flat_shape = orig_shape.copy()
             flat_shape[axis_ignore] = 1
             interpolated_values = np.reshape(interpolated_values, flat_shape)
@@ -1380,12 +1380,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     def _interp_py_chunk(
         self,
-        xyz_grid: Tuple[ArrayLike[float], ...],
+        xyz_grid: tuple[ArrayLike[float], ...],
         cell_inds: ArrayLike[int],
         cell_ind_min: ArrayLike[int],
         cell_ind_max: ArrayLike[int],
         sdf_tol: float,
-    ) -> Tuple[Tuple[ArrayLike, ...], ArrayLike]:
+    ) -> tuple[tuple[ArrayLike, ...], ArrayLike]:
         """For each cell listed in ``cell_inds`` perform interpolation at a rectilinear subarray of
         xyz_grid given by a (3D) index span (cell_ind_min, cell_ind_max).
 
@@ -1552,7 +1552,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # interpolated_value = value0 * face0_sdf / dist0_sdf + ...
         # (because face0_sdf / dist0_sdf is linear shape function for vertex0)
         sdf = -inf * np.ones(num_samples_total)
-        interpolated = np.zeros([num_samples_total] + self._fields_shape, dtype=self._double_type)
+        interpolated = np.zeros([num_samples_total, *self._fields_shape], dtype=self._double_type)
 
         # coordinates of each sample point
         sample_xyz = np.zeros((num_samples_total, num_dims))
@@ -1623,7 +1623,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] = None,
+        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
         **sel_kwargs,
     ) -> Union[UnstructuredGridDataset, XrDataArray]:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument

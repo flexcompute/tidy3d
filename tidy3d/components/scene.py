@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional, Set, Tuple, Union
+from typing import Literal, Optional, Union
 
 import autograd.numpy as np
 
@@ -22,10 +22,10 @@ from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
+from tidy3d.constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
+from tidy3d.exceptions import SetupError, Tidy3dError
+from tidy3d.log import log
 
-from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
-from ..exceptions import SetupError, Tidy3dError
-from ..log import log
 from .base import Tidy3dBaseModel, cached_property
 from .data.utils import (
     CustomSpatialDataType,
@@ -54,6 +54,7 @@ from .types import (
     InterpMethod,
     LengthUnit,
     PermittivityComponent,
+    PriorityMode,
     Shapely,
     Size,
 )
@@ -102,12 +103,24 @@ class Scene(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    structures: Tuple[Structure, ...] = pd.Field(
+    structures: tuple[Structure, ...] = pd.Field(
         (),
         title="Structures",
         description="Tuple of structures present in scene. "
-        "Note: Structures defined later in this list override the "
-        "simulation material properties in regions of spatial overlap.",
+        "Note: In regions of spatial overlap between structures, "
+        "material properties are dictated by structure of higher priority. "
+        "The priority for structure of `priority=None` is set automatically "
+        "based on `structure_priority_mode`. For structures of equal priority, "
+        "the structure added later to the structure list takes precedence.",
+    )
+
+    structure_priority_mode: PriorityMode = pd.Field(
+        "equal",
+        title="Structure Priority Setting",
+        description="This field only affects structures of `priority=None`. "
+        "If `equal`, the priority of those structures is set to 0; if `conductor`, "
+        "the priority of structures made of `LossyMetalMedium` is set to 90, "
+        "`PECMedium` to 100, and others to 0.",
     )
 
     plot_length_units: Optional[LengthUnit] = pd.Field(
@@ -220,7 +233,7 @@ class Scene(Tidy3dBaseModel):
         return Box(center=self.center, size=self.size)
 
     @cached_property
-    def mediums(self) -> Set[StructureMediumType]:
+    def mediums(self) -> set[StructureMediumType]:
         """Returns set of distinct :class:`.AbstractMedium` in scene.
 
         Returns
@@ -233,7 +246,7 @@ class Scene(Tidy3dBaseModel):
         return list(medium_dict.keys())
 
     @cached_property
-    def medium_map(self) -> Dict[StructureMediumType, pd.NonNegativeInt]:
+    def medium_map(self) -> dict[StructureMediumType, pd.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium` in scene.
 
@@ -246,20 +259,31 @@ class Scene(Tidy3dBaseModel):
         return {medium: index for index, medium in enumerate(self.mediums)}
 
     @cached_property
+    def sorted_structures(self) -> list[Structure]:
+        """Returns a list of sorted structures based on their priority.In the sorted list,
+        latter added structures take higher priority.
+
+        Returns
+        -------
+        List[:class:`.Structure`]
+        """
+        return Structure._sort_structures(self.structures, self.structure_priority_mode)
+
+    @cached_property
     def background_structure(self) -> Structure:
         """Returns structure representing the background of the :class:`.Scene`."""
         geometry = Box(size=(inf, inf, inf))
         return Structure(geometry=geometry, medium=self.medium)
 
     @cached_property
-    def all_structures(self) -> List[Structure]:
+    def all_structures(self) -> list[Structure]:
         """List of all structures in the simulation including the background."""
-        return [self.background_structure] + list(self.structures)
+        return [self.background_structure, *self.sorted_structures]
 
     @staticmethod
     def intersecting_media(
-        test_object: Box, structures: Tuple[Structure, ...]
-    ) -> Tuple[StructureMediumType, ...]:
+        test_object: Box, structures: tuple[Structure, ...]
+    ) -> tuple[StructureMediumType, ...]:
         """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
         surfaces, if it is a volume.
@@ -293,8 +317,8 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def intersecting_structures(
-        test_object: Box, structures: Tuple[Structure, ...]
-    ) -> Tuple[Structure, ...]:
+        test_object: Box, structures: tuple[Structure, ...]
+    ) -> tuple[Structure, ...]:
         """From a given list of structures, returns a list of :class:`.Structure` that intersect
         with the ``test_object``, if it is a surface, or its surfaces, if it is a volume.
 
@@ -337,12 +361,12 @@ class Scene(Tidy3dBaseModel):
     @staticmethod
     def _get_plot_lims(
         bounds: Bound,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+    ) -> tuple[tuple[float, float], tuple[float, float]]:
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (hmin, vmin) = Box.pop_axis(bounds[0], axis=axis)
@@ -365,12 +389,12 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
@@ -409,12 +433,12 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         fill: bool = True,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -443,7 +467,7 @@ class Scene(Tidy3dBaseModel):
         """
 
         medium_shapes = self._get_structures_2dbox(
-            structures=self.to_static().structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         medium_map = self.medium_map
         for medium, shape in medium_shapes:
@@ -551,11 +575,11 @@ class Scene(Tidy3dBaseModel):
     def _set_plot_bounds(
         bounds: Bound,
         ax: Ax,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Sets the xy limits of the scene at a plane, useful after plotting.
 
@@ -586,13 +610,13 @@ class Scene(Tidy3dBaseModel):
 
     def _get_structures_2dbox(
         self,
-        structures: List[Structure],
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> List[Tuple[Medium, Shapely]]:
+        structures: list[Structure],
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+    ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
 
         Parameters
@@ -647,8 +671,8 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def _filter_structures_plane_medium(
-        structures: List[Structure], plane: Box
-    ) -> List[Tuple[Medium, Shapely]]:
+        structures: list[Structure], plane: Box
+    ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         medium.
 
@@ -672,10 +696,10 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def _filter_structures_plane(
-        structures: List[Structure],
+        structures: list[Structure],
         plane: Box,
-        property_list: List,
-    ) -> List[Tuple[Medium, Shapely]]:
+        property_list: list,
+    ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         provided property_list.
 
@@ -703,14 +727,14 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_eps(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -754,17 +778,17 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_eps(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
-        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
+        eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         grid: Grid = None,
         eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
@@ -830,17 +854,17 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_property(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
-        limits: Tuple[Union[float, None], Union[float, None]] = (None, None),
+        limits: tuple[Union[float, None], Union[float, None]] = (None, None),
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         grid: Grid = None,
         property: Literal["eps", "doping", "N_a", "N_d"] = "eps",
         eps_component: Optional[PermittivityComponent] = None,
@@ -889,7 +913,7 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        structures = self.structures
+        structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -912,10 +936,10 @@ class Scene(Tidy3dBaseModel):
             # for doping background structure could be a non-doping structure
             # that needs to be rendered
             if property in ["N_d", "N_a", "doping"]:
-                structures = [self.background_structure] + list(structures)
+                structures = [self.background_structure, *list(structures)]
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
-            structures = [self.background_structure] + list(structures)
+            structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
                 structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
             )
@@ -1033,9 +1057,9 @@ class Scene(Tidy3dBaseModel):
     @staticmethod
     def _eps_bounds(
         medium_list: list[Medium],
-        freq: float = None,
+        freq: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Compute range of (real) permittivity present in the mediums at frequency "freq"."""
         medium_list = [medium for medium in medium_list if not medium.is_pec]
         eps_list = [medium._eps_plot(freq, eps_component) for medium in medium_list]
@@ -1050,7 +1074,9 @@ class Scene(Tidy3dBaseModel):
             eps_max = max(eps_max, mat_epsmax)
         return eps_min, eps_max
 
-    def eps_bounds(self, freq: float = None, eps_component: str = None) -> Tuple[float, float]:
+    def eps_bounds(
+        self, freq: Optional[float] = None, eps_component: Optional[str] = None
+    ) -> tuple[float, float]:
         """Compute range of (real) permittivity present in the scene at frequency "freq".
 
         Parameters
@@ -1069,7 +1095,7 @@ class Scene(Tidy3dBaseModel):
             Minimal and maximal values of relative permittivity in scene.
         """
 
-        medium_list = [self.medium] + list(self.mediums)
+        medium_list = [self.medium, *list(self.mediums)]
         return self._eps_bounds(medium_list=medium_list, freq=freq, eps_component=eps_component)
 
     def _pcolormesh_shape_custom_medium_structure_eps(
@@ -1148,11 +1174,11 @@ class Scene(Tidy3dBaseModel):
                         cmap=STRUCTURE_EPS_CMAP,
                         vmin=eps_min,
                         vmax=eps_max,
-                        pcolor_kwargs=dict(
-                            clip_path=(polygon_path(shape), ax.transData),
-                            clip_box=ax.bbox,
-                            alpha=alpha,
-                        ),
+                        pcolor_kwargs={
+                            "clip_path": (polygon_path(shape), ax.transData),
+                            "clip_box": ax.bbox,
+                            "alpha": alpha,
+                        },
                     )
                     return
 
@@ -1242,7 +1268,7 @@ class Scene(Tidy3dBaseModel):
         eps_min: float,
         eps_max: float,
         reverse: bool = False,
-        alpha: float = None,
+        alpha: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in scene.plot_eps()."""
@@ -1282,7 +1308,7 @@ class Scene(Tidy3dBaseModel):
         eps_max: float,
         ax: Ax,
         reverse: bool = False,
-        alpha: float = None,
+        alpha: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
@@ -1304,15 +1330,15 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_heat_charge_property(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         property: str = "heat_conductivity",
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1358,15 +1384,15 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_heat_conductivity(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1423,16 +1449,16 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_structures_heat_charge_property(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         property: str = "heat_conductivity",
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1466,7 +1492,7 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        structures = self.structures
+        structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -1482,7 +1508,7 @@ class Scene(Tidy3dBaseModel):
             plane = Box(center=center, size=size)
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
-            structures = [self.background_structure] + list(structures)
+            structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
                 structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
             )
@@ -1524,7 +1550,7 @@ class Scene(Tidy3dBaseModel):
         )
         return ax
 
-    def heat_charge_property_bounds(self, property) -> Tuple[float, float]:
+    def heat_charge_property_bounds(self, property) -> tuple[float, float]:
         """Compute range of the heat-charge simulation property present in the scene.
 
         Returns
@@ -1533,7 +1559,7 @@ class Scene(Tidy3dBaseModel):
             Minimal and maximal values of thermal conductivity in scene.
         """
 
-        medium_list = [self.medium] + list(self.mediums)
+        medium_list = [self.medium, *list(self.mediums)]
         if property == "heat_conductivity":
             SolidType = (SolidSpec, SolidMedium)
             medium_list = [
@@ -1553,7 +1579,7 @@ class Scene(Tidy3dBaseModel):
         cond_max = max(cond_list)
         return cond_min, cond_max
 
-    def heat_conductivity_bounds(self) -> Tuple[float, float]:
+    def heat_conductivity_bounds(self) -> tuple[float, float]:
         """Compute range of thermal conductivities present in the scene.
 
         Returns
@@ -1575,7 +1601,7 @@ class Scene(Tidy3dBaseModel):
         property_val_min: float,
         property_val_max: float,
         reverse: bool = False,
-        alpha: float = None,
+        alpha: Optional[float] = None,
         property: str = "heat_conductivity",
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in
@@ -1622,7 +1648,7 @@ class Scene(Tidy3dBaseModel):
         property: str,
         ax: Ax,
         reverse: bool = False,
-        alpha: float = None,
+        alpha: Optional[float] = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for thermal
         conductivity.
@@ -1642,14 +1668,14 @@ class Scene(Tidy3dBaseModel):
     @add_ax_if_none
     def plot_heat_conductivity(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ):
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1744,7 +1770,7 @@ class Scene(Tidy3dBaseModel):
         """
 
         scene_dict = self.dict()
-        structures = self.structures
+        structures = self.sorted_structures
         array_dict = {
             "temperature": temperature,
             "electron_density": electron_density,
@@ -1795,7 +1821,7 @@ class Scene(Tidy3dBaseModel):
         acceptors_lims = [1e50, -1e50]
         donors_lims = [1e50, -1e50]
 
-        for struct in [self.background_structure] + list(self.structures):
+        for struct in self.all_structures:
             if isinstance(struct.medium.charge, SemiconductorMedium):
                 electric_spec = struct.medium.charge
                 for doping, limits in zip(

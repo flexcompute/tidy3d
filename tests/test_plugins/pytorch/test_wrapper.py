@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import autograd.numpy as anp
 import torch
 from autograd import elementwise_grad
 from numpy.testing import assert_allclose
+
 from tidy3d.plugins.pytorch.wrapper import to_torch
 
 

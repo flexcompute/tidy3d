@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Iterable
 from functools import lru_cache, partial
-from typing import Annotated, Callable, Iterable, Tuple, Union
+from typing import Annotated, Callable, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -11,16 +12,15 @@ from numpy.typing import NDArray
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import TYPE_TAG_STR
-
-from ..functions import convolve
-from ..types import KernelType, PaddingType
-from ..utilities import get_kernel_size_px, make_kernel
+from tidy3d.plugins.autograd.functions import convolve
+from tidy3d.plugins.autograd.types import KernelType, PaddingType
+from tidy3d.plugins.autograd.utilities import get_kernel_size_px, make_kernel
 
 
 class AbstractFilter(Tidy3dBaseModel, abc.ABC):
     """An abstract class for creating and applying convolution filters."""
 
-    kernel_size: Union[pd.PositiveInt, Tuple[pd.PositiveInt, ...]] = pd.Field(
+    kernel_size: Union[pd.PositiveInt, tuple[pd.PositiveInt, ...]] = pd.Field(
         ..., title="Kernel Size", description="Size of the kernel in pixels for each dimension."
     )
     normalize: bool = pd.Field(
@@ -32,7 +32,7 @@ class AbstractFilter(Tidy3dBaseModel, abc.ABC):
 
     @classmethod
     def from_radius_dl(
-        cls, radius: Union[float, Tuple[float, ...]], dl: Union[float, Tuple[float, ...]], **kwargs
+        cls, radius: Union[float, tuple[float, ...]], dl: Union[float, tuple[float, ...]], **kwargs
     ) -> AbstractFilter:
         """Create a filter from radius and grid spacing.
 
@@ -125,10 +125,10 @@ class CircularFilter(AbstractFilter):
 
 
 def _get_kernel_size(
-    radius: Union[float, Tuple[float, ...]],
-    dl: Union[float, Tuple[float, ...]],
-    size_px: Union[int, Tuple[int, ...]],
-) -> Tuple[int, ...]:
+    radius: Union[float, tuple[float, ...]],
+    dl: Union[float, tuple[float, ...]],
+    size_px: Union[int, tuple[int, ...]],
+) -> tuple[int, ...]:
     """Determine the kernel size based on the provided radius, grid spacing, or size in pixels.
 
     Parameters
@@ -156,18 +156,17 @@ def _get_kernel_size(
                 "Both 'size_px' and 'radius' and 'dl' are provided. 'size_px' will take precedence."
             )
         return (size_px,) if np.isscalar(size_px) else tuple(size_px)
-    elif radius is not None and dl is not None:
+    if radius is not None and dl is not None:
         kernel_size = get_kernel_size_px(radius=radius, dl=dl)
         return (kernel_size,) if np.isscalar(kernel_size) else tuple(kernel_size)
-    else:
-        raise ValueError("Either 'size_px' or both 'radius' and 'dl' must be provided.")
+    raise ValueError("Either 'size_px' or both 'radius' and 'dl' must be provided.")
 
 
 def make_filter(
-    radius: Union[float, Tuple[float, ...]] = None,
-    dl: Union[float, Tuple[float, ...]] = None,
+    radius: Optional[Union[float, tuple[float, ...]]] = None,
+    dl: Optional[Union[float, tuple[float, ...]]] = None,
     *,
-    size_px: Union[int, Tuple[int, ...]] = None,
+    size_px: Optional[Union[int, tuple[int, ...]]] = None,
     normalize: bool = True,
     padding: PaddingType = "reflect",
     filter_type: KernelType,

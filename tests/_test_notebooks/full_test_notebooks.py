@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 
@@ -66,7 +68,7 @@ skip = [
 ]
 
 # if any run only supplied, only add those
-if len(run_only):
+if run_only:
     notebook_filenames_all = [NOTEBOOK_DIR + base + ".ipynb" for base in run_only]
 
 # filter out the skip notebooks

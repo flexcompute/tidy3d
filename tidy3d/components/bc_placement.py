@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple, Union
+from typing import Union
 
 import pydantic.v1 as pd
 
-from ..exceptions import SetupError
+from tidy3d.exceptions import SetupError
+
 from .base import Tidy3dBaseModel
 from .types import BoxSurface
 
@@ -38,7 +39,7 @@ class StructureStructureInterface(AbstractBCPlacement):
     >>> bc_placement = StructureStructureInterface(structures=["box", "sphere"])
     """
 
-    structures: Tuple[str, str] = pd.Field(
+    structures: tuple[str, str] = pd.Field(
         title="Structures",
         description="Names of two structures.",
     )
@@ -61,7 +62,7 @@ class MediumMediumInterface(AbstractBCPlacement):
     >>> bc_placement = MediumMediumInterface(mediums=["dieletric", "metal"])
     """
 
-    mediums: Tuple[str, str] = pd.Field(
+    mediums: tuple[str, str] = pd.Field(
         title="Mediums",
         description="Names of two mediums.",
     )
@@ -82,7 +83,7 @@ class SimulationBoundary(AbstractBCPlacement):
     >>> bc_placement = SimulationBoundary(surfaces=["x-", "x+"])
     """
 
-    surfaces: Tuple[BoxSurface, ...] = pd.Field(
+    surfaces: tuple[BoxSurface, ...] = pd.Field(
         ("x-", "x+", "y-", "y+", "z-", "z+"),
         title="Surfaces",
         description="Surfaces of simulation domain where to apply boundary conditions.",
@@ -102,7 +103,7 @@ class StructureSimulationBoundary(AbstractBCPlacement):
         description="Name of the structure.",
     )
 
-    surfaces: Tuple[BoxSurface, ...] = pd.Field(
+    surfaces: tuple[BoxSurface, ...] = pd.Field(
         ("x-", "x+", "y-", "y+", "z-", "z+"),
         title="Surfaces",
         description="Surfaces of simulation domain where to apply boundary conditions.",

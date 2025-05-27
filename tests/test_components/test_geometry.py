@@ -1,17 +1,19 @@
 """Tests Geometry objects."""
 
+from __future__ import annotations
+
 import math
 import warnings
 
-import gdspy
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import shapely
-import tidy3d as td
 import trimesh
+
+import tidy3d as td
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -183,7 +185,7 @@ def test_zero_dims():
 
 
 def test_inside_polyslab_sidewall():
-    ps = POLYSLAB.copy(update=dict(sidewall_angle=0.1))
+    ps = POLYSLAB.copy(update={"sidewall_angle": 0.1})
     ps.inside(x=0, y=0, z=0)
 
 
@@ -284,7 +286,7 @@ def test_box_from_bounds():
 
 def test_polyslab_center_axis():
     """Test the handling of center_axis in a polyslab having (-td.inf, td.inf) bounds."""
-    ps = POLYSLAB.copy(update=dict(slab_bounds=(-td.inf, td.inf)))
+    ps = POLYSLAB.copy(update={"slab_bounds": (-td.inf, td.inf)})
     assert ps.center_axis == 0
 
 
@@ -293,7 +295,7 @@ def test_polyslab_center_axis():
 )
 def test_polyslab_inf_bounds(lower_bound, upper_bound):
     """Test the handling of various operations in a polyslab having inf bounds."""
-    ps = POLYSLAB.copy(update=dict(slab_bounds=(lower_bound, upper_bound)))
+    ps = POLYSLAB.copy(update={"slab_bounds": (lower_bound, upper_bound)})
     # catch any runtime warning related to inf operations
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -327,28 +329,28 @@ def test_polyslab_inf_to_finite_bounds(axis):
         vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
     )
 
-    assert ps_low_inf.finite_length_axis == (
-        LARGE_NUMBER + axis_bound
-    ), "Unexpected finite length for polyslab axis with -inf bound"
-    assert ps_high_inf.finite_length_axis == (
-        LARGE_NUMBER + axis_bound
-    ), "Unexpected finite length for polyslab axis with inf bound"
-    assert (
-        ps_inf.finite_length_axis == 2 * LARGE_NUMBER
-    ), "Unexpected finite length for polyslab axis with two inf bounds"
+    assert ps_low_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
+        "Unexpected finite length for polyslab axis with -inf bound"
+    )
+    assert ps_high_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
+        "Unexpected finite length for polyslab axis with inf bound"
+    )
+    assert ps_inf.finite_length_axis == 2 * LARGE_NUMBER, (
+        "Unexpected finite length for polyslab axis with two inf bounds"
+    )
 
 
 def test_validate_polyslab_vertices_valid():
     with pytest.raises(pydantic.ValidationError):
-        POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))
+        POLYSLAB.copy(update={"vertices": (1, 2, 3)})
     with pytest.raises(pydantic.ValidationError):
         crossing_verts = ((0, 0), (1, 1), (0, 1), (1, 0))
-        POLYSLAB.copy(update=dict(vertices=crossing_verts))
+        POLYSLAB.copy(update={"vertices": crossing_verts})
 
 
 def test_sidewall_failed_validation():
     with pytest.raises(pydantic.ValidationError):
-        POLYSLAB.copy(update=dict(sidewall_angle=1000))
+        POLYSLAB.copy(update={"sidewall_angle": 1000})
 
 
 def test_surfaces():
@@ -377,14 +379,6 @@ def test_gdstk_cell():
         td.PolySlab.from_gds(
             gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1, gds_dtype=0
         )
-
-
-def test_gdspy_cell():
-    gds_cell = gdspy.Cell("name")
-    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
-    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
-    with pytest.raises(Tidy3dKeyError):
-        td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
 
 
 def make_geo_group():
@@ -437,16 +431,16 @@ def test_geometryoperations():
     assert UNION + CYLINDER == td.GeometryGroup(
         geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
     )
-    assert BOX + GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
-    assert GROUP + CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+    assert BOX + GROUP == td.GeometryGroup(geometries=(BOX, *GROUP.geometries))
+    assert GROUP + CYLINDER == td.GeometryGroup(geometries=(*GROUP.geometries, CYLINDER))
 
     assert BOX | CYLINDER == td.GeometryGroup(geometries=(BOX, CYLINDER))
     assert BOX | UNION == td.GeometryGroup(geometries=(BOX, UNION.geometry_a, UNION.geometry_b))
     assert UNION | CYLINDER == td.GeometryGroup(
         geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
     )
-    assert BOX | GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
-    assert GROUP | CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+    assert BOX | GROUP == td.GeometryGroup(geometries=(BOX, *GROUP.geometries))
+    assert GROUP | CYLINDER == td.GeometryGroup(geometries=(*GROUP.geometries, CYLINDER))
 
     assert BOX * SPHERE == td.ClipOperation(
         operation="intersection", geometry_a=BOX, geometry_b=SPHERE
@@ -1049,7 +1043,7 @@ def test_custom_surface_geometry(tmp_path):
 def test_geo_group_sim():
     geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
     geos_orig = list(geo_grp.geometries)
-    geo_grp_full = geo_grp.updated_copy(geometries=geos_orig + [td.Box(size=(1, 1, 1))])
+    geo_grp_full = geo_grp.updated_copy(geometries=[*geos_orig, td.Box(size=(1, 1, 1))])
 
     sim = td.Simulation(
         size=(10, 10, 10),
@@ -1172,3 +1166,86 @@ def test_triangulation_with_collinear_vertices():
     xr = np.linspace(0, 1, 6)
     a = np.array([[x, -0.5] for x in xr] + [[x, 0.5] for x in xr[::-1]])
     assert len(td.components.geometry.triangulation.triangulate(a)) == 10
+
+
+def test_triangle_mesh_from_height():
+    """Test the TriangleMesh.from_height_function and from_height_grid constructors."""
+
+    # Test successful creation with a valid height function
+    def valid_height_func(x, y):
+        return 0.5 + 0.2 * np.sin(4 * (x + 1)) * np.cos(3 * y)
+
+    axis = 2
+    direction = "+"
+    base = 0.0
+    center = [0, 0]
+    size = [1.5, 2]
+    grid_size = [20, 15]
+
+    geometry_from_func = td.TriangleMesh.from_height_function(
+        axis=axis,
+        direction=direction,
+        base=base,
+        center=center,
+        size=size,
+        grid_size=grid_size,
+        height_func=valid_height_func,
+    )
+
+    assert isinstance(geometry_from_func, td.TriangleMesh)
+
+    # Test equivalence with from_height_grid method
+    x = np.linspace(center[0] - 0.5 * size[0], center[0] + 0.5 * size[0], grid_size[0])
+    y = np.linspace(center[1] - 0.5 * size[1], center[1] + 0.5 * size[1], grid_size[1])
+    x_mesh, y_mesh = np.meshgrid(x, y, indexing="ij")
+
+    geometry_from_grid = td.TriangleMesh.from_height_grid(
+        axis=axis,
+        direction=direction,
+        base=base,
+        grid=(x, y),
+        height=valid_height_func(x_mesh, y_mesh),
+    )
+
+    # Check if the two TriangleMesh objects are equivalent
+    assert geometry_from_func == geometry_from_grid
+
+    # Test ValueError for negative height values
+    def negative_height_func(x, y):
+        return 0.5 + 0.2 * np.sin(4 * (x + 1)) * np.cos(3 * y) - 2
+
+    with pytest.raises(
+        ValueError,
+        match="All height values must be non-negative.",
+    ):
+        td.TriangleMesh.from_height_function(
+            axis=axis,
+            direction=direction,
+            base=base,
+            center=center,
+            size=size,
+            grid_size=grid_size,
+            height_func=negative_height_func,
+        )
+
+    # Test ValueError for height_func returning ndarray with wrong shape
+    def wrong_shape_height_func(x, y):
+        return np.zeros((3, 3))  # Incorrect shape
+
+    expected_shape = (grid_size[0], grid_size[1])
+
+    # Test for the presence of key parts of the error message
+    with pytest.raises(ValueError) as excinfo:
+        td.TriangleMesh.from_height_function(
+            axis=axis,
+            direction=direction,
+            base=base,
+            center=center,
+            size=size,
+            grid_size=grid_size,
+            height_func=wrong_shape_height_func,
+        )
+    # Check that the error message contains the expected information
+    error_message = str(excinfo.value)
+    assert f"shape {expected_shape}" in error_message
+    assert "shape (3, 3)" in error_message

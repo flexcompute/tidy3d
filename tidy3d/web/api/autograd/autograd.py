@@ -1,4 +1,5 @@
 # autograd wrapper for web functions
+from __future__ import annotations
 
 import os
 import tempfile
@@ -14,16 +15,15 @@ from autograd.extend import defvjp, primitive
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.types import Literal
+from tidy3d.exceptions import AdjointError
+from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
+from tidy3d.web.api.asynchronous import run_async as run_async_webapi
+from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
+from tidy3d.web.api.tidy3d_stub import SimulationDataType, SimulationType
+from tidy3d.web.api.webapi import run as run_webapi
+from tidy3d.web.core.s3utils import download_file, upload_file
+from tidy3d.web.core.types import PayType
 
-from ....exceptions import AdjointError
-from ...core.s3utils import download_file, upload_file
-from ...core.types import PayType
-from ..asynchronous import DEFAULT_DATA_DIR
-from ..asynchronous import run_async as run_async_webapi
-from ..container import DEFAULT_DATA_PATH, Batch, BatchData, Job
-from ..tidy3d_stub import SimulationDataType, SimulationType
-from ..webapi import run as run_webapi
 from .utils import E_to_D, FieldMap, TracerKeys, get_derivative_maps
 
 # keys for data into auxiliary dictionary
@@ -57,14 +57,14 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
         return False
 
     # if no tracers just use regular web.run()
-    traced_fields = simulation.strip_traced_fields(
+    traced_fields = simulation._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
     )
     if not traced_fields:
         return False
 
     # if no frequency-domain data (e.g. only field time monitors), raise an error
-    if not simulation.freqs_adjoint:
+    if not simulation._freqs_adjoint:
         raise AdjointError(
             "No frequency-domain data found in simulation, but found traced structures. "
             "For an autograd run, you must have at least one frequency-domain monitor."
@@ -96,17 +96,17 @@ def run(
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: str = None,
+    callback_url: typing.Optional[str] = None,
     verbose: bool = True,
-    progress_callback_upload: typing.Callable[[float], None] = None,
-    progress_callback_download: typing.Callable[[float], None] = None,
-    solver_version: str = None,
-    worker_group: str = None,
+    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
+    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
+    solver_version: typing.Optional[str] = None,
+    worker_group: typing.Optional[str] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: list[str] = None,
+    parent_tasks: typing.Optional[list[str]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: Literal["auto", True, False] = "auto",
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
 ) -> SimulationDataType:
     """
@@ -232,14 +232,14 @@ def run_async(
     simulations: dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: str = None,
-    num_workers: int = None,
+    callback_url: typing.Optional[str] = None,
+    num_workers: typing.Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: dict[str, list[str]] = None,
+    parent_tasks: typing.Optional[dict[str, list[str]]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: Literal["auto", True, False] = "auto",
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
@@ -404,7 +404,7 @@ def setup_run(simulation: td.Simulation) -> AutogradFieldMap:
     """Process a user-supplied ``Simulation`` into inputs to ``_run_primitive``."""
 
     # get a mapping of all the traced fields in the provided simulation
-    return simulation.strip_traced_fields(
+    return simulation._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
     )
 
@@ -414,7 +414,7 @@ def postprocess_run(traced_fields_data: AutogradFieldMap, aux_data: dict) -> td.
 
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
     sim_data_original = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
-    return sim_data_original.insert_traced_fields(traced_fields_data)
+    return sim_data_original._insert_traced_fields(traced_fields_data)
 
 
 """ Autograd-traced Primitive for FWD pass ``run`` functions """
@@ -467,7 +467,7 @@ def _run_primitive(
         # TODO: put this in postprocess?
         aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
         aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
-        field_map = sim_data_orig.strip_traced_fields(
+        field_map = sim_data_orig._strip_traced_fields(
             include_untraced_data_arrays=True, starting_path=("data",)
         )
 
@@ -531,7 +531,7 @@ def _run_async_primitive(
             sim_data_orig = sim_data_orig_dict[task_name]
             aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID] = task_id_fwd
             aux_data_dict[task_name][AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
-            field_map = sim_data_orig.strip_traced_fields(
+            field_map = sim_data_orig._strip_traced_fields(
                 include_untraced_data_arrays=True, starting_path=("data",)
             )
             field_map_fwd_dict[task_name] = field_map
@@ -548,7 +548,7 @@ def setup_fwd(
 
     # Always try to build the variant that includes adjoint monitors so that
     # errors in monitor placement are caught early.
-    sim_with_adj_mon = sim_original.with_adjoint_monitors(sim_fields)
+    sim_with_adj_mon = sim_original._with_adjoint_monitors(sim_fields)
     return sim_with_adj_mon if local_gradient else sim_original
 
 
@@ -560,7 +560,7 @@ def postprocess_fwd(
     """Postprocess the combined simulation data into an Autograd field map."""
 
     num_mnts_original = len(sim_original.monitors)
-    sim_data_original, sim_data_fwd = sim_data_combined.split_original_fwd(
+    sim_data_original, sim_data_fwd = sim_data_combined._split_original_fwd(
         num_mnts_original=num_mnts_original
     )
 
@@ -568,7 +568,7 @@ def postprocess_fwd(
     aux_data[AUX_KEY_SIM_DATA_FWD] = sim_data_fwd
 
     # strip out the tracer AutogradFieldMap for the .data from the original sim
-    data_traced = sim_data_original.strip_traced_fields(
+    data_traced = sim_data_original._strip_traced_fields(
         include_untraced_data_arrays=True, starting_path=("data",)
     )
 
@@ -704,7 +704,7 @@ def _run_bwd(
 
             # Build a per-task parent_tasks mapping
             parent_tasks = {}
-            for tname_adj in sims_adj_dict.keys():
+            for tname_adj in sims_adj_dict:
                 parent_tasks[tname_adj] = [task_id_fwd]
             run_kwargs["parent_tasks"] = parent_tasks
 
@@ -900,7 +900,7 @@ def setup_adj(
 
     # start with the full simulation data structure and either zero out the fields
     # that have no tracer data for them or insert the tracer data
-    full_sim_data_dict = sim_data_orig.strip_traced_fields(
+    full_sim_data_dict = sim_data_orig._strip_traced_fields(
         include_untraced_data_arrays=True, starting_path=("data",)
     )
     for path in full_sim_data_dict.keys():
@@ -910,17 +910,17 @@ def setup_adj(
             full_sim_data_dict[path] *= 0
 
     # insert the raw VJP data into the .data of the original SimulationData
-    sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=full_sim_data_dict)
+    sim_data_vjp = sim_data_orig._insert_traced_fields(field_mapping=full_sim_data_dict)
 
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())
 
     num_monitors = len(sim_data_orig.simulation.monitors)
-    adjoint_monitors = sim_data_orig.simulation.with_adjoint_monitors(sim_fields_keys).monitors[
+    adjoint_monitors = sim_data_orig.simulation._with_adjoint_monitors(sim_fields_keys).monitors[
         num_monitors:
     ]
 
-    sims_adj = sim_data_vjp.make_adjoint_sims(
+    sims_adj = sim_data_vjp._make_adjoint_sims(
         data_vjp_paths=data_vjp_paths,
         adjoint_monitors=adjoint_monitors,
     )
@@ -978,10 +978,10 @@ def postprocess_adj(
     sim_fields_vjp = {}
     for structure_index, structure_paths in sim_vjp_map.items():
         # grab the forward and adjoint data
-        E_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
-        eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
-        E_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
-        eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
+        E_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
+        eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
+        E_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
+        eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
         adj_flds_normed = {}
@@ -1066,11 +1066,11 @@ def postprocess_adj(
                 bounds_intersect=bounds_intersect,
             )
 
-            vjp_value_map = structure.compute_derivatives(derivative_info)
+            vjp_value_map = structure._compute_derivatives(derivative_info)
 
             # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
             for structure_path, vjp_value in vjp_value_map.items():
-                sim_path = tuple(["structures", structure_index] + list(structure_path))
+                sim_path = ("structures", structure_index, *list(structure_path))
                 if freq_idx == 0:
                     sim_fields_vjp[sim_path] = vjp_value
                 else:
@@ -1099,7 +1099,7 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 
 def parse_run_kwargs(**run_kwargs):
     """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
-    job_fields = list(Job._upload_fields) + ["solver_version", "pay_type"]
+    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type"]
     job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
     return job_init_kwargs
 

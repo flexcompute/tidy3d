@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Literal, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -180,14 +180,15 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         cells = CellDataArray(
             cells_numpy,
-            coords=dict(
-                cell_index=np.arange(num_cells), vertex_index=np.arange(cls._cell_num_vertices())
-            ),
+            coords={
+                "cell_index": np.arange(num_cells),
+                "vertex_index": np.arange(cls._cell_num_vertices()),
+            },
         )
 
         points = PointDataArray(
             points_2d_numpy,
-            coords=dict(index=np.arange(len(points_numpy)), axis=np.arange(cls._point_dims())),
+            coords={"index": np.arange(len(points_numpy)), "axis": np.arange(cls._point_dims())},
         )
 
         if remove_degenerate_cells:
@@ -304,7 +305,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Union[float, Literal["extrapolate"]] = None,
+        fill_value: Optional[Union[float, Literal["extrapolate"]]] = None,
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         ignore_normal_pos: bool = True,
@@ -376,7 +377,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
             interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]] + self._fields_shape
         )
 
-        coords_dict = dict(x=x, y=y, z=z)
+        coords_dict = {"x": x, "y": y, "z": z}
         coords_dict.update(self._values_coords_dict)
 
         if len(self._values_coords_dict) == 0:
@@ -443,7 +444,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] = None,
+        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
         **sel_kwargs,
     ) -> XrDataArray:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument
@@ -574,11 +575,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
         grid: bool = True,
         cbar: bool = True,
         cmap: str = "viridis",
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         shading: Literal["gourand", "flat"] = "gouraud",
-        cbar_kwargs: Dict = None,
-        pcolor_kwargs: Dict = None,
+        cbar_kwargs: Optional[dict] = None,
+        pcolor_kwargs: Optional[dict] = None,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 

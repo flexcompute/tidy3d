@@ -1,9 +1,11 @@
 # Test the inverse design plugin
+from __future__ import annotations
 
 import autograd.numpy as anp
 import numpy as np
 import numpy.testing as npt
 import pytest
+
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
 from tidy3d.plugins.expressions import ModeAmp, ModePower
@@ -361,9 +363,9 @@ def test_continue_run_fns(use_emulated_run):  # noqa: F811
 
     num_steps_orig = len(result_orig.history["params"])
     num_steps_full = len(result_full.history["params"])
-    assert (
-        num_steps_full == num_steps_orig + num_steps_continue
-    ), "wrong number of elements in the combined run history."
+    assert num_steps_full == num_steps_orig + num_steps_continue, (
+        "wrong number of elements in the combined run history."
+    )
 
 
 def test_continue_run_from_file(use_emulated_run):  # noqa: F811
@@ -377,17 +379,17 @@ def test_continue_run_from_file(use_emulated_run):  # noqa: F811
     )
     num_steps_orig = len(result_orig.history["params"])
     num_steps_new = len(result_full.history["params"])
-    assert (
-        num_steps_new == num_steps_orig + num_steps_continue
-    ), "wrong number of elements in the combined run history."
+    assert num_steps_new == num_steps_orig + num_steps_continue, (
+        "wrong number of elements in the combined run history."
+    )
 
     # test the convenience function to load it from file
     result_full = optimizer.continue_run_from_history(num_steps=2, post_process_fn=post_process_fn)
     num_steps_orig = num_steps_new
     num_steps_new = len(result_full.history["params"])
-    assert (
-        num_steps_new == num_steps_orig + num_steps_continue
-    ), "wrong number of elements in the combined run history."
+    assert num_steps_new == num_steps_orig + num_steps_continue, (
+        "wrong number of elements in the combined run history."
+    )
 
 
 def test_result(
@@ -419,7 +421,7 @@ def test_result_data(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
 
 
 def test_result_data_multi(
-    use_emulated_to_sim_data,  # noqa: F811
+    use_emulated_to_sim_data,
     use_emulated_run,  # noqa: F811
     tmp_path,
 ):

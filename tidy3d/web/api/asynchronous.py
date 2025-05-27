@@ -1,22 +1,25 @@
 """Interface to run several jobs in batch using simplified syntax."""
 
-from typing import Dict, List, Literal, Union
+from __future__ import annotations
 
-from ...log import log
-from ..core.types import PayType
+from typing import Literal, Optional, Union
+
+from tidy3d.log import log
+from tidy3d.web.core.types import PayType
+
 from .container import DEFAULT_DATA_DIR, Batch, BatchData
 from .tidy3d_stub import SimulationType
 
 
 def run_async(
-    simulations: Dict[str, SimulationType],
+    simulations: dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: str = None,
-    num_workers: int = None,
+    callback_url: Optional[str] = None,
+    num_workers: Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: Dict[str, List[str]] = None,
+    parent_tasks: Optional[dict[str, list[str]]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:

@@ -4,6 +4,8 @@ install and configure the development environment for tidy3d. The commands are i
 are available as CLI commands when tidy3d is installed.
 """
 
+from __future__ import annotations
+
 import platform
 import re
 import subprocess
@@ -16,16 +18,16 @@ from .utils import echo_and_check_subprocess, echo_and_run_subprocess, get_insta
 __all__ = [
     "activate_correct_poetry_python",
     "configure_submodules",
-    "verify_pandoc_is_installed_and_version_less_than_3",
-    "verify_pipx_is_installed",
-    "verify_poetry_is_installed",
-    "verify_sphinx_is_installed",
     "get_install_directory_command",
     "install_development_environment",
     "install_in_poetry",
     "uninstall_development_environment",
     "update_submodules_remote",
     "verify_development_environment",
+    "verify_pandoc_is_installed_and_version_less_than_3",
+    "verify_pipx_is_installed",
+    "verify_poetry_is_installed",
+    "verify_sphinx_is_installed",
 ]
 
 
@@ -33,9 +35,7 @@ def activate_correct_poetry_python():
     """
     Activate the correct Python environment for Poetry based on the operating system.
     """
-    if platform.system() == "Windows":
-        echo_and_run_subprocess(["poetry", "env", "use", "python"])
-    elif platform.system() == "Darwin":
+    if platform.system() == "Windows" or platform.system() == "Darwin":
         echo_and_run_subprocess(["poetry", "env", "use", "python"])
     elif platform.system() == "Linux":
         try:
@@ -87,12 +87,10 @@ def verify_pandoc_is_installed_and_version_less_than_3():
             if major_version < 3:
                 print(f"Pandoc is installed with version {version}, which is less than 3.")
                 return True
-            else:
-                print(f"Pandoc version {version} is installed, but it is not less than 3.")
-                return False
-        else:
-            print("Pandoc version number could not be determined.")
+            print(f"Pandoc version {version} is installed, but it is not less than 3.")
             return False
+        print("Pandoc version number could not be determined.")
+        return False
 
     except subprocess.CalledProcessError:
         # This exception is raised if the command returned a non-zero exit status
@@ -148,9 +146,9 @@ def verify_poetry_is_installed():
         if result.returncode == 0:
             print("Poetry is installed: " + result.stdout)
             return True
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
         # This exception is raised if the command returned a non-zero exit status
-        raise OSError("Poetry is not installed or not found in the system PATH.")
+        raise OSError("Poetry is not installed or not found in the system PATH.") from exc
 
 
 def verify_sphinx_is_installed():
@@ -170,9 +168,9 @@ def verify_sphinx_is_installed():
         )
         # If the command was successful, we'll get the version info
         print("sphinx is installed: " + result.stdout)
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
         # This exception is raised if the command returned a non-zero exit status
-        raise OSError("sphinx is not installed or not found in the poetry environment.")
+        raise OSError("sphinx is not installed or not found in the poetry environment.") from exc
 
 
 @develop.command(name="get-install-directory", help="Gets the TIDY3D base directory.")
@@ -205,7 +203,7 @@ def install_development_environment(args=None):
     # Verify and install pipx if required
     try:
         verify_pipx_is_installed()
-    except:  # NOQA: E722
+    except Exception as exc:
         if platform.system() == "Windows":
             echo_and_check_subprocess(["scoop", "install", "pipx"])
             echo_and_check_subprocess(["pipx", "ensurepath"])
@@ -219,15 +217,13 @@ def install_development_environment(args=None):
             raise OSError(
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
                 "tidy3d develop are compatible with your operating system."
-            )
+            ) from exc
 
     # Verify and install poetry if required
     try:
         verify_poetry_is_installed()
-    except:  # NOQA: E722
-        if platform.system() == "Windows":
-            echo_and_check_subprocess(["pipx", "install", "poetry"])
-        elif platform.system() == "Darwin":
+    except Exception as exc:
+        if platform.system() == "Windows" or platform.system() == "Darwin":
             echo_and_check_subprocess(["pipx", "install", "poetry"])
         elif platform.system() == "Linux":
             echo_and_check_subprocess(["python3", "-m", "pipx", "install", "poetry"])
@@ -235,16 +231,16 @@ def install_development_environment(args=None):
             raise OSError(
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
                 "tidy3d develop are compatible with your operating system."
-            )
+            ) from exc
 
     # Verify pandoc is installed
     try:
         verify_pandoc_is_installed_and_version_less_than_3()
-    except:  # NOQA: E722
+    except Exception as exc:
         raise OSError(
             "Please install pandoc < 3 depending on your platform: https://pandoc.org/installing.html . Then run this "
             "command again. You can also follow our detailed instructions under the development guide."
-        )
+        ) from exc
 
     # Makes sure that poetry uses the python environment active on the terminal.
 
@@ -328,7 +324,7 @@ def uninstall_development_environment(args=None):
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
                 "tidy3d develop are compatible with your operating system."
             )
-    else:  # NOQA: E722
+    else:
         print("poetry is not found on the PATH. It is already uninstalled from PATH.")
 
     # Verify and install pipx if required
@@ -357,8 +353,7 @@ def uninstall_development_environment(args=None):
             "Please uninstall pandoc < 3 depending on your platform: https://pandoc.org/installing.html . Then run this "
             "command again. You can also follow our detailed instructions under the development guide."
         )
-    else:  # NOQA: E722
-        print("pandoc is not found on the PATH. It is already uninstalled from PATH.")
+    print("pandoc is not found on the PATH. It is already uninstalled from PATH.")
 
     return 0
 

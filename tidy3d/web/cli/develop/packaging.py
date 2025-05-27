@@ -6,6 +6,8 @@ it for different hardware. For example, say we just need to use a certain sectio
 functionality to extract the timing performance of that specific operation and compare it to previous usages.
 """
 
+from __future__ import annotations
+
 import pathlib
 import subprocess
 from pathlib import Path
@@ -47,7 +49,7 @@ def benchmark_timing_operations(
     operations in the `tests` section and benchmark them properly using this. This function does not require poetry
     and can be run anywhere where a tidy3d installation is already implemented. The output file has an extension.
     """
-    timing_command_list = list()
+    timing_command_list = []
     if output_file is None:
         output_file = timing_command.split("_")[1:] + ".log"
 
@@ -60,7 +62,7 @@ def benchmark_timing_operations(
             "The output file path "
             + str(output_file_path)
             + " does not exist and cannot be created."
-        )
+        ) from None
 
     if in_poetry_environment:
         timing_command_list += ["poetry", "run"]
@@ -70,9 +72,9 @@ def benchmark_timing_operations(
     except KeyError:
         # This has to do with choosing a timing command not available in the dictionary
         raise KeyError(
-            f"Make sure the selected timing command {timing_command}"
-            + "corresponds to an existing command."
-        )
+            f"Make sure the selected timing command {timing_command} "
+            "corresponds to an existing command."
+        ) from None
 
     echo_and_check_subprocess(
         command=timing_command_list, stdout=output_file_write, stderr=subprocess.STDOUT
@@ -90,7 +92,7 @@ def benchmark_timing_operations(
     default=True,
     type=bool,
     is_flag=True,
-    help="Runs in poetry environment if " "True.",
+    help="Runs in poetry environment if True.",
 )
 @click.option(
     "-o",

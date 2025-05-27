@@ -63,5 +63,4 @@ class Account(Tidy3DResource, extra=Extra.allow):
         if resp:
             account = Account(**resp)
             return account
-        else:
-            return None
+        return None

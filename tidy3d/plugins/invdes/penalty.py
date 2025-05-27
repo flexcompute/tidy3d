@@ -1,4 +1,5 @@
 # define penalties applied to parameters from design region
+from __future__ import annotations
 
 import abc
 import typing

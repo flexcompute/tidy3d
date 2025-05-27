@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from io import StringIO
-from typing import List
 
 from rich.console import Console
 from rich.panel import Panel
@@ -7,7 +8,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from ..components.viz import FLEXCOMPUTE_COLORS
+from tidy3d.components.viz import FLEXCOMPUTE_COLORS
 
 MAX_POLES_TO_DISPLAY = 3
 
@@ -55,7 +56,7 @@ def variant_name(v):
     return name
 
 
-def summarize_medium(med) -> List[str]:
+def summarize_medium(med) -> list[str]:
     """Returns relevant medium information for display."""
     lines = []
 
@@ -108,11 +109,6 @@ def summarize_variant_item(v) -> str:
     return "\n".join(lines)
 
 
-def get_hex_formatted_string(color_key):
-    """Return a hex formatted string from the FLEXCOMPUTE_COLORS that can be used with rich printing."""
-    return f"#{FLEXCOMPUTE_COLORS[color_key]:06x}"
-
-
 def repr_pretty_with_rich(obj, p, cycle):
     """Enable _repr_pretty_ for jupyter notebooks to use the rich printing output."""
     if cycle:
@@ -147,28 +143,24 @@ def summarize_material_library_rich(matlib):
     """Returns a Rich Table summarizing the MaterialLibrary."""
 
     table = Table(
-        title=f"[bold {get_hex_formatted_string('brand_black')}]Material Library Summary[/]",
+        title=f"[bold {FLEXCOMPUTE_COLORS['brand_black']}]Material Library Summary[/]",
         show_header=True,
-        header_style=f"bold {get_hex_formatted_string('brand_black')}",
-        border_style=f"{get_hex_formatted_string('brand_black')}",
+        header_style=f"bold {FLEXCOMPUTE_COLORS['brand_black']}",
+        border_style=f"{FLEXCOMPUTE_COLORS['brand_black']}",
         expand=False,  # Don't force table to full terminal width
     )
 
+    table.add_column("Key", style=f"{FLEXCOMPUTE_COLORS['brand_blue']}", width=18, justify="center")
     table.add_column(
-        "Key", style=f"{get_hex_formatted_string('brand_blue')}", width=18, justify="center"
-    )
-    table.add_column(
-        "Name", style=f"{get_hex_formatted_string('brand_purple')}", min_width=20, justify="center"
+        "Name", style=f"{FLEXCOMPUTE_COLORS['brand_purple']}", min_width=20, justify="center"
     )
     table.add_column(
         "Default Variant",
-        style=f"{get_hex_formatted_string('brand_green')}",
+        style=f"{FLEXCOMPUTE_COLORS['brand_green']}",
         min_width=20,
         justify="center",
     )
-    table.add_column(
-        "# Variants", style=f"{get_hex_formatted_string('brand_green')}", justify="center"
-    )
+    table.add_column("# Variants", style=f"{FLEXCOMPUTE_COLORS['brand_green']}", justify="center")
 
     # Iterate through the sorted items for consistent order
     for key, mat_item in sorted(matlib.items()):
@@ -197,7 +189,7 @@ def summarize_material_library_rich(matlib):
 
 def summarize_material_item_rich(m):
     """Returns a Rich Tree representation summarizing the MaterialItem."""
-    tree_title = f"[bold {get_hex_formatted_string('brand_purple')}]Material Summary: {m.name}[/]"
+    tree_title = f"[bold {FLEXCOMPUTE_COLORS['brand_purple']}]Material Summary: {m.name}[/]"
     tree = Tree(tree_title)
 
     # Add a subtree for the variants
@@ -212,7 +204,7 @@ def summarize_material_item_rich(m):
         # Indicate if there are no variants
         variants_node.add("[italic]None[/italic]")
 
-    return Panel(tree, border_style=f"{get_hex_formatted_string('brand_purple')}", expand=False)
+    return Panel(tree, border_style=f"{FLEXCOMPUTE_COLORS['brand_purple']}", expand=False)
 
 
 def summarize_variant_item_rich(v):
@@ -220,9 +212,7 @@ def summarize_variant_item_rich(v):
 
     name = variant_name(v)
 
-    tree_title = Text(
-        f"Variant Summary: {name}", style=f"bold {get_hex_formatted_string('brand_green')}"
-    )
+    tree_title = Text(f"Variant Summary: {name}", style=f"bold {FLEXCOMPUTE_COLORS['brand_green']}")
     tree = Tree(tree_title)
 
     ref_node = tree.add("[bold]References[/bold]")
@@ -252,10 +242,10 @@ def summarize_variant_item_rich(v):
     if mediums:
         for med_key, med in mediums.items():
             medium_type_node = mediums_node.add(
-                f"[italic {get_hex_formatted_string('brand_blue')}]{med_key}[/]"
+                f"[italic {FLEXCOMPUTE_COLORS['brand_blue']}]{med_key}[/]"
             )
             add_medium_details_to_tree(med, medium_type_node)
     else:
         mediums_node.add("[italic]None[/italic]")
 
-    return Panel(tree, border_style=f"{get_hex_formatted_string('brand_green')}", expand=False)
+    return Panel(tree, border_style=f"{FLEXCOMPUTE_COLORS['brand_green']}", expand=False)

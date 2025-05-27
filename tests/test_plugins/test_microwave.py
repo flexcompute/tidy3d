@@ -1,15 +1,18 @@
 """Test the microwave plugin."""
 
+from __future__ import annotations
+
 from math import isclose
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
-import tidy3d.plugins.microwave as mw
 from skrf import Frequency
 from skrf.media import MLine
+
+import tidy3d as td
+import tidy3d.plugins.microwave as mw
 from tidy3d import FieldData
 from tidy3d.constants import ETA_0
 from tidy3d.exceptions import DataError
@@ -96,7 +99,7 @@ def make_stripline_scalar_field_data_array(grid_key: str):
         values = np.where(above_and_within, -ones / ETA_0, values)
         values = np.where(below_and_within, ones / ETA_0, values)
 
-    return td.ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+    return td.ScalarFieldDataArray(values, coords={"x": XS, "y": YS, "z": ZS, "f": FS})
 
 
 def make_coaxial_field_data_array(grid_key: str):
@@ -141,7 +144,7 @@ def make_coaxial_field_data_array(grid_key: str):
         else:
             field /= ETA_0
 
-    return td.ScalarFieldDataArray(field, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+    return td.ScalarFieldDataArray(field, coords={"x": XS, "y": YS, "z": ZS, "f": FS})
 
 
 def make_field_data():

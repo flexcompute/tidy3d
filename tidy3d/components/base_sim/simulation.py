@@ -3,31 +3,35 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Optional
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
 
-from ...exceptions import Tidy3dKeyError
-from ...log import log
-from ...version import __version__
-from ..base import cached_property, skip_if_fields_missing
-from ..geometry.base import Box
-from ..medium import Medium, MediumType3D
-from ..scene import Scene
-from ..structure import Structure
-from ..types import TYPE_TAG_STR, Ax, Axis, Bound, LengthUnit, Symmetry
-from ..validators import (
+from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.medium import Medium, MediumType3D
+from tidy3d.components.scene import Scene
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import (
+    TYPE_TAG_STR,
+    Ax,
+    Axis,
+    Bound,
+    LengthUnit,
+    PriorityMode,
+    Symmetry,
+)
+from tidy3d.components.validators import (
     _warn_unsupported_traced_argument,
     assert_objects_in_sim_bounds,
     assert_unique_names,
 )
-from ..viz import (
-    PlotParams,
-    add_ax_if_none,
-    equal_aspect,
-    plot_params_symmetry,
-)
+from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect, plot_params_symmetry
+from tidy3d.exceptions import Tidy3dKeyError
+from tidy3d.log import log
+from tidy3d.version import __version__
+
 from .monitor import AbstractMonitor
 
 
@@ -44,7 +48,7 @@ class AbstractSimulation(Box, ABC):
     Background medium of simulation, defaults to vacuum if not specified.
     """
 
-    structures: Tuple[Structure, ...] = pd.Field(
+    structures: tuple[Structure, ...] = pd.Field(
         (),
         title="Structures",
         description="Tuple of structures present in simulation. "
@@ -73,7 +77,7 @@ class AbstractSimulation(Box, ABC):
         )
     """
 
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
+    symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
@@ -81,7 +85,7 @@ class AbstractSimulation(Box, ABC):
         "at the simulation center of each axis, respectively. ",
     )
 
-    sources: Tuple[None, ...] = pd.Field(
+    sources: tuple[None, ...] = pd.Field(
         (),
         title="Sources",
         description="Sources in the simulation.",
@@ -93,7 +97,7 @@ class AbstractSimulation(Box, ABC):
         description="Specification of boundary conditions.",
     )
 
-    monitors: Tuple[None, ...] = pd.Field(
+    monitors: tuple[None, ...] = pd.Field(
         (),
         title="Monitors",
         description="Monitors in the simulation. ",
@@ -117,6 +121,15 @@ class AbstractSimulation(Box, ABC):
         description="When set to a supported ``LengthUnit``, "
         "plots will be produced with proper scaling of axes and "
         "include the desired unit specifier in labels.",
+    )
+
+    structure_priority_mode: PriorityMode = pd.Field(
+        "equal",
+        title="Structure Priority Setting",
+        description="This field only affects structures of `priority=None`. "
+        "If `equal`, the priority of those structures is set to 0; if `conductor`, "
+        "the priority of structures made of `LossyMetalMedium` is set to 90, "
+        "`PECMedium` to 100, and others to 0.",
     )
 
     """ Validating setup """
@@ -182,7 +195,6 @@ class AbstractSimulation(Box, ABC):
 
     def validate_pre_upload(self) -> None:
         """Validate the fully initialized simulation is ok for upload to our servers."""
-        pass
 
     """ Accounting """
 
@@ -191,7 +203,10 @@ class AbstractSimulation(Box, ABC):
         """Scene instance associated with the simulation."""
 
         return Scene(
-            medium=self.medium, structures=self.structures, plot_length_units=self.plot_length_units
+            medium=self.medium,
+            structures=self.structures,
+            plot_length_units=self.plot_length_units,
+            structure_priority_mode=self.structure_priority_mode,
         )
 
     def get_monitor_by_name(self, name: str) -> AbstractMonitor:
@@ -227,14 +242,14 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
@@ -292,12 +307,12 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot_sources(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        alpha: Optional[float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
@@ -340,12 +355,12 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot_monitors(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        alpha: Optional[float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
@@ -388,11 +403,11 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot_symmetries(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
@@ -463,9 +478,9 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot_boundaries(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -497,12 +512,12 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot_structures(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         fill: bool = True,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -541,16 +556,16 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot_structures_eps(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -608,15 +623,15 @@ class AbstractSimulation(Box, ABC):
     @add_ax_if_none
     def plot_structures_heat_conductivity(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.

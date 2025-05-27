@@ -3,32 +3,31 @@
 from __future__ import annotations
 
 import json
-from typing import Callable, List, Union
+from typing import Callable, Optional, Union
 
 import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
 
+from tidy3d import log
+from tidy3d.components.base import _get_valid_extension
+from tidy3d.components.data.monitor_data import ModeSolverData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.eme.data.sim_data import EMESimulationData
+from tidy3d.components.eme.simulation import EMESimulation
+from tidy3d.components.mode.data.sim_data import ModeSimulationData
+from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.components.simulation import Simulation
 from tidy3d.components.tcad.data.sim_data import HeatChargeSimulationData, HeatSimulationData
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-
-from ... import log
-from ...components.base import _get_valid_extension
-from ...components.data.monitor_data import ModeSolverData
-from ...components.data.sim_data import SimulationData
-from ...components.eme.data.sim_data import EMESimulationData
-from ...components.eme.simulation import EMESimulation
-from ...components.mode.data.sim_data import ModeSimulationData
-from ...components.mode.simulation import ModeSimulation
-from ...components.simulation import Simulation
-from ...plugins.mode.mode_solver import ModeSolver
-from ..core.file_util import (
+from tidy3d.plugins.mode.mode_solver import ModeSolver
+from tidy3d.web.core.file_util import (
     read_simulation_from_hdf5,
     read_simulation_from_hdf5_gz,
     read_simulation_from_json,
 )
-from ..core.stub import TaskStub, TaskStubData
-from ..core.types import TaskType
+from tidy3d.web.core.stub import TaskStub, TaskStubData
+from tidy3d.web.core.types import TaskType
 
 SimulationType = Union[
     Simulation, HeatChargeSimulation, HeatSimulation, EMESimulation, ModeSolver, ModeSimulation
@@ -76,17 +75,17 @@ class Tidy3dStub(BaseModel, TaskStub):
 
         data = json.loads(json_str)
         type_ = data["type"]
-        if "Simulation" == type_:
+        if type_ == "Simulation":
             sim = Simulation.from_file(file_path)
-        elif "ModeSolver" == type_:
+        elif type_ == "ModeSolver":
             sim = ModeSolver.from_file(file_path)
-        elif "HeatSimulation" == type_:
+        elif type_ == "HeatSimulation":
             sim = HeatSimulation.from_file(file_path)
-        elif "HeatChargeSimulation" == type_:
+        elif type_ == "HeatChargeSimulation":
             sim = HeatChargeSimulation.from_file(file_path)
-        elif "EMESimulation" == type_:
+        elif type_ == "EMESimulation":
             sim = EMESimulation.from_file(file_path)
-        elif "ModeSimulation" == type_:
+        elif type_ == "ModeSimulation":
             sim = ModeSimulation.from_file(file_path)
 
         return sim
@@ -109,7 +108,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         """
         self.simulation.to_file(file_path)
 
-    def to_hdf5_gz(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+    def to_hdf5_gz(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
         """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .hdf5.gz file.
 
         Parameters
@@ -138,15 +137,15 @@ class Tidy3dStub(BaseModel, TaskStub):
         """
         if isinstance(self.simulation, Simulation):
             return TaskType.FDTD.name
-        elif isinstance(self.simulation, ModeSolver):
+        if isinstance(self.simulation, ModeSolver):
             return TaskType.MODE_SOLVER.name
-        elif isinstance(self.simulation, HeatSimulation):
+        if isinstance(self.simulation, HeatSimulation):
             return TaskType.HEAT.name
-        elif isinstance(self.simulation, HeatChargeSimulation):
+        if isinstance(self.simulation, HeatChargeSimulation):
             return TaskType.HEAT_CHARGE.name
-        elif isinstance(self.simulation, EMESimulation):
+        if isinstance(self.simulation, EMESimulation):
             return TaskType.EME.name
-        elif isinstance(self.simulation, ModeSimulation):
+        if isinstance(self.simulation, ModeSimulation):
             return TaskType.MODE.name
 
     def validate_pre_upload(self, source_required) -> None:
@@ -188,17 +187,17 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
         data = json.loads(json_str)
         type_ = data["type"]
-        if "SimulationData" == type_:
+        if type_ == "SimulationData":
             sim_data = SimulationData.from_file(file_path)
-        elif "ModeSolverData" == type_:
+        elif type_ == "ModeSolverData":
             sim_data = ModeSolverData.from_file(file_path)
-        elif "HeatSimulationData" == type_:
+        elif type_ == "HeatSimulationData":
             sim_data = HeatSimulationData.from_file(file_path)
-        elif "HeatChargeSimulationData" == type_:
+        elif type_ == "HeatChargeSimulationData":
             sim_data = HeatChargeSimulationData.from_file(file_path)
-        elif "EMESimulationData" == type_:
+        elif type_ == "EMESimulationData":
             sim_data = EMESimulationData.from_file(file_path)
-        elif "ModeSimulationData" == type_:
+        elif type_ == "ModeSimulationData":
             sim_data = ModeSimulationData.from_file(file_path)
 
         return sim_data

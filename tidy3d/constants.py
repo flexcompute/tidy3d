@@ -10,6 +10,8 @@ Attributes:
     Q_e (float): funamental charge [C]
 """
 
+from __future__ import annotations
+
 from types import MappingProxyType
 
 import numpy as np
@@ -192,6 +194,11 @@ Watts per (micrometer Kelvin).
 SPECIFIC_HEAT_CAPACITY = "J/(kg*K)"
 """
 Joules per (kilogram Kelvin).
+"""
+
+DENSITY = "kg/um^3"
+"""
+Kilograms per cubic micrometer.
 """
 
 HEAT_FLUX = "W/um^2"

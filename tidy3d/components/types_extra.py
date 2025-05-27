@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from typing import Any
 
-from ..packaging import check_import
+from tidy3d.packaging import check_import
 
 # TODO Complicated as trimesh should be a core package unless decoupled implementation types in functional location.
 #  We need to restructure.

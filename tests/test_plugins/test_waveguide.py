@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
-import tidy3d as td
 from pydantic.v1 import ValidationError
+
+import tidy3d as td
 from tidy3d.plugins import waveguide
 
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Optional
 
 import pydantic.v1 as pd
@@ -48,12 +50,11 @@ class Variable(Expression):
             if self.name not in kwargs:
                 raise ValueError(f"Variable '{self.name}' not provided.")
             return kwargs[self.name]
-        else:
-            if not args:
-                raise ValueError("No positional argument provided for unnamed variable.")
-            if len(args) > 1:
-                raise ValueError("Multiple positional arguments provided for unnamed variable.")
-            return args[0]
+        if not args:
+            raise ValueError("No positional argument provided for unnamed variable.")
+        if len(args) > 1:
+            raise ValueError("Multiple positional arguments provided for unnamed variable.")
+        return args[0]
 
     def __repr__(self) -> str:
         return self.name if self.name else "Variable()"

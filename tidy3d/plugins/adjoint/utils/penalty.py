@@ -1,14 +1,18 @@
 """Penalty Functions for adjoint plugin."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import jax.numpy as jnp
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel
-from ....components.types import ArrayFloat2D
-from ....constants import MICROMETER
-from ....log import log
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import ArrayFloat2D
+from tidy3d.constants import MICROMETER
+from tidy3d.log import log
+
 from .filter import BinaryProjector, ConicFilter
 
 # Radius of Curvature Calculation
@@ -227,7 +231,7 @@ class ErosionDilationPenalty(Penalty):
         """:class:`ConicFilter` associated with this object."""
         return ConicFilter(radius=self.length_scale, design_region_dl=self.pixel_size)
 
-    def binary_projector(self, eta: float = None) -> BinaryProjector:
+    def binary_projector(self, eta: Optional[float] = None) -> BinaryProjector:
         """:class:`BinaryProjector` associated with this object."""
 
         if eta is None:
@@ -235,11 +239,11 @@ class ErosionDilationPenalty(Penalty):
 
         return BinaryProjector(eta=eta, beta=self.beta, vmin=0.0, vmax=1.0, strict_binarize=False)
 
-    def tanh_projection(self, x: jnp.ndarray, eta: float = None) -> jnp.ndarray:
+    def tanh_projection(self, x: jnp.ndarray, eta: Optional[float] = None) -> jnp.ndarray:
         """Project an array ``x`` once using ``self.beta`` and ``self.eta0``."""
         return self.binary_projector(eta=eta).evaluate(x)
 
-    def filter_project(self, x: jnp.ndarray, eta: float = None) -> jnp.ndarray:
+    def filter_project(self, x: jnp.ndarray, eta: Optional[float] = None) -> jnp.ndarray:
         """Filter an array ``x`` using length scale and dL and then apply a projection."""
         filter = self.conic_filter()
         projector = self.binary_projector(eta=eta)

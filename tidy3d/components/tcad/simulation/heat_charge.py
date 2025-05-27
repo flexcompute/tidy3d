@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -37,6 +37,7 @@ from tidy3d.components.scene import Scene
 from tidy3d.components.spice.sources.dc import DCVoltageSource
 from tidy3d.components.spice.types import ElectricalAnalysisType
 from tidy3d.components.structure import Structure
+from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis
 from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
@@ -92,7 +93,10 @@ HeatSourceTypes = (UniformHeatSource, HeatSource, HeatFromElectricSource)
 ChargeSourceTypes = ()
 ElectricBCTypes = (VoltageBC, CurrentBC, InsulatingBC)
 
-AnalysisSpecType = ElectricalAnalysisType
+AnalysisSpecType = Union[ElectricalAnalysisType, UnsteadyHeatAnalysis]
+
+# define some limits for transient heat simulations
+TRANSIENT_HEAT_MAX_STEPS = 1000
 
 
 class TCADAnalysisTypes(str, Enum):
@@ -260,19 +264,19 @@ class HeatChargeSimulation(AbstractSimulation):
     Background medium of simulation, defaults to a standard dispersion-less :class:`Medium` if not specified.
     """
 
-    sources: Tuple[annotate_type(HeatChargeSourceType), ...] = pd.Field(
+    sources: tuple[annotate_type(HeatChargeSourceType), ...] = pd.Field(
         (),
         title="Heat and Charge sources",
         description="List of heat and/or charge sources.",
     )
 
-    monitors: Tuple[annotate_type(HeatChargeMonitorType), ...] = pd.Field(
+    monitors: tuple[annotate_type(HeatChargeMonitorType), ...] = pd.Field(
         (),
         title="Monitors",
         description="Monitors in the simulation.",
     )
 
-    boundary_spec: Tuple[annotate_type(Union[HeatChargeBoundarySpec, HeatBoundarySpec]), ...] = (
+    boundary_spec: tuple[annotate_type(Union[HeatChargeBoundarySpec, HeatBoundarySpec]), ...] = (
         pd.Field(
             (),
             title="Boundary Condition Specifications",
@@ -287,7 +291,7 @@ class HeatChargeSimulation(AbstractSimulation):
         discriminator=TYPE_TAG_STR,
     )
 
-    symmetry: Tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
+    symmetry: tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
@@ -299,8 +303,8 @@ class HeatChargeSimulation(AbstractSimulation):
     analysis_spec: AnalysisSpecType = pd.Field(
         None,
         title="Analysis specification.",
-        description="The `analysis_spec` is used to validate that the simulation parameters and tolerance settings "
-        "are correctly configured as desired by the user.",
+        description="The `analysis_spec` is used to specify the type of simulation. Currently, it is used to "
+        "specify Charge simulations or transient Heat simulations.",
     )
 
     @pd.validator("structures", always=True)
@@ -315,7 +319,7 @@ class HeatChargeSimulation(AbstractSimulation):
         return val
 
     @staticmethod
-    def _check_cross_solids(objs: Tuple[Box, ...], values: Dict) -> Tuple[int, ...]:
+    def _check_cross_solids(objs: tuple[Box, ...], values: dict) -> tuple[int, ...]:
         """Given model dictionary ``values``, check whether objects in list ``objs`` cross
         a ``SolidSpec`` medium.
         """
@@ -335,7 +339,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 "'size', 'center',  'medium', and 'structures'. Thus, it should only be used in "
                 "validators with @skip_if_fields_missing(['medium', 'center', 'size', 'structures']) "
                 "or root validators with option 'skip_on_failure=True'."
-            )
+            ) from None
 
         # list of structures including background as a Box()
         structure_bg = Structure(
@@ -346,7 +350,7 @@ class HeatChargeSimulation(AbstractSimulation):
             medium=medium,
         )
 
-        total_structures = [structure_bg] + list(structures)
+        total_structures = [structure_bg, *list(structures)]
 
         obj_do_not_cross_solid_idx = []
         obj_do_not_cross_cond_idx = []
@@ -358,8 +362,7 @@ class HeatChargeSimulation(AbstractSimulation):
                     isinstance(medium.heat_spec, SolidMedium) for medium in medium_set
                 )
                 crosses_elec_spec = any(
-                    any([isinstance(medium.charge, medium_i)] for medium_i in valid_electric_medium)
-                    for medium in medium_set
+                    isinstance(medium.charge, valid_electric_medium) for medium in medium_set
                 )
             else:
                 # approximate check for volumetric objects based on bounding boxes
@@ -372,10 +375,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 crosses_elec_spec = any(
                     obj.intersects(structure.geometry)
                     for structure in total_structures
-                    if any(
-                        [isinstance(structure.medium.charge, medium_i)]
-                        for medium_i in valid_electric_medium
-                    )
+                    if isinstance(structure.medium.charge, valid_electric_medium)
                 )
 
             if not crosses_solid:
@@ -390,8 +390,8 @@ class HeatChargeSimulation(AbstractSimulation):
     def _monitors_cross_solids(cls, val, values):
         """Error if monitors does not cross any solid medium."""
 
-        if val is None:
-            return val
+        # if val is None:
+        #     return val
 
         failed_solid_idx, failed_elect_idx = cls._check_cross_solids(val, values)
 
@@ -434,11 +434,8 @@ class HeatChargeSimulation(AbstractSimulation):
             for bc in bounday_spec:
                 if isinstance(bc.condition, VoltageBC):
                     if isinstance(bc.condition.source, DCVoltageSource):
-                        if isinstance(bc.condition.source.voltage, list) or isinstance(
-                            bc.condition.source.voltage, tuple
-                        ):
-                            if len(bc.condition.source.voltage) > 1:
-                                voltage_array_present = True
+                        if len(bc.condition.source.voltage) > 1:
+                            voltage_array_present = True
         if is_capacitance_mnt and not voltage_array_present:
             raise SetupError(
                 "Monitors of type 'SteadyCapacitanceMonitor' have been defined but no array of voltages "
@@ -521,15 +518,14 @@ class HeatChargeSimulation(AbstractSimulation):
                 if isinstance(bc.condition.source, DCVoltageSource):
                     voltages = bc.condition.source.voltage
 
-                if isinstance(voltages, tuple):
-                    if len(voltages) > 1:
-                        if not array_already_provided:
-                            array_already_provided = True
-                        else:
-                            raise SetupError(
-                                "More than one voltage array has been provided. "
-                                "Currently voltage arrays are supported only for one of the BCs."
-                            )
+                if len(voltages) > 1:
+                    if not array_already_provided:
+                        array_already_provided = True
+                    else:
+                        raise SetupError(
+                            "More than one voltage array has been provided. "
+                            "Currently voltage arrays are supported only for one of the BCs."
+                        )
         return val
 
     @pd.root_validator(skip_on_failure=True)
@@ -722,7 +718,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @staticmethod
     def _check_simulation_types(
-        values: Dict,
+        values: dict,
         HeatBCTypes=HeatBCTypes,
         ElectricBCTypes=ElectricBCTypes,
         HeatSourceTypes=HeatSourceTypes,
@@ -834,20 +830,83 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return values
 
+    @skip_if_fields_missing(["analysis_spec", "monitors", "structures", "size"])
+    @pd.root_validator(skip_on_failure=True)
+    def check_transient_heat(cls, values):
+        """Make sure transient heat simulations can run."""
+
+        analysis_type = values.get("analysis_spec")
+        if isinstance(analysis_type, UnsteadyHeatAnalysis):
+            monitors = values.get("monitors")
+            for mnt in monitors:
+                if isinstance(mnt, TemperatureMonitor):
+                    if not mnt.unstructured:
+                        raise SetupError(
+                            f"Unsteady simulations require the temperature monitor '{mnt.name}' to be unstructured."
+                        )
+            # additionaly check that the SolidSpec has capacity and density defined
+            capacities = []
+            densities = []
+            conductivities = []
+            structures = values.get("structures")
+            for structure in structures:
+                if isinstance(structure.medium.heat, SolidMedium):
+                    if structure.medium.heat_spec.capacity is None:
+                        raise SetupError(
+                            f"Unsteady simulations require the medium '{structure.medium.name}' to have capacity defined."
+                        )
+                    else:
+                        capacities.append(structure.medium.heat_spec.capacity)
+                    if structure.medium.heat_spec.density is None:
+                        raise SetupError(
+                            f"Unsteady simulations require the medium '{structure.medium.name}' to have density defined."
+                        )
+                    else:
+                        densities.append(structure.medium.heat_spec.density)
+
+                    conductivities.append(structure.medium.heat_spec.conductivity)
+
+            # check that we don't have too many time-steps
+            if analysis_type.unsteady_spec.total_time_steps > TRANSIENT_HEAT_MAX_STEPS:
+                raise SetupError(
+                    "Unsteady simulations require the number of time-steps to be less than "
+                    f"{TRANSIENT_HEAT_MAX_STEPS} but {analysis_type.unsteady_spec.total_time_steps} were provided."
+                )
+
+            # check simulation time
+            domain_length = np.max([d for d in values.get("size") if d != np.inf])
+            characteristic_time = (
+                domain_length**2
+                * np.mean(capacities)
+                * np.mean(densities)
+                / np.mean(conductivities)
+                * 1e-18
+            )
+            if (
+                analysis_type.unsteady_spec.time_step * analysis_type.unsteady_spec.total_time_steps
+                > 100 * characteristic_time
+            ):
+                log.warning(
+                    "The simulation time is larger than 100 times the estimated characteristic time of the system. "
+                    "This may lead to unnecessary long simulation times. "
+                    "Consider reducing the simulation time or the time step size."
+                )
+        return values
+
     @equal_aspect
     @add_ax_if_none
     def plot_property(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        alpha: float = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
+        alpha: Optional[float] = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
         property: str = "heat_conductivity",
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -937,16 +996,16 @@ class HeatChargeSimulation(AbstractSimulation):
     @add_ax_if_none
     def plot_heat_conductivity(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        alpha: float = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
+        alpha: Optional[float] = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
         colorbar: str = "conductivity",
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         **kwargs,
     ) -> Ax:
         """
@@ -1012,9 +1071,9 @@ class HeatChargeSimulation(AbstractSimulation):
     @add_ax_if_none
     def plot_boundaries(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         property: str = "heat_conductivity",
         ax: Ax = None,
     ) -> Ax:
@@ -1043,7 +1102,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # get structure list
         structures = [self.simulation_structure]
-        structures += list(self.structures)
+        structures += list(self.scene.sorted_structures)
 
         # construct slicing plane
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1107,9 +1166,9 @@ class HeatChargeSimulation(AbstractSimulation):
     @staticmethod
     def _structure_to_bc_spec_map(
         plane: Box,
-        structures: Tuple[Structure, ...],
-        boundary_spec: Tuple[HeatChargeBoundarySpec, ...],
-    ) -> Dict[str, HeatChargeBoundarySpec]:
+        structures: tuple[Structure, ...],
+        boundary_spec: tuple[HeatChargeBoundarySpec, ...],
+    ) -> dict[str, HeatChargeBoundarySpec]:
         """Construct structure name to bc spec inverse mapping. One structure may correspond to
         multiple boundary conditions."""
 
@@ -1143,9 +1202,9 @@ class HeatChargeSimulation(AbstractSimulation):
     @staticmethod
     def _medium_to_bc_spec_map(
         plane: Box,
-        structures: Tuple[Structure, ...],
-        boundary_spec: Tuple[HeatChargeBoundarySpec, ...],
-    ) -> Dict[str, HeatChargeBoundarySpec]:
+        structures: tuple[Structure, ...],
+        boundary_spec: tuple[HeatChargeBoundarySpec, ...],
+    ) -> dict[str, HeatChargeBoundarySpec]:
         """Construct medium name to bc spec inverse mapping. One medium may correspond to
         multiple boundary conditions."""
 
@@ -1168,11 +1227,11 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @staticmethod
     def _construct_forward_boundaries(
-        shapes: Tuple[Tuple[str, str, Shapely, Tuple[float, float, float, float]], ...],
-        struct_to_bc_spec: Dict[str, HeatChargeBoundarySpec],
-        med_to_bc_spec: Dict[str, HeatChargeBoundarySpec],
+        shapes: tuple[tuple[str, str, Shapely, tuple[float, float, float, float]], ...],
+        struct_to_bc_spec: dict[str, HeatChargeBoundarySpec],
+        med_to_bc_spec: dict[str, HeatChargeBoundarySpec],
         background_structure_shape: Shapely,
-    ) -> Tuple[Tuple[HeatChargeBoundarySpec, Shapely], ...]:
+    ) -> tuple[tuple[HeatChargeBoundarySpec, Shapely], ...]:
         """Construct Simulation, StructureSimulation, Structure, and MediumMedium boundaries."""
 
         # forward foop to take care of Simulation, StructureSimulation, Structure,
@@ -1260,10 +1319,10 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @staticmethod
     def _construct_reverse_boundaries(
-        shapes: Tuple[Tuple[str, str, Shapely, Bound], ...],
-        struct_to_bc_spec: Dict[str, HeatChargeBoundarySpec],
+        shapes: tuple[tuple[str, str, Shapely, Bound], ...],
+        struct_to_bc_spec: dict[str, HeatChargeBoundarySpec],
         background_structure_shape: Shapely,
-    ) -> Tuple[Tuple[HeatChargeBoundarySpec, Shapely], ...]:
+    ) -> tuple[tuple[HeatChargeBoundarySpec, Shapely], ...]:
         """Construct StructureStructure boundaries."""
 
         # backward foop to take care of StructureStructure
@@ -1328,10 +1387,10 @@ class HeatChargeSimulation(AbstractSimulation):
 
     @staticmethod
     def _construct_heat_charge_boundaries(
-        structures: List[Structure],
+        structures: list[Structure],
         plane: Box,
-        boundary_spec: List[HeatChargeBoundarySpec],
-    ) -> List[Tuple[HeatChargeBoundarySpec, Shapely]]:
+        boundary_spec: list[HeatChargeBoundarySpec],
+    ) -> list[tuple[HeatChargeBoundarySpec, Shapely]]:
         """Compute list of boundary lines to plot on plane.
 
         Parameters
@@ -1395,13 +1454,13 @@ class HeatChargeSimulation(AbstractSimulation):
     @add_ax_if_none
     def plot_sources(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         property: str = "heat_conductivity",
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        alpha: float = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        alpha: Optional[float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
@@ -1433,7 +1492,7 @@ class HeatChargeSimulation(AbstractSimulation):
         """
 
         # background can't have source, so no need to add background structure
-        structures = self.structures
+        structures = self.scene.sorted_structures
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -1498,28 +1557,16 @@ class HeatChargeSimulation(AbstractSimulation):
             ax=ax,
         )
 
-    def _safe_float_conversion(self, string) -> float:
-        """Function to deal with failed string2float conversion when using
-        expressions in 'HeatSource'"""
-        try:
-            return float(string)
-        except ValueError:
-            return None
-
-    def source_bounds(self, property: str = "heat_conductivity") -> Tuple[float, float]:
+    def source_bounds(self, property: str = "heat_conductivity") -> tuple[float, float]:
         """Compute range of heat sources present in the simulation."""
 
         if property == "heat_conductivity" or property == "source":
             rate_list = [
-                self._safe_float_conversion(source.rate)
-                for source in self.sources
-                if isinstance(source, HeatSource)
+                np.mean(source.rate) for source in self.sources if isinstance(source, HeatSource)
             ]
         elif property == "electric_conductivity":
             rate_list = [
-                self._safe_float_conversion(source.rate)
-                for source in self.sources
-                if isinstance(source, ChargeSourceTypes)
+                source.rate for source in self.sources if isinstance(source, ChargeSourceTypes)
             ]  # this is currently an empty list
 
         rate_list.append(0)
@@ -1532,7 +1579,7 @@ class HeatChargeSimulation(AbstractSimulation):
         source: HeatChargeSourceType,
         source_min: float,
         source_max: float,
-        alpha: float = None,
+        alpha: Optional[float] = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
 
@@ -1541,7 +1588,7 @@ class HeatChargeSimulation(AbstractSimulation):
             plot_params = plot_params.copy(update={"alpha": alpha})
 
         if isinstance(source, HeatSource):
-            rate = self._safe_float_conversion(source.rate)
+            rate = np.mean(source.rate)
             if rate is not None:
                 delta_rate = rate - source_min
                 delta_rate_max = source_max - source_min + 1e-5
@@ -1559,7 +1606,7 @@ class HeatChargeSimulation(AbstractSimulation):
         source_min: float,
         source_max: float,
         ax: Ax,
-        alpha: float = None,
+        alpha: Optional[float] = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self._get_structure_source_plot_params(
@@ -1629,8 +1676,13 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # NOTE: for the time being, if a simulation has SemiconductorMedium
         # then we consider it of being a 'TCADAnalysisTypes.CHARGE'
-        if self._check_if_semiconductor_present(self.structures):
-            return [TCADAnalysisTypes.CHARGE]
+        if isinstance(self.analysis_spec, ElectricalAnalysisType):
+            if self._check_if_semiconductor_present(self.structures):
+                return [TCADAnalysisTypes.CHARGE]
+
+        # check if unsteady heat
+        if isinstance(self.analysis_spec, UnsteadyHeatAnalysis):
+            return [TCADAnalysisTypes.HEAT]
 
         heat_source_present = any(isinstance(s, HeatSourceTypes) for s in self.sources)
 
@@ -1638,7 +1690,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         if heat_source_present and not heat_BCs_present:
             raise SetupError("Heat sources defined but no heat BCs present.")
-        elif heat_BCs_present or heat_source_present:
+        if heat_BCs_present or heat_source_present:
             simulation_types.append(TCADAnalysisTypes.HEAT)
 
         # check for conduction simulation
@@ -1657,7 +1709,7 @@ class HeatChargeSimulation(AbstractSimulation):
                 "'.medium.charge=None' are treated as insulators, thus, "
                 "the solution domain is empty."
             )
-        elif electric_BCs_present and electric_spec_present:
+        if electric_BCs_present and electric_spec_present:
             simulation_types.append(TCADAnalysisTypes.CONDUCTION)
 
         return simulation_types

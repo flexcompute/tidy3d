@@ -1,10 +1,13 @@
 """Tests mode objects."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
-import tidy3d as td
 from matplotlib import pyplot as plt
+
+import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
 from ..test_data.test_data_arrays import (
@@ -125,9 +128,14 @@ def test_mode_sim():
     with AssertLogLevel("INFO"):
         _ = sim.updated_copy(freqs=FS[0], grid_spec=grid_spec)
     # multiple freqs are ok
-    _ = sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[1e10] + list(sim.freqs))
     _ = sim.updated_copy(
-        size=sim.size, freqs=list(sim.freqs) + [1e10], grid_spec=grid_spec, mode_spec=MODE_SPEC
+        grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[10000000000.0, *list(sim.freqs)]
+    )
+    _ = sim.updated_copy(
+        size=sim.size,
+        freqs=[*list(sim.freqs), 10000000000.0],
+        grid_spec=grid_spec,
+        mode_spec=MODE_SPEC,
     )
 
     # size limit

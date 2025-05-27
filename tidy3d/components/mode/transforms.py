@@ -8,6 +8,8 @@ for the transformation of eps and E is evaluated at the r' positions of E-field 
 Similarly, the jacobian for mu and H is evaluated at the r' positions of H-field components.
 Currently, the half-step offset in w is ignored, which should be a pretty good approximation."""
 
+from __future__ import annotations
+
 import numpy as np
 
 

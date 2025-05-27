@@ -4,23 +4,19 @@ from __future__ import annotations
 
 import math
 from copy import copy
-from typing import List, Tuple, Union
+from typing import Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 import shapely
 from autograd.tracer import getval, isbox
 
-from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
-from ...exceptions import SetupError, ValidationError
-from ...log import log
-from ...packaging import verify_packages_import
-from ..autograd import AutogradFieldMap, TracedVertices, get_static
-from ..autograd.derivative_utils import DerivativeInfo, DerivativeSurfaceMesh
-from ..autograd.types import TracedFloat
-from ..base import cached_property, skip_if_fields_missing
-from ..transformation import ReflectionFromPlane, RotationAroundAxis
-from ..types import (
+from tidy3d.components.autograd import AutogradFieldMap, TracedVertices, get_static
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo, DerivativeSurfaceMesh
+from tidy3d.components.autograd.types import TracedFloat
+from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
+from tidy3d.components.types import (
     ArrayFloat1D,
     ArrayFloat2D,
     ArrayLike,
@@ -31,6 +27,11 @@ from ..types import (
     PlanePosition,
     Shapely,
 )
+from tidy3d.constants import LARGE_NUMBER, MICROMETER, fp_eps
+from tidy3d.exceptions import SetupError, Tidy3dImportError, ValidationError
+from tidy3d.log import log
+from tidy3d.packaging import verify_packages_import
+
 from . import base, triangulation
 
 # sampling polygon along dilation for validating polygon to be
@@ -60,7 +61,7 @@ class PolySlab(base.Planar):
     >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     """
 
-    slab_bounds: Tuple[TracedFloat, TracedFloat] = pydantic.Field(
+    slab_bounds: tuple[TracedFloat, TracedFloat] = pydantic.Field(
         ...,
         title="Slab Bounds",
         description="Minimum and maximum positions of the slab along axis dimension.",
@@ -252,20 +253,20 @@ class PolySlab(base.Planar):
         cls,
         gds_cell,
         axis: Axis,
-        slab_bounds: Tuple[float, float],
+        slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: int = None,
+        gds_dtype: Optional[int] = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
-    ) -> List[PolySlab]:
-        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
+    ) -> list[PolySlab]:
+        """Import :class:`PolySlab` from a ``gdstk.Cell``.
 
         Parameters
         ----------
-        gds_cell : Union[gdstk.Cell, gdspy.Cell]
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
         axis : int
             Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z).
         slab_bounds: Tuple[float, float]
@@ -316,15 +317,15 @@ class PolySlab(base.Planar):
     def _load_gds_vertices(
         gds_cell,
         gds_layer: int,
-        gds_dtype: int = None,
+        gds_dtype: Optional[int] = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List[ArrayFloat2D]:
-        """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
+    ) -> list[ArrayFloat2D]:
+        """Import :class:`PolySlab` from a ``gdstk.Cell``.
 
         Parameters
         ----------
-        gds_cell : Union[gdstk.Cell, gdspy.Cell]
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
         gds_layer : int
             Layer index in the ``gds_cell``.
         gds_dtype : int = None
@@ -340,25 +341,23 @@ class PolySlab(base.Planar):
         List[ArrayFloat2D]
             List of :class:`.ArrayFloat2D`
         """
+        import gdstk
 
-        # switch the GDS cell loader function based on the class name string
-        # TODO: make this more robust in future releases
         gds_cell_class_name = str(gds_cell.__class__)
-
-        if "gdstk" in gds_cell_class_name:
-            gds_loader_fn = base.Geometry.load_gds_vertices_gdstk
-
-        elif "gdspy" in gds_cell_class_name:
-            gds_loader_fn = base.Geometry.load_gds_vertices_gdspy
-
-        else:
+        if not isinstance(gds_cell, gdstk.Cell):
+            if (
+                "gdstk" in gds_cell_class_name
+            ):  # Check if it might be a gdstk cell but gdstk is not found
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to import gdstk cells."
+                )
             raise ValueError(
                 f"validate 'gds_cell' of type '{gds_cell_class_name}' "
-                "does not seem to be associated with 'gdstk' or 'gdspy' packages "
+                "does not seem to be associated with 'gdstk' package "
                 "and therefore can't be loaded by Tidy3D."
             )
 
-        all_vertices = gds_loader_fn(
+        all_vertices = base.Geometry.load_gds_vertices_gdstk(
             gds_cell=gds_cell, gds_layer=gds_layer, gds_dtype=gds_dtype, gds_scale=gds_scale
         )
 
@@ -466,7 +465,7 @@ class PolySlab(base.Planar):
             raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
         return self.axis
 
-    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> PolySlab:
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> PolySlab:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         if axis != self.axis:
@@ -578,7 +577,7 @@ class PolySlab(base.Planar):
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -800,7 +799,7 @@ class PolySlab(base.Planar):
 
     def _find_intersecting_ys_angle_vertical(
         self, vertices: np.ndarray, position: float, axis: int, exclude_on_vertices: bool = False
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For unslanted polyslab).
@@ -880,7 +879,7 @@ class PolySlab(base.Planar):
 
     def _find_intersecting_ys_angle_slant(
         self, vertices: np.ndarray, position: float, axis: int
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For slanted polyslab)
@@ -1252,7 +1251,7 @@ class PolySlab(base.Planar):
     @staticmethod
     def _shift_vertices(
         vertices: np.ndarray, dist
-    ) -> Tuple[np.ndarray, np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    ) -> tuple[np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray]]:
         """Shifts the vertices of a polygon outward uniformly by distances
         `dists`.
 
@@ -1313,7 +1312,7 @@ class PolySlab(base.Planar):
         return np.swapaxes(vs_orig + shift_total, -2, -1), parallel_shift, (shift_x, shift_y)
 
     @staticmethod
-    def _edge_length_and_reduction_rate(vertices: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _edge_length_and_reduction_rate(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Edge length of reduction rate of each edge with unit offset length.
 
         Parameters
@@ -1354,7 +1353,7 @@ class PolySlab(base.Planar):
         shapely_poly = PolySlab.make_shapely_polygon(vertices)
         if shapely_poly.is_valid:
             return vertices
-        elif isbox(vertices):
+        if isbox(vertices):
             raise NotImplementedError(
                 "The dilation caused damage to the polygon. "
                 "Automatically healing this is currently not supported when "
@@ -1415,19 +1414,19 @@ class PolySlab(base.Planar):
 
     """ Autograd code """
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         vjps = {}
 
         for key in derivative_info.paths:
             if key == ("vertices",):
-                vjp = self.compute_derivative_vertices(derivative_info=derivative_info)
+                vjp = self._compute_derivative_vertices(derivative_info=derivative_info)
                 vjps[key] = vjp
 
             elif key[0] == "slab_bounds":
                 min_max_index = key[1]
-                vjp_face = self.compute_derivative_slab_face(
+                vjp_face = self._compute_derivative_slab_face(
                     derivative_info=derivative_info, min_max_index=min_max_index
                 )
 
@@ -1443,7 +1442,7 @@ class PolySlab(base.Planar):
 
         return vjps
 
-    def compute_derivative_slab_face(
+    def _compute_derivative_slab_face(
         self, derivative_info: DerivativeInfo, min_max_index: int
     ) -> TracedVertices:
         """Derivative with respect to slab_bounds."""
@@ -1517,7 +1516,7 @@ class PolySlab(base.Planar):
 
         return get_grad(min_max_index)
 
-    def compute_derivative_slab_face_single_pt(
+    def _compute_derivative_slab_face_single_pt(
         self, derivative_info: DerivativeInfo, min_max_index: int
     ) -> TracedVertices:
         """Derivative with respect to slab faces (single point approximation)."""
@@ -1547,7 +1546,7 @@ class PolySlab(base.Planar):
 
         return vjp
 
-    def compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
+    def _compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
         # derivative w.r.t each edge
 
         vertices = np.array(self.vertices)
@@ -1628,7 +1627,7 @@ class PolySlab(base.Planar):
         if self.axis != 1:
             normals_norm_xyz *= -1
 
-        return dict(norm=normals_norm_xyz, perp1=edges_norm_xyz, perp2=slabs_norm_xyz)
+        return {"norm": normals_norm_xyz, "perp1": edges_norm_xyz, "perp2": slabs_norm_xyz}
 
     def unpop_axis_vect(self, ax_coords: np.ndarray, plane_coords: np.ndarray) -> np.ndarray:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
@@ -1642,7 +1641,7 @@ class PolySlab(base.Planar):
         arr_xyz = np.stack(arr_xyz, axis=-1)
         return arr_xyz
 
-    def pop_axis_vect(self, coord: np.ndarray) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    def pop_axis_vect(self, coord: np.ndarray) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
         coord.shape == [N, 3]
@@ -1779,14 +1778,14 @@ class ComplexPolySlabBase(PolySlab):
         cls,
         gds_cell,
         axis: Axis,
-        slab_bounds: Tuple[float, float],
+        slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: int = None,
+        gds_dtype: Optional[int] = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
-    ) -> List[PolySlab]:
+    ) -> list[PolySlab]:
         """Import :class:`.PolySlab` from a ``gdstk.Cell``.
 
         Parameters
@@ -1855,7 +1854,7 @@ class ComplexPolySlabBase(PolySlab):
         return base.GeometryGroup(geometries=self.sub_polyslabs)
 
     @property
-    def sub_polyslabs(self) -> List[PolySlab]:
+    def sub_polyslabs(self) -> list[PolySlab]:
         """Divide a complex polyslab into a list of simple polyslabs.
         Only neighboring vertex-vertex crossing events are treated in this
         version.
@@ -1906,11 +1905,11 @@ class ComplexPolySlabBase(PolySlab):
                 # direction of marching
                 reference_plane = "bottom" if dist_val / self._tanq < 0 else "top"
                 sub_polyslab_dict.update(
-                    dict(
-                        slab_bounds=tuple(slab_bounds),
-                        vertices=vertices_now,
-                        reference_plane=reference_plane,
-                    )
+                    {
+                        "slab_bounds": tuple(slab_bounds),
+                        "vertices": vertices_now,
+                        "reference_plane": reference_plane,
+                    }
                 )
                 sub_polyslab_list.append(PolySlab.parse_obj(sub_polyslab_dict))
 
@@ -1940,7 +1939,7 @@ class ComplexPolySlabBase(PolySlab):
         return sub_polyslab_list
 
     @property
-    def _dilation_length(self) -> List[float]:
+    def _dilation_length(self) -> list[float]:
         """dilation length from reference plane to the top/bottom of the polyslab."""
 
         # for "bottom", only needs to compute the offset length to the top
@@ -1966,7 +1965,7 @@ class ComplexPolySlabBase(PolySlab):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters

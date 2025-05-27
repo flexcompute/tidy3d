@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import autograd.numpy as np
 import numpy.testing as npt
 import pytest
+from autograd import grad
 from autograd.test_util import check_grads
+
 from tidy3d.plugins.autograd import interpolate_spline
 
 from ....utils import AssertLogLevel
@@ -34,6 +38,22 @@ def test_interpolate_spline_grads(rng, order, num_points, endpoint_derivs, x_dis
     check_grads(interpolate_spline, modes=["rev"], order=1, argnum=1)(
         x, y, num_points, order, endpoint_derivs
     )
+
+
+def test_interpolate_spline_grads_kwargs(rng):
+    """Test interpolate_spline function can be called with kwargs."""
+    x = np.linspace(0, 1, 10)
+    y = rng.random(x.size)
+    # this should not error
+    grad(
+        lambda y_: interpolate_spline(
+            x_points=x,
+            y_points=y_,
+            num_points=10,
+            order=3,
+            endpoint_derivatives=(None, None),
+        )[1][0]
+    )(y)
 
 
 @pytest.mark.parametrize("order", [1, 2, 3])

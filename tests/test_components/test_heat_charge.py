@@ -1,10 +1,13 @@
 """Test suite for heat-charge simulation objects and data using pytest fixtures."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
 from matplotlib import pyplot as plt
+
+import tidy3d as td
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
@@ -411,7 +414,7 @@ def temperature_monitor_data(monitors):
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     temperature_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data1 = td.TemperatureData(monitor=temp_mnt1, temperature=temperature_field)
@@ -489,7 +492,7 @@ def voltage_monitor_data(monitors):
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(-5, 5, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     voltage_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data1 = td.SteadyPotentialData(monitor=volt_mnt1, potential=voltage_field)
@@ -711,6 +714,9 @@ def test_heat_charge_bcs_validation(boundary_conditions):
     with pytest.raises(pd.ValidationError):
         td.CurrentBC(source=td.DCCurrentSource(current=td.inf))
 
+    with pytest.raises(pd.ValidationError):
+        td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([td.inf, 0, 1])))
+
 
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
@@ -752,6 +758,11 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
             medium=solid_no_heat, structures=[solid_struct_no_heat], monitors=[temp_monitor]
         )
 
+    # check error is raised in voltage monitor doesn't cross a conducting medium
+    with pytest.raises(pd.ValidationError):
+        volt_mnt = td.SteadyPotentialMonitor(center=(0, 0, 0), size=(0, td.inf, td.inf))
+        _ = conduction_simulation.updated_copy(monitors=[volt_mnt])
+
 
 def test_heat_charge_mnt_data(
     temperature_monitor_data, voltage_monitor_data, capacitance_monitor_data
@@ -790,6 +801,7 @@ def test_device_characteristics():
         steady_dc_hole_capacitance=capacitance,
         steady_dc_electron_capacitance=capacitance,
         steady_dc_current_voltage=current_voltage,
+        steady_dc_resistance_voltage=current_voltage,
     )
 
 
@@ -823,14 +835,14 @@ def test_heat_charge_simulation(simulation_data):
     assert cond_sim is not None, "Conduction simulation should be created successfully."
 
     voltage_capacitance_sim = voltage_capacitance_sim_data.simulation
-    assert (
-        voltage_capacitance_sim is not None
-    ), "Voltage-Capacitance simulation should be created successfully."
+    assert voltage_capacitance_sim is not None, (
+        "Voltage-Capacitance simulation should be created successfully."
+    )
 
     current_voltage_sim = current_voltage_simulation_data.simulation
-    assert (
-        current_voltage_sim is not None
-    ), "Current-Voltage simulation should be created successfully."
+    assert current_voltage_sim is not None, (
+        "Current-Voltage simulation should be created successfully."
+    )
 
 
 def test_sim_data_plotting(simulation_data):
@@ -872,6 +884,26 @@ def test_sim_data_plotting(simulation_data):
 
     with pytest.raises(pd.ValidationError):
         heat_sim_data.updated_copy(simulation=sim)
+
+
+def test_conduction_simulation_has_conductors(conduction_simulation, structures):
+    """Test whether error is raised if conduction simulation has no conductors."""
+
+    with pytest.raises(pd.ValidationError):
+        _ = conduction_simulation.updated_copy(
+            monitors=[],
+            structures=[structures["insulator_structure"]],
+        )
+
+
+def test_coupling_source(conduction_simulation, heat_simulation):
+    """Test whether the coupling source can be applied."""
+
+    with pytest.raises(pd.ValidationError):
+        _ = conduction_simulation.updated_copy(sources=[td.HeatFromElectricSource()])
+
+    with pytest.raises(pd.ValidationError):
+        _ = heat_simulation.updated_copy(sources=[td.HeatFromElectricSource()])
 
 
 # --------------------------
@@ -1047,11 +1079,17 @@ class TestCharge:
             )
             _ = sim.updated_copy(boundary_spec=[bc_p, new_bc_n])
 
+        # test error is raised when more than one voltage array is provided
+        with pytest.raises(pd.ValidationError):
+            new_bc_p = bc_p.updated_copy(
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1, 2]))
+            )
+            _ = sim.updated_copy(boundary_spec=[new_bc_p, bc_n])
+
     def test_doping_distributions(self):
         """Test doping distributions."""
         # Implementation needed
         # This test was empty in the original code.
-        pass
 
 
 # --------------------------
@@ -1325,7 +1363,7 @@ def test_dynamic_simulation_updates(heat_simulation):
     # Add a new monitor
     new_monitor = td.TemperatureMonitor(size=(1, 1, 1), name="new_temp_mnt")
     updated_sim = heat_simulation.updated_copy(
-        monitors=tuple(list(heat_simulation.monitors) + [new_monitor])
+        monitors=(*list(heat_simulation.monitors), new_monitor)
     )
     assert len(updated_sim.monitors) == len(heat_simulation.monitors) + 1
     assert updated_sim.monitors[-1].name == "new_temp_mnt"
@@ -1366,13 +1404,13 @@ def test_bandgap_monitor():
 
     tri_grid_values_single_voltage = td.IndexedVoltageDataArray(
         [[0.0], [0], [3], [3]],
-        coords=dict(index=np.arange(4), voltage=[1]),
+        coords={"index": np.arange(4), "voltage": [1]},
         name="test",
     )
 
     tri_grid_values_multi_voltage = td.IndexedVoltageDataArray(
         [[0.0, 0.0], [0, 0], [3, -3], [3, -3]],
-        coords=dict(index=np.arange(4), voltage=[-1, 1]),
+        coords={"index": np.arange(4), "voltage": [-1, 1]},
         name="test",
     )
 
@@ -1414,7 +1452,7 @@ def test_bandgap_monitor():
 
     tet_grid_values_single_voltage = td.IndexedVoltageDataArray(
         [[0.0], [0.0], [0.0], [0.0], [3.0], [3.0], [3.0], [3.0]],
-        coords=dict(index=np.arange(8), voltage=[1]),
+        coords={"index": np.arange(8), "voltage": [1]},
         name="test_tet",
     )
 
@@ -1429,7 +1467,7 @@ def test_bandgap_monitor():
             [3.0, 3.5],
             [3.0, 3.5],
         ],
-        coords=dict(index=np.arange(8), voltage=[-1, 1]),
+        coords={"index": np.arange(8), "voltage": [-1, 1]},
         name="test_tet",
     )
 
@@ -1599,3 +1637,71 @@ def test_symmetry_capacitance(symmetry):
         assert (
             mnt_data.symmetry_expanded_copy.electron_capacitance.data[n] == data[n] * scaling_factor
         )
+
+
+def test_unsteady_parameters():
+    """Test that unsteady parameters are set correctly."""
+
+    _ = td.UnsteadyHeatAnalysis(
+        initial_temperature=300,
+        unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+    )
+
+    # test non-positive initial temperature raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=0,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+        )
+
+    # test negative time step raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=10,
+            unsteady_spec=td.UnsteadySpec(time_step=-0.1, total_time_steps=1),
+        )
+
+    # test negative total time steps raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=10,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=-1),
+        )
+
+
+def test_unsteady_heat_analysis(heat_simulation):
+    """Test that the validators for unsteady heat analysis are working."""
+
+    unsteady_analysis_spec = td.UnsteadyHeatAnalysis(
+        initial_temperature=300,
+        unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+    )
+
+    temp_mnt = td.TemperatureMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, td.inf),
+        name="temperature",
+        unstructured=True,
+        interval=2,
+    )
+
+    # this should work since the monitor is unstructured
+    unsteady_sim = heat_simulation.updated_copy(
+        analysis_spec=unsteady_analysis_spec, monitors=[temp_mnt]
+    )
+
+    with pytest.raises(pd.ValidationError):
+        temp_mnt = temp_mnt.updated_copy(unstructured=False)
+        _ = unsteady_sim.updated_copy(monitors=[temp_mnt])
+
+    with pytest.raises(pd.ValidationError):
+        temp_mnt = temp_mnt.updated_copy(unstructured=True, interval=0)
+        _ = unsteady_sim.updated_copy(monitors=[temp_mnt])
+
+    # try simulation with excessive time steps
+    with pytest.raises(pd.ValidationError):
+        mew_spex = td.UnsteadyHeatAnalysis(
+            initial_temperature=300,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=100000),
+        )
+        _ = unsteady_sim.updated_copy(analysis_spec=mew_spex)

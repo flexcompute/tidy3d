@@ -1,16 +1,19 @@
 """Defines specification for mode solver."""
 
+from __future__ import annotations
+
 from math import isclose
-from typing import Tuple, Union
+from typing import Literal, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ..constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
-from ..exceptions import SetupError, ValidationError
-from ..log import log
+from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .base import Tidy3dBaseModel, skip_if_fields_missing
-from .types import Axis2D, Literal, TrackFreq
+from .types import Axis2D, TrackFreq
 
 GROUP_INDEX_STEP = 0.005
 
@@ -65,7 +68,7 @@ class ModeSpec(Tidy3dBaseModel):
         None, title="Target effective index", description="Guess for effective index of the mode."
     )
 
-    num_pml: Tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
+    num_pml: tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
         (0, 0),
         title="Number of PML layers",
         description="Number of standard pml layers to add in the two tangential axes.",

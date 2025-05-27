@@ -8,8 +8,9 @@ from typing import Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ..constants import RADIAN
-from ..exceptions import ValidationError
+from tidy3d.constants import RADIAN
+from tidy3d.exceptions import ValidationError
+
 from .autograd import TracedFloat
 from .base import Tidy3dBaseModel, cached_property
 from .types import ArrayFloat2D, Axis, Coordinate, TensorReal

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 
 import autograd.numpy as anp
@@ -198,6 +200,34 @@ def trapz(y: NDArray, x: NDArray = None, dx: float = 1.0, axis: int = -1) -> flo
 
 
 @primitive
+def _add_at(x: NDArray, indices_x: tuple, y: NDArray) -> NDArray:
+    """
+    Add values to specified indices of an array.
+
+    Autograd requires that arguments to primitives are passed in positionally.
+    ``add_at`` is the public-facing wrapper for this function,
+    which allows keyword arguments in case users pass in kwargs.
+    """
+    out = np.copy(x)  # Copy to preserve 'x' for gradient computation
+    out[tuple(indices_x)] += y
+    return out
+
+
+defvjp(
+    _add_at,
+    lambda ans, x, indices_x, y: unbroadcast_f(x, lambda g: g),
+    lambda ans, x, indices_x, y: lambda g: g[tuple(indices_x)],
+    argnums=(0, 2),
+)
+
+defjvp(
+    _add_at,
+    lambda g, ans, x, indices_x, y: broadcast(g, ans),
+    lambda g, ans, x, indices_x, y: _add_at(anp.zeros_like(ans), indices_x, g),
+    argnums=(0, 2),
+)
+
+
 def add_at(x: NDArray, indices_x: tuple, y: NDArray) -> NDArray:
     """
     Add values to specified indices of an array.
@@ -219,28 +249,11 @@ def add_at(x: NDArray, indices_x: tuple, y: NDArray) -> NDArray:
     np.ndarray
         The modified array with values added at the specified indices.
     """
-    out = np.copy(x)  # Copy to preserve 'x' for gradient computation
-    out[tuple(indices_x)] += y
-    return out
-
-
-defvjp(
-    add_at,
-    lambda ans, x, indices_x, y: unbroadcast_f(x, lambda g: g),
-    lambda ans, x, indices_x, y: lambda g: g[tuple(indices_x)],
-    argnums=(0, 2),
-)
-
-defjvp(
-    add_at,
-    lambda g, ans, x, indices_x, y: broadcast(g, ans),
-    lambda g, ans, x, indices_x, y: add_at(anp.zeros_like(ans), indices_x, g),
-    argnums=(0, 2),
-)
+    return _add_at(x, indices_x, y)
 
 
 __all__ = [
+    "add_at",
     "interpn",
     "trapz",
-    "add_at",
 ]

@@ -1,27 +1,28 @@
 """Convenience functions for estimating antenna radiation by applying array factor."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 from pydantic.v1 import NonNegativeFloat, PositiveInt
 
+from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.grid.grid_spec import GridSpec, LayerRefinementSpec
+from tidy3d.components.lumped_element import LumpedElement
+from tidy3d.components.medium import Medium, MediumType3D
+from tidy3d.components.monitor import AbstractFieldProjectionMonitor, MonitorType
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.utils import SourceType
+from tidy3d.components.structure import MeshOverrideStructure, Structure
+from tidy3d.components.types import ArrayLike, Axis, Bound, Undefined
+from tidy3d.constants import C_0, inf
 from tidy3d.log import log
-
-from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
-from ...components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
-from ...components.data.sim_data import SimulationData
-from ...components.geometry.base import Box, Geometry
-from ...components.grid.grid_spec import GridSpec, LayerRefinementSpec
-from ...components.lumped_element import LumpedElement
-from ...components.medium import Medium, MediumType3D
-from ...components.monitor import AbstractFieldProjectionMonitor, MonitorType
-from ...components.simulation import Simulation
-from ...components.source.utils import SourceType
-from ...components.structure import MeshOverrideStructure, Structure
-from ...components.types import ArrayLike, Axis, Bound
-from ...constants import C_0, inf
 
 
 class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
@@ -159,7 +160,7 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
 
     def _duplicate_or_expand_list_of_objects(
         self,
-        objects: Tuple[
+        objects: tuple[
             Union[Structure, MeshOverrideStructure, LayerRefinementSpec, LumpedElement], ...
         ],
         old_sim_bounds: Bound,
@@ -228,7 +229,7 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
 
     def _expand_monitors(
         self,
-        monitors: Tuple[MonitorType, ...],
+        monitors: tuple[MonitorType, ...],
         antenna_bounds: Bound,
         new_sim_bounds: Bound,
         old_sim_bounds: Bound,
@@ -300,7 +301,7 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
         return array_monitors
 
     def _duplicate_structures(
-        self, structures: Tuple[Structure, ...], new_sim_bounds: Bound, old_sim_bounds: Bound
+        self, structures: tuple[Structure, ...], new_sim_bounds: Bound, old_sim_bounds: Bound
     ):
         """Duplicate structures."""
 
@@ -310,8 +311,8 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
 
     def _duplicate_sources(
         self,
-        sources: Tuple[SourceType, ...],
-        lumped_elements: Tuple[LumpedElement, ...],
+        sources: tuple[SourceType, ...],
+        lumped_elements: tuple[LumpedElement, ...],
         old_sim_bounds: Bound,
         new_sim_bounds: Bound,
     ):
@@ -619,23 +620,23 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     ... ) # doctest: +SKIP
     """
 
-    array_size: Tuple[PositiveInt, PositiveInt, PositiveInt] = pd.Field(
+    array_size: tuple[PositiveInt, PositiveInt, PositiveInt] = pd.Field(
         title="Array Size",
         description="Number of antennas along x, y, and z directions.",
     )
 
-    spacings: Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = pd.Field(
+    spacings: tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat] = pd.Field(
         title="Antenna Spacings",
         description="Center-to-center spacings between antennas along x, y, and z directions.",
     )
 
-    phase_shifts: Tuple[float, float, float] = pd.Field(
+    phase_shifts: tuple[float, float, float] = pd.Field(
         (0, 0, 0),
         title="Phase Shifts",
         description="Phase-shifts between antennas along x, y, and z directions.",
     )
 
-    amp_multipliers: Tuple[Optional[ArrayLike], Optional[ArrayLike], Optional[ArrayLike]] = (
+    amp_multipliers: tuple[Optional[ArrayLike], Optional[ArrayLike], Optional[ArrayLike]] = (
         pd.Field(
             (None, None, None),
             title="Amplitude Multipliers",
@@ -702,7 +703,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         return np.ravel(sum(p for p in phase_shifts_grid))
 
     @property
-    def _extend_dims(self) -> Tuple[Axis, ...]:
+    def _extend_dims(self) -> tuple[Axis, ...]:
         """Dimensions along which antennas will be duplicated."""
         return [ind for ind, size in enumerate(self.array_size) if size > 1]
 
@@ -711,7 +712,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         theta: Union[float, ArrayLike],
         phi: Union[float, ArrayLike],
         frequency: Union[NonNegativeFloat, ArrayLike],
-        medium: MediumType3D = Medium(),
+        medium: MediumType3D = Undefined,
     ) -> ArrayLike:
         """
         Compute the array factor for a 3D antenna array.
@@ -730,6 +731,8 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         ArrayLike
             Array factor values for each combination of theta and phi.
         """
+        if medium is Undefined:
+            medium = Medium()
 
         # Convert all inputs to numpy arrays
         theta_array = np.atleast_1d(theta)

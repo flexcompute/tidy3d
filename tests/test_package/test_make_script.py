@@ -1,5 +1,7 @@
 """Tests generation of pythons script from simulation file."""
 
+from __future__ import annotations
+
 import tidy3d as td
 from scripts.make_script import main
 
