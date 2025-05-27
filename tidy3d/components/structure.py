@@ -5,15 +5,16 @@ from __future__ import annotations
 import pathlib
 from collections import defaultdict
 from functools import cmp_to_key
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Union
 
 import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ..constants import MICROMETER
-from ..exceptions import SetupError, Tidy3dImportError
-from ..log import log
+from tidy3d.constants import MICROMETER
+from tidy3d.exceptions import SetupError, Tidy3dImportError
+from tidy3d.log import log
+
 from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap
 from .autograd.types import Box as AutogradBox
@@ -125,8 +126,8 @@ class AbstractStructure(Tidy3dBaseModel):
 
     @staticmethod
     def _sort_structures(
-        structures: List[StructureType], structure_priority_mode: PriorityMode
-    ) -> List[StructureType]:
+        structures: list[StructureType], structure_priority_mode: PriorityMode
+    ) -> list[StructureType]:
         """Sort structure lists based on their priority values in ascending order."""
 
         def structure_comparator(struct1, struct2):
@@ -143,7 +144,12 @@ class AbstractStructure(Tidy3dBaseModel):
     @equal_aspect
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **patch_kwargs,
     ) -> Ax:
         """Plot structure's geometric cross section at single (x,y,z) coordinate.
 
@@ -233,7 +239,7 @@ class Structure(AbstractStructure):
     def viz_spec(self):
         return self.medium.viz_spec
 
-    def eps_diagonal(self, frequency: float, coords: Coords) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
 
         Parameters
@@ -285,10 +291,10 @@ class Structure(AbstractStructure):
     def _get_monitor_name(index: int, data_type: str) -> str:
         """Get the monitor name for either a field or permittivity monitor at given index."""
 
-        monitor_name_map = dict(
-            fld=f"adjoint_fld_{index}",
-            eps=f"adjoint_eps_{index}",
-        )
+        monitor_name_map = {
+            "fld": f"adjoint_fld_{index}",
+            "eps": f"adjoint_eps_{index}",
+        }
 
         if data_type not in monitor_name_map:
             raise KeyError(f"'data_type' must be in {monitor_name_map.keys()}")
@@ -363,7 +369,7 @@ class Structure(AbstractStructure):
 
             # construct map of {field path -> derivative value}
             for field_path, derivative_value in derivative_values_map.items():
-                path = tuple([med_or_geo] + list(field_path))
+                path = (med_or_geo, *list(field_path))
                 derivative_map[path] = derivative_value
 
         return derivative_map
@@ -395,9 +401,9 @@ class Structure(AbstractStructure):
 
     def to_gdstk(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -464,9 +470,9 @@ class Structure(AbstractStructure):
     def to_gds(
         self,
         cell,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -516,9 +522,9 @@ class Structure(AbstractStructure):
     def to_gds_file(
         self,
         fname: str,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pydantic.NonNegativeFloat = 1,
         frequency: pydantic.PositiveFloat = 0,
         gds_layer: pydantic.NonNegativeInt = 0,
@@ -650,7 +656,7 @@ class MeshOverrideStructure(AbstractStructure):
     >>> struct_override = MeshOverrideStructure(geometry=box, dl=(0.1,0.2,0.3), name='override_box')
     """
 
-    dl: Tuple[
+    dl: tuple[
         Optional[pydantic.PositiveFloat],
         Optional[pydantic.PositiveFloat],
         Optional[pydantic.PositiveFloat],

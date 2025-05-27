@@ -1,5 +1,7 @@
 """Imports for parameter sweep."""
 
+from __future__ import annotations
+
 from .design import DesignSpace
 from .method import (
     MethodBayOpt,
@@ -13,13 +15,13 @@ from .result import Result
 
 __all__ = [
     "DesignSpace",
-    "ParameterInt",
-    "ParameterFloat",
-    "ParameterAny",
-    "Result",
-    "MethodMonteCarlo",
-    "MethodGrid",
     "MethodBayOpt",
     "MethodGenAlg",
+    "MethodGrid",
+    "MethodMonteCarlo",
     "MethodParticleSwarm",
+    "ParameterAny",
+    "ParameterFloat",
+    "ParameterInt",
+    "Result",
 ]

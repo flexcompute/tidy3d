@@ -1,9 +1,12 @@
 """Tests the scene and its validators."""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
+
 import tidy3d as td
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
 
@@ -113,7 +116,7 @@ def test_structure_alpha():
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SCENE_FULL.medium) for s in SCENE_FULL.structures
     ]
-    S2 = SCENE_FULL.copy(update=dict(structures=new_structs))
+    S2 = SCENE_FULL.copy(update={"structures": new_structs})
     _ = S2.plot_structures_eps(x=0, alpha=0.5)
     plt.close()
 
@@ -236,7 +239,7 @@ def test_perturbed_mediums_copy(unstructured, z):
         ),
     )
 
-    coords = dict(x=[1, 2], y=[3, 4], z=z)
+    coords = {"x": [1, 2], "y": [3, 4], "z": z}
     temperature = td.SpatialDataArray(300 * np.ones((2, 2, len(z))), coords=coords)
     electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, len(z))), coords=coords)
     hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, len(z))), coords=coords)

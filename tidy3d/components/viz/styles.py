@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     from matplotlib.patches import ArrowStyle
 

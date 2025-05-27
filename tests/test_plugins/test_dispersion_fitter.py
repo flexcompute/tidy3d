@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import responses
+
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.plugins.dispersion import (

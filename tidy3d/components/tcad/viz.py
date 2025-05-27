@@ -1,5 +1,7 @@
 """utilities for heat solver plotting"""
 
+from __future__ import annotations
+
 from tidy3d.components.viz import PlotParams
 
 """ Constants """

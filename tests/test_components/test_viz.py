@@ -1,9 +1,12 @@
 """Tests visualization operations."""
 
+from __future__ import annotations
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pydantic.v1 as pd
 import pytest
+
 import tidy3d as td
 from tidy3d import Box, Medium, Simulation, Structure
 from tidy3d.components.viz import Polygon, restore_matplotlib_rcparams, set_default_labels_and_title
@@ -192,18 +195,17 @@ def plot_with_multi_viz_spec(alphas, facecolors, edgecolors, rng, use_viz_spec=T
         td.VisualizationSpec(
             facecolor=facecolors[idx], edgecolor=edgecolors[idx], alpha=alphas[idx]
         )
-        for idx in range(0, len(alphas))
+        for idx in range(len(alphas))
     ]
-    media = [td.Medium(permittivity=2.25) for idx in range(0, len(viz_specs))]
+    media = [td.Medium(permittivity=2.25) for idx in range(len(viz_specs))]
     if use_viz_spec:
         media = [
-            td.Medium(permittivity=2.25, viz_spec=viz_specs[idx])
-            for idx in range(0, len(viz_specs))
+            td.Medium(permittivity=2.25, viz_spec=viz_specs[idx]) for idx in range(len(viz_specs))
         ]
 
     structures = []
-    for idx in range(0, len(viz_specs)):
-        center = tuple(list(rng.uniform(-3, 3, 2)) + [0])
+    for idx in range(len(viz_specs)):
+        center = (*list(rng.uniform(-3, 3, 2)), 0)
         size = tuple(rng.uniform(1, 2, 3))
         box = td.Box(center=center, size=size)
 

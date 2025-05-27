@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from io import StringIO
-from typing import List
 
 from rich.console import Console
 from rich.panel import Panel
@@ -7,7 +8,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from ..components.viz import FLEXCOMPUTE_COLORS
+from tidy3d.components.viz import FLEXCOMPUTE_COLORS
 
 MAX_POLES_TO_DISPLAY = 3
 
@@ -55,7 +56,7 @@ def variant_name(v):
     return name
 
 
-def summarize_medium(med) -> List[str]:
+def summarize_medium(med) -> list[str]:
     """Returns relevant medium information for display."""
     lines = []
 

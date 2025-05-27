@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Callable, List, Literal, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ...constants import fp_eps, inf
-from ...exceptions import DataError, ValidationError
-from ...log import log
-from ...packaging import verify_packages_import
-from ..base import cached_property
-from ..data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
-from ..data.dataset import TriangleMeshDataset
-from ..data.validators import validate_no_nans
-from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
-from ..viz import add_ax_if_none, equal_aspect
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
+from tidy3d.components.data.dataset import TriangleMeshDataset
+from tidy3d.components.data.validators import validate_no_nans
+from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.constants import fp_eps, inf
+from tidy3d.exceptions import DataError, ValidationError
+from tidy3d.log import log
+from tidy3d.packaging import verify_packages_import
+
 from . import base
 
 AREA_SIZE_THRESHOLD = 1e-36
@@ -150,8 +151,8 @@ class TriangleMesh(base.Geometry, ABC):
         cls,
         filename: str,
         scale: float = 1.0,
-        origin: Tuple[float, float, float] = (0, 0, 0),
-        solid_index: int = None,
+        origin: tuple[float, float, float] = (0, 0, 0),
+        solid_index: Optional[int] = None,
         **kwargs,
     ) -> Union[TriangleMesh, base.GeometryGroup]:
         """Load a :class:`.TriangleMesh` directly from an STL file.
@@ -181,7 +182,7 @@ class TriangleMesh(base.Geometry, ABC):
         """
         import trimesh
 
-        from ..types_extra import TrimeshType
+        from tidy3d.components.types_extra import TrimeshType
 
         def process_single(mesh: TrimeshType) -> TriangleMesh:
             """Process a single 'trimesh.Trimesh' using scale and origin."""
@@ -253,11 +254,11 @@ class TriangleMesh(base.Geometry, ABC):
                 f"Provided 'triangles' must be an N x 3 x 3 array, given {triangles.shape}."
             )
         num_faces = len(triangles)
-        coords = dict(
-            face_index=np.arange(num_faces),
-            vertex_index=np.arange(3),
-            axis=np.arange(3),
-        )
+        coords = {
+            "face_index": np.arange(num_faces),
+            "vertex_index": np.arange(3),
+            "axis": np.arange(3),
+        }
         vertices = TriangleMeshDataArray(triangles, coords=coords)
         mesh_dataset = TriangleMeshDataset(surface_mesh=vertices)
         return TriangleMesh(mesh_dataset=mesh_dataset)
@@ -314,7 +315,7 @@ class TriangleMesh(base.Geometry, ABC):
         axis: Ax,
         direction: Literal["-", "+"],
         base: float,
-        grid: Tuple[np.ndarray, np.ndarray],
+        grid: tuple[np.ndarray, np.ndarray],
         height: np.ndarray,
     ) -> TriangleMesh:
         """Construct a TriangleMesh object from grid based height information.
@@ -432,9 +433,9 @@ class TriangleMesh(base.Geometry, ABC):
         axis: Ax,
         direction: Literal["-", "+"],
         base: float,
-        center: Tuple[float, float],
-        size: Tuple[float, float],
-        grid_size: Tuple[int, int],
+        center: tuple[float, float],
+        size: tuple[float, float],
+        grid_size: tuple[int, int],
         height_func: Callable[[np.ndarray, np.ndarray], np.ndarray],
     ) -> TriangleMesh:
         """Construct a TriangleMesh object from analytical expression of height function.
@@ -527,7 +528,7 @@ class TriangleMesh(base.Geometry, ABC):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -553,8 +554,8 @@ class TriangleMesh(base.Geometry, ABC):
         return path.polygons_full
 
     def intersections_plane(
-        self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -654,7 +655,12 @@ class TriangleMesh(base.Geometry, ABC):
     @equal_aspect
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 

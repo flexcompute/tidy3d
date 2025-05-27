@@ -1,9 +1,12 @@
 """Tests sources."""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.components.source.field import CHEB_GRID_WIDTH, DirectionalSource
 from tidy3d.exceptions import SetupError
@@ -369,7 +372,7 @@ def test_custom_source_time():
     _ = cst.amp_time(-1)
     assert np.allclose(cst.amp_time([2]), np.exp(-1j * 2 * np.pi * 2 * freq0), rtol=0, atol=ATOL)
 
-    vals = td.components.data.data_array.TimeDataArray([1, 2], coords=dict(t=[-1, -0.5]))
+    vals = td.components.data.data_array.TimeDataArray([1, 2], coords={"t": [-1, -0.5]})
     dataset = td.components.data.dataset.TimeDataset(values=vals)
     cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
@@ -386,7 +389,7 @@ def test_custom_source_time():
 
     # test single value validation error
     with pytest.raises(pydantic.ValidationError):
-        vals = td.components.data.data_array.TimeDataArray([1], coords=dict(t=[0]))
+        vals = td.components.data.data_array.TimeDataArray([1], coords={"t": [0]})
         dataset = td.components.data.dataset.TimeDataset(values=vals)
         cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
         assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
@@ -399,7 +402,7 @@ def test_custom_field_source():
     Z = [0]
     freqs = [2e14]
     n_data = np.ones((Nx, Ny, Nz, Nf))
-    n_dataset = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    n_dataset = td.ScalarFieldDataArray(n_data, coords={"x": X, "y": Y, "z": Z, "f": freqs})
 
     def make_custom_field_source(field_ds):
         custom_source = td.CustomFieldSource(
@@ -413,9 +416,9 @@ def test_custom_field_source():
 
     with pytest.raises(pydantic.ValidationError):
         # repeat some entries so data cannot be interpolated
-        X2 = [X[0]] + list(X)
+        X2 = [X[0], *list(X)]
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
-        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
+        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords={"x": X2, "y": Y, "z": Z, "f": freqs})
         field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset2)
         make_custom_field_source(field_dataset)
 

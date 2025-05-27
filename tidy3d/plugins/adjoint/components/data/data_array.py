@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Literal, Optional, Union
 
 import h5py
 import jax
@@ -12,8 +13,8 @@ import pydantic.v1 as pd
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
 
-from .....components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .....exceptions import AdjointError, DataError, Tidy3dKeyError
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.exceptions import AdjointError, DataError, Tidy3dKeyError
 
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
@@ -34,7 +35,7 @@ class JaxDataArray(Tidy3dBaseModel):
         jax_field=True,
     )
 
-    coords: Dict[str, list] = pd.Field(
+    coords: dict[str, list] = pd.Field(
         ...,
         title="Coords",
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
@@ -152,18 +153,18 @@ class JaxDataArray(Tidy3dBaseModel):
     def real(self) -> np.ndarray:
         """Real part of self."""
         new_values = jnp.real(self.as_jnp_array)
-        return self.copy(update=dict(values=new_values))
+        return self.copy(update={"values": new_values})
 
     @cached_property
     def imag(self) -> np.ndarray:
         """Imaginary part of self."""
         new_values = jnp.imag(self.as_jnp_array)
-        return self.copy(update=dict(values=new_values))
+        return self.copy(update={"values": new_values})
 
     def conj(self) -> JaxDataArray:
         """Complex conjugate of self."""
         new_values = jnp.conj(self.as_jnp_array)
-        return self.copy(update=dict(values=new_values))
+        return self.copy(update={"values": new_values})
 
     def __abs__(self) -> JaxDataArray:
         """Absolute value of self's values."""
@@ -219,7 +220,7 @@ class JaxDataArray(Tidy3dBaseModel):
         """Multiply self with something else."""
         return self * other
 
-    def sum(self, dim: str = None):
+    def sum(self, dim: Optional[str] = None):
         """Sum (optionally along a single or multiple dimensions)."""
 
         if dim is None:
@@ -239,7 +240,7 @@ class JaxDataArray(Tidy3dBaseModel):
             ret = ret.sum(dim=dim_i)
         return ret
 
-    def squeeze(self, dim: str = None, drop: bool = True) -> JaxDataArray:
+    def squeeze(self, dim: Optional[str] = None, drop: bool = True) -> JaxDataArray:
         """Remove any non-zero dims."""
 
         if dim is None:
@@ -294,7 +295,7 @@ class JaxDataArray(Tidy3dBaseModel):
             return new_values
 
         # otherwise, return another JaxDataArray with the values and coords selected out
-        return self.copy(update=dict(values=new_values, coords=new_coords))
+        return self.copy(update={"values": new_values, "coords": new_coords})
 
     def isel(self, **isel_kwargs) -> JaxDataArray:
         """Select a value from the :class:`.JaxDataArray` by indexing into coordinates by index."""
@@ -313,7 +314,7 @@ class JaxDataArray(Tidy3dBaseModel):
         return self_sel
 
     def sel(
-        self, indexers: dict = None, method: Literal[None, "nearest"] = None, **sel_kwargs
+        self, indexers: Optional[dict] = None, method: Literal[None, "nearest"] = None, **sel_kwargs
     ) -> JaxDataArray:
         """Select a value from the :class:`.JaxDataArray` by indexing into coordinates by value.
 
@@ -392,7 +393,7 @@ class JaxDataArray(Tidy3dBaseModel):
 
         return indices
 
-    def assign_coords(self, coords: dict = None, **coords_kwargs) -> JaxDataArray:
+    def assign_coords(self, coords: Optional[dict] = None, **coords_kwargs) -> JaxDataArray:
         """Assign new coordinates to this object."""
 
         update_kwargs = self.coords.copy()
@@ -407,7 +408,7 @@ class JaxDataArray(Tidy3dBaseModel):
         update_kwargs = {key: np.array(value).tolist() for key, value in update_kwargs.items()}
         return self.updated_copy(coords=update_kwargs)
 
-    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> JaxDataArray:
+    def multiply_at(self, value: complex, coord_name: str, indices: list[int]) -> JaxDataArray:
         """Multiply self by value at indices into ."""
         axis = list(self.coords.keys()).index(coord_name)
         scalar_data_arr = self.as_jnp_array
@@ -498,7 +499,7 @@ class JaxDataArray(Tidy3dBaseModel):
         return ret_value
 
     @cached_property
-    def nonzero_val_coords(self) -> Tuple[List[complex], Dict[str, Any]]:
+    def nonzero_val_coords(self) -> tuple[list[complex], dict[str, Any]]:
         """The value and coordinate associated with the only non-zero element of ``self.values``."""
 
         values = np.nan_to_num(self.as_ndarray)
@@ -519,7 +520,7 @@ class JaxDataArray(Tidy3dBaseModel):
 
         return nonzero_values, nonzero_coords
 
-    def tree_flatten(self) -> Tuple[list, dict]:
+    def tree_flatten(self) -> tuple[list, dict]:
         """Jax works on the values, stash the coords for reconstruction."""
 
         return self.values, self.coords

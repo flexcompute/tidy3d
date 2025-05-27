@@ -22,7 +22,7 @@ def get_derivative_maps(
     """Get electric and displacement field derivative maps."""
     der_map_E = derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
     der_map_D = derivative_map_D(fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj)
-    return dict(E=der_map_E, D=der_map_D)
+    return {"E": der_map_E, "D": der_map_D}
 
 
 def derivative_map_E(fld_fwd: td.FieldData, fld_adj: td.FieldData) -> td.FieldData:

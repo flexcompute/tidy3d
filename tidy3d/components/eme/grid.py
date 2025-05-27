@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ...constants import RADIAN, fp_eps, inf
-from ...exceptions import SetupError, ValidationError
-from ..base import Tidy3dBaseModel, skip_if_fields_missing
-from ..geometry.base import Box
-from ..grid.grid import Coords1D
-from ..mode_spec import ModeSpec
-from ..structure import Structure
-from ..types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
+from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.grid import Coords1D
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
+from tidy3d.constants import RADIAN, fp_eps, inf
+from tidy3d.exceptions import SetupError, ValidationError
 
 # grid limits
 MAX_NUM_MODES = 100
@@ -163,7 +163,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         """Number of virtual cells in this EME grid spec."""
         return len(self.virtual_cell_indices)
 
-    def _updated_copy_num_reps(self, num_reps: Dict[str, pd.PositiveInt]) -> EMEGridSpec:
+    def _updated_copy_num_reps(self, num_reps: dict[str, pd.PositiveInt]) -> EMEGridSpec:
         """Update ``num_reps`` of named subgrids."""
         if self.name is not None:
             new_num_reps = num_reps.get(self.name)
@@ -172,7 +172,7 @@ class EMEGridSpec(Tidy3dBaseModel, ABC):
         return self
 
     @property
-    def _cell_index_pairs(self) -> List[pd.NonNegativeInt]:
+    def _cell_index_pairs(self) -> list[pd.NonNegativeInt]:
         """Pairs of adjacent cell indices."""
         cell_indices = self.virtual_cell_indices
         pairs = []
@@ -246,10 +246,10 @@ class EMEExplicitGrid(EMEGridSpec):
     ... )
     """
 
-    mode_specs: List[EMEModeSpec] = pd.Field(
+    mode_specs: list[EMEModeSpec] = pd.Field(
         ...,
         title="Mode Specifications",
-        description="Mode specifications for each cell " "in the explicit EME grid.",
+        description="Mode specifications for each cell in the explicit EME grid.",
     )
 
     boundaries: ArrayFloat1D = pd.Field(
@@ -270,7 +270,7 @@ class EMEExplicitGrid(EMEGridSpec):
         boundaries = val
         if len(mode_specs) - 1 != len(boundaries):
             raise ValidationError(
-                "There must be exactly one fewer item in 'boundaries' than " "in 'mode_specs'."
+                "There must be exactly one fewer item in 'boundaries' than in 'mode_specs'."
             )
         if len(boundaries) > 0:
             rmin = boundaries[0]
@@ -310,7 +310,7 @@ class EMEExplicitGrid(EMEGridSpec):
                     "The last item in 'boundaries' is outside the simulation domain."
                 )
 
-        boundaries = [sim_rmin] + list(self.boundaries) + [sim_rmax]
+        boundaries = [sim_rmin, *list(self.boundaries), sim_rmax]
         return EMEGrid(
             boundaries=boundaries,
             center=center,
@@ -321,7 +321,7 @@ class EMEExplicitGrid(EMEGridSpec):
 
     @classmethod
     def from_structures(
-        cls, structures: List[Structure], axis: Axis, mode_spec: EMEModeSpec, **kwargs
+        cls, structures: list[Structure], axis: Axis, mode_spec: EMEModeSpec, **kwargs
     ) -> EMEExplicitGrid:
         """Create an explicit EME grid with boundaries aligned with
         structure bounding boxes. Every cell in the resulting grid
@@ -398,7 +398,7 @@ class EMECompositeGrid(EMEGridSpec):
     ... )
     """
 
-    subgrids: List[EMESubgridType] = pd.Field(
+    subgrids: list[EMESubgridType] = pd.Field(
         ..., title="Subgrids", description="Subgrids in the composite grid."
     )
 
@@ -419,8 +419,7 @@ class EMECompositeGrid(EMEGridSpec):
         subgrid_boundaries = val
         if len(subgrids) - 1 != len(subgrid_boundaries):
             raise ValidationError(
-                "There must be exactly one fewer item in 'subgrid_boundaries' than "
-                "in 'subgrids'."
+                "There must be exactly one fewer item in 'subgrid_boundaries' than in 'subgrids'."
             )
         rmin = subgrid_boundaries[0]
         for rmax in subgrid_boundaries[1:]:
@@ -431,7 +430,7 @@ class EMECompositeGrid(EMEGridSpec):
 
     def subgrid_bounds(
         self, center: Coordinate, size: Size, axis: Axis
-    ) -> List[Tuple[float, float]]:
+    ) -> list[tuple[float, float]]:
         """Subgrid bounds: a list of pairs (rmin, rmax) of the
         bounds of the subgrids along the propagation axis.
 
@@ -524,7 +523,7 @@ class EMECompositeGrid(EMEGridSpec):
             inds += [ind + start_ind for ind in subgrid.virtual_cell_indices]
         return list(inds) * self.num_reps
 
-    def _updated_copy_num_reps(self, num_reps: Dict[str, pd.PositiveInt]) -> EMEGridSpec:
+    def _updated_copy_num_reps(self, num_reps: dict[str, pd.PositiveInt]) -> EMEGridSpec:
         """Update ``num_reps`` of named subgrids."""
         new_self = super()._updated_copy_num_reps(num_reps=num_reps)
         new_subgrids = [
@@ -535,11 +534,11 @@ class EMECompositeGrid(EMEGridSpec):
     @classmethod
     def from_structure_groups(
         cls,
-        structure_groups: List[List[Structure]],
+        structure_groups: list[list[Structure]],
         axis: Axis,
-        mode_specs: List[EMEModeSpec],
-        names: List[str] = None,
-        num_reps: List[pd.PositiveInt] = None,
+        mode_specs: list[EMEModeSpec],
+        names: Optional[list[str]] = None,
+        num_reps: Optional[list[pd.PositiveInt]] = None,
     ) -> EMECompositeGrid:
         """Create a composite EME grid with boundaries aligned with
         structure bounding boxes.
@@ -598,7 +597,7 @@ class EMECompositeGrid(EMEGridSpec):
             raise ValidationError("The list 'structure_groups' cannot be empty.")
         if len(mode_specs) != len(structure_groups):
             raise ValidationError(
-                "The lists 'mode_specs' and 'structure_groups' must " "have the same length."
+                "The lists 'mode_specs' and 'structure_groups' must have the same length."
             )
 
         subgrids = []
@@ -612,7 +611,7 @@ class EMECompositeGrid(EMEGridSpec):
         if names is not None:
             if len(names) != len(structure_groups):
                 raise ValidationError(
-                    "The lists 'names' and 'structure_groups' must " "have the same length."
+                    "The lists 'names' and 'structure_groups' must have the same length."
                 )
             for i in range(len(subgrids)):
                 subgrids[i] = subgrids[i].updated_copy(name=names[i])
@@ -620,7 +619,7 @@ class EMECompositeGrid(EMEGridSpec):
         if num_reps is not None:
             if len(num_reps) != len(structure_groups):
                 raise ValidationError(
-                    "The lists 'num_reps' and 'structure_groups' must " "have the same length."
+                    "The lists 'num_reps' and 'structure_groups' must have the same length."
                 )
             for i in range(len(subgrids)):
                 subgrids[i] = subgrids[i].updated_copy(num_reps=num_reps[i])
@@ -676,7 +675,7 @@ class EMEGrid(Box):
         ..., title="Propagation axis", description="Propagation axis for the EME simulation."
     )
 
-    mode_specs: List[EMEModeSpec] = pd.Field(
+    mode_specs: list[EMEModeSpec] = pd.Field(
         ..., title="Mode Specifications", description="Mode specifications for the EME cells."
     )
 
@@ -744,7 +743,7 @@ class EMEGrid(Box):
         return centers
 
     @property
-    def lengths(self) -> List[pd.NonNegativeFloat]:
+    def lengths(self) -> list[pd.NonNegativeFloat]:
         """Lengths of the EME cells along the propagation axis."""
         rmin = self.boundaries[0]
         lengths = []
@@ -760,7 +759,7 @@ class EMEGrid(Box):
         return len(self.centers)
 
     @property
-    def mode_planes(self) -> List[Box]:
+    def mode_planes(self) -> list[Box]:
         """Planes for mode solving, aligned with cell centers."""
         size = [inf, inf, inf]
         center = list(self.center)
@@ -773,7 +772,7 @@ class EMEGrid(Box):
         return mode_planes
 
     @property
-    def boundary_planes(self) -> List[Box]:
+    def boundary_planes(self) -> list[Box]:
         """Planes aligned with cell boundaries."""
         size = list(self.size)
         center = list(self.center)
@@ -786,7 +785,7 @@ class EMEGrid(Box):
         return boundary_planes
 
     @property
-    def cells(self) -> List[Box]:
+    def cells(self) -> list[Box]:
         """EME cells in the grid. Each cell is a :class:`.Box`."""
         size = list(self.size)
         center = list(self.center)
@@ -798,7 +797,7 @@ class EMEGrid(Box):
             cells.append(Box(center=center, size=size))
         return cells
 
-    def cell_indices_in_box(self, box: Box) -> List[pd.NonNegativeInteger]:
+    def cell_indices_in_box(self, box: Box) -> list[pd.NonNegativeInteger]:
         """Indices of cells that overlap with 'box'. Used to determine
         which data is recorded by a monitor.
 

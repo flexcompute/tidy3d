@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
 from matplotlib import pyplot as plt
+
+import tidy3d as td
 from tidy3d import (
     ConvectionBC,
     DistanceUnstructuredGrid,
@@ -156,7 +159,7 @@ def make_heat_mnt_data():
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     temperature_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data1 = TemperatureData(monitor=temp_mnt1, temperature=temperature_field)
@@ -218,7 +221,7 @@ def make_heat_mnt_data():
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     temperature_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data5 = TemperatureData(monitor=temp_mnt5, temperature=temperature_field)
@@ -228,7 +231,7 @@ def make_heat_mnt_data():
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     temperature_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data6 = TemperatureData(monitor=temp_mnt6, temperature=temperature_field)
@@ -278,7 +281,9 @@ def make_heat_source():
 def make_custom_heat_source():
     return HeatSource(
         structures=["solid_structure"],
-        rate=td.SpatialDataArray(np.ones((1, 2, 3)), coords=dict(x=[0], y=[1, 2], z=[3, 4, 5])),
+        rate=td.SpatialDataArray(
+            np.ones((1, 2, 3)), coords={"x": [0], "y": [1, 2], "z": [3, 4, 5]}
+        ),
     )
 
 
@@ -410,10 +415,10 @@ def test_heat_sim():
         medium=heat_sim.medium,
     )
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [struct_1d])
+        _ = heat_sim.updated_copy(structures=[*list(heat_sim.structures), struct_1d])
 
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [struct_2d])
+        _ = heat_sim.updated_copy(structures=[*list(heat_sim.structures), struct_2d])
 
     # no data expected inside a monitor
     for mnt_size in [(0.2, 0.2, 0.2), (0, 1, 1), (0, 2, 0), (0, 0, 0)]:
@@ -624,7 +629,7 @@ def test_symmetry_expanded(zero_dim_axis):
     z = np.linspace(*data_span_z, num_points[2])
     v = np.sin(x[:, None, None]) * np.cos(y[None, :, None]) * np.exp(z[None, None, :])
 
-    data_cart = td.SpatialDataArray(v, coords=dict(x=x, y=y, z=z))
+    data_cart = td.SpatialDataArray(v, coords={"x": x, "y": y, "z": z})
     data_ugrid = cartesian_to_unstructured(data_cart, seed=33342)
 
     mnt_cart = td.TemperatureMonitor(

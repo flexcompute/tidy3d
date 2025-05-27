@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from math import isclose
 
 import numpy as np
+
 from tidy3d.plugins.fitter import AdvancedFitterParam, StableDispersionFitter
 
 np.random.seed(4)

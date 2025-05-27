@@ -1,9 +1,11 @@
 """Geometry operations for bounding box type with minimal imports."""
 
+from __future__ import annotations
+
 from math import isclose
 
-from ...constants import fp_eps
-from ..types import Bound
+from tidy3d.components.types import Bound
+from tidy3d.constants import fp_eps
 
 
 def bounds_intersection(bounds1: Bound, bounds2: Bound) -> Bound:

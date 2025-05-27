@@ -1,10 +1,13 @@
 """Defines jax-compatible datasets."""
 
+from __future__ import annotations
+
 import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
 
-from .....components.data.dataset import PermittivityDataset
-from ..base import JaxObject
+from tidy3d.components.data.dataset import PermittivityDataset
+from tidy3d.plugins.adjoint.components.base import JaxObject
+
 from .data_array import JaxDataArray
 
 

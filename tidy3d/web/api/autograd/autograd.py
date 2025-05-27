@@ -1,4 +1,5 @@
 # autograd wrapper for web functions
+from __future__ import annotations
 
 import os
 import tempfile
@@ -14,16 +15,15 @@ from autograd.extend import defvjp, primitive
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.types import Literal
+from tidy3d.exceptions import AdjointError
+from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
+from tidy3d.web.api.asynchronous import run_async as run_async_webapi
+from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
+from tidy3d.web.api.tidy3d_stub import SimulationDataType, SimulationType
+from tidy3d.web.api.webapi import run as run_webapi
+from tidy3d.web.core.s3utils import download_file, upload_file
+from tidy3d.web.core.types import PayType
 
-from ....exceptions import AdjointError
-from ...core.s3utils import download_file, upload_file
-from ...core.types import PayType
-from ..asynchronous import DEFAULT_DATA_DIR
-from ..asynchronous import run_async as run_async_webapi
-from ..container import DEFAULT_DATA_PATH, Batch, BatchData, Job
-from ..tidy3d_stub import SimulationDataType, SimulationType
-from ..webapi import run as run_webapi
 from .utils import E_to_D, FieldMap, TracerKeys, get_derivative_maps
 
 # keys for data into auxiliary dictionary
@@ -96,17 +96,17 @@ def run(
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: str = None,
+    callback_url: typing.Optional[str] = None,
     verbose: bool = True,
-    progress_callback_upload: typing.Callable[[float], None] = None,
-    progress_callback_download: typing.Callable[[float], None] = None,
-    solver_version: str = None,
-    worker_group: str = None,
+    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
+    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
+    solver_version: typing.Optional[str] = None,
+    worker_group: typing.Optional[str] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: list[str] = None,
+    parent_tasks: typing.Optional[list[str]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: Literal["auto", True, False] = "auto",
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
 ) -> SimulationDataType:
     """
@@ -232,14 +232,14 @@ def run_async(
     simulations: dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: str = None,
-    num_workers: int = None,
+    callback_url: typing.Optional[str] = None,
+    num_workers: typing.Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: dict[str, list[str]] = None,
+    parent_tasks: typing.Optional[dict[str, list[str]]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: Literal["auto", True, False] = "auto",
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
@@ -704,7 +704,7 @@ def _run_bwd(
 
             # Build a per-task parent_tasks mapping
             parent_tasks = {}
-            for tname_adj in sims_adj_dict.keys():
+            for tname_adj in sims_adj_dict:
                 parent_tasks[tname_adj] = [task_id_fwd]
             run_kwargs["parent_tasks"] = parent_tasks
 
@@ -1070,7 +1070,7 @@ def postprocess_adj(
 
             # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
             for structure_path, vjp_value in vjp_value_map.items():
-                sim_path = tuple(["structures", structure_index] + list(structure_path))
+                sim_path = ("structures", structure_index, *list(structure_path))
                 if freq_idx == 0:
                     sim_fields_vjp[sim_path] = vjp_value
                 else:
@@ -1099,7 +1099,7 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 
 def parse_run_kwargs(**run_kwargs):
     """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
-    job_fields = list(Job._upload_fields) + ["solver_version", "pay_type"]
+    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type"]
     job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
     return job_init_kwargs
 

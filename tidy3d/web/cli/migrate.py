@@ -1,5 +1,7 @@
 """Migrate authentication to API key."""
 
+from __future__ import annotations
+
 import json
 import os
 
@@ -7,8 +9,9 @@ import click
 import requests
 import toml
 
-from ..core.constants import HEADER_APPLICATION, HEADER_APPLICATION_VALUE, KEY_APIKEY
-from ..core.environment import Env
+from tidy3d.web.core.constants import HEADER_APPLICATION, HEADER_APPLICATION_VALUE, KEY_APIKEY
+from tidy3d.web.core.environment import Env
+
 from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
 
 
@@ -41,35 +44,29 @@ def migrate() -> bool:
                 if resp.status_code != 200:
                     click.echo(f"Migrate to api key failed: {resp.text}")
                     return False
-                else:
-                    # click.echo(json.dumps(resp.json(), indent=4))
-                    access_token = resp.json()["data"]["auth"]["accessToken"]
-                    headers["Authorization"] = f"Bearer {access_token}"
-                    resp = requests.get(f"{Env.current.web_api_endpoint}/apikey", headers=headers)
+                # click.echo(json.dumps(resp.json(), indent=4))
+                access_token = resp.json()["data"]["auth"]["accessToken"]
+                headers["Authorization"] = f"Bearer {access_token}"
+                resp = requests.get(f"{Env.current.web_api_endpoint}/apikey", headers=headers)
+                if resp.status_code != 200:
+                    click.echo(f"Migrate to api key failed: {resp.text}")
+                    return False
+                click.echo(json.dumps(resp.json(), indent=4))
+                apikey = resp.json()["data"]
+                if not apikey:
+                    resp = requests.post(f"{Env.current.web_api_endpoint}/apikey", headers=headers)
                     if resp.status_code != 200:
                         click.echo(f"Migrate to api key failed: {resp.text}")
                         return False
-                    else:
-                        click.echo(json.dumps(resp.json(), indent=4))
-                        apikey = resp.json()["data"]
-                        if not apikey:
-                            resp = requests.post(
-                                f"{Env.current.web_api_endpoint}/apikey", headers=headers
-                            )
-                            if resp.status_code != 200:
-                                click.echo(f"Migrate to api key failed: {resp.text}")
-                                return False
-                            else:
-                                apikey = resp.json()["data"]
-                        if not os.path.exists(TIDY3D_DIR):
-                            os.mkdir(TIDY3D_DIR)
-                        with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
-                            toml_config = toml.loads(config_file.read())
-                            toml_config.update({KEY_APIKEY: apikey})
-                            config_file.write(toml.dumps(toml_config))
+                    apikey = resp.json()["data"]
+                if not os.path.exists(TIDY3D_DIR):
+                    os.mkdir(TIDY3D_DIR)
+                with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
+                    toml_config = toml.loads(config_file.read())
+                    toml_config.update({KEY_APIKEY: apikey})
+                    config_file.write(toml.dumps(toml_config))
 
-                        # rename auth.json to auth.json.bak
-                        os.rename(CREDENTIAL_FILE, CREDENTIAL_FILE + ".bak")
-                        return True
-            else:
-                click.echo("You can migrate to api key by running 'tidy3d migrate' command.")
+                # rename auth.json to auth.json.bak
+                os.rename(CREDENTIAL_FILE, CREDENTIAL_FILE + ".bak")
+                return True
+            click.echo("You can migrate to api key by running 'tidy3d migrate' command.")

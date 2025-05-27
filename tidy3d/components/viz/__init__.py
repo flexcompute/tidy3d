@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .axes_utils import add_ax_if_none, equal_aspect, make_ax, set_default_labels_and_title
 from .descartes import Polygon, polygon_patch, polygon_path
 from .flex_style import apply_tidy3d_params, restore_matplotlib_rcparams
@@ -39,32 +41,27 @@ from .visualization_spec import MATPLOTLIB_IMPORTED, VisualizationSpec
 apply_tidy3d_params()
 
 __all__ = [
-    "arrow_style",
     "ARROW_ALPHA",
-    "ARROW_LENGTH",
-    "PLOT_BUFFER",
-    "VisualizationSpec",
-    "MATPLOTLIB_IMPORTED",
-    "plot_sim_3d",
-    "FLEXCOMPUTE_COLORS",
-    "ARROW_COLOR_SOURCE",
     "ARROW_COLOR_MONITOR",
     "ARROW_COLOR_POLARIZATION",
+    "ARROW_COLOR_SOURCE",
+    "ARROW_LENGTH",
+    "FLEXCOMPUTE_COLORS",
+    "MATPLOTLIB_IMPORTED",
     "MEDIUM_CMAP",
+    "PLOT_BUFFER",
     "STRUCTURE_EPS_CMAP",
     "STRUCTURE_EPS_CMAP_R",
     "STRUCTURE_HEAT_COND_CMAP",
-    "restore_matplotlib_rcparams",
-    "make_ax",
-    "add_ax_if_none",
-    "equal_aspect",
-    "set_default_labels_and_title",
-    "polygon_patch",
-    "polygon_path",
-    "Polygon",
     "AbstractPlotParams",
     "PathPlotParams",
     "PlotParams",
+    "Polygon",
+    "VisualizationSpec",
+    "add_ax_if_none",
+    "arrow_style",
+    "equal_aspect",
+    "make_ax",
     "plot_params_bloch",
     "plot_params_fluid",
     "plot_params_geometry",
@@ -78,4 +75,9 @@ __all__ = [
     "plot_params_source",
     "plot_params_structure",
     "plot_params_symmetry",
+    "plot_sim_3d",
+    "polygon_patch",
+    "polygon_path",
+    "restore_matplotlib_rcparams",
+    "set_default_labels_and_title",
 ]

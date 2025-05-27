@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from html import escape
 
-from ...exceptions import SetupError
+from tidy3d.exceptions import SetupError
 
 
 def plot_sim_3d(sim, width=800, height=800) -> None:

@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import autograd.numpy as np
 import pytest
 from autograd import grad as grad_ag
 from autograd import value_and_grad as value_and_grad_ag
 from numpy.testing import assert_allclose
+
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.plugins.autograd import grad, value_and_grad
 

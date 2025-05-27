@@ -2,36 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.data.data_array import (
-    DataArray,
-    FreqDataArray,
-)
-from ....components.data.monitor_data import (
-    MonitorData,
-)
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.utils_2d import snap_coordinate_to_grid
-from ....components.microwave.data.monitor_data import AntennaMetricsData
-from ....components.monitor import DirectivityMonitor
-from ....components.simulation import Simulation
-from ....components.source.time import GaussianPulse
-from ....components.types import Ax
-from ....components.viz import add_ax_if_none, equal_aspect
-from ....constants import C_0, OHM
-from ....exceptions import Tidy3dError, Tidy3dKeyError, ValidationError
-from ....log import log
-from ....web.api.container import BatchData
-from ..data.terminal import PortDataArray, TerminalPortDataArray
-from ..ports.base_lumped import AbstractLumpedPort
-from ..ports.coaxial_lumped import CoaxialLumpedPort
-from ..ports.rectangular_lumped import LumpedPort
-from ..ports.wave import WavePort
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import DataArray, FreqDataArray
+from tidy3d.components.data.monitor_data import MonitorData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
+from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
+from tidy3d.components.monitor import DirectivityMonitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Ax
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.constants import C_0, OHM
+from tidy3d.exceptions import Tidy3dError, Tidy3dKeyError, ValidationError
+from tidy3d.log import log
+from tidy3d.plugins.smatrix.data.terminal import PortDataArray, TerminalPortDataArray
+from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
+from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
+from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
+from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.web.api.container import BatchData
+
 from .base import AbstractComponentModeler, TerminalPortType
 
 
@@ -39,7 +35,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
     """Tool for modeling two-terminal multiport devices and computing port parameters
     with lumped and wave ports."""
 
-    ports: Tuple[TerminalPortType, ...] = pd.Field(
+    ports: tuple[TerminalPortType, ...] = pd.Field(
         (),
         title="Terminal Ports",
         description="Collection of lumped and wave ports associated with the network. "
@@ -64,7 +60,12 @@ class TerminalComponentModeler(AbstractComponentModeler):
     @equal_aspect
     @add_ax_if_none
     def plot_sim(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **kwargs,
     ) -> Ax:
         """Plot a :class:`.Simulation` with all sources added for each port, for troubleshooting."""
 
@@ -72,13 +73,18 @@ class TerminalComponentModeler(AbstractComponentModeler):
         for port_source in self.ports:
             source_0 = port_source.to_source(self._source_time)
             plot_sources.append(source_0)
-        sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
+        sim_plot = self.simulation.copy(update={"sources": plot_sources})
         return sim_plot.plot(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @equal_aspect
     @add_ax_if_none
     def plot_sim_eps(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **kwargs,
     ) -> Ax:
         """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
 
@@ -86,11 +92,11 @@ class TerminalComponentModeler(AbstractComponentModeler):
         for port_source in self.ports:
             source_0 = port_source.to_source(self._source_time)
             plot_sources.append(source_0)
-        sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
+        sim_plot = self.simulation.copy(update={"sources": plot_sources})
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @cached_property
-    def sim_dict(self) -> Dict[str, Simulation]:
+    def sim_dict(self) -> dict[str, Simulation]:
         """Generate all the :class:`.Simulation` objects for the port parameter calculation."""
 
         sim_dict = {}
@@ -110,7 +116,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         sim_wo_source = self.simulation.updated_copy(
             grid_spec=grid_spec, lumped_elements=lumped_resistors
         )
-        snap_centers = dict()
+        snap_centers = {}
         for port in self._lumped_ports:
             port_center_on_axis = port.center[port.injection_axis]
             new_port_center = snap_coordinate_to_grid(
@@ -136,10 +142,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
             port.to_load(snap_center=snap_centers[port.name]) for port in self._lumped_ports
         ]
 
-        update_dict = dict(
-            monitors=new_mnts,
-            lumped_elements=new_lumped_elements,
-        )
+        update_dict = {
+            "monitors": new_mnts,
+            "lumped_elements": new_lumped_elements,
+        }
 
         # This is the new default simulation will all shared components added
         sim_wo_source = sim_wo_source.copy(update=update_dict)
@@ -164,7 +170,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
             )
             port_source = wave_port.to_source(self._source_time, snap_center=mode_src_pos)
 
-            update_dict = dict(sources=[port_source])
+            update_dict = {"sources": [port_source]}
 
             task_name = self._task_name(port=wave_port)
             sim_dict[task_name] = sim_wo_source.copy(update=update_dict)
@@ -190,11 +196,11 @@ class TerminalComponentModeler(AbstractComponentModeler):
             (len(self.freqs), len(port_names), len(port_names)),
             dtype=complex,
         )
-        coords = dict(
-            f=np.array(self.freqs),
-            port_out=port_names,
-            port_in=port_names,
-        )
+        coords = {
+            "f": np.array(self.freqs),
+            "port_out": port_names,
+            "port_in": port_names,
+        }
         a_matrix = TerminalPortDataArray(values, coords=coords)
         b_matrix = a_matrix.copy(deep=True)
 
@@ -205,7 +211,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         for port_in in self.ports:
             sim_data = batch_data[self._task_name(port=port_in)]
             a, b = self.compute_power_wave_amplitudes_at_each_port(port_impedances, sim_data)
-            indexer = dict(f=a.f, port_in=port_in.name, port_out=a.port)
+            indexer = {"f": a.f, "port_in": port_in.name, "port_out": a.port}
             a_matrix.loc[indexer] = a
             b_matrix.loc[indexer] = b
 
@@ -265,10 +271,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
             (len(self.freqs), len(port_names)),
             dtype=complex,
         )
-        coords = dict(
-            f=np.array(self.freqs),
-            port=port_names,
-        )
+        coords = {
+            "f": np.array(self.freqs),
+            "port": port_names,
+        }
 
         V_matrix = PortDataArray(values, coords=coords)
         I_matrix = V_matrix.copy(deep=True)
@@ -277,7 +283,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         for port_out in self.ports:
             V_out, I_out = self.compute_port_VI(port_out, sim_data)
-            indexer = dict(port=port_out.name)
+            indexer = {"port": port_out.name}
             V_matrix.loc[indexer] = V_out
             I_matrix.loc[indexer] = I_out
 
@@ -434,7 +440,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
             (len(self.freqs), len(port_names)),
             dtype=complex,
         )
-        coords = dict(f=np.array(self.freqs), port=port_names)
+        coords = {"f": np.array(self.freqs), "port": port_names}
         port_impedances = PortDataArray(values, coords=coords)
         for port in self.ports:
             if isinstance(port, WavePort):
@@ -443,10 +449,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 # WavePorts have a port impedance calculated from its associated modal field distribution
                 # and is frequency dependent.
                 impedances = port.compute_port_impedance(sim_data_port).values
-                port_impedances.loc[dict(port=port.name)] = impedances.squeeze()
+                port_impedances.loc[{"port": port.name}] = impedances.squeeze()
             else:
                 # LumpedPorts have a constant reference impedance
-                port_impedances.loc[dict(port=port.name)] = np.full(len(self.freqs), port.impedance)
+                port_impedances.loc[{"port": port.name}] = np.full(len(self.freqs), port.impedance)
 
         port_impedances = TerminalComponentModeler._set_port_data_array_attributes(port_impedances)
         return port_impedances
@@ -527,12 +533,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
         if not isinstance(a_port, FreqDataArray):
             freqs = list(monitor_data.monitor.freqs)
             array_vals = a_port * np.ones(len(freqs))
-            a_port = FreqDataArray(array_vals, coords=dict(f=freqs))
+            a_port = FreqDataArray(array_vals, coords={"f": freqs})
         scale_array = a_port / a_raw_port
         return monitor_data.scale_fields_by_freq_array(scale_array, method="nearest")
 
     def get_antenna_metrics_data(
-        self, port_amplitudes: dict[str, complex] = None, monitor_name: str = None
+        self,
+        port_amplitudes: Optional[dict[str, complex]] = None,
+        monitor_name: Optional[str] = None,
     ) -> AntennaMetricsData:
         """Calculate antenna parameters using superposition of fields from multiple port excitations.
 
@@ -574,7 +582,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         # Create data arrays for holding the superposition of all port power wave amplitudes
         f = list(rad_mon.freqs)
-        coords = dict(f=f, port=port_names)
+        coords = {"f": f, "port": port_names}
         a_sum = PortDataArray(np.zeros((len(f), len(port_names)), dtype=complex), coords=coords)
         b_sum = a_sum.copy()
         # Retrieve associated simulation data

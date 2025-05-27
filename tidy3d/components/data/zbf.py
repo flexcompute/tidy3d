@@ -7,7 +7,7 @@ from struct import unpack
 import numpy as np
 import pydantic.v1 as pd
 
-from ..base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel
 
 
 class ZBFData(Tidy3dBaseModel):
@@ -118,7 +118,7 @@ class ZBFData(Tidy3dBaseModel):
         except KeyError:
             raise KeyError(
                 f"Invalid units specified in the zbf file (expected '0', '1', '2', or '3', got '{units}')."
-            )
+            ) from None
 
         # load E field
         Ex_real = np.asarray(rawx[0::2]).reshape(nx, ny)

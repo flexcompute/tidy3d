@@ -6,35 +6,31 @@ import json
 import pathlib
 from abc import ABC
 from collections import defaultdict
-from typing import Callable, Tuple, Union
+from typing import Callable, Optional, Union
 
 import h5py
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from ...constants import C_0, inf
-from ...exceptions import DataError, FileError, Tidy3dKeyError
-from ...log import log
-from ..autograd.utils import split_list
-from ..base import JSON_TAG, Tidy3dBaseModel
-from ..base_sim.data.sim_data import AbstractSimulationData
-from ..file_util import replace_values
-from ..monitor import Monitor
-from ..simulation import Simulation
-from ..source.current import CustomCurrentSource
-from ..source.time import GaussianPulse
-from ..source.utils import SourceType
-from ..structure import Structure
-from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
-from ..viz import add_ax_if_none, equal_aspect
+from tidy3d.components.autograd.utils import split_list
+from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel
+from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
+from tidy3d.components.file_util import replace_values
+from tidy3d.components.monitor import Monitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.current import CustomCurrentSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.source.utils import SourceType
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.constants import C_0, inf
+from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError
+from tidy3d.log import log
+
 from .data_array import FreqDataArray
-from .monitor_data import (
-    AbstractFieldData,
-    FieldTimeData,
-    MonitorDataType,
-    MonitorDataTypes,
-)
+from .monitor_data import AbstractFieldData, FieldTimeData, MonitorDataType, MonitorDataTypes
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
@@ -54,7 +50,7 @@ NUM_ADJOINT_FWIDTH_TO_FMIN = 0.5
 class AdjointSourceInfo(Tidy3dBaseModel):
     """Stores information about the adjoint sources to pass to autograd pipeline."""
 
-    sources: Tuple[annotate_type(SourceType), ...] = pd.Field(
+    sources: tuple[annotate_type(SourceType), ...] = pd.Field(
         ...,
         title="Adjoint Sources",
         description="Set of processed sources to include in the adjoint simulation.",
@@ -452,8 +448,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
         **sel_kwargs,
@@ -567,7 +563,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             if field_data.coords[axis].size <= 1:
                 field_data = field_data.sel(**{axis: pos}, method="nearest")
             else:
-                field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
+                field_data = field_data.interp(**{axis: pos}, kwargs={"bounds_error": True})
 
         # warn about new API changes and replace the values
         if "freq" in sel_kwargs:
@@ -597,7 +593,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 field_data = field_data.sel(**{coord_name: coord_val}, method=None)
             else:
                 field_data = field_data.interp(
-                    **{coord_name: coord_val}, kwargs=dict(bounds_error=True)
+                    **{coord_name: coord_val}, kwargs={"bounds_error": True}
                 )
 
         # before dropping coordinates, check if a frequency can be derived from the data that can
@@ -663,8 +659,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
         **sel_kwargs,
@@ -741,11 +737,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_data: xr.DataArray,
         axis: Axis,
         position: float,
-        freq: float = None,
+        freq: Optional[float] = None,
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
         **kwargs,
@@ -919,7 +915,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         description="Original :class:`.Simulation` associated with the data.",
     )
 
-    data: Tuple[annotate_type(MonitorDataType), ...] = pd.Field(
+    data: tuple[annotate_type(MonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
@@ -997,9 +993,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         # Make a new monitor_data dictionary with renormalized data
         data_normalized = [mnt_data.normalize(source_spectrum_fn) for mnt_data in self.data]
 
-        simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
+        simulation = self.simulation.copy(update={"normalize_index": normalize_index})
 
-        return self.copy(update=dict(simulation=simulation, data=data_normalized))
+        return self.copy(update={"simulation": simulation, "data": data_normalized})
 
     def _split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
         """Split data list into original, adjoint field, and adjoint permittivity."""
@@ -1015,7 +1011,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return data_original, data_adjoint
 
-    def _split_original_fwd(self, num_mnts_original: int) -> Tuple[SimulationData, SimulationData]:
+    def _split_original_fwd(self, num_mnts_original: int) -> tuple[SimulationData, SimulationData]:
         """Split this simulation data into original and fwd data from number of original mnts."""
 
         # split the data and monitors into the original ones & adjoint gradient ones (for 'fwd')
@@ -1083,12 +1079,12 @@ class SimulationData(AbstractYeeGridSimulationData):
             ]
 
             # fields to update the 'fwd' simulation with to make it 'adj'
-            sim_adj_update_dict = dict(
-                sources=adjoint_source_info.sources,
-                boundary_spec=bc_adj,
-                monitors=monitors,
-                post_norm=adjoint_source_info.post_norm,
-            )
+            sim_adj_update_dict = {
+                "sources": adjoint_source_info.sources,
+                "boundary_spec": bc_adj,
+                "monitors": monitors,
+                "post_norm": adjoint_source_info.post_norm,
+            }
 
             if not adjoint_source_info.normalize_sim:
                 sim_adj_update_dict["normalize_index"] = None
@@ -1266,7 +1262,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             amp_complex = src_time.amplitude * np.exp(1j * src_time.phase)
             amps_complex.append(amp_complex)
 
-        coords = dict(f=freqs)
+        coords = {"f": freqs}
         amps_complex = np.array(amps_complex)
         return xr.DataArray(amps_complex, coords=coords)
 

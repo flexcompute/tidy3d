@@ -1,6 +1,7 @@
 # type information for autograd
 
 # utilities for working with autograd
+from __future__ import annotations
 
 import copy
 import typing
@@ -10,8 +11,7 @@ from autograd.builtins import dict as dict_ag
 from autograd.extend import Box, defvjp, primitive
 
 from tidy3d.components.type_util import _add_schema
-
-from ..types import ArrayFloat2D, ArrayLike, Complex, Size1D
+from tidy3d.components.types import ArrayFloat2D, ArrayLike, Complex, Size1D
 
 # add schema to the Box
 _add_schema(Box, title="AutogradBox", field_type_str="autograd.tracer.Box")
@@ -36,7 +36,7 @@ TracedVertices = typing.Union[ArrayFloat2D, Box]
 
 # poles
 TracedComplex = typing.Union[Complex, Box]
-TracedPoleAndResidue = typing.Tuple[TracedComplex, TracedComplex]
+TracedPoleAndResidue = tuple[TracedComplex, TracedComplex]
 
 # The data type that we pass in and out of the web.run() @autograd.primitive
 AutogradTraced = typing.Union[Box, ArrayLike]
@@ -46,11 +46,11 @@ AutogradFieldMap = dict_ag[PathType, AutogradTraced]
 InterpolationType = typing.Literal["nearest", "linear"]
 
 __all__ = [
-    "TracedFloat",
-    "TracedSize1D",
-    "TracedSize",
-    "TracedCoordinate",
-    "TracedVertices",
-    "AutogradTraced",
     "AutogradFieldMap",
+    "AutogradTraced",
+    "TracedCoordinate",
+    "TracedFloat",
+    "TracedSize",
+    "TracedSize1D",
+    "TracedVertices",
 ]

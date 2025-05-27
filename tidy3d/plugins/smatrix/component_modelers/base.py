@@ -4,25 +4,25 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Union, get_args
+from typing import Optional, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel, cached_property
-from ....components.data.data_array import DataArray
-from ....components.data.sim_data import SimulationData
-from ....components.simulation import Simulation
-from ....components.types import FreqArray
-from ....config import config
-from ....constants import HERTZ
-from ....exceptions import SetupError, Tidy3dKeyError
-from ....log import log
-from ....web.api.container import Batch, BatchData
-from ..ports.coaxial_lumped import CoaxialLumpedPort
-from ..ports.modal import Port
-from ..ports.rectangular_lumped import LumpedPort
-from ..ports.wave import WavePort
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.types import FreqArray
+from tidy3d.config import config
+from tidy3d.constants import HERTZ
+from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.log import log
+from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
+from tidy3d.plugins.smatrix.ports.modal import Port
+from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
+from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.web.api.container import Batch, BatchData
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -41,7 +41,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: Tuple[Union[Port, TerminalPortType], ...] = pd.Field(
+    ports: tuple[Union[Port, TerminalPortType], ...] = pd.Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
@@ -132,14 +132,14 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         return val
 
     @staticmethod
-    def _task_name(port: Port, mode_index: int = None) -> str:
+    def _task_name(port: Port, mode_index: Optional[int] = None) -> str:
         """The name of a task, determined by the port of the source and mode index, if given."""
         if mode_index is not None:
             return f"smatrix_{port.name}_{mode_index}"
         return f"smatrix_{port.name}"
 
     @cached_property
-    def sim_dict(self) -> Dict[str, Simulation]:
+    def sim_dict(self) -> dict[str, Simulation]:
         """Generate all the :class:`.Simulation` objects for the S matrix calculation."""
 
     def to_file(self, fname: str) -> None:

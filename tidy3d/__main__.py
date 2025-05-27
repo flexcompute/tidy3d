@@ -1,5 +1,7 @@
 """command-line interface. For instructions run `python -m tidy3d --help`"""
 
+from __future__ import annotations
+
 import argparse
 import sys
 

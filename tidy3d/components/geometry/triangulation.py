@@ -1,11 +1,12 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List, Tuple
 
 import numpy as np
 import shapely
 
-from ...exceptions import Tidy3dError
-from ..types import ArrayFloat1D, ArrayFloat2D
+from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D
+from tidy3d.exceptions import Tidy3dError
 
 
 @dataclass
@@ -33,7 +34,7 @@ class Vertex:
     is_ear: bool
 
 
-def update_convexity(vertices: List[Vertex], i: int) -> int:
+def update_convexity(vertices: list[Vertex], i: int) -> int:
     """Update the convexity of a vertex in a polygon.
 
     Parameters
@@ -69,7 +70,7 @@ def update_convexity(vertices: List[Vertex], i: int) -> int:
 
 
 def is_inside(
-    vertex: ArrayFloat1D, triangle: Tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]
+    vertex: ArrayFloat1D, triangle: tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]
 ) -> bool:
     """Check if a vertex is inside a triangle.
 
@@ -90,7 +91,7 @@ def is_inside(
     )
 
 
-def update_ear_flag(vertices: List[Vertex], i: int) -> None:
+def update_ear_flag(vertices: list[Vertex], i: int) -> None:
     """Update the ear flag of a vertex in a polygon.
 
     Parameters
@@ -112,7 +113,7 @@ def update_ear_flag(vertices: List[Vertex], i: int) -> None:
 
 # TODO: This is an inefficient algorithm that runs in O(n^2). We should use something
 # better, and probably as a compiled extension.
-def triangulate(vertices: ArrayFloat2D) -> List[Tuple[int, int, int]]:
+def triangulate(vertices: ArrayFloat2D) -> list[tuple[int, int, int]]:
     """Triangulate a simple polygon.
 
     Parameters

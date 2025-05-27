@@ -1,17 +1,21 @@
 """Defines various validation functions that get used to ensure inputs are legit"""
 
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy as np
 import pydantic.v1 as pydantic
 from autograd.tracer import isbox
 
-from ..exceptions import SetupError, ValidationError
-from ..log import log
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .autograd.utils import get_static
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .data.dataset import Dataset, FieldDataset
 from .geometry.base import Box
 from .mode_spec import ModeSpec
-from .types import Tuple
 
 """ Explanation of pydantic validators:
 
@@ -214,7 +218,10 @@ def assert_objects_in_sim_bounds(
 
 
 def assert_objects_contained_in_sim_bounds(
-    field_name: str, error: bool = True, strict_inequality: bool = False
+    field_name: str,
+    error: bool = True,
+    strict_inequality: bool = False,
+    strict_for_zero_size_dim: bool = False,
 ):
     """Makes sure all objects in field are completely inside the simulation bounds."""
 
@@ -228,10 +235,17 @@ def assert_objects_contained_in_sim_bounds(
 
         # Do a strict check, unless simulation is 0D along a dimension
         strict_ineq = [size != 0 and strict_inequality for size in sim_size]
-
         with log as consolidated_logger:
             for position_index, geometric_object in enumerate(val):
-                if not sim_box.contains(geometric_object.geometry, strict_inequality=strict_ineq):
+                geo_strict_ineq = list(strict_ineq)
+                # Optionally ensure that zero size dimensions are strictly contained
+                if strict_for_zero_size_dim:
+                    zero_dims = geometric_object.geometry.zero_dims
+                    for zero_dim in zero_dims:
+                        geo_strict_ineq[zero_dim] = True
+                if not sim_box.contains(
+                    geometric_object.geometry, strict_inequality=geo_strict_ineq
+                ):
                     message = (
                         f"'simulation.{field_name}[{position_index}]' "
                         "is not completely inside the simulation domain."
@@ -323,9 +337,9 @@ def assert_single_freq_in_range(field_name: str):
 def _warn_potential_error(
     field_name: str,
     base_value: float,
-    val_change_range: Tuple[float, float],
-    allowed_real_range: Tuple[float, float],
-    allowed_imag_range: Tuple[float, float],
+    val_change_range: tuple[float, float],
+    allowed_real_range: tuple[float, float],
+    allowed_imag_range: tuple[float, float],
 ):
     """Basic validation that perturbations do not drive a parameter out of physical bounds."""
 
@@ -358,8 +372,8 @@ def _warn_potential_error(
 def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
-    allowed_real_range: Tuple[Tuple[float, float], ...],
-    allowed_imag_range: Tuple[Tuple[float, float], ...] = None,
+    allowed_real_range: tuple[tuple[float, float], ...],
+    allowed_imag_range: Optional[tuple[tuple[float, float], ...]] = None,
     allowed_complex: bool = True,
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""

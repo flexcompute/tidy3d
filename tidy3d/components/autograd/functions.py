@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 
 import autograd.numpy as anp
@@ -251,7 +253,7 @@ def add_at(x: NDArray, indices_x: tuple, y: NDArray) -> NDArray:
 
 
 __all__ = [
+    "add_at",
     "interpn",
     "trapz",
-    "add_at",
 ]

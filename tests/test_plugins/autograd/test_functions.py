@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import numpy.testing as npt
 import pytest
@@ -6,6 +8,7 @@ import scipy.ndimage
 from autograd import grad
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
+
 from tidy3d.plugins.autograd import (
     add_at,
     convolve,

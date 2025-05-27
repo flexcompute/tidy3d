@@ -3,36 +3,37 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Union
+from typing import Any, Union
 
 import jax.numpy as jnp
 import numpy as np
 import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
 
-from .....components.base import cached_property
-from .....components.data.data_array import (
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import (
     FreqModeDataArray,
     MixedModeDataArray,
     ModeAmpsDataArray,
     ScalarFieldDataArray,
 )
-from .....components.data.dataset import FieldDataset
-from .....components.data.monitor_data import (
+from tidy3d.components.data.dataset import FieldDataset
+from tidy3d.components.data.monitor_data import (
     DiffractionData,
     FieldData,
     ModeData,
     ModeSolverData,
     MonitorData,
 )
-from .....components.geometry.base import Box
-from .....components.source.base import Source
-from .....components.source.current import CustomCurrentSource, PointDipole
-from .....components.source.field import CustomFieldSource, ModeSource, PlaneWave
-from .....components.source.time import GaussianPulse
-from .....constants import C_0, ETA_0, MU_0
-from .....exceptions import AdjointError
-from ..base import JaxObject
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.source.base import Source
+from tidy3d.components.source.current import CustomCurrentSource, PointDipole
+from tidy3d.components.source.field import CustomFieldSource, ModeSource, PlaneWave
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.constants import C_0, ETA_0, MU_0
+from tidy3d.exceptions import AdjointError
+from tidy3d.plugins.adjoint.components.base import JaxObject
+
 from .data_array import JaxDataArray
 
 
@@ -54,7 +55,7 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
         return cls.parse_obj(self_dict)
 
     @abstractmethod
-    def to_adjoint_sources(self, fwidth: float) -> List[Source]:
+    def to_adjoint_sources(self, fwidth: float) -> list[Source]:
         """Construct a list of adjoint sources from this :class:`.JaxMonitorData`."""
 
     @staticmethod
@@ -87,7 +88,7 @@ class JaxModeData(JaxMonitorData, ModeData):
         jax_field=True,
     )
 
-    def to_adjoint_sources(self, fwidth: float) -> List[ModeSource]:
+    def to_adjoint_sources(self, fwidth: float) -> list[ModeSource]:
         """Converts a :class:`.ModeData` to a list of adjoint :class:`.ModeSource`."""
 
         amps, sel_coords = self.amps.nonzero_val_coords
@@ -167,7 +168,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
     def __getitem__(self, item: str) -> bool:
         return self.field_components[item]
 
-    def package_colocate_results(self, centered_fields: Dict[str, ScalarFieldDataArray]) -> Any:
+    def package_colocate_results(self, centered_fields: dict[str, ScalarFieldDataArray]) -> Any:
         """How to package the dictionary of fields computed via self.colocate()."""
         return self.updated_copy(**centered_fields)
 
@@ -243,7 +244,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
             "'time_reversed_copy' is not yet supported in the adjoint plugin."
         )
 
-    def to_adjoint_sources(self, fwidth: float) -> List[CustomFieldSource]:
+    def to_adjoint_sources(self, fwidth: float) -> list[CustomFieldSource]:
         """Converts a :class:`.JaxFieldData` to a list of adjoint :class:`.CustomFieldSource."""
 
         interpolate_source = True
@@ -408,7 +409,7 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         return JaxDataArray(values=power_values, coords=power_coords)
 
-    def to_adjoint_sources(self, fwidth: float) -> List[PlaneWave]:
+    def to_adjoint_sources(self, fwidth: float) -> list[PlaneWave]:
         """Converts a :class:`.DiffractionData` to a list of adjoint :class:`.PlaneWave`."""
 
         # extract the values coordinates of the non-zero amplitudes
@@ -428,7 +429,11 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
                 continue
 
             # select the propagation angles from the data
-            angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq))
+            angle_sel_kwargs = {
+                "orders_x": int(order_x),
+                "orders_y": int(order_y),
+                "f": float(freq),
+            }
             angle_theta = float(theta_data.sel(**angle_sel_kwargs))
             angle_phi = float(phi_data.sel(**angle_sel_kwargs))
 

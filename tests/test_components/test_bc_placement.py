@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from tidy3d.components.bc_placement import (
     MediumMediumInterface,
     SimulationBoundary,

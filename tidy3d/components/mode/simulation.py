@@ -2,31 +2,30 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ...constants import C_0
-from ...exceptions import SetupError, ValidationError
-from ...log import log
-from ..base import cached_property
-from ..boundary import Boundary, BoundarySpec
-from ..geometry.base import Box
-from ..grid.grid import Grid
-from ..grid.grid_spec import GridSpec
-from ..mode_spec import ModeSpec
-from ..monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
-from ..simulation import AbstractYeeGridSimulation, Simulation, validate_boundaries_for_zero_dims
-from ..source.field import ModeSource
-from ..types import (
-    TYPE_TAG_STR,
-    Ax,
-    Direction,
-    EMField,
-    FreqArray,
+from tidy3d.components.base import cached_property
+from tidy3d.components.boundary import Boundary, BoundarySpec
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
+from tidy3d.components.simulation import (
+    AbstractYeeGridSimulation,
+    Simulation,
+    validate_boundaries_for_zero_dims,
 )
-from ..validators import validate_mode_plane_radius
+from tidy3d.components.source.field import ModeSource
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
+from tidy3d.components.validators import validate_mode_plane_radius
+from tidy3d.constants import C_0
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .mode_solver import ModeSolver
 
 ModeSimulationMonitorType = PermittivityMonitor
@@ -138,7 +137,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "primal grid nodes). Default is ``True``.",
     )
 
-    fields: Tuple[EMField, ...] = pd.Field(
+    fields: tuple[EMField, ...] = pd.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
@@ -156,14 +155,14 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "apply PML layers in the mode solver.",
     )
 
-    monitors: Tuple[ModeSimulationMonitorType, ...] = pd.Field(
+    monitors: tuple[ModeSimulationMonitorType, ...] = pd.Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
 
-    sources: Tuple[()] = pd.Field(
+    sources: tuple[()] = pd.Field(
         (),
         title="Sources",
         description="Sources in the simulation. Note: sources are not supported in mode "
@@ -403,8 +402,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_eps_mode_plane(
         self,
-        freq: float = None,
-        alpha: float = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -436,8 +435,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_structures_eps_mode_plane(
         self,
-        freq: float = None,
-        alpha: float = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,

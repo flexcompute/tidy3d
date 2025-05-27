@@ -1,4 +1,5 @@
 # convenient container for the output of the inverse design (specifically the history)
+from __future__ import annotations
 
 import typing
 
@@ -24,67 +25,67 @@ class InverseDesignResult(InvdesBaseModel):
         description="Specification describing the inverse design problem we wish to optimize.",
     )
 
-    params: typing.Tuple[ArrayLike, ...] = pd.Field(
+    params: tuple[ArrayLike, ...] = pd.Field(
         (),
         title="Parameter History",
         description="History of parameter arrays throughout the optimization.",
     )
 
-    objective_fn_val: typing.Tuple[float, ...] = pd.Field(
+    objective_fn_val: tuple[float, ...] = pd.Field(
         (),
         title="Objective Function History",
         description="History of objective function values throughout the optimization.",
     )
 
-    grad: typing.Tuple[ArrayLike, ...] = pd.Field(
+    grad: tuple[ArrayLike, ...] = pd.Field(
         (),
         title="Gradient History",
         description="History of objective function gradient arrays throughout the optimization.",
     )
 
-    penalty: typing.Tuple[float, ...] = pd.Field(
+    penalty: tuple[float, ...] = pd.Field(
         (),
         title="Penalty History",
         description="History of weighted sum of penalties throughout the optimization.",
     )
 
-    post_process_val: typing.Tuple[float, ...] = pd.Field(
+    post_process_val: tuple[float, ...] = pd.Field(
         (),
         title="Post-Process Function History",
         description="History of return values from ``post_process_fn`` throughout the optimization.",
     )
 
-    simulation: typing.Tuple[td.Simulation, ...] = pd.Field(
+    simulation: tuple[td.Simulation, ...] = pd.Field(
         (),
         title="Simulation History",
         description="History of ``td.Simulation`` instances throughout the optimization.",
     )
 
-    opt_state: typing.Tuple[dict, ...] = pd.Field(
+    opt_state: tuple[dict, ...] = pd.Field(
         (),
         title="Optimizer State History",
         description="History of optimizer states throughout the optimization.",
     )
 
     @property
-    def history(self) -> typing.Dict[str, list]:
+    def history(self) -> dict[str, list]:
         """The history-containing fields as a dictionary of lists."""
-        return dict(
-            params=list(self.params),
-            objective_fn_val=list(self.objective_fn_val),
-            grad=list(self.grad),
-            penalty=list(self.penalty),
-            post_process_val=list(self.post_process_val),
-            opt_state=list(self.opt_state),
-        )
+        return {
+            "params": list(self.params),
+            "objective_fn_val": list(self.objective_fn_val),
+            "grad": list(self.grad),
+            "penalty": list(self.penalty),
+            "post_process_val": list(self.post_process_val),
+            "opt_state": list(self.opt_state),
+        }
 
     @property
-    def keys(self) -> typing.List[str]:
+    def keys(self) -> list[str]:
         """Keys stored in the history."""
         return list(self.history.keys())
 
     @property
-    def last(self) -> typing.Dict[str, typing.Any]:
+    def last(self) -> dict[str, typing.Any]:
         """Dictionary of last values in ``self.history``."""
         return {key: value[-1] for key, value in self.history.items()}
 
@@ -101,20 +102,20 @@ class InverseDesignResult(InvdesBaseModel):
         """Get the last value from the history."""
         return self.get(key=key, index=-1)
 
-    def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
+    def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, list[td.Simulation]]:
         """Get the simulation at a specific index in the history (list of sims if multi)."""
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation(params=params)
 
     def get_sim_data(
         self, index: int = -1, **kwargs
-    ) -> typing.Union[td.SimulationData, typing.List[td.SimulationData]]:
+    ) -> typing.Union[td.SimulationData, list[td.SimulationData]]:
         """Get the simulation data at a specific index in the history (list of simdata if multi)."""
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation_data(params=params, **kwargs)
 
     @property
-    def sim_last(self) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
+    def sim_last(self) -> typing.Union[td.Simulation, list[td.Simulation]]:
         """The last simulation."""
         return self.get_sim(index=-1)
 

@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import List, Tuple, Union
+from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ..constants import EPSILON_0, MU_0, PML_SIGMA
-from ..exceptions import DataError, SetupError
-from ..log import log
+from tidy3d.constants import EPSILON_0, MU_0, PML_SIGMA
+from tidy3d.exceptions import DataError, SetupError
+from tidy3d.log import log
+
 from .base import Tidy3dBaseModel, cached_property
 from .medium import Medium
 from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
@@ -906,7 +907,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @cached_property
-    def to_list(self) -> List[Tuple[BoundaryEdgeType, BoundaryEdgeType]]:
+    def to_list(self) -> list[tuple[BoundaryEdgeType, BoundaryEdgeType]]:
         """Returns edge-wise boundary conditions along each dimension for internal use."""
         return [
             (self.x.minus, self.x.plus),
@@ -917,12 +918,12 @@ class BoundarySpec(Tidy3dBaseModel):
     @cached_property
     def flipped_bloch_vecs(self) -> BoundarySpec:
         """Return a copy of the instance where all Bloch vectors are multiplied by -1."""
-        bound_dims = dict(x=self.x.copy(), y=self.y.copy(), z=self.z.copy())
+        bound_dims = {"x": self.x.copy(), "y": self.y.copy(), "z": self.z.copy()}
         for dim_key, bound_dim in bound_dims.items():
-            bound_edges = dict(plus=bound_dim.plus.copy(), minus=bound_dim.minus.copy())
+            bound_edges = {"plus": bound_dim.plus.copy(), "minus": bound_dim.minus.copy()}
             for edge_key, bound_edge in bound_edges.items():
                 if isinstance(bound_edge, BlochBoundary):
                     new_bloch_vec = -1 * bound_edge.bloch_vec
-                    bound_edges[edge_key] = bound_edge.copy(update=dict(bloch_vec=new_bloch_vec))
+                    bound_edges[edge_key] = bound_edge.copy(update={"bloch_vec": new_bloch_vec})
             bound_dims[dim_key] = bound_edges
         return self.copy(update=bound_dims)

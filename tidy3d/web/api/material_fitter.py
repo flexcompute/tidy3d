@@ -12,9 +12,9 @@ import numpy as np
 import requests
 from pydantic.v1 import BaseModel, Field
 
-from ...plugins.dispersion import DispersionFitter
-from ..core.http_util import http
-from ..core.types import Submittable
+from tidy3d.plugins.dispersion import DispersionFitter
+from tidy3d.web.core.http_util import http
+from tidy3d.web.core.types import Submittable
 
 
 class ConstraintEnum(str, Enum):

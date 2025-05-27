@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
 - Fixed shaping of `CustomMedium` gradients when permittivity data includes a frequency dimension with multiple entries.
+- Bug in contains check for `LumpedElement`, which should allow the case of a `LumpedElement` touching the simulation boundaries.
+- Bug when generating a grid with snapping points near the simulation boundaries.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Small (around 1e-4) numerical precision improvements in EME solver.
 - Adjoint source frequency width is adjusted to decay sufficiently before zero frequency when possible to improve accuracy of simulation normalization when using custom current sources.
 - Change `VisualizationSpec` validator for checking validity of user specified colors to only issue a warning if matplotlib is not installed instead of an error.
+- Improved performance of `tidy3d.web.delete_old()` for large folders.
 
 ### Changed
 - `tidy3d.plugins.autograd.interpolate_spline()` and `tidy3d.plugins.autograd.add_at()` can now be called with keyword arguments during tracing.

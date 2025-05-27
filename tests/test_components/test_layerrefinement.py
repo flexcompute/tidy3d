@@ -1,8 +1,11 @@
 """Tests 2d corner finder."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.components.grid.corner_finder import CornerFinderSpec
 from tidy3d.components.grid.grid_spec import GridRefinement, LayerRefinementSpec

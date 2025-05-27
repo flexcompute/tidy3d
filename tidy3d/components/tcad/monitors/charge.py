@@ -1,5 +1,7 @@
 """Objects that define how data is recorded from simulation."""
 
+from __future__ import annotations
+
 from typing import Literal
 
 import pydantic.v1 as pd

@@ -1,9 +1,12 @@
 """Tests generating meshes."""
 
+from __future__ import annotations
+
 import warnings
 
 import numpy as np
 import pytest
+
 import tidy3d as td
 from tidy3d.components.grid.mesher import GradedMesher
 from tidy3d.constants import fp_eps
@@ -735,7 +738,7 @@ def test_anisotropic_material_meshing(unstructured, z):
         ),
     )
 
-    coords = dict(x=[0, 1], y=[0, 1], z=z)
+    coords = {"x": [0, 1], "y": [0, 1], "z": z}
     ones = td.SpatialDataArray(np.ones((2, 2, len(z))), coords=coords)
     if unstructured:
         ones = cartesian_to_unstructured(ones, seed=951)
@@ -815,9 +818,9 @@ def test_override_are_box():
             dl=[1, 2, 3],
         )
 
-    assert isinstance(
-        override_not_box.geometry, td.Box
-    ), "Sphere override structure was not converted to Box"
+    assert isinstance(override_not_box.geometry, td.Box), (
+        "Sphere override structure was not converted to Box"
+    )
 
 
 def test_override_unshadowed():

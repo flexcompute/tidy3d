@@ -1,8 +1,11 @@
 """Test near field to far field transformations."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.components.field_projection import FieldProjector
 from tidy3d.exceptions import DataError
@@ -165,7 +168,7 @@ def test_proj_data(tmp_path):
     r = np.atleast_1d(5)
     theta = np.linspace(0, np.pi, 10)
     phi = np.linspace(0, 2 * np.pi, 20)
-    coords_tp = dict(r=r, theta=theta, phi=phi, f=f)
+    coords_tp = {"r": r, "theta": theta, "phi": phi, "f": f}
     values_tp = (1 + 1j) * np.random.random((len(r), len(theta), len(phi), len(f)))
     scalar_field_tp = td.FieldProjectionAngleDataArray(values_tp, coords=coords_tp)
     monitor_tp = td.FieldProjectionAngleMonitor(
@@ -185,7 +188,7 @@ def test_proj_data(tmp_path):
     x = np.linspace(0, 5, 10)
     y = np.linspace(0, 10, 20)
     z = np.atleast_1d(5)
-    coords_xy = dict(x=x, y=y, z=z, f=f)
+    coords_xy = {"x": x, "y": y, "z": z, "f": f}
     values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     scalar_field_xy = td.FieldProjectionCartesianDataArray(values_xy, coords=coords_xy)
     monitor_xy = td.FieldProjectionCartesianMonitor(
@@ -212,7 +215,7 @@ def test_proj_data(tmp_path):
     ux = np.linspace(0, 0.4, 10)
     uy = np.linspace(0, 0.6, 20)
     r = np.atleast_1d(5)
-    coords_u = dict(ux=ux, uy=uy, r=r, f=f)
+    coords_u = {"ux": ux, "uy": uy, "r": r, "f": f}
     values_u = (1 + 1j) * np.random.random((len(ux), len(uy), len(r), len(f)))
     scalar_field_u = td.FieldProjectionKSpaceDataArray(values_u, coords=coords_u)
     monitor_u = td.FieldProjectionKSpaceMonitor(
@@ -244,7 +247,7 @@ def test_proj_data(tmp_path):
     x = np.linspace(0, 5, 10)
     y = np.linspace(0, 10, 20)
     z = np.atleast_1d(5)
-    coords_xy = dict(x=x, y=y, z=z, f=f)
+    coords_xy = {"x": x, "y": y, "z": z, "f": f}
     values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     scalar_field_xy = td.FieldProjectionCartesianDataArray(values_xy, coords=coords_xy)
     _ = td.FieldProjectionCartesianMonitor(
@@ -290,7 +293,7 @@ def test_proj_clientside():
     y = np.linspace(-1, 1, 10)
     z = np.array([0.0])
     f = [f0]
-    coords = dict(x=x, y=y, z=z, f=f)
+    coords = {"x": x, "y": y, "z": z, "f": f}
     scalar_field = td.ScalarFieldDataArray(
         (1 + 1j) * np.random.random((10, 10, 1, 1)), coords=coords
     )
@@ -469,7 +472,7 @@ def make_2d_proj(plane):
         x = np.array([0.0])
         y = np.linspace(-1, 1, 10)
         z = np.array([0.0])
-        coords = dict(x=x, y=y, z=z, f=[f0])
+        coords = {"x": x, "y": y, "z": z, "f": [f0]}
         scalar_field = td.ScalarFieldDataArray(
             (1 + 1j) * np.random.random((1, 10, 1, 1)), coords=coords
         )
@@ -486,7 +489,7 @@ def make_2d_proj(plane):
         x = np.array([0.0])
         y = np.array([0.0])
         z = np.linspace(-1, 1, 10)
-        coords = dict(x=x, y=y, z=z, f=[f0])
+        coords = {"x": x, "y": y, "z": z, "f": [f0]}
         scalar_field = td.ScalarFieldDataArray(
             (1 + 1j) * np.random.random((1, 1, 10, 1)), coords=coords
         )
@@ -503,7 +506,7 @@ def make_2d_proj(plane):
         x = np.array([0.0])
         y = np.array([0.0])
         z = np.linspace(-1, 1, 10)
-        coords = dict(x=x, y=y, z=z, f=[f0])
+        coords = {"x": x, "y": y, "z": z, "f": [f0]}
         scalar_field = td.ScalarFieldDataArray(
             (1 + 1j) * np.random.random((1, 1, 10, 1)), coords=coords
         )

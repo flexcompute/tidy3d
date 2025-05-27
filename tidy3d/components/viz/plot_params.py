@@ -5,7 +5,7 @@ from typing import Any
 import pydantic.v1 as pd
 from numpy import inf
 
-from ..base import Tidy3dBaseModel
+from tidy3d.components.base import Tidy3dBaseModel
 
 
 class AbstractPlotParams(Tidy3dBaseModel):

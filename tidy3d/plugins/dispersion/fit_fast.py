@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Optional
 
 import numpy as np
 from pydantic.v1 import NonNegativeFloat, PositiveInt
 
-from ...components.dispersion_fitter import AdvancedFastFitterParam, fit
-from ...components.medium import PoleResidue
-from ...constants import C_0, HBAR
+from tidy3d.components.dispersion_fitter import AdvancedFastFitterParam, fit
+from tidy3d.components.medium import PoleResidue
+from tidy3d.constants import C_0, HBAR
+
 from .fit import DispersionFitter
 
 # numerical tolerance for pole relocation for fast fitter
@@ -41,10 +42,10 @@ class FastDispersionFitter(DispersionFitter):
         self,
         min_num_poles: PositiveInt = 1,
         max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
-        eps_inf: float = None,
+        eps_inf: Optional[float] = None,
         tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
         advanced_param: AdvancedFastFitterParam = None,
-    ) -> Tuple[PoleResidue, float]:
+    ) -> tuple[PoleResidue, float]:
         """Fit data using a fast fitting algorithm.
 
         Note
@@ -117,7 +118,7 @@ class FastDispersionFitter(DispersionFitter):
         cls,
         eps_real: float,
         loss_tangent: float,
-        frequency_range: Tuple[float, float],
+        frequency_range: tuple[float, float],
         max_num_poles: PositiveInt = DEFAULT_MAX_POLES,
         number_sampling_frequency: PositiveInt = 10,
         tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
