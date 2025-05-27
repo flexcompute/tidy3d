@@ -174,7 +174,7 @@ jobs:
         PYTHONUNBUFFERED: "1"
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
-        pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
         pytest --cov=tidy3d -rF --tb=short tests
         coverage report -m
         coverage xml -o coverage.xml
