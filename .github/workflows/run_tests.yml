@@ -133,7 +133,7 @@ jobs:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ deploynode ]
+    runs-on: [ inhouse ]
     container: ghcr.io/astral-sh/uv:python3.13-bookworm-slim 
     strategy:
       matrix:
