@@ -910,6 +910,200 @@ SIM_FULL = td.Simulation(
 )
 
 
+FULL_STEADY_HEAT = td.HeatChargeSimulation(
+    center=(0, 0, 0),
+    size=(2, 2, 2),
+    medium=td.MultiPhysicsMedium(
+        heat=td.FluidMedium(), charge=td.ChargeInsulatorMedium(), name="air"
+    ),
+    structures=[
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(0, 1, 0)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.FluidMedium(), charge=td.ChargeInsulatorMedium(), name="temperature0_box"
+            ),
+            name="temperature0_box",
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(0, -1, 0)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.FluidMedium(), charge=td.ChargeInsulatorMedium(), name="temperature1_box"
+            ),
+            name="temperature1_box",
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.SolidMedium.from_si_units(conductivity=1.0, capacity=1.0, density=1.0),
+                charge=td.ChargeConductorMedium(conductivity=1.0),
+                name="solid_box",
+            ),
+            name="solid_box",
+        ),
+    ],
+    boundary_spec=[
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature0_box", "solid_box"]),
+            condition=td.TemperatureBC(temperature=300.0),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature1_box", "solid_box"]),
+            condition=td.TemperatureBC(temperature=320.0),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["air", "solid_box"]),
+            condition=td.HeatFluxBC(flux=0.0),
+        ),
+    ],
+    monitors=[
+        td.TemperatureMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            unstructured=True,
+            name="temperature_monitor",
+        )
+    ],
+    sources=[td.HeatSource(rate=1.0, structures=["solid_box"])],
+    grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+    symmetry=(1, 0, 0),
+)
+
+FULL_UNSTEADY_HEAT = FULL_STEADY_HEAT.updated_copy(
+    analysis_spec=td.UnsteadyHeatAnalysis(
+        initial_temperature=300.0,
+        unsteady_spec=td.UnsteadySpec(time_step=1e-3, total_time_steps=1000),
+    )
+)
+
+
+FULL_CONDUCTION = FULL_STEADY_HEAT.updated_copy(
+    monitors=[
+        td.SteadyPotentialMonitor(
+            center=(0, 0, 0), size=(1, 1, 1), name="potential_monitor", unstructured=True
+        ),
+    ],
+    boundary_spec=[
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature0_box", "solid_box"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=5.0)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature1_box", "solid_box"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.0)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["air", "solid_box"]),
+            condition=td.InsulatingBC(),
+        ),
+    ],
+    sources=[],
+)
+
+
+FULL_SEMICONDUCTOR = td.SemiconductorMedium(
+    permittivity=11,
+    N_d=0,
+    N_a=0,
+    N_c=2e19,
+    N_v=2e19,
+    E_g=1.0,
+    mobility_n=td.ConstantMobilityModel(mu=1500),
+    mobility_p=td.CaugheyThomasMobility(
+        mu_min=44.9,
+        mu=470.5,
+        ref_N=2.23e17,
+        exp_N=0.719,
+        exp_1=-0.57,
+        exp_2=-2.33,
+        exp_3=2.4,
+        exp_4=-0.146,
+    ),
+    R=[
+        td.ShockleyReedHallRecombination(tau_n=3.3e-6, tau_p=4e-6),
+        td.RadiativeRecombination(r_const=1.6e-14),
+        td.AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
+    ],
+    delta_E_g=td.SlotboomBandGapNarrowing(
+        v1=6.92e-3,
+        n2=1.3e17,
+        c2=0.5,
+        min_N=1e15,
+    ),
+)
+
+FULL_CHARGE = td.HeatChargeSimulation(
+    center=(0, 0, 0),
+    size=(3, 3, 0),
+    medium=td.MultiPhysicsMedium(
+        charge=td.ChargeInsulatorMedium(), heat=td.FluidMedium(), name="air"
+    ),
+    structures=[
+        # oxide
+        td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(1.999, 2, 1)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.SolidMedium(conductivity=1.0, capacity=1.0, density=1.0), name="oxide"
+            ),
+        ),
+        # p-side
+        td.Structure(
+            geometry=td.Box(center=(-0.5, 0, 0), size=(1, 1, 1)),
+            medium=FULL_SEMICONDUCTOR.updated_copy(N_a=1e18, name="p_side"),
+        ),
+        # n-side
+        td.Structure(
+            geometry=td.Box(center=(0.5, 0, 0), size=(1, 1, 1)),
+            medium=FULL_SEMICONDUCTOR.updated_copy(N_d=1e18, name="n_side"),
+        ),
+    ],
+    boundary_spec=[
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["p_side", "air"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[-0.5, 0.0, 1])),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["n_side", "air"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.0)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["oxide", "air"]),
+            condition=td.InsulatingBC(),
+        ),
+    ],
+    monitors=[
+        td.SteadyFreeCarrierMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            name="free_carrier_monitor",
+            unstructured=True,
+        ),
+        td.SteadyPotentialMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            name="potential_monitor",
+            unstructured=True,
+        ),
+        td.SteadyCapacitanceMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            name="capacitance_monitor",
+            unstructured=True,
+        ),
+    ],
+    analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
+        temperature=300.0,
+        convergence_dv=0.1,
+        fermi_dirac=False,
+        tolerance_settings=td.ChargeToleranceSpec(
+            rel_tol=1e-4,
+            abs_tol=1e6,
+            max_iters=400,
+        ),
+    ),
+    grid_spec=td.UniformUnstructuredGrid(dl=0.05, relative_min_dl=0),
+)
+
+
 def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, field_name: str):
     """Returns MonitorData coordinates associated with a Monitor object"""
     grid = simulation.discretize_monitor(monitor)
