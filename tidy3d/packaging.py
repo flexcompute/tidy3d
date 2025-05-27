@@ -195,9 +195,11 @@ def supports_local_subpixel(fn):
                 try:
                     import tidy3d_extras as tidy3d_extras_mod
 
+                    _ = tidy3d_extras_mod.__version__
+
                     tidy3d_extras["mod"] = tidy3d_extras_mod
                     tidy3d_extras["use_local_subpixel"] = True
-                except ImportError as exc:
+                except (ImportError, AttributeError) as exc:
                     tidy3d_extras["mod"] = None
                     tidy3d_extras["use_local_subpixel"] = False
                     if config.use_local_subpixel is True:
