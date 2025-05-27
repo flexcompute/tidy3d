@@ -5,3 +5,12 @@ repos:
      - id: ruff
        args: [ --fix ]
      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: test_local
+        name: Run tests with coverage
+        entry: scripts/test_local.sh
+        language: system
+        pass_filenames: false
+        stages: [manual]
+        verbose: true
