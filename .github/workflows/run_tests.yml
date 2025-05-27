@@ -164,9 +164,8 @@ jobs:
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         which python
         which uv
-        which pip
         python --version
-        pip list
+        uv pip list
         uv pip install gdstk --only-binary gdstk
         uv pip install -e ".[dev]"
         uv pip install vtk --only-binary vtk
