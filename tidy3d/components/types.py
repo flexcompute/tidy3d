@@ -255,18 +255,9 @@ Direction = Literal["+", "-"]
 """ monitors """
 
 
-def _list_to_tuple(v):
-    if isinstance(v, list):
-        return tuple(v)
-    return v
-
-
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-FreqArray = Union[
-    Annotated[tuple[float, ...], BeforeValidator(_list_to_tuple)],
-    ArrayFloat1D,
-]
+FreqArray = ArrayFloat1D
 ObsGridArray = FreqArray
 PolarizationBasis = Literal["linear", "circular"]
 AuxField = Literal["Nfx", "Nfy", "Nfz"]
