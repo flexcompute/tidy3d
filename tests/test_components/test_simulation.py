@@ -2172,6 +2172,27 @@ def test_warn_large_epsilon(size, num_struct, log_level):
         sim.epsilon(box=td.Box(size=(size, size, size)))
 
 
+def test_error_no_local_subpixel():
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[
+            td.ModeSource(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, 0),
+                direction="+",
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
+            )
+        ],
+        structures=[],
+    )
+
+    with pytest.raises(SetupError):
+        _ = sim.epsilon(box=td.Box(size=(0, 0, 0)), subpixel=True)
+
+
 @pytest.mark.parametrize("dl, log_level", [(0.1, None), (0.005, "WARNING")])
 def test_warn_large_mode_monitor(dl, log_level):
     """Make sure we get a warning if the mode monitor grid is too large."""

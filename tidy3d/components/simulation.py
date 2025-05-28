@@ -1426,6 +1426,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         box: Box,
         coord_key: str = "centers",
         freq: Optional[float] = None,
+        subpixel: bool = False,
     ) -> xr.DataArray:
         """Get array of permittivity at volume specified by box and freq.
 
@@ -1444,6 +1445,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
+        subpixel : bool = False
+            Whether to use subpixel averaging.
+            Requires installing the ``tidy3d-extras`` package.
+            NOTE: This feature is not yet supported.
 
         Returns
         -------
@@ -1460,7 +1465,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """
 
         sub_grid = self.discretize(box)
-        return self.epsilon_on_grid(grid=sub_grid, coord_key=coord_key, freq=freq)
+        return self.epsilon_on_grid(
+            grid=sub_grid, coord_key=coord_key, freq=freq, subpixel=subpixel
+        )
 
     @supports_local_subpixel
     def epsilon_on_grid(
@@ -1468,6 +1475,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         grid: Grid,
         coord_key: str = "centers",
         freq: Optional[float] = None,
+        subpixel: bool = False,
     ) -> xr.DataArray:
         """Get array of permittivity at a given freq on a given grid.
 
@@ -1486,6 +1494,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
+        subpixel : bool = False
+            Whether to use subpixel averaging.
+            Requires installing the ``tidy3d-extras`` package.
+            NOTE: This feature is not yet supported.
+
         Returns
         -------
         xarray.DataArray
@@ -1507,9 +1520,18 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 "Epsilon calculation may be slow."
             )
 
-        if tidy3d_extras["use_local_subpixel"]:
-            subpixel_sim = tidy3d_extras["mod"].SubpixelSimulation.from_simulation(self)
-            return subpixel_sim.epsilon_on_grid(grid=grid, coord_key=coord_key, freq=freq)
+        if subpixel:
+            if tidy3d_extras["use_local_subpixel"]:
+                subpixel_sim = tidy3d_extras["mod"].SubpixelSimulation.from_simulation(self)
+                return subpixel_sim.epsilon_on_grid(
+                    grid=grid, coord_key=coord_key, freq=freq, subpixel=True
+                )
+            else:
+                raise SetupError(
+                    "Local subpixel ('subpixel=True') requires the 'tidy3d-extras' "
+                    "package as well as setting 'config.use_local_subpixel'. "
+                    "NOTE: This feature is not yet supported."
+                )
 
         def get_eps(structure: Structure, frequency: float, coords: Coords):
             """Select the correct epsilon component if field locations are requested."""
