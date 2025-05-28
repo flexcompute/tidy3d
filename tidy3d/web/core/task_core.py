@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Callable, Optional, Union
 
 from botocore.exceptions import ClientError
-from pydantic import Extra, Field, model_validator, parse_obj_as
+from pydantic import Extra, Field, TypeAdapter, model_validator
 
 import tidy3d as td
 
@@ -50,14 +50,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
             List of folders
         """
         resp = http.get("tidy3d/projects")
-        return (
-            parse_obj_as(
-                list[Folder],
-                resp,
-            )
-            if resp
-            else None
-        )
+        return TypeAdapter(list[Folder]).validate_python(resp) if resp else None
 
     @classmethod
     def get(cls, folder_name: str, create: bool = False):
@@ -123,14 +116,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
             List of tasks in this folder
         """
         resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
-        return (
-            parse_obj_as(
-                list[SimulationTask],
-                resp,
-            )
-            if resp
-            else None
-        )
+        return TypeAdapter(list[SimulationTask]).validate_python(resp) if resp else None
 
 
 class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
@@ -310,7 +296,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         resp = http.get("tidy3d/py/tasks")
         if not resp:
             return []
-        return parse_obj_as(list[SimulationTask], resp)
+        return TypeAdapter(list[SimulationTask]).validate_python(resp)
 
     def delete(self, versions: bool = False):
         """Delete current task from server.

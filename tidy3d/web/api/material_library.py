@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from pydantic import Field, field_validator, parse_obj_as
+from pydantic import Field, TypeAdapter, field_validator
 
 from tidy3d.components.medium import MediumType
 from tidy3d.web.core.http_util import http
@@ -58,4 +58,4 @@ class MaterialLibrary(Queryable):
             List of material libraries/
         """
         resp = http.get("tidy3d/libraries")
-        return parse_obj_as(list[MaterialLibrary], resp) if resp else None
+        return TypeAdapter(list[MaterialLibrary]).validate_python(resp) if resp else None

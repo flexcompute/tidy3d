@@ -294,7 +294,7 @@ class FitterData(AdvancedFitterParam):
             ) from e
 
         run_result = resp.json()
-        best_medium = PoleResidue.parse_raw(run_result["message"])
+        best_medium = PoleResidue.model_validate_json(run_result["message"])
         best_rms = float(run_result["rms"])
 
         if best_rms < self.tolerance_rms:
