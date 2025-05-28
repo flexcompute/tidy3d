@@ -200,6 +200,7 @@ jobs:
           --format markdown:diff-coverage.md
 
     - uses: actions/github-script@v7
+      if: matrix.python-version == '3.13'
       with:
         result-encoding: string
         script: |
