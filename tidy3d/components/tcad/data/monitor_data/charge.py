@@ -27,7 +27,8 @@ from tidy3d.exceptions import DataError
 from tidy3d.log import log
 
 FieldDataset = Union[
-    SpatialDataArray, discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
+    discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset]),
+    SpatialDataArray,
 ]
 
 UnstructuredFieldType = discriminated_union(Union[TriangularGridDataset, TetrahedralGridDataset])
