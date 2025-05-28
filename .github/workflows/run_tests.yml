@@ -191,7 +191,7 @@ jobs:
         ls $GITHUB_WORKSPACE
 
     - name: Produce the diff coverage report
-      if: matrix.python-version == '3.13'
+      if: false # matrix.python-version == '3.13'
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
@@ -200,7 +200,7 @@ jobs:
           --format markdown:diff-coverage.md
 
     - uses: actions/github-script@v7
-      if: matrix.python-version == '3.13'
+      if: false # matrix.python-version == '3.13'
       with:
         result-encoding: string
         script: |
