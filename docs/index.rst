@@ -248,7 +248,15 @@ Contents
 .. toctree::
   :maxdepth: 2
 
+  install
+  lectures/index
+  faq/docs/index
   api/index
+  GUI <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/>
+  Photonforge <https://docs.flexcompute.com/projects/photonforge/en/latest/>
+  development/index
+  changelog
+  About our Solver <https://www.flexcompute.com/tidy3d/solver/>
 
 
 
