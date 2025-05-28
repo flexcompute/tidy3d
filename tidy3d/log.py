@@ -1,4 +1,4 @@
-"""Logging for Tidy3d."""
+"""Logging Configuration for Tidy3d."""
 
 from __future__ import annotations
 
