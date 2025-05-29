@@ -190,7 +190,10 @@ jobs:
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
     - name: Produce the diff coverage report
-      if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+      if: >- 
+        matrix.python-version == '3.13' &&
+        github.event_name == 'pull_request' &&
+        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage')
       run: |
         source ${GITHUB_WORKSPACE}/.venv/bin/activate
         git config --global --add safe.directory ${GITHUB_WORKSPACE}
@@ -199,7 +202,10 @@ jobs:
           --format markdown:diff-coverage.md
 
     - uses: actions/github-script@v7
-      if: matrix.python-version == '3.13' && github.event_name == 'pull_request'
+      if: >- 
+        matrix.python-version == '3.13' &&
+        github.event_name == 'pull_request' &&
+        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage')
       with:
         result-encoding: string
         script: |
