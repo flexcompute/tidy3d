@@ -12,6 +12,7 @@ from tidy3d.components.data.data_array import EMEScalarFieldDataArray, EMESMatri
 from tidy3d.components.data.monitor_data import FieldData, ModeData, ModeSolverData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.eme.simulation import EMESimulation
+from tidy3d.components.geometry.base import Box
 from tidy3d.components.types import annotate_type
 from tidy3d.exceptions import SetupError
 
@@ -72,9 +73,12 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             }
 
         monitor = self.simulation.mode_solver_monitors[eme_cell_index]
-        monitor = monitor.updated_copy(
-            colocate=data.monitor.colocate,
+        box = Box.from_bounds(
+            *Box.bounds_intersection(monitor.geometry.bounds, data.monitor.geometry.bounds)
         )
+        size = box.size
+        center = box.center
+        monitor = monitor.updated_copy(colocate=data.monitor.colocate, size=size, center=center)
         grid_expanded = self.simulation.discretize_monitor(monitor=monitor)
         return ModeSolverData(**update_dict, monitor=monitor, grid_expanded=grid_expanded)
 

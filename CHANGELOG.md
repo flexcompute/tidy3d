@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed shaping of `CustomMedium` gradients when permittivity data includes a frequency dimension with multiple entries.
 - Bug in contains check for `LumpedElement`, which should allow the case of a `LumpedElement` touching the simulation boundaries.
 - Bug when generating a grid with snapping points near the simulation boundaries.
+- Fixed field colocation in `EMEModeSolverMonitor`.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
