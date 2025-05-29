@@ -133,12 +133,32 @@ def mediums():
         name="insulator_medium",
     )
 
+    semiconductor_medium = td.MultiPhysicsMedium(
+        optical=td.Medium(
+            permittivity=5,
+            conductivity=0.01,
+            heat_spec=td.SolidSpec(
+                capacity=2,
+                conductivity=3,
+            ),
+        ),
+        charge=td.SemiconductorMedium(
+            N_c=1e10,
+            N_v=1e10,
+            E_g=1,
+            mobility_n=td.ConstantMobilityModel(mu=1500),
+            mobility_p=td.ConstantMobilityModel(mu=1500),
+        ),
+        name="solid_medium",
+    )
+
     return {
         "fluid_medium": fluid_medium,
         "solid_medium": solid_medium,
         "solid_no_heat": solid_no_heat,
         "solid_no_elect": solid_no_elect,
         "insulator_medium": insulator_medium,
+        "semiconductor_medium": semiconductor_medium,
     }
 
 
@@ -177,12 +197,19 @@ def structures(mediums):
         name="insulator_structure",
     )
 
+    semiconductor_structure = td.Structure(
+        geometry=box,
+        medium=mediums["semiconductor_medium"],
+        name="semiconductor_structure",
+    )
+
     return {
         "fluid_structure": fluid_structure,
         "solid_structure": solid_structure,
         "solid_struct_no_heat": solid_struct_no_heat,
         "solid_struct_no_elect": solid_struct_no_elect,
         "insulator_structure": insulator_structure,
+        "semiconductor_structure": semiconductor_structure,
     }
 
 
@@ -336,7 +363,12 @@ def voltage_capacitance_simulation(mediums, structures, boundary_conditions, mon
     bc_insulating = td.InsulatingBC()
     pl7 = td.HeatChargeBoundarySpec(
         condition=bc_insulating,
-        placement=td.StructureBoundary(structure="solid_structure"),
+        placement=td.StructureBoundary(structure="semiconductor_structure"),
+    )
+
+    # we need two voltage BCs for Charge simulations
+    pl8 = pl7.updated_copy(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
     )
 
     # Let’s pick a couple of monitors. We'll definitely include the CapacitanceMonitor
@@ -349,10 +381,10 @@ def voltage_capacitance_simulation(mediums, structures, boundary_conditions, mon
     # Build a new HeatChargeSimulation
     voltage_cap_sim = td.HeatChargeSimulation(
         medium=mediums["insulator_medium"],
-        structures=[structures["insulator_structure"], structures["solid_structure"]],
+        structures=[structures["insulator_structure"], structures["semiconductor_structure"]],
         center=(0, 0, 0),
         size=(2, 2, 2),
-        boundary_spec=[pl6, pl7],
+        boundary_spec=[pl6, pl7, pl8],
         grid_spec=grid_specs["uniform"],
         sources=[],
         monitors=chosen_monitors,
@@ -1123,6 +1155,13 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
                 )
             ],
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[
+                td.SteadyPotentialMonitor(
+                    center=[0, 0, 0],
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                )
+            ],
         )
 
     # Create all permutations of squares being shifted 1, -1, or zero in all three directions
@@ -1165,6 +1204,11 @@ def test_sim_structure_extent(box_size, log_level):
                 )
             ],
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[
+                td.SteadyPotentialMonitor(
+                    center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="test_monitor"
+                )
+            ],
         )
 
 
@@ -1705,3 +1749,75 @@ def test_unsteady_heat_analysis(heat_simulation):
             unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=100000),
         )
         _ = unsteady_sim.updated_copy(analysis_spec=mew_spex)
+
+
+def test_heat_conduction_simulations():
+    """Test that heat-conduction simulations have necessary components."""
+
+    # let's create some mediums
+    solid_medium = td.MultiPhysicsMedium(
+        heat=td.SolidSpec(conductivity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="solid_medium",
+    )
+    air = td.MultiPhysicsMedium(heat=td.FluidSpec(), charge=td.ChargeInsulatorMedium(), name="air")
+
+    struct1 = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+        medium=solid_medium,
+        name="struct1",
+    )
+
+    # thermal BC
+    thermal_bc = td.HeatChargeBoundarySpec(
+        condition=td.TemperatureBC(temperature=300),
+        placement=td.StructureBoundary(structure="struct1"),
+    )
+
+    # electric BCs
+    electric_bc = td.HeatChargeBoundarySpec(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1])),
+        placement=td.StructureBoundary(structure="struct1"),
+    )
+
+    # thermal monitors
+    temp_monitor = td.TemperatureMonitor(
+        center=(0, 0, 0), size=(1, 1, 1), name="temp_monitor", unstructured=True
+    )
+    # electric monitors
+    voltage_monitor = td.SteadyPotentialMonitor(
+        center=(0, 0, 0), size=(1, 1, 1), name="voltage_monitor", unstructured=True
+    )
+
+    sim = td.HeatChargeSimulation(
+        medium=air,
+        structures=[struct1],
+        center=(0, 0, 0),
+        size=(3, 3, 3),
+        boundary_spec=[thermal_bc, electric_bc],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        sources=[],
+        monitors=[temp_monitor, voltage_monitor],
+    )
+
+    with pytest.raises(pd.ValidationError):
+        # no thermal monitors
+        _ = sim.updated_copy(monitors=[voltage_monitor])
+
+    with pytest.raises(pd.ValidationError):
+        # voltage array in electric BC
+        _ = sim.updated_copy(
+            boundary_spec=[
+                thermal_bc,
+                electric_bc.updated_copy(
+                    condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1, 2]))
+                ),
+            ]
+        )
+
+    # this doesn't raise error
+    coupling_sim = sim.updated_copy(sources=[td.HeatFromElectricSource()])
+
+    with pytest.raises(pd.ValidationError):
+        # This should error since the conduction simulation doesn't have a monitor
+        _ = sim.updated_copy(monitors=[temp_monitor])
