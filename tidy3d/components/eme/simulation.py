@@ -27,7 +27,7 @@ from tidy3d.components.simulation import (
 from tidy3d.components.types import Ax, Axis, FreqArray, Symmetry, annotate_type
 from tidy3d.components.validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.constants import C_0
+from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log
 
@@ -560,9 +560,11 @@ class EMESimulation(AbstractYeeGridSimulation):
     @property
     def port_modes_monitor(self) -> EMEModeSolverMonitor:
         """EME Mode solver monitor for only the port modes."""
+        size = [inf, inf, inf]
+        size[self.axis] = self.size[self.axis]
         return EMEModeSolverMonitor(
             center=self.center,
-            size=self.size,
+            size=size,
             eme_cell_interval_space=self.eme_grid.num_cells,
             name="_eme_port_modes_monitor",
             colocate=False,
