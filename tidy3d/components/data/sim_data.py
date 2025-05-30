@@ -1154,6 +1154,19 @@ class SimulationData(AbstractYeeGridSimulationData):
                 )
         else:
             log.info("Grouping adjoint sources by port.")
+
+            #
+            # warn if the forward simulation had symmetry and we are grouping by port, which
+            # which means the individual adjoint simulations may not respect the original symmetry
+            #
+            if np.any(np.abs(self.simulation.symmetry) > 0):
+                log.warning(
+                    "The adjoint simulations for this problem are being broken into "
+                    "multiple simulations that may not individually respect the symmetry of the "
+                    "initial simulation. Gradients may be unreliable and it is recommended to "
+                    "optimize this problem without utilizing symmetry."
+                )
+
             for src_hash, src_times in hashes_to_src_times.items():
                 base_src = hashes_to_sources[src_hash]
                 group = [base_src.updated_copy(source_time=src_time) for src_time in src_times]

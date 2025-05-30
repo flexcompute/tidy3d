@@ -1349,6 +1349,12 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 field_component = field_component.sel(f=freq0)
                 values = 2 * -1j * field_component.values
 
+                # accounts for the effective size of the source when injecting into a
+                # simulation with symmetry
+                symmetry_factor = np.prod(values.shape) / np.prod(
+                    self.symmetry_expanded_copy.field_components[name].sel(f=freq0).values.shape
+                )
+
                 # make source go backwards
                 if "H" in name:
                     values *= -1
@@ -1370,7 +1376,8 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
                 omega0 = 2 * np.pi * freq0
                 scaling_factor = 0.5 * omega0 * EPSILON_0 / size_element
 
-                values *= scaling_factor
+                values *= scaling_factor * symmetry_factor
+                values = np.nan_to_num(values, nan=0.0)
 
                 # ignore zero components
                 if not np.all(values == 0):
