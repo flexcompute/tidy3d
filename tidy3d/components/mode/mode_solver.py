@@ -56,7 +56,6 @@ from tidy3d.components.types import (
 from tidy3d.components.validators import (
     validate_freqs_min,
     validate_freqs_not_empty,
-    validate_mode_plane_radius,
 )
 from tidy3d.components.viz import make_ax, plot_params_pml
 from tidy3d.constants import C_0
@@ -211,8 +210,11 @@ class ModeSolver(Tidy3dBaseModel):
         return val
 
     def _post_init_validators(self) -> None:
-        validate_mode_plane_radius(
-            mode_spec=self.mode_spec, plane=self.plane, msg_prefix="Mode solver"
+        self._validate_mode_plane_radius(
+            mode_spec=self.mode_spec,
+            plane=self.plane,
+            sim_geom=self.simulation.geometry,
+            msg_prefix="Mode solver",
         )
         self._warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
 
@@ -238,6 +240,35 @@ class ModeSolver(Tidy3dBaseModel):
                     "mode plane cells. Consider using a larger mode plane "
                     "or smaller 'num_pml'."
                 )
+
+    @staticmethod
+    def _mode_plane(plane: Box, sim_geom: Box) -> Box:
+        """Intersect the mode plane with the sim geometry to get the effective
+        mode plane."""
+        mode_plane_bnds = plane.bounds_intersection(plane.bounds, sim_geom.bounds)
+        return Box.from_bounds(*mode_plane_bnds)
+
+    @classmethod
+    def _validate_mode_plane_radius(
+        cls, mode_spec: ModeSpec, plane: Box, sim_geom: Box, msg_prefix: str = ""
+    ):
+        """Validate that the radius of a mode spec with a bend is not smaller than half the size of
+        the plane along the radial direction."""
+
+        if not mode_spec.bend_radius:
+            return
+
+        mode_plane = cls._mode_plane(plane=plane, sim_geom=sim_geom)
+
+        # radial axis is the plane axis that is not the bend axis
+        _, plane_axs = mode_plane.pop_axis([0, 1, 2], mode_plane.size.index(0.0))
+        radial_ax = plane_axs[(mode_spec.bend_axis + 1) % 2]
+
+        if np.abs(mode_spec.bend_radius) < mode_plane.size[radial_ax] / 2:
+            raise ValueError(
+                f"{msg_prefix} bend radius is smaller than half the mode plane size "
+                "along the radial axis, which can produce wrong results."
+            )
 
     @cached_property
     def normal_axis(self) -> Axis:
