@@ -15,6 +15,7 @@ from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.types import annotate_type
 from tidy3d.exceptions import SetupError
+from tidy3d.log import log
 
 from .dataset import EMESMatrixDataset
 from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
@@ -73,12 +74,20 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             }
 
         monitor = self.simulation.mode_solver_monitors[eme_cell_index]
+        monitor = monitor.updated_copy(colocate=data.monitor.colocate)
         box = Box.from_bounds(
             *Box.bounds_intersection(monitor.geometry.bounds, data.monitor.geometry.bounds)
         )
         size = box.size
         center = box.center
-        monitor = monitor.updated_copy(colocate=data.monitor.colocate, size=size, center=center)
+        if size.count(0.0) == 1:
+            monitor = monitor.updated_copy(size=size, center=center)
+        else:
+            log.warning(
+                "'ModeSolverData' extracted from 'EMEModeSolverData' "
+                "is not 2D, so it may not be possible to compute "
+                "certain derived quantities, like the flux."
+            )
         grid_expanded = self.simulation.discretize_monitor(monitor=monitor)
         return ModeSolverData(**update_dict, monitor=monitor, grid_expanded=grid_expanded)
 

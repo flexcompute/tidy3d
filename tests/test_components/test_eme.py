@@ -1160,6 +1160,14 @@ def test_eme_sim_data():
     _ = sim_data.port_modes_tuple
     assert len(sim_data.port_modes_list_sweep) == 1
 
+    with AssertLogLevel("WARNING", contains_str="flux"):
+        _ = sim_data._extract_mode_solver_data(
+            data=sim_data.port_modes.updated_copy(
+                monitor=sim.port_modes_monitor.updated_copy(size=(0, td.inf, td.inf))
+            ),
+            eme_cell_index=0,
+        )
+
     # test freq sweep smatrix_in_basis
     sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=np.linspace(1, 2, 10)))
     port_modes = _get_eme_port_modes(num_sweep=10)
