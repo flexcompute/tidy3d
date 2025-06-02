@@ -71,9 +71,10 @@ def pytest_xdist_auto_num_workers(config):
 
     cores = min(cores, mem_limited_cores)
 
+    MAX_WORKERS = 4
     if os.getenv("GITHUB_ACTIONS"):
-        return cores
-    return max(1, cores - 1)
+        return min(MAX_WORKERS, cores)
+    return min(MAX_WORKERS, max(1, cores - 1))
 
 
 @pytest.fixture
