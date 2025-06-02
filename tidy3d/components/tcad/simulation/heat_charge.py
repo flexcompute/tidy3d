@@ -125,7 +125,16 @@ class HeatChargeSimulation(AbstractSimulation):
 
          .. math::
 
-            -k \\cdot \\nabla(T) = q
+            -\\nabla \\cdot (-k \\nabla T) = q
+
+    It is also possible to run transient heat simulations by specifying ``analysis_spec=UnsteadyHeatAnalysis(...)``. This adds
+    the temporal terms to the above equations:
+
+        .. math::
+
+            \\frac{\\partial \\rho c_p T}{\\partial t} -\\nabla \\cdot (k \\nabla(T)) = q
+
+    where :math:`\\rho` is the density and :math:`c_p` is the specific heat capacity of the medium.
 
 
     The steady-state electrical ``Conduction`` equation depends on the electric conductivity (:math:`\\sigma`)  of a
