@@ -138,7 +138,7 @@ jobs:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ slurm-runner ]
+    runs-on: [ deploynode ]
     container: ghcr.io/astral-sh/uv:debian 
     strategy:
       matrix:
