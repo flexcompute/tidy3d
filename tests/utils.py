@@ -1103,6 +1103,14 @@ FULL_CHARGE = td.HeatChargeSimulation(
     grid_spec=td.UniformUnstructuredGrid(dl=0.05, relative_min_dl=0),
 )
 
+SAMPLE_SIMULATIONS = {
+    "full_fdtd": SIM_FULL,
+    "full_steady_heat": FULL_STEADY_HEAT,
+    "full_unsteady_heat": FULL_UNSTEADY_HEAT,
+    "full_conduction": FULL_CONDUCTION,
+    "full_charge": FULL_CHARGE,
+}
+
 
 def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, field_name: str):
     """Returns MonitorData coordinates associated with a Monitor object"""

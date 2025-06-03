@@ -1,0 +1,290 @@
+{
+    "attrs": {},
+    "type": "HeatChargeSimulation",
+    "center": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "size": [
+        2.0,
+        2.0,
+        2.0
+    ],
+    "medium": {
+        "attrs": {},
+        "name": "air",
+        "optical": null,
+        "heat": {
+            "attrs": {},
+            "name": null,
+            "type": "FluidMedium"
+        },
+        "charge": {
+            "attrs": {},
+            "name": null,
+            "frequency_range": null,
+            "allow_gain": false,
+            "nonlinear_spec": null,
+            "modulation_spec": null,
+            "viz_spec": null,
+            "heat_spec": null,
+            "type": "ChargeInsulatorMedium",
+            "permittivity": 1.0
+        },
+        "type": "MultiPhysicsMedium"
+    },
+    "structures": [
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    0.0,
+                    1.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": "temperature0_box",
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "temperature0_box",
+                "optical": null,
+                "heat": {
+                    "attrs": {},
+                    "name": null,
+                    "type": "FluidMedium"
+                },
+                "charge": {
+                    "attrs": {},
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "ChargeInsulatorMedium",
+                    "permittivity": 1.0
+                },
+                "type": "MultiPhysicsMedium"
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    0.0,
+                    -1.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": "temperature1_box",
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "temperature1_box",
+                "optical": null,
+                "heat": {
+                    "attrs": {},
+                    "name": null,
+                    "type": "FluidMedium"
+                },
+                "charge": {
+                    "attrs": {},
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "ChargeInsulatorMedium",
+                    "permittivity": 1.0
+                },
+                "type": "MultiPhysicsMedium"
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": "solid_box",
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "solid_box",
+                "optical": null,
+                "heat": {
+                    "attrs": {},
+                    "name": null,
+                    "type": "SolidMedium",
+                    "capacity": 1.0,
+                    "conductivity": 1e-06,
+                    "density": 1e-18
+                },
+                "charge": {
+                    "attrs": {},
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "ChargeConductorMedium",
+                    "permittivity": 1.0,
+                    "conductivity": 1.0
+                },
+                "type": "MultiPhysicsMedium"
+            }
+        }
+    ],
+    "symmetry": [
+        1,
+        0,
+        0
+    ],
+    "sources": [
+        {
+            "attrs": {},
+            "name": null,
+            "type": "HeatSource",
+            "structures": [
+                "solid_box"
+            ],
+            "rate": 1.0
+        }
+    ],
+    "boundary_spec": [
+        {
+            "attrs": {},
+            "placement": {
+                "attrs": {},
+                "type": "MediumMediumInterface",
+                "mediums": [
+                    "temperature0_box",
+                    "solid_box"
+                ]
+            },
+            "condition": {
+                "attrs": {},
+                "type": "TemperatureBC",
+                "temperature": 300.0
+            },
+            "type": "HeatChargeBoundarySpec"
+        },
+        {
+            "attrs": {},
+            "placement": {
+                "attrs": {},
+                "type": "MediumMediumInterface",
+                "mediums": [
+                    "temperature1_box",
+                    "solid_box"
+                ]
+            },
+            "condition": {
+                "attrs": {},
+                "type": "TemperatureBC",
+                "temperature": 320.0
+            },
+            "type": "HeatChargeBoundarySpec"
+        },
+        {
+            "attrs": {},
+            "placement": {
+                "attrs": {},
+                "type": "MediumMediumInterface",
+                "mediums": [
+                    "air",
+                    "solid_box"
+                ]
+            },
+            "condition": {
+                "attrs": {},
+                "type": "HeatFluxBC",
+                "flux": 0.0
+            },
+            "type": "HeatChargeBoundarySpec"
+        }
+    ],
+    "monitors": [
+        {
+            "attrs": {},
+            "type": "TemperatureMonitor",
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "name": "temperature_monitor",
+            "unstructured": true,
+            "conformal": false,
+            "interval": 1
+        }
+    ],
+    "grid_spec": {
+        "attrs": {},
+        "relative_min_dl": 0.001,
+        "type": "UniformUnstructuredGrid",
+        "dl": 0.05,
+        "min_edges_per_circumference": 15.0,
+        "min_edges_per_side": 2.0,
+        "non_refined_structures": []
+    },
+    "version": "2.8.4",
+    "plot_length_units": "\u03bcm",
+    "structure_priority_mode": "equal",
+    "analysis_spec": {
+        "attrs": {},
+        "initial_temperature": 300.0,
+        "unsteady_spec": {
+            "attrs": {},
+            "time_step": 0.001,
+            "total_time_steps": 1000,
+            "type": "UnsteadySpec"
+        },
+        "type": "UnsteadyHeatAnalysis"
+    }
+}

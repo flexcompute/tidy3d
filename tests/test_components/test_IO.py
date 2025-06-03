@@ -213,11 +213,14 @@ SIM_FILES = [os.path.join(SIM_DIR, file) for file in os.listdir(SIM_DIR)]
 @pytest.mark.parametrize("sim_file", SIM_FILES)
 def test_simulation_updater(sim_file):
     """Test that all simulations in ``SIM_DIR`` can be updated to current version and loaded."""
-    sim_updated = td.Simulation.from_file(sim_file)
-    assert sim_updated.version == __version__, "Simulation not converted properly"
+    if "fdtd" in sim_file:
+        sim_loaded = td.Simulation.from_file(sim_file)
+    else:
+        sim_loaded = td.HeatChargeSimulation.from_file(sim_file)
+    assert sim_loaded.version == __version__, "Simulation not converted properly"
 
     # just make sure the loaded sim does something properly using this version
-    sim_updated.grid
+    assert sim_loaded.scene is not None
 
 
 def test_yaml(tmp_path):
