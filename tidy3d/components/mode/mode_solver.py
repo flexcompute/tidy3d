@@ -28,7 +28,11 @@ from tidy3d.components.eme.data.sim_data import EMESimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords, Grid
-from tidy3d.components.medium import FullyAnisotropicMedium, LossyMetalMedium
+from tidy3d.components.medium import (
+    FullyAnisotropicMedium,
+    IsotropicUniformMediumType,
+    LossyMetalMedium,
+)
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.components.scene import Scene
@@ -217,6 +221,7 @@ class ModeSolver(Tidy3dBaseModel):
             msg_prefix="Mode solver",
         )
         self._warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
+        self._validate_rotate_structures()
 
     @classmethod
     def _warn_thick_pml(
@@ -269,6 +274,18 @@ class ModeSolver(Tidy3dBaseModel):
                 f"{msg_prefix} bend radius is smaller than half the mode plane size "
                 "along the radial axis, which can produce wrong results."
             )
+
+    def _validate_rotate_structures(self) -> None:
+        """Validate that structures can be rotated if angle_rotation is True."""
+        if not self.mode_spec.angle_rotation:
+            return
+        try:
+            _ = self._rotate_structures
+        except Exception as e:
+            raise SetupError(
+                "Mode object defined with 'angle_rotation=True' but failed "
+                f"to create rotated structures: {e!s}"
+            ) from e
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -578,7 +595,7 @@ class ModeSolver(Tidy3dBaseModel):
         to the simulation and updates the ModeSpec to disable bend correction
         and reset angles to normal."""
 
-        rotated_structures = self._rotate_structures()
+        rotated_structures = self._rotate_structures
         rotated_simulation = self.simulation.updated_copy(structures=rotated_structures)
         rotated_mode_spec = self.mode_spec.updated_copy(
             angle_rotation=False, angle_theta=0, angle_phi=0
@@ -586,6 +603,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         return self.updated_copy(simulation=rotated_simulation, mode_spec=rotated_mode_spec)
 
+    @cached_property
     def _rotate_structures(self) -> list[Structure]:
         """Rotate the structures intersecting with modal plane by angle theta
         if bend_correction is enabeled for bend simulations."""
@@ -611,11 +629,14 @@ class ModeSolver(Tidy3dBaseModel):
         translate_coords[idx_u] = mnt_center[idx_u]
         translate_coords[idx_v] = mnt_center[idx_v]
 
-        reduced_sim_solver = self.reduced_simulation_copy
         rotated_structures = []
-        for structure in Scene.intersecting_structures(
-            self.plane, reduced_sim_solver.simulation.structures
-        ):
+        for structure in Scene.intersecting_structures(self.plane, self.simulation.structures):
+            if not isinstance(structure.medium, IsotropicUniformMediumType):
+                raise NotImplementedError(
+                    "Mode solver plane intersects an unsupported "
+                    "medium. Only uniform isotropic media are supported for the plane rotation. "
+                )
+
             # Rotate and apply translations
             geometry = structure.geometry
             geometry = (

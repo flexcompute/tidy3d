@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed field colocation in `EMEModeSolverMonitor`.
 - Solver error for EME simulations with bends, introduced when support for 2D EME simulations was added.
 - Internal interpolation errors with some versions of `xarray` and `numpy`.
+- If `ModeSpec.angle_rotation=True` for a mode object, validate that the structure rotation can be successfully done. Also, error if the medium cannot be rotated (e.g. anisotropic or custom medium), which would previously have just produced wrong results.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
@@ -36,8 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adjoint source frequency width is adjusted to decay sufficiently before zero frequency when possible to improve accuracy of simulation normalization when using custom current sources.
 - Change `VisualizationSpec` validator for checking validity of user specified colors to only issue a warning if matplotlib is not installed instead of an error.
 - Improved performance of `tidy3d.web.delete_old()` for large folders.
-
-### Changed
+- Upon initialization, an FDTD `Simulation` will now try to create all `ModeSolver` objects associated to `ModeSource`-s and `ModeMonitor`-s so they can be validated.
 - `tidy3d.plugins.autograd.interpolate_spline()` and `tidy3d.plugins.autograd.add_at()` can now be called with keyword arguments during tracing.
 
 ## [2.8.4] - 2025-05-15
