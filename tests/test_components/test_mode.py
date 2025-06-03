@@ -78,6 +78,92 @@ def test_angle_rotation_with_phi():
         td.ModeSpec(angle_phi=np.pi / 3, angle_rotation=True)
 
 
+def test_validation_from_simulation():
+    """Test that a ModeSolver created from a simulation ModeMonitor validates correctly."""
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[],
+        run_time=1e-12,
+        monitors=[],
+    )
+
+    inf_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-td.inf, -1, -100), (td.inf, 1, 0)),
+        medium=td.Medium(permittivity=4.0, conductivity=1e-4),
+    )
+
+    anisotropic_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-1, -1, -100), (1, 1, 0)),
+        medium=td.AnisotropicMedium(
+            xx=td.Medium(permittivity=4.0, conductivity=1e-4),
+            yy=td.Medium(permittivity=4.0, conductivity=1e-4),
+            zz=td.Medium(permittivity=3.0, conductivity=1e-4),
+        ),
+    )
+
+    rot_monitor = td.ModeMonitor(
+        size=(0, 5, 5),
+        name="mode_solver",
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+        freqs=[td.C_0],
+    )
+
+    rot_source = td.ModeSource(
+        size=(0, 5, 5),
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+        source_time=td.GaussianPulse(freq0=td.C_0, fwidth=td.C_0 / 10),
+        direction="+",
+    )
+
+    # Test that transforming a geometry with an infinite extent raises an error
+    with pytest.raises(SetupError):
+        sim.updated_copy(
+            structures=[inf_geometry],
+            monitors=[rot_monitor],
+        )
+
+    # Test that transforming an anisotropic medium raises an error
+    with pytest.raises(SetupError):
+        sim.updated_copy(
+            structures=[anisotropic_geometry],
+            monitors=[rot_monitor],
+        )
+
+    # Same thing with a ModeSource
+    with pytest.raises(SetupError):
+        sim.updated_copy(
+            structures=[inf_geometry],
+            sources=[rot_source],
+        )
+
+    with pytest.raises(SetupError):
+        sim.updated_copy(
+            structures=[anisotropic_geometry],
+            monitors=[rot_monitor],
+        )
+
+    # Same thing with ModeSimulation
+    with pytest.raises(SetupError):
+        td.ModeSimulation(
+            structures=[inf_geometry],
+            size=(0, 5, 5),
+            mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+            freqs=[td.C_0],
+            boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        )
+
+    with pytest.raises(SetupError):
+        td.ModeSimulation(
+            structures=[anisotropic_geometry],
+            size=(0, 5, 5),
+            mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+            freqs=[td.C_0],
+            boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        )
+
+
 def get_mode_sim():
     mode_spec = MODE_SPEC.updated_copy(filter_pol="tm")
     permittivity_monitor = td.PermittivityMonitor(
