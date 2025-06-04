@@ -916,6 +916,7 @@ class HeatChargeSimulation(AbstractSimulation):
         property: str = "heat_conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        # transpose: bool = False,  CONTINUEHERE
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -951,7 +952,7 @@ class HeatChargeSimulation(AbstractSimulation):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim #, transpose=transpose  CONTINUEHERE
         )
 
         cbar_cond = True
@@ -986,16 +987,17 @@ class HeatChargeSimulation(AbstractSimulation):
                 hlim=hlim,
                 vlim=vlim,
                 property=property,
+                # transpose=transpose  CONTINUEHERE
             )
         ax = self.plot_sources(
-            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim
+            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim #, transpose=transpose  CONTINUEHERE
         )
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim)
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim) #, transpose=transpose  CONTINUEHERE
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property) #, transpose=transpose  CONTINUEHERE
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim #, transpose=transpose  CONTINUEHERE
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim) #, transpose=transpose  CONTINUEHERE
 
         if property == "source":
             self._add_source_cbar(ax=ax, property=property)
@@ -1015,6 +1017,7 @@ class HeatChargeSimulation(AbstractSimulation):
         colorbar: str = "conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        # transpose: bool = False,  CONTINUEHERE
         **kwargs,
     ) -> Ax:
         """
@@ -1074,6 +1077,7 @@ class HeatChargeSimulation(AbstractSimulation):
             property=plot_type,
             hlim=hlim,
             vlim=vlim,
+            #, transpose=transpose  CONTINUEHERE
         )
 
     @equal_aspect
@@ -1144,7 +1148,7 @@ class HeatChargeSimulation(AbstractSimulation):
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
-
+        # CONTINUEHERE: Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)  # Swap axis labels if needed
         return ax
 
     def _get_bc_plot_params(self, boundary_spec: HeatChargeBoundarySpec) -> PlotParams:

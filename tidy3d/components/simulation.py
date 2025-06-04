@@ -478,6 +478,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose: bool = False
+            Optional: Swap the horizontal and vertical axes.
 
         Returns
         -------
@@ -492,7 +494,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         """
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose,
         )
 
         ax = self.scene.plot(
@@ -506,17 +508,17 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             transpose=transpose,
         )
 
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
         ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha, transpose=transpose
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
         Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)  # Swap axis labels if needed
         return ax
 
@@ -537,6 +539,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax: Ax = None,
         eps_component: Optional[PermittivityComponent] = None,
         eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        # tuple: bool = False,  CONTINUEHERE
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -598,7 +601,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 )
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim #, transpose=transpose  CONTINUEHERE
         )
 
         ax = self.plot_structures_eps(
@@ -613,18 +616,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             vlim=vlim,
             eps_component=eps_component,
             eps_lim=eps_lim,
+            #, transpose=transpose  CONTINUEHERE
         )
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha) #, transpose=transpose  CONTINUEHERE
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha) #, transpose=transpose  CONTINUEHERE
         ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha #, transpose=transpose  CONTINUEHERE
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim) #, transpose=transpose  CONTINUEHERE
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim) #, transpose=transpose  CONTINUEHERE
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim #, transpose=transpose  CONTINUEHERE
         )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z) #, transpose=transpose  CONTINUEHERE
         return ax
 
     @equal_aspect
@@ -643,6 +647,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         eps_component: Optional[PermittivityComponent] = None,
         eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        # transpose: bool = False,  CONTINUEHERE
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -716,6 +721,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             reverse=reverse,
             eps_component=eps_component,
             eps_lim=eps_lim,
+            # transpose=transpose,  CONTINUEHERE
         )
 
     @equal_aspect
@@ -728,6 +734,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's absorbing boundaries
         on a plane defined by one nonzero x,y,z coordinate.
@@ -746,6 +753,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose: bool = False
+            Optional: Swap the horizontal and vertical axes.
 
         Returns
         -------
@@ -757,12 +766,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         for pml_box in pml_boxes:
             pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
+        Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)
         return ax
 
     # candidate for removal in 3.0
@@ -886,6 +896,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's lumped elements on a plane defined by one
         nonzero x,y,z coordinate.
@@ -906,6 +917,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the lumped element, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose: bool = False
+            Optional: Swap the horizontal and vertical axes.
 
         Returns
         -------
@@ -915,10 +928,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         bounds = self.bounds
         for element in self.lumped_elements:
             kwargs = element.plot_params.include_kwargs(alpha=alpha).to_kwargs()
-            ax = element.to_geometry().plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
+            ax = element.to_geometry().plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, transpose=transpose, **kwargs)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
+        Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)
         return ax
 
     @add_ax_if_none
@@ -955,6 +969,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the snapping points.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose: bool = False
+            Optional: Swap the horizontal and vertical axes.
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -1013,6 +1029,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                     xmin, xmax, ymin, ymax = (
                         self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax)
                     )
+                    if transpose:
+                        xmin, xmax, ymin, ymax = ymin, ymax, xmin, xmax
                     rect = mpl.patches.Rectangle(
                         xy=(xmin, ymin),
                         width=(xmax - xmin),
@@ -1063,7 +1081,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 )
 
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
@@ -1080,6 +1098,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the simulation boundary conditions as lines on a plane
@@ -1095,6 +1114,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose: bool = False
+            Optional: Swap the horizontal and vertical axes.
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -1190,6 +1211,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
+        if transpose:
+            import sys
+            sys.stderr.write(
+                "WARNING: Simulation.plot_boundaries() does not yet implement transpose=True!"
+            )
         return ax
 
     # TODO: not yet supported

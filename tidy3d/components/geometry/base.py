@@ -519,6 +519,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax: Ax = None,
         plot_length_units: LengthUnit = None,
         viz_spec: VisualizationSpec = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
@@ -537,6 +538,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Specify units to use for axis labels, tick labels, and the title.
         viz_spec : VisualizationSpec = None
             Plotting parameters associated with a medium to use instead of defaults.
+        transpose: bool = False
+            Optional: Swap the horizontal and vertical axes.
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -559,13 +562,14 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
+            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax, transpose=transpose)
 
         # clean up the axis display
         ax = self.add_ax_lims(axis=axis, ax=ax)
         ax.set_aspect("equal")
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units)
+        Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)  # Swap axis labels if needed
         return ax
 
     def plot_shape(
@@ -617,8 +621,8 @@ class Geometry(Tidy3dBaseModel, ABC):
                 # Apply this transformation to the coordinates of the patch.
                 patch.set_transform(transpose_xy + ax.transData)
             ax.add_artist(patch)
-        # I transpose==True, I also update the axis labels.  In practice, this seems to
-        # have no effect (since they get overwritten elsewhere), but I do it anway.
+        # If transpose==True, I also update the axis labels (if any).  In practice, this
+        # seems to have no effect (since they get overwritten elsewhere), but I do it anway.
         Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)
         return ax
 
@@ -2252,6 +2256,7 @@ class Box(SimplePlaneIntersection, Centered):
         both_dirs: bool = False,
         ax: Ax = None,
         arrow_base: Coordinate = None,
+        transpose: bool = False,
     ) -> Ax:
         """Adds an arrow to the axis if with options if certain conditions met.
 
@@ -2277,6 +2282,8 @@ class Box(SimplePlaneIntersection, Centered):
             If True, plots an arrow pointing in direction and one in -direction.
         arrow_base : :class:`.Coordinate` = None
             Custom base of the arrow. Uses the geometry's center if not provided.
+        transpose: bool = False
+            Optional: Swap the horizontal and vertical axes.
 
         Returns
         -------
@@ -2311,6 +2318,10 @@ class Box(SimplePlaneIntersection, Centered):
             ymin, ymax = ax.get_ylim()
             v_x = (xmax - xmin) / 10
             v_y = (ymax - ymin) / 10
+
+            if transpose:
+                x0, y0 = y0, x0
+                v_x, v_y = v_y, v_x
 
             directions = (1.0, -1.0) if both_dirs else (1.0,)
             for sign in directions:
