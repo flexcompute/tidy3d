@@ -451,6 +451,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -515,7 +516,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
-
+        Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)  # Swap axis labels if needed
         return ax
 
     @equal_aspect
@@ -930,6 +931,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         override_structures_alpha: float = 1,
         snapping_points_alpha: float = 1,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -1064,6 +1066,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
+        Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)  # Swap axis labels if needed
         return ax
 
     @equal_aspect

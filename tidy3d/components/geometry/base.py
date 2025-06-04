@@ -485,6 +485,29 @@ class Geometry(Tidy3dBaseModel, ABC):
         raise NotImplementedError(
             "'_update_from_bounds' is not compatible with this geometry class."
         )
+    
+    @staticmethod
+    def transpose_axis_info(
+        ax: Ax = None,
+        swap_axis_labels: bool = False,
+        swap_axis_limits: bool = False,
+    ) -> None:
+        """Swaps matplotlib axis-labels and limits, but does not alter geometry (contents) of a plot."""
+        if swap_axis_labels:
+            # Swap the axis labels?
+            xlabel_orig = ax.get_xlabel()
+            ylabel_orig = ax.get_ylabel()
+            ax.set_xlabel(ylabel_orig)
+            ax.set_ylabel(xlabel_orig)
+        if swap_axis_limits:
+            # Do we want to swap the graph boundaries/limits?
+            xlim_orig = ax.get_xlim()
+            ylim_orig = ax.get_ylim()
+            ax.set_xlim(ylim_orig)
+            ax.set_ylim(xlim_orig)
+            # Now recalculate automatic tick locations based on new limits:
+            ax.relim()
+            ax.autoscale_view()
 
     @equal_aspect
     @add_ax_if_none
@@ -554,7 +577,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     ) -> Ax:
         """
         Defines how a shape is plotted on a matplotlib axes.
-        If transpose==True, the horizontal and vertical axes are swapped.
+        If transpose==True, the horizontal and vertical coordinates are swapped.
         """
 
         if shape.geom_type in (
@@ -594,13 +617,9 @@ class Geometry(Tidy3dBaseModel, ABC):
                 # Apply this transformation to the coordinates of the patch.
                 patch.set_transform(transpose_xy + ax.transData)
             ax.add_artist(patch)
-        if transpose:
-            # I also update the axis labels.  In practice, this seems to have no
-            # effect (since they get overwritten elsewhere), but I do it anway.
-            xlabel_orig = ax.get_xlabel()
-            ylabel_orig = ax.get_ylabel()
-            ax.set_xlabel(ylabel_orig)
-            ax.set_ylabel(xlabel_orig)
+        # I transpose==True, I also update the axis labels.  In practice, this seems to
+        # have no effect (since they get overwritten elsewhere), but I do it anway.
+        Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)
         return ax
 
     @staticmethod

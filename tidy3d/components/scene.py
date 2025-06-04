@@ -34,7 +34,7 @@ from .data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
 )
-from .geometry.base import Box, ClipOperation, GeometryGroup
+from .geometry.base import Box, ClipOperation, GeometryGroup, Geometry
 from .geometry.utils import flatten_groups, merging_geometries_on_plane, traverse_geometries
 from .grid.grid import Coords, Grid
 from .material.multi_physics import MultiPhysicsMedium
@@ -396,6 +396,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
@@ -425,7 +426,16 @@ class Scene(Tidy3dBaseModel):
 
         hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures)
+        ax = self.plot_structures(
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            fill=fill_structures,
+            transpose=transpose,
+        )
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
@@ -440,6 +450,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill: bool = True,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -478,6 +489,7 @@ class Scene(Tidy3dBaseModel):
                 shape=shape,
                 ax=ax,
                 fill=fill,
+                transpose=transpose,
             )
 
         # clean up the axis display
@@ -488,6 +500,7 @@ class Scene(Tidy3dBaseModel):
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
         )
+        Geometry.transpose_axis_info(ax, swap_axis_labels=transpose)  # Swap axis labels if needed
         return ax
 
     def _plot_shape_structure(
@@ -497,6 +510,7 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         fill: bool = True,
+        transpose: bool = False,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
         plot_params_struct = self._get_structure_plot_params(
@@ -504,7 +518,7 @@ class Scene(Tidy3dBaseModel):
             mat_index=mat_index,
             fill=fill,
         )
-        ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
+        ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax, transpose=transpose)
         return ax
 
     def _get_structure_plot_params(
