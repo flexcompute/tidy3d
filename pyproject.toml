@@ -51,7 +51,6 @@ joblib = "*"
 
 ### Optional dependencies ###
 # development core
-bump-my-version = { version = "*", optional = true }
 ruff = { version = "0.11.11", optional = true }
 coverage = { version = "*", optional = true }
 dill = { version = "*", optional = true }
@@ -127,7 +126,6 @@ cma = { version = "*", optional = true }
 [tool.poetry.extras]
 dev = [
   'bayesian-optimization',
-  'bump-my-version',
   "coverage",
   'dill',
   'divparams',
@@ -311,42 +309,3 @@ norecursedirs = [
 filterwarnings = "ignore::DeprecationWarning"
 testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
-
-[tool.bumpversion]
-current_version = "2.8.4"
-parse = """(?x)
-    (?P<major>0|[1-9]\\d*)\\.
-    (?P<minor>0|[1-9]\\d*)\\.
-    (?P<patch>0|[1-9]\\d*)
-    (?:
-        (?P<pre_l>[a-zA-Z-]+)         # pre-release label
-        (?P<pre_n>0|[1-9]\\d*)        # pre-release version number
-    )?                                # pre-release section is optional
-"""
-serialize = ["{major}.{minor}.{patch}{pre_l}{pre_n}", "{major}.{minor}.{patch}"]
-search = "{current_version}"
-replace = "{new_version}"
-regex = false
-ignore_missing_version = true
-ignore_missing_files = false
-tag = false
-sign_tags = false
-tag_name = "v{new_version}"
-tag_message = "Bump version: {current_version} → {new_version}"
-allow_dirty = false
-commit = false
-message = "Bump version: {current_version} → {new_version}"
-commit_args = ""
-
-[tool.bumpversion.parts.pre_l]
-values = ["rc", ""]
-
-[[tool.bumpversion.files]]
-filename = "pyproject.toml"
-search = "\nversion = \"{current_version}\""
-replace = "\nversion = \"{new_version}\""
-
-[[tool.bumpversion.files]]
-filename = "tidy3d/version.py"
-search = "{current_version}"
-replace = "{new_version}"
