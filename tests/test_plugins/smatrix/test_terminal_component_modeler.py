@@ -24,6 +24,8 @@ from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from ...utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
 
+mm = 1e3
+
 
 def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
     sim_dict = modeler.sim_dict
@@ -285,8 +287,27 @@ def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
             )
 
 
-def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path):
-    modeler = make_coaxial_component_modeler(path_dir=str(tmp_path), port_refinement=False)
+@pytest.mark.parametrize(
+    "grid_spec",
+    [
+        None,
+        td.GridSpec(
+            grid_x=td.UniformGrid(dl=0.1 * mm),
+            grid_y=td.UniformGrid(dl=10 * mm),
+            grid_z=td.UniformGrid(dl=0.1 * mm),
+        ),
+        td.GridSpec(
+            grid_x=td.UniformGrid(dl=10 * mm),
+            grid_y=td.UniformGrid(dl=0.1 * mm),
+            grid_z=td.UniformGrid(dl=0.1 * mm),
+        ),
+    ],
+)
+def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path, grid_spec):
+    """Ensure that the grid is fine enough at the coaxial ports along the transverse dimensions."""
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_refinement=False, grid_spec=grid_spec
+    )
     # Without port refinement the grid is much too coarse for these port sizes
     with pytest.raises(SetupError):
         _ = run_component_modeler(monkeypatch, modeler)

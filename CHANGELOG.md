@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed handling of symmetry when creating adjoint field sources and added warning when broken up adjoint simulations do not have the same symmetry as the forward simulation.
 - Validation for `CustomGridBoundaries`, which was previously allowing unsorted arrays and arrays with less than two entries.
 - `DiffractionMonitor` results to apply finite grid field corrections for higher precision when comparing e.g. to `FluxMonitor` computations of total power.
+- Bug when validating the grid resolution near `CoaxialLumpedPort`.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
