@@ -13,7 +13,7 @@ import shapely
 import xarray as xr
 
 try:
-    from matplotlib import patches
+    from matplotlib import patches, transforms
 except ImportError:
     pass
 
@@ -545,8 +545,18 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units)
         return ax
 
-    def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
-        """Defines how a shape is plotted on a matplotlib axes."""
+    def plot_shape(
+        self,
+        shape: Shapely,
+        plot_params: PlotParams,
+        ax: Ax,
+        transpose: bool = False,
+    ) -> Ax:
+        """
+        Defines how a shape is plotted on a matplotlib axes.
+        If transpose==True, the horizontal and vertical axes are swapped.
+        """
+
         if shape.geom_type in (
             "MultiPoint",
             "MultiLineString",
@@ -555,19 +565,42 @@ class Geometry(Tidy3dBaseModel, ABC):
         ):
             for sub_shape in shape.geoms:
                 ax = self.plot_shape(shape=sub_shape, plot_params=plot_params, ax=ax)
-
             return ax
 
         _shape = Geometry.evaluate_inf_shape(shape)
 
         if _shape.geom_type == "LineString":
             xs, ys = zip(*_shape.coords)
-            ax.plot(xs, ys, color=plot_params.facecolor, linewidth=plot_params.linewidth)
+            if transpose:
+                ax.plot(ys, xs, color=plot_params.facecolor, linewidth=plot_params.linewidth)
+            else:
+                ax.plot(xs, ys, color=plot_params.facecolor, linewidth=plot_params.linewidth)
         elif _shape.geom_type == "Point":
-            ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
+            if transpose:
+                ax.scatter(shape.y, shape.x, color=plot_params.facecolor)
+            else:
+                ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
+            if transpose:
+                # Define a transformation which swaps horizal<-->vertical coordinates.
+                transpose_xy = transforms.Affine2D().set_matrix(
+                    np.array(
+                        [[0, 1, 0],  # Swap the X and Y axes.
+                         [1, 0, 0],
+                         [0, 0, 1]]
+                    )
+                )
+                # Apply this transformation to the coordinates of the patch.
+                patch.set_transform(transpose_xy + ax.transData)
             ax.add_artist(patch)
+        if transpose:
+            # I also update the axis labels.  In practice, this seems to have no
+            # effect (since they get overwritten elsewhere), but I do it anway.
+            xlabel_orig = ax.get_xlabel()
+            ylabel_orig = ax.get_ylabel()
+            ax.set_xlabel(ylabel_orig)
+            ax.set_ylabel(xlabel_orig)
         return ax
 
     @staticmethod
