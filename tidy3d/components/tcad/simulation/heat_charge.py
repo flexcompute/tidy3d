@@ -1641,7 +1641,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         Example
         -------
-        >>> from tidy3d import Scene, Medium, Box, Structure, UniformUnstructuredGrid
+        >>> from tidy3d import Scene, Medium, Box, Structure, UniformUnstructuredGrid, TemperatureMonitor
         >>> box = Structure(
         ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
         ...     medium=Medium(permittivity=5),
@@ -1667,6 +1667,7 @@ class HeatChargeSimulation(AbstractSimulation):
         ...             condition=TemperatureBC(temperature=500),
         ...         )
         ...     ],
+        ...     monitors=[TemperatureMonitor(name="temp_monitor", center=(0, 0, 0), size=(1, 1, 1))],
         ... )
         """
 
