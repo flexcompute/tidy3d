@@ -423,9 +423,7 @@ class Scene(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-
         ax = self.plot_structures(
             ax=ax,
             x=x,

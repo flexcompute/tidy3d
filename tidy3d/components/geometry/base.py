@@ -579,7 +579,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         Defines how a shape is plotted on a matplotlib axes.
         If transpose==True, the horizontal and vertical coordinates are swapped.
         """
-
         if shape.geom_type in (
             "MultiPoint",
             "MultiLineString",
@@ -607,7 +606,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
             if transpose:
                 # Define a transformation which swaps horizal<-->vertical coordinates.
-                transpose_xy = transforms.Affine2D().set_matrix(
+                transpose_xy = transforms.Affine2D()
+                transpose_xy.set_matrix(
                     np.array(
                         [[0, 1, 0],  # Swap the X and Y axes.
                          [1, 0, 0],

@@ -503,6 +503,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             hlim=hlim,
             vlim=vlim,
             fill_structures=fill_structures,
+            transpose=transpose,
         )
 
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
