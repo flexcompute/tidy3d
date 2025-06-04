@@ -583,6 +583,9 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
 
         # select the extra coordinates out of the data from user-specified kwargs
         for coord_name, coord_val in sel_kwargs.items():
+            interp_val = np.array(coord_val)
+            if interp_val.size == 1:
+                interp_val = interp_val.item()
             if (
                 field_data.coords[coord_name].size <= 1
                 or coord_name == "eme_port_index"
@@ -590,10 +593,10 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 or coord_name == "sweep_index"
                 or coord_name == "mode_index"
             ):
-                field_data = field_data.sel(**{coord_name: coord_val}, method=None)
+                field_data = field_data.sel(**{coord_name: interp_val}, method=None)
             else:
                 field_data = field_data.interp(
-                    **{coord_name: coord_val}, kwargs={"bounds_error": True}
+                    **{coord_name: interp_val}, kwargs={"bounds_error": True}
                 )
 
         # before dropping coordinates, check if a frequency can be derived from the data that can

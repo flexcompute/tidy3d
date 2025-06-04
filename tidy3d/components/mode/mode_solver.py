@@ -1699,7 +1699,7 @@ class ModeSolver(Tidy3dBaseModel):
             Copy of the data with renormalized fields.
         """
         normal_axis = plane.size.index(0.0)
-        normal_pos = plane.center[normal_axis]
+        normal_pos = float(plane.center[normal_axis])
         normal_dim = "xyz"[normal_axis]
 
         # Primal and dual grid along the normal direction,
