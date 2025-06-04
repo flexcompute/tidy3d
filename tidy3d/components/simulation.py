@@ -1033,6 +1033,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ):
             for point in points:
                 _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
+                if transpose:
+                    x_point, y_point = y_point, x_point  # swap X and Y
                 if x_point is None and y_point is None:
                     continue
                 if x_point is None:
