@@ -72,6 +72,9 @@ def pytest_xdist_auto_num_workers(config):
     cores = min(cores, mem_limited_cores)
 
     if os.getenv("GITHUB_ACTIONS"):
+        if os.getenv("RUNNER_ENVIRONMENT") == "self-hosted":
+            MAX_SELF_HOSTED_CORES = 8
+            return min(MAX_SELF_HOSTED_CORES, cores)
         return cores
     return max(1, cores - 1)
 
