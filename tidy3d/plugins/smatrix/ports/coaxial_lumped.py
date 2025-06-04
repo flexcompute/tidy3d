@@ -384,7 +384,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         """Raises :class:``SetupError`` if the grid is too coarse at port locations"""
         trans_axes = self.remaining_axes
         for axis in trans_axes:
-            e_component = "xyz"[trans_axes[0]]
+            e_component = "xyz"[axis]
             e_grid = yee_grid.grid_dict[f"E{e_component}"]
             coords = e_grid.to_dict[e_component]
             min_bound = self.center[axis] - self.outer_diameter / 2
