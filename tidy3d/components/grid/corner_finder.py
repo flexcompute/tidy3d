@@ -85,7 +85,6 @@ class CornerFinderSpec(Tidy3dBaseModel):
         structure_list: list[Structure],
         center: tuple[float, float] = [0, 0, 0],
         size: tuple[float, float, float] = [inf, inf, inf],
-        transpose: bool = False,
     ) -> list[tuple[Any, Shapely]]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, merge geometries made of PEC.
 
@@ -124,7 +123,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
             PEC if (mat.is_pec or isinstance(mat, LossyMetalMedium)) else mat for mat in medium_list
         ]
         # merge geometries
-        merged_geos = merging_geometries_on_plane(geometry_list, plane, medium_list, transpose=transpose)
+        merged_geos = merging_geometries_on_plane(geometry_list, plane, medium_list)
 
         return merged_geos
 
@@ -134,7 +133,6 @@ class CornerFinderSpec(Tidy3dBaseModel):
         coord: float,
         structure_list: list[Structure],
         ravel: bool,
-        transpose: bool = False,
     ) -> tuple[ArrayFloat2D, ArrayFloat1D]:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
         geometries made of PEC.
@@ -159,7 +157,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
 
         # merge geometries
         merged_geos = self._merged_pec_on_plane(
-            normal_axis=normal_axis, coord=coord, structure_list=structure_list, transpose=transpose
+            normal_axis=normal_axis, coord=coord, structure_list=structure_list
         )
 
         # corner finder
@@ -197,7 +195,6 @@ class CornerFinderSpec(Tidy3dBaseModel):
         normal_axis: Axis,
         coord: float,
         structure_list: list[Structure],
-        transpose: bool = False,
     ) -> ArrayFloat2D:
         """On a 2D plane specified by axis = `normal_axis` and coordinate `coord`, find out corners of merged
         geometries made of `medium`.
@@ -219,7 +216,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
         """
 
         corner_list, _ = self._corners_and_convexity(
-            normal_axis=normal_axis, coord=coord, structure_list=structure_list, ravel=True, transpose=transpose
+            normal_axis=normal_axis, coord=coord, structure_list=structure_list, ravel=True
         )
         return corner_list
 

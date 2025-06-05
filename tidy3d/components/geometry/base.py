@@ -1741,7 +1741,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         z : float
             Position along the axis normal to slab
         transpose : bool
-            Optional: Swap the order of the x and y axis in the geometry data
+            Optional: Swap the order of the x and y axis in the geometry data.
 
         Returns
         -------
@@ -1762,7 +1762,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         axis : int
             Integer index into 'xyz' (0,1,2).
         transpose : bool
-            Optional: Swap the order of the remaining two axes (the ones not equal to axis)
+            Optional: Swap the order of the remaining two axes (the axes not equal to axis).
 
         Returns
         -------
@@ -2100,6 +2100,8 @@ class Box(SimplePlaneIntersection, Centered):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        transpose: bool = False
+            Optional: Swap the order of the coordinates in the two remaining (unspecified) axis?
 
         Returns
         -------
@@ -2487,13 +2489,12 @@ class Box(SimplePlaneIntersection, Centered):
         min_max_index: int,
         axis_normal: Axis,
         derivative_info: DerivativeInfo,
-        transpose: bool = False,
     ) -> float:
         """Compute the derivative w.r.t. shifting a face in the normal direction."""
 
         # normal and tangential dims
-        dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal, transpose=transpose)
-        fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal, transpose=transpose)
+        dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal)
+        fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
 
         # normal and tangential fields
         D_normal = derivative_info.D_der_map[fld_normal].sel(f=derivative_info.frequency)
@@ -2503,7 +2504,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         # normal and tangential bounds
         bounds_T = np.array(derivative_info.bounds).T  # put (xyz) first dimension
-        bounds_normal, bounds_perp = self.pop_axis(bounds_T, axis=axis_normal, transpose=transpose)
+        bounds_normal, bounds_perp = self.pop_axis(bounds_T, axis=axis_normal)
 
         # define the integration plane
         coord_normal_face = bounds_normal[min_max_index]
@@ -2550,8 +2551,8 @@ class Box(SimplePlaneIntersection, Centered):
             eps_xyz_outside = [eps.isel(**{dim_normal: index_out}) for eps in eps_xyz]
 
         # put in normal / tangential basis
-        eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal, transpose=transpose)
-        eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal, transpose=transpose)
+        eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal)
+        eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal)
 
         # compute integration pre-factors
         delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]

@@ -112,7 +112,11 @@ class Sphere(base.Centered, base.Circular):
         return [shapely.Polygon(vertices[:, :2])]
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        transpose: bool = False,
     ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -135,7 +139,7 @@ class Sphere(base.Centered, base.Circular):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
-        z0, (x0, y0) = self.pop_axis(self.center, axis=axis)
+        z0, (x0, y0) = self.pop_axis(self.center, axis=axis, transpose=transpose)
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
