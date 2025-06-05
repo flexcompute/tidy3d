@@ -1026,7 +1026,8 @@ def test_heat_charge_sources(structures):
         _ = td.HeatSource(structures=["solid_structure"], rate="100")
 
 
-def test_heat_charge_simulation(simulation_data):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_heat_charge_simulation(transpose, simulation_data):
     """Tests 'HeatChargeSimulation' and 'ConductionSimulation' objects."""
     (
         heat_sim_data,
@@ -1057,33 +1058,46 @@ def test_heat_charge_simulation(simulation_data):
     mesher = mesh_data.mesher
     assert mesher is not None, "VolumeMesher should be created successfully."
 
+    _ = heat_sim.plot_heat_conductivity(x=0, transpose=transpose)
+    plt.close()
+    _ = heat_sim.plot_property(x=0, property="heat_conductivity", transpose=transpose)
+    plt.close()
+    _ = cond_sim.plot_property(x=0, property="electric_conductivity", transpose=transpose)
+    plt.close()
+    for sim in (heat_sim, cond_sim, voltage_capacitance_sim, current_voltage_sim):
+        _ = sim.plot_boundaries(x=0, transpose=transpose)
+        plt.close()
+        _ = sim.plot_sources(x=0, transpose=transpose)
+        plt.close()
 
-def test_sim_data_plotting(simulation_data):
+
+@pytest.mark.parametrize("transpose", [True, False])
+def test_sim_data_plotting(transpose: bool, simulation_data):
     """Tests whether simulation data can be plotted and appropriate errors are raised."""
     heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Plotting temperature data
-    heat_sim_data.plot_field("test", z=0)
-    heat_sim_data.plot_field("tri")
-    heat_sim_data.plot_field("tet", y=0.5)
+    heat_sim_data.plot_field("test", z=0, transpose=transpose)
+    heat_sim_data.plot_field("tri", transpose=transpose)
+    heat_sim_data.plot_field("tet", y=0.5, transpose=transpose)
 
     # Plotting voltage data
-    cond_sim_data.plot_field("v_test", z=0)
-    cond_sim_data.plot_field("v_tri")
-    cond_sim_data.plot_field("v_tet", y=0.5)
+    cond_sim_data.plot_field("v_test", z=0, transpose=transpose)
+    cond_sim_data.plot_field("v_tri", transpose=transpose)
+    cond_sim_data.plot_field("v_tet", y=0.5, transpose=transpose)
     plt.close()
 
     # Test plotting with no data
     with pytest.raises(DataError):
-        heat_sim_data.plot_field("empty")
+        heat_sim_data.plot_field("empty", transpose=transpose)
 
     # Test plotting with 3D data
     with pytest.raises(DataError):
-        heat_sim_data.plot_field("test")
+        heat_sim_data.plot_field("test", transpose=transpose)
 
     # Test plotting with invalid key
     with pytest.raises(KeyError):
-        heat_sim_data.plot_field("test3", x=0)
+        heat_sim_data.plot_field("test3", x=0, transpose=transpose)
 
     # Test updating simulation data with duplicate data
     with pytest.raises(pd.ValidationError):
@@ -1099,42 +1113,43 @@ def test_sim_data_plotting(simulation_data):
         heat_sim_data.updated_copy(simulation=sim)
 
 
-def test_mesh_plotting(simulation_data):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_mesh_plotting(transpose: bool, simulation_data):
     """Tests whether mesh can be plotted and appropriate errors are raised."""
     heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Plotting mesh from unstructured temperature data
-    heat_sim_data.plot_mesh("tri")
-    heat_sim_data.plot_mesh("tet", y=0.5)
+    heat_sim_data.plot_mesh("tri", transpose=transpose)
+    heat_sim_data.plot_mesh("tet", y=0.5, transpose=transpose)
 
     # Plotting mesh from unstructured voltage data
-    cond_sim_data.plot_mesh("v_tri", structures_fill=False)
-    cond_sim_data.plot_mesh("v_tet", y=0.5)
+    cond_sim_data.plot_mesh("v_tri", structures_fill=False, transpose=transpose)
+    cond_sim_data.plot_mesh("v_tet", y=0.5, transpose=transpose)
 
     # Plotting mesh from mesh data
-    mesh_data.plot_mesh("mesh_test", z=0)
+    mesh_data.plot_mesh("mesh_test", z=0, transpose=transpose)
 
     plt.close()
 
     # Test plotting from structured data
     with pytest.raises(DataError):
-        heat_sim_data.plot_mesh("test")
+        heat_sim_data.plot_mesh("test", transpose=transpose)
 
     # Test plotting with no data
     with pytest.raises(DataError):
-        heat_sim_data.plot_mesh("empty")
+        heat_sim_data.plot_mesh("empty", transpose=transpose)
 
     # Test plotting with 3D data
     with pytest.raises(DataError):
-        heat_sim_data.plot_mesh("tet")
+        heat_sim_data.plot_mesh("tet", transpose=transpose)
 
     # Test plotting with invalid key
     with pytest.raises(KeyError):
-        heat_sim_data.plot_mesh("test3", x=0)
+        heat_sim_data.plot_mesh("test3", x=0, transpose=transpose)
 
     # Test plotting with invalid field_name
     with pytest.raises(DataError):
-        mesh_data.plot_mesh("mesh_test", z=0, field_name="wrong")
+        mesh_data.plot_mesh("mesh_test", z=0, field_name="wrong", transpose=transpose)
 
 
 def test_conduction_simulation_has_conductors(conduction_simulation, structures):
@@ -1635,27 +1650,29 @@ def test_dynamic_simulation_updates(heat_simulation):
     assert updated_sim.monitors[-1].name == "new_temp_mnt"
 
 
-def test_plotting_functions(simulation_data):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plotting_functions(transpose: bool, simulation_data):
     """Test plotting functions with various data."""
     heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Valid plotting
     try:
-        heat_sim_data.plot_field("test", z=0)
-        cond_sim_data.plot_field("v_test", y=1)
+        heat_sim_data.plot_field("test", z=0, transpose=transpose)
+        cond_sim_data.plot_field("v_test", y=1, transpose=transpose)
     except Exception as e:
         pytest.fail(f"Plotting raised an exception unexpectedly: {e}")
 
     # Invalid field name
     with pytest.raises(KeyError):
-        heat_sim_data.plot_field("non_existent_field")
+        heat_sim_data.plot_field("non_existent_field", transpose=transpose)
 
     # Invalid plotting parameters
     with pytest.raises(KeyError):
         heat_sim_data.plot_field("test", invalid_param=0)
 
 
-def test_bandgap_monitor():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_bandgap_monitor(transpose):
     """Test energy bandgap monitor ploting function."""
     # create a triangle grid
     tri_grid_points = td.PointDataArray(
@@ -1795,8 +1812,8 @@ def test_bandgap_monitor():
 
     # test check for the voltage value in the list of arguments
 
-    tri_single_voltage_data.plot(x=0.0)
-    tri_multi_voltage_data.plot(x=0.0, voltage=1.0)
+    tri_single_voltage_data.plot(x=0.0, transpose=transpose)
+    tri_multi_voltage_data.plot(x=0.0, voltage=1.0, transpose=transpose)
 
     with pytest.raises(DataError):
         tri_multi_voltage_data.plot(x=0.0)

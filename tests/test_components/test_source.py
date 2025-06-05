@@ -209,19 +209,20 @@ def test_dipole_sources_from_angles():
     )
 
 
-def test_FieldSource():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_FieldSource(transpose):
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     mode_spec = td.ModeSpec(num_modes=2)
 
     # test we can make planewave
-    _ = td.PlaneWave(size=(0, td.inf, td.inf), source_time=g, pol_angle=np.pi / 2, direction="+")
-    # s.plot(y=0)
-    # plt.close()
+    s = td.PlaneWave(size=(0, td.inf, td.inf), source_time=g, pol_angle=np.pi / 2, direction="+")
+    s.plot(y=0, transpose=transpose)
+    plt.close()
 
     # test we can make gaussian beam
-    _ = td.GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    # s.plot(y=0)
-    # plt.close()
+    s = td.GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    s.plot(y=0, transpose=transpose)
+    plt.close()
 
     # test we can make an astigmatic gaussian beam
     _ = td.AstigmaticGaussianBeam(
@@ -234,11 +235,13 @@ def test_FieldSource():
     )
 
     # test we can make mode source
-    _ = td.ModeSource(
+    s = td.ModeSource(
         size=(0, 1, 1), direction="+", source_time=g, mode_spec=mode_spec, mode_index=0
     )
-    # s.plot(y=0)
-    # plt.close()
+    s.plot(y=0, transpose=transpose)
+    plt.close()
+    s.plot(z=0, transpose=transpose)
+    plt.close()
 
     # test that non-planar geometry crashes plane wave and gaussian beams
     with pytest.raises(pydantic.ValidationError):
@@ -264,8 +267,20 @@ def test_FieldSource():
     with pytest.raises(pydantic.ValidationError):
         _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
 
-    # s.plot(z=0)
-    # plt.close()
+
+@pytest.mark.parametrize("transpose", [True, False])
+def test_current_source(transpose):
+    L: float = 5.0
+    source = td.UniformCurrentSource(
+        center=(0, -L / 3, 0),
+        size=(L, 0, L / 2),
+        polarization="Ex",
+        source_time=td.GaussianPulse(
+            freq0=100e14,
+            fwidth=10e14,
+        ),
+    )
+    source.plot(z=0, transpose=transpose)
 
 
 def test_pol_arrow():

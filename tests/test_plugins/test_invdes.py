@@ -540,7 +540,10 @@ def test_parameter_spec(spec_class, spec_kwargs, expected_shape):
     assert params.shape == expected_shape
 
 
-def test_parameter_spec_with_inverse_design(use_emulated_run, use_emulated_to_sim_data):  # noqa: F811
+def test_parameter_spec_with_inverse_design(
+    use_emulated_run,  # noqa: F811
+    use_emulated_to_sim_data,
+):
     """Test InitializationSpec with InverseDesign class."""
 
     metric = 2 * ModePower(monitor_name=MNT_NAME2, f=[FREQ0]) ** 2

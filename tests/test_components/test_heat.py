@@ -335,11 +335,12 @@ def make_heat_sim(include_custom_source: bool = True):
     return heat_sim
 
 
-def test_heat_sim():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_heat_sim(transpose):
     bc_temp, bc_flux, bc_conv = make_heat_bcs()
     heat_sim = make_heat_sim()
 
-    _ = heat_sim.plot(x=0)
+    _ = heat_sim.plot(x=0, transpose=transpose)
 
     # wrong names given
     for pl in [
@@ -373,14 +374,14 @@ def test_heat_sim():
     with pytest.raises(pd.ValidationError):
         heat_sim.updated_copy(monitors=[temp_mnt, temp_mnt])
 
-    _ = heat_sim.plot(x=0)
+    _ = heat_sim.plot(x=0, transpose=transpose)
     plt.close()
 
-    _ = heat_sim.plot_heat_conductivity(y=0)
+    _ = heat_sim.plot_heat_conductivity(y=0, transpose=transpose)
     plt.close()
 
     heat_sim_sym = heat_sim.updated_copy(symmetry=(0, 1, 1))
-    _ = heat_sim_sym.plot_heat_conductivity(z=0, colorbar="source")
+    _ = heat_sim_sym.plot_heat_conductivity(z=0, colorbar="source", transpose=transpose)
     plt.close()
 
     # no negative symmetry
@@ -526,21 +527,22 @@ def make_heat_sim_data():
     return heat_sim_data
 
 
-def test_sim_data():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_sim_data(transpose):
     heat_sim_data = make_heat_sim_data()
-    _ = heat_sim_data.plot_field("test", z=0)
-    _ = heat_sim_data.plot_field("tri")
-    _ = heat_sim_data.plot_field("tet", y=0.5)
+    _ = heat_sim_data.plot_field("test", z=0, transpose=transpose)
+    _ = heat_sim_data.plot_field("tri", transpose=transpose)
+    _ = heat_sim_data.plot_field("tet", y=0.5, transpose=transpose)
     plt.close()
 
     with pytest.raises(DataError):
-        _ = heat_sim_data.plot_field("empty")
+        _ = heat_sim_data.plot_field("empty", transpose=transpose)
 
     with pytest.raises(DataError):
-        _ = heat_sim_data.plot_field("test")
+        _ = heat_sim_data.plot_field("test", transpose=transpose)
 
     with pytest.raises(KeyError):
-        _ = heat_sim_data.plot_field("test3", x=0)
+        _ = heat_sim_data.plot_field("test3", x=0, transpose=transpose)
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim_data.updated_copy(data=[heat_sim_data.data[0]] * 2)

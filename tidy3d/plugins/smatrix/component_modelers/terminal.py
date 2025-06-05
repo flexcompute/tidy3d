@@ -64,6 +64,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
+        transpose: bool = False,
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
@@ -74,7 +75,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
             source_0 = port_source.to_source(self._source_time)
             plot_sources.append(source_0)
         sim_plot = self.simulation.copy(update={"sources": plot_sources})
-        return sim_plot.plot(x=x, y=y, z=z, ax=ax, **kwargs)
+        return sim_plot.plot(x=x, y=y, z=z, ax=ax, transpose=transpose, **kwargs)
 
     @equal_aspect
     @add_ax_if_none
@@ -84,6 +85,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
@@ -93,7 +95,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
             source_0 = port_source.to_source(self._source_time)
             plot_sources.append(source_0)
         sim_plot = self.simulation.copy(update={"sources": plot_sources})
-        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
+        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, transpose=transpose, **kwargs)
 
     @cached_property
     def sim_dict(self) -> dict[str, Simulation]:

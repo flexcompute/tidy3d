@@ -710,9 +710,10 @@ class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         # call Source.plot but with the base of the arrow centered on the injection plane
         patch_kwargs["arrow_base"] = self.injection_plane_center
-        ax = Source.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
+        ax = Source.plot(self, x=x, y=y, z=z, ax=ax, transpose=transpose, **patch_kwargs)
         return ax

@@ -22,6 +22,12 @@ from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
+from tidy3d.components.utils import (
+    pop_axis_and_swap,
+    shape_swap_xy,
+    unpop_axis_and_swap,
+    warn_untested_argument,
+)
 from tidy3d.constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from tidy3d.exceptions import SetupError, Tidy3dError
 from tidy3d.log import log
@@ -282,7 +288,9 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def intersecting_media(
-        test_object: Box, structures: tuple[Structure, ...]
+        test_object: Box,
+        structures: tuple[Structure, ...],
+        transpose: bool = False,
     ) -> tuple[StructureMediumType, ...]:
         """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
@@ -294,6 +302,8 @@ class Scene(Tidy3dBaseModel):
             Object for which intersecting media are to be detected.
         structures : List[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
+        transpose : bool = False
+            Optional: Swap the coordinates of test_object in the plane before calculating intersections.
 
         Returns
         -------
@@ -303,7 +313,9 @@ class Scene(Tidy3dBaseModel):
         structures = [s.to_static() for s in structures]
         if test_object.size.count(0.0) == 1:
             # get all merged structures on the test_object, which is already planar
-            structures_merged = Scene._filter_structures_plane_medium(structures, test_object)
+            structures_merged = Scene._filter_structures_plane_medium(
+                structures, test_object, transpose=transpose
+            )
             mediums = {medium for medium, _ in structures_merged}
             return mediums
 
@@ -317,7 +329,9 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def intersecting_structures(
-        test_object: Box, structures: tuple[Structure, ...]
+        test_object: Box,
+        structures: tuple[Structure, ...],
+        transpose: bool = False,
     ) -> tuple[Structure, ...]:
         """From a given list of structures, returns a list of :class:`.Structure` that intersect
         with the ``test_object``, if it is a surface, or its surfaces, if it is a volume.
@@ -328,6 +342,8 @@ class Scene(Tidy3dBaseModel):
             Object for which intersecting media are to be detected.
         structures : List[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
+        transpose : bool = False
+            Optional: Swap the coordinates of test_object in the plane before calculating intersections.
 
         Returns
         -------
@@ -366,11 +382,12 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> tuple[tuple[float, float], tuple[float, float]]:
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis(bounds[0], axis=axis)
-        _, (hmax, vmax) = Box.pop_axis(bounds[1], axis=axis)
+        _, (hmin, vmin) = pop_axis_and_swap(bounds[0], axis=axis, transpose=transpose)
+        _, (hmax, vmax) = pop_axis_and_swap(bounds[1], axis=axis, transpose=transpose)
 
         # account for unordered limits
         if hlim is None:
@@ -403,6 +420,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
@@ -423,17 +441,24 @@ class Scene(Tidy3dBaseModel):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         fill_structures : bool = True
             Whether to fill structures with color or just draw outlines.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_structures(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures, transpose=transpose
+        )
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         return ax
 
     @equal_aspect
@@ -447,6 +472,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill: bool = True,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -466,15 +492,22 @@ class Scene(Tidy3dBaseModel):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         fill : bool = True
             Whether to fill structures with color or just draw outlines.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         medium_shapes = self._get_structures_2dbox(
-            structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            structures=self.to_static().sorted_structures,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         medium_map = self.medium_map
         for medium, shape in medium_shapes:
@@ -485,15 +518,18 @@ class Scene(Tidy3dBaseModel):
                 shape=shape,
                 ax=ax,
                 fill=fill,
+                transpose=False,  # _get_structures_2dbox() already took care of transposing shape
             )
 
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -504,6 +540,7 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         fill: bool = True,
+        transpose: bool = False,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
         plot_params_struct = self._get_structure_plot_params(
@@ -511,7 +548,9 @@ class Scene(Tidy3dBaseModel):
             mat_index=mat_index,
             fill=fill,
         )
-        ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
+        ax = self.box.plot_shape(
+            shape=shape, plot_params=plot_params_struct, ax=ax, transpose=transpose
+        )
         return ax
 
     def _get_structure_plot_params(
@@ -594,6 +633,7 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Sets the xy limits of the scene at a plane, useful after plotting.
 
@@ -611,13 +651,17 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
+
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The axes after setting the boundaries.
         """
-
-        hlim, vlim = Scene._get_plot_lims(bounds=bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         ax.set_xlim(hlim)
         ax.set_ylim(vlim)
         return ax
@@ -630,6 +674,7 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
 
@@ -647,6 +692,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -655,8 +702,8 @@ class Scene(Tidy3dBaseModel):
         """
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis(self.bounds[0], axis=axis)
-        _, (hmax, vmax) = Box.pop_axis(self.bounds[1], axis=axis)
+        _, (hmin, vmin) = pop_axis_and_swap(self.bounds[0], axis=axis, transpose=transpose)
+        _, (hmax, vmax) = pop_axis_and_swap(self.bounds[1], axis=axis, transpose=transpose)
 
         if hlim is not None:
             (hmin, hmax) = hlim
@@ -670,8 +717,10 @@ class Scene(Tidy3dBaseModel):
         v_size = (vmax - vmin) or inf
 
         axis, center_normal = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        center = Box.unpop_axis(center_normal, (h_center, v_center), axis=axis)
-        size = Box.unpop_axis(0.0, (h_size, v_size), axis=axis)
+        center = unpop_axis_and_swap(
+            center_normal, (h_center, v_center), axis=axis, transpose=transpose
+        )
+        size = unpop_axis_and_swap(0.0, (h_size, v_size), axis=axis, transpose=transpose)
         plane = Box(center=center, size=size)
 
         medium_shapes = []
@@ -680,12 +729,16 @@ class Scene(Tidy3dBaseModel):
             for shape in intersections:
                 if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
+                    if transpose:
+                        shape = shape_swap_xy(shape)
                     medium_shapes.append((structure.medium, shape))
         return medium_shapes
 
     @staticmethod
     def _filter_structures_plane_medium(
-        structures: list[Structure], plane: Box
+        structures: list[Structure],
+        plane: Box,
+        transpose: bool = False,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         medium.
@@ -696,16 +749,17 @@ class Scene(Tidy3dBaseModel):
             List of structures to filter on the plane.
         plane : Box
             Plane specification.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
         List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane after merging.
         """
-
         medium_list = [structure.medium for structure in structures]
         return Scene._filter_structures_plane(
-            structures=structures, plane=plane, property_list=medium_list
+            structures=structures, plane=plane, property_list=medium_list, transpose=transpose
         )
 
     @staticmethod
@@ -713,6 +767,7 @@ class Scene(Tidy3dBaseModel):
         structures: list[Structure],
         plane: Box,
         property_list: list,
+        transpose: bool = False,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         provided property_list.
@@ -725,6 +780,8 @@ class Scene(Tidy3dBaseModel):
             Plane specification.
         property_list : List = None
             Property value for each structure.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -732,7 +789,10 @@ class Scene(Tidy3dBaseModel):
             List of shapes and their property value on the plane after merging.
         """
         return merging_geometries_on_plane(
-            [structure.geometry for structure in structures], plane, property_list
+            [structure.geometry for structure in structures],
+            plane,
+            property_list,
+            transpose=transpose,
         )
 
     """ Plotting Optical """
@@ -749,6 +809,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -773,6 +834,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -780,12 +843,25 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
 
         ax = self.plot_structures_eps(
-            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            freq=freq,
+            cbar=True,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         return ax
 
     @equal_aspect
@@ -805,6 +881,7 @@ class Scene(Tidy3dBaseModel):
         vlim: Optional[tuple[float, float]] = None,
         grid: Grid = None,
         eps_component: Optional[PermittivityComponent] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -840,13 +917,14 @@ class Scene(Tidy3dBaseModel):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         return self.plot_structures_property(
             x=x,
             y=y,
@@ -862,6 +940,7 @@ class Scene(Tidy3dBaseModel):
             grid=grid,
             property="eps",
             eps_component=eps_component,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -882,9 +961,10 @@ class Scene(Tidy3dBaseModel):
         grid: Grid = None,
         property: Literal["eps", "doping", "N_a", "N_d"] = "eps",
         eps_component: Optional[PermittivityComponent] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
+        The selected property is plotted in grayscale based on its value at the specified frequency.
 
         Parameters
         ----------
@@ -920,13 +1000,14 @@ class Scene(Tidy3dBaseModel):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
@@ -951,11 +1032,21 @@ class Scene(Tidy3dBaseModel):
             # that needs to be rendered
             if property in ["N_d", "N_a", "doping"]:
                 structures = [self.background_structure, *list(structures)]
-            medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
+            medium_shapes = self._filter_structures_plane_medium(
+                structures=structures,
+                plane=plane,
+                transpose=transpose,
+            )
         else:
             structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
-                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+                structures=structures,
+                x=x,
+                y=y,
+                z=z,
+                hlim=hlim,
+                vlim=vlim,
+                transpose=transpose,
             )
 
         property_min, property_max = limits
@@ -993,10 +1084,22 @@ class Scene(Tidy3dBaseModel):
                         shape=shape,
                         ax=ax,
                         property="doping",
+                        # Note: I omitted `transpose` because we took care of that earlier.
                     )
                 else:
                     self._pcolormesh_shape_doping_box(
-                        x, y, z, alpha, medium, property_min, property_max, shape, ax, property
+                        x,
+                        y,
+                        z,
+                        alpha,
+                        medium,
+                        property_min,
+                        property_max,
+                        shape,
+                        ax,
+                        property,
+                        transpose=transpose,
+                        transpose_shape=False,  # We took care of transposing the shape earlier.
                     )
             else:
                 # if the background medium is custom medium, it needs to be rendered separately
@@ -1014,6 +1117,7 @@ class Scene(Tidy3dBaseModel):
                         shape=shape,
                         ax=ax,
                         eps_component=eps_component,
+                        # Note: I omitted `transpose` because we took care of that earlier.
                     )
                 else:
                     # For custom medium, apply pcolormesh clipped by the shape.
@@ -1031,6 +1135,8 @@ class Scene(Tidy3dBaseModel):
                         ax,
                         grid,
                         eps_component=eps_component,
+                        transpose=transpose,
+                        transpose_shape=False,  # We took care of transposing the "shape" earlier.
                     )
 
         if cbar:
@@ -1050,10 +1156,12 @@ class Scene(Tidy3dBaseModel):
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -1127,26 +1235,48 @@ class Scene(Tidy3dBaseModel):
         ax: Ax,
         grid: Grid,
         eps_component: Optional[PermittivityComponent] = None,
+        transpose: bool = False,
+        transpose_shape: Optional[bool] = None,
     ):
         """
         Plot shape made of custom medium with ``pcolormesh``.
         """
+        if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
+            warn_untested_argument(
+                cls_name=type(self).__name__,
+                func_name="_pcolormesh_shape_custom_medium_structure_eps",
+                arg="transpose",
+                val="True",
+            )
+
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
+        normal_axis, plane_axes = pop_axis_and_swap(coords, normal_axis_ind, transpose=transpose)
 
         comp2ind = {dim + dim: index for dim, index in zip("xyz", range(3))}
 
         # make grid for eps interpolation
         # we will do this by combining shape bounds and points where custom eps is provided
+        if transpose_shape is None:
+            transpose_shape = transpose  # by default, transpose shape if you transform the meshgrid
+        if transpose_shape:
+            shape = shape_swap_xy(shape)
         shape_bounds = shape.bounds
         rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
+        if transpose:
+            rmin.reverse()
+            rmax.reverse()
+            # Implementation Details: If transpose==True, then the "shape" argument
+            # will have already been modified by the caller (swapping its horizontal
+            # and vertical components), before it is passed to this function.
         rmin.insert(normal_axis_ind, normal_position)
         rmax.insert(normal_axis_ind, normal_position)
 
         if grid is None:
-            plane_axes_inds = [0, 1, 2]
-            plane_axes_inds.pop(normal_axis_ind)
+            _, plane_axes_inds = pop_axis_and_swap(
+                [0, 1, 2], axis=normal_axis_ind, transpose=transpose
+            )
 
             eps_diag = medium.eps_dataarray_freq(frequency=freq)
 
@@ -1193,6 +1323,7 @@ class Scene(Tidy3dBaseModel):
                             "clip_box": ax.bbox,
                             "alpha": alpha,
                         },
+                        transpose=transpose,
                     )
                     return
 
@@ -1263,6 +1394,9 @@ class Scene(Tidy3dBaseModel):
 
         # pcolormesh
         plane_xp, plane_yp = np.meshgrid(plane_coord[0], plane_coord[1], indexing="ij")
+        if transpose:
+            plane_yp, plane_xp = np.meshgrid(plane_coord[1], plane_coord[0], indexing="ij")
+
         ax.pcolormesh(
             plane_xp,
             plane_yp,
@@ -1329,6 +1463,7 @@ class Scene(Tidy3dBaseModel):
         reverse: bool = False,
         alpha: Optional[float] = None,
         eps_component: Optional[PermittivityComponent] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self._get_structure_eps_plot_params(
@@ -1340,7 +1475,7 @@ class Scene(Tidy3dBaseModel):
             reverse=reverse,
             eps_component=eps_component,
         )
-        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax, transpose=transpose)
         return ax
 
     """ Plotting Heat """
@@ -1358,8 +1493,9 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
-        """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
 
         Parameters
@@ -1384,19 +1520,33 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
 
         ax = self.plot_structures_heat_charge_property(
-            cbar=cbar, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, property=property
+            cbar=cbar,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            property=property,
+            transpose=transpose,
         )
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         return ax
 
     @equal_aspect
@@ -1412,6 +1562,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1438,13 +1589,14 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         log.warning(
             "This function 'plot_structures_heat_conductivity' is deprecated and "
             "will be discontinued. In its place you can use "
@@ -1462,6 +1614,7 @@ class Scene(Tidy3dBaseModel):
             ax=ax,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -1478,6 +1631,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1504,13 +1658,14 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         structures = self.sorted_structures
 
         # alpha is None just means plot without any transparency
@@ -1525,11 +1680,19 @@ class Scene(Tidy3dBaseModel):
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
             plane = Box(center=center, size=size)
-            medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
+            medium_shapes = self._filter_structures_plane_medium(
+                structures=structures, plane=plane, transpose=transpose
+            )
         else:
             structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
-                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+                structures=structures,
+                x=x,
+                y=y,
+                z=z,
+                hlim=hlim,
+                vlim=vlim,
+                transpose=transpose,
             )
 
         property_val_min, property_val_max = self.heat_charge_property_bounds(property=property)
@@ -1543,6 +1706,7 @@ class Scene(Tidy3dBaseModel):
                 shape=shape,
                 ax=ax,
                 property=property,
+                # Note: I omitted `transpose` because we took care of that earlier.
             )
 
         if cbar:
@@ -1562,10 +1726,12 @@ class Scene(Tidy3dBaseModel):
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -1668,6 +1834,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax,
         reverse: bool = False,
         alpha: Optional[float] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for thermal
         conductivity.
@@ -1680,7 +1847,7 @@ class Scene(Tidy3dBaseModel):
             reverse=reverse,
             property=property,
         )
-        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax, transpose=transpose)
         return ax
 
     @equal_aspect
@@ -1695,6 +1862,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ):
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1718,19 +1886,19 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         log.warning(
             "The function 'plot_heat_conductivity' is deprecated and will be "
             "discontinued. In its place you can use "
             'plot_heat_charge_property(property="heat_conductivity")'
         )
-
         return self.plot_heat_charge_property(
             x=x,
             y=y,
@@ -1741,6 +1909,7 @@ class Scene(Tidy3dBaseModel):
             ax=ax,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     """ Misc """
@@ -1884,30 +2053,39 @@ class Scene(Tidy3dBaseModel):
         shape: Shapely,
         ax: Ax,
         plt_type: str = "doping",
+        transpose: bool = False,
+        transpose_shape: Optional[bool] = None,
     ):
         """
         Plot shape made of structure defined with doping.
         plt_type accepts ["doping", "N_a", "N_d"]
         """
-        coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
 
         # make grid for eps interpolation
-        # we will do this by combining shape bounds and points where custom eps is provided
+        # we will do this by combining shape bounds and points where custom properties are provided
+        if transpose_shape is None:
+            transpose_shape = transpose  # by default, transpose shape if you transform the meshgrid
+        if transpose_shape:
+            shape = shape_swap_xy(shape)
         shape_bounds = shape.bounds
+
         rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
         rmin.insert(normal_axis_ind, normal_position)
         rmax.insert(normal_axis_ind, normal_position)
 
         # for the time being let's assume we'll always need to generate a mesh
-        plane_axes_inds = [0, 1, 2]
-        plane_axes_inds.pop(normal_axis_ind)
+        _, plane_axes_inds = pop_axis_and_swap([0, 1, 2], axis=normal_axis_ind, transpose=transpose)
 
         # build grid
         N = 100
+
         coords_2D = [np.linspace(rmin[d], rmax[d], N) for d in plane_axes_inds]
         X, Y = np.meshgrid(coords_2D[0], coords_2D[1], indexing="ij")
+
+        if transpose:
+            X, Y = Y, X  # the mesh coordinates that will be displayed to the user
+            coords_2D.reverse()  # = [coords_2D[1], coords_2D[0]] used for lookup
 
         struct_doping = [
             np.zeros(X.shape),  # let's use 0 for N_a

@@ -1,4 +1,4 @@
-# ruff: noqa: W293, W291
+# ruff: noqa: W291
 """Defines heat simulation class"""
 
 from __future__ import annotations
@@ -81,6 +81,7 @@ from tidy3d.components.tcad.viz import (
     plot_params_heat_source,
 )
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
+from tidy3d.components.utils import shape_swap_xy
 from tidy3d.components.viz import PlotParams, add_ax_if_none, equal_aspect
 from tidy3d.constants import VOLUMETRIC_HEAT_RATE, inf
 from tidy3d.exceptions import SetupError
@@ -982,6 +983,7 @@ class HeatChargeSimulation(AbstractSimulation):
         property: str = "heat_conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1009,15 +1011,16 @@ class HeatChargeSimulation(AbstractSimulation):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         cbar_cond = True
@@ -1052,16 +1055,34 @@ class HeatChargeSimulation(AbstractSimulation):
                 hlim=hlim,
                 vlim=vlim,
                 property=property,
+                transpose=transpose,
             )
         ax = self.plot_sources(
-            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            property=property,
+            alpha=source_alpha,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim)
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property)
+        ax = self.plot_monitors(
+            ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim, transpose=transpose
+        )
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
         if property == "source":
             self._add_source_cbar(ax=ax, property=property)
@@ -1081,6 +1102,7 @@ class HeatChargeSimulation(AbstractSimulation):
         colorbar: str = "conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """
@@ -1111,6 +1133,8 @@ class HeatChargeSimulation(AbstractSimulation):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -1140,6 +1164,7 @@ class HeatChargeSimulation(AbstractSimulation):
             property=plot_type,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -1151,6 +1176,7 @@ class HeatChargeSimulation(AbstractSimulation):
         z: Optional[float] = None,
         property: str = "heat_conductivity",
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's boundary conditions on a plane defined by one nonzero x,y,z
         coordinate.
@@ -1168,13 +1194,14 @@ class HeatChargeSimulation(AbstractSimulation):
             Options are ["heat_conductivity", "electric_conductivity"]
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         # get structure list
         structures = [self.simulation_structure]
         structures += list(self.scene.sorted_structures)
@@ -1190,6 +1217,7 @@ class HeatChargeSimulation(AbstractSimulation):
             structures=structures,
             plane=plane,
             boundary_spec=self.boundary_spec,
+            transpose=transpose,
         )
 
         # plot boundary conditions
@@ -1204,11 +1232,13 @@ class HeatChargeSimulation(AbstractSimulation):
             ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax)
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
+        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
 
         return ax
@@ -1465,6 +1495,7 @@ class HeatChargeSimulation(AbstractSimulation):
         structures: list[Structure],
         plane: Box,
         boundary_spec: list[HeatChargeBoundarySpec],
+        transpose: bool = False,
     ) -> list[tuple[HeatChargeBoundarySpec, Shapely]]:
         """Compute list of boundary lines to plot on plane.
 
@@ -1476,6 +1507,8 @@ class HeatChargeSimulation(AbstractSimulation):
             target plane.
         boundary_spec : List[HeatBoundarySpec]
             list of boundary conditions associated with structures.
+        transpose : bool = False
+            Swap the boundary-box coordinates in the plane. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -1491,6 +1524,8 @@ class HeatChargeSimulation(AbstractSimulation):
 
             # append each of them and their medium information to the list of shapes
             for shape in shapes_plane:
+                if transpose:
+                    shape = shape_swap_xy(shape)
                 shapes.append((structure.name, structure.medium, shape, shape.bounds))
 
         background_structure_shape = shapes[0][2]
@@ -1537,6 +1572,7 @@ class HeatChargeSimulation(AbstractSimulation):
         vlim: Optional[tuple[float, float]] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1553,19 +1589,22 @@ class HeatChargeSimulation(AbstractSimulation):
             Options are ["heat_conductivity", "electric_conductivity"]
         hlim : Tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+            (WARNING: This argument has no effect.  Do not use.)
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+            (WARNING: This argument has no effect.  Do not use.)
         alpha : float = None
             Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         # background can't have source, so no need to add background structure
         structures = self.scene.sorted_structures
 
@@ -1597,12 +1636,21 @@ class HeatChargeSimulation(AbstractSimulation):
         plane = Box(center=center, size=size)
 
         source_shapes = self.scene._filter_structures_plane(
-            structures=structures, plane=plane, property_list=source_list
+            structures=structures,
+            plane=plane,
+            property_list=source_list,
+            transpose=transpose,
         )
 
         source_min, source_max = self.source_bounds(property=property)
         for source, shape in source_shapes:
             if source is not None:
+                if hlim or vlim:  # Fix this eventually?  For now, just warn users.
+                    log.warning(
+                        "The `hlim` and `vlim` arguments are not implemented for this plot type. "
+                        "Sources may be displayed at the wrong location.",
+                        log_once=True,
+                    )
                 ax = self._plot_shape_structure_source(
                     alpha=alpha,
                     source=source,
@@ -1610,14 +1658,17 @@ class HeatChargeSimulation(AbstractSimulation):
                     source_max=source_max,
                     shape=shape,
                     ax=ax,
+                    # I omitted `transpose` because we took care of transposing the shape earlier.
                 )
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
+        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -1682,6 +1733,7 @@ class HeatChargeSimulation(AbstractSimulation):
         source_max: float,
         ax: Ax,
         alpha: Optional[float] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
         plot_params = self._get_structure_source_plot_params(
@@ -1690,7 +1742,7 @@ class HeatChargeSimulation(AbstractSimulation):
             source_max=source_max,
             alpha=alpha,
         )
-        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax, transpose=transpose)
         return ax
 
     @classmethod

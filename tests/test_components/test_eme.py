@@ -283,21 +283,22 @@ def test_eme_monitor():
     )
 
 
-def test_eme_simulation():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_eme_simulation(transpose):
     sim = make_eme_sim()
-    _ = sim.plot(x=0, ax=AX)
-    _ = sim.plot(y=0, ax=AX)
-    _ = sim.plot(z=0, ax=AX)
-    _ = sim.plot_grid(x=0, ax=AX)
-    _ = sim.plot_grid(y=0, ax=AX)
-    _ = sim.plot_grid(z=0, ax=AX)
-    _ = sim.plot_eps(x=0, ax=AX)
-    _ = sim.plot_eps(y=0, ax=AX)
-    _ = sim.plot_eps(z=0, ax=AX)
+    _ = sim.plot(x=0, ax=AX, transpose=transpose)
+    _ = sim.plot(y=0, ax=AX, transpose=transpose)
+    _ = sim.plot(z=0, ax=AX, transpose=transpose)
+    _ = sim.plot_grid(x=0, ax=AX, transpose=transpose)
+    _ = sim.plot_grid(y=0, ax=AX, transpose=transpose)
+    _ = sim.plot_grid(z=0, ax=AX, transpose=transpose)
+    _ = sim.plot_eps(x=0, ax=AX, transpose=transpose)
+    _ = sim.plot_eps(y=0, ax=AX, transpose=transpose)
+    _ = sim.plot_eps(z=0, ax=AX, transpose=transpose)
     sim2 = sim.updated_copy(axis=1)
-    _ = sim2.plot(x=0, ax=AX)
-    _ = sim2.plot(y=0, ax=AX)
-    _ = sim2.plot(z=0, ax=AX)
+    _ = sim2.plot(x=0, ax=AX, transpose=transpose)
+    _ = sim2.plot(y=0, ax=AX, transpose=transpose)
+    _ = sim2.plot(z=0, ax=AX, transpose=transpose)
 
     # need at least one freq
     with pytest.raises(pd.ValidationError):

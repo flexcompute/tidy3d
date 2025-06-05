@@ -50,6 +50,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -77,6 +78,8 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
@@ -99,5 +102,6 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            transpose=transpose,
             **sel_kwargs,
         )

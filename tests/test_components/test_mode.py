@@ -173,17 +173,18 @@ def get_mode_sim():
     return sim
 
 
-def test_mode_sim():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_mode_sim(transpose: bool):
     with AssertLogLevel(None):
         sim = get_mode_sim()
-        _ = sim.plot(ax=AX)
-        _ = sim.plot(ax=AX, fill_structures=False, hlim=(-1, 1), vlim=(-1, 1))
-        _ = sim.plot(y=0, ax=AX)
-        _ = sim.plot_mode_plane(ax=AX)
-        _ = sim.plot_eps_mode_plane(ax=AX)
-        _ = sim.plot_structures_eps_mode_plane(ax=AX)
-        _ = sim.plot_grid_mode_plane(ax=AX)
-        _ = sim.plot_pml_mode_plane(ax=AX)
+        _ = sim.plot(ax=AX, transpose=transpose)
+        _ = sim.plot(ax=AX, fill_structures=False, hlim=(-1, 1), vlim=(-1, 1), transpose=transpose)
+        _ = sim.plot(y=0, ax=AX, transpose=transpose)
+        _ = sim.plot_mode_plane(ax=AX, transpose=transpose)
+        _ = sim.plot_eps_mode_plane(ax=AX, transpose=transpose)
+        _ = sim.plot_structures_eps_mode_plane(ax=AX, transpose=transpose)
+        _ = sim.plot_grid_mode_plane(ax=AX, transpose=transpose)
+        _ = sim.plot_pml_mode_plane(ax=AX, transpose=transpose)
         _ = sim.reduced_simulation_copy
     _ = sim.run_local()
     _ = sim._mode_solver.sim_data
@@ -327,9 +328,10 @@ def get_mode_sim_data():
     return sim_data
 
 
-def test_mode_sim_data():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_mode_sim_data(transpose: bool):
     sim_data = get_mode_sim_data()
-    _ = sim_data.plot_field("Ey", ax=AX, mode_index=0, f=FS[0])
+    _ = sim_data.plot_field("Ey", ax=AX, mode_index=0, f=FS[0], transpose=transpose)
 
 
 def test_plane_crosses_symmetry_plane_warning(monkeypatch):

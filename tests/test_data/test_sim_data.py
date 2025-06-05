@@ -148,8 +148,9 @@ def test_centers():
             _ = sim_data.at_centers(mon.name)
 
 
+@pytest.mark.parametrize("transpose", [True, False])
 @pytest.mark.parametrize("phase", [0, 1.0])
-def test_plot(phase):
+def test_plot(transpose: bool, phase: float):
     sim_data = make_sim_data()
 
     # plot regular field data
@@ -158,16 +159,31 @@ def test_plot(phase):
         for axis_name in "xyz":
             xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
             _ = sim_data.plot_field(
-                "field", field_cmp, val="imag", f=1e14, phase=phase, **xyz_kwargs
+                "field",
+                field_cmp,
+                val="imag",
+                f=1e14,
+                phase=phase,
+                transpose=transpose,
+                **xyz_kwargs,
             )
             plt.close()
     for shading in ["gouraud", "nearest", "auto"]:
         _ = sim_data.plot_field(
-            "field", field_cmp, val="imag", f=1e14, phase=phase, shading=shading, **xyz_kwargs
+            "field",
+            field_cmp,
+            val="imag",
+            f=1e14,
+            phase=phase,
+            shading=shading,
+            transpose=transpose,
+            **xyz_kwargs,
         )
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        _ = sim_data.plot_field("field", "int", f=1e14, phase=phase, **xyz_kwargs)
+        _ = sim_data.plot_field(
+            "field", "int", f=1e14, phase=phase, transpose=transpose, **xyz_kwargs
+        )
         plt.close()
 
     # plot field time data
@@ -176,34 +192,56 @@ def test_plot(phase):
         for axis_name in "xyz":
             xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
             _ = sim_data.plot_field(
-                "field_time", field_cmp, val="real", phase=phase, t=0.0, **xyz_kwargs
+                "field_time",
+                field_cmp,
+                val="real",
+                phase=phase,
+                t=0.0,
+                transpose=transpose,
+                **xyz_kwargs,
             )
             plt.close()
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        _ = sim_data.plot_field("field_time", "int", t=0.0, phase=phase, **xyz_kwargs)
+        _ = sim_data.plot_field(
+            "field_time", "int", t=0.0, phase=phase, transpose=transpose, **xyz_kwargs
+        )
         plt.close()
 
     # plot mode field data
     for field_cmp in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
         _ = sim_data.plot_field(
-            "mode_solver", field_cmp, val="real", f=1e14, mode_index=1, phase=phase
+            "mode_solver",
+            field_cmp,
+            val="real",
+            f=1e14,
+            mode_index=1,
+            phase=phase,
+            transpose=transpose,
         )
         plt.close()
-    _ = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1, phase=phase)
+    _ = sim_data.plot_field(
+        "mode_solver", "int", f=1e14, mode_index=1, phase=phase, transpose=transpose
+    )
     plt.close()
 
 
-def test_plot_field_missing_derived_data():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plot_field_missing_derived_data(transpose: bool):
     sim_data = make_sim_data()
     with pytest.raises(Tidy3dKeyError):
-        sim_data.plot_field(field_monitor_name="field_time", field_name="E", val="int")
+        sim_data.plot_field(
+            field_monitor_name="field_time", field_name="E", val="int", transpose=transpose
+        )
 
 
-def test_plot_field_missing_field_value():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plot_field_missing_field_value(transpose: bool):
     sim_data = make_sim_data()
     with pytest.raises(Tidy3dKeyError):
-        sim_data.plot_field(field_monitor_name="field", field_name="Ex", val="test")
+        sim_data.plot_field(
+            field_monitor_name="field", field_name="Ex", val="test", transpose=transpose
+        )
 
 
 @pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
@@ -247,9 +285,10 @@ def test_to_json(tmp_path):
 
 
 @pytest.mark.filterwarnings("ignore:log10")
+@pytest.mark.parametrize("transpose", [True, False])
 @pytest.mark.parametrize("field_name", ["Ex", "Ey", "Ez", "E", "Hx", "Hz", "Sy"])
 @pytest.mark.parametrize("val", ["real", "re", "imag", "im", "abs", "phase"])
-def test_derived_components(field_name, val):
+def test_derived_components(transpose: bool, field_name: str, val: str):
     sim_data = make_sim_data()
     if len(field_name) == 1 and val == "phase":
         with pytest.raises(Tidy3dKeyError):
@@ -259,6 +298,7 @@ def test_derived_components(field_name, val):
                 val=val,
                 y=0.0,
                 time=1e-12,
+                transpose=transpose,
             )
     else:
         sim_data.plot_field(
@@ -267,42 +307,55 @@ def test_derived_components(field_name, val):
             val=val,
             y=0.0,
             time=1e-12,
+            transpose=transpose,
         )
     plt.close()
 
 
-def test_logscale():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_logscale(transpose: bool):
     sim_data = make_sim_data()
-    sim_data.plot_field("field_time", "Ex", val="real", scale="dB", y=0.0, time=1e-12)
+    sim_data.plot_field(
+        "field_time", "Ex", val="real", scale="dB", y=0.0, time=1e-12, transpose=transpose
+    )
     plt.close()
 
 
-def test_sel_kwarg_freq():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_sel_kwarg_freq(transpose: bool):
     """Use freq in sel_kwarg, should still work (but warning) for 1.6.x"""
     sim_data = make_sim_data()
-    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", freq=1e14, mode_index=1)
+    sim_data.plot_field(
+        "mode_solver", "Ex", y=0.0, val="real", freq=1e14, mode_index=1, transpose=transpose
+    )
     plt.close()
 
 
-def test_sel_kwarg_time():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_sel_kwarg_time(transpose: bool):
     """Use time in sel_kwarg, should still work (but warning) for 1.6.x"""
     sim_data = make_sim_data()
-    sim_data.plot_field("field_time", "Ex", y=0.0, val="real", time=1e-12)
+    sim_data.plot_field("field_time", "Ex", y=0.0, val="real", time=1e-12, transpose=transpose)
     plt.close()
 
 
-def test_sel_kwarg_len1():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_sel_kwarg_len1(transpose: bool):
     sim_data = make_sim_data()
 
     # data has no y dimension (only exists at y=0)
 
     # passing y=0 sel kwarg should still work
-    sim_data.plot_field("mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1)
+    sim_data.plot_field(
+        "mode_solver", "Ex", y=0.0, val="real", f=1e14, mode_index=1, transpose=transpose
+    )
     plt.close()
 
     # passing y=1 sel kwarg should error
     with pytest.raises(KeyError):
-        sim_data.plot_field("mode_solver", "Ex", y=-1.0, val="real", f=1e14, mode_index=1)
+        sim_data.plot_field(
+            "mode_solver", "Ex", y=-1.0, val="real", f=1e14, mode_index=1, transpose=transpose
+        )
         plt.close()
 
 
@@ -422,9 +475,10 @@ def test_run_time_lt_start(tmp_path):
     _ = sim_data[tmnt.name]
 
 
-def test_plot_field_title():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plot_field_title(transpose: bool):
     sim_data = make_sim_data()
-    ax = sim_data.plot_field("field", "Ey", "real", f=2e14, z=0.10)
+    ax = sim_data.plot_field("field", "Ey", "real", f=2e14, z=0.10, transpose=transpose)
     assert "z=0.10" in ax.title.get_text(), "title rendered incorrectly."
     plt.close()
 

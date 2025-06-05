@@ -21,6 +21,7 @@ from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Size1D
+from tidy3d.components.utils import warn_untested_argument
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
 from tidy3d.exceptions import Tidy3dError, ValidationError
@@ -822,6 +823,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         ax: Ax = None,
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -840,6 +842,8 @@ class RectangularDielectric(Tidy3dBaseModel):
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
 
         Returns
         -------
@@ -853,6 +857,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             ax=ax,
             source_alpha=source_alpha,
             monitor_alpha=monitor_alpha,
+            transpose=transpose,
             **patch_kwargs,
         )
 
@@ -865,6 +870,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         alpha: Optional[float] = None,
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
+        transpose: bool = False,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -890,6 +896,8 @@ class RectangularDielectric(Tidy3dBaseModel):
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
 
         Returns
         -------
@@ -905,6 +913,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             source_alpha=source_alpha,
             monitor_alpha=monitor_alpha,
             ax=ax,
+            transpose=transpose,
         )
 
     def plot_structures(
@@ -913,6 +922,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -926,6 +936,8 @@ class RectangularDielectric(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
 
         Returns
         -------
@@ -937,6 +949,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             y=y,
             z=z,
             ax=ax,
+            transpose=transpose,
         )
 
     def plot_structures_eps(
@@ -949,6 +962,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -974,6 +988,8 @@ class RectangularDielectric(Tidy3dBaseModel):
             Defaults to the structure default alpha.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
 
         Returns
         -------
@@ -989,6 +1005,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             cbar=cbar,
             reverse=reverse,
             ax=ax,
+            transpose=transpose,
         )
 
     def plot_grid(
@@ -997,6 +1014,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -1011,6 +1029,8 @@ class RectangularDielectric(Tidy3dBaseModel):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -1026,6 +1046,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             y=y,
             z=z,
             ax=ax,
+            transpose=transpose,
             **kwargs,
         )
 
@@ -1034,6 +1055,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         self,
         color: str = "k",
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot the waveguide cross-section geometry edges.
 
@@ -1042,12 +1064,20 @@ class RectangularDielectric(Tidy3dBaseModel):
         color : Color to use for the geometry edges.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
+            warn_untested_argument(
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
+            )
+
         kwargs = {"color": color, "linewidth": pyplot.rcParams["grid.linewidth"]}
         if self.normal_axis < self.lateral_axis:
             x0 = self.origin[self.lateral_axis]
@@ -1085,6 +1115,8 @@ class RectangularDielectric(Tidy3dBaseModel):
                 p = self._translate(x, y, 0)
                 plot_x.append(p[u])
                 plot_y.append(p[v])
+            if transpose:
+                plot_x, plot_y = plot_y, plot_x
             ax.plot(plot_x, plot_y, linestyle="-", **kwargs)
         ax.set_aspect("equal")
         return ax
@@ -1099,6 +1131,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         vmax: Optional[float] = None,
         ax: Ax = None,
         geometry_edges: Optional[str] = None,
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -1127,6 +1160,8 @@ class RectangularDielectric(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
         geometry_edges : Optional color to use for the geometry edges overlaid on the fields.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
@@ -1147,8 +1182,9 @@ class RectangularDielectric(Tidy3dBaseModel):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            transpose=transpose,
             **sel_kwargs,
         )
         if geometry_edges is not None:
-            self.plot_geometry_edges(geometry_edges, ax=ax)
+            self.plot_geometry_edges(geometry_edges, ax=ax, transpose=transpose)
         return ax
