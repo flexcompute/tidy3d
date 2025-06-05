@@ -5,7 +5,6 @@ from typing import Optional
 import numpy as np
 from autograd.extend import defvjp, primitive
 from numpy.typing import NDArray
-from scipy.linalg import solve_banded
 
 from tidy3d.log import log
 
@@ -369,6 +368,8 @@ def _solve_tridiagonal(lower: NDArray, diag: NDArray, upper: NDArray, rhs: NDArr
     np.ndarray
         Solution vector
     """
+    from scipy.linalg import solve_banded
+
     n = diag.size
     ab = np.zeros((3, n))
     ab[0, 1:] = upper[:-1]
