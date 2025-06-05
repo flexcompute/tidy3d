@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Implemented `FreqRange` utility class for frequency/wavelength handling with constructor methods `from_freq_interval()`, `from_wavelength()`, and `from_wvl_interval()`. 
 - Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
 - Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
 - Add `PointDipole.sources_from_angles()` that constructs a list of `PointDipole` objects needed to emulate a dipole oriented at a user-provided set of polar and azimuthal angles.
