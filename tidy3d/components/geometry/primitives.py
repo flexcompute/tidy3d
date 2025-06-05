@@ -378,7 +378,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -390,6 +391,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
+        transpose : bool = False
+            Optional: Swap coordinates in the plane perpendicular to the normal vector?
 
         Returns
         -------
@@ -400,7 +403,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         """
         import trimesh
 
-        z0, (x0, y0) = self.pop_axis(self.center, self.axis)
+        z0, (x0, y0) = self.pop_axis(self.center, self.axis, transpose=transpose)
         half_length = self.finite_length_axis / 2
 
         z_top = z0 + half_length
@@ -442,7 +445,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         x = np.hstack((x_bot, x_top))
         y = np.hstack((y_bot, y_top))
         z = np.hstack((np.full_like(x_bot, z_bot), np.full_like(x_top, z_top)))
-        vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
+        vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis, transpose=transpose)).T
 
         if x_bot.shape[0] == 1:
             m = 1

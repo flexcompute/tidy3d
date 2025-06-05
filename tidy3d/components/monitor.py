@@ -993,7 +993,6 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     def window_parameters(
         self,
         custom_bounds: Bound = None,
-        transpose: bool = False,
     ) -> tuple[Size, Coordinate, Coordinate]:
         """Return the physical size of the window transition region based on the monitor's size
         and optional custom bounds (useful in case the monitor has infinite dimensions). The window
@@ -1008,7 +1007,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         if self.size.count(0.0) != 1:
             return window_size, window_minus, window_plus
 
-        _, plane_inds = self.pop_axis([0, 1, 2], axis=self.size.index(0.0), transpose=transpose)
+        _, plane_inds = self.pop_axis([0, 1, 2], axis=self.size.index(0.0))
 
         for i, ind in enumerate(plane_inds):
             if custom_bounds:
