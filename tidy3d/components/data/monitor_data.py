@@ -1146,6 +1146,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                 "'freq' was not specified for 'FieldData.to_zbf()'. Defaulting to the mean frequency of the dataset."
             )
             freq = np.mean(e_x.coords["f"].values)
+        else:
+            freq = np.array(freq)
+
+        if freq.size > 1:
+            raise ValueError("'freq' must be a single value, not an array.")
+        else:
+            freq = freq.item()
 
         mode_area = mode_area.interp(f=freq)
         e_x = e_x.interp(f=freq)

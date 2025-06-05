@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug when generating a grid with snapping points near the simulation boundaries.
 - Fixed field colocation in `EMEModeSolverMonitor`.
 - Solver error for EME simulations with bends, introduced when support for 2D EME simulations was added.
+- Internal interpolation errors with some versions of `xarray` and `numpy`.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
