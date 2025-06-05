@@ -282,7 +282,9 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def intersecting_media(
-        test_object: Box, structures: tuple[Structure, ...]
+        test_object: Box, 
+        structures: tuple[Structure, ...],
+        transpose: bool = False,
     ) -> tuple[StructureMediumType, ...]:
         """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
@@ -303,7 +305,7 @@ class Scene(Tidy3dBaseModel):
         structures = [s.to_static() for s in structures]
         if test_object.size.count(0.0) == 1:
             # get all merged structures on the test_object, which is already planar
-            structures_merged = Scene._filter_structures_plane_medium(structures, test_object)
+            structures_merged = Scene._filter_structures_plane_medium(structures, test_object, transpose=transpose)
             mediums = {medium for medium, _ in structures_merged}
             return mediums
 
@@ -366,11 +368,12 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> tuple[tuple[float, float], tuple[float, float]]:
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis(bounds[0], axis=axis)
-        _, (hmax, vmax) = Box.pop_axis(bounds[1], axis=axis)
+        _, (hmin, vmin) = Box.pop_axis(bounds[0], axis=axis, transpose=transpose)
+        _, (hmax, vmax) = Box.pop_axis(bounds[1], axis=axis, transpose=transpose)
 
         # account for unordered limits
         if hlim is None:
@@ -396,6 +399,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
@@ -423,10 +427,10 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures, transpose=transpose)
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         return ax
 
     @equal_aspect
@@ -440,6 +444,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill: bool = True,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -467,7 +472,7 @@ class Scene(Tidy3dBaseModel):
         """
 
         medium_shapes = self._get_structures_2dbox(
-            structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         medium_map = self.medium_map
         for medium, shape in medium_shapes:
@@ -478,15 +483,16 @@ class Scene(Tidy3dBaseModel):
                 shape=shape,
                 ax=ax,
                 fill=fill,
+                transpose=transpose,
             )
 
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -580,6 +586,7 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Sets the xy limits of the scene at a plane, useful after plotting.
 
@@ -603,7 +610,7 @@ class Scene(Tidy3dBaseModel):
             The axes after setting the boundaries.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        hlim, vlim = Scene._get_plot_lims(bounds=bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax.set_xlim(hlim)
         ax.set_ylim(vlim)
         return ax
@@ -616,6 +623,7 @@ class Scene(Tidy3dBaseModel):
         z: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
 
@@ -656,13 +664,13 @@ class Scene(Tidy3dBaseModel):
         v_size = (vmax - vmin) or inf
 
         axis, center_normal = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        center = Box.unpop_axis(center_normal, (h_center, v_center), axis=axis)
-        size = Box.unpop_axis(0.0, (h_size, v_size), axis=axis)
+        center = Box.unpop_axis(center_normal, (h_center, v_center), axis=axis, transpose=transpose)
+        size = Box.unpop_axis(0.0, (h_size, v_size), axis=axis, transpose=transpose)
         plane = Box(center=center, size=size)
 
         medium_shapes = []
         for structure in structures:
-            intersections = plane.intersections_with(structure.geometry)
+            intersections = plane.intersections_with(structure.geometry, transpose=transpose)
             for shape in intersections:
                 if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
@@ -671,7 +679,9 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def _filter_structures_plane_medium(
-        structures: list[Structure], plane: Box
+        structures: list[Structure],
+        plane: Box,
+        transpose: bool = False,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         medium.
@@ -691,7 +701,7 @@ class Scene(Tidy3dBaseModel):
 
         medium_list = [structure.medium for structure in structures]
         return Scene._filter_structures_plane(
-            structures=structures, plane=plane, property_list=medium_list
+            structures=structures, plane=plane, property_list=medium_list, transpose=transpose
         )
 
     @staticmethod
@@ -699,6 +709,7 @@ class Scene(Tidy3dBaseModel):
         structures: list[Structure],
         plane: Box,
         property_list: list,
+        transpose: bool = False,
     ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         provided property_list.
@@ -718,7 +729,7 @@ class Scene(Tidy3dBaseModel):
             List of shapes and their property value on the plane after merging.
         """
         return merging_geometries_on_plane(
-            [structure.geometry for structure in structures], plane, property_list
+            [structure.geometry for structure in structures], plane, property_list, transpose=transpose
         )
 
     """ Plotting Optical """
@@ -735,6 +746,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -766,12 +778,12 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
         ax = self.plot_structures_eps(
-            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         return ax
 
     @equal_aspect
@@ -791,6 +803,7 @@ class Scene(Tidy3dBaseModel):
         vlim: Optional[tuple[float, float]] = None,
         grid: Grid = None,
         eps_component: Optional[PermittivityComponent] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -848,6 +861,7 @@ class Scene(Tidy3dBaseModel):
             grid=grid,
             property="eps",
             eps_component=eps_component,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -868,6 +882,7 @@ class Scene(Tidy3dBaseModel):
         grid: Grid = None,
         property: Literal["eps", "doping", "N_a", "N_d"] = "eps",
         eps_component: Optional[PermittivityComponent] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -937,11 +952,13 @@ class Scene(Tidy3dBaseModel):
             # that needs to be rendered
             if property in ["N_d", "N_a", "doping"]:
                 structures = [self.background_structure, *list(structures)]
-            medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
+            medium_shapes = self._filter_structures_plane_medium(
+                structures=structures, plane=plane, transpose=transpose
+            )
         else:
             structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
-                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
             )
 
         property_min, property_max = limits
@@ -1000,6 +1017,7 @@ class Scene(Tidy3dBaseModel):
                         shape=shape,
                         ax=ax,
                         eps_component=eps_component,
+                        transpose=transpose,
                     )
                 else:
                     # For custom medium, apply pcolormesh clipped by the shape.
@@ -1017,6 +1035,7 @@ class Scene(Tidy3dBaseModel):
                         ax,
                         grid,
                         eps_component=eps_component,
+                        transpose=transpose,
                     )
 
         if cbar:
@@ -1036,10 +1055,10 @@ class Scene(Tidy3dBaseModel):
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -1339,6 +1358,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1372,12 +1392,12 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
         ax = self.plot_structures_heat_charge_property(
-            cbar=cbar, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, property=property
+            cbar=cbar, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, property=property, transpose=transpose
         )
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         return ax
 
     @equal_aspect
@@ -1459,6 +1479,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1506,11 +1527,13 @@ class Scene(Tidy3dBaseModel):
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
             plane = Box(center=center, size=size)
-            medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
+            medium_shapes = self._filter_structures_plane_medium(
+                structures=structures, plane=plane, transpose=transpose
+            )
         else:
             structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
-                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
             )
 
         property_val_min, property_val_max = self.heat_charge_property_bounds(property=property)
@@ -1524,6 +1547,7 @@ class Scene(Tidy3dBaseModel):
                 shape=shape,
                 ax=ax,
                 property=property,
+                transpose=transpose,
             )
 
         if cbar:
@@ -1543,10 +1567,10 @@ class Scene(Tidy3dBaseModel):
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 

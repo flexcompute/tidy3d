@@ -554,7 +554,11 @@ class TriangleMesh(base.Geometry, ABC):
         return path.polygons_full
 
     def intersections_plane(
-        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -600,7 +604,7 @@ class TriangleMesh(base.Geometry, ABC):
             # permute so normal is aligned with z axis
             # and (y, z), (x, z), resp. (x, y) are aligned with (x, y)
             identity = np.eye(3)
-            permutation = self.unpop_axis(identity[2], identity[0:2], axis=axis)
+            permutation = self.unpop_axis(identity[2], identity[0:2], axis=axis, transpose=transpose)
             mapping[:3, :3] = np.array(permutation).T
 
             section2d, _ = section.to_planar(to_2D=mapping)
@@ -620,7 +624,7 @@ class TriangleMesh(base.Geometry, ABC):
                     "Using bounding box instead."
                 )
             log.warning(f"Error encountered: {e}")
-            return self.bounding_box.intersections_plane(x=x, y=y, z=z)
+            return self.bounding_box.intersections_plane(x=x, y=y, z=z, transpose=transpose)
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]

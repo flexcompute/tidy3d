@@ -966,6 +966,7 @@ class HeatChargeSimulation(AbstractSimulation):
         property: str = "heat_conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1001,7 +1002,7 @@ class HeatChargeSimulation(AbstractSimulation):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         cbar_cond = True
@@ -1036,16 +1037,17 @@ class HeatChargeSimulation(AbstractSimulation):
                 hlim=hlim,
                 vlim=vlim,
                 property=property,
+                transpose=transpose,
             )
         ax = self.plot_sources(
-            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim
+            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim)
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
         if property == "source":
             self._add_source_cbar(ax=ax, property=property)
@@ -1065,6 +1067,7 @@ class HeatChargeSimulation(AbstractSimulation):
         colorbar: str = "conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """
@@ -1124,6 +1127,7 @@ class HeatChargeSimulation(AbstractSimulation):
             property=plot_type,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -1135,6 +1139,7 @@ class HeatChargeSimulation(AbstractSimulation):
         z: Optional[float] = None,
         property: str = "heat_conductivity",
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's boundary conditions on a plane defined by one nonzero x,y,z
         coordinate.
@@ -1174,6 +1179,7 @@ class HeatChargeSimulation(AbstractSimulation):
             structures=structures,
             plane=plane,
             boundary_spec=self.boundary_spec,
+            transpose=transpose,
         )
 
         # plot boundary conditions
@@ -1185,14 +1191,14 @@ class HeatChargeSimulation(AbstractSimulation):
             ]
 
         for bc_spec, shape in new_boundaries:
-            ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax)
+            ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax, transpose=transpose)
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
+        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
+        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose)
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
 
         return ax
@@ -1215,11 +1221,11 @@ class HeatChargeSimulation(AbstractSimulation):
         return plot_params
 
     def _plot_boundary_condition(
-        self, shape: Shapely, boundary_spec: HeatChargeBoundarySpec, ax: Ax
+        self, shape: Shapely, boundary_spec: HeatChargeBoundarySpec, ax: Ax, transpose: bool = False
     ) -> Ax:
         """Plot a structure's cross section shape for a given boundary condition."""
         plot_params_bc = self._get_bc_plot_params(boundary_spec=boundary_spec)
-        ax = self.plot_shape(shape=shape, plot_params=plot_params_bc, ax=ax)
+        ax = self.plot_shape(shape=shape, plot_params=plot_params_bc, ax=ax, transpose=transpose)
         return ax
 
     @staticmethod
@@ -1521,6 +1527,7 @@ class HeatChargeSimulation(AbstractSimulation):
         vlim: Optional[tuple[float, float]] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1594,14 +1601,15 @@ class HeatChargeSimulation(AbstractSimulation):
                     source_max=source_max,
                     shape=shape,
                     ax=ax,
+                    transpose=transpose,
                 )
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
+        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
+        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose)
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 

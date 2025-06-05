@@ -456,6 +456,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -496,7 +497,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         """
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         ax = self.scene.plot(
@@ -507,19 +508,20 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             hlim=hlim,
             vlim=vlim,
             fill_structures=fill_structures,
+            transpose=transpose,
         )
 
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
         ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha, transpose=transpose
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
 
         return ax
 
@@ -540,6 +542,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax: Ax = None,
         eps_component: Optional[PermittivityComponent] = None,
         eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -601,7 +604,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 )
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         ax = self.plot_structures_eps(
@@ -616,18 +619,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             vlim=vlim,
             eps_component=eps_component,
             eps_lim=eps_lim,
+            transpose=transpose,
         )
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
         ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha, transpose=transpose
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
         return ax
 
     @equal_aspect
@@ -646,6 +650,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         eps_component: Optional[PermittivityComponent] = None,
         eps_lim: tuple[Union[float, None], Union[float, None]] = (None, None),
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -691,7 +696,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         if freq is None:
             freq0s = [source.source_time.freq0 for source in self.sources]
@@ -719,6 +724,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             reverse=reverse,
             eps_component=eps_component,
             eps_lim=eps_lim,
+            transpose=transpose
         )
 
     @equal_aspect
@@ -731,6 +737,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's absorbing boundaries
         on a plane defined by one nonzero x,y,z coordinate.
@@ -760,11 +767,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         for pml_box in pml_boxes:
             pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -889,6 +896,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's lumped elements on a plane defined by one
         nonzero x,y,z coordinate.
@@ -918,9 +926,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         bounds = self.bounds
         for element in self.lumped_elements:
             kwargs = element.plot_params.include_kwargs(alpha=alpha).to_kwargs()
-            ax = element.to_geometry().plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
+            ax = element.to_geometry().plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, transpose=transpose, **kwargs)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         return ax
 
@@ -935,6 +943,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim: Optional[tuple[float, float]] = None,
         override_structures_alpha: float = 1,
         snapping_points_alpha: float = 1,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -975,7 +984,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         kwargs.setdefault("snapping_linestyle", "--")
         cell_boundaries = self.grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
+        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, transpose=transpose)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
 
@@ -1011,7 +1020,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             for structures, plot_param in zip(all_override_structures, plot_params):
                 for structure in structures:
                     bounds = list(zip(*structure.geometry.bounds))
-                    _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
+                    _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(
+                        bounds, axis=axis, transpose=transpose
+                    )
                     xmin, xmax, ymin, ymax = (
                         self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax)
                     )
@@ -1034,7 +1045,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             plot_params,
         ):
             for point in points:
-                _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
+                _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis, transpose=transpose)
                 if x_point is None and y_point is None:
                     continue
                 if x_point is None:
@@ -1063,11 +1074,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 )
 
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -1079,6 +1090,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the simulation boundary conditions as lines on a plane
@@ -1129,7 +1141,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundaries = self.boundary_spec.to_list
 
         normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis)
+        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis, transpose=transpose)
 
         umin, umax = ax.get_xlim()
         vmin, vmax = ax.get_ylim()
@@ -1182,12 +1194,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         )
         ax.add_patch(rect)
 
-        # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, transpose=transpose)
         ax.set_xlim([ulim_minus, ulim_plus])
         ax.set_ylim([vlim_minus, vlim_plus])
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -2704,7 +2716,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["medium", "size", "structures", "sources"])
-    def plane_wave_boundaries(cls, val, values):
+    def plane_wave_boundaries(cls, val, values, transpose: bool = False):
         """Error if there are plane wave sources incompatible with boundary conditions."""
         boundaries = val.to_list
         sources = values.get("sources")
@@ -2715,7 +2727,7 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, PlaneWave):
                 continue
 
-            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis, transpose=transpose)
             medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
@@ -2758,7 +2770,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["boundary_spec", "medium", "size", "structures", "sources"])
-    def bloch_boundaries_diff_mnt(cls, val, values):
+    def bloch_boundaries_diff_mnt(cls, val, values, transpose: bool = False):
         """Error if there are diffraction monitors incompatible with boundary conditions."""
 
         monitors = val
@@ -2775,7 +2787,7 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, PlaneWave):
                 continue
 
-            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis, transpose=transpose)
             medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
@@ -2798,7 +2810,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["medium", "center", "size", "structures", "sources"])
-    def tfsf_boundaries(cls, val, values):
+    def tfsf_boundaries(cls, val, values, transpose: bool = False):
         """Error if the boundary conditions are incompatible with TFSF sources, if any."""
         boundaries = val.to_list
         sources = values.get("sources")
@@ -2814,7 +2826,7 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, TFSF):
                 continue
 
-            norm_dir, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            norm_dir, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis, transpose=transpose)
             src_bounds = source.bounds
 
             # make a dummy source that represents the injection surface to get the intersecting
@@ -3154,14 +3166,14 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["boundary_spec"])
-    def diffraction_monitor_boundaries(cls, val, values):
+    def diffraction_monitor_boundaries(cls, val, values, transpose: bool = False):
         """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
         transverse directions are periodic or Bloch."""
         monitors = val
         boundary_spec = values.get("boundary_spec")
         for monitor in monitors:
             if isinstance(monitor, DiffractionMonitor):
-                _, (n_x, n_y) = monitor.pop_axis(["x", "y", "z"], axis=monitor.normal_axis)
+                _, (n_x, n_y) = monitor.pop_axis(["x", "y", "z"], axis=monitor.normal_axis, transpose=transpose)
                 boundaries = [
                     boundary_spec[n_x].plus,
                     boundary_spec[n_x].minus,
@@ -3225,7 +3237,7 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
-    def _projection_direction(cls, val, values):
+    def _projection_direction(cls, val, values, transpose: bool = False):
         """Warn if field projection observation points are behind surface projection monitors."""
         # This validator is in simulation.py rather than monitor.py because volume monitors are
         # eventually converted to their bounding surface projection monitors, in which case we
@@ -3263,7 +3275,7 @@ class Simulation(AbstractYeeGridSimulation):
                         x, y, z = Geometry.sph_2_car(r=monitor.proj_distance, theta=theta, phi=phi)
                     else:
                         pts = monitor.unpop_axis(
-                            monitor.proj_distance, (monitor.x, monitor.y), axis=normal_ind
+                            monitor.proj_distance, (monitor.x, monitor.y), axis=normal_ind, transpose=transpose
                         )
                         x, y, z = pts
 
@@ -3851,7 +3863,7 @@ class Simulation(AbstractYeeGridSimulation):
                         custom_loc=["structures", i],
                     )
 
-    def _validate_tfsf_nonuniform_grid(self) -> None:
+    def _validate_tfsf_nonuniform_grid(self, transpose: bool = False) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,
         inside the TFSF box.
         """
@@ -3867,7 +3879,7 @@ class Simulation(AbstractYeeGridSimulation):
                 centers = self.grid.centers.to_list
                 sizes = self.grid.sizes.to_list
                 tfsf_bounds = source.bounds
-                _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
+                _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis, transpose=transpose)
                 grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
                 for ind in plane_inds:
                     grid_type = grid_list[ind]
@@ -4109,7 +4121,7 @@ class Simulation(AbstractYeeGridSimulation):
                     custom_loc = ["monitors", mnt_ind]
                     warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
 
-    def _validate_num_cells_in_mode_objects(self) -> None:
+    def _validate_num_cells_in_mode_objects(self, transpose: bool = False) -> None:
         """Raise an error if mode sources or monitors intersect with a very small number
         of grid cells in their transverse dimensions."""
 
@@ -4117,7 +4129,7 @@ class Simulation(AbstractYeeGridSimulation):
             mode_object: tuple[ModeSource, ModeMonitor], normal_axis: Axis, msg_header: str
         ):
             disc_grid = self.discretize(mode_object)
-            _, check_axes = Box.pop_axis([0, 1, 2], axis=normal_axis)
+            _, check_axes = Box.pop_axis([0, 1, 2], axis=normal_axis, transpose=transpose)
             for axis in check_axes:
                 sim_size = self.size[axis]
                 dim_cells = disc_grid.num_cells[axis]
@@ -4204,7 +4216,7 @@ class Simulation(AbstractYeeGridSimulation):
                 "data, use hdf5 format instead."
             )
 
-    def _validate_tfsf_structure_intersections(self) -> None:
+    def _validate_tfsf_structure_intersections(self, transpose: bool = False) -> None:
         """Error if the 4 sidewalls of a TFSF box don't all intersect the same structures.
         This validator may need to compute permittivities on the grid, so it is called
         pre-upload rather than at the time of definition. Also errors if any side wall
@@ -4270,7 +4282,7 @@ class Simulation(AbstractYeeGridSimulation):
                 # a single "stripe" of epsilon as the reference and subtract it from all other
                 # stripes, which should result in zero if all the epsilon profiles are the same
                 freq0 = source.source_time.freq0
-                _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis)
+                _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis, transpose=transpose)
                 ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=freq0)
                 kwargs = {plane_axs[0]: 0, plane_axs[1]: 0}
                 ref_eps = ref_eps.isel(**kwargs)
@@ -4577,6 +4589,7 @@ class Simulation(AbstractYeeGridSimulation):
         gds_layer_dtype_map: Optional[
             dict[AbstractMedium, tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]]
         ] = None,
+        transpose: bool = False
     ) -> list:
         """Convert a simulation's planar slice to a .gds type polygon list.
 
@@ -4605,10 +4618,10 @@ class Simulation(AbstractYeeGridSimulation):
             gds_layer_dtype_map = {}
 
         axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, bmin = self.pop_axis(self.bounds[0], axis)
-        _, bmax = self.pop_axis(self.bounds[1], axis)
+        _, bmin = self.pop_axis(self.bounds[0], axis, transpose=transpose)
+        _, bmax = self.pop_axis(self.bounds[1], axis, transpose=transpose)
 
-        _, symmetry = self.pop_axis(self.symmetry, axis)
+        _, symmetry = self.pop_axis(self.symmetry, axis, transpose=transpose)
         if symmetry[0] != 0:
             bmin = (0, bmin[1])
         if symmetry[1] != 0:
@@ -4626,6 +4639,7 @@ class Simulation(AbstractYeeGridSimulation):
                 frequency=frequency,
                 gds_layer=gds_layer,
                 gds_dtype=gds_dtype,
+                transpose=transpose,
             ):
                 pmin, pmax = polygon.bounding_box()
                 if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
@@ -4703,6 +4717,7 @@ class Simulation(AbstractYeeGridSimulation):
             dict[AbstractMedium, tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]]
         ] = None,
         gds_cell_name: str = "MAIN",
+        transpose: bool = False,
     ) -> None:
         """Append the simulation structures to a .gds cell.
 
@@ -4738,7 +4753,7 @@ class Simulation(AbstractYeeGridSimulation):
         cell = library.new_cell(gds_cell_name)
 
         axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, symmetry = self.pop_axis(self.symmetry, axis)
+        _, symmetry = self.pop_axis(self.symmetry, axis, transpose=transpose)
         if symmetry[0] != 0:
             outer_cell = cell
             cell = library.new_cell(gds_cell_name + "_X")

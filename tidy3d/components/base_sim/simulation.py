@@ -251,6 +251,7 @@ class AbstractSimulation(Box, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -282,23 +283,23 @@ class AbstractSimulation(Box, ABC):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         ax = self.scene.plot_structures(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures, transpose=transpose
         )
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
 
         return ax
@@ -314,6 +315,7 @@ class AbstractSimulation(Box, ABC):
         vlim: Optional[tuple[float, float]] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
@@ -341,13 +343,13 @@ class AbstractSimulation(Box, ABC):
         """
         bounds = self.bounds
         for source in self.sources:
-            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -362,6 +364,7 @@ class AbstractSimulation(Box, ABC):
         vlim: Optional[tuple[float, float]] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
 
@@ -389,13 +392,13 @@ class AbstractSimulation(Box, ABC):
         """
         bounds = self.bounds
         for monitor in self.monitors:
-            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -409,6 +412,7 @@ class AbstractSimulation(Box, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
 
@@ -432,7 +436,7 @@ class AbstractSimulation(Box, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
+9
         normal_axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
 
         for sym_axis, sym_value in enumerate(self.symmetry):
@@ -440,13 +444,13 @@ class AbstractSimulation(Box, ABC):
                 continue
             sym_box = self._make_symmetry_box(sym_axis=sym_axis)
             plot_params = self._make_symmetry_plot_params(sym_value=sym_value)
-            ax = sym_box.plot(x=x, y=y, z=z, ax=ax, **plot_params.to_kwargs())
+            ax = sym_box.plot(x=x, y=y, z=z, ax=ax, transpose=transpose, **plot_params.to_kwargs())
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 
@@ -482,6 +486,7 @@ class AbstractSimulation(Box, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the simulation boundary conditions as lines on a plane
@@ -519,6 +524,7 @@ class AbstractSimulation(Box, ABC):
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill: bool = True,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -545,11 +551,11 @@ class AbstractSimulation(Box, ABC):
         """
 
         hlim_new, vlim_new = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         return self.scene.plot_structures(
-            x=x, y=y, z=z, ax=ax, hlim=hlim_new, vlim=vlim_new, fill=fill
+            x=x, y=y, z=z, ax=ax, hlim=hlim_new, vlim=vlim_new, fill=fill, transpose=transpose
         )
 
     @equal_aspect
@@ -566,6 +572,7 @@ class AbstractSimulation(Box, ABC):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -603,7 +610,7 @@ class AbstractSimulation(Box, ABC):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         return self.scene.plot_structures_eps(
@@ -617,6 +624,7 @@ class AbstractSimulation(Box, ABC):
             hlim=hlim,
             vlim=vlim,
             reverse=reverse,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -632,6 +640,7 @@ class AbstractSimulation(Box, ABC):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -669,7 +678,7 @@ class AbstractSimulation(Box, ABC):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         return self.scene.plot_structures_heat_conductivity(
@@ -682,6 +691,7 @@ class AbstractSimulation(Box, ABC):
             hlim=hlim,
             vlim=vlim,
             reverse=reverse,
+            transpose=transpose,
         )
 
     @classmethod
