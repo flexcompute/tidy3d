@@ -128,6 +128,8 @@ class Sphere(base.Centered, base.Circular):
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane normal to the axis before creating each shape?
 
         Returns
         -------
@@ -471,13 +473,15 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         path, _ = section.to_planar(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float):
+    def _intersections_normal(self, z: float, transpose: bool = False):
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
 
         Parameters
         ----------
         z : float
             Position along the axis normal to slab
+        transpose : bool = False
+            Optional: Swap the x and y coordinates?
 
         Returns
         -------
@@ -495,10 +499,10 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if radius_offset <= 0:
             return []
 
-        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis)
+        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axi, transpose=transpose)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
-    def _intersections_side(self, position, axis):
+    def _intersections_side(self, position, axis, transpose: bool = False):
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
         When ``sidewall_angle`` is nonzero, so that it's in fact a conical frustum or cone, the
         cross section can contain hyperbolic curves. This is currently approximated by a polygon
@@ -510,6 +514,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             Position along axis direction.
         axis : int
             Integer index into 'xyz' (0, 1, 2).
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane orthogonal to the axis?
 
         Returns
         -------
@@ -534,8 +540,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # the vertices on the max side of top/bottom
         # The two vertices are present in all scenarios.
         vertices_max = [
-            self._local_to_global_side_cross_section([-intersect_half_length_max, 0], axis),
-            self._local_to_global_side_cross_section([intersect_half_length_max, 0], axis),
+            self._local_to_global_side_cross_section([-intersect_half_length_max, 0], axis, transpose=transpose),
+            self._local_to_global_side_cross_section([intersect_half_length_max, 0], axis, transpose=transpose),
         ]
 
         # Extending to a cone, the maximal height of the cone
@@ -559,7 +565,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             )
             for i in range(_N_SAMPLE_CURVE_SHAPELY):
                 vertices_frustum_right.append(
-                    self._local_to_global_side_cross_section([x_list[i], y_list[i]], axis)
+                    self._local_to_global_side_cross_section([x_list[i], y_list[i]], axis, transpose=transpose)
                 )
                 vertices_frustum_left.append(
                     self._local_to_global_side_cross_section(
@@ -568,6 +574,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                             y_list[_N_SAMPLE_CURVE_SHAPELY - i - 1],
                         ],
                         axis,
+                        transpose=transpose,
                     )
                 )
 
@@ -578,17 +585,17 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if intersect_half_length_min > 0:
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [intersect_half_length_min, self.finite_length_axis], axis
+                    [intersect_half_length_min, self.finite_length_axis], axis, transpose=transpose
                 )
             )
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [-intersect_half_length_min, self.finite_length_axis], axis
+                    [-intersect_half_length_min, self.finite_length_axis], axis, transpose=transpose
                 )
             )
         ## early termination
         else:
-            vertices_min.append(self._local_to_global_side_cross_section([0, height_max], axis))
+            vertices_min.append(self._local_to_global_side_cross_section([0, height_max], axis, transpose=transpose))
 
         return [
             shapely.Polygon(
@@ -735,7 +742,12 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         return radius_middle - (z - self.center_axis) * self._tanq
 
-    def _local_to_global_side_cross_section(self, coords: list[float], axis: int) -> list[float]:
+    def _local_to_global_side_cross_section(
+        self,
+        coords: list[float],
+        axis: int,
+        transpose: bool = False,
+    ) -> list[float]:
         """Map a point (x,y) from local to global coordinate system in the
         side cross section.
 
@@ -750,6 +762,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             Integer index into 'xyz' (0, 1, 2).
         coords : List[float, float]
             The value in the planar coordinate.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before converting them?
 
         Returns
         -------
@@ -767,6 +781,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             plane_val=coords[0],
             axis_val=axis_sign * (-self.finite_length_axis / 2 + coords[1]),
             axis=axis,
+            transpose=transpose,
         )
-        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis)
+        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis, transpose=transpose)
         return [x_center + lx_offset, y_center + ly_offset]
