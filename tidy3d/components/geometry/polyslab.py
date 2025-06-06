@@ -87,7 +87,7 @@ class PolySlab(base.Planar):
     )
 
     @staticmethod
-    def make_shapely_polygon(vertices: ArrayLike, transpose: bool = False) -> shapely.Polygon:
+    def make_shapely_polygon(vertices: ArrayLike) -> shapely.Polygon:
         """Make a shapely polygon from some vertices, first ensures they are untraced."""
         return shapely.Polygon(vertices)
 
@@ -650,7 +650,7 @@ class PolySlab(base.Planar):
             vertices = self.reference_polygon
             if transpose:
                 vertices = vertices[:, (1, 0)]  # swap column 0 (x coords) with column 1 (y coords)
-            return [self.make_shapely_polygon(vertices, transpose=transpose)]
+            return [self.make_shapely_polygon(vertices)]
         z0 = self.center_axis
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
@@ -658,7 +658,7 @@ class PolySlab(base.Planar):
         vertices = vertices_z
         if transpose:
             vertices = vertices[:, (1, 0)]  # swap column 0 (x coords) with column 1 (y coords)
-        return [self.make_shapely_polygon(vertices, transpose=transpose)]
+        return [self.make_shapely_polygon(vertices)]
 
     def _intersections_side(self, position, axis, transpose: bool = False) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
