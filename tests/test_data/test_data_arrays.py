@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-import numpy as np
+import autograd as ag
+import autograd.numpy as np
 import pytest
 import xarray.testing as xrt
+from autograd.test_util import check_grads
 
 import tidy3d as td
 from tidy3d.exceptions import DataError
@@ -468,3 +470,49 @@ def test_interp(method, scalar_index):
     xr_interp = data.interp(f=f)
     ag_interp = data._ag_interp(f=f)
     xrt.assert_allclose(xr_interp, ag_interp)
+
+
+def test_with_updated_data_grad():
+    """Check the ``DataArray.with_updated_data()`` method."""
+
+    arr = td.SpatialDataArray(
+        np.ones((2, 3, 4, 5), dtype=np.complex128),
+        coords={"x": [0, 1], "y": [1, 2, 3], "z": [2, 3, 4, 5], "w": [0, 1, 2, 3, 4]},
+    )
+
+    data = np.zeros((1, 1, 1, 5))
+
+    coords = {"x": 0, "y": 2, "z": 3}
+
+    arr2 = arr._with_updated_data(data=data, coords=coords)
+
+    data_expected = np.ones(arr.shape) + 0j
+    data_expected[0, 1, 1, :] = 0.0 + 0j
+    assert np.all(arr2.data == data_expected), "DataArray.with_updated_copy() failed"
+
+    def f(x):
+        arr2 = arr._with_updated_data(data=x, coords=coords)
+        return np.abs(np.sum(arr2.data))
+
+    # grad should just be all 1s because of sum, so check that this is true
+    g = ag.grad(f)(data)
+    assert np.all(g == np.ones_like(data))
+
+    check_grads(f, order=1, modes=["rev"])(data)
+
+
+def test_with_updated_data_shape():
+    """Check the ``DataArray.with_updated_data()`` method."""
+
+    arr = td.SpatialDataArray(
+        np.ones((2, 3, 4, 5), dtype=np.complex128),
+        coords={"x": [0, 1], "y": [1, 2, 3], "z": [2, 3, 4, 5], "w": [0, 1, 2, 3, 4]},
+    )
+
+    # wrong shape
+    data = np.zeros((1, 1, 1, 3))
+
+    coords = {"x": 0, "y": 2, "z": 3}
+
+    with pytest.raises(ValueError):
+        arr2 = arr._with_updated_data(data=data, coords=coords)
