@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved performance of `tidy3d.web.delete_old()` for large folders.
 - Upon initialization, an FDTD `Simulation` will now try to create all `ModeSolver` objects associated to `ModeSource`-s and `ModeMonitor`-s so they can be validated.
 - `tidy3d.plugins.autograd.interpolate_spline()` and `tidy3d.plugins.autograd.add_at()` can now be called with keyword arguments during tracing.
+- Zero-size dimensions automatically receive periodic boundary conditions instead of raising an error.
 
 ## [2.8.4] - 2025-05-15
 
