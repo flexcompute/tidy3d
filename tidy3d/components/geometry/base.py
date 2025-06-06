@@ -1347,7 +1347,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         z: Optional[float] = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
-        transpose: bool = False,
     ) -> list:
         """Convert a Geometry object's planar slice to a .gds type polygon.
 
@@ -1371,7 +1370,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         import gdstk
 
-        shapes = self.intersections_plane(x=x, y=y, z=z, transpose=transpose)
+        shapes = self.intersections_plane(x=x, y=y, z=z)
         polygons = []
         for shape in shapes:
             for vertices in vertices_from_shapely(shape):
@@ -1398,7 +1397,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         z: Optional[float] = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
-        transpose: bool = False,
     ) -> None:
         """Append a Geometry object's planar slice to a .gds cell.
 
@@ -1426,7 +1424,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                 )
             raise Tidy3dImportError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
-        polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype, transpose=transpose)
+        polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
         if polygons:
             cell.add(*polygons)
 
@@ -1440,7 +1438,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
-        transpose: bool = False,
     ) -> None:
         """Export a Geometry object's planar slice to a .gds file.
 
@@ -1471,7 +1468,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         library = gdstk.Library()
         cell = library.new_cell(gds_cell_name)
-        self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype, transpose=transpose)
+        self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
