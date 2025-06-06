@@ -2716,7 +2716,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["medium", "size", "structures", "sources"])
-    def plane_wave_boundaries(cls, val, values, transpose: bool = False):
+    def plane_wave_boundaries(cls, val, values):
         """Error if there are plane wave sources incompatible with boundary conditions."""
         boundaries = val.to_list
         sources = values.get("sources")
@@ -2727,7 +2727,7 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, PlaneWave):
                 continue
 
-            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis, transpose=transpose)
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
             medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
@@ -2770,7 +2770,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["boundary_spec", "medium", "size", "structures", "sources"])
-    def bloch_boundaries_diff_mnt(cls, val, values, transpose: bool = False):
+    def bloch_boundaries_diff_mnt(cls, val, values):
         """Error if there are diffraction monitors incompatible with boundary conditions."""
 
         monitors = val
@@ -2787,7 +2787,7 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, PlaneWave):
                 continue
 
-            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis, transpose=transpose)
+            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
             medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
@@ -2810,7 +2810,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["medium", "center", "size", "structures", "sources"])
-    def tfsf_boundaries(cls, val, values, transpose: bool = False):
+    def tfsf_boundaries(cls, val, values):
         """Error if the boundary conditions are incompatible with TFSF sources, if any."""
         boundaries = val.to_list
         sources = values.get("sources")
@@ -2826,7 +2826,7 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, TFSF):
                 continue
 
-            norm_dir, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis, transpose=transpose)
+            norm_dir, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
             src_bounds = source.bounds
 
             # make a dummy source that represents the injection surface to get the intersecting
@@ -3166,14 +3166,14 @@ class Simulation(AbstractYeeGridSimulation):
 
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["boundary_spec"])
-    def diffraction_monitor_boundaries(cls, val, values, transpose: bool = False):
+    def diffraction_monitor_boundaries(cls, val, values):
         """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
         transverse directions are periodic or Bloch."""
         monitors = val
         boundary_spec = values.get("boundary_spec")
         for monitor in monitors:
             if isinstance(monitor, DiffractionMonitor):
-                _, (n_x, n_y) = monitor.pop_axis(["x", "y", "z"], axis=monitor.normal_axis, transpose=transpose)
+                _, (n_x, n_y) = monitor.pop_axis(["x", "y", "z"], axis=monitor.normal_axis)
                 boundaries = [
                     boundary_spec[n_x].plus,
                     boundary_spec[n_x].minus,
@@ -3237,7 +3237,7 @@ class Simulation(AbstractYeeGridSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
-    def _projection_direction(cls, val, values, transpose: bool = False):
+    def _projection_direction(cls, val, values):
         """Warn if field projection observation points are behind surface projection monitors."""
         # This validator is in simulation.py rather than monitor.py because volume monitors are
         # eventually converted to their bounding surface projection monitors, in which case we
@@ -3275,7 +3275,7 @@ class Simulation(AbstractYeeGridSimulation):
                         x, y, z = Geometry.sph_2_car(r=monitor.proj_distance, theta=theta, phi=phi)
                     else:
                         pts = monitor.unpop_axis(
-                            monitor.proj_distance, (monitor.x, monitor.y), axis=normal_ind, transpose=transpose
+                            monitor.proj_distance, (monitor.x, monitor.y), axis=normal_ind
                         )
                         x, y, z = pts
 

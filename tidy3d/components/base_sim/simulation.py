@@ -436,7 +436,7 @@ class AbstractSimulation(Box, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-9
+
         normal_axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
 
         for sym_axis, sym_value in enumerate(self.symmetry):

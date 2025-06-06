@@ -483,7 +483,6 @@ class Scene(Tidy3dBaseModel):
                 shape=shape,
                 ax=ax,
                 fill=fill,
-                transpose=transpose,
             )
 
         # clean up the axis display

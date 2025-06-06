@@ -502,7 +502,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if radius_offset <= 0:
             return []
 
-        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axi, transpose=transpose)
+        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis, transpose=transpose)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis, transpose: bool = False):
