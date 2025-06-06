@@ -2183,7 +2183,7 @@ class Box(SimplePlaneIntersection, Centered):
         dim = "xyz"[normal_ind]
         pos = self.center[normal_ind]
         xyz_kwargs = {dim: pos}
-        shapes_plane = other.intersections_plane(**xyz_kwargs)
+        shapes_plane = other.intersections_plane(**xyz_kwargs, transpose=transpose)
 
         # intersect all shapes with the input self
         bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind, transpose=transpose)[1] for bounds in self.bounds)

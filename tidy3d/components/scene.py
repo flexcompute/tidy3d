@@ -319,7 +319,7 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def intersecting_structures(
-        test_object: Box, structures: tuple[Structure, ...]
+        test_object: Box, structures: tuple[Structure, ...], transpose: bool = False,
     ) -> tuple[Structure, ...]:
         """From a given list of structures, returns a list of :class:`.Structure` that intersect
         with the ``test_object``, if it is a surface, or its surfaces, if it is a volume.
@@ -346,7 +346,7 @@ class Scene(Tidy3dBaseModel):
 
             structures_merged = []
             for structure in structures:
-                intersections = structure.geometry.intersections_plane(**xyz_kwargs)
+                intersections = structure.geometry.intersections_plane(**xyz_kwargs, transpose=transpose)
                 if len(intersections) > 0:
                     structures_merged.append(structure)
             return structures_merged
@@ -648,8 +648,8 @@ class Scene(Tidy3dBaseModel):
         """
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis(self.bounds[0], axis=axis)
-        _, (hmax, vmax) = Box.pop_axis(self.bounds[1], axis=axis)
+        _, (hmin, vmin) = Box.pop_axis(self.bounds[0], axis=axis, transpose=transpose)
+        _, (hmax, vmax) = Box.pop_axis(self.bounds[1], axis=axis, transpose=transpose)
 
         if hlim is not None:
             (hmin, hmax) = hlim
