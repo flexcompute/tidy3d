@@ -149,6 +149,7 @@ class AbstractStructure(Tidy3dBaseModel):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot structure's geometric cross section at single (x,y,z) coordinate.
@@ -173,7 +174,8 @@ class AbstractStructure(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        return self.geometry.plot(x=x, y=y, z=z, ax=ax, viz_spec=self.viz_spec, **patch_kwargs)
+        print(f"AbstractStructure.plot({transpose=})")  # DEBUG
+        return self.geometry.plot(x=x, y=y, z=z, ax=ax, viz_spec=self.viz_spec, transpose=transpose, **patch_kwargs)
 
 
 class Structure(AbstractStructure):
