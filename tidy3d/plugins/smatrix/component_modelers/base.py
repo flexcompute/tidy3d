@@ -6,7 +6,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Generic, Optional, TypeVar, Union, get_args
 
-import numpy as np
+import autograd.numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
@@ -23,11 +23,15 @@ from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.web import run_async
 from tidy3d.web.api.container import Batch, BatchData
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
 DEFAULT_DATA_DIR = "."
+
+# whether to run gradient calculation for component modeler locally
+LOCAL_GRADIENT = False
 
 LumpedPortType = Union[LumpedPort, CoaxialLumpedPort]
 TerminalPortType = Union[LumpedPortType, WavePort]
@@ -251,7 +255,26 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
     @cached_property
     def batch_data(self) -> BatchData:
         """The :class:`.BatchData` associated with the simulations run for this component modeler."""
-        return self.batch.run(path_dir=self.path_dir)
+
+        # NOTE: uses run_async because Batch is not differentiable.
+        batch = self.batch
+        run_async_kwargs = batch.dict(
+            exclude={
+                "type",
+                "path_dir",
+                "attrs",
+                "solver_version",
+                "jobs_cached",
+                "num_workers",
+                "simulations",
+            }
+        )
+        return run_async(
+            batch.simulations,
+            **run_async_kwargs,
+            local_gradient=LOCAL_GRADIENT,
+            path_dir=self.path_dir,
+        )
 
     def get_path_dir(self, path_dir: str) -> None:
         """Check whether the supplied 'path_dir' matches the internal field value."""

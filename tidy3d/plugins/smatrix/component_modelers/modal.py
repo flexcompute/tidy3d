@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-import numpy as np
+import autograd.numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
@@ -237,14 +237,15 @@ class ComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
                 )
                 source_norm = self._normalization_factor(port_in, sim_data)
                 s_matrix_elements = np.array(amp.data) / np.array(source_norm)
-                s_matrix.loc[
-                    {
-                        "port_in": port_name_in,
-                        "mode_index_in": mode_index_in,
-                        "port_out": port_name_out,
-                        "mode_index_out": mode_index_out,
-                    }
-                ] = s_matrix_elements
+
+                coords_set = {
+                    "port_in": port_name_in,
+                    "mode_index_in": mode_index_in,
+                    "port_out": port_name_out,
+                    "mode_index_out": mode_index_out,
+                }
+
+                s_matrix = s_matrix._with_updated_data(data=s_matrix_elements, coords=coords_set)
 
         # element can be determined by user-defined mapping
         for (row_in, col_in), (row_out, col_out), mult_by in self.element_mappings:
@@ -259,12 +260,14 @@ class ComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
 
             port_out_to, mode_index_out_to = row_out
             port_in_to, mode_index_in_to = col_out
+
+            elements_from = mult_by * s_matrix.loc[coords_from].values
             coords_to = {
                 "port_in": port_in_to,
                 "mode_index_in": mode_index_in_to,
                 "port_out": port_out_to,
                 "mode_index_out": mode_index_out_to,
             }
-            s_matrix.loc[coords_to] = mult_by * s_matrix.loc[coords_from].values
+            s_matrix = s_matrix._with_updated_data(data=elements_from, coords=coords_to)
 
         return s_matrix

@@ -489,6 +489,40 @@ class DataArray(xr.DataArray):
                 result = result.transpose(*out_dims)
         return result
 
+    def _with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> DataArray:
+        """Make copy of ``DataArray`` with ``data`` at specified ``coords``, autograd compatible
+
+        Constraints / Edge cases:
+            - `coords` must map to a specific value eg {x: '1'}, does not broadcast to arrays
+            - `data` will be reshaped to try to match `self.shape` except where `coords` present
+        """
+
+        # make mask
+        mask = xr.zeros_like(self, dtype=bool)
+        mask.loc[coords] = True
+
+        # reshape `data` to line up with `self.dims`, with shape of 1 along the selected axis
+        old_data = self.data
+        new_shape = list(old_data.shape)
+        for i, dim in enumerate(self.dims):
+            if dim in coords:
+                new_shape[i] = 1
+        try:
+            new_data = data.reshape(new_shape)
+        except ValueError as e:
+            raise ValueError(
+                "Couldn't reshape the supplied 'data' to update 'DataArray'. The provided data was "
+                f"of shape {data.shape} and tried to reshape to {new_shape}. If you encounter this "
+                "error please raise an issue on the tidy3d github repository with the context."
+            ) from e
+
+        # broadcast data to repeat data along the selected dimensions to match mask
+        new_data = new_data + np.zeros_like(old_data)
+
+        new_data = np.where(mask, new_data, old_data)
+
+        return self.copy(deep=True, data=new_data)
+
 
 class FreqDataArray(DataArray):
     """Frequency-domain array.

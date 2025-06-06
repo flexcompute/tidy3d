@@ -291,9 +291,10 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             port, mode_index = self.network_dict[source_index]
             sim_data = batch_data[self._task_name(port=port, mode_index=mode_index)]
             a, b = self.compute_power_wave_amplitudes_at_each_port(port_impedances, sim_data)
-            indexer = {"f": a.f, "port_out": a.port, "port_in": source_index}
-            a_matrix.loc[indexer] = a
-            b_matrix.loc[indexer] = b
+
+            indexer = {"port_in": source_index}
+            a_matrix = a_matrix._with_updated_data(data=a.data, coords=indexer)
+            b_matrix = b_matrix._with_updated_data(data=b.data, coords=indexer)
 
         # If excitation is assumed ideal, a_matrix is assumed to be diagonal
         # and the explicit inverse can be avoided. When only a subset of excitations
@@ -315,7 +316,8 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
                 "port_in": col_out,
                 "port_out": row_out,
             }
-            s_matrix.loc[coords_to] = mult_by * s_matrix.loc[coords_from].values
+            data = mult_by * s_matrix.loc[coords_from].data
+            s_matrix = s_matrix._with_updated_data(data=data, coords=coords_to)
 
         return s_matrix
 
@@ -408,8 +410,8 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             port, mode_index = self.network_dict[network_index]
             V_out, I_out = self.compute_port_VI(port, sim_data)
             indexer = {"port": network_index}
-            V_matrix.loc[indexer] = V_out
-            I_matrix.loc[indexer] = I_out
+            V_matrix = V_matrix._with_updated_data(data=V_out.data, coords=indexer)
+            I_matrix = I_matrix._with_updated_data(data=I_out.data, coords=indexer)
 
         V_numpy = V_matrix.values
         I_numpy = I_matrix.values
@@ -577,16 +579,16 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             )
         for network_index in self.matrix_indices_monitor:
             port, mode_index = self.network_dict[network_index]
+            indexer = {"port": network_index}
             if isinstance(port, WavePort):
                 # WavePorts have a port impedance calculated from its associated modal field distribution
                 # and is frequency dependent.
-                impedances = port.compute_port_impedance(sim_data).values
-                port_impedances.loc[{"port": network_index}] = impedances.squeeze()
+                data = port.compute_port_impedance(sim_data).data
+                port_impedances = port_impedances._with_updated_data(data=data, coords=indexer)
             else:
                 # LumpedPorts have a constant reference impedance
-                port_impedances.loc[{"port": network_index}] = np.full(
-                    len(self.freqs), port.impedance
-                )
+                data = np.full(len(self.freqs), port.impedance)
+                port_impedances = port_impedances._with_updated_data(data=data, coords=indexer)
 
         port_impedances = TerminalComponentModeler._set_port_data_array_attributes(port_impedances)
         return port_impedances
