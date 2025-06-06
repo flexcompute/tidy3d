@@ -1,5 +1,3 @@
-"""DO NOT EDIT: Modified automatically with .bump2version.cfg"""
+import importlib.metadata
 
-from __future__ import annotations
-
-__version__ = "2.8.4"
+__version__ = importlib.metadata.version("tidy3d")
