@@ -563,16 +563,19 @@ def test_validate_zero_dim_boundaries():
         pol_angle=0.0,
     )
 
-    with pytest.raises(pydantic.ValidationError):
-        td.Simulation(
-            size=(1, 1, 0),
-            run_time=1e-12,
-            sources=[src],
-            boundary_spec=td.BoundarySpec(
-                x=td.Boundary.periodic(),
-                y=td.Boundary.periodic(),
-                z=td.Boundary.pml(),
-            ),
+    with AssertLogLevel("WARNING", contains_str="Periodic"):
+        assert (
+            td.Simulation(
+                size=(1, 1, 0),
+                run_time=1e-12,
+                sources=[src],
+                boundary_spec=td.BoundarySpec(
+                    x=td.Boundary.periodic(),
+                    y=td.Boundary.periodic(),
+                    z=td.Boundary.pml(),
+                ),
+            ).boundary_spec.z
+            == td.Boundary.periodic()
         )
 
     # zero-dim simulation with an absorbing boundary any other direction should not error

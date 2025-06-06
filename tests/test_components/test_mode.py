@@ -151,7 +151,6 @@ def test_validation_from_simulation():
             size=(0, 5, 5),
             mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
             freqs=[td.C_0],
-            boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
         )
 
     with pytest.raises(SetupError):
@@ -160,7 +159,6 @@ def test_validation_from_simulation():
             size=(0, 5, 5),
             mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
             freqs=[td.C_0],
-            boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
         )
 
 
@@ -169,16 +167,12 @@ def get_mode_sim():
     permittivity_monitor = td.PermittivityMonitor(
         size=(1, 1, 0), center=(0, 0, 0), name="eps", freqs=FS
     )
-    boundary_spec = td.BoundarySpec(
-        x=td.Boundary.pml(), y=td.Boundary.periodic(), z=td.Boundary.pml()
-    )
     sim = td.ModeSimulation(
         size=SIZE_2D,
         freqs=FS,
         mode_spec=mode_spec,
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
         monitors=[permittivity_monitor],
-        boundary_spec=boundary_spec,
     )
     return sim
 

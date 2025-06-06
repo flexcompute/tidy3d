@@ -8,7 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.boundary import Boundary, BoundarySpec
+from tidy3d.components.boundary import BoundarySpec
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -212,18 +212,6 @@ class ModeSimulation(AbstractYeeGridSimulation):
         if not sim_box.intersects(val):
             raise SetupError("'ModeSimulation.plane' must intersect 'ModeSimulation.geometry.")
         return val
-
-    @pd.validator("boundary_spec", always=True)
-    def boundaries_for_zero_dims(cls, val, values):
-        """Replace with periodic boundary along zero-size dimensions."""
-        boundaries = [val.x, val.y, val.z]
-        size = values.get("size")
-
-        for dim, size_dim in enumerate(size):
-            if size_dim == 0:
-                boundaries[dim] = Boundary.periodic()
-
-        return BoundarySpec(x=boundaries[0], y=boundaries[1], z=boundaries[2])
 
     def _post_init_validators(self) -> None:
         """Call validators taking `self` that get run after init."""
@@ -524,4 +512,4 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def validate_pre_upload(self, source_required: bool = False):
         self._mode_solver.validate_pre_upload(source_required=source_required)
 
-    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims(warn_on_change=False)
