@@ -788,6 +788,55 @@ class HeatChargeSimulation(AbstractSimulation):
         return values
 
     @pd.root_validator(skip_on_failure=True)
+    def check_heat_sim(cls, values):
+        """Make sure that heat simulations have at least one monitor defined."""
+
+        simulation_types = cls._check_simulation_types(values=values)
+
+        if TCADAnalysisTypes.HEAT in simulation_types:
+            monitors = values.get("monitors")
+            if not any(isinstance(mnt, TemperatureMonitor) for mnt in monitors):
+                raise SetupError(
+                    "Heat simulations require the definition of, at least, one "
+                    "'TemperatureMonitor' but none have been defined."
+                )
+
+        return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_conduction_sim(cls, values):
+        """Make sure that conduction simulations have at least one monitor defined."""
+
+        simulation_types = cls._check_simulation_types(values=values)
+        sources = values.get("sources")
+
+        if TCADAnalysisTypes.CONDUCTION in simulation_types:
+            monitors = values.get("monitors")
+            if not any(isinstance(mnt, SteadyPotentialMonitor) for mnt in monitors):
+                if any(isinstance(s, HeatFromElectricSource) for s in sources):
+                    log.warning(
+                        "A Conduction simulation has been defined but no "
+                        "SteadyPotentialMonitor has been defined. "
+                    )
+                else:
+                    raise SetupError(
+                        "Conduction simulations require the definition of, at least, one "
+                        "'SteadyPotentialMonitor' but none have been defined."
+                    )
+
+            # now make sure we only have one voltage per VoltageBC
+            for bc in values.get("boundary_spec", []):
+                if isinstance(bc.condition, VoltageBC):
+                    if isinstance(bc.condition.source, DCVoltageSource):
+                        if len(bc.condition.source.voltage) > 1:
+                            raise SetupError(
+                                "A Conduction simulation has been defined but a VoltageBC with an array of voltages "
+                                "has been defined. This is not supported in Conduction simulations."
+                            )
+
+        return values
+
+    @pd.root_validator(skip_on_failure=True)
     def estimate_charge_mesh_size(cls, values):
         """Make an estimate of the mesh size and raise a warning if too big.
         NOTE: this is a very rough estimate. The back-end will actually stop
@@ -1641,7 +1690,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         Example
         -------
-        >>> from tidy3d import Scene, Medium, Box, Structure, UniformUnstructuredGrid
+        >>> from tidy3d import Scene, Medium, Box, Structure, UniformUnstructuredGrid, TemperatureMonitor
         >>> box = Structure(
         ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
         ...     medium=Medium(permittivity=5),
@@ -1667,6 +1716,7 @@ class HeatChargeSimulation(AbstractSimulation):
         ...             condition=TemperatureBC(temperature=500),
         ...         )
         ...     ],
+        ...     monitors=[TemperatureMonitor(name="temp_monitor", center=(0, 0, 0), size=(1, 1, 1))],
         ... )
         """
 

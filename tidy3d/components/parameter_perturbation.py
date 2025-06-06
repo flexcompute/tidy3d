@@ -942,6 +942,10 @@ class CustomChargePerturbation(ChargePerturbation):
         if isinstance(h_vals, UnstructuredGridDataset):
             h_vals = h_vals.values
 
+        # Needed to avoid error in some xarray / numpy versions
+        e_vals = e_vals.item() if e_vals.size == 1 else e_vals
+        h_vals = h_vals.item() if h_vals.size == 1 else h_vals
+
         # note that the dimensionality of this operation differs depending on whether xarrays
         # or simple unlabeled arrays are provided:
         # - for unlabeled arrays, values are broadcasted

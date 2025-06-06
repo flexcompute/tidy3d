@@ -453,6 +453,14 @@ def test_heat_sim_bounds(shift_amount, log_level):
                 )
             ],
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[
+                td.TemperatureMonitor(
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                    unstructured=True,
+                )
+            ],
         )
 
     # create all permutations of squares being shifted 1, -1, or zero in all three directions
@@ -492,6 +500,14 @@ def test_sim_structure_extent(box_size, log_level):
             boundary_spec=[
                 td.HeatBoundarySpec(
                     placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
+                )
+            ],
+            monitors=[
+                td.TemperatureMonitor(
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                    unstructured=True,
                 )
             ],
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
@@ -549,6 +565,14 @@ def test_relative_min_dl_warning():
                     placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
                 )
             ],
+            monitors=[
+                td.TemperatureMonitor(
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                    unstructured=True,
+                )
+            ],
         )
 
     with AssertLogLevel("WARNING"):
@@ -567,6 +591,14 @@ def test_relative_min_dl_warning():
                     placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
                 )
             ],
+            monitors=[
+                td.TemperatureMonitor(
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                    unstructured=True,
+                )
+            ],
         )
 
     with AssertLogLevel("WARNING"):
@@ -583,6 +615,14 @@ def test_relative_min_dl_warning():
             boundary_spec=[
                 td.HeatBoundarySpec(
                     placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
+                )
+            ],
+            monitors=[
+                td.TemperatureMonitor(
+                    center=(0, 0, 0),
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                    unstructured=True,
                 )
             ],
         )
