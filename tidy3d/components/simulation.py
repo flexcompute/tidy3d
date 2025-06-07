@@ -4589,7 +4589,6 @@ class Simulation(AbstractYeeGridSimulation):
         gds_layer_dtype_map: Optional[
             dict[AbstractMedium, tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]]
         ] = None,
-        swap_axes: bool = False
     ) -> list:
         """Convert a simulation's planar slice to a .gds type polygon list.
 
@@ -4618,10 +4617,10 @@ class Simulation(AbstractYeeGridSimulation):
             gds_layer_dtype_map = {}
 
         axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, bmin = self.pop_axis(self.bounds[0], axis, swap_axes=swap_axes)
-        _, bmax = self.pop_axis(self.bounds[1], axis, swap_axes=swap_axes)
+        _, bmin = self.pop_axis(self.bounds[0], axis)
+        _, bmax = self.pop_axis(self.bounds[1], axis)
 
-        _, symmetry = self.pop_axis(self.symmetry, axis, swap_axes=swap_axes)
+        _, symmetry = self.pop_axis(self.symmetry, axis)
         if symmetry[0] != 0:
             bmin = (0, bmin[1])
         if symmetry[1] != 0:
@@ -4639,7 +4638,6 @@ class Simulation(AbstractYeeGridSimulation):
                 frequency=frequency,
                 gds_layer=gds_layer,
                 gds_dtype=gds_dtype,
-                swap_axes=swap_axes,
             ):
                 pmin, pmax = polygon.bounding_box()
                 if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
@@ -4717,7 +4715,6 @@ class Simulation(AbstractYeeGridSimulation):
             dict[AbstractMedium, tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]]
         ] = None,
         gds_cell_name: str = "MAIN",
-        swap_axes: bool = False,
     ) -> None:
         """Append the simulation structures to a .gds cell.
 
