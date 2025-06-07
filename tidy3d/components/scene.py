@@ -1016,7 +1016,6 @@ class Scene(Tidy3dBaseModel):
                         shape=shape,
                         ax=ax,
                         eps_component=eps_component,
-                        transpose=transpose,
                     )
                 else:
                     # For custom medium, apply pcolormesh clipped by the shape.
@@ -1034,7 +1033,6 @@ class Scene(Tidy3dBaseModel):
                         ax,
                         grid,
                         eps_component=eps_component,
-                        transpose=transpose,
                     )
 
         if cbar:
@@ -1359,7 +1357,7 @@ class Scene(Tidy3dBaseModel):
         vlim: Optional[tuple[float, float]] = None,
         transpose: bool = False,
     ) -> Ax:
-        """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
 
         Parameters
@@ -1412,6 +1410,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1462,6 +1461,7 @@ class Scene(Tidy3dBaseModel):
             ax=ax,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -1699,6 +1699,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ):
         """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
         The thermal conductivity is plotted in grayscale based on its value.
@@ -1745,6 +1746,7 @@ class Scene(Tidy3dBaseModel):
             ax=ax,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     """ Misc """
