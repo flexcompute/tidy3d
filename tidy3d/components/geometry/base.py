@@ -242,7 +242,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -267,11 +267,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         normal = self.unpop_axis(1, (0, 0), axis=axis)
         to_2D = np.eye(4)
         if axis != 2:
-            last, indices = self.pop_axis((0, 1, 2), axis, transpose=transpose)
+            last, indices = self.pop_axis((0, 1, 2), axis, swap_axes=swap_axes)
             to_2D = to_2D[[*list(indices), last, 3]]
         return self.intersections_tilted_plane(normal, origin, to_2D)
 
-    def intersections_2dbox(self, plane: Box, transpose: bool = False) -> list[Shapely]:
+    def intersections_2dbox(self, plane: Box, swap_axes: bool = False) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         a 2D box.
 
@@ -285,7 +285,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             "'intersections_2dbox()' is deprecated and will be removed in the future. "
             "Use 'plane.intersections_with(...)' for the same functionality."
         )
-        return plane.intersections_with(self, transpose=transpose)
+        return plane.intersections_with(self, swap_axes=swap_axes)
 
     def intersects(
         self, other, strict_inequality: tuple[bool, bool, bool] = [False, False, False]
@@ -448,7 +448,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def _pop_bounds(
         self,
         axis: Axis,
-        transpose: bool = False
+        swap_axes: bool = False
     ) -> tuple[Coordinate2D, tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
@@ -464,8 +464,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Packed as ``(zmin, zmax), ((xmin, ymin), (xmax, ymax))``.
         """
         b_min, b_max = self.bounds
-        zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis, transpose=transpose)
-        zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis, transpose=transpose)
+        zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis, swap_axes=swap_axes)
+        zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis, swap_axes=swap_axes)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
     @staticmethod
@@ -506,7 +506,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax: Ax = None,
         plot_length_units: LengthUnit = None,
         viz_spec: VisualizationSpec = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
@@ -537,7 +537,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         # find shapes that intersect self at plane
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        shapes_intersect = self.intersections_plane(x=x, y=y, z=z, transpose=transpose)
+        shapes_intersect = self.intersections_plane(x=x, y=y, z=z, swap_axes=swap_axes)
 
         plot_params = self.plot_params
         if viz_spec is not None:
@@ -549,10 +549,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
+        ax = self.add_ax_lims(axis=axis, ax=ax, swap_axes=swap_axes)
         ax.set_aspect("equal")
         # Add the default axis labels, tick labels, and title
-        ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units, transpose=transpose)
+        ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units, swap_axes=swap_axes)
         return ax
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
@@ -600,7 +600,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return False
 
     @staticmethod
-    def _get_plot_labels(axis: Axis, transpose: bool = False) -> tuple[str, str]:
+    def _get_plot_labels(axis: Axis, swap_axes: bool = False) -> tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
 
         Parameters
@@ -613,11 +613,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         str, str
             Labels of plot, packaged as ``(xlabel, ylabel)``.
         """
-        _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis, transpose=transpose)
+        _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis, swap_axes=swap_axes)
         return xlabel, ylabel
 
     def _get_plot_limits(
-        self, axis: Axis, buffer: float = PLOT_BUFFER, transpose: bool = False
+        self, axis: Axis, buffer: float = PLOT_BUFFER, swap_axes: bool = False
     ) -> tuple[Coordinate2D, Coordinate2D]:
         """Gets planar coordinate limits for cross section plots.
 
@@ -633,10 +633,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             Tuple[float, float], Tuple[float, float]
         The x and y plot limits, packed as ``(xmin, xmax), (ymin, ymax)``.
         """
-        _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis, transpose=transpose)
+        _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis, swap_axes=swap_axes)
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
 
-    def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, transpose: bool = False) -> Ax:
+    def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, swap_axes: bool = False) -> Ax:
         """Sets the x,y limits based on ``self.bounds``.
 
         Parameters
@@ -653,7 +653,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer, transpose=transpose)
+        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer, swap_axes=swap_axes)
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
         xmin, xmax, ymin, ymax = self._evaluate_inf((xmin, xmax, ymin, ymax))
@@ -669,7 +669,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         plot_length_units: LengthUnit = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> Ax:
         """Sets the axis labels, tick labels, and title based on ``axis``
         and an optional ``plot_length_units`` argument.
@@ -694,7 +694,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             The supplied matplotlib axes.
         """
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        axis_labels = Box._get_plot_labels(axis, transpose=transpose)
+        axis_labels = Box._get_plot_labels(axis, swap_axes=swap_axes)
         ax = set_default_labels_and_title(
             axis_labels=axis_labels,
             axis=axis,
@@ -736,7 +736,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def pop_axis(
         coord: tuple[Any, Any, Any],
         axis: int,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> tuple[Any, tuple[Any, Any]]:
         """Separates coordinate at ``axis`` index from coordinates on the plane tangent to ``axis``.
 
@@ -746,7 +746,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Tuple of three values in original coordinate system.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose: bool = False
+        swap_axes: bool = False
             Optional: Swap the order of the remaining two axes?
 
         Returns
@@ -758,7 +758,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         plane_vals = list(coord)
         axis_val = plane_vals.pop(axis)
-        if transpose:
+        if swap_axes:
             plane_vals = [plane_vals[1], plane_vals[0]]
         return axis_val, tuple(plane_vals)
 
@@ -767,7 +767,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax_coord: Any,
         plane_coords: tuple[Any, Any],
         axis: int,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> tuple[Any, Any, Any]:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
@@ -779,7 +779,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Values along ordered planar directions.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose: bool = False
+        swap_axes: bool = False
             Optional: Swap the order of the entries in plane_coords[]?
             NOTE: If `axis, plane_coords = pop_axis(coords, axis, transpose)`,
             then, if you want to get back the original `coords`, you should use:
@@ -791,7 +791,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             The three values in the xyz coordinate system.
         """
         coords = list(plane_coords)
-        if transpose:
+        if swap_axes:
             coords = [coords[1], coords[0]]
         coords.insert(axis, ax_coord)
         return tuple(coords)
@@ -1701,7 +1701,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1725,18 +1725,18 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         if not self.intersects_axis_position(axis, position):
             return []
         if axis == self.axis:
-            return self._intersections_normal(position, transpose=transpose)
-        return self._intersections_side(position, axis, transpose=transpose)
+            return self._intersections_normal(position, swap_axes=swap_axes)
+        return self._intersections_side(position, axis, swap_axes=swap_axes)
 
     @abstractmethod
-    def _intersections_normal(self, z: float, transpose: bool = False) -> list:
+    def _intersections_normal(self, z: float, swap_axes: bool = False) -> list:
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Parameters
         ----------
         z : float
             Position along the axis normal to slab
-        transpose : bool
+        swap_axes : bool
             Optional: Swap the order of the x and y axis in the geometry data.
 
         Returns
@@ -1748,7 +1748,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         """
 
     @abstractmethod
-    def _intersections_side(self, position: float, axis: Axis, transpose: bool = False) -> list:
+    def _intersections_side(self, position: float, axis: Axis, swap_axes: bool = False) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to plane.
 
         Parameters
@@ -1757,7 +1757,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position along axis.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose : bool
+        swap_axes : bool
             Optional: Swap the order of the remaining two axes (the axes not equal to axis).
 
         Returns
@@ -1790,7 +1790,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         plane_val: Any,
         axis_val: Any,
         axis: int,
-        transpose: bool = False
+        swap_axes: bool = False
     ) -> tuple[Any, Any]:
         """Orders a value in the plane and value along axis in correct (x,y) order for plotting.
            Note: sometimes if axis=1 and we compute cross section values orthogonal to axis,
@@ -1805,7 +1805,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             The value in the ``axis`` coordinate.
         axis : int
             Integer index into the structure's planar axis.
-        transpose : bool
+        swap_axes : bool
             Optional: Swap the order of the remaining two axes (the ones not equal to axis)
 
         Returns
@@ -1815,7 +1815,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         """
         vals = 3 * [plane_val]
         vals[self.axis] = axis_val
-        _, (val_x, val_y) = self.pop_axis(vals, axis=axis, transpose=transpose)
+        _, (val_x, val_y) = self.pop_axis(vals, axis=axis, swap_axes=swap_axes)
         return val_x, val_y
 
     @cached_property
@@ -2084,7 +2084,7 @@ class Box(SimplePlaneIntersection, Centered):
         x: Optional[float] = None, 
         y: Optional[float] = None, 
         z: Optional[float] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -2096,7 +2096,7 @@ class Box(SimplePlaneIntersection, Centered):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        transpose: bool = False
+        swap_axes: bool = False
             Optional: Swap the order of the coordinates in the two remaining (unspecified) axis?
 
         Returns
@@ -2109,8 +2109,8 @@ class Box(SimplePlaneIntersection, Centered):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
-        z0, (x0, y0) = self.pop_axis(self.center, axis=axis, transpose=transpose)
-        Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis, transpose=transpose)
+        z0, (x0, y0) = self.pop_axis(self.center, axis=axis, swap_axes=swap_axes)
+        Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis, swap_axes=swap_axes)
         dz = np.abs(z0 - position)
         if dz > Lz / 2 + fp_eps:
             return []
@@ -2155,7 +2155,7 @@ class Box(SimplePlaneIntersection, Centered):
         dist_z = np.abs(z - z0)
         return (dist_x <= Lx / 2) * (dist_y <= Ly / 2) * (dist_z <= Lz / 2)
 
-    def intersections_with(self, other, transpose: bool = False):
+    def intersections_with(self, other, swap_axes: bool = False):
         """Returns list of shapely geometries representing the intersections of the geometry with
         this 2D box.
 
@@ -2182,10 +2182,10 @@ class Box(SimplePlaneIntersection, Centered):
         dim = "xyz"[normal_ind]
         pos = self.center[normal_ind]
         xyz_kwargs = {dim: pos}
-        shapes_plane = other.intersections_plane(**xyz_kwargs, transpose=transpose)
+        shapes_plane = other.intersections_plane(**xyz_kwargs, swap_axes=swap_axes)
 
         # intersect all shapes with the input self
-        bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind, transpose=transpose)[1] for bounds in self.bounds)
+        bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind, swap_axes=swap_axes)[1] for bounds in self.bounds)
 
         shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
@@ -2253,7 +2253,7 @@ class Box(SimplePlaneIntersection, Centered):
         both_dirs: bool = False,
         ax: Ax = None,
         arrow_base: Coordinate = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> Ax:
         """Adds an arrow to the axis if with options if certain conditions met.
 
@@ -2287,11 +2287,11 @@ class Box(SimplePlaneIntersection, Centered):
         """
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis, transpose=transpose)
+        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis, swap_axes=swap_axes)
 
         # conditions to check to determine whether to plot arrow, taking into account the
         # possibility of a custom arrow base
-        arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z, transpose=transpose)) > 0
+        arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z, swap_axes=swap_axes)) > 0
         center = self.center
         if arrow_base:
             arrow_intersecting_plane = arrow_intersecting_plane and any(
@@ -2299,12 +2299,12 @@ class Box(SimplePlaneIntersection, Centered):
             )
             center = arrow_base
 
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis, transpose=transpose)
+        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis, swap_axes=swap_axes)
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
-            _, (x0, y0) = self.pop_axis(center, axis=plot_axis, transpose=transpose)
+            _, (x0, y0) = self.pop_axis(center, axis=plot_axis, swap_axes=swap_axes)
 
             # Reasonable value for temporary arrow size.  The correct size and direction
             # have to be calculated after all transforms have been set.  That is why we
@@ -3013,7 +3013,7 @@ class ClipOperation(Geometry):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3033,8 +3033,8 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        a = self.geometry_a.intersections_plane(x, y, z, transpose=transpose)
-        b = self.geometry_b.intersections_plane(x, y, z, transpose=transpose)
+        a = self.geometry_a.intersections_plane(x, y, z, swap_axes=swap_axes)
+        b = self.geometry_b.intersections_plane(x, y, z, swap_axes=swap_axes)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(
@@ -3228,7 +3228,7 @@ class GeometryGroup(Geometry):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
@@ -3253,7 +3253,7 @@ class GeometryGroup(Geometry):
         return [
             intersection
             for geometry in self.geometries
-            for intersection in geometry.intersections_plane(x=x, y=y, z=z, transpose=transpose)
+            for intersection in geometry.intersections_plane(x=x, y=y, z=z, swap_axes=swap_axes)
         ]
 
     def intersects_axis_position(self, axis: float, position: float) -> bool:

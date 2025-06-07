@@ -116,7 +116,7 @@ class Sphere(base.Centered, base.Circular):
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -128,7 +128,7 @@ class Sphere(base.Centered, base.Circular):
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap the coordinates in the plane normal to the axis before creating each shape?
 
         Returns
@@ -141,7 +141,7 @@ class Sphere(base.Centered, base.Circular):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
-        z0, (x0, y0) = self.pop_axis(self.center, axis=axis, transpose=transpose)
+        z0, (x0, y0) = self.pop_axis(self.center, axis=axis, swap_axes=swap_axes)
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
@@ -379,7 +379,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -391,7 +391,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             Vector defining the plane origin.
         to_2D : MatrixReal4x4
             Transformation matrix to apply to resulting shapes.
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap coordinates in the plane perpendicular to the normal vector?
 
         Returns
@@ -403,7 +403,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         """
         import trimesh
 
-        z0, (x0, y0) = self.pop_axis(self.center, self.axis, transpose=transpose)
+        z0, (x0, y0) = self.pop_axis(self.center, self.axis, swap_axes=swap_axes)
         half_length = self.finite_length_axis / 2
 
         z_top = z0 + half_length
@@ -445,7 +445,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         x = np.hstack((x_bot, x_top))
         y = np.hstack((y_bot, y_top))
         z = np.hstack((np.full_like(x_bot, z_bot), np.full_like(x_top, z_top)))
-        vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis, transpose=transpose)).T
+        vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis, swap_axes=swap_axes)).T
 
         if x_bot.shape[0] == 1:
             m = 1
@@ -476,14 +476,14 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         path, _ = section.to_planar(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float, transpose: bool = False):
+    def _intersections_normal(self, z: float, swap_axes: bool = False):
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
 
         Parameters
         ----------
         z : float
             Position along the axis normal to slab
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap the x and y coordinates?
 
         Returns
@@ -502,10 +502,10 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if radius_offset <= 0:
             return []
 
-        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis, transpose=transpose)
+        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis, swap_axes=swap_axes)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
-    def _intersections_side(self, position, axis, transpose: bool = False):
+    def _intersections_side(self, position, axis, swap_axes: bool = False):
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
         When ``sidewall_angle`` is nonzero, so that it's in fact a conical frustum or cone, the
         cross section can contain hyperbolic curves. This is currently approximated by a polygon
@@ -517,7 +517,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             Position along axis direction.
         axis : int
             Integer index into 'xyz' (0, 1, 2).
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap the coordinates in the plane orthogonal to the axis?
 
         Returns
@@ -543,8 +543,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # the vertices on the max side of top/bottom
         # The two vertices are present in all scenarios.
         vertices_max = [
-            self._local_to_global_side_cross_section([-intersect_half_length_max, 0], axis, transpose=transpose),
-            self._local_to_global_side_cross_section([intersect_half_length_max, 0], axis, transpose=transpose),
+            self._local_to_global_side_cross_section([-intersect_half_length_max, 0], axis, swap_axes=swap_axes),
+            self._local_to_global_side_cross_section([intersect_half_length_max, 0], axis, swap_axes=swap_axes),
         ]
 
         # Extending to a cone, the maximal height of the cone
@@ -568,7 +568,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             )
             for i in range(_N_SAMPLE_CURVE_SHAPELY):
                 vertices_frustum_right.append(
-                    self._local_to_global_side_cross_section([x_list[i], y_list[i]], axis, transpose=transpose)
+                    self._local_to_global_side_cross_section([x_list[i], y_list[i]], axis, swap_axes=swap_axes)
                 )
                 vertices_frustum_left.append(
                     self._local_to_global_side_cross_section(
@@ -577,7 +577,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
                             y_list[_N_SAMPLE_CURVE_SHAPELY - i - 1],
                         ],
                         axis,
-                        transpose=transpose,
+                        swap_axes=swap_axes,
                     )
                 )
 
@@ -588,17 +588,17 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if intersect_half_length_min > 0:
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [intersect_half_length_min, self.finite_length_axis], axis, transpose=transpose
+                    [intersect_half_length_min, self.finite_length_axis], axis, swap_axes=swap_axes
                 )
             )
             vertices_min.append(
                 self._local_to_global_side_cross_section(
-                    [-intersect_half_length_min, self.finite_length_axis], axis, transpose=transpose
+                    [-intersect_half_length_min, self.finite_length_axis], axis, swap_axes=swap_axes
                 )
             )
         ## early termination
         else:
-            vertices_min.append(self._local_to_global_side_cross_section([0, height_max], axis, transpose=transpose))
+            vertices_min.append(self._local_to_global_side_cross_section([0, height_max], axis, swap_axes=swap_axes))
 
         return [
             shapely.Polygon(
@@ -749,7 +749,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         self,
         coords: list[float],
         axis: int,
-        transpose: bool = False,
+        swap_axes: bool = False,
     ) -> list[float]:
         """Map a point (x,y) from local to global coordinate system in the
         side cross section.
@@ -765,7 +765,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             Integer index into 'xyz' (0, 1, 2).
         coords : List[float, float]
             The value in the planar coordinate.
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap the coordinates in the plane before converting them?
 
         Returns
@@ -784,7 +784,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             plane_val=coords[0],
             axis_val=axis_sign * (-self.finite_length_axis / 2 + coords[1]),
             axis=axis,
-            transpose=transpose,
+            swap_axes=swap_axes,
         )
-        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis, transpose=transpose)
+        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis, swap_axes=swap_axes)
         return [x_center + lx_offset, y_center + ly_offset]

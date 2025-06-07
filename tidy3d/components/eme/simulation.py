@@ -306,7 +306,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the EME ports."""
@@ -316,15 +316,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         rmax = self.geometry.bounds[1][self.axis]
         ports = np.array([rmin + self.port_offsets[0], rmax - self.port_offsets[1]])
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, transpose=transpose)
+        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, swap_axes=swap_axes)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = ports
         if axis_y == self.axis:
             boundaries_y = ports
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, transpose=transpose)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, transpose=transpose)
+        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
@@ -335,7 +335,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax.add_collection(line_segments_y)
 
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
 
         return ax
@@ -351,7 +351,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the EME subgrid boundaries.
@@ -365,15 +365,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         subgrid_boundaries = np.array(eme_grid_spec.subgrid_boundaries)
         subgrids = eme_grid_spec.subgrids
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, transpose=transpose)
+        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, swap_axes=swap_axes)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = subgrid_boundaries
         if axis_y == self.axis:
             boundaries_y = subgrid_boundaries
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, transpose=transpose)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, transpose=transpose)
+        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
@@ -384,12 +384,12 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax.add_collection(line_segments_y)
 
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
 
         for subgrid in subgrids:
             ax = self.plot_eme_subgrid_boundaries(
-                eme_grid_spec=subgrid, x=x, y=y, z=z, ax=ax, hlim=hlim, vlim=vlim, transpose=transpose, **kwargs
+                eme_grid_spec=subgrid, x=x, y=y, z=z, ax=ax, hlim=hlim, vlim=vlim, swap_axes=swap_axes, **kwargs
             )
 
         return ax
@@ -404,7 +404,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the EME grid."""
@@ -412,15 +412,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         kwargs.setdefault("colors", "black")
         cell_boundaries = self.eme_grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, transpose=transpose)
+        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, swap_axes=swap_axes)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = cell_boundaries
         if axis_y == self.axis:
             boundaries_y = cell_boundaries
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, transpose=transpose)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, transpose=transpose)
+        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
@@ -431,7 +431,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         ax.add_collection(line_segments_y)
 
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
 
         return ax
@@ -448,7 +448,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         monitor_alpha: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        transpose: bool = False,
+        swap_axes: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -479,23 +479,23 @@ class EMESimulation(AbstractYeeGridSimulation):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
 
-        ax = self.scene.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
+        ax = self.scene.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, swap_axes=swap_axes)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, swap_axes=swap_axes)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, swap_axes=swap_axes)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes)
 
-        ax = self.plot_eme_grid(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_eme_grid(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes)
         ax = self.plot_eme_subgrid_boundaries(
-            eme_grid_spec=self.eme_grid_spec, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            eme_grid_spec=self.eme_grid_spec, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
-        ax = self.plot_eme_ports(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_eme_ports(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes)
         return ax
 
     @cached_property

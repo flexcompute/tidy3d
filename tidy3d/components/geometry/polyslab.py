@@ -628,14 +628,14 @@ class PolySlab(base.Planar):
         path, _ = section.to_planar(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float, transpose: bool = False):
+    def _intersections_normal(self, z: float, swap_axes: bool = False):
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Parameters
         ----------
         z : float
             Position along the axis normal to slab.
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap the planar (XY) coordinates?
 
         Returns
@@ -647,7 +647,7 @@ class PolySlab(base.Planar):
         """
         if math.isclose(self.sidewall_angle, 0):
             vertices = self.reference_polygon
-            if transpose:
+            if swap_axes:
                 vertices = vertices[:, (1, 0)]  # swap column 0 (x coords) with column 1 (y coords)
             return [self.make_shapely_polygon(vertices)]
         z0 = self.center_axis
@@ -655,11 +655,11 @@ class PolySlab(base.Planar):
         dist = -z_local * self._tanq
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
         vertices = vertices_z
-        if transpose:
+        if swap_axes:
             vertices = vertices[:, (1, 0)]  # swap column 0 (x coords) with column 1 (y coords)
         return [self.make_shapely_polygon(vertices)]
 
-    def _intersections_side(self, position, axis, transpose: bool = False) -> list:
+    def _intersections_side(self, position, axis, swap_axes: bool = False) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
 
         For slanted polyslab, the procedure is as follows,
@@ -684,7 +684,7 @@ class PolySlab(base.Planar):
             Position along ``axis``.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap the coordinates in the plane orthogonal to the axis?
 
         Returns
@@ -732,8 +732,8 @@ class PolySlab(base.Planar):
             for y_index in range(len(ints_y) // 2):
                 y_min = ints_y[2 * y_index]
                 y_max = ints_y[2 * y_index + 1]
-                minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose)
-                maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis, transpose=transpose)
+                minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, swap_axes=swap_axes)
+                maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis, swap_axes=swap_axes)
 
                 if math.isclose(self.sidewall_angle, 0):
                     polys.append(self.make_shapely_box(minx, miny, maxx, maxy))
@@ -747,13 +747,13 @@ class PolySlab(base.Planar):
                     dy_min = h_length * np.tan(angle_min)
                     dy_max = h_length * np.tan(angle_max)
 
-                    x1, y1 = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose)
-                    x2, y2 = self._order_by_axis(plane_val=y_max, axis_val=z_min, axis=axis, transpose=transpose)
+                    x1, y1 = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, swap_axes=swap_axes)
+                    x2, y2 = self._order_by_axis(plane_val=y_max, axis_val=z_min, axis=axis, swap_axes=swap_axes)
                     x3, y3 = self._order_by_axis(
-                        plane_val=y_max - dy_max, axis_val=z_max, axis=axis, transpose=transpose
+                        plane_val=y_max - dy_max, axis_val=z_max, axis=axis, swap_axes=swap_axes
                     )
                     x4, y4 = self._order_by_axis(
-                        plane_val=y_min + dy_min, axis_val=z_max, axis=axis, transpose=transpose
+                        plane_val=y_min + dy_min, axis_val=z_max, axis=axis, swap_axes=swap_axes
                     )
                     vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
                     polys.append(self.make_shapely_polygon(vertices).buffer(0))
@@ -993,14 +993,14 @@ class PolySlab(base.Planar):
         return ints_y_sort, ints_angle_sort
 
     @cached_property
-    def bounds(self, transpose: bool = False) -> Bound:
+    def bounds(self, swap_axes: bool = False) -> Bound:
         """Returns bounding box min and max coordinates. The dilation and slant angle are not
         taken into account exactly for speed. Instead, the polygon may be slightly smaller than
         the returned bounds, but it should always be fully contained.
 
         Parameters
         -------
-        transpose : bool = False
+        swap_axes : bool = False
             Optional: Swap the planar axes? (the axes perpendicular to self.axis)
 
         Returns
@@ -1035,8 +1035,8 @@ class PolySlab(base.Planar):
         zmin, zmax = self.slab_bounds
 
         # rearrange axes
-        coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis, transpose=transpose)
-        coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis, transpose=transpose)
+        coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis, swap_axes=swap_axes)
+        coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis, swap_axes=swap_axes)
         return (tuple(coords_min), tuple(coords_max))
 
     def _extrusion_length_to_offset_distance(self, extrusion: float) -> float:
