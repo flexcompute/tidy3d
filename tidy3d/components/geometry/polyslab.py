@@ -645,7 +645,6 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"PolySlab._intersections_normal({transpose=})")  # DEBUG
         if math.isclose(self.sidewall_angle, 0):
             vertices = self.reference_polygon
             if transpose:
@@ -695,7 +694,6 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"PolySlab._intersections_side({transpose=})")  # DEBUG
 
         # find out all z_i where the plane will intersect the vertex
         z0 = self.center_axis

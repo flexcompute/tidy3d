@@ -269,7 +269,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         if axis != 2:
             last, indices = self.pop_axis((0, 1, 2), axis, transpose=transpose)
             to_2D = to_2D[[*list(indices), last, 3]]
-        print(f"Geometry.intersections_plane({transpose=}), {to_2D=}")  # DEBUG
         return self.intersections_tilted_plane(normal, origin, to_2D)
 
     def intersections_2dbox(self, plane: Box, transpose: bool = False) -> list[Shapely]:
@@ -539,7 +538,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         # find shapes that intersect self at plane
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections_plane(x=x, y=y, z=z, transpose=transpose)
-        print(f"Geometry.plot({transpose=}), {shapes_intersect=}")  # DEBUG
 
         plot_params = self.plot_params
         if viz_spec is not None:
@@ -1723,14 +1721,11 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             For more details refer to
         `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Planar.intersections_plane({transpose=})")  # DEBUG
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
         if axis == self.axis:
-            # print(f"{self._intersections_normal=}")  # DEBUG
             return self._intersections_normal(position, transpose=transpose)
-        # print(f"{self._intersections_side=}")  # DEBUG
         return self._intersections_side(position, axis, transpose=transpose)
 
     @abstractmethod
@@ -2111,7 +2106,6 @@ class Box(SimplePlaneIntersection, Centered):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Box.intersections_plane({transpose=})")  # DEBUG
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
@@ -2188,7 +2182,6 @@ class Box(SimplePlaneIntersection, Centered):
         dim = "xyz"[normal_ind]
         pos = self.center[normal_ind]
         xyz_kwargs = {dim: pos}
-        print(f"Box.intersects_with({transpose=}), {xyz_kwargs=}")  # DEBUG
         shapes_plane = other.intersections_plane(**xyz_kwargs, transpose=transpose)
 
         # intersect all shapes with the input self
@@ -3040,7 +3033,6 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"ClipOperation.intersections_plane({transpose=})")  # DEBUG
         a = self.geometry_a.intersections_plane(x, y, z, transpose=transpose)
         b = self.geometry_b.intersections_plane(x, y, z, transpose=transpose)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
@@ -3256,7 +3248,6 @@ class GeometryGroup(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"GeometryGroup.intersections_plane({transpose=})")  # DEBUG
         if not self.intersects_plane(x, y, z):
             return []
         return [

@@ -470,7 +470,6 @@ class Scene(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        print(f"Scene.plot_structures({transpose=})")  # DEBUG
         medium_shapes = self._get_structures_2dbox(
             structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
