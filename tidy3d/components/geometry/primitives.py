@@ -141,7 +141,7 @@ class Sphere(base.Centered, base.Circular):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
-        z0, (x0, y0) = self.pop_axis(self.center, axis=axis, swap_axes=swap_axes)
+        z0, (x0, y0) = self.pop_axis_and_swap(self.center, axis=axis, swap_axes=swap_axes)
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
@@ -403,7 +403,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         """
         import trimesh
 
-        z0, (x0, y0) = self.pop_axis(self.center, self.axis, swap_axes=swap_axes)
+        z0, (x0, y0) = self.pop_axis_and_swap(self.center, self.axis, swap_axes=swap_axes)
         half_length = self.finite_length_axis / 2
 
         z_top = z0 + half_length
@@ -445,7 +445,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         x = np.hstack((x_bot, x_top))
         y = np.hstack((y_bot, y_top))
         z = np.hstack((np.full_like(x_bot, z_bot), np.full_like(x_top, z_top)))
-        vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis, swap_axes=swap_axes)).T
+        vertices = np.vstack(self.unpop_axis_and_swap(z, (x, y), self.axis, swap_axes=swap_axes)).T
 
         if x_bot.shape[0] == 1:
             m = 1
@@ -501,8 +501,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         if radius_offset <= 0:
             return []
-
-        _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis, swap_axes=swap_axes)
+        _, (x0, y0) = self.pop_axis_and_swap(static_self.center, axis=self.axis, swap_axes=swap_axes)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis, swap_axes: bool = False):
@@ -786,5 +785,5 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             axis=axis,
             swap_axes=swap_axes,
         )
-        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis, swap_axes=swap_axes)
+        _, (x_center, y_center) = self.pop_axis_and_swap(self.center, axis=axis, swap_axes=swap_axes)
         return [x_center + lx_offset, y_center + ly_offset]

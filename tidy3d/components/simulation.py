@@ -984,7 +984,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         kwargs.setdefault("snapping_linestyle", "--")
         cell_boundaries = self.grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, swap_axes=swap_axes)
+        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, swap_axes=swap_axes)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
 
@@ -1020,7 +1020,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             for structures, plot_param in zip(all_override_structures, plot_params):
                 for structure in structures:
                     bounds = list(zip(*structure.geometry.bounds))
-                    _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(
+                    _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis_and_swap(
                         bounds, axis=axis, swap_axes=swap_axes
                     )
                     xmin, xmax, ymin, ymax = (
@@ -1045,7 +1045,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             plot_params,
         ):
             for point in points:
-                _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis, swap_axes=swap_axes)
+                _, (x_point, y_point) = Geometry.pop_axis_and_swap(point, axis=axis, swap_axes=swap_axes)
                 if x_point is None and y_point is None:
                     continue
                 if x_point is None:
@@ -1141,7 +1141,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundaries = self.boundary_spec.to_list
 
         normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis, swap_axes=swap_axes)
+        _, (dim_u, dim_v) = self.pop_axis_and_swap([0, 1, 2], axis=normal_axis, swap_axes=swap_axes)
 
         umin, umax = ax.get_xlim()
         vmin, vmax = ax.get_ylim()
@@ -3879,7 +3879,7 @@ class Simulation(AbstractYeeGridSimulation):
                 centers = self.grid.centers.to_list
                 sizes = self.grid.sizes.to_list
                 tfsf_bounds = source.bounds
-                _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis, swap_axes=swap_axes)
+                _, plane_inds = source.pop_axis_and_swap([0, 1, 2], axis=source.injection_axis, swap_axes=swap_axes)
                 grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
                 for ind in plane_inds:
                     grid_type = grid_list[ind]
@@ -4129,7 +4129,7 @@ class Simulation(AbstractYeeGridSimulation):
             mode_object: tuple[ModeSource, ModeMonitor], normal_axis: Axis, msg_header: str
         ):
             disc_grid = self.discretize(mode_object)
-            _, check_axes = Box.pop_axis([0, 1, 2], axis=normal_axis, swap_axes=swap_axes)
+            _, check_axes = Box.pop_axis_and_swap([0, 1, 2], axis=normal_axis, swap_axes=swap_axes)
             for axis in check_axes:
                 sim_size = self.size[axis]
                 dim_cells = disc_grid.num_cells[axis]
@@ -4282,7 +4282,7 @@ class Simulation(AbstractYeeGridSimulation):
                 # a single "stripe" of epsilon as the reference and subtract it from all other
                 # stripes, which should result in zero if all the epsilon profiles are the same
                 freq0 = source.source_time.freq0
-                _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis, swap_axes=swap_axes)
+                _, plane_axs = source.pop_axis_and_swap("xyz", axis=source.injection_axis, swap_axes=swap_axes)
                 ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=freq0)
                 kwargs = {plane_axs[0]: 0, plane_axs[1]: 0}
                 ref_eps = ref_eps.isel(**kwargs)
@@ -4750,7 +4750,7 @@ class Simulation(AbstractYeeGridSimulation):
         cell = library.new_cell(gds_cell_name)
 
         axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, symmetry = self.pop_axis(self.symmetry, axis, swap_axes=swap_axes)
+        _, symmetry = self.pop_axis(self.symmetry, axis)
         if symmetry[0] != 0:
             outer_cell = cell
             cell = library.new_cell(gds_cell_name + "_X")

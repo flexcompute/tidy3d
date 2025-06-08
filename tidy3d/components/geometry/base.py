@@ -464,8 +464,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Packed as ``(zmin, zmax), ((xmin, ymin), (xmax, ymax))``.
         """
         b_min, b_max = self.bounds
-        zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis, swap_axes=swap_axes)
-        zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis, swap_axes=swap_axes)
+        zmin, (xmin, ymin) = self.pop_axis_and_swap(b_min, axis=axis, swap_axes=swap_axes)
+        zmax, (xmax, ymax) = self.pop_axis_and_swap(b_max, axis=axis, swap_axes=swap_axes)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
     @staticmethod
@@ -613,7 +613,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         str, str
             Labels of plot, packaged as ``(xlabel, ylabel)``.
         """
-        _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis, swap_axes=swap_axes)
+        _, (xlabel, ylabel) = Geometry.pop_axis_and_swap("xyz", axis=axis, swap_axes=swap_axes)
         return xlabel, ylabel
 
     def _get_plot_limits(
@@ -736,7 +736,6 @@ class Geometry(Tidy3dBaseModel, ABC):
     def pop_axis(
         coord: tuple[Any, Any, Any],
         axis: int,
-        swap_axes: bool = False,
     ) -> tuple[Any, tuple[Any, Any]]:
         """Separates coordinate at ``axis`` index from coordinates on the plane tangent to ``axis``.
 
@@ -746,8 +745,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Tuple of three values in original coordinate system.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        swap_axes: bool = False
-            Optional: Swap the order of the remaining two axes?
+
 
         Returns
         -------
@@ -758,16 +756,47 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         plane_vals = list(coord)
         axis_val = plane_vals.pop(axis)
-        if swap_axes:
-            plane_vals = [plane_vals[1], plane_vals[0]]
         return axis_val, tuple(plane_vals)
+
+    @staticmethod
+    def pop_axis_and_swap(
+        coord: tuple[Any, Any, Any],
+        axis: int,
+        swap_axes: bool = False,
+    ) -> tuple[Any, tuple[Any, Any]]:
+        """
+        pop_axis_and_swap() is identical to pop_axis(), except that accepts an
+        additional "swap_axes" argument which reverses the output orer.  Examples:
+
+        pop_axis_and_swap(("x", "y", "z"), 1, swap_axes=False)  ->  "y", ("x", "z")
+        pop_axis_and_swap(("x", "y", "z"), 1, swap_axes=True)   ->  "y", ("z", "x")
+
+        Parameters
+        ----------
+        coord : Tuple[Any, Any, Any]
+            Tuple of three values in original coordinate system.
+        axis : int
+            Integer index into 'xyz' (0,1,2).
+        swap_axes: bool = False
+            Optional: Swap the order of the data from the two remaining axes in the output tuple?
+
+        Returns
+        -------
+        Any, Tuple[Any, Any]
+            The input coordinates are separated into the one along the axis provided
+            and the two on the planar coordinates,
+            like ``axis_coord, (planar_coord1, planar_coord2)``.
+        """
+        axis_val, plane_vals = Geometry.pop_axis(coord, axis)
+        if swap_axes:
+            return axis_val, (plane_vals[1], plane_vals[0])
+        return axis_val, plane_vals
 
     @staticmethod
     def unpop_axis(
         ax_coord: Any,
         plane_coords: tuple[Any, Any],
         axis: int,
-        swap_axes: bool = False,
     ) -> tuple[Any, Any, Any]:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
@@ -779,11 +808,6 @@ class Geometry(Tidy3dBaseModel, ABC):
             Values along ordered planar directions.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        swap_axes: bool = False
-            Optional: Swap the order of the entries in plane_coords[]?
-            NOTE: If `axis, plane_coords = pop_axis(coords, axis, transpose)`,
-            then, if you want to get back the original `coords`, you should use:
-            `unpop_axis(ax_coord, plane_coords, axis, transpose)`
 
         Returns
         -------
@@ -791,10 +815,47 @@ class Geometry(Tidy3dBaseModel, ABC):
             The three values in the xyz coordinate system.
         """
         coords = list(plane_coords)
-        if swap_axes:
-            coords = [coords[1], coords[0]]
         coords.insert(axis, ax_coord)
         return tuple(coords)
+
+    @staticmethod
+    def unpop_axis_and_swap(
+        ax_coord: Any,
+        plane_coords: tuple[Any, Any],
+        axis: int,
+        swap_axes: bool = False,
+    ) -> tuple[Any, Any, Any]:
+        """
+        unpop_axis_and_swap() is identical to unpop_axis(), except that accepts
+        an additional "swap_axes" argument which reverses the order of 
+        plane_coords before sending them to unpop_axis().  For example:
+
+        unpop_axis_and_swap("y", ("x", "z"), 1, swap_axes=False)  -->  ("x", "y", "z")
+        unpop_axis_and_swap("y", ("x", "z"), 1, swap_axes=True)   -->  ("z", "y", "x")
+
+        This function is the inverse of pop_axis_and_swap().  For example:
+        unpop_axis_and_swap("y", ("z", "x"), 1, swap_axes=True)   -->  ("x", "y", "z")
+
+        Parameters
+        ----------
+        ax_coord : Any
+            Value along axis direction.
+        plane_coords : Tuple[Any, Any]
+            Values along ordered planar directions.
+        axis : int
+            Integer index into 'xyz' (0,1,2).
+        swap_axes: bool = False
+            Optional: Swap the order of the entries in plane_coords[]?
+
+        Returns
+        -------
+        Tuple[Any, Any, Any]
+            The three values in the xyz coordinate system.
+        """
+        coords = plane_coords
+        if swap_axes:
+            coords = (coords[1], coords[0])
+        return Geometry.unpop_axis(ax_coord, coords, axis)
 
     @staticmethod
     def parse_xyz_kwargs(**xyz) -> tuple[Axis, float]:
@@ -1815,7 +1876,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         """
         vals = 3 * [plane_val]
         vals[self.axis] = axis_val
-        _, (val_x, val_y) = self.pop_axis(vals, axis=axis, swap_axes=swap_axes)
+        _, (val_x, val_y) = self.pop_axis_and_swap(vals, axis=axis, swap_axes=swap_axes)
         return val_x, val_y
 
     @cached_property
@@ -2109,8 +2170,8 @@ class Box(SimplePlaneIntersection, Centered):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
-        z0, (x0, y0) = self.pop_axis(self.center, axis=axis, swap_axes=swap_axes)
-        Lz, (Lx, Ly) = self.pop_axis(self.size, axis=axis, swap_axes=swap_axes)
+        z0, (x0, y0) = self.pop_axis_and_swap(self.center, axis=axis, swap_axes=swap_axes)
+        Lz, (Lx, Ly) = self.pop_axis_and_swap(self.size, axis=axis, swap_axes=swap_axes)
         dz = np.abs(z0 - position)
         if dz > Lz / 2 + fp_eps:
             return []
@@ -2185,7 +2246,7 @@ class Box(SimplePlaneIntersection, Centered):
         shapes_plane = other.intersections_plane(**xyz_kwargs, swap_axes=swap_axes)
 
         # intersect all shapes with the input self
-        bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind, swap_axes=swap_axes)[1] for bounds in self.bounds)
+        bs_min, bs_max = (self.pop_axis_and_swap(bounds, axis=normal_ind, swap_axes=swap_axes)[1] for bounds in self.bounds)
 
         shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
@@ -2287,7 +2348,7 @@ class Box(SimplePlaneIntersection, Centered):
         """
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis, swap_axes=swap_axes)
+        _, (dx, dy) = self.pop_axis_and_swap(direction, axis=plot_axis, swap_axes=swap_axes)
 
         # conditions to check to determine whether to plot arrow, taking into account the
         # possibility of a custom arrow base
@@ -2299,12 +2360,12 @@ class Box(SimplePlaneIntersection, Centered):
             )
             center = arrow_base
 
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis, swap_axes=swap_axes)
+        _, (dx, dy) = self.pop_axis_and_swap(direction, axis=plot_axis, swap_axes=swap_axes)
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
-            _, (x0, y0) = self.pop_axis(center, axis=plot_axis, swap_axes=swap_axes)
+            _, (x0, y0) = self.pop_axis_and_swap(center, axis=plot_axis, swap_axes=swap_axes)
 
             # Reasonable value for temporary arrow size.  The correct size and direction
             # have to be calculated after all transforms have been set.  That is why we

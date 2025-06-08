@@ -1035,8 +1035,8 @@ class PolySlab(base.Planar):
         zmin, zmax = self.slab_bounds
 
         # rearrange axes
-        coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis, swap_axes=swap_axes)
-        coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis, swap_axes=swap_axes)
+        coords_min = self.unpop_axis_and_swap(zmin, (xmin, ymin), axis=self.axis, swap_axes=swap_axes)
+        coords_max = self.unpop_axis_and_swap(zmax, (xmax, ymax), axis=self.axis, swap_axes=swap_axes)
         return (tuple(coords_min), tuple(coords_max))
 
     def _extrusion_length_to_offset_distance(self, extrusion: float) -> float:

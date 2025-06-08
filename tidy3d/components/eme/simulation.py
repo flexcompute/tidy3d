@@ -316,15 +316,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         rmax = self.geometry.bounds[1][self.axis]
         ports = np.array([rmin + self.port_offsets[0], rmax - self.port_offsets[1]])
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, swap_axes=swap_axes)
+        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, swap_axes=swap_axes)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = ports
         if axis_y == self.axis:
             boundaries_y = ports
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
+        _, (xmin, ymin) = self.pop_axis_and_swap(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (xmax, ymax) = self.pop_axis_and_swap(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
@@ -365,15 +365,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         subgrid_boundaries = np.array(eme_grid_spec.subgrid_boundaries)
         subgrids = eme_grid_spec.subgrids
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, swap_axes=swap_axes)
+        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, swap_axes=swap_axes)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = subgrid_boundaries
         if axis_y == self.axis:
             boundaries_y = subgrid_boundaries
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
+        _, (xmin, ymin) = self.pop_axis_and_swap(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (xmax, ymax) = self.pop_axis_and_swap(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
@@ -412,15 +412,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         kwargs.setdefault("colors", "black")
         cell_boundaries = self.eme_grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis, swap_axes=swap_axes)
+        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, swap_axes=swap_axes)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = cell_boundaries
         if axis_y == self.axis:
             boundaries_y = cell_boundaries
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
+        _, (xmin, ymin) = self.pop_axis_and_swap(self.simulation_bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (xmax, ymax) = self.pop_axis_and_swap(self.simulation_bounds[1], axis=axis, swap_axes=swap_axes)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]

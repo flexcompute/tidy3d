@@ -372,8 +372,8 @@ class Scene(Tidy3dBaseModel):
     ) -> tuple[tuple[float, float], tuple[float, float]]:
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis(bounds[0], axis=axis, swap_axes=swap_axes)
-        _, (hmax, vmax) = Box.pop_axis(bounds[1], axis=axis, swap_axes=swap_axes)
+        _, (hmin, vmin) = Box.pop_axis_and_swap(bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (hmax, vmax) = Box.pop_axis_and_swap(bounds[1], axis=axis, swap_axes=swap_axes)
 
         # account for unordered limits
         if hlim is None:
@@ -647,8 +647,8 @@ class Scene(Tidy3dBaseModel):
         """
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis(self.bounds[0], axis=axis, swap_axes=swap_axes)
-        _, (hmax, vmax) = Box.pop_axis(self.bounds[1], axis=axis, swap_axes=swap_axes)
+        _, (hmin, vmin) = Box.pop_axis_and_swap(self.bounds[0], axis=axis, swap_axes=swap_axes)
+        _, (hmax, vmax) = Box.pop_axis_and_swap(self.bounds[1], axis=axis, swap_axes=swap_axes)
 
         if hlim is not None:
             (hmin, hmax) = hlim
@@ -662,8 +662,8 @@ class Scene(Tidy3dBaseModel):
         v_size = (vmax - vmin) or inf
 
         axis, center_normal = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        center = Box.unpop_axis(center_normal, (h_center, v_center), axis=axis, swap_axes=swap_axes)
-        size = Box.unpop_axis(0.0, (h_size, v_size), axis=axis, swap_axes=swap_axes)
+        center = Box.unpop_axis_and_swap(center_normal, (h_center, v_center), axis=axis, swap_axes=swap_axes)
+        size = Box.unpop_axis_and_swap(0.0, (h_size, v_size), axis=axis, swap_axes=swap_axes)
         plane = Box(center=center, size=size)
 
         medium_shapes = []
