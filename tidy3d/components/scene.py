@@ -1545,7 +1545,6 @@ class Scene(Tidy3dBaseModel):
                 shape=shape,
                 ax=ax,
                 property=property,
-                swap_axes=swap_axes,
             )
 
         if cbar:
