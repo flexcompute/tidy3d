@@ -272,6 +272,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
+        swap_axes: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the data for a monitor with simulation structures overlaid.
@@ -357,6 +358,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 vmax=vmax,
                 cbar_kwargs={"label": field_name},
                 grid=False,
+                swap_axes=swap_axes,
             )
 
             # compute parameters for structures overlay plot
@@ -365,10 +367,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
 
             # compute plot bounds
             field_data_bounds = field_data.bounds
-            min_bounds = list(field_data_bounds[0])
-            max_bounds = list(field_data_bounds[1])
-            min_bounds.pop(axis)
-            max_bounds.pop(axis)
+            _, min_bounds = self.pop_axis_and_swap(field_data_bounds[0], axis, swap_axes=swap_axes)
+            _, max_bounds = self.pop_axis_and_swap(field_data_bounds[1], axis, swap_axes=swap_axes)
 
         if isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions
@@ -420,8 +420,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             axis = "xyz".index(planar_coord)
             position = float(field_data.coords[planar_coord])
 
-            xy_coord_labels = list("xyz")
-            xy_coord_labels.pop(axis)
+            _, xy_coord_labels = self.pop_axis_and_swap(list("xyz"), axis=axis, swap_axes=swap_axes)
+
             x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
             field_data.plot(
                 ax=ax,
@@ -432,6 +432,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 vmax=vmax,
                 robust=robust,
                 cbar_kwargs={"label": field_name},
+                swap_axes=swap_axes,
             )
 
             # compute plot bounds
@@ -449,6 +450,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 alpha=structures_alpha,
                 ax=ax,
                 property=property_to_plot,
+                swap_axes=swap_axes,
                 **interp_kwarg,
             )
 

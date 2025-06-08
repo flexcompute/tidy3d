@@ -1589,7 +1589,7 @@ class HeatChargeSimulation(AbstractSimulation):
         plane = Box(center=center, size=size)
 
         source_shapes = self.scene._filter_structures_plane(
-            structures=structures, plane=plane, property_list=source_list
+            structures=structures, plane=plane, property_list=source_list, swap_axes=swap_axes
         )
 
         source_min, source_max = self.source_bounds(property=property)
