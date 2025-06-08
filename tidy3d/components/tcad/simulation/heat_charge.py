@@ -1191,7 +1191,7 @@ class HeatChargeSimulation(AbstractSimulation):
             ]
 
         for bc_spec, shape in new_boundaries:
-            ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax, swap_axes=swap_axes)
+            ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax)
 
         # clean up the axis display
         ax = self.add_ax_lims(axis=axis, ax=ax, swap_axes=swap_axes)
@@ -1221,11 +1221,11 @@ class HeatChargeSimulation(AbstractSimulation):
         return plot_params
 
     def _plot_boundary_condition(
-        self, shape: Shapely, boundary_spec: HeatChargeBoundarySpec, ax: Ax, swap_axes: bool = False
+        self, shape: Shapely, boundary_spec: HeatChargeBoundarySpec, ax: Ax
     ) -> Ax:
         """Plot a structure's cross section shape for a given boundary condition."""
         plot_params_bc = self._get_bc_plot_params(boundary_spec=boundary_spec)
-        ax = self.plot_shape(shape=shape, plot_params=plot_params_bc, ax=ax, swap_axes=swap_axes)
+        ax = self.plot_shape(shape=shape, plot_params=plot_params_bc, ax=ax)
         return ax
 
     @staticmethod
@@ -1455,6 +1455,7 @@ class HeatChargeSimulation(AbstractSimulation):
         structures: list[Structure],
         plane: Box,
         boundary_spec: list[HeatChargeBoundarySpec],
+        swap_axes: bool = False,
     ) -> list[tuple[HeatChargeBoundarySpec, Shapely]]:
         """Compute list of boundary lines to plot on plane.
 
@@ -1477,7 +1478,7 @@ class HeatChargeSimulation(AbstractSimulation):
         shapes = []  # structure name, structure medium, shape, bounds
         for structure in structures:
             # get list of Shapely shapes that intersect at the plane
-            shapes_plane = plane.intersections_with(structure.geometry)
+            shapes_plane = plane.intersections_with(structure.geometry, swap_axes=swap_axes)
 
             # append each of them and their medium information to the list of shapes
             for shape in shapes_plane:
@@ -1601,7 +1602,6 @@ class HeatChargeSimulation(AbstractSimulation):
                     source_max=source_max,
                     shape=shape,
                     ax=ax,
-                    swap_axes=swap_axes,
                 )
 
         # clean up the axis display
