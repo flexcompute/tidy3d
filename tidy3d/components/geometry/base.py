@@ -267,7 +267,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         normal = self.unpop_axis(1, (0, 0), axis=axis)
         to_2D = np.eye(4)
         if axis != 2:
-            last, indices = self.pop_axis((0, 1, 2), axis, swap_axes=swap_axes)
+            last, indices = self.pop_axis_and_swap((0, 1, 2), axis, swap_axes=swap_axes)
             to_2D = to_2D[[*list(indices), last, 3]]
         return self.intersections_tilted_plane(normal, origin, to_2D)
 
