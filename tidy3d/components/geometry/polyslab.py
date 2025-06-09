@@ -89,6 +89,7 @@ class PolySlab(base.Planar):
     @staticmethod
     def make_shapely_polygon(vertices: ArrayLike) -> shapely.Polygon:
         """Make a shapely polygon from some vertices, first ensures they are untraced."""
+        vertices = get_static(vertices)
         return shapely.Polygon(vertices)
 
     @pydantic.validator("slab_bounds", always=True)

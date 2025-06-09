@@ -10,6 +10,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
+from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.data.data_array import (
     SpatialDataArray,
     SteadyVoltageDataArray,
@@ -367,8 +368,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
 
             # compute plot bounds
             field_data_bounds = field_data.bounds
-            _, min_bounds = self.pop_axis_and_swap(field_data_bounds[0], axis, swap_axes=swap_axes)
-            _, max_bounds = self.pop_axis_and_swap(field_data_bounds[1], axis, swap_axes=swap_axes)
+            _, min_bounds = Geometry.pop_axis_and_swap(field_data_bounds[0], axis, swap_axes=swap_axes)
+            _, max_bounds = Geometry.pop_axis_and_swap(field_data_bounds[1], axis, swap_axes=swap_axes)
 
         if isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions
@@ -420,7 +421,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             axis = "xyz".index(planar_coord)
             position = float(field_data.coords[planar_coord])
 
-            _, xy_coord_labels = self.pop_axis_and_swap(list("xyz"), axis=axis, swap_axes=swap_axes)
+            _, xy_coord_labels = Geometry.pop_axis_and_swap(list("xyz"), axis=axis, swap_axes=swap_axes)
 
             x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
             field_data.plot(
