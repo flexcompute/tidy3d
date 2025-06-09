@@ -780,6 +780,20 @@ def test_pop_axis():
         assert Ly == _Ly
 
 
+def test_pop_axis_and_swap():
+    b = td.Box(size=(1, 1, 1))
+    for swap_axes in (False, True):
+        for axis in range(3):
+            coords = (1, 2, 3)
+            Lz, (Lx, Ly) = b.pop_axis_and_swap(coords, axis=axis, swap_axes=swap_axes)
+            _coords = b.unpop_axis_and_swap(Lz, (Lx, Ly), axis=axis, swap_axes=swap_axes)
+            assert all(c == _c for (c, _c) in zip(coords, _coords))
+            _Lz, (_Lx, _Ly) = b.pop_axis_and_swap(_coords, axis=axis, swap_axes=swap_axes)
+            assert Lz == _Lz
+            assert Lx == _Lx
+            assert Ly == _Ly
+
+
 def test_2b_box_intersections():
     plane = td.Box(size=(1, 4, 0))
     box1 = td.Box(size=(1, 1, 1))
