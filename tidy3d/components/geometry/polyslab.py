@@ -649,7 +649,7 @@ class PolySlab(base.Planar):
         if math.isclose(self.sidewall_angle, 0):
             vertices = self.reference_polygon
             if swap_axes:
-                vertices = vertices[:, (1, 0)]  # swap column 0 (x coords) with column 1 (y coords)
+                vertices = vertices[:, ::-1]  # swap column 0 (x coords) with column 1 (y coords)
             return [self.make_shapely_polygon(vertices)]
         z0 = self.center_axis
         z_local = z - z0  # distance to the middle
@@ -657,7 +657,7 @@ class PolySlab(base.Planar):
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
         vertices = vertices_z
         if swap_axes:
-            vertices = vertices[:, (1, 0)]  # swap column 0 (x coords) with column 1 (y coords)
+            vertices = vertices[:, ::-1]  # swap column 0 (x coords) with column 1 (y coords)
         return [self.make_shapely_polygon(vertices)]
 
     def _intersections_side(self, position, axis, swap_axes: bool = False) -> list:
