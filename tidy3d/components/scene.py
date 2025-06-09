@@ -607,7 +607,6 @@ class Scene(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The axes after setting the boundaries.
         """
-
         hlim, vlim = Scene._get_plot_lims(bounds=bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes)
         ax.set_xlim(hlim)
         ax.set_ylim(vlim)

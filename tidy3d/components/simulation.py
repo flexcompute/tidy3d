@@ -499,7 +499,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         hlim, vlim = Scene._get_plot_lims(
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
-
         ax = self.scene.plot(
             x=x,
             y=y,
@@ -510,7 +509,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             fill_structures=fill_structures,
             swap_axes=swap_axes,
         )
-
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, swap_axes=swap_axes)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, swap_axes=swap_axes)
         ax = self.plot_lumped_elements(
@@ -522,7 +520,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, swap_axes=swap_axes)
-
         return ax
 
     @equal_aspect
