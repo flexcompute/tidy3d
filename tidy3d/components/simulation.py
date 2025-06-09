@@ -3665,8 +3665,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_tfsf_aux_sources()
         self._validate_nonlinear_specs()
         self._validate_custom_source_time()
-        self._validate_mode_object_bends()
-        self._warn_mode_object_pml()
+        self._validate_mode_objects()
         self._warn_rf_license()
 
     def _warn_rf_license(self):
@@ -3703,49 +3702,35 @@ class Simulation(AbstractYeeGridSimulation):
             msg += rf_component_breakdown_msg
             log.warning(msg, log_once=True)
 
-    def _warn_mode_object_pml(self) -> None:
-        """Warn if any mode objects have large pml."""
+    def _validate_mode_objects(self) -> None:
+        """Create a ModeSolver for each mode object in order to validate."""
         from .mode.mode_solver import ModeSolver
 
         for imnt, monitor in enumerate(self.monitors):
             if isinstance(monitor, AbstractModeMonitor):
-                warn_str = f"'monitors[{imnt}]'"
-                ModeSolver._warn_thick_pml(
-                    simulation=self,
-                    plane=monitor.geometry,
-                    mode_spec=monitor.mode_spec,
-                    warn_str=warn_str,
-                )
+                try:
+                    _ = ModeSolver(
+                        mode_spec=monitor.mode_spec,
+                        plane=monitor.geometry,
+                        simulation=self,
+                        freqs=monitor.freqs,
+                    )
+                except Exception as e:
+                    raise SetupError(
+                        f"Monitor at 'monitors[{imnt}]' failed validation: {e!s}"
+                    ) from e
+
         for isrc, source in enumerate(self.sources):
             if isinstance(source, ModeSource):
-                warn_str = f"'sources[{isrc}]'"
-                ModeSolver._warn_thick_pml(
-                    simulation=self,
-                    plane=source.geometry,
-                    mode_spec=source.mode_spec,
-                    warn_str=warn_str,
-                )
-
-    def _validate_mode_object_bends(self) -> None:
-        """Error if any mode sources or monitors with bends have a radius that is too small."""
-        from .mode.mode_solver import ModeSolver
-
-        for imnt, monitor in enumerate(self.monitors):
-            if isinstance(monitor, AbstractModeMonitor):
-                ModeSolver._validate_mode_plane_radius(
-                    mode_spec=monitor.mode_spec,
-                    plane=monitor.geometry,
-                    sim_geom=self.geometry,
-                    msg_prefix=f"Monitor at 'monitors[{imnt}]' ",
-                )
-        for isrc, source in enumerate(self.sources):
-            if isinstance(source, ModeSource):
-                ModeSolver._validate_mode_plane_radius(
-                    mode_spec=source.mode_spec,
-                    plane=source.geometry,
-                    sim_geom=self.geometry,
-                    msg_prefix=f"Source at 'sources[{isrc}]' ",
-                )
+                try:
+                    _ = ModeSolver(
+                        mode_spec=source.mode_spec,
+                        plane=source.geometry,
+                        simulation=self,
+                        freqs=source.source_time.freq0,
+                    )
+                except Exception as e:
+                    raise SetupError(f"Source at 'sources[{isrc}]' failed validation: {e!s}") from e
 
     def _validate_custom_source_time(self):
         """Warn if all simulation times are outside CustomSourceTime definition range."""

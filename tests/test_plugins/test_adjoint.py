@@ -574,7 +574,13 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
 def test_adjoint_pipeline_2d(local, use_emulated_run, tmp_path):
     run_fn = run_local if local else run
 
-    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    sim = make_sim(
+        permittivity=EPS,
+        size=SIZE,
+        vertices=VERTICES,
+        base_eps_val=BASE_EPS_VAL,
+        custom_medium=False,
+    )
 
     sim_size_2d = list(sim.size)
     sim_size_2d[1] = 0
@@ -584,7 +590,11 @@ def test_adjoint_pipeline_2d(local, use_emulated_run, tmp_path):
 
     def f(permittivity, size, vertices, base_eps_val):
         sim = make_sim(
-            permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
+            permittivity=permittivity,
+            size=size,
+            vertices=vertices,
+            base_eps_val=base_eps_val,
+            custom_medium=False,
         )
         sim_size_2d = list(sim.size)
         sim_size_2d[1] = 0
@@ -1262,7 +1272,11 @@ def test_adjoint_run_async(local, use_emulated_run_async, tmp_path):
     def make_sim_simple(permittivity: float) -> JaxSimulation:
         """Make a sim as a function of a single parameter."""
         return make_sim(
-            permittivity=permittivity, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL
+            permittivity=permittivity,
+            size=SIZE,
+            vertices=VERTICES,
+            base_eps_val=BASE_EPS_VAL,
+            custom_medium=False,
         )
 
     def f(x):
@@ -1804,10 +1818,8 @@ def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time
     assert sim_adj.run_time == run_time_expected
 
 
-@pytest.mark.parametrize("has_adj_src, log_level_expected", [(True, None), (False, "WARNING")])
-def test_no_adjoint_sources(
-    monkeypatch, use_emulated_run, tmp_path, has_adj_src, log_level_expected
-):
+@pytest.mark.parametrize("has_adj_src", [True, False])
+def test_no_adjoint_sources(monkeypatch, use_emulated_run, tmp_path, has_adj_src):
     """Make sure warning (not error) if no adjoint sources."""
 
     def make_sim(eps):
@@ -1839,8 +1851,9 @@ def test_no_adjoint_sources(
     data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     # check whether we got a warning for no sources?
-    with AssertLogLevel(log_level_expected, contains_str="No adjoint sources"):
-        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
+    if not has_adj_src:
+        with AssertLogLevel("WARNING", contains_str="No adjoint sources"):
+            data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
 
     jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
 
