@@ -359,7 +359,6 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 vmax=vmax,
                 cbar_kwargs={"label": field_name},
                 grid=False,
-                swap_axes=swap_axes,
             )
 
             # compute parameters for structures overlay plot
@@ -433,7 +432,6 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 vmax=vmax,
                 robust=robust,
                 cbar_kwargs={"label": field_name},
-                swap_axes=swap_axes,
             )
 
             # compute plot bounds
