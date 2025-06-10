@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   determine-test-scope:
-    runs-on: [ deploynode ]
+    runs-on: [ slurm-runner, 1xcpu ]
     if: |
       github.event.pull_request.draft == false ||
       github.ref == 'refs/heads/develop' ||
@@ -119,7 +119,7 @@ jobs:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     name: Run linting
-    runs-on: [ deploynode ] 
+    runs-on: [ slurm-runner, 1xcpu ] 
     container: ghcr.io/astral-sh/uv:debian 
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
     name: Python ${{ matrix.python-version }} - self-hosted-runner 
-    runs-on: [ deploynode ]
+    runs-on: [ slurm-runner, 4xcpu ]
     container: ghcr.io/astral-sh/uv:debian 
     strategy:
       matrix:
@@ -319,7 +319,7 @@ jobs:
     name: pr-requirements-pass
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     needs: [local-tests, remote-tests, lint]
-    runs-on: [ deploynode ]
+    runs-on: [ slurm-runner, 1xcpu ]
     steps:
       - name: check-passing-remote-tests
         run: |
