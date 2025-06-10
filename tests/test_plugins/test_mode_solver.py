@@ -312,6 +312,7 @@ def test_mode_solver_group_index_warning(group_index_step, log_level):
         mode_spec = td.ModeSpec(
             num_modes=1,
             group_index_step=group_index_step,
+            precision="auto",
         )
 
     _ = ModeSolver(

@@ -54,6 +54,15 @@ class EMEModeSpec(ModeSpec):
         units=RADIAN,
     )
 
+    precision: Literal["auto", "single", "double"] = pd.Field(
+        "auto",
+        title="single, double, or automatic precision in mode solver",
+        description="The solver will be faster and using less memory under "
+        "single precision, but more accurate under double precision. "
+        "Choose ``'auto'`` to apply double precision if the simulation contains a good "
+        "conductor, single precision otherwise.",
+    )
+
     # this method is not supported because not all ModeSpec features are supported
     # @classmethod
     # def _from_mode_spec(cls, mode_spec: ModeSpec) -> EMEModeSpec:
@@ -74,19 +83,9 @@ class EMEModeSpec(ModeSpec):
 
     def _to_mode_spec(self) -> ModeSpec:
         """Convert to ordinary :class:`.ModeSpec`."""
-        return ModeSpec(
-            num_modes=self.num_modes,
-            target_neff=self.target_neff,
-            num_pml=self.num_pml,
-            filter_pol=self.filter_pol,
-            angle_theta=self.angle_theta,
-            angle_phi=self.angle_phi,
-            precision=self.precision,
-            bend_radius=self.bend_radius,
-            bend_axis=self.bend_axis,
-            track_freq=self.track_freq,
-            group_index_step=self.group_index_step,
-        )
+        ms_dict = self.dict()
+        ms_dict.pop("type")
+        return ModeSpec.parse_obj(ms_dict)
 
 
 class EMEGridSpec(Tidy3dBaseModel, ABC):

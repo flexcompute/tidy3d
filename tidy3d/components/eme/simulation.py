@@ -1183,4 +1183,4 @@ class EMESimulation(AbstractYeeGridSimulation):
             pairs = set(self.eme_grid_spec._cell_index_pairs)
         return list(pairs)
 
-    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims(warn_on_change=False)
