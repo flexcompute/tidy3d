@@ -1,5 +1,3 @@
 from __future__ import annotations
 
-import importlib.metadata
-
-__version__ = importlib.metadata.version("tidy3d")
+__version__ = "2.9.0rc1"
