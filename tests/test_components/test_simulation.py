@@ -827,14 +827,14 @@ class TestAnisotropicPlotting:
             self.make_sim(self.medium_diag).plot_eps(x=0, eps_component=eps_comp)
 
     @pytest.mark.parametrize(
-        "eps_comp",
-        [None, *diag_comps],
+        "eps_comp, swap_axes",
+        zip([None, *diag_comps], [True, False]),
     )
-    def test_plot_anisotropic_medium(self, eps_comp):
+    def test_plot_anisotropic_medium(self, eps_comp, swap_axes):
         """Test plotting diagonal components of a diagonally anisotropic medium succeeds or not.
         diagonal components and ``None`` should succeed.
         """
-        self.make_sim(self.medium_diag).plot_eps(x=0, eps_component=eps_comp)
+        self.make_sim(self.medium_diag).plot_eps(x=0, eps_component=eps_comp, swap_axes=swap_axes)
 
     @pytest.mark.parametrize("eps_comp", offdiag_comps)
     def test_plot_anisotropic_medium_offdiagfail(self, eps_comp):
@@ -858,15 +858,15 @@ class TestAnisotropicPlotting:
         self.compare_eps_images(tmp_path, eps_comp1, eps_comp2, expected, self.medium_diag)
 
     @pytest.mark.parametrize(
-        "eps_comp",
-        [None, *diag_comps, *offdiag_comps],
+        "eps_comp, swap_axes",
+        zip([None, *diag_comps, *offdiag_comps], [True, False]),
     )
-    def test_plot_fully_anisotropic_medium(self, eps_comp):
+    def test_plot_fully_anisotropic_medium(self, eps_comp, swap_axes):
         """Test plotting all components of a fully anisotropic medium.
         All plots should succeed.
         """
         sim = self.make_sim(self.medium_fullyani)
-        sim.plot_eps(x=0, eps_component=eps_comp)
+        sim.plot_eps(x=0, eps_component=eps_comp, swap_axes=swap_axes)
 
     # Test parameters for comparing plots of a FullyAnisotropicMedium
     fullyani_testplot_diff_params = []
@@ -885,14 +885,14 @@ class TestAnisotropicPlotting:
         self.compare_eps_images(tmp_path, eps_comp1, eps_comp2, expected, self.medium_fullyani)
 
     @pytest.mark.parametrize(
-        "eps_comp",
-        [None, *diag_comps],
+        "eps_comp, swap_axes",
+        zip([None, *diag_comps], [True, False]),
     )
-    def test_plot_customanisotropic_medium(self, eps_comp, medium_customani):
+    def test_plot_customanisotropic_medium(self, eps_comp, swap_axes, medium_customani):
         """Test plotting diagonal components of a diagonally anisotropic custom medium.
         diagonal components and ``None`` should succeed.
         """
-        self.make_sim(medium_customani).plot_eps(x=0, eps_component=eps_comp)
+        self.make_sim(medium_customani).plot_eps(x=0, eps_component=eps_comp, swap_axes=swap_axes)
 
     @pytest.mark.parametrize("eps_comp", offdiag_comps)
     def test_plot_customanisotropic_medium_offdiagfail(self, eps_comp, medium_customani):
@@ -918,14 +918,16 @@ class TestAnisotropicPlotting:
         self.compare_eps_images(tmp_path, eps_comp1, eps_comp2, expected, medium_customani)
 
 
-def test_plot():
-    SIM_FULL.plot(x=0)
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot(swap_axes):
+    SIM_FULL.plot(x=0, swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot_with_units():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_with_units(swap_axes):
     sim_with_units = SIM_FULL.updated_copy(plot_length_units="nm")
-    sim_with_units.plot(x=-0.5)
+    sim_with_units.plot(x=-0.5, swap_axes=swap_axes)
 
 
 def test_plot_1d_sim():
@@ -941,12 +943,13 @@ def test_plot_1d_sim():
     plt.close()
 
 
-def test_plot_bounds():
-    _ = SIM_FULL.plot(x=0, hlim=[-0.45, 0.45])
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_bounds(swap_axes):
+    _ = SIM_FULL.plot(x=0, hlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot(x=0, vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot(x=0, vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
 
 
@@ -1011,22 +1014,25 @@ def test_plot_eps_with_default_frequency():
     plt.close()
 
 
-def test_plot_symmetries():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_symmetries(swap_axes):
     S2 = SIM.copy(update={"symmetry": (1, 0, -1)})
-    S2.plot_symmetries(x=0)
+    S2.plot_symmetries(x=0, swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot_grid():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_grid(swap_axes):
     override = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium())
     S2 = SIM_FULL.copy(
         update={"grid_spec": td.GridSpec(wavelength=1.0, override_structures=[override])}
     )
-    S2.plot_grid(x=0)
+    S2.plot_grid(x=0, swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot_boundaries():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_boundaries(swap_axes):
     bound_spec = td.BoundarySpec(
         x=td.Boundary(plus=td.PECBoundary(), minus=td.PMCBoundary()),
         y=td.Boundary(
@@ -1036,16 +1042,17 @@ def test_plot_boundaries():
         z=td.Boundary(plus=td.Periodic(), minus=td.Periodic()),
     )
     S2 = SIM_FULL.copy(update={"boundary_spec": bound_spec})
-    S2.plot_boundaries(z=0)
+    S2.plot_boundaries(z=0, swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot_with_lumped_elements():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_with_lumped_elements(swap_axes):
     load = td.LumpedResistor(
         center=(0, 0, 0), size=(1, 2, 0), name="resistor", voltage_axis=0, resistance=50
     )
     sim_test = SIM_FULL.updated_copy(lumped_elements=[load])
-    sim_test.plot(z=0)
+    sim_test.plot(z=0, swap_axes=swap_axes)
     plt.close()
 
 
