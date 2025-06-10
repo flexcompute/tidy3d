@@ -13,13 +13,6 @@ from tidy3d.components.medium import Drude, Medium2D, PoleResidue
 from tidy3d.constants import ELECTRON_VOLT, EPSILON_0, HBAR, K_B, KELVIN, Q_e
 from tidy3d.log import log
 
-try:
-    from scipy import integrate
-
-    INTEGRATE_AVAILABLE = True
-except ImportError:
-    INTEGRATE_AVAILABLE = False
-
 # default values of the physical parameters for graphene
 # scattering rate in eV
 GRAPHENE_DEF_GAMMA = 0.00041
@@ -233,6 +226,12 @@ class Graphene(ParametricVariantItem2D):
         List[complex]
             The list of corresponding interband conductivities, in S.
         """
+        try:
+            from scipy import integrate
+
+            INTEGRATE_AVAILABLE = True
+        except ImportError:
+            INTEGRATE_AVAILABLE = False
 
         def fermi(E: float) -> float:
             """Fermi distribution."""

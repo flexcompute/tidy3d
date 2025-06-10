@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-import scipy
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 from rich.progress import Progress
 
@@ -493,6 +492,7 @@ class FastFitterData(AdvancedFastFitterParam):
 
     def iterate_poles(self) -> FastFitterData:
         """Perform a single iteration of the pole-updating procedure."""
+        from scipy import optimize
 
         def compute_zeros(residues: ArrayComplex1D, d_tilde: float) -> ArrayComplex1D:
             """Compute the zeros from the residues."""
@@ -564,7 +564,7 @@ class FastFitterData(AdvancedFastFitterParam):
                 )
 
             # solve the least squares problem
-            x_vector = scipy.optimize.lsq_linear(a_matrix_real, b_vector_real).x
+            x_vector = optimize.lsq_linear(a_matrix_real, b_vector_real).x
 
             # unpack the solution
             residues = np.zeros(len(self.poles), dtype=complex)
@@ -594,6 +594,8 @@ class FastFitterData(AdvancedFastFitterParam):
 
     def fit_residues(self) -> FastFitterData:
         """Fit residues."""
+        from scipy import optimize
+
         # build the matrices
         if self.optimize_eps_inf:
             poly_len = 1
@@ -610,7 +612,7 @@ class FastFitterData(AdvancedFastFitterParam):
         # solve the least squares problem
         bounds = (-np.inf * np.ones(a_matrix.shape[1]), np.inf * np.ones(a_matrix.shape[1]))
         bounds[0][-1] = 1  # eps_inf >= 1
-        x_vector = scipy.optimize.lsq_linear(a_matrix_real, b_vector_real).x
+        x_vector = optimize.lsq_linear(a_matrix_real, b_vector_real).x
 
         # unpack the solution
         residues = np.zeros(len(self.poles), dtype=complex)
@@ -650,6 +652,7 @@ class FastFitterData(AdvancedFastFitterParam):
 
     def iterate_passivity(self, passivity_omega: ArrayFloat1D) -> tuple[FastFitterData, int]:
         """Iterate passivity enforcement algorithm."""
+        from scipy import optimize
 
         size = len(self.real_poles) + 2 * len(self.complex_poles)
         constraint_matrix = np.imag(self.pole_matrix_omega(passivity_omega))
@@ -683,7 +686,7 @@ class FastFitterData(AdvancedFastFitterParam):
 
         x0 = np.zeros(size)
         err = np.amin(c_vector - constraint_matrix @ x0)
-        result = scipy.optimize.minimize(
+        result = optimize.minimize(
             loss, x0=x0, jac=jac, constraints=cons, method="SLSQP", options=opt
         )
         x_vector = result.x
