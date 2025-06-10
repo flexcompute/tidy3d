@@ -159,7 +159,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
-        zero_dims = np.where(np.isclose(bounds, 0))[0]
+        zero_dims = np.where(np.isclose(bounds, 0, atol=1e-6))[0]
 
         if len(zero_dims) != 1:
             raise DataError(
