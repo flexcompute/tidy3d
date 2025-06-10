@@ -660,7 +660,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return intensity.squeeze(dim=normal_dim, drop=True)
 
     @property
-    def poynting(self) -> ScalarFieldDataArray:
+    def complex_poynting(self) -> ScalarFieldDataArray:
         """Time-averaged Poynting vector for frequency-domain data associated to a 2D monitor,
         projected to the direction normal to the monitor plane."""
 
@@ -677,26 +677,35 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         e2_h1 = e2 * h1.conj()
 
         e_x_h_star = e1_h2 - e2_h1
-        poynting = 0.5 * np.real(e_x_h_star)
+        return 0.5 * e_x_h_star
 
-        return poynting
+    @property
+    def poynting(self) -> ScalarFieldDataArray:
+        """Time-averaged Poynting vector for frequency-domain data associated to a 2D monitor,
+        projected to the direction normal to the monitor plane."""
+        return self.complex_poynting.real
 
     def package_flux_results(self, flux_values: DataArray) -> Any:
         """How to package flux"""
         return FluxDataArray(flux_values)
 
     @cached_property
-    def flux(self) -> FluxDataArray:
+    def complex_flux(self) -> FluxDataArray:
         """Flux for data corresponding to a 2D monitor."""
 
         # Compute flux by integrating Poynting vector in-plane
         d_area = self._diff_area
-        poynting = self.poynting
+        poynting = self.complex_poynting
 
         flux_values = poynting * d_area
         flux_values = flux_values.sum(dim=d_area.dims)
 
         return self.package_flux_results(flux_values)
+
+    @cached_property
+    def flux(self) -> FluxDataArray:
+        """Flux for data corresponding to a 2D monitor."""
+        return self.complex_flux.real
 
     @cached_property
     def mode_area(self) -> FreqModeDataArray:

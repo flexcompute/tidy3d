@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Solver error for EME simulations with bends, introduced when support for 2D EME simulations was added.
 - Internal interpolation errors with some versions of `xarray` and `numpy`.
 - If `ModeSpec.angle_rotation=True` for a mode object, validate that the structure rotation can be successfully done. Also, error if the medium cannot be rotated (e.g. anisotropic or custom medium), which would previously have just produced wrong results.
+- Characteristic impedance calculations in the `ImpedanceCalculator` using definitions that rely on flux, which were giving incorrect results for lossy transmission lines.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
