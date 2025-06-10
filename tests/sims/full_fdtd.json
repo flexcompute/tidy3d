@@ -44,6 +44,7 @@
             "name": "traced_dieletric_cylinder",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -78,6 +79,7 @@
             "name": "traced_dieletric_box",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -124,6 +126,7 @@
             "name": "traced custom polyslab",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -161,6 +164,7 @@
             "name": "dieletric_box",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -195,6 +199,7 @@
             "name": "lossy_box",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -225,6 +230,7 @@
             "name": "sellmeier_sphere",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -267,6 +273,7 @@
             "name": "lorentz_box",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -307,6 +314,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -341,6 +349,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -380,6 +389,7 @@
             "name": "drude_box",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -419,6 +429,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -499,6 +510,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -553,6 +565,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -622,6 +635,7 @@
             "name": "fully_anisotropic_box",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -694,6 +708,7 @@
             "name": "pec_group",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -726,6 +741,7 @@
             "name": "anisotopic_cylinder",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -809,6 +825,7 @@
             "name": "pole_slab",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -854,6 +871,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -891,6 +909,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -932,6 +951,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -974,6 +994,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1015,6 +1036,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1056,6 +1078,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1096,6 +1119,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1139,6 +1163,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1198,6 +1223,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1264,6 +1290,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1323,6 +1350,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1382,6 +1410,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1434,6 +1463,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1473,6 +1503,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1555,6 +1586,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1595,6 +1627,7 @@
             "name": "dieletric_mesh",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1639,6 +1672,7 @@
             "name": null,
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1692,6 +1726,7 @@
             "name": "clip_operation",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1756,6 +1791,7 @@
             "name": "transformed_box",
             "background_permittivity": null,
             "background_medium": null,
+            "priority": null,
             "type": "Structure",
             "medium": {
                 "attrs": {},
@@ -1769,6 +1805,59 @@
                 "type": "Medium",
                 "permittivity": 1.5,
                 "conductivity": 0.0
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    1.0,
+                    1.0,
+                    1.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "SiO2",
+                "optical": {
+                    "attrs": {},
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "Medium",
+                    "permittivity": 4.0,
+                    "conductivity": 0.0
+                },
+                "heat": null,
+                "charge": {
+                    "attrs": {},
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "ChargeInsulatorMedium",
+                    "permittivity": 2.0
+                },
+                "type": "MultiPhysicsMedium"
             }
         }
     ],
@@ -1871,7 +1960,7 @@
                 "filter_pol": null,
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
-                "precision": "auto",
+                "precision": "double",
                 "bend_radius": null,
                 "bend_axis": null,
                 "angle_rotation": false,
@@ -2419,7 +2508,7 @@
                 "filter_pol": null,
                 "angle_theta": 0.0,
                 "angle_phi": 0.0,
-                "precision": "auto",
+                "precision": "double",
                 "bend_radius": null,
                 "bend_axis": null,
                 "angle_rotation": false,
@@ -3181,6 +3270,7 @@
                 "name": null,
                 "background_permittivity": null,
                 "background_medium": null,
+                "priority": null,
                 "type": "Structure",
                 "medium": {
                     "attrs": {},
@@ -3201,8 +3291,9 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.8.4",
+    "version": "2.9.0rc1",
     "plot_length_units": "\u03bcm",
+    "structure_priority_mode": "equal",
     "lumped_elements": [
         {
             "attrs": {},

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0rc1] - 2025-06-10
+
 ### Added
 
 - Fields `convex_resolution`, `concave_resolution`, and `mixed_resolution` in `CornerFinderSpec` can be used to take into account the dimensions of autodetected convex, concave, or mixed geometric features when `dl_min` is automatically inferred during automatic grid generation.
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Characteristic impedance calculations in the `ImpedanceCalculator` using definitions that rely on flux, which were giving incorrect results for lossy transmission lines.
 - Fixed handling of symmetry when creating adjoint field sources and added warning when broken up adjoint simulations do not have the same symmetry as the forward simulation.
 - Validation for `CustomGridBoundaries`, which was previously allowing unsorted arrays and arrays with less than two entries.
+- `DiffractionMonitor` results to apply finite grid field corrections for higher precision when comparing e.g. to `FluxMonitor` computations of total power.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
@@ -1656,7 +1659,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.4...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.9.0rc1...develop
+[2.9.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.8.4...v2.9.0rc1
 [2.8.4]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...v2.8.4
 [2.8.3]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...v2.8.3
 [2.8.2]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...v2.8.2
