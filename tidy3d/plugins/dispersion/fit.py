@@ -8,7 +8,6 @@ from typing import Optional
 
 import numpy as np
 import requests
-import scipy.optimize as opt
 from pydantic.v1 import Field, validator
 from rich.progress import Progress
 
@@ -361,6 +360,7 @@ class DispersionFitter(Tidy3dBaseModel):
         Tuple[:class:`.PoleResidue`, float]
             Results of single fit: (dispersive medium, RMS error).
         """
+        import scipy.optimize as opt
 
         # NOTE: Not used
         def constraint(coeffs, _grad=None):

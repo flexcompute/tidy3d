@@ -6,7 +6,6 @@ from functools import partial
 from typing import Union
 
 import numpy as np
-import scipy.linalg
 import xarray as xr
 from pydantic.v1 import Field, NonNegativeFloat, PositiveInt, validator
 
@@ -361,6 +360,8 @@ class ResonanceFinder(Tidy3dBaseModel):
         I. Theory and application to a quantum-dynamics model,"
         J. Chem. Phys. 102, 8001 (1995).
         """
+        import scipy.linalg
+
         eigvals_b, eigvecs_b = scipy.linalg.eig(b_matrix)
         large_inds = np.abs(eigvals_b) > rcond * np.amax(np.abs(eigvals_b))
         eigvals_b = eigvals_b[large_inds]

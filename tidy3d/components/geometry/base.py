@@ -1386,7 +1386,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         import gdstk
 
         if not isinstance(cell, gdstk.Cell):
-            if "gdstk" in cell.__class__.__name__.lower():  # type: ignore[attr-defined]
+            if "gdstk" in cell.__class__.__name__.lower():
                 raise Tidy3dImportError(
                     "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
                 )

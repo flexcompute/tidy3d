@@ -8,7 +8,6 @@ from typing import Optional
 import numpy as np
 import pydantic.v1 as pd
 from pandas import DataFrame
-from scipy.signal import find_peaks, peak_widths
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.types import ArrayFloat1D, ArrayLike, Ax
@@ -132,6 +131,8 @@ class LobeMeasurer(Tidy3dBaseModel):
         DataFrame
             A DataFrame containing all lobe measures, where rows indicate the lobe index.
         """
+        from scipy.signal import find_peaks
+
         if self.apply_cyclic_extension:
             angle, signal = self.cyclic_extension(self.angle, self.radiation_pattern)
         else:
@@ -231,6 +232,8 @@ class LobeMeasurer(Tidy3dBaseModel):
         self, angle: ArrayLike, signal: ArrayLike, peaks: ArrayLike
     ) -> tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
         """Get the peak widths in terms of the angular coordinates."""
+        from scipy.signal import peak_widths
+
         rel_height = 1.0 - self.width_measure
         last_element = len(signal) - 1
         left_ips = np.zeros_like(peaks)

@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-import scipy.stats.qmc as qmc
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.constants import inf
 
 from .parameter import ParameterAny, ParameterFloat, ParameterInt, ParameterType
 
-DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube
+if TYPE_CHECKING:
+    from scipy.stats import qmc as qmc_type
 
 
 class Method(Tidy3dBaseModel, ABC):
@@ -786,14 +786,14 @@ class AbstractMethodRandom(MethodSample, ABC):
     )
 
     @abstractmethod
-    def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc.QMCEngine:
+    def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
     def _get_run_count(self, parameters: Optional[list] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.num_points
 
-    def sample(self, parameters: tuple[ParameterType, ...], **kwargs) -> dict[str, Any]:
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs) -> list[dict[str, Any]]:
         """Defines how the design parameters are sampled on grid."""
 
         sampler = self._get_sampler(parameters)
@@ -823,11 +823,12 @@ class MethodMonteCarlo(AbstractMethodRandom):
     >>> method = tdd.MethodMonteCarlo(num_points=20)
     """
 
-    def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc.QMCEngine:
+    def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class."""
+        from scipy.stats import qmc
 
         d = len(parameters)
-        return DEFAULT_MONTE_CARLO_SAMPLER_TYPE(d=d, seed=self.seed)
+        return qmc.LatinHypercube(d=d, seed=self.seed)
 
 
 MethodType = Union[
