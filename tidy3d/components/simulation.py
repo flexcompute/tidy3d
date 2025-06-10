@@ -762,7 +762,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         pml_boxes = self._make_pml_boxes(normal_axis=normal_axis)
         for pml_box in pml_boxes:
-            pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
+            pml_box.plot(x=x, y=y, z=z, ax=ax, swap_axes=swap_axes, **plot_params_pml.to_kwargs())
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
         )

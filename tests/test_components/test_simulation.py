@@ -711,22 +711,25 @@ def test_wvl_mat_min_error():
         SIM.wvl_mat_min()
 
 
-def test_plot_structure():
-    _ = SIM_FULL.structures[0].plot(x=0)
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_structure(swap_axes):
+    _ = SIM_FULL.structures[0].plot(x=0, swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot_eps():
-    _ = SIM_FULL.plot_eps(x=0)
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_eps(swap_axes):
+    _ = SIM_FULL.plot_eps(x=0, swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot_eps_bounds():
-    _ = SIM_FULL.plot_eps(x=0, hlim=[-0.45, 0.45])
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_eps_bounds(swap_axes):
+    _ = SIM_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot_eps(x=0, vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot_eps(x=0, vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
 
 
@@ -952,22 +955,23 @@ def test_plot_3d():
     plt.close()
 
 
-def test_structure_alpha():
-    _ = SIM_FULL.plot_structures_eps(x=0, alpha=None)
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_structure_alpha(swap_axes):
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=None, swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot_structures_eps(x=0, alpha=-1)
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=-1, swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot_structures_eps(x=0, alpha=1)
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=1, swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot_structures_eps(x=0, alpha=0.5)
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=0.5, swap_axes=swap_axes)
     plt.close()
-    _ = SIM_FULL.plot_structures_eps(x=0, alpha=0.5, cbar=True)
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=0.5, cbar=True, swap_axes=swap_axes)
     plt.close()
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SIM_FULL.medium) for s in SIM_FULL.structures
     ]
     S2 = SIM_FULL.copy(update={"structures": new_structs})
-    _ = S2.plot_structures_eps(x=0, alpha=0.5)
+    _ = S2.plot_structures_eps(x=0, alpha=0.5, swap_axes=swap_axes)
     plt.close()
 
 
