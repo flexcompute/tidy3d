@@ -1068,8 +1068,8 @@ def test_mode_solver_relative():
     _ = ms._data_on_yee_grid_relative(basis=basis)
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_mode_solver_plot(swap_axes):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_mode_solver_plot(transpose):
     """Test mode plane plotting functions"""
 
     simulation = td.Simulation(
@@ -1096,13 +1096,13 @@ def test_mode_solver_plot(swap_axes):
         colocate=False,
     )
     _, ax = plt.subplots(2, 2, figsize=(12, 8), tight_layout=True)
-    ms.plot(ax=ax[0, 0], swap_axes=swap_axes)
-    ms.plot_eps(freq=200e14, alpha=0.7, ax=ax[0, 1], swap_axes=swap_axes)
-    ms.plot_structures_eps(freq=200e14, alpha=0.8, cbar=True, reverse=False, ax=ax[1, 0], swap_axes=swap_axes)
-    ms.plot_grid(linewidth=0.3, ax=ax[1, 0], swap_axes=swap_axes)
-    ms.plot(ax=ax[1, 1], swap_axes=swap_axes)
-    ms.plot_pml(ax=ax[1, 1], swap_axes=swap_axes)
-    ms.plot_grid(linewidth=0.3, ax=ax[1, 1], swap_axes=swap_axes)
+    ms.plot(ax=ax[0, 0], transpose=transpose)
+    ms.plot_eps(freq=200e14, alpha=0.7, ax=ax[0, 1], transpose=transpose)
+    ms.plot_structures_eps(freq=200e14, alpha=0.8, cbar=True, reverse=False, ax=ax[1, 0], transpose=transpose)
+    ms.plot_grid(linewidth=0.3, ax=ax[1, 0], transpose=transpose)
+    ms.plot(ax=ax[1, 1], transpose=transpose)
+    ms.plot_pml(ax=ax[1, 1], transpose=transpose)
+    ms.plot_grid(linewidth=0.3, ax=ax[1, 1], transpose=transpose)
     plt.close()
 
 

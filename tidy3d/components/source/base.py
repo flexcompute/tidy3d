@@ -74,7 +74,7 @@ class Source(Box, AbstractSource, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        swap_axes: bool = False,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot this source."""
@@ -82,7 +82,7 @@ class Source(Box, AbstractSource, ABC):
         kwargs_arrow_base = patch_kwargs.pop("arrow_base", None)
 
         # call the `Source.plot()` function first.
-        ax = Box.plot(self, x=x, y=y, z=z, ax=ax, swap_axes=swap_axes, **patch_kwargs)
+        ax = Box.plot(self, x=x, y=y, z=z, ax=ax, transpose=transpose, **patch_kwargs)
 
         kwargs_alpha = patch_kwargs.get("alpha")
         arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
@@ -113,7 +113,7 @@ class Source(Box, AbstractSource, ABC):
                 alpha=arrow_alpha,
                 both_dirs=False,
                 arrow_base=kwargs_arrow_base,
-                swap_axes=swap_axes,
+                transpose=transpose,
             )
 
         if self._pol_vector is not None:
@@ -127,7 +127,7 @@ class Source(Box, AbstractSource, ABC):
                 alpha=arrow_alpha,
                 both_dirs=False,
                 arrow_base=kwargs_arrow_base,
-                swap_axes=swap_axes,
+                transpose=transpose,
             )
 
         return ax

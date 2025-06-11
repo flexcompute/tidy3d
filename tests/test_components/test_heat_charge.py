@@ -1025,8 +1025,8 @@ def test_heat_charge_sources(structures):
         _ = td.HeatSource(structures=["solid_structure"], rate="100")
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_heat_charge_simulation(swap_axes, simulation_data):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_heat_charge_simulation(transpose, simulation_data):
     """Tests 'HeatChargeSimulation' and 'ConductionSimulation' objects."""
     (
         heat_sim_data,
@@ -1057,16 +1057,16 @@ def test_heat_charge_simulation(swap_axes, simulation_data):
     mesher = mesh_data.mesher
     assert mesher is not None, "VolumeMesher should be created successfully."
 
-    _ = heat_sim.plot_heat_conductivity(x=0, swap_axes=swap_axes)
+    _ = heat_sim.plot_heat_conductivity(x=0, transpose=transpose)
     plt.close()
-    _ = heat_sim.plot_property(x=0, property="heat_conductivity", swap_axes=swap_axes)
+    _ = heat_sim.plot_property(x=0, property="heat_conductivity", transpose=transpose)
     plt.close()
-    _ = cond_sim.plot_property(x=0, property="electric_conductivity", swap_axes=swap_axes)
+    _ = cond_sim.plot_property(x=0, property="electric_conductivity", transpose=transpose)
     plt.close()
     for sim in (heat_sim, cond_sim, voltage_capacitance_sim, current_voltage_sim):
-        _ = sim.plot_boundaries(x=0, swap_axes=swap_axes)
+        _ = sim.plot_boundaries(x=0, transpose=transpose)
         plt.close()
-        _ = sim.plot_sources(x=0, swap_axes=swap_axes)
+        _ = sim.plot_sources(x=0, transpose=transpose)
         plt.close()
 
 
@@ -1664,8 +1664,8 @@ def test_plotting_functions(simulation_data):
         heat_sim_data.plot_field("test", invalid_param=0)
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_bandgap_monitor(swap_axes):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_bandgap_monitor(transpose):
     """Test energy bandgap monitor ploting function."""
     # create a triangle grid
     tri_grid_points = td.PointDataArray(
@@ -1805,8 +1805,8 @@ def test_bandgap_monitor(swap_axes):
 
     # test check for the voltage value in the list of arguments
 
-    tri_single_voltage_data.plot(x=0.0, swap_axes=swap_axes)
-    tri_multi_voltage_data.plot(x=0.0, voltage=1.0, swap_axes=swap_axes)
+    tri_single_voltage_data.plot(x=0.0, transpose=transpose)
+    tri_multi_voltage_data.plot(x=0.0, voltage=1.0, transpose=transpose)
 
     with pytest.raises(DataError):
         tri_multi_voltage_data.plot(x=0.0)

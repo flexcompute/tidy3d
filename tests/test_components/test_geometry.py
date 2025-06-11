@@ -87,14 +87,14 @@ GEO_TYPES = [
 _, AX = plt.subplots()
 
 
-@pytest.mark.parametrize("component, swap_axes", zip(GEO_TYPES, [True, False]))
-def test_plot(component, swap_axes):
-    _ = component.plot(z=0, ax=AX, swap_axes=swap_axes)
+@pytest.mark.parametrize("component, transpose", zip(GEO_TYPES, [True, False]))
+def test_plot(component, transpose):
+    _ = component.plot(z=0, ax=AX, transpose=transpose)
     plt.close()
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_plot_with_units(swap_axes):
-    _ = BOX.plot(z=0, ax=AX, plot_length_units="nm", swap_axes=swap_axes)
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plot_with_units(transpose):
+    _ = BOX.plot(z=0, ax=AX, plot_length_units="nm", transpose=transpose)
     plt.close()
 
 
@@ -206,11 +206,11 @@ def test_array_to_vertices():
     assert np.all(np.array(vertices) == np.array(vertices2))
 
 
-@pytest.mark.parametrize("component, swap_axes", zip(GEO_TYPES, [True, False]))
-def test_intersections_plane(component, swap_axes):
-    assert len(component.intersections_plane(z=0.2, swap_axes=swap_axes)) > 0
-    assert len(component.intersections_plane(x=0.2, swap_axes=swap_axes)) > 0
-    assert len(component.intersections_plane(x=10000, swap_axes=swap_axes)) == 0
+@pytest.mark.parametrize("component, transpose", zip(GEO_TYPES, [True, False]))
+def test_intersections_plane(component, transpose):
+    assert len(component.intersections_plane(z=0.2, transpose=transpose)) > 0
+    assert len(component.intersections_plane(x=0.2, transpose=transpose)) > 0
+    assert len(component.intersections_plane(x=10000, transpose=transpose)) == 0
 
 
 def test_intersections_plane_inf():
@@ -780,39 +780,39 @@ def test_pop_axis():
         assert Ly == _Ly
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_pop_axis_and_swap(swap_axes):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_pop_axis_and_swap(transpose):
     b = td.Box(size=(1, 1, 1))
     for axis in range(3):
         coords = (1, 2, 3)
-        Lz, (Lx, Ly) = b.pop_axis_and_swap(coords, axis=axis, swap_axes=swap_axes)
-        _coords = b.unpop_axis_and_swap(Lz, (Lx, Ly), axis=axis, swap_axes=swap_axes)
+        Lz, (Lx, Ly) = b.pop_axis_and_swap(coords, axis=axis, transpose=transpose)
+        _coords = b.unpop_axis_and_swap(Lz, (Lx, Ly), axis=axis, transpose=transpose)
         assert all(c == _c for (c, _c) in zip(coords, _coords))
-        _Lz, (_Lx, _Ly) = b.pop_axis_and_swap(_coords, axis=axis, swap_axes=swap_axes)
+        _Lz, (_Lx, _Ly) = b.pop_axis_and_swap(_coords, axis=axis, transpose=transpose)
         assert Lz == _Lz
         assert Lx == _Lx
         assert Ly == _Ly
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_2b_box_intersections(swap_axes):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_2b_box_intersections(transpose):
     plane = td.Box(size=(1, 4, 0))
     box1 = td.Box(size=(1, 1, 1))
     box2 = td.Box(size=(1, 1, 1), center=(3, 0, 0))
 
-    result = plane.intersections_with(box1, swap_axes=swap_axes)
+    result = plane.intersections_with(box1, transpose=transpose)
     assert len(result) == 1
     assert result[0].geom_type == "Polygon"
-    assert len(plane.intersections_with(box2, swap_axes=swap_axes)) == 0
+    assert len(plane.intersections_with(box2, transpose=transpose)) == 0
 
     with pytest.raises(ValidationError):
-        _ = box1.intersections_with(box2, swap_axes=swap_axes)
+        _ = box1.intersections_with(box2, transpose=transpose)
 
-    assert len(box1.intersections_2dbox(plane, swap_axes=swap_axes)) == 1
-    assert len(box2.intersections_2dbox(plane, swap_axes=swap_axes)) == 0
+    assert len(box1.intersections_2dbox(plane, transpose=transpose)) == 1
+    assert len(box2.intersections_2dbox(plane, transpose=transpose)) == 0
 
     with pytest.raises(ValidationError):
-        _ = box2.intersections_2dbox(box1, swap_axes=swap_axes)
+        _ = box2.intersections_2dbox(box1, transpose=transpose)
 
 
 def test_polyslab_merge():
@@ -954,8 +954,8 @@ def test_to_gds(geometry, tmp_path):
     assert len(cell.polygons) == 0
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_custom_surface_geometry(swap_axes, tmp_path):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_custom_surface_geometry(transpose, tmp_path):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
@@ -989,11 +989,11 @@ def test_custom_surface_geometry(swap_axes, tmp_path):
 
     # test intersections
     assert shapely.equals(
-        geom.intersections_plane(x=0, swap_axes=swap_axes),
+        geom.intersections_plane(x=0, transpose=transpose),
         shapely.Polygon([[0, 0], [0, 1], [1, 0]]),
     )
     assert shapely.equals(
-        geom.intersections_plane(z=0.5, swap_axes=swap_axes),
+        geom.intersections_plane(z=0.5, transpose=transpose),
         shapely.Polygon([[0, 0], [0, 0.5], [0.5, 0]]),
     )
 
@@ -1003,7 +1003,7 @@ def test_custom_surface_geometry(swap_axes, tmp_path):
 
     # test plot
     _, ax = plt.subplots()
-    _ = geom.plot(z=0.1, ax=ax, swap_axes=swap_axes)
+    _ = geom.plot(z=0.1, ax=ax, transpose=transpose)
     plt.close()
 
     # test inconsistent winding
@@ -1053,7 +1053,7 @@ def test_custom_surface_geometry(swap_axes, tmp_path):
         boundary_spec=td.BoundarySpec.all_sides(td.PML()),
     )
     _, ax = plt.subplots()
-    _ = sim.plot(y=0, ax=ax, swap_axes=swap_axes)
+    _ = sim.plot(y=0, ax=ax, transpose=transpose)
     plt.close()
 
     # allow small triangles

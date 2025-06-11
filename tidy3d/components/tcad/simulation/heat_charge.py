@@ -966,7 +966,7 @@ class HeatChargeSimulation(AbstractSimulation):
         property: str = "heat_conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        swap_axes: bool = False,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1002,7 +1002,7 @@ class HeatChargeSimulation(AbstractSimulation):
         """
 
         hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
 
         cbar_cond = True
@@ -1037,17 +1037,17 @@ class HeatChargeSimulation(AbstractSimulation):
                 hlim=hlim,
                 vlim=vlim,
                 property=property,
-                swap_axes=swap_axes,
+                transpose=transpose,
             )
         ax = self.plot_sources(
-            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim, swap_axes=swap_axes
+            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim, swap_axes=swap_axes)
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property, swap_axes=swap_axes)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
         )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, swap_axes=swap_axes)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
         if property == "source":
             self._add_source_cbar(ax=ax, property=property)
@@ -1067,7 +1067,7 @@ class HeatChargeSimulation(AbstractSimulation):
         colorbar: str = "conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        swap_axes: bool = False,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """
@@ -1127,7 +1127,7 @@ class HeatChargeSimulation(AbstractSimulation):
             property=plot_type,
             hlim=hlim,
             vlim=vlim,
-            swap_axes=swap_axes,
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -1139,7 +1139,7 @@ class HeatChargeSimulation(AbstractSimulation):
         z: Optional[float] = None,
         property: str = "heat_conductivity",
         ax: Ax = None,
-        swap_axes: bool = False,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's boundary conditions on a plane defined by one nonzero x,y,z
         coordinate.
@@ -1179,7 +1179,7 @@ class HeatChargeSimulation(AbstractSimulation):
             structures=structures,
             plane=plane,
             boundary_spec=self.boundary_spec,
-            swap_axes=swap_axes,
+            transpose=transpose,
         )
 
         # plot boundary conditions
@@ -1194,11 +1194,11 @@ class HeatChargeSimulation(AbstractSimulation):
             ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax)
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax, swap_axes=swap_axes)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, swap_axes=swap_axes)
+        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
+        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose)
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, swap_axes=swap_axes
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
 
         return ax
@@ -1455,7 +1455,7 @@ class HeatChargeSimulation(AbstractSimulation):
         structures: list[Structure],
         plane: Box,
         boundary_spec: list[HeatChargeBoundarySpec],
-        swap_axes: bool = False,
+        transpose: bool = False,
     ) -> list[tuple[HeatChargeBoundarySpec, Shapely]]:
         """Compute list of boundary lines to plot on plane.
 
@@ -1478,7 +1478,7 @@ class HeatChargeSimulation(AbstractSimulation):
         shapes = []  # structure name, structure medium, shape, bounds
         for structure in structures:
             # get list of Shapely shapes that intersect at the plane
-            shapes_plane = plane.intersections_with(structure.geometry, swap_axes=swap_axes)
+            shapes_plane = plane.intersections_with(structure.geometry, transpose=transpose)
 
             # append each of them and their medium information to the list of shapes
             for shape in shapes_plane:
@@ -1528,7 +1528,7 @@ class HeatChargeSimulation(AbstractSimulation):
         vlim: Optional[tuple[float, float]] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
-        swap_axes: bool = False,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1589,7 +1589,7 @@ class HeatChargeSimulation(AbstractSimulation):
         plane = Box(center=center, size=size)
 
         source_shapes = self.scene._filter_structures_plane(
-            structures=structures, plane=plane, property_list=source_list, swap_axes=swap_axes
+            structures=structures, plane=plane, property_list=source_list, transpose=transpose
         )
 
         source_min, source_max = self.source_bounds(property=property)
@@ -1605,11 +1605,11 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax, swap_axes=swap_axes)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, swap_axes=swap_axes)
+        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
+        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose)
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, swap_axes=swap_axes
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
         )
         return ax
 

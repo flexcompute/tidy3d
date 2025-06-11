@@ -70,7 +70,7 @@ class HeatSimulation(HeatChargeSimulation):
         colorbar: str = "conductivity",
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
-        swap_axes: bool = False
+        transpose: bool = False
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -122,5 +122,5 @@ class HeatSimulation(HeatChargeSimulation):
             property=plot_type,
             hlim=hlim,
             vlim=vlim,
-            swap_axes=swap_axes,
+            transpose=transpose,
         )

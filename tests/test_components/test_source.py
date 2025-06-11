@@ -209,19 +209,19 @@ def test_dipole_sources_from_angles():
     )
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_FieldSource(swap_axes):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_FieldSource(transpose):
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     mode_spec = td.ModeSpec(num_modes=2)
 
     # test we can make planewave
     s = td.PlaneWave(size=(0, td.inf, td.inf), source_time=g, pol_angle=np.pi / 2, direction="+")
-    s.plot(y=0, swap_axes=swap_axes)
+    s.plot(y=0, transpose=transpose)
     plt.close()
 
     # test we can make gaussian beam
     s = td.GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    s.plot(y=0, swap_axes=swap_axes)
+    s.plot(y=0, transpose=transpose)
     plt.close()
 
     # test we can make an astigmatic gaussian beam
@@ -238,7 +238,7 @@ def test_FieldSource(swap_axes):
     s = td.ModeSource(
         size=(0, 1, 1), direction="+", source_time=g, mode_spec=mode_spec, mode_index=0
     )
-    s.plot(y=0, swap_axes=swap_axes)
+    s.plot(y=0, transpose=transpose)
     plt.close()
 
     # test that non-planar geometry crashes plane wave and gaussian beams
@@ -265,12 +265,12 @@ def test_FieldSource(swap_axes):
     with pytest.raises(pydantic.ValidationError):
         _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
 
-    # s.plot(z=0, swap_axes=swap_axes)
+    # s.plot(z=0, transpose=transpose)
     # plt.close()
 
 
-@pytest.mark.parametrize("swap_axes", [True, False])
-def test_current_source(swap_axes):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_current_source(transpose):
     L: float = 5.0
     source = td.UniformCurrentSource(
         center=(0, -L / 3, 0),
@@ -281,7 +281,7 @@ def test_current_source(swap_axes):
             fwidth=10e14,
         ),
     )
-    source.plot(z=0, swap_axes=swap_axes)
+    source.plot(z=0, transpose=transpose)
 
 
 def test_pol_arrow():

@@ -273,7 +273,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
-        swap_axes: bool = False,
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the data for a monitor with simulation structures overlaid.
@@ -367,8 +367,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
 
             # compute plot bounds
             field_data_bounds = field_data.bounds
-            _, min_bounds = Geometry.pop_axis_and_swap(field_data_bounds[0], axis, swap_axes=swap_axes)
-            _, max_bounds = Geometry.pop_axis_and_swap(field_data_bounds[1], axis, swap_axes=swap_axes)
+            _, min_bounds = Geometry.pop_axis_and_swap(field_data_bounds[0], axis, transpose=transpose)
+            _, max_bounds = Geometry.pop_axis_and_swap(field_data_bounds[1], axis, transpose=transpose)
 
         if isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions
@@ -420,7 +420,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             axis = "xyz".index(planar_coord)
             position = float(field_data.coords[planar_coord])
 
-            _, xy_coord_labels = Geometry.pop_axis_and_swap(list("xyz"), axis=axis, swap_axes=swap_axes)
+            _, xy_coord_labels = Geometry.pop_axis_and_swap(list("xyz"), axis=axis, transpose=transpose)
 
             x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
             field_data.plot(
@@ -449,7 +449,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 alpha=structures_alpha,
                 ax=ax,
                 property=property_to_plot,
-                swap_axes=swap_axes,
+                transpose=transpose,
                 **interp_kwarg,
             )
 

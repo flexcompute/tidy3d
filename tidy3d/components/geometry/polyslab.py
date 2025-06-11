@@ -629,14 +629,14 @@ class PolySlab(base.Planar):
         path, _ = section.to_planar(to_2D=to_2D)
         return path.polygons_full
 
-    def _intersections_normal(self, z: float, swap_axes: bool = False):
+    def _intersections_normal(self, z: float, transpose: bool = False):
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
 
         Parameters
         ----------
         z : float
             Position along the axis normal to slab.
-        swap_axes : bool = False
+        transpose : bool = False
             Optional: Swap the planar (XY) coordinates?
 
         Returns
@@ -648,7 +648,7 @@ class PolySlab(base.Planar):
         """
         if math.isclose(self.sidewall_angle, 0):
             vertices = self.reference_polygon
-            if swap_axes:
+            if transpose:
                 vertices = vertices[:, ::-1]  # swap column 0 (x coords) with column 1 (y coords)
             return [self.make_shapely_polygon(vertices)]
         z0 = self.center_axis
@@ -656,11 +656,11 @@ class PolySlab(base.Planar):
         dist = -z_local * self._tanq
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
         vertices = vertices_z
-        if swap_axes:
+        if transpose:
             vertices = vertices[:, ::-1]  # swap column 0 (x coords) with column 1 (y coords)
         return [self.make_shapely_polygon(vertices)]
 
-    def _intersections_side(self, position, axis, swap_axes: bool = False) -> list:
+    def _intersections_side(self, position, axis, transpose: bool = False) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
 
         For slanted polyslab, the procedure is as follows,
@@ -685,7 +685,7 @@ class PolySlab(base.Planar):
             Position along ``axis``.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        swap_axes : bool = False
+        transpose : bool = False
             Optional: Swap the coordinates in the plane orthogonal to the axis?
 
         Returns
@@ -733,8 +733,8 @@ class PolySlab(base.Planar):
             for y_index in range(len(ints_y) // 2):
                 y_min = ints_y[2 * y_index]
                 y_max = ints_y[2 * y_index + 1]
-                minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, swap_axes=swap_axes)
-                maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis, swap_axes=swap_axes)
+                minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose)
+                maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis, transpose=transpose)
 
                 if math.isclose(self.sidewall_angle, 0):
                     polys.append(self.make_shapely_box(minx, miny, maxx, maxy))
@@ -748,13 +748,13 @@ class PolySlab(base.Planar):
                     dy_min = h_length * np.tan(angle_min)
                     dy_max = h_length * np.tan(angle_max)
 
-                    x1, y1 = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, swap_axes=swap_axes)
-                    x2, y2 = self._order_by_axis(plane_val=y_max, axis_val=z_min, axis=axis, swap_axes=swap_axes)
+                    x1, y1 = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose)
+                    x2, y2 = self._order_by_axis(plane_val=y_max, axis_val=z_min, axis=axis, transpose=transpose)
                     x3, y3 = self._order_by_axis(
-                        plane_val=y_max - dy_max, axis_val=z_max, axis=axis, swap_axes=swap_axes
+                        plane_val=y_max - dy_max, axis_val=z_max, axis=axis, transpose=transpose
                     )
                     x4, y4 = self._order_by_axis(
-                        plane_val=y_min + dy_min, axis_val=z_max, axis=axis, swap_axes=swap_axes
+                        plane_val=y_min + dy_min, axis_val=z_max, axis=axis, transpose=transpose
                     )
                     vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
                     polys.append(self.make_shapely_polygon(vertices).buffer(0))

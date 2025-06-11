@@ -358,12 +358,12 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
-        swap_axes: bool = False,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot this monitor."""
         # call the monitor.plot() function first
-        ax = super().plot(x=x, y=y, z=z, ax=ax, swap_axes=swap_axes, **patch_kwargs)
+        ax = super().plot(x=x, y=y, z=z, ax=ax, transpose=transpose, **patch_kwargs)
 
         kwargs_alpha = patch_kwargs.get("alpha")
         arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
@@ -385,7 +385,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             color=ARROW_COLOR_MONITOR,
             alpha=arrow_alpha,
             both_dirs=True,
-            swap_axes=swap_axes,
+            transpose=transpose,
         )
         return ax
 
