@@ -14,13 +14,13 @@ _MSG = dedent(
     f"""
     The 'adjoint' plugin (legacy JAX-based adjoint plugin) was deprecated in Tidy3D '2.7.0' and will be disabled as of '2.9.0'.
 
-    ➤ Migrate to the native autograd workflow:
+    Migrate to the native autograd workflow:
         import tidy3d as td
         import autograd.numpy as np
         from autograd import grad
 
-      It uses standard 'td.' objects, has fewer dependencies, and offers a smoother optimization experience.
-      Full guide ↗ {_DOC_URL}
+    It uses standard 'td.' objects, has fewer dependencies, and offers a smoother optimization experience.
+    Full guide: {_DOC_URL}
     """
 ).strip()
 
