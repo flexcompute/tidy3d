@@ -419,6 +419,23 @@ class CustomGridBoundaries(GridSpec1d):
 
         return min(np.diff(self.coords))
 
+    @pd.validator("coords", always=True)
+    def _validate_coords(cls, val):
+        """
+        Ensure 'coords' is sorted and has at least 2 entries.
+        """
+        if len(val) < 2:
+            raise SetupError("You must supply at least 2 entries for 'coords'.")
+        # Ensure coords is sorted
+        positive_diff = np.diff(val) > 0
+        if not np.all(positive_diff):
+            violations = np.where(np.diff(val) <= 0)[0] + 1
+            raise SetupError(
+                "'coords' must be strictly increasing (sorted in ascending order). "
+                f"The entries at the following indices violated this requirement: {violations}."
+            )
+        return val
+
 
 class CustomGrid(GridSpec1d):
     """Custom 1D grid supplied as a list of grid cell sizes centered on the simulation center.

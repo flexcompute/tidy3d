@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - If `ModeSpec.angle_rotation=True` for a mode object, validate that the structure rotation can be successfully done. Also, error if the medium cannot be rotated (e.g. anisotropic or custom medium), which would previously have just produced wrong results.
 - Characteristic impedance calculations in the `ImpedanceCalculator` using definitions that rely on flux, which were giving incorrect results for lossy transmission lines.
 - Fixed handling of symmetry when creating adjoint field sources and added warning when broken up adjoint simulations do not have the same symmetry as the forward simulation.
+- Validation for `CustomGridBoundaries`, which was previously allowing unsorted arrays and arrays with less than two entries.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.

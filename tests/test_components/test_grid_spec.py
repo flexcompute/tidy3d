@@ -544,3 +544,13 @@ def test_uniform_grid_dl_validation(dl, expect_exception):
             grid_spec=td.GridSpec.uniform(dl=dl),
             run_time=1e-12,
         )
+
+
+def test_custom_grid_boundary_validation():
+    """Tests that the 'coords' is at least length 2 and sorted in ascending order."""
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.CustomGridBoundaries(coords=[10])
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.CustomGridBoundaries(coords=[9, 10, 9, 10, 11, 9, 8])
