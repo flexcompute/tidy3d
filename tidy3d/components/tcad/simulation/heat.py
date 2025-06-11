@@ -98,6 +98,8 @@ class HeatSimulation(HeatChargeSimulation):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------

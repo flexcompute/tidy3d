@@ -994,6 +994,8 @@ class HeatChargeSimulation(AbstractSimulation):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1098,6 +1100,8 @@ class HeatChargeSimulation(AbstractSimulation):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1157,6 +1161,8 @@ class HeatChargeSimulation(AbstractSimulation):
             Options are ["heat_conductivity", "electric_conductivity"]
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1467,6 +1473,8 @@ class HeatChargeSimulation(AbstractSimulation):
             target plane.
         boundary_spec : List[HeatBoundarySpec]
             list of boundary conditions associated with structures.
+        transpose : bool = False
+            Swap the boundary-box coordinates in the plane. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1551,6 +1559,8 @@ class HeatChargeSimulation(AbstractSimulation):
             Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
