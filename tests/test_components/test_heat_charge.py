@@ -1025,7 +1025,8 @@ def test_heat_charge_sources(structures):
         _ = td.HeatSource(structures=["solid_structure"], rate="100")
 
 
-def test_heat_charge_simulation(simulation_data):
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_heat_charge_simulation(swap_axes, simulation_data):
     """Tests 'HeatChargeSimulation' and 'ConductionSimulation' objects."""
     (
         heat_sim_data,
@@ -1055,6 +1056,18 @@ def test_heat_charge_simulation(simulation_data):
 
     mesher = mesh_data.mesher
     assert mesher is not None, "VolumeMesher should be created successfully."
+
+    _ = heat_sim.plot_heat_conductivity(x=0, swap_axes=swap_axes)
+    plt.close()
+    _ = heat_sim.plot_property(x=0, property="heat_conductivity", swap_axes=swap_axes)
+    plt.close()
+    _ = cond_sim.plot_property(x=0, property="electric_conductivity", swap_axes=swap_axes)
+    plt.close()
+    for sim in (heat_sim, cond_sim, voltage_capacitance_sim, current_voltage_sim):
+        _ = sim.plot_boundaries(x=0, swap_axes=swap_axes)
+        plt.close()
+        _ = sim.plot_sources(x=0, swap_axes=swap_axes)
+        plt.close()
 
 
 def test_sim_data_plotting(simulation_data):
@@ -1651,7 +1664,8 @@ def test_plotting_functions(simulation_data):
         heat_sim_data.plot_field("test", invalid_param=0)
 
 
-def test_bandgap_monitor():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_bandgap_monitor(swap_axes):
     """Test energy bandgap monitor ploting function."""
     # create a triangle grid
     tri_grid_points = td.PointDataArray(
@@ -1791,8 +1805,8 @@ def test_bandgap_monitor():
 
     # test check for the voltage value in the list of arguments
 
-    tri_single_voltage_data.plot(x=0.0)
-    tri_multi_voltage_data.plot(x=0.0, voltage=1.0)
+    tri_single_voltage_data.plot(x=0.0, swap_axes=swap_axes)
+    tri_multi_voltage_data.plot(x=0.0, voltage=1.0, swap_axes=swap_axes)
 
     with pytest.raises(DataError):
         tri_multi_voltage_data.plot(x=0.0)

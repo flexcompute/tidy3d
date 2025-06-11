@@ -335,11 +335,12 @@ def make_heat_sim(include_custom_source: bool = True):
     return heat_sim
 
 
-def test_heat_sim():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_heat_sim(swap_axes):
     bc_temp, bc_flux, bc_conv = make_heat_bcs()
     heat_sim = make_heat_sim()
 
-    _ = heat_sim.plot(x=0)
+    _ = heat_sim.plot(x=0, swap_axes=swap_axes)
 
     # wrong names given
     for pl in [
@@ -373,14 +374,14 @@ def test_heat_sim():
     with pytest.raises(pd.ValidationError):
         heat_sim.updated_copy(monitors=[temp_mnt, temp_mnt])
 
-    _ = heat_sim.plot(x=0)
+    _ = heat_sim.plot(x=0, swap_axes=swap_axes)
     plt.close()
 
-    _ = heat_sim.plot_heat_conductivity(y=0)
+    _ = heat_sim.plot_heat_conductivity(y=0, swap_axes=swap_axes)
     plt.close()
 
     heat_sim_sym = heat_sim.updated_copy(symmetry=(0, 1, 1))
-    _ = heat_sim_sym.plot_heat_conductivity(z=0, colorbar="source")
+    _ = heat_sim_sym.plot_heat_conductivity(z=0, colorbar="source", swap_axes=swap_axes)
     plt.close()
 
     # no negative symmetry
