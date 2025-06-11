@@ -570,6 +570,8 @@ class TriangleMesh(base.Geometry, ABC):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------

@@ -483,6 +483,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -578,6 +580,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Defaults to ``None``, which returns the average of the diagonal values.
         eps_lim : Tuple[float, float] = None
             Custom limits for eps coloring.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -685,6 +689,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Defaults to ``None``, which returns the average of the diagonal values.
         eps_lim : Tuple[float, float] = None
             Custom limits for eps coloring.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -753,6 +759,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -914,6 +922,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the lumped element, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -963,6 +973,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the snapping points.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -1103,6 +1115,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -3860,7 +3874,7 @@ class Simulation(AbstractYeeGridSimulation):
                         custom_loc=["structures", i],
                     )
 
-    def _validate_tfsf_nonuniform_grid(self, transpose: bool = False) -> None:
+    def _validate_tfsf_nonuniform_grid(self) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,
         inside the TFSF box.
         """
@@ -3876,7 +3890,7 @@ class Simulation(AbstractYeeGridSimulation):
                 centers = self.grid.centers.to_list
                 sizes = self.grid.sizes.to_list
                 tfsf_bounds = source.bounds
-                _, plane_inds = source.pop_axis_and_swap([0, 1, 2], axis=source.injection_axis, transpose=transpose)
+                _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
                 grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
                 for ind in plane_inds:
                     grid_type = grid_list[ind]
@@ -4118,7 +4132,7 @@ class Simulation(AbstractYeeGridSimulation):
                     custom_loc = ["monitors", mnt_ind]
                     warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
 
-    def _validate_num_cells_in_mode_objects(self, transpose: bool = False) -> None:
+    def _validate_num_cells_in_mode_objects(self) -> None:
         """Raise an error if mode sources or monitors intersect with a very small number
         of grid cells in their transverse dimensions."""
 
@@ -4126,7 +4140,7 @@ class Simulation(AbstractYeeGridSimulation):
             mode_object: tuple[ModeSource, ModeMonitor], normal_axis: Axis, msg_header: str
         ):
             disc_grid = self.discretize(mode_object)
-            _, check_axes = Box.pop_axis_and_swap([0, 1, 2], axis=normal_axis, transpose=transpose)
+            _, check_axes = Box.pop_axis([0, 1, 2], axis=normal_axis)
             for axis in check_axes:
                 sim_size = self.size[axis]
                 dim_cells = disc_grid.num_cells[axis]
@@ -4213,7 +4227,7 @@ class Simulation(AbstractYeeGridSimulation):
                 "data, use hdf5 format instead."
             )
 
-    def _validate_tfsf_structure_intersections(self, transpose: bool = False) -> None:
+    def _validate_tfsf_structure_intersections(self) -> None:
         """Error if the 4 sidewalls of a TFSF box don't all intersect the same structures.
         This validator may need to compute permittivities on the grid, so it is called
         pre-upload rather than at the time of definition. Also errors if any side wall
@@ -4279,7 +4293,7 @@ class Simulation(AbstractYeeGridSimulation):
                 # a single "stripe" of epsilon as the reference and subtract it from all other
                 # stripes, which should result in zero if all the epsilon profiles are the same
                 freq0 = source.source_time.freq0
-                _, plane_axs = source.pop_axis_and_swap("xyz", axis=source.injection_axis, transpose=transpose)
+                _, plane_axs = source.pop_axis("xyz", axis=source.injection_axis)
                 ref_eps = self.epsilon(box=sidewall_surfaces[0], coord_key="centers", freq=freq0)
                 kwargs = {plane_axs[0]: 0, plane_axs[1]: 0}
                 ref_eps = ref_eps.isel(**kwargs)

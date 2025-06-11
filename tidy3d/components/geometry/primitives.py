@@ -481,7 +481,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         z : float
             Position along the axis normal to slab
         transpose : bool = False
-            Optional: Swap the x and y coordinates?
+            Optional: Swap the coordinates in slab's plane before calculating intersections.
 
         Returns
         -------
@@ -514,7 +514,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         axis : int
             Integer index into 'xyz' (0, 1, 2).
         transpose : bool = False
-            Optional: Swap the coordinates in the plane orthogonal to the axis?
+            Optional: Swap the coordinates in the perpendicular plane before calculating intersections.
 
         Returns
         -------
@@ -762,7 +762,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         coords : List[float, float]
             The value in the planar coordinate.
         transpose : bool = False
-            Optional: Swap the coordinates in the plane before converting them?
+            Optional: Swap the coordinates in the perpendicular plane before calculating intersections.
 
         Returns
         -------

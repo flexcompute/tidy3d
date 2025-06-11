@@ -55,6 +55,8 @@ def merging_geometries_on_plane(
         Plane specification.
     property_list : List = None
         Property value for each structure.
+    transpose : bool = False
+            Optional: Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
 
     Returns
     -------

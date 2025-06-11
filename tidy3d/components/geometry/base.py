@@ -254,6 +254,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -274,6 +276,13 @@ class Geometry(Tidy3dBaseModel, ABC):
     def intersections_2dbox(self, plane: Box, transpose: bool = False) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         a 2D box.
+
+        Parameters
+        ----------
+        plane : Box
+            Plane specification.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -456,6 +465,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         ----------
         axis : int
             Integer index into 'xyz' (0,1,2).
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -525,6 +536,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Specify units to use for axis labels, tick labels, and the title.
         viz_spec : VisualizationSpec = None
             Plotting parameters associated with a medium to use instead of defaults.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -607,6 +620,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         ----------
         axis : int
             Integer index into 'xyz' (0,1,2).
+        transpose : bool = False
+            Optional: Swap horizontal and vertical plot labels. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -637,7 +652,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
 
     def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, transpose: bool = False) -> Ax:
-        """Sets the x,y limits based on ``self.bounds``.
+        """Sets the horizontal and vertical axis limits based on ``self.bounds``.
 
         Parameters
         ----------
@@ -647,6 +662,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Matplotlib axes to add labels and limits on.
         buffer : float = 0.3
             Amount of space to place around the limits on the + and - sides.
+        transpose : bool = False
+            Optional: Swap horizontal and vertical axis limits. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -687,6 +704,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         plot_length_units : LengthUnit = None
             When set to a supported ``LengthUnit``, plots will be produced with annotated axes
             and title with the proper units.
+        transpose : bool = False
+            Optional: Swap horizontal and vertical axis labels. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -1774,6 +1793,8 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -1797,8 +1818,8 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         ----------
         z : float
             Position along the axis normal to slab
-        transpose : bool
-            Optional: Swap the order of the x and y axis in the geometry data.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -1818,8 +1839,8 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position along axis.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose : bool
-            Optional: Swap the order of the remaining two axes (the axes not equal to axis).
+        transpose : bool = False
+            Optional: Swap the coordinates in the perpendicular plane before calculating intersections.
 
         Returns
         -------
@@ -2157,8 +2178,8 @@ class Box(SimplePlaneIntersection, Centered):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        transpose: bool = False
-            Optional: Swap the order of the coordinates in the two remaining (unspecified) axis?
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -2340,6 +2361,8 @@ class Box(SimplePlaneIntersection, Centered):
             If True, plots an arrow pointing in direction and one in -direction.
         arrow_base : :class:`.Coordinate` = None
             Custom base of the arrow. Uses the geometry's center if not provided.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -3086,6 +3109,8 @@ class ClipOperation(Geometry):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -3301,6 +3326,8 @@ class GeometryGroup(Geometry):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------

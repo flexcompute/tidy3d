@@ -637,7 +637,7 @@ class PolySlab(base.Planar):
         z : float
             Position along the axis normal to slab.
         transpose : bool = False
-            Optional: Swap the planar (XY) coordinates?
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -686,7 +686,7 @@ class PolySlab(base.Planar):
         axis : int
             Integer index into 'xyz' (0,1,2).
         transpose : bool = False
-            Optional: Swap the coordinates in the plane orthogonal to the axis?
+            Optional: Swap the coordinates in the perpendicular plane before calculating intersections.
 
         Returns
         -------

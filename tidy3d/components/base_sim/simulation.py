@@ -276,6 +276,8 @@ class AbstractSimulation(Box, ABC):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         fill_structures : bool = True
             Whether to fill structures with color or just draw outlines.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -335,6 +337,8 @@ class AbstractSimulation(Box, ABC):
             Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -384,6 +388,8 @@ class AbstractSimulation(Box, ABC):
             Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -502,6 +508,8 @@ class AbstractSimulation(Box, ABC):
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -544,6 +552,9 @@ class AbstractSimulation(Box, ABC):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         fill : bool = True
             Whether to fill structures with color or just draw outlines.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
+
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -602,6 +613,8 @@ class AbstractSimulation(Box, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -670,6 +683,8 @@ class AbstractSimulation(Box, ABC):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------

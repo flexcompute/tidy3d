@@ -296,6 +296,8 @@ class Scene(Tidy3dBaseModel):
             Object for which intersecting media are to be detected.
         structures : List[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
+        transpose : bool = False
+            Optional: Swap the coordinates of test_object in the plane before calculating intersections.
 
         Returns
         -------
@@ -330,6 +332,8 @@ class Scene(Tidy3dBaseModel):
             Object for which intersecting media are to be detected.
         structures : List[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
+        transpose : bool = False
+            Optional: Swap the coordinates of test_object in the plane before calculating intersections.
 
         Returns
         -------
@@ -420,6 +424,8 @@ class Scene(Tidy3dBaseModel):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         fill_structures : bool = True
             Whether to fill structures with color or just draw outlines.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -464,6 +470,8 @@ class Scene(Tidy3dBaseModel):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         fill : bool = True
             Whether to fill structures with color or just draw outlines.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -602,6 +610,9 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
+
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -638,6 +649,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -689,6 +702,8 @@ class Scene(Tidy3dBaseModel):
             List of structures to filter on the plane.
         plane : Box
             Plane specification.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -719,6 +734,8 @@ class Scene(Tidy3dBaseModel):
             Plane specification.
         property_list : List = None
             Property value for each structure.
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane before calculating intersections.
 
         Returns
         -------
@@ -768,6 +785,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -836,6 +855,8 @@ class Scene(Tidy3dBaseModel):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -918,6 +939,8 @@ class Scene(Tidy3dBaseModel):
             Component of the permittivity tensor to plot for anisotropic materials,
             e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
             Defaults to ``None``, which returns the average of the diagonal values.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1380,6 +1403,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1435,6 +1460,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1503,6 +1530,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
@@ -1720,6 +1749,8 @@ class Scene(Tidy3dBaseModel):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order).
 
         Returns
         -------
