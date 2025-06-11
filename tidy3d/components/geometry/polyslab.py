@@ -994,15 +994,10 @@ class PolySlab(base.Planar):
         return ints_y_sort, ints_angle_sort
 
     @cached_property
-    def bounds(self, swap_axes: bool = False) -> Bound:
+    def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates. The dilation and slant angle are not
         taken into account exactly for speed. Instead, the polygon may be slightly smaller than
         the returned bounds, but it should always be fully contained.
-
-        Parameters
-        -------
-        swap_axes : bool = False
-            Optional: Swap the planar axes? (the axes perpendicular to self.axis)
 
         Returns
         -------
@@ -1036,8 +1031,8 @@ class PolySlab(base.Planar):
         zmin, zmax = self.slab_bounds
 
         # rearrange axes
-        coords_min = self.unpop_axis_and_swap(zmin, (xmin, ymin), axis=self.axis, swap_axes=swap_axes)
-        coords_max = self.unpop_axis_and_swap(zmax, (xmax, ymax), axis=self.axis, swap_axes=swap_axes)
+        coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)
+        coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
         return (tuple(coords_min), tuple(coords_max))
 
     def _extrusion_length_to_offset_distance(self, extrusion: float) -> float:

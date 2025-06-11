@@ -954,7 +954,8 @@ def test_to_gds(geometry, tmp_path):
     assert len(cell.polygons) == 0
 
 
-def test_custom_surface_geometry(tmp_path):
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_custom_surface_geometry(swap_axes, tmp_path):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
@@ -987,9 +988,13 @@ def test_custom_surface_geometry(tmp_path):
     assert np.isclose(geom.volume(), 1 / 6)
 
     # test intersections
-    assert shapely.equals(geom.intersections_plane(x=0), shapely.Polygon([[0, 0], [0, 1], [1, 0]]))
     assert shapely.equals(
-        geom.intersections_plane(z=0.5), shapely.Polygon([[0, 0], [0, 0.5], [0.5, 0]])
+        geom.intersections_plane(x=0, swap_axes=swap_axes),
+        shapely.Polygon([[0, 0], [0, 1], [1, 0]]),
+    )
+    assert shapely.equals(
+        geom.intersections_plane(z=0.5, swap_axes=swap_axes),
+        shapely.Polygon([[0, 0], [0, 0.5], [0.5, 0]]),
     )
 
     # test inside
@@ -998,7 +1003,7 @@ def test_custom_surface_geometry(tmp_path):
 
     # test plot
     _, ax = plt.subplots()
-    _ = geom.plot(z=0.1, ax=ax)
+    _ = geom.plot(z=0.1, ax=ax, swap_axes=swap_axes)
     plt.close()
 
     # test inconsistent winding
@@ -1048,7 +1053,7 @@ def test_custom_surface_geometry(tmp_path):
         boundary_spec=td.BoundarySpec.all_sides(td.PML()),
     )
     _, ax = plt.subplots()
-    _ = sim.plot(y=0, ax=ax)
+    _ = sim.plot(y=0, ax=ax, swap_axes=swap_axes)
     plt.close()
 
     # allow small triangles

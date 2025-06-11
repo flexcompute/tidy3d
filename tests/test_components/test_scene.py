@@ -50,13 +50,15 @@ def test_validate_components_none():
     assert SCENE._validate_num_mediums(val=None) is None
 
 
-def test_plot_eps():
-    ax = SCENE_FULL.plot_eps(x=0)
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_eps(swap_axes):
+    ax = SCENE_FULL.plot_eps(x=0, swap_axes=swap_axes)
     SCENE_FULL._add_cbar_eps(eps_min=1, eps_max=2, ax=ax)
     plt.close()
 
 
-def test_plot_eps_multiphysics():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_eps_multiphysics(swap_axes):
     s = td.Scene(
         structures=[
             td.Structure(
@@ -70,20 +72,22 @@ def test_plot_eps_multiphysics():
         ]
     )
     assert s.structures[0].medium.name == "SiO2"
-    s.plot_eps(x=0)
+    s.plot_eps(x=0, swap_axes=swap_axes)
 
 
-def test_plot_eps_bounds():
-    _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45])
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_eps_bounds(swap_axes):
+    _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot_eps(x=0, vlim=[-0.45, 0.45])
+    _ = SCENE_FULL.plot_eps(x=0, vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot():
-    SCENE_FULL.plot(x=0)
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot(swap_axes):
+    SCENE_FULL.plot(x=0, swap_axes=swap_axes)
     plt.close()
 
 
@@ -93,44 +97,48 @@ def test_plot_1d_scene():
     plt.close()
 
 
-def test_plot_bounds():
-    _ = SCENE_FULL.plot(x=0, hlim=[-0.45, 0.45])
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_bounds(swap_axes):
+    _ = SCENE_FULL.plot(x=0, hlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot(x=0, vlim=[-0.45, 0.45])
+    _ = SCENE_FULL.plot(x=0, vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    _ = SCENE_FULL.plot(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45], swap_axes=swap_axes)
     plt.close()
 
 
-def test_structure_alpha():
-    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=None)
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_structure_alpha(swap_axes):
+    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=None, swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=-1)
+    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=-1, swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=1)
+    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=1, swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=0.5)
+    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=0.5, swap_axes=swap_axes)
     plt.close()
-    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=0.5, cbar=True)
+    _ = SCENE_FULL.plot_structures_eps(x=0, alpha=0.5, cbar=True, swap_axes=swap_axes)
     plt.close()
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SCENE_FULL.medium) for s in SCENE_FULL.structures
     ]
     S2 = SCENE_FULL.copy(update={"structures": new_structs})
-    _ = S2.plot_structures_eps(x=0, alpha=0.5)
+    _ = S2.plot_structures_eps(x=0, alpha=0.5, swap_axes=swap_axes)
     plt.close()
 
 
-def test_plot_with_units():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_plot_with_units(swap_axes):
     scene_with_units = SCENE_FULL.updated_copy(plot_length_units="nm")
-    scene_with_units.plot(x=-0.5)
+    scene_with_units.plot(x=-0.5, swap_axes=swap_axes)
 
 
-def test_filter_structures():
+@pytest.mark.parametrize("swap_axes", [True, False])
+def test_filter_structures(swap_axes):
     s1 = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=SCENE.medium)
     s2 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)), medium=SCENE.medium)
     plane = td.Box(center=(0, 0, 1.5), size=(td.inf, td.inf, 0))
-    SCENE._filter_structures_plane_medium(structures=[s1, s2], plane=plane)
+    SCENE._filter_structures_plane_medium(structures=[s1, s2], plane=plane, swap_axes=swap_axes)
 
 
 def test_get_structure_plot_params():
