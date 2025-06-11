@@ -9,7 +9,11 @@ import xarray as xr
 import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
-from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
+from tidy3d.plugins.microwave import (
+    CurrentIntegralAxisAligned,
+    CustomCurrentIntegral2D,
+    VoltageIntegralAxisAligned,
+)
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
     CoaxialLumpedPort,
@@ -602,6 +606,69 @@ def test_wave_port_path_integral_validation():
     )
     # Make sure validation would have failed if a strict comparison was used
     assert wave_port.bounds[0][2] > wave_port.voltage_integral.bounds[0][2]
+
+
+def test_wave_port_grid_validation(tmp_path):
+    """Ensure that 'num_grid_cells' is validated and works to ensure that the grid is refined around wave ports."""
+    size_port = [2, 2, 0]
+    center_port = [0, 0, -10]
+
+    voltage_path = VoltageIntegralAxisAligned(
+        center=(0.5, 0, -10),
+        size=(1.0, 0, 0),
+        extrapolate_to_endpoints=True,
+        snap_path_to_grid=True,
+        sign="+",
+    )
+
+    current_path = CurrentIntegralAxisAligned(
+        center=(0.5, 0, -10),
+        size=(0.25, 0.5, 0),
+        snap_contour_to_grid=True,
+        sign="+",
+    )
+
+    mode_spec = td.ModeSpec(num_modes=1, target_neff=1.8)
+
+    _ = WavePort(
+        center=center_port,
+        size=size_port,
+        name="wave_port_1",
+        mode_spec=mode_spec,
+        direction="+",
+        voltage_integral=voltage_path,
+        current_integral=current_path,
+        num_grid_cells=None,
+    )
+
+    with pytest.raises(pd.ValidationError):
+        _ = WavePort(
+            center=center_port,
+            size=size_port,
+            name="wave_port_1",
+            mode_spec=mode_spec,
+            direction="+",
+            voltage_integral=voltage_path,
+            current_integral=current_path,
+            num_grid_cells=2,
+        )
+
+    modeler = make_coaxial_component_modeler(
+        grid_spec=td.GridSpec.auto(wavelength=10e3),
+        port_refinement=True,
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+    )
+    _ = modeler.sim_dict
+
+    modeler = make_coaxial_component_modeler(
+        grid_spec=td.GridSpec.auto(wavelength=10e3),
+        port_refinement=False,
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+    )
+    with pytest.raises(SetupError):
+        _ = modeler.sim_dict
 
 
 def test_wave_port_to_mode_solver(tmp_path):
