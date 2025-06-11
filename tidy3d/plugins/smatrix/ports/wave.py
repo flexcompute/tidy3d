@@ -18,13 +18,17 @@ from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource, ModeSpec
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Direction, FreqArray
+from tidy3d.components.structure import MeshOverrideStructure
+from tidy3d.components.types import Axis, Direction, FreqArray
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.plugins.microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
 from tidy3d.plugins.mode import ModeSolver
 
 from .base_terminal import AbstractTerminalPort
+
+DEFAULT_WAVE_PORT_NUM_CELLS = 5
+MIN_WAVE_PORT_NUM_CELLS = 3
 
 
 class WavePort(AbstractTerminalPort, Box):
@@ -63,6 +67,15 @@ class WavePort(AbstractTerminalPort, Box):
         description="Definition of current integral used to compute current and the characteristic impedance.",
     )
 
+    num_grid_cells: Optional[int] = pd.Field(
+        DEFAULT_WAVE_PORT_NUM_CELLS,
+        ge=MIN_WAVE_PORT_NUM_CELLS,
+        title="Number of Grid Cells",
+        description="Number of mesh grid cells in the transverse plane of the `WavePort`. "
+        "Used in generating the suggested list of :class:`.MeshOverrideStructure` objects. "
+        "Must be greater than or equal to 3. When set to `None`, no grid refinement is performed.",
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.
@@ -88,9 +101,15 @@ class WavePort(AbstractTerminalPort, Box):
         return current_coeffs.squeeze()
 
     @cached_property
-    def injection_axis(self):
+    def injection_axis(self) -> Axis:
         """Injection axis of the port."""
         return self.size.index(0.0)
+
+    @cached_property
+    def transverse_axes(self) -> tuple[Axis, Axis]:
+        """Transverse axes of the port."""
+        _, trans_axes = Box.pop_axis([0, 1, 2], self.injection_axis)
+        return trans_axes
 
     @cached_property
     def _mode_monitor_name(self) -> str:
@@ -186,6 +205,25 @@ class WavePort(AbstractTerminalPort, Box):
         impedance_array = impedance_calc.compute_impedance(mode_data)
         return impedance_array
 
+    def to_mesh_overrides(self) -> list[MeshOverrideStructure]:
+        """Creates a list of :class:`.MeshOverrideStructure` for mesh refinement in the transverse
+        plane of the port. The mode source requires at least 3 grid cells in the transverse
+        dimensions, so these mesh overrides will be added to the simulation to ensure that this
+        requirement is satisfied.
+        """
+        dl = [None] * 3
+        for trans_axis in self.transverse_axes:
+            dl[trans_axis] = self.size[trans_axis] / self.num_grid_cells
+
+        return [
+            MeshOverrideStructure(
+                geometry=Box(center=self.center, size=self.size),
+                dl=dl,
+                shadow=False,
+                priority=-1,
+            )
+        ]
+
     @pd.validator("voltage_integral", "current_integral")
     def _validate_path_integrals_within_port(cls, val, values):
         """Raise ``ValidationError`` when the supplied path integrals are not within the port bounds."""
@@ -213,7 +251,7 @@ class WavePort(AbstractTerminalPort, Box):
         return val
 
     @pd.validator("current_integral", always=True)
-    def validate_current_integral_sign(cls, val, values):
+    def _validate_current_integral_sign(cls, val, values):
         """
         Validate that the sign of ``current_integral`` matches the port direction.
         """

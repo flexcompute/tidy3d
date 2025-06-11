@@ -304,7 +304,9 @@ def make_coaxial_component_modeler(
                     normal_axis=2,
                     clockwise=direction != "+",
                 )
-
+            port_cells = None
+            if port_refinement:
+                port_cells = 5
             port = WavePort(
                 center=center,
                 size=[2 * Router, 2 * Router, 0],
@@ -314,6 +316,7 @@ def make_coaxial_component_modeler(
                 mode_index=0,
                 voltage_integral=voltage_integral,
                 current_integral=current_integral,
+                num_grid_cells=port_cells,
             )
         return port
 

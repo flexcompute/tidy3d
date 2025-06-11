@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `TriangleMesh.from_height_expression` class method to create a mesh from an analytical height function defined on a 2D grid and `TriangleMesh.from_height_grid` class method to create a mesh from height values sampled on a 2D grid.
 - Added heat sources with custom spatial dependence. It is now possible to add a `SpatialDataArray` as the `rate` in a `HeatSource`.
 - Added Transient Heat simulations. It is now possible to run transient Heat simulations. This can be done by specifying `analysis_spec` of `HeatChargeSimulation` object as `UnsteadyHeatAnalysis`. 
+- A `num_grid_cells` field to `WavePort`, which ensures that there are 5 grid cells across the port. Grid refinement can be disabled by passing `None` to `num_grid_cells`.
 
 ### Fixed
 - Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
