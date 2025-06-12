@@ -779,7 +779,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis : int
             Integer index into 'xyz' (0,1,2).
 
-
         Returns
         -------
         Any, Tuple[Any, Any]
