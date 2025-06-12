@@ -1,254 +1,204 @@
 # Automatic Differentiation in Tidy3D
 
-As of version 2.7.0, `tidy3d` supports the ability to differentiate functions involving a `web.run` of a `tidy3d` simulation.
-This allows users to optimize objective functions involving `tidy3d` simulations using gradient descent.
-This gradient calculation is done under the hood using the adjoint method, which requires just one additional simulation, no matter how many design parameters are involved.
+As of version 2.7.0, Tidy3D provides native support for automatic differentiation (AD), empowering you to perform gradient-based optimization and sensitivity analysis of photonic devices directly within your simulation workflow.
 
-This functionality was previously available using the `adjoint` plugin, which used `jax`. There were a few issues with this approach:
+The gradient calculation is performed efficiently using the **adjoint method**, which requires only one additional simulation per gradient evaluation, regardless of the number of design parameters. This makes it feasible to optimize devices with thousands of parameters.
 
-1. `jax` can be quite difficult to install on many systems and often conflicted with other packages.
-2. Because we wanted `jax` to be an optional dependency, the `adjoint` plugin was separated from the regular `tidy3d` components, requiring a new set of `Jax_` classes.
-3. Because we inherited these classes from their `tidy3d` components, for technical reasons, we needed to separate the `jax`-traced fields from the regular fields.
-   For example, `JaxSimulation.input_structures` and `.output_monitors` were needed.
+This implementation is powered by the `autograd` library and replaces the previous `jax`-based `adjoint` plugin, offering several key benefits:
 
-All of these limitations (among others) motivated us to come up with a new approach to automatic differentiation, which was introduced as an experimental feature in `2.7`.
-The `adjoint` plugin will continue to be supported indefinitely, but no new features will be developed for it.
-We also believe the new approach offers a far better user experience, so we encourage users to switch whenever is convenient.
-This guide will give some instructions on how to do so.
+*   **Simplicity**: Use standard Tidy3D components like `td.Structure` and `td.Simulation` directly in your differentiable functions.
+*   **Ease of Use**: The main `td.web.run` and `td.web.run_async` functions are directly differentiable.
+*   **Painless Installation**: The core AD framework, `autograd`, is a direct dependency of Tidy3D, removing the installation challenges associated with `jax`.
 
-## New implementation using `autograd`
+## How It Works: `autograd` and the Adjoint Method
 
-Automatic differentiation in `2.7` is built directly into `tidy3d`.
-One can perform objective function differentiation similarly to what was possible in the `adjoint` plugin.
-However, this can be done using regular `td.` components, such as `td.Simulation`, `td.Structure`, and `td.Medium`.
-Also, the regular `web.run()` function is now differentiable, so there is no need to import a wrapper.
-In short, users can take existing functional code and differentiate it without changing much:
+Tidy3D's AD capability combines two core technologies:
 
-```py
-def objective(eps: float) -> float:
-    structure = td.Structure(
-        medium=td.Medium(permittivity=eps),
-        geometry=td.Box(...),
-    )
+1.  **The `autograd` Framework**: This library automatically tracks all numerical operations in your Python objective function, building a computational graph to calculate derivatives using the chain rule.
+2.  **The Adjoint Method**: Tidy3D has "taught" `autograd` how to differentiate the FDTD simulation step (`td.web.run`). This custom derivative rule is implemented using the adjoint method, a powerful technique that computes the gradient with respect to all design parameters using just one extra (adjoint) simulation.
 
-    sim = td.Simulation(
-        structures=[structure],
-        ...
-    )
+When you request a gradient, Tidy3D and `autograd` work together behind the scenes:
+1.  **Forward Pass**: Your code executes, running a standard FDTD simulation and calculating your scalar objective value. Tidy3D automatically stores the fields required for the subsequent gradient calculation.
+2.  **Backward Pass**: `autograd` propagates gradients backward. When it reaches the simulation step, Tidy3D's custom rule takes over, sets up and runs an adjoint simulation, and uses both forward and adjoint fields to efficiently compute the gradients with respect to all design parameters.
 
-    data = td.web.run(sim)
+## Basic Workflow
 
-    return np.sum(np.abs(data["mode"].amps.sel(mode_index=0))).item()
+An inverse design optimization loop in Tidy3D generally follows these steps:
 
-# compute derivative of objective(1.0) with respect to input
-autograd.grad(objective)(1.0)
-```
+1.  **Define a function** that creates your `td.Simulation` based on a set of design parameters.
+2.  **Define an objective function** that:
+    *   Takes the design parameters as input.
+    *   Calls the simulation-creation function.
+    *   Runs the simulation via `td.web.run()`.
+    *   Post-processes the results from the `SimulationData` object to return a single, real scalar value (the figure of merit).
+3.  **Get the gradient function** using `autograd.value_and_grad()`.
+4.  **Run an optimization loop** that iteratively calls the value-and-gradient function and updates the parameters using the computed gradient.
 
-Instead of using `jax`, we now use the [autograd](https://github.com/HIPS/autograd) package for our "core" automatic differentiation.
-Many `tidy3d` components now accept and are compatible with `autograd` arrays.
-Due to its lightweight nature and minimal dependencies, `autograd` has been made a core dependency of `tidy3d`.
-
-Although `autograd` is used internally, we provide wrappers for other automatic differentiation frameworks, allowing you to use your preferred AD framework (e.g., `jax`, `pytorch`) with minimal syntax changes. For instance, you can refer to our PyTorch wrapper [here](../pytorch/).
-
-The usability of `autograd` is extremely similar to `jax` but with a couple of modifications, which we'll outline below.
-
-### Migrating from jax to autograd
-
-Like in `jax`, the gradient functions can be imported directly from `autograd`:
-
-```py
-import jax
-jax.grad(f)
-```
-
-becomes
-
-```py
+**Example: A Simple Optimization**
+```python
 import autograd
-autograd.grad(f)
-```
-
-There is also a `numpy` wrapper that can be similarly imported from `autograd.numpy`
-
-```py
-import jax.numpy as jnp
-jnp.sum(...)
-```
-
-becomes
-
-```py
 import autograd.numpy as anp
-anp.sum(...)
-```
-
-`Autograd` supports fewer features than `jax`.
-For example, the `has_aux` option is not supported in the default `autograd.grad()` function, but one can write their own utilities to implement these features, as we show in the notebook examples.
-We also have a `value_and_grad` function in `tidy3d.plugins.autograd.differential_operators` that is similar to `jax.value_and_grad` and supports `has_aux`.
-Additionally, `autograd` has a `grad_with_aux` function that can be used to compute gradients while returning auxiliary values, similar to `jax.grad` with `has_aux`.
-
-Otherwise, `jax` and `autograd` are very similar to each other in practice.
-
-### Migrating from `adjoint` plugin
-
-Converting code from the `adjoint` plugin to the native autograd support is straightforward.
-
-Instead of importing classes from the `tda` namespace, with names like `tda.Jax_`, we can just use regular `td.` classes.
-
-```py
-import tidy3d.plugins.adjoint as tda
-tda.JaxStructure(...)
-```
-
-becomes
-
-```py
 import tidy3d as td
-td.Structure(...)
+import optax
+
+# 1. Function to create the simulation from parameters
+def make_simulation(width):
+    # ... (define sources, monitors, etc.)
+    geometry = td.Box(size=(width, 0.5, 0.22))
+    structure = td.Structure(geometry=geometry, medium=td.Medium(permittivity=12.0))
+    sim = td.Simulation(
+        # ... (simulation parameters)
+        structures=[structure],
+        # ...
+    )
+    return sim
+
+# 2. Objective function returning a scalar
+def objective_fn(width):
+    sim = make_simulation(width)
+    sim_data = td.web.run(sim, task_name="optimization_step")
+    # Objective: maximize power in the fundamental mode
+    mode_amps = sim_data["monitor_name"].amps.sel(direction="+", mode_index=0)
+    return anp.sum(anp.abs(mode_amps.values)**2)
+
+# 3. Get the value and gradient function
+value_and_grad_fn = autograd.value_and_grad(objective_fn)
+
+# 4. Optimization loop
+params = anp.array([2.0]) # Initial width
+optimizer = optax.adam(learning_rate=0.01)
+opt_state = optimizer.init(params)
+
+for i in range(20):
+    value, gradient = value_and_grad_fn(params)
+    updates, opt_state = optimizer.update(-gradient, opt_state, params) # Use -gradient to maximize
+    params = optax.apply_updates(params, updates)
+    print(f"Step {i+1}: Value = {value:.4f}, Width = {params[0]:.3f}")
 ```
 
-These `td.` classes can be used directly in the differentiable objective functions.
-Like before, only some fields are traceable for differentiation, and we outline the full list of supported fields in the feature roadmap below.
+## Capabilities and Supported Components
 
-Furthermore, there is no need for separated fields in the `JaxSimulation`, so one can eliminate `output_monitors` and `input_structures` and put everything in `monitors` and `structures`, respectively.
-`tidy3d` will automatically determine which structure and monitor is traced for differentiation.
+Tidy3D's AD framework supports a wide range of design scenarios.
 
-Finally, the regular `web.run()` and `web.run_async()` functions have their derivatives registered with `autograd`, so there is no need to use special web API functions.
-If there are no tracers found in `web.run()` or `web.run_async()` simulations, the original (non-`autograd`) code will be called.
+### Differentiable Parameters (Simulation Inputs)
 
-## Common Gotchas
+| Component Type | Traceable Attributes | Example Use Case |
+| :--- | :--- | :--- |
+| **Geometry** | | |
+| `Box` | `.center`, `.size` | Shape Optimization |
+| `Cylinder` | `.center`, `.radius`, `.length` | Shape Optimization |
+| `PolySlab` | `.vertices`, `.slab_bounds`, `dilation` | Shape Optimization |
+| `GeometryGroup`| `.geometries` | Grouping for performance |
+| **Medium** | | |
+| `Medium` | `.permittivity` (for isotropic, non-dispersive) | Material Optimization |
+| `CustomMedium` | permittivity data array | Topology Optimization |
+| `PoleResidue` | `.eps_inf`, `.poles` | Dispersive Material Opt. |
+| `CustomPoleResidue`| `.eps_inf`, `.poles` (as data arrays) | Spatially-varying Dispersive Opt. |
 
-Autograd has some limitations and quirks.
-A good starting point to get familiar with them is the [autograd tutorial](https://github.com/HIPS/autograd/blob/master/docs/tutorial.md).
+### Differentiable Results (Simulation Outputs)
 
-Some of the most important autograd "Don'ts" are:
+| Data Type | Traceable Attributes & Methods |
+| :--- | :--- |
+| `ModeData` | `.amps` |
+| `DiffractionData` | `.amps` |
+| `FieldData` | `.Ex`, `.Ey`, `.Ez`, etc. |
+| `FluxData` | **Not directly supported.** Flux must be computed from `FieldData`. |
+| `SimulationData` | `get_intensity()`, `get_poynting_vector()` |
 
-- Do not use in-place assignment on numpy arrays, e.g., `x[i] = something`.
-  Often, you can formulate the assignment in terms of `np.where()`.
-- Similarly, do not use in-place operators such as `+=`, `*=`, etc.
-- Prefer numpy functions over array methods, e.g., use `np.sum(x)` over `x.sum()`.
+### Key Features
 
-It is important to note that any function you use with autograd differential operators like `grad`, `value_and_grad`, `elementwise_grad`, etc., must return real values in the form of a float, a tuple of floats, or a numpy array.
-Specifically, for `grad` and `value_and_grad`, the output must be either a scalar or a one-element array.
+*   **Topology Optimization**: Optimize the permittivity in every voxel of a design region using `CustomMedium`.
+*   **Shape Optimization**: Optimize the geometric parameters of structures like `Box`, `Cylinder`, and `PolySlab`.
+*   **Broadband Optimization**: Compute gradients for objectives defined over multiple frequencies using a single broadband adjoint source (for `ModeMonitor` and `DiffractionMonitor`).
+*   **Multi-objective Optimization**: Efficiently run and differentiate over multiple simulations at once using `td.web.run_async`.
+*   **Far-Field Gradients**: Differentiate far-field quantities by first recording near-fields with a `FieldMonitor` and then using a local `FieldProjector`. Direct differentiation of server-side projection is not yet supported.
+*   **Fabrication-Aware Design**: Impose constraints on minimum feature size and curvature using built-in penalty functions, or integrate external, differentiable fabrication models.
 
-When extracting values from `SimulationData`, ensure that any output value is converted to a float or numpy array before returning.
-This is because numpy operations on `DataArray` objects will yield other `DataArray` objects, which are not compatible with autograd's automatic differentiation when returned from the function.
+## The Autograd Plugin: Advanced Design Functions
 
-For example:
+Beyond the core differentiation of components, Tidy3D includes a powerful set of tools in the `tidy3d.plugins.autograd` module designed to facilitate advanced optimization tasks. This toolkit provides differentiable building blocks for common inverse design techniques like topology optimization, shape parameterization, and enforcing fabrication constraints.
 
-```py
-def objective(params: np.ndarray) -> float:
-    sim = make_simulation(params)
-    sim_data = td.web.run(sim)
+### Topology Optimization and Fabrication-Aware Design
 
-    amps = sim_data["mode_monitor"].amps
-    mode_power = np.abs(amps)**2  # mode_power is still a DataArray!
+Many of the tools are geared towards topology optimization, where the goal is to find the optimal distribution of materials in a design region.
 
-    # either select out a specific value
-    objective_value = mode_power.sel(mode_index=0, f=freq0)
-    # or, for example, sum over all frequencies
-    objective_value = mode_power.sel(mode_index=0).sum()
+*   **Filtering**: Functions like `make_circular_filter` and `make_conic_filter` apply a convolution to the raw design parameters. This is a standard technique to enforce a minimum length scale and create smooth, manufacturable features.
+*   **Projection**: To ensure the final design consists of distinct materials (e.g., silicon or air), projection functions like `tanh_projection` are used. They smoothly binarize the continuous design parameters to values like 0 and 1.
+*   **Penalties**: To further guide the optimization, you can add penalty terms to your objective function. The toolkit includes `make_curvature_penalty` to control the curvature of boundaries and `make_erosion_dilation_penalty` to enforce minimum feature sizes.
 
-    # just make sure that whatever you return is scalar and a numeric type by extracting the scalar value with item()
-    return objective_value.item()  # alternatively, for single-element arrays: flux.data or flux.values (deprecated)
+These operations can be easily connected using the `chain` utility to create a standard data processing pipeline for your parameters.
+
+```python
+from tidy3d.plugins.autograd import (
+    make_conic_filter,
+    tanh_projection,
+    chain,
+)
+
+# Define a filter to enforce a 20nm minimum feature size on a 5nm grid.
+radius_px = 20 / 5
+conic_filter = make_conic_filter(radius_px)
+
+# Define a projection function to binarize the design
+project = tanh_projection(beta=8.0, eta=0.5)
+
+# Chain them together to create a single processing function
+process_params = chain(conic_filter, project)
+
+# In the objective function, apply this to the raw parameters
+def objective_fn(raw_params):
+    processed_params = process_params(raw_params)
+    # ... create CustomMedium and Simulation from processed_params ...
+    # ... run simulation and compute objective ...
+    return objective
 ```
 
-For more complex objective functions, it is advisable to extract the `.data` attribute from the `DataArray` _before_ performing any numpy operations.
-Although most autograd numpy functions are compatible with `DataArray` objects, there can be instances of unexpected behavior.
-Therefore, working directly with the underlying data of the `DataArray` is generally a more robust approach.
+### Differentiable Primitives and Utilities
 
-For example:
+The plugin also offers several general-purpose differentiable functions:
 
-```py
-def objective(params: np.ndarray) -> float:
-    sim = make_simulation(params)
-    sim_data = td.web.run(sim)
+*   `interpolate_spline`: A powerful tool for parameterizing device geometries. You can define a shape using a small number of control points and use this function to generate a smooth, differentiable spline. Optimizing the control points allows for flexible shape optimization.
+*   **Morphological Operations**: Differentiable versions of standard image processing functions like `grey_dilation`, `grey_erosion`, and `convolve` are available for custom parameter processing.
+*   `least_squares`: A differentiable least-squares optimizer for fitting models to data within your objective function.
+*   `smooth_max` / `smooth_min`: Differentiable approximations of `max()` and `min()`, useful for creating objectives that depend on the maximum or minimum value in a set of results.
 
-    fields = sim_data["field_monitor"]
+## Best Practices and Limitations
 
-    # extract the data from the DataArray
-    Ex = fields.Ex.data
-    Ey = fields.Ey.data
-    Ez = fields.Ez.data
+To ensure robust and efficient optimizations, please consider the following guidelines. For more details, refer to the official [autograd tutorial](https://github.com/HIPS/autograd/blob/master/docs/tutorial.md).
 
-    # we can now use these just like regular numpy arrays
-    intensity = anp.abs(Ex) ** 2 + anp.abs(Ey) ** 2 + anp.abs(Ez) ** 2  # sim_data.get_intensity("field_monitor") would also work of course
-    norm_intensity = anp.linalg.norm(intensity)
+### Do's
 
-    return norm_intensity  # no .item() needed
-```
+*   **Use `autograd.numpy`**: Always import `autograd.numpy as anp` and use it for all numerical operations within your objective function.
+*   **Extract Raw Data**: Before performing numerical operations on `xarray.DataArray` objects from `SimulationData` (e.g., `sim_data["monitor"].amps`), extract the raw numpy array using the `.values` or `.data` attribute. This avoids potential issues with metadata interfering with `autograd`.
+    ```python
+    # Robust approach
+    Ex_data = sim_data["field_monitor"].Ex.data
+    intensity = anp.sum(anp.abs(Ex_data)**2)
+    ```
+*   **Use `GeometryGroup`**: To optimize more than 500 structures, group them into a single `GeometryGroup` if they share the same medium.
+*   **Set `background_medium`**: When optimizing a structure's shape within another structure, set `Structure.background_medium` to ensure correct gradient calculation at the material interface.
+*   **Manage Monitor Frequencies**: During optimization, ensure monitors only contain frequencies relevant to your objective function to avoid unnecessary data storage and computation.
 
-## Feature Roadmap
+### Don'ts
 
-Please check out our [Adjoint Master Plan](https://github.com/flexcompute/tidy3d/issues/1548) on GitHub if you want to stay updated on the progress of planned features and contribute to the discussion.
+*   **Don't Use In-place Operations**: Avoid in-place assignment (`x[i] = val`) or operators (`x += 1`) on arrays tracked by `autograd`.
+*   **Don't Differentiate `FluxMonitor`**: `FluxMonitor` data is not directly differentiable. To optimize flux, you must use a `FieldMonitor` and compute the flux from the field data.
+*   **Don't Differentiate Server-Side Projections**: Far-field gradients must be computed locally using `FieldProjector` on downloaded `FieldMonitor` data.
 
-### Currently Supported
+### Current Limitations
 
-The following components are traceable as inputs to the `td.Simulation`
+*   **Traced Structures Limit**: A maximum of 500 structures containing tracers can be added to a `Simulation`. Use `GeometryGroup` to bypass this.
+*   **Async Batches**: `web.run_async` for simulations with tracers returns a `dict` of `SimulationData` objects, not a `BatchData` object. This may lead to high memory usage for large batches.
+*   **Broadband Field Data**: Differentiating with respect to `FieldData` from a broadband monitor will launch one adjoint simulation *per frequency*, which can be computationally expensive. Use this feature judiciously.
 
-| Component Type                                                    | Traceable Attributes                                    |
-| ----------------------------------------------------------------- | ------------------------------------------------------- |
-| rectangular prisms                                                | `Box.center`, `Box.size`                                |
-| polyslab (including those with dilation or slanted sidewalls)     | `PolySlab.vertices`, `PolySlab.slab_bounds`                          |
-| regular mediums                                                   | `Medium.permittivity`, `Medium.conductivity`            |
-| spatially varying mediums (for topology optimization mainly)      | `CustomMedium.permittivity`, `CustomMedium.eps_dataset` |
-| groups of geometries with the same medium (for faster processing) | `GeometryGroup.geometries`                              |
-| complex and self-intersecting polyslabs                           | `ComplexPolySlab.vertices`                              |
-| dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
-| spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
-| cylinders                                                         | `Cylinder.radius`, `Cylinder.center`                    |
+## Migrating from the `adjoint` Plugin
 
-The following components are traceable as outputs of the `td.SimulationData`
+Updating your code from the old `adjoint` plugin is straightforward:
 
-| Data Type         | Traceable Attributes & Methods                                |
-| ----------------- | ------------------------------------------------------------- |
-| `ModeData`        | `amps`                                                        |
-| `DiffractionData` | `amps`                                                        |
-| `FieldData`       | `field_components`, `flux`                                    |
-| `SimulationData`  | `get_intensity(field_monitor)`, `get_poynting(field_monitor)` |
+1.  **Replace `Jax` Components**: Replace `tidy3d.plugins.adjoint` (`tda`) imports with standard `tidy3d` (`td`) imports. For example, `tda.JaxStructure` becomes `td.Structure`, and `tda.JaxMedium` becomes `td.Medium`.
+2.  **Use Standard `td.Simulation`**: The `JaxSimulation` class is no longer needed. You can now use a standard `td.Simulation`. Tidy3D automatically detects which components are being traced for differentiation.
+3.  **Use Standard `web.run`**: Use the standard `td.web.run` or `td.web.run_async` functions. No special wrappers are required.
 
-We also support the following high-level features:
+If you have feature requests or questions, please feel free to file an issue or start a discussion on the [Tidy3D GitHub repository](https://github.com/flexcompute/tidy3d).
 
-- To manually set the background permittivity of a structure for purposes of shape optimization, one can set `Structure.background_medium`.
-- Compute gradients for objective functions that rely on multi-frequency data using a single broadband adjoint source. Note that this only works for mode monitors.
-- Enable local gradient processing by setting `local_gradient=True` in the web run functions.
-  This will cause the forward and adjoint field monitor data to be downloaded locally.
-  Can be useful for inspecting these fields, but will cause significantly more data/bandwidth usage.
-- We automatically determine the number of adjoint simulations to run from a given forward simulation to maintain gradient accuracy.
-  Adjoint sources are automatically grouped by either frequency or spatial port (whichever yields fewer adjoint simulations), and all adjoint simulations are run in a single batch (applies to both `run` and `run_async`).
-  The parameter `max_num_adjoint_per_fwd` (default `10`) prevents launching unexpectedly large numbers of adjoint simulations automatically.
-
-We currently have the following restrictions:
-
-- Only 500 max structures containing tracers can be added to the `Simulation` to cut down on processing time.
-  To bypass this restriction, use `GeometryGroup` to group structures with the same medium.
-- `web.run_async` for simulations with tracers does not return a `BatchData` but rather a `dict` mapping task name to `SimulationData`.
-  There may be high memory usage with many simulations or a lot of data for each.
-- Differentiating w.r.t. field monitors will lead to one adjoint simulation _per frequency_ in the monitor, which can cause significant data usage for large monitors.
-- The forward simulation records fields and permittivities within the bounding box of any traced object (e.g., design region) at each unique frequency in the simulation (defined by the monitors).
-  This can cause unnecessary data usage during the forward pass, especially if the monitors contain many frequencies that are not relevant for the objective function (i.e., they are not being differentiated w.r.t.).
-  To avoid this, restrict the frequencies in the monitors only to the ones that are relevant for differentiation during optimization.
-
-### To be supported soon
-
-Next on our roadmap (targeting 2.8 and 2.9, 2025) is to support:
-
-- `TriangleMesh`.
-- `GUI` integration of invdes plugin.
-
-### Finally
-
-If you have feature requests or questions, please feel free to file an issue or discussion on this `tidy3d` front-end repository.
-
-Happy autogradding!
-
-## Developer Notes
-
-To convert existing tidy3d front end code to be autograd compatible, will need to be aware of
-
-- `numpy` -> `autograd.numpy`
-- Casting to `float()` is not supported for autograd `ArrayBox` objects.
-- `isclose()` -> `np.isclose()`
-- `array[i] = something` needs a different approach (happens in mesher a lot)
-- Whenever we pass things to other modules, like `shapely` especially, we need to be careful that they are untraced.
-- I just made structures static before any meshing, as a cutoff point. So if we add a new `make_grid()` call somewhere, e.g. in a validator, just need to be aware.
+Happy autogradding
