@@ -291,10 +291,21 @@ class AbstractSimulation(Box, ABC):
         ax = self.scene.plot_structures(
             ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures, transpose=transpose
         )
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
+        ax = self.plot_sources(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose
+        )
+        ax = self.plot_monitors(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose
+        )
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
@@ -347,9 +358,18 @@ class AbstractSimulation(Box, ABC):
         """
         bounds = self.bounds
         for source in self.sources:
-            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds, transpose=transpose)
+            ax = source.plot(
+                x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds, transpose=transpose
+            )
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
@@ -398,9 +418,18 @@ class AbstractSimulation(Box, ABC):
         """
         bounds = self.bounds
         for monitor in self.monitors:
-            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds, transpose=transpose)
+            ax = monitor.plot(
+                x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds, transpose=transpose
+            )
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
@@ -452,7 +481,14 @@ class AbstractSimulation(Box, ABC):
             plot_params = self._make_symmetry_plot_params(sym_value=sym_value)
             ax = sym_box.plot(x=x, y=y, z=z, ax=ax, transpose=transpose, **plot_params.to_kwargs())
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(

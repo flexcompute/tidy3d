@@ -2901,9 +2901,11 @@ def test_sim_subsection(unstructured, nz):
         boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
         # Set theta to 'pi/2' for 2D simulation in the x-y plane
         monitors=[
-            mnt.updated_copy(theta=np.pi / 2)
-            if isinstance(mnt, td.FieldProjectionAngleMonitor)
-            else mnt
+            (
+                mnt.updated_copy(theta=np.pi / 2)
+                if isinstance(mnt, td.FieldProjectionAngleMonitor)
+                else mnt
+            )
             for mnt in subsection_monitors
             if not isinstance(
                 mnt, (td.FieldProjectionCartesianMonitor, td.FieldProjectionKSpaceMonitor)

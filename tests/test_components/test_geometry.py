@@ -92,6 +92,7 @@ def test_plot(component, transpose):
     _ = component.plot(z=0, ax=AX, transpose=transpose)
     plt.close()
 
+
 @pytest.mark.parametrize("transpose", [True, False])
 def test_plot_with_units(transpose):
     _ = BOX.plot(z=0, ax=AX, plot_length_units="nm", transpose=transpose)
@@ -331,15 +332,15 @@ def test_polyslab_inf_to_finite_bounds(axis):
         vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
     )
 
-    assert ps_low_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
-        "Unexpected finite length for polyslab axis with -inf bound"
-    )
-    assert ps_high_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
-        "Unexpected finite length for polyslab axis with inf bound"
-    )
-    assert ps_inf.finite_length_axis == 2 * LARGE_NUMBER, (
-        "Unexpected finite length for polyslab axis with two inf bounds"
-    )
+    assert ps_low_inf.finite_length_axis == (
+        LARGE_NUMBER + axis_bound
+    ), "Unexpected finite length for polyslab axis with -inf bound"
+    assert ps_high_inf.finite_length_axis == (
+        LARGE_NUMBER + axis_bound
+    ), "Unexpected finite length for polyslab axis with inf bound"
+    assert (
+        ps_inf.finite_length_axis == 2 * LARGE_NUMBER
+    ), "Unexpected finite length for polyslab axis with two inf bounds"
 
 
 def test_validate_polyslab_vertices_valid():

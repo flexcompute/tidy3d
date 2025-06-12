@@ -74,7 +74,8 @@ class Coords(Tidy3dBaseModel):
     @cached_property
     def cell_size_meshgrid(self):
         """Returns an N-dimensional grid where N is the number of coordinate arrays that have more than one
-        element. Each grid element corresponds to the size of the mesh cell in N-dimensions and 1 for N=0."""
+        element. Each grid element corresponds to the size of the mesh cell in N-dimensions and 1 for N=0.
+        """
         coord_dict = self.to_dict
 
         cell_size_meshgrid = np.squeeze(np.ones(tuple(len(coord_dict[dim]) for dim in "xyz")))

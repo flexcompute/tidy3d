@@ -1098,7 +1098,9 @@ def test_mode_solver_plot(transpose):
     _, ax = plt.subplots(2, 2, figsize=(12, 8), tight_layout=True)
     ms.plot(ax=ax[0, 0], transpose=transpose)
     ms.plot_eps(freq=200e14, alpha=0.7, ax=ax[0, 1], transpose=transpose)
-    ms.plot_structures_eps(freq=200e14, alpha=0.8, cbar=True, reverse=False, ax=ax[1, 0], transpose=transpose)
+    ms.plot_structures_eps(
+        freq=200e14, alpha=0.8, cbar=True, reverse=False, ax=ax[1, 0], transpose=transpose
+    )
     ms.plot_grid(linewidth=0.3, ax=ax[1, 0], transpose=transpose)
     ms.plot(ax=ax[1, 1], transpose=transpose)
     ms.plot_pml(ax=ax[1, 1], transpose=transpose)

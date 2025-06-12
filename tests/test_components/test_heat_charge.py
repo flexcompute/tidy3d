@@ -1045,14 +1045,14 @@ def test_heat_charge_simulation(transpose, simulation_data):
     assert cond_sim is not None, "Conduction simulation should be created successfully."
 
     voltage_capacitance_sim = voltage_capacitance_sim_data.simulation
-    assert voltage_capacitance_sim is not None, (
-        "Voltage-Capacitance simulation should be created successfully."
-    )
+    assert (
+        voltage_capacitance_sim is not None
+    ), "Voltage-Capacitance simulation should be created successfully."
 
     current_voltage_sim = current_voltage_simulation_data.simulation
-    assert current_voltage_sim is not None, (
-        "Current-Voltage simulation should be created successfully."
-    )
+    assert (
+        current_voltage_sim is not None
+    ), "Current-Voltage simulation should be created successfully."
 
     mesher = mesh_data.mesher
     assert mesher is not None, "VolumeMesher should be created successfully."

@@ -359,9 +359,11 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
         for translation_vector in self._antenna_locations:
             for snapping_point in grid_spec.snapping_points:
                 new_snapping_point = [
-                    snapping_point[dim] + translation_vector[dim]
-                    if snapping_point[dim] is not None
-                    else None
+                    (
+                        snapping_point[dim] + translation_vector[dim]
+                        if snapping_point[dim] is not None
+                        else None
+                    )
                     for dim in range(3)
                 ]
                 array_snapping_points.append(new_snapping_point)

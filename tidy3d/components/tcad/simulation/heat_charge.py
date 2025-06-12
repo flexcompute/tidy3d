@@ -1042,12 +1042,29 @@ class HeatChargeSimulation(AbstractSimulation):
                 transpose=transpose,
             )
         ax = self.plot_sources(
-            ax=ax, x=x, y=y, z=z, property=property, alpha=source_alpha, hlim=hlim, vlim=vlim, transpose=transpose
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            property=property,
+            alpha=source_alpha,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_monitors(
+            ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, property=property, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
 
@@ -1201,7 +1218,9 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # clean up the axis display
         ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
@@ -1616,7 +1635,9 @@ class HeatChargeSimulation(AbstractSimulation):
 
         # clean up the axis display
         ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
-        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose

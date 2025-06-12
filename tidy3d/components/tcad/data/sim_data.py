@@ -367,8 +367,12 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
 
             # compute plot bounds
             field_data_bounds = field_data.bounds
-            _, min_bounds = Geometry.pop_axis_and_swap(field_data_bounds[0], axis, transpose=transpose)
-            _, max_bounds = Geometry.pop_axis_and_swap(field_data_bounds[1], axis, transpose=transpose)
+            _, min_bounds = Geometry.pop_axis_and_swap(
+                field_data_bounds[0], axis, transpose=transpose
+            )
+            _, max_bounds = Geometry.pop_axis_and_swap(
+                field_data_bounds[1], axis, transpose=transpose
+            )
 
         if isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions
@@ -420,7 +424,9 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             axis = "xyz".index(planar_coord)
             position = float(field_data.coords[planar_coord])
 
-            _, xy_coord_labels = Geometry.pop_axis_and_swap(list("xyz"), axis=axis, transpose=transpose)
+            _, xy_coord_labels = Geometry.pop_axis_and_swap(
+                list("xyz"), axis=axis, transpose=transpose
+            )
 
             x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
             field_data.plot(

@@ -511,15 +511,33 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             fill_structures=fill_structures,
             transpose=transpose,
         )
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
+        ax = self.plot_sources(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose
+        )
+        ax = self.plot_monitors(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose
+        )
         ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha, transpose=transpose
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            alpha=lumped_element_alpha,
+            transpose=transpose,
         )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
         return ax
@@ -622,15 +640,33 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             eps_lim=eps_lim,
             transpose=transpose,
         )
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose)
+        ax = self.plot_sources(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha, transpose=transpose
+        )
+        ax = self.plot_monitors(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha, transpose=transpose
+        )
         ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha, transpose=transpose
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            alpha=lumped_element_alpha,
+            transpose=transpose,
         )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, transpose=transpose)
         return ax
@@ -727,7 +763,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             reverse=reverse,
             eps_component=eps_component,
             eps_lim=eps_lim,
-            transpose=transpose
+            transpose=transpose,
         )
 
     @equal_aspect
@@ -772,7 +808,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         for pml_box in pml_boxes:
             pml_box.plot(x=x, y=y, z=z, ax=ax, transpose=transpose, **plot_params_pml.to_kwargs())
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
@@ -933,9 +976,18 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         bounds = self.bounds
         for element in self.lumped_elements:
             kwargs = element.plot_params.include_kwargs(alpha=alpha).to_kwargs()
-            ax = element.to_geometry().plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, transpose=transpose, **kwargs)
+            ax = element.to_geometry().plot(
+                x=x, y=y, z=z, ax=ax, sim_bounds=bounds, transpose=transpose, **kwargs
+            )
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         return ax
 
@@ -1054,7 +1106,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             plot_params,
         ):
             for point in points:
-                _, (x_point, y_point) = Geometry.pop_axis_and_swap(point, axis=axis, transpose=transpose)
+                _, (x_point, y_point) = Geometry.pop_axis_and_swap(
+                    point, axis=axis, transpose=transpose
+                )
                 if x_point is None and y_point is None:
                     continue
                 if x_point is None:
@@ -1083,7 +1137,14 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 )
 
         ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            bounds=self.simulation_bounds,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(

@@ -176,7 +176,9 @@ class AbstractStructure(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        return self.geometry.plot(x=x, y=y, z=z, ax=ax, viz_spec=self.viz_spec, transpose=transpose, **patch_kwargs)
+        return self.geometry.plot(
+            x=x, y=y, z=z, ax=ax, viz_spec=self.viz_spec, transpose=transpose, **patch_kwargs
+        )
 
 
 class Structure(AbstractStructure):

@@ -282,7 +282,7 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def intersecting_media(
-        test_object: Box, 
+        test_object: Box,
         structures: tuple[Structure, ...],
         transpose: bool = False,
     ) -> tuple[StructureMediumType, ...]:
@@ -307,7 +307,9 @@ class Scene(Tidy3dBaseModel):
         structures = [s.to_static() for s in structures]
         if test_object.size.count(0.0) == 1:
             # get all merged structures on the test_object, which is already planar
-            structures_merged = Scene._filter_structures_plane_medium(structures, test_object, transpose=transpose)
+            structures_merged = Scene._filter_structures_plane_medium(
+                structures, test_object, transpose=transpose
+            )
             mediums = {medium for medium, _ in structures_merged}
             return mediums
 
@@ -321,7 +323,9 @@ class Scene(Tidy3dBaseModel):
 
     @staticmethod
     def intersecting_structures(
-        test_object: Box, structures: tuple[Structure, ...], transpose: bool = False,
+        test_object: Box,
+        structures: tuple[Structure, ...],
+        transpose: bool = False,
     ) -> tuple[Structure, ...]:
         """From a given list of structures, returns a list of :class:`.Structure` that intersect
         with the ``test_object``, if it is a surface, or its surfaces, if it is a volume.
@@ -350,7 +354,9 @@ class Scene(Tidy3dBaseModel):
 
             structures_merged = []
             for structure in structures:
-                intersections = structure.geometry.intersections_plane(**xyz_kwargs, transpose=transpose)
+                intersections = structure.geometry.intersections_plane(
+                    **xyz_kwargs, transpose=transpose
+                )
                 if len(intersections) > 0:
                     structures_merged.append(structure)
             return structures_merged
@@ -433,10 +439,16 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
 
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures, transpose=transpose)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self.plot_structures(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, fill=fill_structures, transpose=transpose
+        )
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         return ax
 
     @equal_aspect
@@ -479,7 +491,13 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
         medium_shapes = self._get_structures_2dbox(
-            structures=self.to_static().sorted_structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            structures=self.to_static().sorted_structures,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
         medium_map = self.medium_map
         for medium, shape in medium_shapes:
@@ -495,7 +513,9 @@ class Scene(Tidy3dBaseModel):
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
@@ -618,7 +638,9 @@ class Scene(Tidy3dBaseModel):
         matplotlib.axes._subplots.Axes
             The axes after setting the boundaries.
         """
-        hlim, vlim = Scene._get_plot_lims(bounds=bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         ax.set_xlim(hlim)
         ax.set_ylim(vlim)
         return ax
@@ -674,7 +696,9 @@ class Scene(Tidy3dBaseModel):
         v_size = (vmax - vmin) or inf
 
         axis, center_normal = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        center = Box.unpop_axis_and_swap(center_normal, (h_center, v_center), axis=axis, transpose=transpose)
+        center = Box.unpop_axis_and_swap(
+            center_normal, (h_center, v_center), axis=axis, transpose=transpose
+        )
         size = Box.unpop_axis_and_swap(0.0, (h_size, v_size), axis=axis, transpose=transpose)
         plane = Box(center=center, size=size)
 
@@ -743,7 +767,10 @@ class Scene(Tidy3dBaseModel):
             List of shapes and their property value on the plane after merging.
         """
         return merging_geometries_on_plane(
-            [structure.geometry for structure in structures], plane, property_list, transpose=transpose
+            [structure.geometry for structure in structures],
+            plane,
+            property_list,
+            transpose=transpose,
         )
 
     """ Plotting Optical """
@@ -794,12 +821,25 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
 
         ax = self.plot_structures_eps(
-            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+            freq=freq,
+            cbar=True,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            transpose=transpose,
         )
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         return ax
 
     @equal_aspect
@@ -1073,7 +1113,9 @@ class Scene(Tidy3dBaseModel):
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose
@@ -1412,12 +1454,25 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
 
         ax = self.plot_structures_heat_charge_property(
-            cbar=cbar, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, property=property, transpose=transpose
+            cbar=cbar,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            property=property,
+            transpose=transpose,
         )
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         return ax
 
     @equal_aspect
@@ -1592,7 +1647,9 @@ class Scene(Tidy3dBaseModel):
         # clean up the axis display
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_lims(axis=axis, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose)
+        ax = self._set_plot_bounds(
+            bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
+        )
         # Add the default axis labels, tick labels, and title
         ax = Box.add_ax_labels_and_title(
             ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units, transpose=transpose

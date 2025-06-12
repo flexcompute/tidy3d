@@ -282,6 +282,7 @@ def test_eme_monitor():
         center=(1, 2, 3), size=(2, 2, 2), freqs=[300e12], num_modes=2, name="eme_coeffs"
     )
 
+
 @pytest.mark.parametrize("transpose", [True, False])
 def test_eme_simulation(transpose):
     sim = make_eme_sim()

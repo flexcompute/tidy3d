@@ -73,9 +73,9 @@ def test_simulation_load_export(split_string, tmp_path):
     SIM.to_hdf5(path_hdf5)
     SIM2 = td.Simulation.from_file(path)
     SIM_HDF5 = td.Simulation.from_hdf5(path_hdf5)
-    assert set_datasets_to_none(SIM)._json_string == SIM2._json_string, (
-        "original and loaded simulations are not the same"
-    )
+    assert (
+        set_datasets_to_none(SIM)._json_string == SIM2._json_string
+    ), "original and loaded simulations are not the same"
     assert SIM == SIM_HDF5, "original and loaded from hdf5 simulations are not the same"
 
 
@@ -83,9 +83,9 @@ def test_simulation_load_export_yaml(tmp_path):
     path = str(tmp_path / "simulation.yaml")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert set_datasets_to_none(SIM)._json_string == SIM2._json_string, (
-        "original and loaded simulations are not the same"
-    )
+    assert (
+        set_datasets_to_none(SIM)._json_string == SIM2._json_string
+    ), "original and loaded simulations are not the same"
 
 
 def test_component_load_export(tmp_path):

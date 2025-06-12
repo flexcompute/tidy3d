@@ -606,7 +606,9 @@ class TriangleMesh(base.Geometry, ABC):
             # permute so normal is aligned with z axis
             # and (y, z), (x, z), resp. (x, y) are aligned with (x, y)
             identity = np.eye(3)
-            permutation = self.unpop_axis_and_swap(identity[2], identity[0:2], axis=axis, transpose=transpose)
+            permutation = self.unpop_axis_and_swap(
+                identity[2], identity[0:2], axis=axis, transpose=transpose
+            )
             mapping[:3, :3] = np.array(permutation).T
 
             section2d, _ = section.to_planar(to_2D=mapping)

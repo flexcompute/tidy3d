@@ -281,12 +281,12 @@ def test_run_component_modeler(monkeypatch):
                     coords_in = {"port_in": port_in.name, "mode_index_in": mode_index_in}
                     coords_out = {"port_out": port_out.name, "mode_index_out": mode_index_out}
 
-                    assert np.all(s_matrix.sel(**coords_in) != 0), (
-                        "source index not present in S matrix"
-                    )
-                    assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
-                        "monitor index not present in S matrix"
-                    )
+                    assert np.all(
+                        s_matrix.sel(**coords_in) != 0
+                    ), "source index not present in S matrix"
+                    assert np.all(
+                        s_matrix.sel(**coords_in).sel(**coords_out) != 0
+                    ), "monitor index not present in S matrix"
 
 
 def test_component_modeler_run_only(monkeypatch):

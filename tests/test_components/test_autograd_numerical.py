@@ -256,7 +256,9 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
         "eval_fn",
         "eval_fn_name",
         "test_number",
-    )(field_data_test_parameters)
+    )(
+        field_data_test_parameters
+    )
 
     dim_um = mesh_wvl_um
     dim_um = mesh_wvl_um
@@ -279,11 +281,7 @@ def test_finite_difference_field_data(field_data_test_parameters, rng, tmp_path,
 
     objective = create_objective_function(
         block,
-        lambda mesh_wvl_um=mesh_wvl_um,
-        adj_wvl_um=adj_wvl_um,
-        monitor_size_wvl=monitor_size_wvl,
-        box_for_override=box_for_override,
-        monitor_bg_index=monitor_bg_index: make_base_sim(
+        lambda mesh_wvl_um=mesh_wvl_um, adj_wvl_um=adj_wvl_um, monitor_size_wvl=monitor_size_wvl, box_for_override=box_for_override, monitor_bg_index=monitor_bg_index: make_base_sim(
             mesh_wvl_um=mesh_wvl_um,
             adj_wvl_um=adj_wvl_um,
             monitor_size_wvl=monitor_size_wvl,

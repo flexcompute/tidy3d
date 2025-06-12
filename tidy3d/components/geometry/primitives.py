@@ -378,7 +378,10 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4,
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -498,7 +501,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         if radius_offset <= 0:
             return []
-        _, (x0, y0) = self.pop_axis_and_swap(static_self.center, axis=self.axis, transpose=transpose)
+        _, (x0, y0) = self.pop_axis_and_swap(
+            static_self.center, axis=self.axis, transpose=transpose
+        )
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis, transpose: bool = False):
@@ -539,8 +544,12 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # the vertices on the max side of top/bottom
         # The two vertices are present in all scenarios.
         vertices_max = [
-            self._local_to_global_side_cross_section([-intersect_half_length_max, 0], axis, transpose=transpose),
-            self._local_to_global_side_cross_section([intersect_half_length_max, 0], axis, transpose=transpose),
+            self._local_to_global_side_cross_section(
+                [-intersect_half_length_max, 0], axis, transpose=transpose
+            ),
+            self._local_to_global_side_cross_section(
+                [intersect_half_length_max, 0], axis, transpose=transpose
+            ),
         ]
 
         # Extending to a cone, the maximal height of the cone
@@ -564,7 +573,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             )
             for i in range(_N_SAMPLE_CURVE_SHAPELY):
                 vertices_frustum_right.append(
-                    self._local_to_global_side_cross_section([x_list[i], y_list[i]], axis, transpose=transpose)
+                    self._local_to_global_side_cross_section(
+                        [x_list[i], y_list[i]], axis, transpose=transpose
+                    )
                 )
                 vertices_frustum_left.append(
                     self._local_to_global_side_cross_section(
@@ -594,7 +605,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             )
         ## early termination
         else:
-            vertices_min.append(self._local_to_global_side_cross_section([0, height_max], axis, transpose=transpose))
+            vertices_min.append(
+                self._local_to_global_side_cross_section([0, height_max], axis, transpose=transpose)
+            )
 
         return [
             shapely.Polygon(
@@ -782,5 +795,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             axis=axis,
             transpose=transpose,
         )
-        _, (x_center, y_center) = self.pop_axis_and_swap(self.center, axis=axis, transpose=transpose)
+        _, (x_center, y_center) = self.pop_axis_and_swap(
+            self.center, axis=axis, transpose=transpose
+        )
         return [x_center + lx_offset, y_center + ly_offset]

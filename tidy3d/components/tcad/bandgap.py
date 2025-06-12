@@ -35,7 +35,8 @@ class SlotboomBandGapNarrowing(Tidy3dBaseModel):
             ...    min_N=1e15,
             ... )
 
-        .. [1] 'UNIFIED APPARENT BANDGAP NARROWING IN n- AND p-TYPE SILICON' Solid-State Electronics Vol. 35, No. 2, pp. 125-129, 1992"""
+        .. [1] 'UNIFIED APPARENT BANDGAP NARROWING IN n- AND p-TYPE SILICON' Solid-State Electronics Vol. 35, No. 2, pp. 125-129, 1992
+    """
 
     v1: pd.PositiveFloat = pd.Field(
         ...,

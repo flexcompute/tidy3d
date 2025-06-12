@@ -733,8 +733,12 @@ class PolySlab(base.Planar):
             for y_index in range(len(ints_y) // 2):
                 y_min = ints_y[2 * y_index]
                 y_max = ints_y[2 * y_index + 1]
-                minx, miny = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose)
-                maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis, transpose=transpose)
+                minx, miny = self._order_by_axis(
+                    plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose
+                )
+                maxx, maxy = self._order_by_axis(
+                    plane_val=y_max, axis_val=z_max, axis=axis, transpose=transpose
+                )
 
                 if math.isclose(self.sidewall_angle, 0):
                     polys.append(self.make_shapely_box(minx, miny, maxx, maxy))
@@ -748,8 +752,12 @@ class PolySlab(base.Planar):
                     dy_min = h_length * np.tan(angle_min)
                     dy_max = h_length * np.tan(angle_max)
 
-                    x1, y1 = self._order_by_axis(plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose)
-                    x2, y2 = self._order_by_axis(plane_val=y_max, axis_val=z_min, axis=axis, transpose=transpose)
+                    x1, y1 = self._order_by_axis(
+                        plane_val=y_min, axis_val=z_min, axis=axis, transpose=transpose
+                    )
+                    x2, y2 = self._order_by_axis(
+                        plane_val=y_max, axis_val=z_min, axis=axis, transpose=transpose
+                    )
                     x3, y3 = self._order_by_axis(
                         plane_val=y_max - dy_max, axis_val=z_max, axis=axis, transpose=transpose
                     )

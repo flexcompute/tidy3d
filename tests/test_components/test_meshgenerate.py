@@ -818,9 +818,9 @@ def test_override_are_box():
             dl=[1, 2, 3],
         )
 
-    assert isinstance(override_not_box.geometry, td.Box), (
-        "Sphere override structure was not converted to Box"
-    )
+    assert isinstance(
+        override_not_box.geometry, td.Box
+    ), "Sphere override structure was not converted to Box"
 
 
 def test_override_unshadowed():

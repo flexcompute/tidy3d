@@ -311,7 +311,9 @@ class ModeSolver(Tidy3dBaseModel):
         for dim in range(3):
             if simulation.center[dim] != plane.center[dim]:
                 mode_symmetry[dim] = 0
-        _, solver_sym = plane.pop_axis_and_swap(mode_symmetry, axis=normal_axis, transpose=transpose)
+        _, solver_sym = plane.pop_axis_and_swap(
+            mode_symmetry, axis=normal_axis, transpose=transpose
+        )
         return solver_sym
 
     @cached_property
@@ -349,7 +351,9 @@ class ModeSolver(Tidy3dBaseModel):
 
         span_inds = simulation._discretize_inds_monitor(plane, colocate=False)
         normal_axis = plane.size.index(0.0)
-        solver_symmetry = cls._solver_symmetry(simulation=simulation, plane=plane, transpose=transpose)
+        solver_symmetry = cls._solver_symmetry(
+            simulation=simulation, plane=plane, transpose=transpose
+        )
 
         # Remove extension along monitor normal
         if not keep_additional_layers:
@@ -2311,7 +2315,7 @@ class ModeSolver(Tidy3dBaseModel):
             vlim=v_lim,
             ax=ax,
             transpose=transpose,
-            **kwargs
+            **kwargs,
         )
 
     @classmethod
@@ -2323,7 +2327,9 @@ class ModeSolver(Tidy3dBaseModel):
     ) -> tuple[Coords, Coords]:
         """Plane grid for mode solver."""
         # Get the mode plane normal axis, center, and limits.
-        _, _, _, t_axes = cls._center_and_lims(simulation=simulation, plane=plane, transpose=transpose)
+        _, _, _, t_axes = cls._center_and_lims(
+            simulation=simulation, plane=plane, transpose=transpose
+        )
 
         grid_snapped = cls._grid_snapped(simulation=simulation, plane=plane, transpose=transpose)
 
@@ -2356,8 +2362,7 @@ class ModeSolver(Tidy3dBaseModel):
         cls,
         simulation: Simulation,
         plane: Box,
-        mode_spec:
-        ModeSpec,
+        mode_spec: ModeSpec,
         transpose: bool = False,
     ) -> tuple[
         tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat],
@@ -2369,7 +2374,9 @@ class ModeSolver(Tidy3dBaseModel):
         to the mode plane.
         """
         # Get the mode plane normal axis, center, and limits.
-        solver_symmetry = cls._solver_symmetry(simulation=simulation, plane=plane, transpose=transpose)
+        solver_symmetry = cls._solver_symmetry(
+            simulation=simulation, plane=plane, transpose=transpose
+        )
         coord_0, coord_1 = cls._plane_grid(simulation=simulation, plane=plane, transpose=transpose)
 
         # Number of PML layers in ModeSpec.
@@ -2401,7 +2408,9 @@ class ModeSolver(Tidy3dBaseModel):
         cls, simulation: Simulation, plane: Box, transpose: bool = False
     ) -> tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat]:
         """The size of the mode plane intersected with the simulation."""
-        _, h_lim, v_lim, _ = cls._center_and_lims(simulation=simulation, plane=plane, transpose=transpose)
+        _, h_lim, v_lim, _ = cls._center_and_lims(
+            simulation=simulation, plane=plane, transpose=transpose
+        )
         return h_lim[1] - h_lim[0], v_lim[1] - v_lim[0]
 
     @classmethod
@@ -2457,14 +2466,15 @@ class ModeSolver(Tidy3dBaseModel):
         cls,
         simulation: Simulation,
         plane: Box,
-        mode_spec:
-        ModeSpec,
+        mode_spec: ModeSpec,
         ax: Ax = None,
         transpose: bool = False,
     ) -> Ax:
         """Plot the mode plane absorbing boundaries."""
         # Get the mode plane normal axis, center, and limits.
-        _, h_lim, v_lim, _ = cls._center_and_lims(simulation=simulation, plane=plane, transpose=transpose)
+        _, h_lim, v_lim, _ = cls._center_and_lims(
+            simulation=simulation, plane=plane, transpose=transpose
+        )
 
         # Create ax if ax=None.
         if not ax:
@@ -2477,7 +2487,9 @@ class ModeSolver(Tidy3dBaseModel):
         num_pml_1 = mode_spec.num_pml[1]
 
         ((pml_thick_0_plus, pml_thick_0_minus), (pml_thick_1_plus, pml_thick_1_minus)) = (
-            cls._pml_thickness(simulation=simulation, plane=plane, mode_spec=mode_spec, transpose=transpose)
+            cls._pml_thickness(
+                simulation=simulation, plane=plane, mode_spec=mode_spec, transpose=transpose
+            )
         )
 
         # Mode Plane width and height
@@ -2524,8 +2536,12 @@ class ModeSolver(Tidy3dBaseModel):
         a_center = [None, None, None]
         a_center[n_axis] = plane.center[n_axis]
 
-        _, (h_min_s, v_min_s) = Box.pop_axis_and_swap(simulation.bounds[0], axis=n_axis, transpose=transpose)
-        _, (h_max_s, v_max_s) = Box.pop_axis_and_swap(simulation.bounds[1], axis=n_axis, transpose=transpose)
+        _, (h_min_s, v_min_s) = Box.pop_axis_and_swap(
+            simulation.bounds[0], axis=n_axis, transpose=transpose
+        )
+        _, (h_max_s, v_max_s) = Box.pop_axis_and_swap(
+            simulation.bounds[1], axis=n_axis, transpose=transpose
+        )
 
         h_min = plane.center[t_axes[0]] - plane.size[t_axes[0]] / 2
         h_max = plane.center[t_axes[0]] + plane.size[t_axes[0]] / 2
