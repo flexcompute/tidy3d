@@ -623,6 +623,20 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @classmethod
     @requires_vtk
+    def _cell_to_point_data(
+        cls,
+        vtk_obj,
+    ):
+        """Get point data values from a VTK object."""
+
+        cellDataToPointData = vtk["mod"].vtkCellDataToPointData()
+        cellDataToPointData.SetInputData(vtk_obj)
+        cellDataToPointData.Update()
+
+        return cellDataToPointData.GetOutput()
+
+    @classmethod
+    @requires_vtk
     def _get_values_from_vtk(
         cls,
         vtk_obj,
