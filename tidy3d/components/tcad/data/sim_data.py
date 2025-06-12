@@ -10,7 +10,6 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
-from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.data.data_array import (
     SpatialDataArray,
     SteadyVoltageDataArray,
@@ -20,6 +19,7 @@ from tidy3d.components.data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
 )
+from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.tcad.data.monitor_data.mesh import VolumeMeshData
 from tidy3d.components.tcad.data.types import (
     SteadyPotentialData,
