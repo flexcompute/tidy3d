@@ -240,6 +240,8 @@ def test_FieldSource(transpose):
     )
     s.plot(y=0, transpose=transpose)
     plt.close()
+    s.plot(z=0, transpose=transpose)
+    plt.close()
 
     # test that non-planar geometry crashes plane wave and gaussian beams
     with pytest.raises(pydantic.ValidationError):
@@ -264,9 +266,6 @@ def test_FieldSource(transpose):
     # assert that TFSF must be volumetric
     with pytest.raises(pydantic.ValidationError):
         _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
-
-    s.plot(z=0, transpose=transpose)
-    plt.close()
 
 
 @pytest.mark.parametrize("transpose", [True, False])
