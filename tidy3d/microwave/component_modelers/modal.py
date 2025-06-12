@@ -11,6 +11,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.microwave.ports.modal import ModalPortDataArray, Port
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
@@ -18,7 +19,6 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Ax, Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import SetupError
-from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray, Port
 from tidy3d.web.api.container import BatchData
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler

@@ -6,23 +6,6 @@ from tidy3d.components.microwave import models
 from tidy3d.components.microwave.array_factor import (
     RectangularAntennaArrayCalculator,
 )
-from tidy3d.components.microwave.auto_path_integrals import path_integrals_from_lumped_element
-from tidy3d.components.microwave.custom_path_integrals import (
-    CustomCurrentIntegral2D,
-    CustomPathIntegral2D,
-    CustomVoltageIntegral2D,
-)
-from tidy3d.components.microwave.impedance_calculator import (
-    CurrentIntegralTypes,
-    ImpedanceCalculator,
-    VoltageIntegralTypes,
-)
-from tidy3d.components.microwave.path_integrals import (
-    AxisAlignedPathIntegral,
-    CurrentIntegralAxisAligned,
-    VoltageIntegralAxisAligned,
-)
-from tidy3d.components.microwave.rf_material_library import rf_material_library
 from tidy3d.microwave.lobe_measurer import LobeMeasurer
 
 __all__ = [

@@ -8,6 +8,7 @@ import xarray as xr
 
 import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.microwave.ports.base_lumped import AbstractLumpedPort
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import (
     CurrentIntegralAxisAligned,
@@ -23,7 +24,6 @@ from tidy3d.plugins.smatrix import (
     TerminalPortDataArray,
     WavePort,
 )
-from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 
 from ...utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler

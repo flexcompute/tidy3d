@@ -178,6 +178,16 @@ dev = [
   'cma',
   'diff-cover'
 ]
+tests-only = [
+  'pytest',
+  'pytest-timeout',
+  'pytest-xdist',
+  'pytest-env',
+  'pytest-cov', 
+  'psutil',
+  'ruff',
+  'diff-cover'
+]
 docs = [
   "jupyter",
   "jinja2",
