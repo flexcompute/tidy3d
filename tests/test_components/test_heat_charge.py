@@ -254,19 +254,22 @@ def monitors():
 
     mesh_mnt = td.VolumeMeshMonitor(size=(1.6, 2, 3), name="mesh_test")
 
+    electric_field_mnt = td.SteadyElectricFieldMonitor(size=(1.6, 2, 3), name="electric_field_test")
+
     return [
-        temp_mnt1,
-        temp_mnt2,
-        temp_mnt3,
-        temp_mnt4,
-        volt_mnt1,
-        volt_mnt2,
-        volt_mnt3,
-        volt_mnt4,
-        capacitance_mnt1,
-        free_carrier_mnt1,
-        energy_band_mnt1,
-        mesh_mnt,
+        temp_mnt1,  # 0
+        temp_mnt2,  # 1
+        temp_mnt3,  # 2
+        temp_mnt4,  # 3
+        volt_mnt1,  # 4
+        volt_mnt2,  # 5
+        volt_mnt3,  # 6
+        volt_mnt4,  # 7
+        capacitance_mnt1,  # 8
+        free_carrier_mnt1,  # 9
+        energy_band_mnt1,  # 10
+        mesh_mnt,  # 11
+        electric_field_mnt,  # 12
     ]
 
 
@@ -519,7 +522,10 @@ def temperature_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def voltage_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _, _, _ = monitors
+    volt_mnt1 = monitors[4]
+    volt_mnt2 = monitors[5]
+    volt_mnt3 = monitors[6]
+    volt_mnt4 = monitors[7]
 
     # SpatialDataArray
     nx, ny, nz = 9, 6, 5
@@ -677,6 +683,76 @@ def energy_band_monitor_data(monitors):
     assert field_components is not None
 
     return (eb_data1,)
+
+
+@pytest.fixture(scope="module")
+def electric_field_monitor_data(monitors):
+    """Creates different electric field monitor data."""
+    monitor = monitors[12]
+
+    # TetrahedralGridDataset
+    tet_grid_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values = td.PointDataArray(
+        [[0.0, 1.0, 0.0], [1.0, 1.0, 1.0], [3.0, 5.0, 1.0], [4.0, 5.0, 3.0], [5.0, 2.0, 1.0]],
+        dims=(
+            "index",
+            "axis",
+        ),
+        name="T",
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    mnt_data1 = td.SteadyElectricFieldData(monitor=monitor, E=tet_grid)
+
+    # TriangularGridDataset
+    tri_grid_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tri_grid_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tri_grid_values = td.IndexedFieldVoltageDataArray(
+        [
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+        ],
+        coords={"index": np.arange(4), "axis": np.arange(3), "voltage": [-1, 1]},
+        name="T",
+    )
+
+    tri_grid = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values,
+    )
+
+    mnt_data2 = td.SteadyElectricFieldData(monitor=monitor, E=tri_grid)
+
+    mnt_data3 = td.SteadyElectricFieldData(monitor=monitor, E=None)
+
+    return (mnt_data1, mnt_data2, mnt_data3)
 
 
 @pytest.fixture(scope="module")
@@ -853,11 +929,52 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
 
 
 def test_heat_charge_mnt_data(
-    temperature_monitor_data, voltage_monitor_data, capacitance_monitor_data
+    temperature_monitor_data, voltage_monitor_data, electric_field_monitor_data
 ):
     """Tests whether different heat-charge monitor data can be created."""
     assert len(temperature_monitor_data) == 4, "Expected 4 temperature monitor data entries."
     assert len(voltage_monitor_data) == 4, "Expected 4 voltage monitor data entries."
+    assert len(electric_field_monitor_data) == 3, "Expected 3 electric field monitor data entries."
+
+    for mnt_data in electric_field_monitor_data:
+        assert "E" in mnt_data.field_components.keys()
+
+        symm_data = mnt_data.symmetry_expanded_copy
+        assert symm_data.E == mnt_data.E
+
+        names = mnt_data.field_name("abs^2")
+        assert names == "E²"
+        names = mnt_data.field_name()
+        assert names == "E"
+
+        # make sure an error is raised if we don't use a field data array
+        # TriangularGridDataset
+        tri_grid_points = td.PointDataArray(
+            [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+            dims=("index", "axis"),
+        )
+
+        tri_grid_cells = td.CellDataArray(
+            [[0, 1, 2], [1, 2, 3]],
+            dims=("cell_index", "vertex_index"),
+        )
+
+        tri_grid_values = td.IndexedDataArray(
+            [1.0, 2.0, 3.0, 4.0],
+            dims=("index",),
+            name="T",
+        )
+
+        tri_grid = td.TriangularGridDataset(
+            normal_axis=1,
+            normal_pos=0,
+            points=tri_grid_points,
+            cells=tri_grid_cells,
+            values=tri_grid_values,
+        )
+
+        with pytest.raises(pd.ValidationError):
+            _ = mnt_data.updated_copy(E=tri_grid)
 
 
 def test_grid_spec_validation(grid_specs):

@@ -80,3 +80,22 @@ class SteadyCapacitanceMonitor(HeatChargeMonitor):
         title="Unstructured Grid",
         description="Return data on the original unstructured grid.",
     )
+
+
+class SteadyElectricFieldMonitor(HeatChargeMonitor):
+    """
+    Electric field monitor for Charge simulations.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> electric_field_monitor_z0 = td.SteadyElectricFieldMonitor(
+    ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="electric_field_z0",
+    ... )
+    """
+
+    unstructured: Literal[True] = pd.Field(
+        True,
+        title="Unstructured Grid",
+        description="Return data on the original unstructured grid.",
+    )

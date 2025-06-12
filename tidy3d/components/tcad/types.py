@@ -13,6 +13,7 @@ from tidy3d.components.tcad.generation_recombination import (
 from tidy3d.components.tcad.mobility import CaugheyThomasMobility, ConstantMobilityModel
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
@@ -34,6 +35,7 @@ HeatChargeMonitorType = Union[
     SteadyPotentialMonitor,
     SteadyFreeCarrierMonitor,
     SteadyEnergyBandMonitor,
+    SteadyElectricFieldMonitor,
     SteadyCapacitanceMonitor,
 ]
 HeatChargeSourceType = Union[HeatSource, HeatFromElectricSource, UniformHeatSource]

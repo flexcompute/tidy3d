@@ -10,7 +10,9 @@ import pydantic.v1 as pd
 from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.data_array import (
     DataArray,
+    IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
+    PointDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
 )
@@ -18,6 +20,7 @@ from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridD
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
@@ -460,3 +463,82 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
             electron_capacitance=new_electron_capacitance,
             symmetry=(0, 0, 0),
         )
+
+
+class SteadyElectricFieldData(HeatChargeMonitorData):
+    """
+    Stores electric field :math:`\\vec{E}` from a charge simulation.
+
+    Notes
+    -----
+        The electric field is computed as the negative gradient of the electric potential :math:`\\vec{E} = -\\nabla \\psi`.
+        It is given in units of :math:`V/\\mu m` (Volts per micrometer).
+    """
+
+    monitor: SteadyElectricFieldMonitor = pd.Field(
+        ...,
+        title="Electric field monitor",
+        description="Electric field data associated with a Charge simulation.",
+    )
+
+    E: UnstructuredFieldType = pd.Field(
+        None,
+        title="Electric field",
+        description=r"Contains the computed electric field in :math:`V/\\mu m`.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @property
+    def field_components(self) -> dict[str, UnstructuredFieldType]:
+        """Maps the field components to their associated data."""
+        return {"E": self.E}
+
+    @pd.root_validator(skip_on_failure=True)
+    def warn_no_data(cls, values):
+        """Warn if no data provided."""
+
+        mnt = values.get("monitor")
+        E = values.get("E")
+
+        if E is None:
+            log.warning(
+                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
+                "monitor not intersecting any solid medium."
+            )
+
+        return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_correct_data_type(cls, values):
+        """Issue error if incorrect data type is used"""
+
+        mnt = values.get("monitor")
+        E = values.get("E")
+
+        if isinstance(E, TetrahedralGridDataset) or isinstance(E, TriangularGridDataset):
+            AcceptedTypes = (IndexedFieldVoltageDataArray, PointDataArray)
+            if not isinstance(E.values, AcceptedTypes):
+                raise ValueError(
+                    f"In the data associated with monitor {mnt}, must contain a field. This can be "
+                    "defined with IndexedFieldVoltageDataArray or PointDataArray."
+                )
+
+        return values
+
+    @property
+    def symmetry_expanded_copy(self) -> SteadyElectricFieldData:
+        """Return copy of self with symmetry applied."""
+
+        new_E = self._symmetry_expanded_copy(property=self.E)
+
+        return self.updated_copy(
+            E=new_E,
+            symmetry=(0, 0, 0),
+        )
+
+    def field_name(self, val: str = "") -> str:
+        """Gets the name of the fields to be plotted."""
+        if val == "abs^2":
+            return "E²"
+        else:
+            return "E"

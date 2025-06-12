@@ -37,6 +37,7 @@ from tidy3d.components.tcad.data.sim_data import (
 )
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
+    SteadyElectricFieldData,
     SteadyEnergyBandData,
     SteadyFreeCarrierData,
     SteadyPotentialData,
@@ -53,6 +54,7 @@ from tidy3d.components.tcad.grid import (
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
@@ -136,6 +138,7 @@ from .components.data.data_array import (
     FluxTimeDataArray,
     HeatDataArray,
     IndexedDataArray,
+    IndexedFieldVoltageDataArray,
     IndexedTimeDataArray,
     IndexedVoltageDataArray,
     ModeAmpsDataArray,
@@ -565,6 +568,7 @@ __all__ = [
     "HuraySurfaceRoughness",
     "IndexPerturbation",
     "IndexedDataArray",
+    "IndexedFieldVoltageDataArray",
     "IndexedTimeDataArray",
     "IndexedVoltageDataArray",
     "InsulatingBC",
@@ -653,6 +657,8 @@ __all__ = [
     "Staircasing",
     "SteadyCapacitanceData",
     "SteadyCapacitanceMonitor",
+    "SteadyElectricFieldData",
+    "SteadyElectricFieldMonitor",
     "SteadyEnergyBandData",
     "SteadyEnergyBandMonitor",
     "SteadyFreeCarrierData",

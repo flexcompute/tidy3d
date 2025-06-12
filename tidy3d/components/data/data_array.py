@@ -1175,9 +1175,9 @@ class SteadyVoltageDataArray(DataArray):
 
 
 class PointDataArray(DataArray):
-    """A two-dimensional array that stores coordinates of a collection of points.
+    """A two-dimensional array that stores coordinates/field components for a collection of points.
     Dimension ``index`` denotes the index of a point in the collection, and dimension ``axis``
-    denotes the point's coordinate along that axis.
+    denotes the field component (or point coordinate) in that direction.
 
     Example
     -------
@@ -1188,6 +1188,14 @@ class PointDataArray(DataArray):
     >>> point3 = point_array.sel(index=3)
     >>> # get x coordinates of all points
     >>> x_coords = point_array.sel(axis=0)
+    >>>
+    >>> field_da = PointDataArray(
+    ...     np.random.random((120, 3)), coords=dict(index=np.arange(120), axis=np.arange(3)),
+    ... )
+    >>> # get field of point number 90
+    >>> field_point90 = field_da.sel(index=90)
+    >>> # get z component of all points
+    >>> z_field = field_da.sel(axis=2)
     """
 
     __slots__ = ()
@@ -1265,6 +1273,20 @@ class IndexedTimeDataArray(DataArray):
     _dims = ("index", "t")
 
 
+class IndexedFieldVoltageDataArray(DataArray):
+    """Stores indexed values of vector fields for different voltages. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+    Example
+    -------
+    >>> indexed_array = IndexedFieldVoltageDataArray(
+    ...     (1+1j) * np.random.random((4,3,2)), coords=dict(index=np.arange(4), axis=np.arange(3), voltage=[-1, 1])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "axis", "voltage")
+
+
 class SpatialVoltageDataArray(AbstractSpatialDataArray):
     """Spatial distribution with voltage mapping.
 
@@ -1319,6 +1341,7 @@ DATA_ARRAY_TYPES = [
     PointDataArray,
     CellDataArray,
     IndexedDataArray,
+    IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
     SpatialVoltageDataArray,
     PerturbationCoefficientDataArray,
@@ -1326,4 +1349,10 @@ DATA_ARRAY_TYPES = [
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
-IndexedDataArrayTypes = Union[IndexedDataArray, IndexedVoltageDataArray, IndexedTimeDataArray]
+IndexedDataArrayTypes = Union[
+    IndexedDataArray,
+    IndexedVoltageDataArray,
+    IndexedTimeDataArray,
+    IndexedFieldVoltageDataArray,
+    PointDataArray,
+]
