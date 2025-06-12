@@ -238,7 +238,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
     def intersections_plane(
-        self,
+        self, 
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -455,7 +455,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         return zero_dims
 
     def _pop_bounds(
-        self, axis: Axis, transpose: bool = False
+        self,
+        axis: Axis,
+        transpose: bool = False
     ) -> tuple[Coordinate2D, tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
@@ -563,9 +565,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
         ax.set_aspect("equal")
         # Add the default axis labels, tick labels, and title
-        ax = Box.add_ax_labels_and_title(
-            ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units, transpose=transpose
-        )
+        ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units, transpose=transpose)
         return ax
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
@@ -651,9 +651,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis, transpose=transpose)
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
 
-    def add_ax_lims(
-        self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, transpose: bool = False
-    ) -> Ax:
+    def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, transpose: bool = False) -> Ax:
         """Sets the horizontal and vertical axis limits based on ``self.bounds``.
 
         Parameters
@@ -672,9 +670,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(
-            axis=axis, buffer=buffer, transpose=transpose
-        )
+        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer, transpose=transpose)
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
         xmin, xmax, ymin, ymax = self._evaluate_inf((xmin, xmax, ymin, ymax))
@@ -769,6 +765,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis : int
             Integer index into 'xyz' (0,1,2).
 
+
         Returns
         -------
         Any, Tuple[Any, Any]
@@ -799,8 +796,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Tuple of three values in original coordinate system.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose : bool = False
-            Optional: Swap the order of the data from the two remaining axes in the output tuple.
+        transpose: bool = False
+            Optional: Swap the order of the data from the two remaining axes in the output tuple?
 
         Returns
         -------
@@ -867,7 +864,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis : int
             Integer index into 'xyz' (0,1,2).
         transpose: bool = False
-            Optional: Swap the order of the entries in plane_coords[].
+            Optional: Swap the order of the entries in plane_coords[]?
 
         Returns
         -------
@@ -1684,7 +1681,7 @@ class SimplePlaneIntersection(Geometry, ABC):
             axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
-            section = self.intersections_plane(**kwargs)
+            section = self.intersections_plane(**kwargs)  # <-- BUG?: X,Y axis order ignores normal axis direction +/-
             # Apply transformation in the plane by removing row and column
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
@@ -1871,7 +1868,11 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         return axis_index[axis]
 
     def _order_by_axis(
-        self, plane_val: Any, axis_val: Any, axis: int, transpose: bool = False
+        self,
+        plane_val: Any,
+        axis_val: Any,
+        axis: int,
+        transpose: bool = False
     ) -> tuple[Any, Any]:
         """Orders a value in the plane and value along axis in correct (x,y) order for plotting.
            Note: sometimes if axis=1 and we compute cross section values orthogonal to axis,
@@ -2161,9 +2162,9 @@ class Box(SimplePlaneIntersection, Centered):
         return path.polygons_full
 
     def intersections_plane(
-        self,
-        x: Optional[float] = None,
-        y: Optional[float] = None,
+        self, 
+        x: Optional[float] = None, 
+        y: Optional[float] = None, 
         z: Optional[float] = None,
         transpose: bool = False,
     ):
@@ -2266,10 +2267,7 @@ class Box(SimplePlaneIntersection, Centered):
         shapes_plane = other.intersections_plane(**xyz_kwargs, transpose=transpose)
 
         # intersect all shapes with the input self
-        bs_min, bs_max = (
-            self.pop_axis_and_swap(bounds, axis=normal_ind, transpose=transpose)[1]
-            for bounds in self.bounds
-        )
+        bs_min, bs_max = (self.pop_axis_and_swap(bounds, axis=normal_ind, transpose=transpose)[1] for bounds in self.bounds)
 
         shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
@@ -2364,8 +2362,7 @@ class Box(SimplePlaneIntersection, Centered):
         arrow_base : :class:`.Coordinate` = None
             Custom base of the arrow. Uses the geometry's center if not provided.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default
-            lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -2378,9 +2375,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         # conditions to check to determine whether to plot arrow, taking into account the
         # possibility of a custom arrow base
-        arrow_intersecting_plane = (
-            len(self.intersections_plane(x=x, y=y, z=z, transpose=transpose)) > 0
-        )
+        arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z, transpose=transpose)) > 0
         center = self.center
         if arrow_base:
             arrow_intersecting_plane = arrow_intersecting_plane and any(
