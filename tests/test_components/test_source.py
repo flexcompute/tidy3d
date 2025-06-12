@@ -265,8 +265,8 @@ def test_FieldSource(transpose):
     with pytest.raises(pydantic.ValidationError):
         _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
 
-    # s.plot(z=0, transpose=transpose)
-    # plt.close()
+    s.plot(z=0, transpose=transpose)
+    plt.close()
 
 
 @pytest.mark.parametrize("transpose", [True, False])
