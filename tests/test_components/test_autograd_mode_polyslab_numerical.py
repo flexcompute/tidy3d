@@ -332,9 +332,7 @@ def test_finite_difference_mode_data_polyslab(
         "geometry_size_wvl",
         "polyslab_permittivity",
         "test_number",
-    )(
-        mode_data_test_parameters
-    )
+    )(mode_data_test_parameters)
 
     adj_freq = td.C_0 / adj_wvl_um
 
@@ -374,7 +372,11 @@ def test_finite_difference_mode_data_polyslab(
     polyslab_height_um = POLYSLAB_HEIGHT_WVL * adj_wvl_um
 
     objective = create_objective_function(
-        lambda mesh_wvl_um=mesh_wvl_um, adj_wvl_um=adj_wvl_um, geometry_size_wvl=geometry_size_wvl, polyslab_permittivity=polyslab_permittivity, box_for_override=box_for_override: make_base_sim(
+        lambda mesh_wvl_um=mesh_wvl_um,
+        adj_wvl_um=adj_wvl_um,
+        geometry_size_wvl=geometry_size_wvl,
+        polyslab_permittivity=polyslab_permittivity,
+        box_for_override=box_for_override: make_base_sim(
             mesh_wvl_um=mesh_wvl_um,
             adj_wvl_um=adj_wvl_um,
             geometry_size_wvl=geometry_size_wvl,

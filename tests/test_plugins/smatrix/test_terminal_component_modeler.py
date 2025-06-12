@@ -150,9 +150,9 @@ def test_run_component_modeler(monkeypatch, tmp_path):
             coords_out = {"port_out": port_out.name}
 
             assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(
-                s_matrix.sel(**coords_in).sel(**coords_out) != 0
-            ), "monitor index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
+                "monitor index not present in S matrix"
+            )
 
 
 def test_s_to_z_component_modeler():
@@ -286,9 +286,9 @@ def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
             coords_out = {"port_out": port_out.name}
 
             assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(
-                s_matrix.sel(**coords_in).sel(**coords_out) != 0
-            ), "monitor index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
+                "monitor index not present in S matrix"
+            )
 
 
 @pytest.mark.parametrize(
@@ -483,9 +483,9 @@ def test_run_coaxial_component_modeler_with_wave_ports(
             coords_in = {"port_in": port_in.name}
             coords_out = {"port_out": port_out.name}
 
-            assert np.all(
-                s_matrix.sel(**coords_in).values.shape == shape_one_port
-            ), "source index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
+                "source index not present in S matrix"
+            )
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
             ), "monitor index not present in S matrix"
@@ -508,9 +508,9 @@ def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
             coords_in = {"port_in": port_in.name}
             coords_out = {"port_out": port_out.name}
 
-            assert np.all(
-                s_matrix.sel(**coords_in).values.shape == shape_one_port
-            ), "source index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
+                "source index not present in S matrix"
+            )
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
             ), "monitor index not present in S matrix"

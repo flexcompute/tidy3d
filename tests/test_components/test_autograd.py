@@ -1247,18 +1247,18 @@ def test_adjoint_src_width():
     adj_srcs_fwidth = td.SimulationData._adjoint_src_width_single(adj_srcs)
 
     for src in adj_srcs_fwidth:
-        assert np.isclose(
-            (src.source_time.freq0 - f0) / f0, 0.0
-        ), "f0 of adjoint source should be centered on original f0"
+        assert np.isclose((src.source_time.freq0 - f0) / f0, 0.0), (
+            "f0 of adjoint source should be centered on original f0"
+        )
 
         check_fwidth = (
             src.source_time.freq0
             - td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_ZERO * src.source_time.fwidth
         ) / src.source_time.freq0
 
-        assert np.isclose(check_fwidth, 0.0) or (
-            check_fwidth > 0.0
-        ), "fwidth of adjoint source should decay sufficiently before f=0"
+        assert np.isclose(check_fwidth, 0.0) or (check_fwidth > 0.0), (
+            "fwidth of adjoint source should decay sufficiently before f=0"
+        )
 
 
 def test_broadband_adjoint_src_width():
@@ -1305,12 +1305,12 @@ def test_broadband_adjoint_src_width():
             f0_expected - np.min(f0_adj_all)
         ) / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_FMIN
 
-        assert np.isclose(
-            (f0_expected - broadband_f0) / f0_expected, 0.0
-        ), "Expected freq0 not matching for broadband source"
-        assert np.isclose(
-            (fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0
-        ), "Expected fwidth not matching for broadband source"
+        assert np.isclose((f0_expected - broadband_f0) / f0_expected, 0.0), (
+            "Expected freq0 not matching for broadband source"
+        )
+        assert np.isclose((fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0), (
+            "Expected fwidth not matching for broadband source"
+        )
 
     # Test the case where we need a wider pulse to cover all the adjoint frequencies than we would otherwise choose for
     # each individual adjoint source
@@ -1333,12 +1333,12 @@ def test_broadband_adjoint_src_width():
         f0_expected - np.min(f0_broadband)
     ) / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_FMIN
 
-    assert np.isclose(
-        (f0_expected - broadband_f0) / f0_expected, 0.0
-    ), "Expected freq0 not matching for broadband source"
-    assert np.isclose(
-        (fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0
-    ), "Expected fwidth not matching for broadband source"
+    assert np.isclose((f0_expected - broadband_f0) / f0_expected, 0.0), (
+        "Expected freq0 not matching for broadband source"
+    )
+    assert np.isclose((fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0), (
+        "Expected fwidth not matching for broadband source"
+    )
 
     # Test the case where we have a narrow set of frequencies for the adjoint sources and so we can
     # choose a wider overall source than is needed for covering those frequencies. This larger pulse width
@@ -1360,12 +1360,12 @@ def test_broadband_adjoint_src_width():
     f0_expected = 0.5 * (np.max(f0_broadband) + np.min(f0_broadband))
     fwidth_expected = f0_expected / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_ZERO
 
-    assert np.isclose(
-        (f0_expected - broadband_f0) / f0_expected, 0.0
-    ), "Expected freq0 not matching for broadband source"
-    assert np.isclose(
-        (fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0
-    ), "Expected fwidth not matching for broadband source"
+    assert np.isclose((f0_expected - broadband_f0) / f0_expected, 0.0), (
+        "Expected freq0 not matching for broadband source"
+    )
+    assert np.isclose((fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0), (
+        "Expected fwidth not matching for broadband source"
+    )
 
 
 @pytest.mark.parametrize("colocate", [True, False])

@@ -71,20 +71,20 @@ def test_medium_repr():
     repr_noname_medium = test_media[0].__repr__()
     str_noname_medium_dict = str(noname_medium_in_dict)
 
-    assert (
-        "type='Medium' permittivity=2.25 conductivity=0.0" in str_noname_medium
-    ), "Expected medium information in string"
-    assert (
-        "Medium(attrs={}, name=None, frequency_range=None" in repr_noname_medium
-    ), "Expcted medium information in repr"
+    assert "type='Medium' permittivity=2.25 conductivity=0.0" in str_noname_medium, (
+        "Expected medium information in string"
+    )
+    assert "Medium(attrs={}, name=None, frequency_range=None" in repr_noname_medium, (
+        "Expcted medium information in repr"
+    )
     assert repr_noname_medium in str_noname_medium_dict, "Expected repr in dictionary string"
 
     for medium in test_media:
         repr_str = medium.__repr__()
 
-    assert (
-        test_media[1].__repr__() == material_name
-    ), "Expected repr to return just the material name."
+    assert test_media[1].__repr__() == material_name, (
+        "Expected repr to return just the material name."
+    )
 
 
 def test_variant_str():
@@ -97,16 +97,16 @@ def test_variant_str():
 
     printed_SiO2_Palik_lossless = str(td.material_library["SiO2"].variants["Palik_Lossless"])
 
-    assert (
-        "eps_inf: 1.5385442336875639" in printed_SiO2_Palik_lossless
-    ), "Expected eps_inf in SiO2 printed string"
+    assert "eps_inf: 1.5385442336875639" in printed_SiO2_Palik_lossless, (
+        "Expected eps_inf in SiO2 printed string"
+    )
     assert "poles: 2" in printed_SiO2_Palik_lossless, "Expected 1 pole in SiO2 printed string"
 
     printed_SiO2_Palik_lossy = str(td.material_library["SiO2"].variants["Palik_Lossy"])
 
-    assert (
-        "eps_inf: 2.1560362571240765" in printed_SiO2_Palik_lossy
-    ), "Expected eps_inf in SiO2 printed string"
+    assert "eps_inf: 2.1560362571240765" in printed_SiO2_Palik_lossy, (
+        "Expected eps_inf in SiO2 printed string"
+    )
     assert "poles: 5" in printed_SiO2_Palik_lossy, "Expected 1 pole in SiO2 printed string"
 
 
@@ -115,9 +115,9 @@ def test_material_str():
 
     printed_Ag = str(td.material_library["Ag"])
 
-    assert (
-        "Default Variant: Rakic1998BB" in printed_Ag
-    ), "Expected default variant in printed string"
+    assert "Default Variant: Rakic1998BB" in printed_Ag, (
+        "Expected default variant in printed string"
+    )
     assert "RakicLorentzDrude1998" in printed_Ag, "Expected variant in printed string"
 
     printed_Au = str(td.material_library["Au"])

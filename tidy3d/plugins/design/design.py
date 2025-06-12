@@ -251,9 +251,9 @@ class DesignSpace(Tidy3dBaseModel):
         evaluate_fn = self._get_evaluate_fn_single(fn=fn)
         return self.method._run(run_fn=evaluate_fn, parameters=self.parameters, console=console)
 
-    def run_pre_post(
-        self, fn_pre: Callable, fn_post: Callable, console: Console
-    ) -> tuple(list[dict], list[dict], list[Any]):
+    def run_pre_post(self, fn_pre: Callable, fn_post: Callable, console: Console) -> tuple(
+        list[dict], list[dict], list[Any]
+    ):
         """Run a function with Tidy3D implicitly called in between."""
         handler = self._get_evaluate_fn_pre_post(
             fn_pre=fn_pre, fn_post=fn_post, fn_mid=self._fn_mid, console=console
