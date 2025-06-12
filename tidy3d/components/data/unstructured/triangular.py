@@ -132,6 +132,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         remove_unused_points: bool = False,
         values_type=IndexedDataArray,
         expect_complex=None,
+        ignore_invalid_cells: bool = False,
     ):
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -143,12 +144,20 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         cells_numpy = vtk["vtk_to_numpy"](cells_vtk.GetConnectivityArray())
 
+        # verify cell_types
         cell_offsets = vtk["vtk_to_numpy"](cells_vtk.GetOffsetsArray())
-        if not np.all(np.diff(cell_offsets) == cls._cell_num_vertices()):
-            raise DataError(
-                "Only triangular 'vtkUnstructuredGrid' or 'vtkPolyData' can be converted into "
-                "'TriangularGridDataset'."
-            )
+        invalid_cells = np.diff(cell_offsets) != cls._cell_num_vertices()
+        if any(invalid_cells):
+            if ignore_invalid_cells:
+                valid_cell_offsets = cell_offsets[:-1][invalid_cells == 0]
+                cells_numpy = cells_numpy[
+                    np.ravel(valid_cell_offsets[:, None] + np.arange(3, dtype=int)[None, :])
+                ]
+            else:
+                raise DataError(
+                    "Only triangular 'vtkUnstructuredGrid' or 'vtkPolyData' can be converted into "
+                    "'TriangularGridDataset'."
+                )
 
         points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
 

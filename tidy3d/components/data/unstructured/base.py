@@ -483,6 +483,17 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return grid
 
+    @staticmethod
+    @requires_vtk
+    def _read_vtkLegacyFile(fname: str):
+        """Load a grid from a legacy `.vtk` file."""
+        reader = vtk["mod"].vtkGenericDataObjectReader()
+        reader.SetFileName(fname)
+        reader.Update()
+        grid = reader.GetOutput()
+
+        return grid
+
     @classmethod
     @abstractmethod
     @requires_vtk
@@ -494,6 +505,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         remove_unused_points: bool = False,
         values_type=IndexedDataArray,
         expect_complex=None,
+        ignore_invalid_cells=False,
     ) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
 
@@ -524,6 +536,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         field: Optional[str] = None,
         remove_degenerate_cells: bool = False,
         remove_unused_points: bool = False,
+        ignore_invalid_cells: bool = False,
     ) -> UnstructuredGridDataset:
         """Load unstructured data from a vtu file.
 
@@ -549,6 +562,44 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             field=field,
             remove_degenerate_cells=remove_degenerate_cells,
             remove_unused_points=remove_unused_points,
+            ignore_invalid_cells=ignore_invalid_cells,
+        )
+
+    @classmethod
+    @requires_vtk
+    def from_vtk(
+        cls,
+        file: str,
+        field: Optional[str] = None,
+        remove_degenerate_cells: bool = False,
+        remove_unused_points: bool = False,
+        ignore_invalid_cells: bool = False,
+    ) -> UnstructuredGridDataset:
+        """Load unstructured data from a vtk file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .vtk file to load the unstructured data from.
+        field : str = None
+            Name of the field to load.
+        remove_degenerate_cells : bool = False
+            Remove explicitly degenerate cells.
+        remove_unused_points : bool = False
+            Remove unused points.
+
+        Returns
+        -------
+        UnstructuredGridDataset
+            Unstructured data.
+        """
+        grid = cls._read_vtkLegacyFile(file)
+        return cls._from_vtk_obj(
+            grid,
+            field=field,
+            remove_degenerate_cells=remove_degenerate_cells,
+            remove_unused_points=remove_unused_points,
+            ignore_invalid_cells=ignore_invalid_cells,
         )
 
     @requires_vtk
@@ -586,7 +637,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 "No point data is found in a VTK object. '.values' will be initialized to zeros."
             )
             values_numpy = np.zeros(num_points)
-            values_coords = {"index": []}
+            values_coords = {"index": np.arange(num_points)}
             values_name = None
 
         else:
