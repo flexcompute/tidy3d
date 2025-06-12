@@ -692,7 +692,7 @@ class AbstractSimulation(Box, ABC):
         transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
+        The conductivity is plotted in grayscale based on its value.
 
         Parameters
         ----------
@@ -702,14 +702,11 @@ class AbstractSimulation(Box, ABC):
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
-        freq : float = None
-            Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
         reverse : bool = False
-            If ``False``, the highest permittivity is plotted in black.
+            If ``False``, the highest conductivity is plotted in black.
             If ``True``, it is plotteed in white (suitable for black backgrounds).
         cbar : bool = True
-            Whether to plot a colorbar for the relative permittivity.
+            Whether to plot a colorbar for the relative conductivity.
         alpha : float = None
             Opacity of the structures being plotted.
             Defaults to the structure default alpha.
@@ -720,7 +717,8 @@ class AbstractSimulation(Box, ABC):
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default
+            lexicographic axis order.)
 
         Returns
         -------

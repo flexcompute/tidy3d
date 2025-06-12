@@ -238,7 +238,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
     def intersections_plane(
-        self, 
+        self,
         x: Optional[float] = None,
         y: Optional[float] = None,
         z: Optional[float] = None,
@@ -255,7 +255,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
-            Optional: Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
+            Optional: Swap the coordinates in the plane. (This overrides the
+            default lexicographic axis order.)
 
         Returns
         -------
@@ -282,7 +283,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         plane : Box
             Plane specification.
         transpose : bool = False
-            Optional: Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
+            Optional: Swap the coordinates in the plane. (This overrides the
+            default lexicographic axis order.)
 
         Returns
         -------
@@ -455,9 +457,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return zero_dims
 
     def _pop_bounds(
-        self,
-        axis: Axis,
-        transpose: bool = False
+        self, axis: Axis, transpose: bool = False
     ) -> tuple[Coordinate2D, tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
@@ -466,7 +466,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis : int
             Integer index into 'xyz' (0,1,2).
         transpose : bool = False
-            Optional: Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
+            Optional: Swap the coordinates in the plane. (This overrides the
+            default lexicographic axis order.)
 
         Returns
         -------
@@ -537,7 +538,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         viz_spec : VisualizationSpec = None
             Plotting parameters associated with a medium to use instead of defaults.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default
+            lexicographic axis order.)
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -565,7 +567,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
         ax.set_aspect("equal")
         # Add the default axis labels, tick labels, and title
-        ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units, transpose=transpose)
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units, transpose=transpose
+        )
         return ax
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
@@ -621,7 +625,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         axis : int
             Integer index into 'xyz' (0,1,2).
         transpose : bool = False
-            Optional: Swap horizontal and vertical plot labels. (This overrides the default lexicographic axis order.)
+            Optional: Swap horizontal and vertical plot labels.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -642,6 +647,9 @@ class Geometry(Tidy3dBaseModel, ABC):
             Integer index into 'xyz' (0,1,2).
         buffer : float = 0.3
             Amount of space to add around the limits on the + and - sides.
+        transpose : bool = False
+            Optional: Swap horizontal and vertical axis limits.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -651,7 +659,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis, transpose=transpose)
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
 
-    def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, transpose: bool = False) -> Ax:
+    def add_ax_lims(
+        self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, transpose: bool = False
+    ) -> Ax:
         """Sets the horizontal and vertical axis limits based on ``self.bounds``.
 
         Parameters
@@ -663,14 +673,17 @@ class Geometry(Tidy3dBaseModel, ABC):
         buffer : float = 0.3
             Amount of space to place around the limits on the + and - sides.
         transpose : bool = False
-            Optional: Swap horizontal and vertical axis limits. (This overrides the default lexicographic axis order.)
+            Optional: Swap horizontal and vertical axis limits.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer, transpose=transpose)
+        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(
+            axis=axis, buffer=buffer, transpose=transpose
+        )
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
         xmin, xmax, ymin, ymax = self._evaluate_inf((xmin, xmax, ymin, ymax))
@@ -705,7 +718,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             When set to a supported ``LengthUnit``, plots will be produced with annotated axes
             and title with the proper units.
         transpose : bool = False
-            Optional: Swap horizontal and vertical axis labels. (This overrides the default lexicographic axis order.)
+            Optional: Swap horizontal and vertical axis labels.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -784,11 +798,11 @@ class Geometry(Tidy3dBaseModel, ABC):
         transpose: bool = False,
     ) -> tuple[Any, tuple[Any, Any]]:
         """
-        pop_axis_and_swap() is identical to pop_axis(), except that accepts an
-        additional "transpose" argument which reverses the output order.  Examples:
+        ``pop_axis_and_swap()`` is identical to ``pop_axis()``, except that it accepts an
+        additional ``transpose`` argument which reverses the output order.  Examples:
 
-        pop_axis_and_swap(("x", "y", "z"), 1, transpose=False)  ->  "y", ("x", "z")
-        pop_axis_and_swap(("x", "y", "z"), 1, transpose=True)   ->  "y", ("z", "x")
+        ``pop_axis_and_swap(("x", "y", "z"), 1, transpose=False)``  ->  ``("y", ("x", "z"))``
+        ``pop_axis_and_swap(("x", "y", "z"), 1, transpose=True)``   ->  ``("y", ("z", "x"))``
 
         Parameters
         ----------
@@ -796,8 +810,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Tuple of three values in original coordinate system.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose: bool = False
-            Optional: Swap the order of the data from the two remaining axes in the output tuple?
+        transpose : bool = False
+            Optional: Swap the order of the data from the two remaining axes in the output tuple.
 
         Returns
         -------
@@ -845,15 +859,15 @@ class Geometry(Tidy3dBaseModel, ABC):
         transpose: bool = False,
     ) -> tuple[Any, Any, Any]:
         """
-        unpop_axis_and_swap() is identical to unpop_axis(), except that accepts
-        an additional "transpose" argument which reverses the order of
-        plane_coords before sending them to unpop_axis().  For example:
+        ``unpop_axis_and_swap()`` is identical to ``unpop_axis()``, except that
+        it accepts an additional ``transpose`` argument which reverses the order of
+        ``plane_coords`` before sending them to ``unpop_axis()``.  For example:
 
-        unpop_axis_and_swap("y", ("x", "z"), 1, transpose=False)  -->  ("x", "y", "z")
-        unpop_axis_and_swap("y", ("x", "z"), 1, transpose=True)   -->  ("z", "y", "x")
+        ``unpop_axis_and_swap("y", ("x", "z"), 1, transpose=False)``  -->  ``("x", "y", "z")``
+        ``unpop_axis_and_swap("y", ("x", "z"), 1, transpose=True)``   -->  ``("z", "y", "x")``
 
-        This function is the inverse of pop_axis_and_swap().  For example:
-        unpop_axis_and_swap("y", ("z", "x"), 1, transpose=True)   -->  ("x", "y", "z")
+        This function is the inverse of ``pop_axis_and_swap()``.  For example:
+        ``unpop_axis_and_swap("y", ("z", "x"), 1, transpose=True)``   -->  ``("x", "y", "z")``
 
         Parameters
         ----------
@@ -863,8 +877,9 @@ class Geometry(Tidy3dBaseModel, ABC):
             Values along ordered planar directions.
         axis : int
             Integer index into 'xyz' (0,1,2).
-        transpose: bool = False
-            Optional: Swap the order of the entries in plane_coords[]?
+        transpose : bool = False
+            Optional: Swap the order of the entries in plane_coords[].
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -1681,7 +1696,7 @@ class SimplePlaneIntersection(Geometry, ABC):
             axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
-            section = self.intersections_plane(**kwargs)  # <-- BUG?: X,Y axis order ignores normal axis direction +/-
+            section = self.intersections_plane(**kwargs)
             # Apply transformation in the plane by removing row and column
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
@@ -1795,6 +1810,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -1820,6 +1836,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position along the axis normal to slab
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -1840,7 +1857,8 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         axis : int
             Integer index into 'xyz' (0,1,2).
         transpose : bool = False
-            Optional: Swap the coordinates in the perpendicular plane before calculating intersections.
+            Optional: Swap the coordinates in the perpendicular plane before calculating
+            intersections.  (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -1868,11 +1886,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         return axis_index[axis]
 
     def _order_by_axis(
-        self,
-        plane_val: Any,
-        axis_val: Any,
-        axis: int,
-        transpose: bool = False
+        self, plane_val: Any, axis_val: Any, axis: int, transpose: bool = False
     ) -> tuple[Any, Any]:
         """Orders a value in the plane and value along axis in correct (x,y) order for plotting.
            Note: sometimes if axis=1 and we compute cross section values orthogonal to axis,
@@ -1888,7 +1902,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         axis : int
             Integer index into the structure's planar axis.
         transpose : bool
-            Optional: Swap the order of the remaining two axes (the ones not equal to axis)
+            Optional: Swap the order for the remaining two axes (the axes not equal to axis).
 
         Returns
         -------
@@ -2162,9 +2176,9 @@ class Box(SimplePlaneIntersection, Centered):
         return path.polygons_full
 
     def intersections_plane(
-        self, 
-        x: Optional[float] = None, 
-        y: Optional[float] = None, 
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
         z: Optional[float] = None,
         transpose: bool = False,
     ):
@@ -2180,6 +2194,7 @@ class Box(SimplePlaneIntersection, Centered):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -2267,7 +2282,10 @@ class Box(SimplePlaneIntersection, Centered):
         shapes_plane = other.intersections_plane(**xyz_kwargs, transpose=transpose)
 
         # intersect all shapes with the input self
-        bs_min, bs_max = (self.pop_axis_and_swap(bounds, axis=normal_ind, transpose=transpose)[1] for bounds in self.bounds)
+        bs_min, bs_max = (
+            self.pop_axis_and_swap(bounds, axis=normal_ind, transpose=transpose)[1]
+            for bounds in self.bounds
+        )
 
         shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
@@ -2362,7 +2380,8 @@ class Box(SimplePlaneIntersection, Centered):
         arrow_base : :class:`.Coordinate` = None
             Custom base of the arrow. Uses the geometry's center if not provided.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -2375,7 +2394,9 @@ class Box(SimplePlaneIntersection, Centered):
 
         # conditions to check to determine whether to plot arrow, taking into account the
         # possibility of a custom arrow base
-        arrow_intersecting_plane = len(self.intersections_plane(x=x, y=y, z=z, transpose=transpose)) > 0
+        arrow_intersecting_plane = (
+            len(self.intersections_plane(x=x, y=y, z=z, transpose=transpose)) > 0
+        )
         center = self.center
         if arrow_base:
             arrow_intersecting_plane = arrow_intersecting_plane and any(
@@ -3111,6 +3132,7 @@ class ClipOperation(Geometry):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
@@ -3328,6 +3350,7 @@ class GeometryGroup(Geometry):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
+            (This overrides the default lexicographic axis order.)
 
         Returns
         -------
