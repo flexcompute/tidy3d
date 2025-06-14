@@ -1211,11 +1211,9 @@ class Scene(Tidy3dBaseModel):
         """
         Plot shape made of custom medium with ``pcolormesh``.
         """
-        print("-------------------------------------------------------------")  # DEBUG
-        print("-------------------------------------------------------------")  # DEBUG
+
         print(f"invoked _pcolormesh_shape_custom_medium_structure_eps({shape=})")  # DEBUG
-        print("-------------------------------------------------------------")  # DEBUG
-        print("-------------------------------------------------------------")  # DEBUG
+
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         normal_axis, plane_axes = Box.pop_axis_and_swap(
@@ -1346,26 +1344,7 @@ class Scene(Tidy3dBaseModel):
                 ind_axis = "xyz".index(plane_axes[plane_axis])
                 plane_coord.append(grid.boundaries.to_list[ind_axis][slice(*span_inds[ind_axis])])
 
-        """
-        # build grid
-        N = 100
-        coords_2D_mesh = [np.linspace(rmin[d], rmax[d], N) for d in plane_axes_inds]
-        X, Y = np.meshgrid(coords_2D_mesh[0], coords_2D_mesh[1], indexing="ij")
-        coords_2D_lookup = coords_2D_mesh.copy()
-        if transpose:
-            # `X`, `Y`` are the coordinates that will be displayed to the user.  We want to
-            # change them so they are displayed at new locations with the axes swapped.
-            X, Y = Y, X
-            # The `coords_2D_lookup[]` arrays will be used to lookup the property
-            # we are plotting as a function of the real (physical) coordinates.
-            # This should not change.  However the `coords_2D_mesh[]` array's
-            # order was reversed when we previously invoked `pop_axis_and_swap()`
-            # with `transpose=True`.  We need to undo that now.
-            coords_2D_lookup.reverse()  # = [coords_2D_mesh[1], coords_2D_mesh[0]]
-        # print(f"{coords_2D_lookup=}")  # DEBUG
-        """
-
-        print(f"{plane_coord=}")  # DEBUG
+        # print(f"{plane_coord=}")  # DEBUG
 
         # prepare `Coords` for interpolation
         coord_dict = {
@@ -1395,9 +1374,9 @@ class Scene(Tidy3dBaseModel):
         if transpose:
             plane_yp, plane_xp = np.meshgrid(plane_coord[1], plane_coord[0], indexing="ij")
 
-        print(f"{plane_xp=}")  # DEBUG
-        print(f"{plane_yp=}")  # DEBUG
-        print(f"{eps_shape=}")  # DEBUG
+        # print(f"{plane_xp=}")  # DEBUG
+        # print(f"{plane_yp=}")  # DEBUG
+        # print(f"{eps_shape=}")  # DEBUG
         ax.pcolormesh(
             plane_xp,
             plane_yp,
