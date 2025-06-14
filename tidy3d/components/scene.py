@@ -1015,14 +1015,14 @@ class Scene(Tidy3dBaseModel):
             medium_shapes = self._filter_structures_plane_medium(
                 structures=structures, plane=plane, transpose=transpose
             )
-            print("self._filter_structures_plane_medium() invoked")  # DEBUG
+            print("invoked self._filter_structures_plane_medium() invoked")  # DEBUG
         else:
             structures = [self.background_structure, *list(structures)]
             medium_shapes = self._get_structures_2dbox(
                 structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim, transpose=transpose
             )
-            print("self._get_structures_2dbox() invoked")  # DEBUG
-        print(f"{medium_shapes[2]=}")  # DEBUG
+            print("invoked self._get_structures_2dbox()")  # DEBUG
+        # print(f"{medium_shapes[2]=}")  # DEBUG
 
         property_min, property_max = limits
 
@@ -1107,6 +1107,7 @@ class Scene(Tidy3dBaseModel):
                         ax,
                         grid,
                         eps_component=eps_component,
+                        transpose=transpose,
                     )
 
         if cbar:
@@ -1205,27 +1206,52 @@ class Scene(Tidy3dBaseModel):
         ax: Ax,
         grid: Grid,
         eps_component: Optional[PermittivityComponent] = None,
+        transpose: bool = False,
     ):
         """
         Plot shape made of custom medium with ``pcolormesh``.
         """
-        print(f"_pcolormesh_shape_custom_medium_structure_eps({shape=})")  # DEBUG
+        print("-------------------------------------------------------------")  # DEBUG
+        print("-------------------------------------------------------------")  # DEBUG
+        print(f"invoked _pcolormesh_shape_custom_medium_structure_eps({shape=})")  # DEBUG
+        print("-------------------------------------------------------------")  # DEBUG
+        print("-------------------------------------------------------------")  # DEBUG
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
+        normal_axis, plane_axes = Box.pop_axis_and_swap(
+            coords, normal_axis_ind, transpose=transpose
+        )
 
         comp2ind = {dim + dim: index for dim, index in zip("xyz", range(3))}
 
         # make grid for eps interpolation
         # we will do this by combining shape bounds and points where custom eps is provided
+        # Note: If transpose==True, then the horizontal and vertical coordinates of shape have
+        # already been swapped by the caller. Either way, shape.bounds does not need modification.
         shape_bounds = shape.bounds
         rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
+        if transpose:
+            rmin.reverse()
+            rmax.reverse()
         rmin.insert(normal_axis_ind, normal_position)
         rmax.insert(normal_axis_ind, normal_position)
+        print(f"{rmin=}, {rmax=}")  # DEBUG
 
         if grid is None:
-            plane_axes_inds = [0, 1, 2]
-            plane_axes_inds.pop(normal_axis_ind)
+            if transpose:
+                import warnings
+
+                warnings.warn(
+                    "UNTESTED! The plotting function you are using has not\n"
+                    "yet been rigorously tested with `transpose=True`.\n"
+                    "To confirm that the plot you are seeing now is correct,\n"
+                    "try again with `transpose=False` and compare the two plots.",
+                    stacklevel=2,
+                )
+
+            _, plane_axes_inds = Box.pop_axis_and_swap(
+                [0, 1, 2], axis=normal_axis_ind, transpose=transpose
+            )
 
             eps_diag = medium.eps_dataarray_freq(frequency=freq)
 
@@ -1272,6 +1298,7 @@ class Scene(Tidy3dBaseModel):
                             "clip_box": ax.bbox,
                             "alpha": alpha,
                         },
+                        transpose=transpose,
                     )
                     return
 
@@ -1319,13 +1346,36 @@ class Scene(Tidy3dBaseModel):
                 ind_axis = "xyz".index(plane_axes[plane_axis])
                 plane_coord.append(grid.boundaries.to_list[ind_axis][slice(*span_inds[ind_axis])])
 
+        """
+        # build grid
+        N = 100
+        coords_2D_mesh = [np.linspace(rmin[d], rmax[d], N) for d in plane_axes_inds]
+        X, Y = np.meshgrid(coords_2D_mesh[0], coords_2D_mesh[1], indexing="ij")
+        coords_2D_lookup = coords_2D_mesh.copy()
+        if transpose:
+            # `X`, `Y`` are the coordinates that will be displayed to the user.  We want to
+            # change them so they are displayed at new locations with the axes swapped.
+            X, Y = Y, X
+            # The `coords_2D_lookup[]` arrays will be used to lookup the property
+            # we are plotting as a function of the real (physical) coordinates.
+            # This should not change.  However the `coords_2D_mesh[]` array's
+            # order was reversed when we previously invoked `pop_axis_and_swap()`
+            # with `transpose=True`.  We need to undo that now.
+            coords_2D_lookup.reverse()  # = [coords_2D_mesh[1], coords_2D_mesh[0]]
+        # print(f"{coords_2D_lookup=}")  # DEBUG
+        """
+
+        print(f"{plane_coord=}")  # DEBUG
+
         # prepare `Coords` for interpolation
         coord_dict = {
             plane_axes[0]: plane_coord[0],
             plane_axes[1]: plane_coord[1],
             normal_axis: [normal_position],
         }
+        # print(f"{coord_dict=}")  # DEBUG
         coord_shape = Coords(**coord_dict)
+        # print(f"{coord_shape=}")  # DEBUG
 
         # interpolate permittivity and pick the component to plot
         eps_shape = medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape)
@@ -1342,6 +1392,12 @@ class Scene(Tidy3dBaseModel):
 
         # pcolormesh
         plane_xp, plane_yp = np.meshgrid(plane_coord[0], plane_coord[1], indexing="ij")
+        if transpose:
+            plane_yp, plane_xp = np.meshgrid(plane_coord[1], plane_coord[0], indexing="ij")
+
+        print(f"{plane_xp=}")  # DEBUG
+        print(f"{plane_yp=}")  # DEBUG
+        print(f"{eps_shape=}")  # DEBUG
         ax.pcolormesh(
             plane_xp,
             plane_yp,
@@ -1405,7 +1461,7 @@ class Scene(Tidy3dBaseModel):
         eps_component: Optional[PermittivityComponent] = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
-        print(f"_plot_shape_structure_eps({shape=})")  # DEBUG
+        print(f"invoked _plot_shape_structure_eps({shape=})")  # DEBUG
         plot_params = self._get_structure_eps_plot_params(
             medium=medium,
             freq=freq,
@@ -1774,7 +1830,7 @@ class Scene(Tidy3dBaseModel):
         """Plot a structure's cross section shape for a given medium, grayscale for thermal
         conductivity.
         """
-        print(f"_plot_shape_structure_heat_charge_property({shape=})")
+        print(f"invoked _plot_shape_structure_heat_charge_property({shape=})")  # DEBUG
         plot_params = self._get_structure_heat_charge_property_plot_params(
             medium=medium,
             property_val_min=property_val_min,
@@ -1836,7 +1892,7 @@ class Scene(Tidy3dBaseModel):
             "discontinued. In its place you can use "
             'plot_heat_charge_property(property="heat_conductivity")'
         )
-        print("Invoked plot_heat_conductivity()")  # DEBUG
+        print("invoked plot_heat_conductivity()")  # DEBUG
         return self.plot_heat_charge_property(
             x=x,
             y=y,
@@ -1997,7 +2053,7 @@ class Scene(Tidy3dBaseModel):
         Plot shape made of structure defined with doping.
         plt_type accepts ["doping", "N_a", "N_d"]
         """
-        print(f"_pcolormesh_shape_doping_box({shape=})")  # DEBUG
+        print(f"invoked _pcolormesh_shape_doping_box({shape=})")  # DEBUG
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         normal_axis, plane_axes = Box.pop_axis_and_swap(
@@ -2005,8 +2061,11 @@ class Scene(Tidy3dBaseModel):
         )
 
         # make grid for eps interpolation
-        # we will do this by combining shape bounds and points where custom eps is provided
+        # we will do this by combining shape bounds and points where custom properties are provided
+        # Note: If transpose==True, then the horizontal and vertical coordinates of shape have
+        # already been swapped by the caller. Either way, shape.bounds does not need modification.
         shape_bounds = shape.bounds
+
         print(f"{shape_bounds=}")  # DEBUG
         rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
         print(f"initially {rmin=}, {rmax=}")  # DEBUG
@@ -2035,7 +2094,7 @@ class Scene(Tidy3dBaseModel):
             # order was reversed when we previously invoked `pop_axis_and_swap()`
             # with `transpose=True`.  We need to undo that now.
             coords_2D_lookup.reverse()  # = [coords_2D_mesh[1], coords_2D_mesh[0]]
-        print(f"{coords_2D_lookup=}")  # DEBUG
+        # print(f"{coords_2D_lookup=}")  # DEBUG
 
         struct_doping = [
             np.zeros(X.shape),  # let's use 0 for N_a
@@ -2045,7 +2104,7 @@ class Scene(Tidy3dBaseModel):
         electric_spec = medium.charge
         for n, doping in enumerate([electric_spec.N_a, electric_spec.N_d]):
             if isinstance(doping, float):
-                print(f"GOT HERE 1: {doping=}")  # DEBUG
+                # print(f"GOT HERE 1: {doping=}")  # DEBUG
                 struct_doping[n] = struct_doping[n] + doping
             if isinstance(doping, SpatialDataArray):
                 struct_coords = {
@@ -2057,20 +2116,20 @@ class Scene(Tidy3dBaseModel):
                 if not data_is_2d:
                     selector = {"xyz"[normal_axis_ind]: normal_position}
                     data_2D = doping.sel(**selector)
-                print(f"GOT HERE 2: {data_2D=}")  # DEBUG
+                # print(f"GOT HERE 2: {data_2D=}")  # DEBUG
                 contrib = data_2D.interp(**struct_coords, method="nearest")
                 struct_doping[n] = struct_doping[n] + contrib
             if isinstance(doping, tuple):
-                print(f"GOT HERE 3a: {doping=}")  # DEBUG
+                # print(f"GOT HERE 3a: {doping=}")  # DEBUG
                 for doping_box in doping:
                     if isinstance(doping_box, (ConstantDoping, GaussianDoping)):
                         coords_dict = {
                             "xyz"[d]: coords_2D_lookup[i] for i, d in enumerate(plane_axes_inds)
                         }
-                        print(f"GOT HERE 3b: {type(doping_box)=}")  # DEBUG
-                        print(f"GOT HERE 3c: {coords_dict=}")  # DEBUG
+                        # print(f"GOT HERE 3b: {type(doping_box)=}")  # DEBUG
+                        # print(f"GOT HERE 3c: {coords_dict=}")  # DEBUG
                         contrib = doping_box._get_contrib(coords_dict)
-                        print(f"GOT HERE 3d: {contrib=}")  # DEBUG
+                        # print(f"GOT HERE 3d: {contrib=}")  # DEBUG
                         struct_doping[n] = struct_doping[n] + contrib
 
         if plt_type == "doping":
@@ -2080,9 +2139,9 @@ class Scene(Tidy3dBaseModel):
         elif plt_type == "N_d":
             struct_doping_to_plot = struct_doping[1]
 
-        print(f"{X=}")
-        print(f"{Y=}")
-        print(f"{struct_doping_to_plot=}")  # DEBUG
+        # print(f"{X=}")  # DEBUG
+        # print(f"{Y=}")  # DEBUG
+        # print(f"{struct_doping_to_plot=}")  # DEBUG
 
         ax.pcolormesh(
             X,

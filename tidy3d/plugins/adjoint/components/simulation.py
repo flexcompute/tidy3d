@@ -539,6 +539,7 @@ class JaxSimulation(Simulation, JaxObject):
         monitor_alpha: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Wrapper around regular :class:`.Simulation` structure plotting."""
@@ -552,6 +553,7 @@ class JaxSimulation(Simulation, JaxObject):
             monitor_alpha=monitor_alpha,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
             **patch_kwargs,
         )
 
@@ -566,6 +568,7 @@ class JaxSimulation(Simulation, JaxObject):
         monitor_alpha: Optional[float] = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
         ax: Ax = None,
     ) -> Ax:
         """Wrapper around regular :class:`.Simulation` permittivity plotting."""
@@ -579,6 +582,7 @@ class JaxSimulation(Simulation, JaxObject):
             monitor_alpha=monitor_alpha,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     def plot_structures(
@@ -589,6 +593,7 @@ class JaxSimulation(Simulation, JaxObject):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -606,6 +611,8 @@ class JaxSimulation(Simulation, JaxObject):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
 
         Returns
         -------
@@ -620,6 +627,7 @@ class JaxSimulation(Simulation, JaxObject):
             ax=ax,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     def plot_structures_eps(
@@ -634,6 +642,7 @@ class JaxSimulation(Simulation, JaxObject):
         ax: Ax = None,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -663,6 +672,9 @@ class JaxSimulation(Simulation, JaxObject):
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default
+            lexicographic axis order.)
 
         Returns
         -------
@@ -681,6 +693,7 @@ class JaxSimulation(Simulation, JaxObject):
             ax=ax,
             hlim=hlim,
             vlim=vlim,
+            transpose=transpose,
         )
 
     def epsilon(
