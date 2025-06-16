@@ -70,8 +70,6 @@ class AbstractDopingBox(Box):
         indices_in_box = np.logical_and(indices_in_box, new_bounds[0][2] <= Z)
         indices_in_box = np.logical_and(indices_in_box, new_bounds[1][2] >= Z)
 
-        # print(f"{indices_in_box=}")  # DEBUG
-
         return indices_in_box, X, Y, Z, normal_axis
 
     @pd.root_validator(skip_on_failure=True)
