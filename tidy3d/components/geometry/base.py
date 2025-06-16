@@ -2292,7 +2292,9 @@ class Box(SimplePlaneIntersection, Centered):
             event.canvas.mpl_disconnect(arrow.set_shape_cb[0])
 
             transform = arrow.axes.transData.transform
-            scale = transform((1, 0))[0] - transform((0, 0))[0]
+            scale_x = transform((1, 0))[0] - transform((0, 0))[0]
+            scale_y = transform((0, 1))[1] - transform((0, 0))[1]
+            scale = max(scale_x, scale_y)  # <-- Hack: This is a somewhat arbitrary choice.
             arrow_length = ARROW_LENGTH * event.canvas.figure.get_dpi() / scale
 
             if bend_radius:
