@@ -265,6 +265,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"invoked Geometry.intersections_plane({transpose=})")  # DEBUG
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         origin = self.unpop_axis(position, (0, 0), axis=axis)
         normal = self.unpop_axis(1, (0, 0), axis=axis)
@@ -272,7 +273,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         if axis != 2:
             last, indices = self.pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
             to_2D = to_2D[[*list(indices), last, 3]]
-        return self.intersections_tilted_plane(normal, origin, to_2D)
+        return self.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
 
     def intersections_2dbox(self, plane: Box, transpose: bool = False) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
@@ -551,8 +552,10 @@ class Geometry(Tidy3dBaseModel, ABC):
             The supplied or created matplotlib axes.
         """
         # find shapes that intersect self at plane
+        print(f"invoked Geometry.plot({transpose=})")
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections_plane(x=x, y=y, z=z, transpose=transpose)
+        print(f"{shapes_intersect=}")  # DEBUG
 
         plot_params = self.plot_params
         if viz_spec is not None:
@@ -1668,7 +1671,11 @@ class SimplePlaneIntersection(Geometry, ABC):
     """A geometry where intersections with an axis aligned plane may be computed efficiently."""
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
         Checks special cases before relying on the complete computation.
@@ -1690,12 +1697,15 @@ class SimplePlaneIntersection(Geometry, ABC):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
+        print(f"invoked SimplePlaneIntersection.intersections_tilted_plane({transpose=})")
+
+        """
         # Check if normal is a special case, where the normal is aligned with an axis.
         if np.sum(np.isclose(normal, 0.0)) == 2:
             axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
-            section = self.intersections_plane(**kwargs)
+            section = self.intersections_plane(transpose=transpose, **kwargs)
             # Apply transformation in the plane by removing row and column
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
@@ -1707,11 +1717,21 @@ class SimplePlaneIntersection(Geometry, ABC):
             transformed_section = shapely.transform(section, transformation=transform)
             return transformed_section
         # Otherwise compute the arbitrary intersection
-        return self._do_intersections_tilted_plane(normal=normal, origin=origin, to_2D=to_2D)
+        """
+        return self._do_intersections_tilted_plane(
+            normal=normal,
+            origin=origin,
+            to_2D=to_2D,
+            transpose=transpose,
+        )
 
     @abstractmethod
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -2125,7 +2145,11 @@ class Box(SimplePlaneIntersection, Centered):
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -2172,6 +2196,9 @@ class Box(SimplePlaneIntersection, Centered):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
+        if transpose:
+            path.vertices = path.vertices[:, ::-1]  # swap column 0 with column 1
+        print(f"Box._do_intersections_tilted_plane({transpose=}), {path=}")
         return path.polygons_full
 
     def intersections_plane(
@@ -2202,6 +2229,8 @@ class Box(SimplePlaneIntersection, Centered):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"invoked Box.intersections_plane({transpose=})")  # DEBUG
+
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
@@ -2774,7 +2803,11 @@ class Transformed(Geometry):
         return (tuple(vertices.min(axis=1)), tuple(vertices.max(axis=1)))
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -2798,6 +2831,7 @@ class Transformed(Geometry):
             tuple(np.dot((normal[0], normal[1], normal[2], 0.0), self.transform)[:3]),
             tuple(np.dot(self.inverse, (origin[0], origin[1], origin[2], 1.0))[:3]),
             np.dot(to_2D, self.transform),
+            transpose=transpose,
         )
 
     def inside(
