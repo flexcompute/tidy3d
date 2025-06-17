@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<report-database>
+ <description>DRC results</description>
+ <original-file/>
+ <generator>drc: script='testwidthonly.drc'</generator>
+ <top-cell>MAIN</top-cell>
+ <tags>
+ </tags>
+ <categories>
+  <category>
+   <name>min_width</name>
+   <description>minimum width</description>
+   <categories>
+   </categories>
+  </category>
+ </categories>
+ <cells>
+  <cell>
+   <name>MAIN</name>
+   <variant/>
+   <layout-name/>
+   <references>
+   </references>
+  </cell>
+ </cells>
+ <items>
+ </items>
+</report-database>
