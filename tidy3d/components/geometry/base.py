@@ -13,7 +13,7 @@ import shapely
 import xarray as xr
 
 try:
-    from matplotlib import patches
+    from matplotlib import patches, transforms
 except ImportError:
     pass
 
@@ -558,7 +558,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         # find shapes that intersect self at plane
         print(f"invoked Geometry.plot({transpose=})")
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        shapes_intersect = self.intersections_plane(x=x, y=y, z=z, transpose=transpose)
+        shapes_intersect = self.intersections_plane(x=x, y=y, z=z)  # , transpose=transpose)
         print(f"{shapes_intersect=}")  # DEBUG
 
         plot_params = self.plot_params
@@ -568,7 +568,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
+            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax, transpose=transpose)
 
         # clean up the axis display
         ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
@@ -579,7 +579,13 @@ class Geometry(Tidy3dBaseModel, ABC):
         )
         return ax
 
-    def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
+    def plot_shape(
+        self,
+        shape: Shapely,
+        plot_params: PlotParams,
+        ax: Ax,
+        transpose: bool = False,
+    ) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
         if shape.geom_type in (
             "MultiPoint",
@@ -596,11 +602,30 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         if _shape.geom_type == "LineString":
             xs, ys = zip(*_shape.coords)
+            if transpose:
+                xs, ys = ys, xs
             ax.plot(xs, ys, color=plot_params.facecolor, linewidth=plot_params.linewidth)
         elif _shape.geom_type == "Point":
-            ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
+            xcrds, ycrds = shape.x, shape.y
+            if transpose:
+                xcrds, ycrds = shape.y, shape.x
+            ax.scatter(xcrds, ycrds, color=plot_params.facecolor)
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
+            if transpose:
+                # Define a transformation which swaps horizal<-->vertical coordinates.
+                transpose_xy = transforms.Affine2D()
+                transpose_xy.set_matrix(
+                    np.array(
+                        [
+                            [0, 1, 0],  # Swap the X and Y axes.
+                            [1, 0, 0],
+                            [0, 0, 1],
+                        ]
+                    )
+                )
+                # Apply this transformation to the coordinates of the patch.
+                patch.set_transform(transpose_xy + ax.transData)
             ax.add_artist(patch)
         return ax
 
