@@ -600,6 +600,7 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"invoked PolySlab._do_intersections_tilted_plane({transpose=})")  # DEBUG
         import trimesh
 
         if len(self.base_polygon) > _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION:
@@ -624,16 +625,16 @@ class PolySlab(base.Planar):
         x = np.hstack((self.base_polygon[:, 0], self.top_polygon[:, 0]))
         y = np.hstack((self.base_polygon[:, 1], self.top_polygon[:, 1]))
         z = np.hstack((np.full(n, self.slab_bounds[0]), np.full(n, self.slab_bounds[1])))
+        if transpose:
+            x, y = y, x
         vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
+        print(f"PolySlab._do_intersections_tilted_plane({transpose=}), {vertices=}")  # DEBUG
         mesh = trimesh.Trimesh(vertices, faces)
 
         section = mesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
-        if transpose:
-            path.vertices = path.vertices[:, ::-1]  # swap column 0 (X) with column 1 (Y)
-        print(f"TriangleMesh.intersections_tilted_plane({transpose=}), {path=}")  # DEBUG
         return path.polygons_full
 
     def _intersections_normal(self, z: float, transpose: bool = False):
