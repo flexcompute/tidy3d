@@ -527,7 +527,11 @@ class TriangleMesh(base.Geometry, ABC):
         return self.trimesh.bounds
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -551,6 +555,9 @@ class TriangleMesh(base.Geometry, ABC):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
+        if transpose:
+            path.vertices = path.vertices[:, ::-1]  # swap column 0 (X) with column 1 (Y)
+        print(f"TriangleMesh.intersections_tilted_plane({transpose=}), {path=}")  # DEBUG
         return path.polygons_full
 
     def intersections_plane(

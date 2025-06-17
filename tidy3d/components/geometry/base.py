@@ -216,7 +216,11 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -1697,9 +1701,11 @@ class SimplePlaneIntersection(Geometry, ABC):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-        print(f"invoked SimplePlaneIntersection.intersections_tilted_plane({transpose=})")
+        print(f"invoked SimplePlaneIntersection.intersections_tilted_plane({transpose=})")  # DEBUG
 
         """
+        HAVING UNNECESSARY CONDITIONAL BRANCHING MAKES CODE MORE COMPLEX,
+        AND ADDING "transpose" TO THIS IF-CLAUSE IS A HEADACHE.  DELETING IT FOR NOW.
         # Check if normal is a special case, where the normal is aligned with an axis.
         if np.sum(np.isclose(normal, 0.0)) == 2:
             axis = np.argmax(np.abs(normal)).item()
@@ -1708,16 +1714,15 @@ class SimplePlaneIntersection(Geometry, ABC):
             section = self.intersections_plane(transpose=transpose, **kwargs)
             # Apply transformation in the plane by removing row and column
             to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
-
             def transform(p_array):
                 return np.dot(
                     np.hstack((p_array, np.ones((p_array.shape[0], 1)))), to_2D_in_plane.T
                 )[:, :2]
-
             transformed_section = shapely.transform(section, transformation=transform)
             return transformed_section
         # Otherwise compute the arbitrary intersection
         """
+
         return self._do_intersections_tilted_plane(
             normal=normal,
             origin=origin,
@@ -2198,7 +2203,9 @@ class Box(SimplePlaneIntersection, Centered):
         path, _ = section.to_planar(to_2D=to_2D)
         if transpose:
             path.vertices = path.vertices[:, ::-1]  # swap column 0 with column 1
-        print(f"Box._do_intersections_tilted_plane({transpose=}), {path=}")
+
+        print(f"Box._do_intersections_tilted_plane({transpose=}), {path=}")  # DEBUG
+
         return path.polygons_full
 
     def intersections_plane(
@@ -3117,7 +3124,11 @@ class ClipOperation(Geometry):
         return result
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3137,8 +3148,8 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        a = self.geometry_a.intersections_tilted_plane(normal, origin, to_2D)
-        b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D)
+        a = self.geometry_a.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
+        b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(
@@ -3338,7 +3349,11 @@ class GeometryGroup(Geometry):
         )
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -3361,7 +3376,9 @@ class GeometryGroup(Geometry):
         return [
             intersection
             for geometry in self.geometries
-            for intersection in geometry.intersections_tilted_plane(normal, origin, to_2D)
+            for intersection in geometry.intersections_tilted_plane(
+                normal, origin, to_2D, transpose=transpose
+            )
         ]
 
     def intersections_plane(

@@ -71,7 +71,11 @@ class Sphere(base.Centered, base.Circular):
         return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
 
     def intersections_tilted_plane(
-        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+        self,
+        normal: Coordinate,
+        origin: Coordinate,
+        to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -109,6 +113,8 @@ class Sphere(base.Centered, base.Circular):
         angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)[:-1]
         circ = center + np.outer(np.cos(angles), radius * u) + np.outer(np.sin(angles), radius * v)
         vertices = np.dot(np.hstack((circ, np.ones((angles.size, 1)))), to_2D.T)
+        if transpose:
+            vertices = vertices[:, ::-1]  # swap column 0 (X) with column 1 (Y)
         return [shapely.Polygon(vertices[:, :2])]
 
     def intersections_plane(
@@ -382,6 +388,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         normal: Coordinate,
         origin: Coordinate,
         to_2D: MatrixReal4x4,
+        transpose: bool = False,
     ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
@@ -474,6 +481,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
+        if transpose:
+            path.vertices = path.vertices[:, ::-1]  # swap column 0 (X) with column 1 (Y)
         return path.polygons_full
 
     def _intersections_normal(self, z: float, transpose: bool = False):
