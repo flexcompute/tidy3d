@@ -15,6 +15,7 @@ Plugins
     ./design
     ./waveguide
     ./microwave
+    ./klayout
 
 
 .. include:: /api/plugins/mode_solver.rst
@@ -28,3 +29,4 @@ Plugins
 .. include:: /api/plugins/design.rst
 .. include:: /api/plugins/waveguide.rst
 .. include:: /api/plugins/microwave.rst
+.. include:: /api/plugins/klayout.rst

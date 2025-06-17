@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<report-database>
+ <description>DRC results</description>
+ <original-file/>
+ <generator>drc: script='my_drc_runset.drc'</generator>
+ <top-cell>TOP</top-cell>
+ <tags>
+ </tags>
+ <categories>
+  <category>
+   <name>min_width</name>
+   <description>minimum width</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>min_gap</name>
+   <description>minimum gap</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>min_area</name>
+   <description>minimum area</description>
+   <categories>
+   </categories>
+  </category>
+  <category>
+   <name>min_hole</name>
+   <description>minimum hole</description>
+   <categories>
+   </categories>
+  </category>
+ </categories>
+ <cells>
+  <cell>
+   <name>TOP</name>
+   <variant/>
+   <layout-name/>
+   <references>
+   </references>
+  </cell>
+ </cells>
+ <items>
+  <item>
+   <tags/>
+   <category>min_width</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (-0.6,0.163;-0.6,0.419)|(-0.31,0.342;-0.31,0.24)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>min_width</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (-0.206,0.342;-0.31,0.342)|(-0.521,0.555;0.005,0.555)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>min_gap</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (-0.31,0.24;-0.206,0.24)|(-0.206,0.342;-0.31,0.342)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>min_gap</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>edge-pair: (-0.206,0.24;-0.206,0.342)|(-0.31,0.342;-0.31,0.24)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>min_area</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>polygon: (-0.6,-0.112;-0.6,0.555;0.217,0.555;0.217,-0.112/-0.31,0.24;-0.206,0.24;-0.206,0.342;-0.31,0.342)</value>
+   </values>
+  </item>
+  <item>
+   <tags/>
+   <category>min_hole</category>
+   <cell>TOP</cell>
+   <visited>false</visited>
+   <multiplicity>1</multiplicity>
+   <comment/>
+   <image/>
+   <values>
+    <value>polygon: (-0.31,0.24;-0.31,0.342;-0.206,0.342;-0.206,0.24)</value>
+   </values>
+  </item>
+ </items>
+</report-database>
