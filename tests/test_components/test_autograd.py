@@ -1650,18 +1650,18 @@ def test_custom_pole_residue(monkeypatch):
     custom_med_pole_res = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
 
     def J(eps):
-        return anp.sum(abs(eps))
+        return anp.sum(anp.abs(eps))
 
     freq = 3e8
     pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
     eps0 = pr.eps_model(freq)
 
-    dJ_deps = ag.holomorphic_grad(J)(eps0)
+    dJ_deps = np.conj(ag.holomorphic_grad(J)(eps0))
 
     monkeypatch.setattr(
         td.CustomPoleResidue,
         "_derivative_field_cmp",
-        lambda self, E_der_map, eps_data, dim, freqs: dJ_deps,
+        lambda self, E_der_map, eps_data, dim, freqs: dJ_deps / 3.0,
     )
 
     import importlib
@@ -1703,17 +1703,18 @@ def test_custom_pole_residue(monkeypatch):
         eps = td.CustomPoleResidue._eps_model(eps_inf, poles, freq)
         return J(eps)
 
-    gfn = ag.holomorphic_grad(f, argnum=(0, 1))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        grad_eps_inf, grad_poles = gfn(eps_inf.values, poles_complex)
+    gfn = ag.grad(lambda x: f(x, poles_complex))
+    grad_eps_inf = gfn(eps_inf.values)
 
     assert np.allclose(grads_computed[("eps_inf",)], grad_eps_inf)
+
+    gfn = ag.holomorphic_grad(lambda x: f(eps_inf.values, x))
+    grad_poles = gfn(poles_complex)
 
     for i in range(len(poles)):
         for j in range(2):
             field_path = ("poles", i, j)
-            assert np.allclose(grads_computed[field_path], grad_poles[i][j])
+            assert np.allclose(grads_computed[field_path], np.conj(grad_poles[i][j]))
 
 
 # @pytest.mark.timeout(18.0)
