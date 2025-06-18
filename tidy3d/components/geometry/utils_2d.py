@@ -121,6 +121,7 @@ def subdivide(
         which includes the newly created structures below and above.
 
     """
+    # print(f"invoked subdivide({geom=}, {structures=})")  # DEBUG
 
     def shapely_to_polyslab(polygon: shapely.Polygon, axis: Axis, center: float) -> PolySlab:
         xx, yy = polygon.exterior.coords.xy
@@ -172,7 +173,7 @@ def subdivide(
         # If the 2D structure overlaps completely with all previously tested structures above then there is no more work to do
         if not geom_shapely:
             break
-
+        # print(f"shapely.intersection({geom_shapely=}, {mp_structure[0]=})")  # DEBUG
         intersection_res = shapely.intersection(geom_shapely, mp_structure[0])
         intersection_mp = to_multipolygon(intersection_res)
         difference_res = shapely.difference(geom_shapely, mp_structure[0])
@@ -194,7 +195,7 @@ def subdivide(
                 break
             if not mp_structure_below[0]:
                 continue
-
+            # print(f"shapely.intersection({geom_shapely=}, {mp_structure_below[0]=})")  # DEBUG
             intersection_res = shapely.intersection(above_intersection, mp_structure_below[0])
             intersection_mp = to_multipolygon(intersection_res)
             above_difference = to_multipolygon(

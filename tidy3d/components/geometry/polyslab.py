@@ -628,7 +628,9 @@ class PolySlab(base.Planar):
         if transpose:
             x, y = y, x
         vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
-        print(f"PolySlab._do_intersections_tilted_plane({transpose=}), {vertices=}")  # DEBUG
+
+        # print(f"PolySlab._do_intersections_tilted_plane({transpose=}), {vertices=}")  # DEBUG
+
         mesh = trimesh.Trimesh(vertices, faces)
 
         section = mesh.section(plane_origin=origin, plane_normal=normal)

@@ -408,7 +408,6 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"invoked Cylinder._do_intersections_tilted_plane({transpose=})")  # DEBUG
         import trimesh
 
         z0, (x0, y0) = self.pop_axis(self.center, self.axis)
@@ -456,7 +455,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if transpose:
             x, y = y, x
         vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
-        print(f"Cylinder._do_intersections_tilted_plane({transpose=}), {vertices=}")  # DEBUG
+
+        print("invoked Cylinder._do_intersections_tilted_plane()")  # DEBUG
+        # print(f"Cylinder._do_intersections_tilted_plane({transpose=}), {vertices=}")  # DEBUG
 
         if x_bot.shape[0] == 1:
             m = 1

@@ -275,7 +275,10 @@ class Geometry(Tidy3dBaseModel, ABC):
         normal = self.unpop_axis(1, (0, 0), axis=axis)
         to_2D = np.eye(4)
         if axis != 2:
-            last, indices = self.pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
+            print("WARNING: Geometry.intersections_plane(axis!=2)\nDOES PLOT LOOK OKAY?")  # DEBUG
+
+            # last, indices = self.pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
+            last, indices = self.pop_axis((0, 1, 2), axis)
             to_2D = to_2D[[*list(indices), last, 3]]
         return self.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
 
@@ -568,6 +571,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
+            print(f"{shapely.get_coordinates(shape)=}")  # DEBUG
             ax = self.plot_shape(shape, plot_params=plot_params, ax=ax, transpose=transpose)
 
         # clean up the axis display
@@ -1726,7 +1730,7 @@ class SimplePlaneIntersection(Geometry, ABC):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-        print(f"invoked SimplePlaneIntersection.intersections_tilted_plane({transpose=})")  # DEBUG
+        print("invoked SimplePlaneIntersection.intersections_tilted_plane()")  # DEBUG
 
         """
         HAVING UNNECESSARY CONDITIONAL BRANCHING MAKES CODE MORE COMPLEX,
@@ -2199,6 +2203,7 @@ class Box(SimplePlaneIntersection, Centered):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print("invoked Box._do_intersections_tilted_plane()")  # DEBUG
         import trimesh
 
         (x0, y0, z0), (x1, y1, z1) = self.bounds
@@ -2229,7 +2234,7 @@ class Box(SimplePlaneIntersection, Centered):
         if transpose:
             path.vertices = path.vertices[:, ::-1]  # swap column 0 with column 1
 
-        print(f"Box._do_intersections_tilted_plane({transpose=}), {path=}")  # DEBUG
+        # print(f"Box._do_intersections_tilted_plane({transpose=}), {path=}")  # DEBUG
 
         return path.polygons_full
 
@@ -2859,6 +2864,7 @@ class Transformed(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print("invoked Transformed.intersections_tilted_plane()")  # DEBUG
         return self.geometry.intersections_tilted_plane(
             tuple(np.dot((normal[0], normal[1], normal[2], 0.0), self.transform)[:3]),
             tuple(np.dot(self.inverse, (origin[0], origin[1], origin[2], 1.0))[:3]),
@@ -3173,8 +3179,12 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print("invoked ClipOperation.intersections_tilted_plane()")  # DEBUG
         a = self.geometry_a.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
         b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
+        print(f"{to_2D=}")  # DEBUG
+        print(f"{a=}")  # DEBUG
+        print(f"{b=}")  # DEBUG
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
         return ClipOperation.to_polygon_list(
@@ -3398,6 +3408,7 @@ class GeometryGroup(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print("invoked GeometryGroup.intersections_tilted_plane()")  # DEBUG
         return [
             intersection
             for geometry in self.geometries
