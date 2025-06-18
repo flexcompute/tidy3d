@@ -319,17 +319,34 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     eps_arr = 1.01 + 0.5 * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
 
     nx, ny, nz = eps_arr.shape
+    da_coords = {
+        "x": np.linspace(-0.5, 0.5, nx),
+        "y": np.linspace(-0.5, 0.5, ny),
+        "z": np.linspace(-0.5, 0.5, nz),
+    }
 
     custom_med = td.Structure(
         geometry=box,
         medium=td.CustomMedium(
             permittivity=td.SpatialDataArray(
                 eps_arr,
-                coords={
-                    "x": np.linspace(-0.5, 0.5, nx),
-                    "y": np.linspace(-0.5, 0.5, ny),
-                    "z": np.linspace(-0.5, 0.5, nz),
-                },
+                coords=da_coords,
+            ),
+        ),
+    )
+
+    # custom medium with variable permittivity and conductivity data
+    conductivity_arr = 0.01 * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
+    custom_med_with_conductivity = td.Structure(
+        geometry=box,
+        medium=td.CustomMedium(
+            permittivity=td.SpatialDataArray(
+                eps_arr,
+                coords=da_coords,
+            ),
+            conductivity=td.SpatialDataArray(
+                conductivity_arr,
+                coords=da_coords,
             ),
         ),
     )
@@ -337,12 +354,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     # custom medium with vector valued permittivity data
     eps_ii = td.ScalarFieldDataArray(
         eps_arr.reshape(nx, ny, nz, 1),
-        coords={
-            "x": np.linspace(-0.5, 0.5, nx),
-            "y": np.linspace(-0.5, 0.5, ny),
-            "z": np.linspace(-0.5, 0.5, nz),
-            "f": [td.C_0],
-        },
+        coords=da_coords | {"f": [td.C_0]},
     )
 
     custom_med_vec = td.Structure(
@@ -484,6 +496,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         "center_list": center_list,
         "size_element": size_element,
         "custom_med": custom_med,
+        "custom_med_with_conductivity": custom_med_with_conductivity,
         "custom_med_vec": custom_med_vec,
         "polyslab": polyslab,
         "polyslab_dispersive": polyslab_dispersive,
@@ -581,6 +594,7 @@ structure_keys_ = (
     "center_list",
     "size_element",
     "custom_med",
+    "custom_med_with_conductivity",
     "custom_med_vec",
     "polyslab",
     "complex_polyslab",
@@ -1741,7 +1755,7 @@ def test_custom_pole_residue(monkeypatch):
     monkeypatch.setattr(
         td.CustomPoleResidue,
         "_derivative_field_cmp",
-        lambda self, E_der_map, eps_data, dim: dJ_deps / 3.0,
+        lambda self, E_der_map, spatial_data, dim, freqs, component="real": dJ_deps / 3.0,
     )
 
     import importlib
@@ -2438,3 +2452,52 @@ def test_error_clip(use_emulated_run):
 
     with pytest.raises(ValueError):
         g = ag.grad(objective)(1.0)
+
+
+def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_path):
+    """Test conductivity gradients for CustomMedium with constant permittivity."""
+
+    monitor, postprocess = make_monitors()["field_point"]
+
+    def objective(params):
+        """Objective function testing only conductivity gradient (constant permittivity)."""
+        len_arr = np.prod(DA_SHAPE)
+        matrix = rng.random((len_arr, N_PARAMS))
+
+        # constant permittivity
+        eps_arr = np.ones(DA_SHAPE) * 2.0
+
+        # variable conductivity
+        conductivity_arr = 0.05 * (anp.tanh(3 * matrix @ params).reshape(DA_SHAPE) + 1)
+
+        nx, ny, nz = DA_SHAPE
+        coords = {
+            "x": np.linspace(-0.5, 0.5, nx),
+            "y": np.linspace(-0.5, 0.5, ny),
+            "z": np.linspace(-0.5, 0.5, nz),
+        }
+
+        custom_med_struct = td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+            medium=td.CustomMedium(
+                permittivity=td.SpatialDataArray(eps_arr, coords=coords),
+                conductivity=td.SpatialDataArray(conductivity_arr, coords=coords),
+            ),
+        )
+
+        sim = SIM_BASE.updated_copy(
+            structures=[custom_med_struct],
+            monitors=[monitor],
+        )
+
+        data = run(
+            sim,
+            path=str(tmp_path / "sim_test.hdf5"),
+            task_name="conductivity_only_grad_test",
+            verbose=False,
+        )
+        return postprocess(data, data[monitor.name])
+
+    val, grad = ag.value_and_grad(objective)(params0)
+
+    assert anp.all(grad != 0.0), "some gradients are 0 for conductivity-only test"
