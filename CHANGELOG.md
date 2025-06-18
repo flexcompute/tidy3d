@@ -18,11 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `InternalAbsorber` class for placing first-order absorbing boundary conditions on planes inside the simulation domain. Internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.
 - Added `absorber` field (default: `True`) to `WavePort` for automatically placing an absorber behind the port.
 - Added `conjugated_dot_product` field in `ModeMonitor` (default: `True`) and `WavePort` (default: `False`) to allow selecting the conjugated or non-conjugated dot product for mode decomposition.
+- Support for gradients with respect to the `conductivity` of a `CustomMedium`.
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
 - Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
 - The `TerminalComponentModeler` defaults to the pseudo wave definition of scattering parameters. The new field `s_param_def` can be used to switch between either pseudo or power wave definitions.
+- Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
 
 ### Fixed
 - Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.

@@ -1682,13 +1682,15 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     def _derivative_field_cmp(
         self,
         E_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
+        spatial_data: PermittivityDataset,
         dim: str,
     ) -> np.ndarray:
-        coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
-        dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
+        coords_interp = {key: val for key, val in spatial_data.coords.items() if len(val) > 1}
+        dims_sum = {dim for dim in spatial_data.coords.keys() if dim not in coords_interp}
 
-        eps_coordinate_shape = [len(eps_data.coords[dim]) for dim in eps_data.dims if dim in "xyz"]
+        eps_coordinate_shape = [
+            len(spatial_data.coords[dim]) for dim in spatial_data.dims if dim in "xyz"
+        ]
 
         # compute sizes along each of the interpolation dimensions
         sizes_list = []
@@ -2898,13 +2900,27 @@ class CustomMedium(AbstractCustomMedium):
         vjps = {}
 
         for field_path in derivative_info.paths:
-            if field_path == ("permittivity",):
+            if field_path[0] == "permittivity":
                 vjp_array = 0.0
                 for dim in "xyz":
                     vjp_array += self._derivative_field_cmp(
                         E_der_map=derivative_info.E_der_map,
-                        eps_data=self.permittivity,
+                        spatial_data=self.permittivity,
                         dim=dim,
+                        freqs=derivative_info.frequencies,
+                        component="real",
+                    )
+                vjps[field_path] = vjp_array
+
+            elif field_path[0] == "conductivity":
+                vjp_array = 0.0
+                for dim in "xyz":
+                    vjp_array += self._derivative_field_cmp(
+                        E_der_map=derivative_info.E_der_map,
+                        spatial_data=self.conductivity,
+                        dim=dim,
+                        freqs=derivative_info.frequencies,
+                        component="sigma",
                     )
                 vjps[field_path] = vjp_array
 
@@ -2913,10 +2929,11 @@ class CustomMedium(AbstractCustomMedium):
                 dim = key[-1]
                 vjps[field_path] = self._derivative_field_cmp(
                     E_der_map=derivative_info.E_der_map,
-                    eps_data=self.eps_dataset.field_components[key],
+                    spatial_data=self.eps_dataset.field_components[key],
                     dim=dim,
+                    freqs=derivative_info.frequencies,
+                    component="complex",
                 )
-
             else:
                 raise NotImplementedError(
                     f"No derivative defined for 'CustomMedium' field: {field_path}."
@@ -2927,14 +2944,18 @@ class CustomMedium(AbstractCustomMedium):
     def _derivative_field_cmp(
         self,
         E_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
+        spatial_data: CustomSpatialDataTypeAnnotated,
         dim: str,
+        freqs: np.ndarray,
+        component: str = "real",
     ) -> np.ndarray:
-        """Compute derivative with respect to the ``dim`` components within the custom medium."""
-        coords_interp = {key: eps_data.coords[key] for key in "xyz"}
+        """Compute the derivative with respect to a material property component."""
+        coords_interp = {key: spatial_data.coords[key] for key in "xyz"}
         coords_interp = {key: val for key, val in coords_interp.items() if len(val) > 1}
 
-        eps_coordinate_shape = [len(eps_data.coords[dim]) for dim in eps_data.dims if dim in "xyz"]
+        eps_coordinate_shape = [
+            len(spatial_data.coords[dim]) for dim in spatial_data.dims if dim in "xyz"
+        ]
 
         E_der_dim_interp = E_der_map[f"E{dim}"]
 
@@ -2972,10 +2993,28 @@ class CustomMedium(AbstractCustomMedium):
             # if sizes_list is empty, then reduce() fails
             d_vol = np.array(1.0)
 
-        # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        E_der_dim_interp = (
-            E_der_dim_interp.interp(**coords_interp, assume_sorted=True).fillna(0.0).real.sum("f")
-        )
+        E_der_dim_interp_complex = E_der_dim_interp.interp(
+            **coords_interp, assume_sorted=True
+        ).fillna(0.0)
+
+        if component == "sigma":
+            # compute conductivity gradient from imaginary-permittivity gradient
+            # apply per-frequency scaling before summing over frequencies
+            # d eps_imag / d sigma = 1 / (2 * pi * f * EPSILON_0)
+            E_der_dim_interp = E_der_dim_interp_complex.imag
+            freqs_da = E_der_dim_interp_complex.coords["f"]
+            scale = -1.0 / (2.0 * np.pi * freqs_da * EPSILON_0)
+            E_der_dim_interp *= scale
+        elif component == "complex":
+            # for complex permittivity in eps_dataset, return the full complex derivative
+            E_der_dim_interp = E_der_dim_interp_complex
+        elif component == "imag":
+            # pure imaginary component (no conductivity conversion)
+            E_der_dim_interp = E_der_dim_interp_complex.imag
+        else:
+            E_der_dim_interp = E_der_dim_interp_complex.real
+
+        E_der_dim_interp = E_der_dim_interp.sum("f")
 
         try:
             E_der_dim_interp = E_der_dim_interp * d_vol.reshape(E_der_dim_interp.shape)
@@ -3975,6 +4014,28 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
 
+    def _derivative_field_cmp(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        spatial_data: CustomSpatialDataTypeAnnotated,
+        dim: str,
+        freqs=None,
+        component: str = "complex",
+    ) -> np.ndarray:
+        """Compatibility wrapper for derivative computation.
+
+        Accepts the extended signature used by other custom media (
+        e.g., `CustomMedium._derivative_field_cmp`) while delegating the actual
+        computation to the base implementation that only depends on
+        `E_der_map`, `spatial_data`, and `dim`.
+
+        Parameters `freqs` and `component` are ignored for this model since the
+        derivative is taken with respect to the complex permittivity directly.
+        """
+        return super()._derivative_field_cmp(
+            E_der_map=E_der_map, spatial_data=spatial_data, dim=dim
+        )
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives by preparing array data and calling the static helper."""
 
@@ -3982,8 +4043,10 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         for dim in "xyz":
             dJ_deps_complex += self._derivative_field_cmp(
                 E_der_map=derivative_info.E_der_map,
-                eps_data=self.eps_inf,
+                spatial_data=self.eps_inf,
                 dim=dim,
+                freqs=derivative_info.frequencies,
+                component="complex",
             )
 
         poles_vals = [
