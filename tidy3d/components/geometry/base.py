@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional, Union
 
 import autograd.numpy as np
+import numpy.typing as npt
 import pydantic.v1 as pydantic
 import shapely
 import xarray as xr
@@ -2863,8 +2864,8 @@ class ClipOperation(Geometry):
 
     @staticmethod
     def to_polygon_list(base_geometry: Shapely) -> list[Shapely]:
-        """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
-        empty polygons.
+        """Return a list of valid polygons from a shapely geometry, discarding points, lines,
+        empty polygons, and empty triangles within polygons.
 
         Parameters
         ----------
@@ -2876,13 +2877,23 @@ class ClipOperation(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             Valid polygons retrieved from ``base geometry``.
         """
+        unfiltered_polygons: list[shapely.Polygon] = []
         if base_geometry.geom_type == "GeometryCollection":
-            return [p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)]
+            unfiltered_polygons = [
+                p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)
+            ]
         if base_geometry.geom_type == "MultiPolygon":
-            return [p for p in base_geometry.geoms if not p.is_empty]
+            unfiltered_polygons = [p for p in base_geometry.geoms if not p.is_empty]
         if base_geometry.geom_type == "Polygon" and not base_geometry.is_empty:
-            return [base_geometry]
-        return []
+            unfiltered_polygons = [base_geometry]
+        # Now "clean" each of the polygons (by removing empty boundary triangles).
+        polygons = []
+        for polygon in unfiltered_polygons:
+            assert isinstance(polygon, shapely.Polygon)
+            polygon = cleanup_shapely_polygon(polygon)
+            if not polygon.is_empty:
+                polygons.append(polygon)
+        return polygons
 
     @property
     def _shapely_operation(self) -> Callable[[Shapely, Shapely], Shapely]:
@@ -3291,6 +3302,106 @@ class GeometryGroup(Geometry):
             grad_vjps[field_path] = grad_vjp_values[0]
 
         return grad_vjps
+
+
+def cleanup_simple_polygon(
+    coords: npt.ArrayLike,
+    min_thickness: float = 1e-12,
+    repeat_first: bool = False,
+) -> npt.ArrayLike:
+    """Remove thin triangles from the boundary of a polygon represented as an Nx2 array of coords.
+
+    Parameters
+    ----------
+    coords : npt.ArrayLike
+        An Nx2 numpy array containing the coordinates of the N points on the polygon's boundary.
+    min_thickness : float = 1e-12
+        Triangles whose thickness (in any direction) falls below this parameter are discarded.
+    repeat_first: bool = False
+        Optional: Duplicate the first vertex at the end of the array to create a closed curve.
+                  Set to True if you want to be to be consistent with shapely.Polygons convetions.
+
+    Returns
+    -------
+    npt.ArrayLike
+        A new polygon with thin triangles removed.
+    """
+    coords = np.asarray(coords)
+    n = len(coords)
+    if n < 3:  # Special case
+        return []
+    good_verts = []  # select the vertices we want to keep
+    i = i_prev = 0
+    while i < n:
+        i0 = i_prev
+        i1 = (i + 1) % n
+        i2 = (i + 2) % n
+        if i2 == 1 and len(good_verts) > 0:  # Special case at the cyclic boundary: don't use i2=1
+            i2 = good_verts[0]  # Use the first point we kept (since i1=0 and i2=1 might overlap)
+        thickness = triangle_thickness(coords[i0], coords[i1], coords[i2])
+        if thickness >= min_thickness:
+            good_verts.append(i1)
+            i_prev = i1
+        i += 1
+    if len(good_verts) > 0:
+        # Optional: Reorder to try and match the original order of the vertices as much as possible
+        good_verts = good_verts[-1:] + good_verts[:-1]  # shift by 1
+        if repeat_first:
+            good_verts.append(good_verts[0])
+    return np.array([coords[i] for i in good_verts])
+
+
+def cleanup_shapely_polygon(p: shapely.Polygon, min_thickness: float = 1e-12) -> shapely.Polygon:
+    """Remove pathologically thin triangles from the boundaries of a shapely polygon.
+
+    Parameters
+    ----------
+    p : shapely.Polygon
+        Vector defining the normal direction to the plane.
+    min_thickness : float = 1e-13
+        Triangles whose thickness (in any direction) falls below this parameter are discarded.
+
+    Returns
+    -------
+    shapely.Polygon
+        A new polygon with thin triangles removed.
+    """
+    # remove thin triangles from the exterior boundary of the polygon.
+    exterior_coords = cleanup_simple_polygon(
+        p.exterior.coords, min_thickness=min_thickness, repeat_first=True
+    )
+    # remove thin triangles from each of the interior boundares.
+    interior_coords_list = []
+    if len(exterior_coords) < 3:
+        return shapely.Polygon([], [])
+    for interior_ring in p.interiors:
+        interior_coords = cleanup_simple_polygon(
+            interior_ring.coords, min_thickness=min_thickness, repeat_first=True
+        )
+        if len(interior_coords) >= 3:
+            interior_coords_list.append(interior_coords)
+    return shapely.Polygon(exterior_coords, interior_coords_list)
+
+
+def triangle_thickness(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike) -> float:
+    def distance_to_line(r: npt.ArrayLike, ra: npt.ArrayLike, rb: npt.ArrayLike) -> float:
+        r = np.array(r)
+        ra = np.array(ra)
+        rb = np.array(rb)
+        rab = ra - rb  # line direction
+        rab_len_sq = np.sum(rab * rab)  # squared length of rab
+        if rab_len_sq > 0.0:  # cast a shadow of (r - ra) onto the line
+            r_proj = rab * np.dot(r - ra, rab) / rab_len_sq
+            r_perp = (r - ra) - r_proj
+        else:
+            r_perp = r - ra
+        return float(np.linalg.norm(r_perp))
+
+    return min(
+        distance_to_line(r1, r2, r3),
+        distance_to_line(r3, r1, r2),
+        distance_to_line(r2, r3, r1),
+    )
 
 
 from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402

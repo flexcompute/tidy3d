@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions,
   and their lengths no longer exceed the height of the plot window.
+- Removed pathologically thin triangles from the boundaries of clipped polygons
+  displayed in 2D plots.  Such triangles are often generated when displaying the
+  intersections between closely aligned objects, causing visual glitches.
 
 ## [2.9.0rc1] - 2025-06-10
 
