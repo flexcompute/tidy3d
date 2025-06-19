@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
+- Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
+
+### Changed
+- Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
+
+### Fixed
+- Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
+- Bug in `PlaneWave` defined with a negative `angle_theta` which would lead to wrong injection.
+
+### Changed
+- `GaussianBeam` and `AstigmaticGaussianBeam` default `num_freqs` reset to 1 (it was set to 3 in v2.8.0) and a warning is issued for a broadband, angled beam for which `num_freqs` may not be sufficiently large.
+- Set the maximum `num_freqs` to 20 for all broadband sources (we have been warning about the introduction of this hard limit for a while).
+
+## [2.9.0rc1] - 2025-06-10
+
+### Added
 
 - Fields `convex_resolution`, `concave_resolution`, and `mixed_resolution` in `CornerFinderSpec` can be used to take into account the dimensions of autodetected convex, concave, or mixed geometric features when `dl_min` is automatically inferred during automatic grid generation.
 - `LayerRefinementSpec` now supports automatic thin gap meshing through fields `gap_meshing_iters` and `dl_min_from_gap_width`.
@@ -16,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `priority` field in `Structure` and `MeshOverrideStructure` for setting the behavior in structure overlapping region. When its value is `None`, the priority is automatically determined based on the material property and simulation's `structure_priority_mode`.
 - Automatically apply `matplotlib` styles when importing `tidy3d` which can be reverted via the `td.restore_matplotlib_rcparams()` function.
 - Added `TriangleMesh.from_height_expression` class method to create a mesh from an analytical height function defined on a 2D grid and `TriangleMesh.from_height_grid` class method to create a mesh from height values sampled on a 2D grid.
+- Added heat sources with custom spatial dependence. It is now possible to add a `SpatialDataArray` as the `rate` in a `HeatSource`.
+- Added Transient Heat simulations. It is now possible to run transient Heat simulations. This can be done by specifying `analysis_spec` of `HeatChargeSimulation` object as `UnsteadyHeatAnalysis`. 
+- A `num_grid_cells` field to `WavePort`, which ensures that there are 5 grid cells across the port. Grid refinement can be disabled by passing `None` to `num_grid_cells`.
 
 ### Fixed
 - Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
@@ -23,6 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in contains check for `LumpedElement`, which should allow the case of a `LumpedElement` touching the simulation boundaries.
 - Bug when generating a grid with snapping points near the simulation boundaries.
 - Solver error for EME simulations with bends, introduced when support for 2D EME simulations was added.
+- Fixed field colocation in `EMEModeSolverMonitor`.
+- Solver error for EME simulations with bends, introduced when support for 2D EME simulations was added.
+- Internal interpolation errors with some versions of `xarray` and `numpy`.
+- If `ModeSpec.angle_rotation=True` for a mode object, validate that the structure rotation can be successfully done. Also, error if the medium cannot be rotated (e.g. anisotropic or custom medium), which would previously have just produced wrong results.
+- Characteristic impedance calculations in the `ImpedanceCalculator` using definitions that rely on flux, which were giving incorrect results for lossy transmission lines.
+- Fixed handling of symmetry when creating adjoint field sources and added warning when broken up adjoint simulations do not have the same symmetry as the forward simulation.
+- Validation for `CustomGridBoundaries`, which was previously allowing unsorted arrays and arrays with less than two entries.
+- `DiffractionMonitor` results to apply finite grid field corrections for higher precision when comparing e.g. to `FluxMonitor` computations of total power.
+- Bug when validating the grid resolution near `CoaxialLumpedPort`.
 
 ### Changed
 - Relaxed bounds checking of path integrals during `WavePort` validation.
@@ -35,6 +64,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `tidy3d.plugins.autograd.interpolate_spline()` and `tidy3d.plugins.autograd.add_at()` can now be called with keyword arguments during tracing.
+- Upon initialization, an FDTD `Simulation` will now try to create all `ModeSolver` objects associated to `ModeSource`-s and `ModeMonitor`-s so they can be validated.
+- `tidy3d.plugins.autograd.interpolate_spline()` and `tidy3d.plugins.autograd.add_at()` can now be called with keyword arguments during tracing.
+- Zero-size dimensions automatically receive periodic boundary conditions instead of raising an error.
+- Set `ModeSpec` precision to `double` by deafult for more accurate mode solver results. Does not apply to `EMEModeSpec`, where the `auto` precision is still default for speed and cost.
 
 ## [2.8.4] - 2025-05-15
 

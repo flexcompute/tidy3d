@@ -456,3 +456,80 @@ def test_fixed_angle_source():
     )
 
     assert not plane_wave._is_fixed_angle
+
+
+def test_broadband_angled_gaussian_warning():
+    g = td.GaussianPulse(freq0=1e14, fwidth=0.8e14)
+    # Case 1: num_freqs = 3, angle_theta = np.pi / 3, should warn
+    with AssertLogLevel("WARNING", contains_str="number of frequencies"):
+        s = td.GaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=3,
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
+
+    # Case 2: Increasing to num_freqs = 10 should NOT warn
+    with AssertLogLevel(None):
+        s = td.GaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=10,
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
+
+    # Case 3: Case 2 but changed to astigmatic gaussian beam with one larger waist size should warn
+    with AssertLogLevel("WARNING", contains_str="number of frequencies"):
+        s = td.AstigmaticGaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=10,
+            waist_sizes=(1, 5),
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
+
+    # Case 4: Case 3 but with num_freqs = 1 should NOT warn (broadband treatment is off)
+    with AssertLogLevel(None):
+        s = td.AstigmaticGaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=1,
+            waist_sizes=(1, 5),
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
