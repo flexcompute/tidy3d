@@ -2877,23 +2877,25 @@ class ClipOperation(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             Valid polygons retrieved from ``base geometry``.
         """
-        unfiltered_polygons: list[shapely.Polygon] = []
+        unfiltered_geoms: list[Shapely] = []
         if base_geometry.geom_type == "GeometryCollection":
-            unfiltered_polygons = [
+            unfiltered_geoms = [
                 p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)
             ]
         if base_geometry.geom_type == "MultiPolygon":
-            unfiltered_polygons = [p for p in base_geometry.geoms if not p.is_empty]
+            unfiltered_geoms = [p for p in base_geometry.geoms if not p.is_empty]
         if base_geometry.geom_type == "Polygon" and not base_geometry.is_empty:
-            unfiltered_polygons = [base_geometry]
+            unfiltered_geoms = [base_geometry]
         # Now "clean" each of the polygons (by removing empty boundary triangles).
-        polygons = []
-        for polygon in unfiltered_polygons:
-            assert isinstance(polygon, shapely.Polygon)
-            polygon = cleanup_shapely_polygon(polygon)
-            if not polygon.is_empty:
-                polygons.append(polygon)
-        return polygons
+        geoms: list[Shapely] = []
+        for geom in unfiltered_geoms:
+            if isinstance(geom, shapely.Polygon):
+                polygon = cleanup_shapely_polygon(geom)
+                if not polygon.is_empty:
+                    geoms.append(polygon)
+            else:
+                geoms.append(geom)
+        return geoms
 
     @property
     def _shapely_operation(self) -> Callable[[Shapely, Shapely], Shapely]:
