@@ -27,8 +27,6 @@ from .base import Source
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
 CHEB_GRID_WIDTH = 1.5
-# Number of frequencies in a broadband source above which to issue a warning
-WARN_NUM_FREQS = 20
 # For broadband plane waves with constan in-plane k, the Chebyshev grid is truncated at
 # ``CRITICAL_FREQUENCY_FACTOR * f_crit``, where ``f_crit`` is the critical frequency
 # (oblique propagation).
@@ -90,14 +88,14 @@ class DirectionalSource(FieldSource, ABC):
 class BroadbandSource(Source, ABC):
     """A source with frequency dependent field distributions."""
 
-    # Default as for analytic beam sources; overwrriten for ModeSource below
     num_freqs: int = pydantic.Field(
-        3,
+        1,
         title="Number of Frequency Points",
         description="Number of points used to approximate the frequency dependence of the injected "
-        "field. Default is 3, which should cover even very broadband sources. For simulations "
-        "which are not very broadband and the source is very large (e.g. metalens simulations), "
-        "decreasing the value to 1 may lead to a speed up in the preprocessing.",
+        "field. A Chebyshev interpolation is used, thus, only a small number of points is "
+        "typically sufficient to obtain converged results. Note that larger values of 'num_freqs' "
+        "could spread out the source time signal and introduce numerical noise, or prevent timely  "
+        "field decay.",
         ge=1,
         le=20,
     )
@@ -115,23 +113,6 @@ class BroadbandSource(Source, ABC):
         uni_points = (2 * np.arange(self.num_freqs) + 1) / (2 * self.num_freqs)
         cheb_points = np.cos(np.pi * np.flip(uni_points))
         return freq_avg + freq_diff * cheb_points
-
-    @pydantic.validator("num_freqs", always=True, allow_reuse=True)
-    def _warn_if_large_number_of_freqs(cls, val):
-        """Warn if a large number of frequency points is requested."""
-
-        if val is None:
-            return val
-
-        if val >= WARN_NUM_FREQS:
-            log.warning(
-                f"A large number ({val}) of frequency points is used in a broadband source. "
-                "This can lead to solver slow-down and increased cost, and even introduce "
-                "numerical noise. This may become a hard limit in future Tidy3D versions.",
-                custom_loc=["num_freqs"],
-            )
-
-        return val
 
 
 """ Source current profiles determined by user-supplied data on a plane."""
@@ -422,16 +403,6 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    num_freqs: int = pydantic.Field(
-        1,
-        title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
-        "than 20, is typically sufficient to obtain converged results.",
-        ge=1,
-        le=99,
-    )
-
     @cached_property
     def angle_theta(self):
         """Polar angle of propagation."""
@@ -515,6 +486,17 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         discriminator=TYPE_TAG_STR,
     )
 
+    num_freqs: int = pydantic.Field(
+        3,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. Default is 3, which should cover even very broadband plane waves. For simulations "
+        "which are not very broadband and the source is very large (e.g. metalens simulations), "
+        "decreasing the value to 1 may lead to a speed up in the preprocessing.",
+        ge=1,
+        le=20,
+    )
+
     @cached_property
     def _is_fixed_angle(self) -> bool:
         """Whether the plane wave is at a fixed non-zero angle."""
@@ -594,6 +576,18 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         units=MICROMETER,
     )
 
+    num_freqs: int = pydantic.Field(
+        1,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
+        "in an empty simulation to ensure there are no injection artifacts when 'num_freqs' > 1. "
+        "Note that larger values of 'num_freqs' could spread out the source time signal and "
+        "introduce numerical noise, or prevent timely field decay.",
+        ge=1,
+        le=20,
+    )
+
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     """The simple astigmatic Gaussian distribution allows
@@ -640,6 +634,18 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         "``waist_distances`` are negative, the waist is on the ``+`` side (in front) of "
         "the source plane.",
         units=MICROMETER,
+    )
+
+    num_freqs: int = pydantic.Field(
+        1,
+        title="Number of Frequency Points",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
+        "in an empty simulation to ensure there are no injection artifacts when 'num_freqs' > 1. "
+        "Note that larger values of 'num_freqs' could spread out the source time signal and "
+        "introduce numerical noise, or prevent timely field decay.",
+        ge=1,
+        le=20,
     )
 
 

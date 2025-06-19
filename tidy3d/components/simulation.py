@@ -3618,6 +3618,53 @@ class Simulation(AbstractYeeGridSimulation):
                                 "A fixed angle plane wave can only be injected into a homogeneous isotropic"
                                 "dispersionless medium."
                             )
+                    # check if broadband angled gaussian beam frequency variation is too fast
+                    if (
+                        isinstance(source, (GaussianBeam, AstigmaticGaussianBeam))
+                        and np.abs(source.angle_theta) > 0
+                        and source.num_freqs > 1
+                    ):
+
+                        def radius(waist_radius, waist_distance, k0):
+                            """Gaussian beam radius at a given waist distance and k0."""
+                            z_r = waist_radius**2 * k0 / 2
+                            return waist_radius * np.sqrt(1 + (waist_distance / z_r) ** 2)
+
+                        # A slanted GaussianBeam will accumulate a phase that's frequency-dependent
+                        # like phi = K f, with the derivative dphi / df = K = 2 * pi * n * r * sin(theta) / c_0.
+                        # Here, we compute the maximum value of this coefficient computed at the waist radius
+                        # and over all frequencies. Then we compare this to the frequency spacing to
+                        # determine whether the frequency dependence is too fast, and issue a warning.
+                        optical_path_length = []
+                        freqs = source.frequency_grid
+                        for freq in freqs:
+                            n_freq, _ = src_medium.nk_model(frequency=freq)
+                            k0 = 2 * np.pi * n_freq * freq / C_0
+                            if isinstance(source, GaussianBeam):
+                                rad = radius(source.waist_radius, source.waist_distance, k0)
+                            else:
+                                rad = max(
+                                    radius(source.waist_sizes[0], source.waist_distances[0], k0),
+                                    radius(source.waist_sizes[1], source.waist_distances[1], k0),
+                                )
+                            optical_path_length.append(n_freq * rad * np.sin(source.angle_theta))
+                        # Maximum value of the path length over all freqs
+                        max_path_length = np.max(optical_path_length)
+                        # Maximum value of the phase difference
+                        max_phase_diff = max_path_length * 2 * np.pi * (freqs[-1] - freqs[0]) / C_0
+                        # Compare this in magnitude to the frequency spacing assuming uniform
+                        # spacing. This is heuristic since in reality we use a Chebyshev grid,
+                        # but it should be a good rule of thumb. Because the Chebyshev interpolation
+                        # is much better than simple interpolation, we don't require << 1, just < 1
+                        if not max_phase_diff / source.num_freqs < 1:
+                            log.warning(
+                                f"Broadband, angled {source.type} source has a phase dependence "
+                                "with frequency that might be under-resolved by the provided "
+                                "number of frequencies. Consider reducing the source bandwidth, "
+                                "or increasing the 'num_freqs' of the source, and verify the "
+                                "source injection in an empty simulation.",
+                            )
+
         return val
 
     @pydantic.validator("normalize_index", always=True)
