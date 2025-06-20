@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
 
 ### Fixed
-- Arrow lengths are now scaled consistently in the X and Y directions,
-  and their lengths no longer exceed the height of the plot window.
+- Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
+- Bug in `PlaneWave` defined with a negative `angle_theta` which would lead to wrong injection.
 
 ## [2.9.0rc1] - 2025-06-10
 
