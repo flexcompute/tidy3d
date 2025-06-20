@@ -318,7 +318,7 @@ class PlaneWaveBeamProfile(BeamProfile):
         k0 = 2 * np.pi * np.array(self.freqs) / C_0 * background_n
         kx, ky = self.in_plane_k(background_n)
         k_perp = np.sqrt(kx**2 + ky**2)
-        return np.real(np.arcsin(k_perp / k0))
+        return np.real(np.arcsin(k_perp / k0)) * np.sign(self.angle_theta)
 
     def _rotate_points_z(self, points: Numpy, background_n: Numpy) -> Numpy:
         """Rotate points to new coordinates where z is the propagation axis."""
