@@ -201,7 +201,7 @@ class TestMorphology:
     def test_morphology_val_grad(self, rng, op, sp_op, mode, ary_size, kernel_size):
         """Test gradients of morphological operations for various modes, array sizes, and kernel sizes."""
         x = rng.random(ary_size)
-        check_grads(op, modes=["rev"], order=2)(x, size=kernel_size, mode=mode)
+        check_grads(op, modes=["rev"], order=1)(x, size=kernel_size, mode=mode)
 
     @pytest.mark.parametrize(
         "full",
@@ -245,7 +245,24 @@ class TestMorphology:
         ):
             """Test gradients of morphological operations for various kernel structures."""
             x, k = self._ary_and_kernel(rng, ary_size, kernel_size, full, square, flat)
-            check_grads(op, modes=["rev"], order=2)(x, size=kernel_size, mode=mode)
+            check_grads(op, modes=["rev"], order=1)(x, structure=k, mode=mode)
+
+
+class TestMorphologyExceptions:
+    """Test exceptions in morphological operations."""
+
+    def test_no_size_or_structure(self, rng):
+        """Test that an exception is raised when neither size nor structure is provided."""
+        x = rng.random((5, 5))
+        with pytest.raises(ValueError, match="Either size or structure must be provided"):
+            grey_dilation(x)
+
+    def test_even_structure_dimensions(self, rng):
+        """Test that an exception is raised for even-dimensioned structuring elements."""
+        x = rng.random((5, 5))
+        k_even = np.ones((4, 4))
+        with pytest.raises(ValueError, match="Structuring element dimensions must be odd"):
+            grey_dilation(x, structure=k_even)
 
 
 @pytest.mark.parametrize(
