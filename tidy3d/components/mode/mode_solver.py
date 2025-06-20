@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from functools import wraps
 from math import isclose
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -218,14 +218,17 @@ class ModeSolver(Tidy3dBaseModel):
             mode_spec=self.mode_spec,
             plane=self.plane,
             sim_geom=self.simulation.geometry,
-            msg_prefix="Mode solver",
         )
         self._warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
         self._validate_rotate_structures()
 
     @classmethod
     def _warn_thick_pml(
-        cls, simulation: Simulation, plane: Box, mode_spec: ModeSpec, warn_str: str = "'ModeSolver'"
+        cls,
+        simulation: Simulation,
+        plane: Box,
+        mode_spec: ModeSpec,
+        msg_prefix: str = "'ModeSolver'",
     ):
         """Warn if the pml covers a significant portion of the mode plane."""
         coord_0, coord_1 = cls._plane_grid(
@@ -239,7 +242,7 @@ class ModeSolver(Tidy3dBaseModel):
         for i in (0, 1):
             if 2 * effective_num_pml[i] > (WARN_THICK_PML_PERCENT / 100) * num_cells[i]:
                 log.warning(
-                    f"{warn_str}:  "
+                    f"{msg_prefix}: "
                     f"The mode solver pml in tangential axis '{i}' "
                     f"covers more than '{WARN_THICK_PML_PERCENT}%' of the "
                     "mode plane cells. Consider using a larger mode plane "
@@ -254,9 +257,7 @@ class ModeSolver(Tidy3dBaseModel):
         return Box.from_bounds(*mode_plane_bnds)
 
     @classmethod
-    def _validate_mode_plane_radius(
-        cls, mode_spec: ModeSpec, plane: Box, sim_geom: Box, msg_prefix: str = ""
-    ):
+    def _validate_mode_plane_radius(cls, mode_spec: ModeSpec, plane: Box, sim_geom: Box):
         """Validate that the radius of a mode spec with a bend is not smaller than half the size of
         the plane along the radial direction."""
 
@@ -271,21 +272,14 @@ class ModeSolver(Tidy3dBaseModel):
 
         if np.abs(mode_spec.bend_radius) < mode_plane.size[radial_ax] / 2:
             raise ValueError(
-                f"{msg_prefix} bend radius is smaller than half the mode plane size "
+                "Mode solver bend radius is smaller than half the mode plane size "
                 "along the radial axis, which can produce wrong results."
             )
 
     def _validate_rotate_structures(self) -> None:
         """Validate that structures can be rotated if angle_rotation is True."""
-        if not self.mode_spec.angle_rotation:
-            return
-        try:
+        if np.abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
             _ = self._rotate_structures
-        except Exception as e:
-            raise SetupError(
-                "Mode object defined with 'angle_rotation=True' but failed "
-                f"to create rotated structures: {e!s}"
-            ) from e
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -628,28 +622,41 @@ class ModeSolver(Tidy3dBaseModel):
         translate_coords = [0, 0, 0]
         translate_coords[idx_u] = mnt_center[idx_u]
         translate_coords[idx_v] = mnt_center[idx_v]
+        translate_kwargs = dict(zip("xyz", translate_coords))
+        # Rotation arguments
+        rotate_kwargs = {"angle": theta, "axis": self.bend_axis_3d}
 
-        rotated_structures = []
-        for structure in Scene.intersecting_structures(self.plane, self.simulation.structures):
-            if not isinstance(structure.medium, IsotropicUniformMediumType):
-                raise NotImplementedError(
-                    "Mode solver plane intersects an unsupported "
-                    "medium. Only uniform isotropic media are supported for the plane rotation. "
+        structs_in = Scene.intersecting_structures(self.plane, self.simulation.structures)
+        return self._make_rotated_structures(structs_in, translate_kwargs, rotate_kwargs)
+
+    @staticmethod
+    def _make_rotated_structures(
+        structures: list[Structure], translate_kwargs: dict, rotate_kwargs: dict
+    ):
+        try:
+            rotated_structures = []
+            for structure in structures:
+                if not isinstance(structure.medium, get_args(IsotropicUniformMediumType)):
+                    raise NotImplementedError(
+                        "Mode solver plane intersects an unsupported medium. "
+                        "Only uniform isotropic media are supported for the plane rotation."
+                    )
+
+                # Rotate and apply translations
+                geometry = structure.geometry
+                geometry = (
+                    geometry.translated(**{key: -val for key, val in translate_kwargs.items()})
+                    .rotated(**rotate_kwargs)
+                    .translated(**translate_kwargs)
                 )
 
-            # Rotate and apply translations
-            geometry = structure.geometry
-            geometry = (
-                geometry.translated(
-                    x=-translate_coords[0], y=-translate_coords[1], z=-translate_coords[2]
-                )
-                .rotated(theta, axis=self.bend_axis_3d)
-                .translated(x=translate_coords[0], y=translate_coords[1], z=translate_coords[2])
-            )
+                rotated_structures.append(structure.updated_copy(geometry=geometry))
 
-            rotated_structures.append(structure.updated_copy(geometry=geometry))
-
-        return rotated_structures
+            return rotated_structures
+        except Exception as e:
+            raise SetupError(
+                f"'angle_rotation' set to True but could not rotate structures: {e!s}"
+            ) from e
 
     @cached_property
     def rotated_bend_center(self) -> list:

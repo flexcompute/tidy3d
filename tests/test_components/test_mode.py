@@ -89,6 +89,11 @@ def test_validation_from_simulation():
         monitors=[],
     )
 
+    reg_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-100, -1, -100), (100, 1, 0)),
+        medium=td.Medium(permittivity=4.0, conductivity=1e-4),
+    )
+
     inf_geometry = td.Structure(
         geometry=td.Box.from_bounds((-td.inf, -1, -100), (td.inf, 1, 0)),
         medium=td.Medium(permittivity=4.0, conductivity=1e-4),
@@ -117,32 +122,23 @@ def test_validation_from_simulation():
         direction="+",
     )
 
+    # First test that a mode object can be added if there's no problem with the geometries
+    _ = sim.updated_copy(structures=[reg_geometry], monitors=[rot_monitor])
+
     # Test that transforming a geometry with an infinite extent raises an error
     with pytest.raises(SetupError):
-        sim.updated_copy(
-            structures=[inf_geometry],
-            monitors=[rot_monitor],
-        )
+        sim.updated_copy(structures=[inf_geometry], monitors=[rot_monitor])
 
     # Test that transforming an anisotropic medium raises an error
     with pytest.raises(SetupError):
-        sim.updated_copy(
-            structures=[anisotropic_geometry],
-            monitors=[rot_monitor],
-        )
+        sim.updated_copy(structures=[anisotropic_geometry], monitors=[rot_monitor])
 
     # Same thing with a ModeSource
     with pytest.raises(SetupError):
-        sim.updated_copy(
-            structures=[inf_geometry],
-            sources=[rot_source],
-        )
+        sim.updated_copy(structures=[inf_geometry], sources=[rot_source])
 
     with pytest.raises(SetupError):
-        sim.updated_copy(
-            structures=[anisotropic_geometry],
-            monitors=[rot_monitor],
-        )
+        sim.updated_copy(structures=[anisotropic_geometry], sources=[rot_source])
 
     # Same thing with ModeSimulation
     with pytest.raises(SetupError):
