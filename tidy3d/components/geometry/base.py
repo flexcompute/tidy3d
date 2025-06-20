@@ -3306,63 +3306,106 @@ class GeometryGroup(Geometry):
         return grad_vjps
 
 
-def cleanup_simple_polygon(
-    coords: npt.ArrayLike,
+def cleanup_simple_polygon_indices(
+    crds: npt.ArrayLike,
     min_thickness: float = 1e-12,
-    repeat_first: bool = False,
 ) -> npt.ArrayLike:
-    """Remove thin triangles from the boundary of a polygon represented as an Nx2 array of coords.
+    """
+    Remove vertices on the boundary of polygons that are collinear (or almost collinear) with their
+    neighbors (if the triangles they belong to are thinner than the ``min_thickness`` parameter).
 
     Parameters
     ----------
-    coords : npt.ArrayLike
+    crds : npt.ArrayLike
         An Nx2 numpy array containing the coordinates of the N points on the polygon's boundary.
     min_thickness : float = 1e-12
-        Triangles whose thickness (in any direction) falls below this parameter are discarded.
-    repeat_first: bool = False
-        Optional: Duplicate the first vertex at the end of the array to create a closed curve.
-                  Set to True if you want to be to be consistent with shapely.Polygons convetions.
+        Vertices bordering triangles whose thickness falls below this parameter are discarded.
 
     Returns
     -------
     npt.ArrayLike
-        A new polygon with thin triangles removed.
+        A 1D numpy array of integers containing the indices of the vertices we did not throw away.
     """
-    coords = np.asarray(coords)
-    n = len(coords)
-    if n < 3:  # Special case
-        return []
-    good_verts = []  # select the vertices we want to keep
-    i = i_prev = 0
-    while i < n:
-        i0 = i_prev
-        i1 = (i + 1) % n
-        i2 = (i + 2) % n
-        if i2 == 1 and len(good_verts) > 0:  # Special case at the cyclic boundary: don't use i2=1
-            i2 = good_verts[0]  # Use the first point we kept (since i1=0 and i2=1 might overlap)
-        thickness = triangle_thickness(coords[i0], coords[i1], coords[i2])
-        if thickness >= min_thickness:
-            good_verts.append(i1)
-            i_prev = i1
-        i += 1
-    if len(good_verts) > 0:
-        # Optional: Reorder to try and match the original order of the vertices as much as possible
-        good_verts = good_verts[-1:] + good_verts[:-1]  # shift by 1
-        if repeat_first:
-            good_verts.append(good_verts[0])
-    return np.array([coords[i] for i in good_verts])
+    # compute unit vector to next and previous vertex
+    crds_next = np.roll(crds, axis=0, shift=-1)
+    crds_prev = np.roll(crds, axis=0, shift=+1)
+    triangle_thicknesses = _triangle_thickness(crds_prev, crds, crds_next)
+    good_indices = np.argwhere(triangle_thicknesses > min_thickness)[:, 0]
+    assert len(good_indices) == 0 or len(good_indices) >= 3
+    return good_indices
+
+
+def cleanup_simple_polygon(
+    crds: npt.ArrayLike,
+    min_thickness: float = 1e-12,
+    repeat_first: bool = False,
+) -> npt.ArrayLike:
+    """
+    Remove vertices on the boundary of polygons that are collinear (or almost collinear) with their
+    neighbors (if the triangles they belong to are thinner than the ``min_thickness`` parameter).
+    Returns a 2D array with the coordinates of the remaining vertices which were not deleted.
+
+    Parameters
+    ----------
+    crds : npt.ArrayLike
+        An Nx2 numpy array containing the coordinates of the N points on the polygon's boundary.
+    min_thickness : float = 1e-12
+        Vertices bordering triangles whose thickness falls below this parameter are discarded.
+    repeat_first: bool = False
+        Optional: Duplicate the first vertex at the end of the array to create a closed curve.
+                  Set to True if you want to be to be consistent with shapely.Polygons convetions.
+    Returns
+    -------
+    npt.ArrayLike
+        Coordinates for a polygon with thin triangles removed.
+    """
+    # compute unit vector to next and previous vertex
+    good_indices = cleanup_simple_polygon_indices(crds)
+    if repeat_first and len(good_indices) > 0:
+        good_indices.append(good_indices[0])
+    return crds[good_indices]
+
+
+def _triangle_thickness(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike) -> float:
+    """
+    Computes the thicknesses of N triangles.
+
+    Parameters
+    ----------
+    r1 : npt.ArrayLike
+        An Nx2 array of the coordinates of the 1st vertex from the N triangles
+    r2 : npt.ArrayLike
+        An Nx2 array of the coordinates of the 2nd vertex from the N triangles
+    r3 : npt.ArrayLike
+        An Nx2 array of the coordinates of the 3rd vertex from the N triangles
+
+    Returns
+    -------
+    npt.ArrayLike
+        An Nx1 array of the thickness of all N triangles
+    """
+    n = len(r1)
+    len12 = np.linalg.norm(r1 - r2, axis=1, keepdims=True)
+    len23 = np.linalg.norm(r2 - r3, axis=1, keepdims=True)
+    len31 = np.linalg.norm(r3 - r1, axis=1, keepdims=True)
+    cross_prod = np.cross(
+        np.hstack([r2 - r1, np.zeros((n, 1))]),
+        np.hstack([r3 - r1, np.zeros((n, 1))]),
+        axis=-1,
+    )
+    area_parallelogram = np.abs(cross_prod)[:, 2, np.newaxis]
+    longest_side = np.max(np.hstack([len12, len23, len31]), axis=1, keepdims=True)
+    return area_parallelogram / longest_side
 
 
 def cleanup_shapely_polygon(p: shapely.Polygon, min_thickness: float = 1e-12) -> shapely.Polygon:
     """Remove pathologically thin triangles from the boundaries of a shapely polygon.
-
     Parameters
     ----------
     p : shapely.Polygon
         Vector defining the normal direction to the plane.
     min_thickness : float = 1e-13
         Triangles whose thickness (in any direction) falls below this parameter are discarded.
-
     Returns
     -------
     shapely.Polygon
@@ -3383,27 +3426,3 @@ def cleanup_shapely_polygon(p: shapely.Polygon, min_thickness: float = 1e-12) ->
         if len(interior_coords) >= 3:
             interior_coords_list.append(interior_coords)
     return shapely.Polygon(exterior_coords, interior_coords_list)
-
-
-def triangle_thickness(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike) -> float:
-    def distance_to_line(r: npt.ArrayLike, ra: npt.ArrayLike, rb: npt.ArrayLike) -> float:
-        r = np.array(r)
-        ra = np.array(ra)
-        rb = np.array(rb)
-        rab = ra - rb  # line direction
-        rab_len_sq = np.sum(rab * rab)  # squared length of rab
-        if rab_len_sq > 0.0:  # cast a shadow of (r - ra) onto the line
-            r_proj = rab * np.dot(r - ra, rab) / rab_len_sq
-            r_perp = (r - ra) - r_proj
-        else:
-            r_perp = r - ra
-        return float(np.linalg.norm(r_perp))
-
-    return min(
-        distance_to_line(r1, r2, r3),
-        distance_to_line(r3, r1, r2),
-        distance_to_line(r2, r3, r1),
-    )
-
-
-from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402

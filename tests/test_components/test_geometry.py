@@ -16,9 +16,9 @@ import trimesh
 
 import tidy3d as td
 from tidy3d.components.geometry.base import (
+    _triangle_thickness,
     cleanup_shapely_polygon,
     cleanup_simple_polygon,
-    triangle_thickness,
 )
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import (
@@ -1259,14 +1259,23 @@ def test_triangle_mesh_from_height():
 
 def test_triangle_thickness():
     tolerance = 1e-07
-    coords_tr1 = ((0.0, 0.0), (3.0, 1.0), (2.0, -1.0))
-    coords_tr2 = ((0.0, 0.0), (1.0, 1.0), (1.0, 2.0))
-    coords_tr3 = ((2.0, -1.0), (1.0, 3.0), (3.0, 0.0))
-    coords_tr4 = ((0.0, 0.0), (-1.0, 1.0), (100.0, 2.0))
-    assert math.isclose(triangle_thickness(*coords_tr1), 1.5811388300841898, abs_tol=tolerance)
-    assert math.isclose(triangle_thickness(*coords_tr2), 0.4472135954999579, abs_tol=tolerance)
-    assert math.isclose(triangle_thickness(*coords_tr3), 1.212678125181665, abs_tol=tolerance)
-    assert math.isclose(triangle_thickness(*coords_tr4), 1.0098514936405245, abs_tol=tolerance)
+    coords_tr1 = np.array((((0.0, 0.0),), ((3.0, 1.0),), ((2.0, -1.0),)))
+    coords_tr2 = np.array((((0.0, 0.0),), ((1.0, 1.0),), ((1.0, 2.0),)))
+    coords_tr3 = np.array((((2.0, -1.0),), ((1.0, 3.0),), ((3.0, 0.0),)))
+    coords_tr4 = np.array((((0.0, 0.0),), ((-1.0, 1.0),), ((100.0, 2.0),)))
+    # create an Nx3x2 array storing all the coordinates
+    all_coords = np.hstack([coords_tr1, coords_tr2, coords_tr3, coords_tr4])
+    # r1, r2, r3 = coordinates of the first, second, and third vertex from each triangle (size Nx2)
+    r1, r2, r3 = all_coords[0], all_coords[1], all_coords[2]
+    thicknesses = _triangle_thickness(r1, r2, r3)
+    # 1st triangle thickness:
+    assert math.isclose(thicknesses[0][0], 1.5811388300841898, abs_tol=tolerance)
+    # 2nd triangle thickness:
+    assert math.isclose(thicknesses[1][0], 0.4472135954999579, abs_tol=tolerance)
+    # 3rd triangle thickness:
+    assert math.isclose(thicknesses[2][0], 1.212678125181665, abs_tol=tolerance)
+    # 4th triangle thickness:
+    assert math.isclose(thicknesses[3][0], 1.0098514936405245, abs_tol=tolerance)
 
 
 def test_cleanup_simple_polygon():
@@ -1290,36 +1299,40 @@ def test_cleanup_simple_polygon():
                 assert len(coords_after) == correct_num_verts + 1
                 assert np.array_equal(coords_after[0], coords_after[-1])
 
-    line_segment = ((0, 0), (1, 0))
+    line_segment = np.array(((0, 0), (1, 0)))
     test_with_cycling(line_segment, 0)  # polygons with less than 3 vertices should be cleared
-    pointlike = ((0, 0), (0, 0), (0, 0))
+    pointlike = np.array(((0, 0), (0, 0), (0, 0)))
     test_with_cycling(pointlike, 0)  # zero-area polygons should have no vertices
-    pointlike_repeats = ((0, 0), (0, 0), (0, 0), (0, 0), (0, 0))
+    pointlike_repeats = np.array(((0, 0), (0, 0), (0, 0), (0, 0), (0, 0)))
     test_with_cycling(pointlike_repeats, 0)  # zero-area polygons should have no vertices
-    triangle_collinear = ((0, 0), (1, 1), (2, 2))
+    triangle_collinear = np.array(((0, 0), (1, 1), (2, 2)))
     test_with_cycling(triangle_collinear, 0)  # zero-area polygons should have no vertices
-    triangle_collinear_repeats = ((0, 0), (1, 1), (1, 1), (2, 2), (2, 2), (2, 2))
+    triangle_collinear_repeats = np.array(((0, 0), (1, 1), (1, 1), (2, 2), (2, 2), (2, 2)))
     test_with_cycling(triangle_collinear_repeats, 0)  # zero-area polygons should have no vertices
-    triangle_empty_tails = ((1, 1), (3, 1), (2, 2), (3, 3), (0, 0))
+    triangle_empty_tails = np.array(((1, 1), (3, 1), (2, 2), (3, 3), (0, 0)))
     test_with_cycling(triangle_empty_tails, 3)  # triangles have 3 vertices
-    square_empty_tail1 = ((0, 0), (1, 0), (1, 1), (0, 1), (0, -100))
+    square_empty_tail1 = np.array(((0, 0), (1, 0), (1, 1), (0, 1), (0, -100)))
     test_with_cycling(square_empty_tail1, 4)  # squares have 4 vertices
-    square_thin_tail2 = ((0, 0), (1, 0), (1, 1), (0, 1), (-1, -100))
+    square_thin_tail2 = np.array(((0, 0), (1, 0), (1, 1), (0, 1), (-1, -100)))
     test_with_cycling(square_thin_tail2, 4, min_thickness=0.01)  # squares have 4 vertices
     test_with_cycling(square_thin_tail2, 5)  # (or 5 if we keep the thin tail)
-    square_thin_tail3 = ((0, 0), (1, 0), (1, 1), (0, 1), (-1, -100), (-1, -101))
+    square_thin_tail3 = np.array(((0, 0), (1, 0), (1, 1), (0, 1), (-1, -100), (-1, -101)))
     test_with_cycling(square_thin_tail2, 4, min_thickness=0.01)  # squares have 4 vertices
     test_with_cycling(square_thin_tail3, 6)  # (or 6 if we keep the thin tail)
-    square_repeats = ((0, 0), (1, 0), (1, 0), (1, 1), (1, 1), (1, 1), (0, 1), (0, 1), (0, 0))
+    square_repeats = np.array(
+        ((0, 0), (1, 0), (1, 0), (1, 1), (1, 1), (1, 1), (0, 1), (0, 1), (0, 0))
+    )
     test_with_cycling(square_repeats, 4)  # squares have 4 vertices
-    square_colinear = ((0, 0), (3, 0), (3, 1), (3, 2), (3, 3), (3, 3), (3, 3), (1.5, 3), (0, 3))
+    square_colinear = np.array(
+        ((0, 0), (3, 0), (3, 1), (3, 2), (3, 3), (3, 3), (3, 3), (1.5, 3), (0, 3))
+    )
     test_with_cycling(square_colinear, 4)  # squares have 4 vertices
 
 
 def test_cleanup_shapely_polygon():
-    big_square_5x5 = ((0, 0), (3, 0), (5, 0), (5, 0), (5, 10), (5, 5), (0, 5))
-    triangle_empty_tails = ((1, 1), (3, 1), (2, 2), (2.5, 2.5), (0.5, 0.5))
-    triangle_collinear = ((4, 2), (3, 3), (2, 4), (4, 2))
+    big_square_5x5 = np.array(((0, 0), (3, 0), (5, 0), (5, 0), (5, 10), (5, 5), (0, 5)))
+    triangle_empty_tails = np.array(((1, 1), (3, 1), (2, 2), (2.5, 2.5), (0.5, 0.5)))
+    triangle_collinear = np.array(((4, 2), (3, 3), (2, 4), (4, 2)))
     # Build a shapely polygon with the 4 small polygons enclosed by big_square_5x5
     exterior_coords = big_square_5x5
     interior_coords_list = [
