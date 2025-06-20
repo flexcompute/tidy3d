@@ -3710,15 +3710,34 @@ class Simulation(AbstractYeeGridSimulation):
         """Create a ModeSolver for each mode object in order to validate."""
         from .mode.mode_solver import ModeSolver
 
+        def validate_mode_object(mode_obj: Union[ModeSource, AbstractModeMonitor], msg_prefix: str):
+            # Warn if pml is too thick
+            ModeSolver._warn_thick_pml(
+                simulation=self,
+                plane=mode_obj.geometry,
+                mode_spec=mode_obj.mode_spec,
+                msg_prefix=msg_prefix,
+            )
+            # Error if mode plane radius is too small
+            ModeSolver._validate_mode_plane_radius(
+                mode_spec=mode_obj.mode_spec,
+                plane=mode_obj.geometry,
+                sim_geom=self.geometry,
+            )
+            # Test if structures can be rotated if ``angle_rotation=True``
+            theta = mode_obj.mode_spec.angle_theta
+            if np.abs(theta) > 0 and mode_obj.mode_spec.angle_rotation:
+                structs_in = Scene.intersecting_structures(mode_obj.geometry, self.structures)
+                translate_kwargs = dict(zip("xyz", mode_obj.center))
+                _, axes = mode_obj.pop_axis([0, 1, 2], mode_obj.size.index(0.0))
+                # we just pick one of the in-plane axes to test the roation
+                rotate_kwargs = {"angle": theta, "axis": axes[1]}
+                ModeSolver._make_rotated_structures(structs_in, translate_kwargs, rotate_kwargs)
+
         for imnt, monitor in enumerate(self.monitors):
             if isinstance(monitor, AbstractModeMonitor):
                 try:
-                    _ = ModeSolver(
-                        mode_spec=monitor.mode_spec,
-                        plane=monitor.geometry,
-                        simulation=self,
-                        freqs=monitor.freqs,
-                    )
+                    validate_mode_object(mode_obj=monitor, msg_prefix=f"'monitors[{imnt}]'")
                 except Exception as e:
                     raise SetupError(
                         f"Monitor at 'monitors[{imnt}]' failed validation: {e!s}"
@@ -3727,12 +3746,7 @@ class Simulation(AbstractYeeGridSimulation):
         for isrc, source in enumerate(self.sources):
             if isinstance(source, ModeSource):
                 try:
-                    _ = ModeSolver(
-                        mode_spec=source.mode_spec,
-                        plane=source.geometry,
-                        simulation=self,
-                        freqs=source.source_time.freq0,
-                    )
+                    validate_mode_object(mode_obj=source, msg_prefix=f"'sources[{isrc}]'")
                 except Exception as e:
                     raise SetupError(f"Source at 'sources[{isrc}]' failed validation: {e!s}") from e
 
