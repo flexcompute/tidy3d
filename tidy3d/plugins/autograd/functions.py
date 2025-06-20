@@ -4,9 +4,13 @@ from collections.abc import Iterable
 from typing import Callable, Literal, Union
 
 import autograd.numpy as np
+import numpy as onp
 from autograd import jacobian
+from autograd.extend import defvjp, primitive
 from autograd.scipy.signal import convolve as convolve_ag
 from autograd.scipy.special import logsumexp
+from autograd.tracer import getval
+from numpy.lib.stride_tricks import sliding_window_view
 from numpy.typing import NDArray
 
 from tidy3d.components.autograd.functions import add_at, interpn, trapz
@@ -33,7 +37,13 @@ __all__ = [
 ]
 
 
-def _pad_indices(n: int, pad_width: tuple[int, int], *, mode: PaddingType) -> NDArray:
+def _get_pad_indices(
+    n: int,
+    pad_width: tuple[int, int],
+    *,
+    mode: PaddingType,
+    numpy_module,
+) -> NDArray:
     """Compute the indices to pad an array along a single axis based on the padding mode.
 
     Parameters
@@ -44,6 +54,8 @@ def _pad_indices(n: int, pad_width: tuple[int, int], *, mode: PaddingType) -> ND
         The number of values padded to the edges of the axis.
     mode : PaddingType
         The padding mode to use.
+    numpy_module : module
+        The numpy module to use (either `numpy` or `autograd.numpy`).
 
     Returns
     -------
@@ -52,70 +64,26 @@ def _pad_indices(n: int, pad_width: tuple[int, int], *, mode: PaddingType) -> ND
     """
     total_pad = sum(pad_width)
     if n == 0:
-        return np.zeros(total_pad, dtype=int)
+        return numpy_module.zeros(total_pad, dtype=int)
 
-    idx = np.arange(-pad_width[0], n + pad_width[1])
+    idx = numpy_module.arange(-pad_width[0], n + pad_width[1])
 
-    # Handle each padding mode
     if mode == "constant":
         return idx
-
     if mode == "edge":
-        return np.clip(idx, 0, n - 1)
-
+        return numpy_module.clip(idx, 0, n - 1)
     if mode == "reflect":
         period = 2 * n - 2 if n > 1 else 1
-        idx = np.mod(idx, period)
-        return np.where(idx >= n, period - idx, idx)
-
+        idx = numpy_module.mod(idx, period)
+        return numpy_module.where(idx >= n, period - idx, idx)
     if mode == "symmetric":
         period = 2 * n if n > 1 else 1
-        idx = np.mod(idx, period)
-        return np.where(idx >= n, period - idx - 1, idx)
-
+        idx = numpy_module.mod(idx, period)
+        return numpy_module.where(idx >= n, period - idx - 1, idx)
     if mode == "wrap":
-        return np.mod(idx, n)
+        return numpy_module.mod(idx, n)
 
     raise ValueError(f"Unsupported padding mode: {mode}")
-
-
-def _pad_axis(
-    array: NDArray,
-    pad_width: tuple[int, int],
-    axis: int,
-    *,
-    mode: PaddingType = "constant",
-    constant_value: float = 0.0,
-) -> NDArray:
-    """Pad an array along a specified axis.
-
-    Parameters
-    ----------
-    array : np.ndarray
-        The input array to pad.
-    pad_width : Tuple[int, int]
-        The number of values padded to the edges of the axis.
-    axis : int
-        The axis along which to pad.
-    mode : PaddingType = "constant"
-        The padding mode to use.
-    constant_value : float = 0.0
-        The constant value to pad with when mode is 'constant'.
-
-    Returns
-    -------
-    np.ndarray
-        The padded array.
-    """
-    if mode == "constant":
-        padding = [(0, 0)] * array.ndim
-        padding[axis] = pad_width
-        return np.pad(array, padding, mode="constant", constant_values=constant_value)
-
-    idx = _pad_indices(array.shape[axis], pad_width, mode=mode)
-    indexer = [slice(None)] * array.ndim
-    indexer[axis] = idx
-    return array[tuple(indexer)]
 
 
 def pad(
@@ -155,34 +123,32 @@ def pad(
     IndexError
         If an axis is out of range for the array dimensions.
     """
-    # Normalize pad_width to a tuple of two elements
     pad_width = np.atleast_1d(pad_width)
     if pad_width.size > 2:
         raise ValueError(f"Padding width must have one or two elements, got {pad_width.size}.")
     pad_tuple = (pad_width[0], pad_width[0]) if pad_width.size == 1 else tuple(pad_width)
 
-    # Validate padding values
     if any(p < 0 for p in pad_tuple):
         raise ValueError("Padding must be non-negative.")
     if all(p == 0 for p in pad_tuple):
         return array
 
-    # Normalize and validate axes
     axes = range(array.ndim) if axis is None else [axis] if isinstance(axis, int) else axis
     axes = [ax + array.ndim if ax < 0 else ax for ax in axes]
     if any(ax < 0 or ax >= array.ndim for ax in axes):
         raise IndexError(f"Axis out of range for array with {array.ndim} dimensions.")
 
-    # Apply padding to each axis
     result = array
     for ax in axes:
-        result = _pad_axis(
-            result,
-            pad_tuple,
-            axis=ax,
-            mode=mode,
-            constant_value=constant_value,
-        )
+        if mode == "constant":
+            padding = [(0, 0)] * result.ndim
+            padding[ax] = pad_tuple
+            result = np.pad(result, padding, mode="constant", constant_values=constant_value)
+        else:
+            idx = _get_pad_indices(result.shape[ax], pad_tuple, mode=mode, numpy_module=np)
+            indexer = [slice(None)] * result.ndim
+            indexer[ax] = idx
+            result = result[tuple(indexer)]
     return result
 
 
@@ -238,9 +204,27 @@ def convolve(
     return convolve_ag(array, kernel, axes=axes, mode=mode)
 
 
+def _get_footprint(size, structure, maxval):
+    """Helper to generate the morphological footprint from size or structure."""
+    if size is None and structure is None:
+        raise ValueError("Either size or structure must be provided.")
+    if structure is None:
+        size_np = onp.atleast_1d(size)
+        shape = (size_np[0], size_np[-1]) if size_np.size > 1 else (size_np[0], size_np[0])
+        nb = onp.zeros(shape)
+    else:
+        structure_np = getval(structure)
+        nb = onp.copy(structure_np)
+        nb[structure_np == 0] = -maxval
+    if nb.shape[0] % 2 == 0 or nb.shape[1] % 2 == 0:
+        raise ValueError(f"Structuring element dimensions must be odd, got {nb.shape}.")
+    return nb
+
+
+@primitive
 def grey_dilation(
     array: NDArray,
-    size: Union[Union[int, tuple[int, int]], None] = None,
+    size: Union[int, tuple[int, int], None] = None,
     structure: Union[NDArray, None] = None,
     *,
     mode: PaddingType = "reflect",
@@ -252,7 +236,7 @@ def grey_dilation(
     ----------
     array : np.ndarray
         The input array to perform grey dilation on.
-    size : Union[Union[int, Tuple[int, int]], None] = None
+    size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
@@ -269,27 +253,81 @@ def grey_dilation(
     Raises
     ------
     ValueError
-        If both `size` and `structure` are None.
+        If both `size` and `structure` are None, or if the structuring element has even dimensions.
     """
-    if size is None and structure is None:
-        raise ValueError("Either size or structure must be provided.")
-
-    if size is not None:
-        size = np.atleast_1d(size)
-        shape = (size[0], size[-1])
-        nb = np.zeros(shape)
-    elif np.all(structure == 0):
-        nb = np.zeros_like(structure)
-    else:
-        nb = np.copy(structure)
-        nb[structure == 0] = -maxval
-
+    nb = _get_footprint(size, structure, maxval)
     h, w = nb.shape
-    bias = np.reshape(nb, (-1, 1, 1))
-    kernel = np.reshape(np.eye(h * w), (h * w, h, w))
 
-    array = convolve(array, kernel, axes=((0, 1), (1, 2)), padding=mode) + bias
-    return np.max(array, axis=0)
+    padded_array = pad(array, (h // 2, h // 2), mode=mode, axis=0)
+    padded_array = pad(padded_array, (w // 2, w // 2), mode=mode, axis=1)
+
+    padded_array_np = getval(padded_array)
+
+    windows = sliding_window_view(padded_array_np, window_shape=(h, w))
+    dilated_windows = windows + nb
+    return onp.max(dilated_windows, axis=(-2, -1))
+
+
+def _vjp_maker_dilation(ans, array, size=None, structure=None, *, mode="reflect", maxval=1e4):
+    """VJP for the custom grey_dilation primitive."""
+    nb = _get_footprint(size, structure, maxval)
+    h, w = nb.shape
+
+    padded_array = pad(array, (h // 2, h // 2), mode=mode, axis=0)
+    padded_array = pad(padded_array, (w // 2, w // 2), mode=mode, axis=1)
+
+    padded_array_np = getval(padded_array)
+    in_h, in_w = getval(array).shape
+
+    windows = sliding_window_view(padded_array_np, window_shape=(h, w))
+    dilated_windows = windows + nb
+
+    output_reshaped = ans[..., None, None]
+    is_max_mask = (dilated_windows == output_reshaped).astype(onp.float64)
+
+    # normalize the gradient for cases where multiple elements are the maximum.
+    multiplicity = onp.sum(is_max_mask, axis=(-2, -1), keepdims=True)
+    is_max_mask /= onp.maximum(multiplicity, 1)
+
+    def vjp(g):
+        g_reshaped = g[..., None, None]
+        grad_windows = g_reshaped * is_max_mask
+
+        grad_padded = onp.zeros_like(padded_array_np)
+
+        # create broadcastable indices for the scatter-add operation
+        i = onp.arange(in_h)[:, None, None, None]
+        j = onp.arange(in_w)[None, :, None, None]
+        u = onp.arange(h)[None, None, :, None]
+        v = onp.arange(w)[None, None, None, :]
+
+        onp.add.at(grad_padded, (i + u, j + v), grad_windows)
+
+        pad_h, pad_w = h // 2, w // 2
+
+        # for constant padding, we can just slice the gradient
+        if mode == "constant":
+            return grad_padded[pad_h : pad_h + in_h, pad_w : pad_w + in_w]
+
+        # for other modes, we need to sum gradients from padded regions by unpadding each axis
+        grad_unpadded_w = onp.zeros((in_h + 2 * pad_h, in_w))
+        padded_indices_w = _get_pad_indices(in_w, (pad_w, pad_w), mode=mode, numpy_module=onp)
+        row_indices_w = onp.arange(in_h + 2 * pad_h)[:, None]
+        onp.add.at(grad_unpadded_w, (row_indices_w, padded_indices_w), grad_padded)
+
+        grad_unpadded_hw = onp.zeros((in_h, in_w))
+        padded_indices_h = _get_pad_indices(in_h, (pad_h, pad_h), mode=mode, numpy_module=onp)[
+            :, None
+        ]
+        col_indices_h = onp.arange(in_w)[None, :]
+        onp.add.at(grad_unpadded_hw, (padded_indices_h, col_indices_h), grad_unpadded_w)
+
+        return grad_unpadded_hw
+
+    return vjp
+
+
+defvjp(grey_dilation, _vjp_maker_dilation, argnums=[0])
 
 
 def grey_erosion(
@@ -302,10 +340,12 @@ def grey_erosion(
 ) -> NDArray:
     """Perform grey erosion on an array.
 
+    This function is implemented via duality, calling `grey_dilation` internally.
+
     Parameters
     ----------
     array : np.ndarray
-        The input array to perform grey dilation on.
+        The input array to perform grey erosion on.
     size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
     structure : Union[np.ndarray, None] = None
@@ -318,32 +358,18 @@ def grey_erosion(
     Returns
     -------
     np.ndarray
-        The result of the grey dilation operation.
-
-    Raises
-    ------
-    ValueError
-        If both `size` and `structure` are None.
+        The result of the grey erosion operation.
     """
-    if size is None and structure is None:
-        raise ValueError("Either size or structure must be provided.")
+    if structure is not None:
+        structure = structure[::-1, ::-1]
 
-    if size is not None:
-        size = np.atleast_1d(size)
-        shape = (size[0], size[-1])
-        nb = np.zeros(shape)
-    elif np.all(structure == 0):
-        nb = np.zeros_like(structure)
-    else:
-        nb = np.copy(structure)
-        nb[structure == 0] = -maxval
-
-    h, w = nb.shape
-    bias = np.reshape(nb, (-1, 1, 1))
-    kernel = np.reshape(np.eye(h * w), (h * w, h, w))
-
-    array = convolve(array, kernel, axes=((0, 1), (1, 2)), padding=mode) - bias
-    return np.min(array, axis=0)
+    return -grey_dilation(
+        -array,
+        size=size,
+        structure=structure,
+        mode=mode,
+        maxval=maxval,
+    )
 
 
 def grey_opening(
