@@ -2864,7 +2864,7 @@ class ClipOperation(Geometry):
 
     @staticmethod
     def to_polygon_list(base_geometry: Shapely) -> list[Shapely]:
-        """Return a list of valid polygons from a shapely geometry, discarding points, lines,
+        """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
         empty polygons, and empty triangles within polygons.
 
         Parameters
@@ -2885,6 +2885,7 @@ class ClipOperation(Geometry):
         if base_geometry.geom_type == "MultiPolygon":
             unfiltered_geoms = [p for p in base_geometry.geoms if not p.is_empty]
         if base_geometry.geom_type == "Polygon" and not base_geometry.is_empty:
+            unfiltered_geoms = [base_geometry]
             unfiltered_geoms = [base_geometry]
         # Now "clean" each of the polygons (by removing empty boundary triangles).
         geoms: list[Shapely] = []
@@ -3306,33 +3307,36 @@ class GeometryGroup(Geometry):
         return grad_vjps
 
 
-def cleanup_simple_polygon_indices(
+def remove_repeated_polygon_vertices(
     crds: npt.ArrayLike,
-    min_thickness: float = 1e-12,
 ) -> npt.ArrayLike:
     """
-    Remove vertices on the boundary of polygons that are collinear (or almost collinear) with their
-    neighbors (if the triangles they belong to are thinner than the ``min_thickness`` parameter).
+    Removes repeated consecutive coordinates from the boundary of a polygon.  To do that it
+    removes repeated consecutive rows from a 2D numpy array (including first and last row).
 
     Parameters
     ----------
     crds : npt.ArrayLike
         An Nx2 numpy array containing the coordinates of the N points on the polygon's boundary.
-    min_thickness : float = 1e-12
-        Vertices bordering triangles whose thickness falls below this parameter are discarded.
 
     Returns
     -------
-    npt.ArrayLike
-        A 1D numpy array of integers containing the indices of the vertices we did not throw away.
+    npt.ArrayLixke
+        Coordinates for a polygon with thin duplicate vertices removed.
     """
-    # compute unit vector to next and previous vertex
-    crds_next = np.roll(crds, axis=0, shift=-1)
-    crds_prev = np.roll(crds, axis=0, shift=+1)
-    triangle_thicknesses = _triangle_thickness(crds_prev, crds, crds_next)
-    good_indices = np.argwhere(triangle_thicknesses > min_thickness)[:, 0]
-    assert len(good_indices) == 0 or len(good_indices) >= 3
-    return good_indices
+    if len(crds) < 2:
+        return crds
+    diff_rows = np.diff(crds, axis=0)  # compute the displacement vector from crds[i] to crds[i+1]
+    are_rows_identical = (diff_rows == 0).all(axis=1)  # Check where the differences are all zeros
+    # Insert False at beginning so that the boolean array matches the original array indexing.
+    rows_to_delete_mask = np.insert(are_rows_identical, 0, False)
+    rows_to_keep_mask = ~rows_to_delete_mask
+    new_crds = crds[rows_to_keep_mask]
+    # Edge case: Polygons are cyclic.  So if the first and last vertices are identical, omit the
+    # last vertex.  (Note: This breaks compatibility with shapely, but we will fix that later.)
+    if len(new_crds) > 0 and np.all(np.equal(new_crds[0], new_crds[-1])):
+        return new_crds[:-1]  # Omit the last row of `crds`
+    return new_crds
 
 
 def cleanup_simple_polygon(
@@ -3353,23 +3357,28 @@ def cleanup_simple_polygon(
         Vertices bordering triangles whose thickness falls below this parameter are discarded.
     repeat_first: bool = False
         Optional: Duplicate the first vertex at the end of the array to create a closed curve.
-                  Set to True if you want to be to be consistent with shapely.Polygons convetions.
+                  Set to True if you want to be to be compatible with the shapely library.
     Returns
     -------
     npt.ArrayLike
         Coordinates for a polygon with thin triangles removed.
     """
-    # compute unit vector to next and previous vertex
-    good_indices = cleanup_simple_polygon_indices(crds)
+    crds = remove_repeated_polygon_vertices(crds)  # Eliminate zero-length line segments
+    crds_next = np.roll(crds, axis=0, shift=-1)
+    crds_prev = np.roll(crds, axis=0, shift=+1)
+    triangle_thicknesses = _triangle_thicknesses(crds_prev, crds, crds_next)
+    # Select the indices from `crds` for vertices that we want to keep.
+    good_indices = np.argwhere(triangle_thicknesses > min_thickness)[:, 0]  # keep these vertices
+    assert len(good_indices) == 0 or len(good_indices) >= 3  # polygon must have >= 3 vertices
     if repeat_first and len(good_indices) > 0:
-        good_indices.append(good_indices[0])
+        # The shapely library assumes the first and last vertices are identical
+        good_indices = np.append(good_indices, good_indices[0])  # copy first index to the end.
     return crds[good_indices]
 
 
-def _triangle_thickness(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike) -> float:
+def _triangle_thicknesses(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike) -> float:
     """
-    Computes the thicknesses of N triangles.
-
+    Computes the thicknesses of N triangles, whose coordinates are arranged in 3 Nx2 arrays.
     Parameters
     ----------
     r1 : npt.ArrayLike
@@ -3378,11 +3387,10 @@ def _triangle_thickness(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike)
         An Nx2 array of the coordinates of the 2nd vertex from the N triangles
     r3 : npt.ArrayLike
         An Nx2 array of the coordinates of the 3rd vertex from the N triangles
-
     Returns
     -------
     npt.ArrayLike
-        An Nx1 array of the thickness of all N triangles
+        An Nx1 array of the thicknesses of all N triangles.
     """
     n = len(r1)
     len12 = np.linalg.norm(r1 - r2, axis=1, keepdims=True)
@@ -3393,8 +3401,9 @@ def _triangle_thickness(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike)
         np.hstack([r3 - r1, np.zeros((n, 1))]),
         axis=-1,
     )
-    area_parallelogram = np.abs(cross_prod)[:, 2, np.newaxis]
+    area_parallelogram = np.abs(cross_prod)[:, 2, np.newaxis]  # = 2x triangle area
     longest_side = np.max(np.hstack([len12, len23, len31]), axis=1, keepdims=True)
+    longest_side[longest_side == 0] = 1.0  # replace 0s with 1s to avoid 0/0 division errors
     return area_parallelogram / longest_side
 
 
@@ -3413,7 +3422,7 @@ def cleanup_shapely_polygon(p: shapely.Polygon, min_thickness: float = 1e-12) ->
     """
     # remove thin triangles from the exterior boundary of the polygon.
     exterior_coords = cleanup_simple_polygon(
-        p.exterior.coords, min_thickness=min_thickness, repeat_first=True
+        np.asarray(p.exterior.coords), min_thickness=min_thickness, repeat_first=True
     )
     # remove thin triangles from each of the interior boundares.
     interior_coords_list = []
@@ -3421,8 +3430,11 @@ def cleanup_shapely_polygon(p: shapely.Polygon, min_thickness: float = 1e-12) ->
         return shapely.Polygon([], [])
     for interior_ring in p.interiors:
         interior_coords = cleanup_simple_polygon(
-            interior_ring.coords, min_thickness=min_thickness, repeat_first=True
+            np.asarray(interior_ring.coords), min_thickness=min_thickness, repeat_first=True
         )
         if len(interior_coords) >= 3:
             interior_coords_list.append(interior_coords)
     return shapely.Polygon(exterior_coords, interior_coords_list)
+
+
+from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402

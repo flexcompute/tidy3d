@@ -16,7 +16,7 @@ import trimesh
 
 import tidy3d as td
 from tidy3d.components.geometry.base import (
-    _triangle_thickness,
+    _triangle_thicknesses,
     cleanup_shapely_polygon,
     cleanup_simple_polygon,
 )
@@ -1259,36 +1259,40 @@ def test_triangle_mesh_from_height():
 
 def test_triangle_thickness():
     tolerance = 1e-07
-    coords_tr1 = np.array((((0.0, 0.0),), ((3.0, 1.0),), ((2.0, -1.0),)))
-    coords_tr2 = np.array((((0.0, 0.0),), ((1.0, 1.0),), ((1.0, 2.0),)))
-    coords_tr3 = np.array((((2.0, -1.0),), ((1.0, 3.0),), ((3.0, 0.0),)))
-    coords_tr4 = np.array((((0.0, 0.0),), ((-1.0, 1.0),), ((100.0, 2.0),)))
+    coords_tr1 = np.array((((0.0, 0.0),), ((0.0, 0.0),), ((0.0, 0.0),)))  # edge case
+    coords_tr2 = np.array((((0.0, 0.0),), ((3.0, 1.0),), ((2.0, -1.0),)))
+    coords_tr3 = np.array((((0.0, 0.0),), ((1.0, 1.0),), ((1.0, 2.0),)))
+    coords_tr4 = np.array((((2.0, -1.0),), ((1.0, 3.0),), ((3.0, 0.0),)))
+    coords_tr5 = np.array((((0.0, 0.0),), ((-1.0, 1.0),), ((100.0, 2.0),)))
     # create an Nx3x2 array storing all the coordinates
-    all_coords = np.hstack([coords_tr1, coords_tr2, coords_tr3, coords_tr4])
+    all_coords = np.hstack([coords_tr1, coords_tr2, coords_tr3, coords_tr4, coords_tr5])
     # r1, r2, r3 = coordinates of the first, second, and third vertex from each triangle (size Nx2)
     r1, r2, r3 = all_coords[0], all_coords[1], all_coords[2]
-    thicknesses = _triangle_thickness(r1, r2, r3)
+    thicknesses = _triangle_thicknesses(r1, r2, r3)
     # 1st triangle thickness:
-    assert math.isclose(thicknesses[0][0], 1.5811388300841898, abs_tol=tolerance)
+    assert math.isclose(thicknesses[0][0], 0.0, abs_tol=tolerance)
     # 2nd triangle thickness:
-    assert math.isclose(thicknesses[1][0], 0.4472135954999579, abs_tol=tolerance)
+    assert math.isclose(thicknesses[1][0], 1.5811388300841898, abs_tol=tolerance)
     # 3rd triangle thickness:
-    assert math.isclose(thicknesses[2][0], 1.212678125181665, abs_tol=tolerance)
+    assert math.isclose(thicknesses[2][0], 0.4472135954999579, abs_tol=tolerance)
     # 4th triangle thickness:
-    assert math.isclose(thicknesses[3][0], 1.0098514936405245, abs_tol=tolerance)
+    assert math.isclose(thicknesses[3][0], 1.212678125181665, abs_tol=tolerance)
+    # 5th triangle thickness:
+    assert math.isclose(thicknesses[4][0], 1.0098514936405245, abs_tol=tolerance)
 
 
 def test_cleanup_simple_polygon():
     def test_with_cycling(
         coords: npt.ArrayLike, correct_num_verts: int, min_thickness: float = 1e-12
     ) -> None:
-        # Polygon geometry should not be affected by cyclic permutations.
-        # So this function considers all cyclic permutations and
-        # verifies that the number of vertices after cleanup is correct
+        # Polygon geometry should not be affected by cyclic permutations of vertices.
+        # This function considers all cyclic permutations of polygon vertices,
+        # and verifies that the number of vertices after cleanup remains correct.
+        # (This has caught some subtle errors.)
         n = len(coords)
         coords_before = coords
-        for _ in range(n):
-            coords_before = coords_before[1:] + coords_before[:1]  # cycle left by 1
+        for i in range(n):
+            coords_before = np.roll(coords, axis=0, shift=i)  # cyclic shift by i
             coords_after = cleanup_simple_polygon(coords_before, min_thickness=min_thickness)
             assert len(coords_after) == correct_num_verts
             if correct_num_verts > 0:
@@ -1299,10 +1303,12 @@ def test_cleanup_simple_polygon():
                 assert len(coords_after) == correct_num_verts + 1
                 assert np.array_equal(coords_after[0], coords_after[-1])
 
+    point = np.array([[0, 0]])
+    test_with_cycling(point, 0)  # polygons with less than 3 vertices should be cleared
     line_segment = np.array(((0, 0), (1, 0)))
     test_with_cycling(line_segment, 0)  # polygons with less than 3 vertices should be cleared
     pointlike = np.array(((0, 0), (0, 0), (0, 0)))
-    test_with_cycling(pointlike, 0)  # zero-area polygons should have no vertices
+    test_with_cycling(pointlike, 0)  # zero-area polygons should be cleared (have no vertices)
     pointlike_repeats = np.array(((0, 0), (0, 0), (0, 0), (0, 0), (0, 0)))
     test_with_cycling(pointlike_repeats, 0)  # zero-area polygons should have no vertices
     triangle_collinear = np.array(((0, 0), (1, 1), (2, 2)))

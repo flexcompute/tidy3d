@@ -25,6 +25,11 @@ def test_2dcorner_finder_filter_collinear_vertex():
     corners = CORNER_FINDER.corners(normal_axis=2, coord=0, structure_list=structures)
     assert len(corners) == 3
 
+    # if angle threshold is 0, collinear vertex will not be filtered
+    corner_finder = CORNER_FINDER.updated_copy(angle_threshold=0)
+    corners = corner_finder.corners(normal_axis=2, coord=0, structure_list=structures)
+    assert len(corners) == 5
+
 
 def test_2dcorner_finder_filter_nearby_vertex():
     """In corner finder, test that vertices that are very close are filtered"""
