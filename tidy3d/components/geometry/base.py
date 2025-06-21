@@ -3393,17 +3393,21 @@ def _triangle_thicknesses(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLik
         An Nx1 array of the thicknesses of all N triangles.
     """
     n = len(r1)
-    len12 = np.linalg.norm(r1 - r2, axis=1, keepdims=True)
-    len23 = np.linalg.norm(r2 - r3, axis=1, keepdims=True)
-    len31 = np.linalg.norm(r3 - r1, axis=1, keepdims=True)
+    r12 = r1 - r2
+    r23 = r2 - r3
+    r31 = r3 - r1
+    len12_sq = np.sum(r12 * r12, axis=1, keepdims=True)
+    len23_sq = np.sum(r23 * r23, axis=1, keepdims=True)
+    len31_sq = np.sum(r31 * r31, axis=1, keepdims=True)
     cross_prod = np.cross(
         np.hstack([r2 - r1, np.zeros((n, 1))]),
         np.hstack([r3 - r1, np.zeros((n, 1))]),
         axis=-1,
     )
     area_parallelogram = np.abs(cross_prod)[:, 2, np.newaxis]  # = 2x triangle area
-    longest_side = np.max(np.hstack([len12, len23, len31]), axis=1, keepdims=True)
-    longest_side[longest_side == 0] = 1.0  # replace 0s with 1s to avoid 0/0 division errors
+    longest_side_sq = np.max(np.hstack([len12_sq, len23_sq, len31_sq]), axis=1, keepdims=True)
+    longest_side_sq[longest_side_sq == 0] = 1.0  # replace 0s with 1s to avoid 0/0 division errors
+    longest_side = np.sqrt(longest_side_sq)
     return area_parallelogram / longest_side
 
 
