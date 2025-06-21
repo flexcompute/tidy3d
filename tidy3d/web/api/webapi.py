@@ -250,6 +250,9 @@ def upload(
 
     """
 
+    if isinstance(simulation, (ModeSolver, ModeSimulation)):
+        simulation = get_reduced_simulation(simulation, reduce_simulation)
+
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
@@ -279,8 +282,6 @@ def upload(
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
-    if task_type == "MODE_SOLVER" or task_type == "MODE":
-        simulation = get_reduced_simulation(simulation, reduce_simulation)
 
     task.upload_simulation(
         stub=stub,
@@ -322,7 +323,6 @@ def get_reduced_simulation(simulation, reduce_simulation):
     there. Note that if we do the latter we may want to also modify the warning below to only
     happen if there are custom media *and* they extend beyond the simulation domain.
     """
-
     if reduce_simulation == "auto":
         if isinstance(simulation, ModeSimulation):
             sim_mediums = simulation.scene.mediums
@@ -339,7 +339,6 @@ def get_reduced_simulation(simulation, reduce_simulation):
                 " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
                 " silence this warning."
             )
-
     if reduce_simulation:
         return simulation.reduced_simulation_copy
     return simulation
