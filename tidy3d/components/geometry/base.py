@@ -17,6 +17,7 @@ try:
 except ImportError:
     pass
 
+from tidy3d.compat import _shapely_is_older_than
 from tidy3d.components.autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
@@ -63,6 +64,7 @@ from tidy3d.packaging import verify_packages_import
 from .bound_ops import bounds_intersection, bounds_union
 
 POLY_GRID_SIZE = 1e-12
+POLY_TOLERANCE_RATIO = 1e-12
 
 
 _shapely_operations = {
@@ -2862,27 +2864,45 @@ class ClipOperation(Geometry):
         return val
 
     @staticmethod
-    def to_polygon_list(base_geometry: Shapely) -> list[Shapely]:
+    def to_polygon_list(base_geometry: Shapely, cleanup: bool = False) -> list[Shapely]:
         """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
-        empty polygons.
+        empty polygons, and empty triangles within polygons.
 
         Parameters
         ----------
         base_geometry : shapely.geometry.base.BaseGeometry
             Base geometry for inspection.
+        cleanup: bool = False
+            If True, removes extremely small features from each polygon's boundary.
+            This is useful for removing artifacts from 2D plots displayed to the user.
 
         Returns
         -------
         List[shapely.geometry.base.BaseGeometry]
             Valid polygons retrieved from ``base geometry``.
         """
+        unfiltered_geoms = []
         if base_geometry.geom_type == "GeometryCollection":
-            return [p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)]
+            unfiltered_geoms = [
+                p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)
+            ]
         if base_geometry.geom_type == "MultiPolygon":
-            return [p for p in base_geometry.geoms if not p.is_empty]
+            unfiltered_geoms = [p for p in base_geometry.geoms if not p.is_empty]
         if base_geometry.geom_type == "Polygon" and not base_geometry.is_empty:
-            return [base_geometry]
-        return []
+            unfiltered_geoms = [base_geometry]
+        geoms = []
+        if cleanup:
+            # Optional: "clean" each of the polygons (by removing extremely small or thin features).
+            for geom in unfiltered_geoms:
+                geom_clean = cleanup_shapely_object(geom)
+                if geom_clean.geom_type == "Polygon":
+                    geoms.append(geom_clean)
+                if geom_clean.geom_type == "MultiPolygon":
+                    geoms += [p for p in geom_clean.geoms if not p.is_empty]
+                # Ignore other types of shapely objects (points and lines)
+        else:
+            geoms = unfiltered_geoms
+        return geoms
 
     @property
     def _shapely_operation(self) -> Callable[[Shapely, Shapely], Shapely]:
@@ -2931,7 +2951,10 @@ class ClipOperation(Geometry):
         b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
-        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
+        return ClipOperation.to_polygon_list(
+            self._shapely_operation(geom_a, geom_b),
+            cleanup=True,
+        )
 
     def intersections_plane(
         self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
@@ -2958,7 +2981,10 @@ class ClipOperation(Geometry):
         b = self.geometry_b.intersections_plane(x, y, z)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
-        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
+        return ClipOperation.to_polygon_list(
+            self._shapely_operation(geom_a, geom_b),
+            cleanup=True,
+        )
 
     @cached_property
     def bounds(self) -> Bound:
@@ -3291,6 +3317,94 @@ class GeometryGroup(Geometry):
             grad_vjps[field_path] = grad_vjp_values[0]
 
         return grad_vjps
+
+
+def cleanup_shapely_object(obj: Shapely, tolerance_ratio: float = POLY_TOLERANCE_RATIO) -> Shapely:
+    """Remove small geometric features from the boundaries of a shapely object including
+    inward and outward spikes, thin holes, and thin connections between larger regions.
+
+    Parameters
+    ----------
+    obj : shapely
+        a shapely object (typically a ``Polygon`` or a ``MultiPolygon``)
+    tolerance_ratio : float = ``POLY_TOLERANCE_RATIO``
+        Features on the boundaries of polygons will be discarded if they are smaller
+        or narrower than ``tolerance_ratio`` multiplied by the size of the object.
+
+    Returns
+    -------
+    Shapely
+        A new shapely object whose small features (eg. thin spikes or holes) are removed.
+
+    Notes
+    -----
+    This function does not attempt to delete overlapping, nearby, or collinear vertices.
+    To solve that problem, use ``shapely.simplify()`` afterwards.
+    """
+    if _shapely_is_older_than("2.1"):
+        log.warning(
+            "Using old versions of the shapely library (prior to v2.1) may cause "
+            "plot errors.  This can be solved by upgrading to Python 3.10 "
+            "(or later) and reinstalling Tidy3d.",
+            log_once=True,
+        )
+        return obj
+    if obj.is_empty:
+        return obj
+    centroid = obj.centroid
+    object_size = min(obj.bounds[2] - obj.bounds[0], obj.bounds[3] - obj.bounds[1])
+    if object_size == 0.0:
+        return shapely.Polygon([])
+    # In order to prevent numerical overflow or underflow errors, we first subtract
+    # the centroid and divide by (rescale) the size of the object so it is not too big.
+    normalized_obj = shapely.affinity.affine_transform(
+        # https://shapely.readthedocs.io/en/stable/manual.html#affine-transformations
+        obj,
+        matrix=[
+            1 / object_size,
+            0.0,
+            0.0,
+            1 / object_size,
+            -centroid.x / object_size,
+            -centroid.y / object_size,
+        ],
+    )
+    # Important: Remove any self intersections beforehand using `shapely.make_valid()`.
+    valid_obj = shapely.make_valid(normalized_obj, method="structure", keep_collapsed=False)
+    # To get rid of small thin features, erode(shrink), dilate(expand), and erode again.
+    eroded_obj = shapely.buffer(  # This removes outward spikes
+        valid_obj,
+        distance=-tolerance_ratio,
+        cap_style="square",  # (optional parameter to reduce computation time)
+        quad_segs=3,  # (optional parameter to reduce computation time)
+    )
+    dilated_obj = shapely.buffer(  # This removes inward spikes and tiny holes
+        eroded_obj,
+        distance=2 * tolerance_ratio,
+        cap_style="square",
+        quad_segs=3,
+    )
+    cleaned_obj = dilated_obj
+    # Optional: Now shrink the polygon back to the original size.
+    cleaned_obj = shapely.buffer(
+        cleaned_obj,
+        distance=-tolerance_ratio,
+        cap_style="square",
+        quad_segs=3,
+    )
+    # Revert to the original scale and position.
+    rescaled_clean_obj = shapely.affinity.affine_transform(
+        cleaned_obj,
+        matrix=[
+            object_size,
+            0.0,
+            0.0,
+            object_size,
+            centroid.x,
+            centroid.y,
+        ],
+    )
+    return rescaled_clean_obj
 
 
 from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402
