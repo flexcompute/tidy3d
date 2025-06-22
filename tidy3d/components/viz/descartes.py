@@ -35,7 +35,10 @@ class Polygon:
     @property
     def exterior(self):
         """Get polygon exterior."""
-        return getattr(self.context, "exterior", None) or self.context[0]
+        value = getattr(self.context, "exterior", None)
+        if value is None:
+            value = self.context[0]
+        return value
 
     @property
     def interiors(self):
@@ -53,9 +56,13 @@ def polygon_path(polygon):
     def coding(obj):
         # The codes will be all "LINETO" commands, except for "MOVETO"s at the
         # beginning of each subpath
-        n = len(getattr(obj, "coords", None) or obj)
+        crds = getattr(obj, "coords", None)
+        if crds is None:
+            crds = obj
+        n = len(crds)
         vals = ones(n, dtype=Path.code_type) * Path.LINETO
-        vals[0] = Path.MOVETO
+        if len(vals) > 0:
+            vals[0] = Path.MOVETO
         return vals
 
     ptype = polygon.geom_type
