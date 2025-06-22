@@ -104,10 +104,21 @@ def mock_upload(monkeypatch, set_api_key):
         status=200,
     )
 
+    # store the uploaded stub for verification
+    uploaded_stub = {}
+
+    def mock_upload_simulation(self, stub, **kwargs):
+        uploaded_stub["stub"] = stub
+
     def mock_upload_file(*args, **kwargs):
         pass
 
+    monkeypatch.setattr(
+        "tidy3d.web.core.task_core.SimulationTask.upload_simulation", mock_upload_simulation
+    )
     monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
+
+    return uploaded_stub
 
 
 @pytest.fixture
@@ -263,6 +274,26 @@ def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     sim = make_mode_sim()
     assert sim != get_reduced_simulation(sim, reduce_simulation=True)
     assert upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=True)
+
+
+@pytest.mark.parametrize("reduce_simulation", [True, False])
+@responses.activate
+def test_upload_with_reduction_parameter(
+    monkeypatch, mock_upload, mock_get_info, mock_metadata, reduce_simulation
+):
+    """Test that simulation reduction is properly applied before upload based on reduce_simulation parameter."""
+    sim = make_mode_sim()
+
+    upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=reduce_simulation)
+
+    if reduce_simulation:
+        expected_sim = get_reduced_simulation(sim, reduce_simulation=True)
+        assert sim != expected_sim
+    else:
+        expected_sim = sim
+
+    uploaded_sim = mock_upload["stub"].simulation
+    assert uploaded_sim == expected_sim
 
 
 @responses.activate
