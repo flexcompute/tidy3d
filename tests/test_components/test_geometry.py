@@ -16,7 +16,7 @@ import trimesh
 
 import tidy3d as td
 from tidy3d.components.geometry.base import (
-    _triangle_thicknesses,
+    _triangle_thicknesses_sq,
     cleanup_shapely_polygon,
     cleanup_simple_polygon,
 )
@@ -1268,17 +1268,17 @@ def test_triangle_thickness():
     all_coords = np.hstack([coords_tr1, coords_tr2, coords_tr3, coords_tr4, coords_tr5])
     # r1, r2, r3 = coordinates of the first, second, and third vertex from each triangle (size Nx2)
     r1, r2, r3 = all_coords[0], all_coords[1], all_coords[2]
-    thicknesses = _triangle_thicknesses(r1, r2, r3)
+    thicknesses_sq = _triangle_thicknesses_sq(r1, r2, r3)
     # 1st triangle thickness:
-    assert math.isclose(thicknesses[0][0], 0.0, abs_tol=tolerance)
+    assert math.isclose(thicknesses_sq[0][0], 0.0, abs_tol=tolerance)
     # 2nd triangle thickness:
-    assert math.isclose(thicknesses[1][0], 1.5811388300841898, abs_tol=tolerance)
+    assert math.isclose(thicknesses_sq[1][0], 1.5811388300841898**2, abs_tol=tolerance)
     # 3rd triangle thickness:
-    assert math.isclose(thicknesses[2][0], 0.4472135954999579, abs_tol=tolerance)
+    assert math.isclose(thicknesses_sq[2][0], 0.4472135954999579**2, abs_tol=tolerance)
     # 4th triangle thickness:
-    assert math.isclose(thicknesses[3][0], 1.212678125181665, abs_tol=tolerance)
+    assert math.isclose(thicknesses_sq[3][0], 1.212678125181665**2, abs_tol=tolerance)
     # 5th triangle thickness:
-    assert math.isclose(thicknesses[4][0], 1.0098514936405245, abs_tol=tolerance)
+    assert math.isclose(thicknesses_sq[4][0], 1.0098514936405245**2, abs_tol=tolerance)
 
 
 def test_cleanup_simple_polygon():

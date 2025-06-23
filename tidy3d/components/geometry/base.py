@@ -3366,9 +3366,10 @@ def cleanup_simple_polygon(
     crds = remove_repeated_polygon_vertices(crds)  # Eliminate zero-length line segments
     crds_next = np.roll(crds, axis=0, shift=-1)
     crds_prev = np.roll(crds, axis=0, shift=+1)
-    triangle_thicknesses = _triangle_thicknesses(crds_prev, crds, crds_next)
+    tri_thicknesses_sq = _triangle_thicknesses_sq(crds_prev, crds, crds_next)
     # Select the indices from `crds` for vertices that we want to keep.
-    good_indices = np.argwhere(triangle_thicknesses > min_thickness)[:, 0]  # keep these vertices
+    min_thickness_sq = min_thickness * min_thickness
+    good_indices = np.argwhere(tri_thicknesses_sq > min_thickness_sq)[:, 0]  # keep these verts
     assert len(good_indices) == 0 or len(good_indices) >= 3  # polygon must have >= 3 vertices
     if repeat_first and len(good_indices) > 0:
         # The shapely library assumes the first and last vertices are identical
@@ -3376,9 +3377,10 @@ def cleanup_simple_polygon(
     return crds[good_indices]
 
 
-def _triangle_thicknesses(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike) -> float:
+def _triangle_thicknesses_sq(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLike) -> float:
     """
-    Computes the thicknesses of N triangles, whose coordinates are arranged in 3 Nx2 arrays.
+    Computes the square of the thicknesses of N triangles whose coordinates are arranged in 3 Nx2 arrays.
+
     Parameters
     ----------
     r1 : npt.ArrayLike
@@ -3387,28 +3389,29 @@ def _triangle_thicknesses(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.ArrayLik
         An Nx2 array of the coordinates of the 2nd vertex from the N triangles
     r3 : npt.ArrayLike
         An Nx2 array of the coordinates of the 3rd vertex from the N triangles
+
     Returns
     -------
     npt.ArrayLike
-        An Nx1 array of the thicknesses of all N triangles.
+        An Nx1 array of the square of the thicknesses of all N triangles.
+
+    Notes
+    -----
+    In order to reduce computation time, the square of the thickess of each triangle is computed.
+    Use np.sqrt() if you need the thickness of each triangle.
     """
-    n = len(r1)
     r12 = r1 - r2
     r23 = r2 - r3
     r31 = r3 - r1
     len12_sq = np.sum(r12 * r12, axis=1, keepdims=True)
     len23_sq = np.sum(r23 * r23, axis=1, keepdims=True)
     len31_sq = np.sum(r31 * r31, axis=1, keepdims=True)
-    cross_prod = np.cross(
-        np.hstack([r2 - r1, np.zeros((n, 1))]),
-        np.hstack([r3 - r1, np.zeros((n, 1))]),
-        axis=-1,
-    )
-    area_parallelogram = np.abs(cross_prod)[:, 2, np.newaxis]  # = 2x triangle area
+    area_parallelogram = (r12[:, 0] * r31[:, 1] - r12[:, 1] * r31[:, 0])[:, np.newaxis]  # crossprod
     longest_side_sq = np.max(np.hstack([len12_sq, len23_sq, len31_sq]), axis=1, keepdims=True)
     longest_side_sq[longest_side_sq == 0] = 1.0  # replace 0s with 1s to avoid 0/0 division errors
-    longest_side = np.sqrt(longest_side_sq)
-    return area_parallelogram / longest_side
+    # The thickness of a triangle = 2*triangle area / longest_side
+    # To reduce computation time, I compute the square of this quantity.
+    return area_parallelogram * area_parallelogram / longest_side_sq
 
 
 def cleanup_shapely_polygon(p: shapely.Polygon, min_thickness: float = 1e-12) -> shapely.Polygon:
