@@ -112,6 +112,13 @@ material_refs = {
         "for germanium J. Opt. Soc. Am. 69 178-180 (1979)",
         doi="https://doi.org/10.1364/JOSA.69.000178",
     ),
+    "Nunley2016": ReferenceData(
+        journal="T. S. Nunley, N. S. Fernando, N. Samarasingha, J. M. Moya, "
+        "C. M. Nelson, A. A. Medina, and S. Zollner. Optical constants of "
+        "germanium and thermally grown germanium dioxide from 0.5 to 6.6eV "
+        "via a multisample ellipsometry investigation, J. Vac. Sci. Technol. B 34, 061205 (2016)",
+        doi="https://doi.org/10.1116/1.4963075",
+    ),
     "Pettit1965": ReferenceData(
         journal="G. D. Pettit and W. J. Turner. Refractive index of InP, "
         "J. Appl. Phys. 36, 2081 (1965)",

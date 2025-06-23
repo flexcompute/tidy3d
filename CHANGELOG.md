@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
+- Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
 
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
