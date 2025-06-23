@@ -76,6 +76,12 @@ class WavePort(AbstractTerminalPort, Box):
         "Must be greater than or equal to 3. When set to `None`, no grid refinement is performed.",
     )
 
+    pec_frame: pd.NonNegativeInt = pd.Field(
+        0,
+        title="PEC Frame.",
+        description="Add a thin pec frame around the source during FDTD run.",
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.
@@ -131,6 +137,7 @@ class WavePort(AbstractTerminalPort, Box):
             mode_index=self.mode_index,
             direction=self.direction,
             name=self.name,
+            pec_frame=self.pec_frame,
         )
 
     def to_monitors(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -45,6 +45,8 @@ def warn_num_layers_factory(min_num_layers: int, descr: str):
         return val
 
     return _warn_num_layers
+
+DEFAULT_MODE_SPEC_MODE_ABC = ModeSpec()
 
 
 class BoundaryEdge(ABC, Tidy3dBaseModel):
@@ -119,7 +121,7 @@ class ModeABCBoundary(AbstractABCBoundary):
     """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
 
     mode_spec: ModeSpec = pd.Field(
-        ModeSpec(),
+        DEFAULT_MODE_SPEC_MODE_ABC,
         title="Mode Specification",
         description="Parameters that determine the modes computed by the mode solver.",
     )
@@ -894,7 +896,7 @@ class Boundary(Tidy3dBaseModel):
     def mode_abc(
         cls,
         plane: Box,
-        mode_spec: ModeSpec = ModeSpec(),
+        mode_spec: ModeSpec = DEFAULT_MODE_SPEC_MODE_ABC,
         mode_index: pd.NonNegativeInt = 0,
         frequency: Optional[pd.PositiveFloat] = None,
     ):

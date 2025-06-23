@@ -422,6 +422,7 @@ __all__ = [
     "PMC",
     "PML",
     "TFSF",
+    "ABCBoundary",
     "Absorber",
     "AbsorberParams",
     "AbstractFieldProjectionData",
@@ -593,6 +594,7 @@ __all__ = [
     "Medium2D",
     "MediumMediumInterface",
     "MeshOverrideStructure",
+    "ModeABCBoundary",
     "ModeAmpsDataArray",
     "ModeData",
     "ModeIndexDataArray",
@@ -716,6 +718,4 @@ __all__ = [
     "set_logging_console",
     "set_logging_file",
     "wavelengths",
-    "ABCBoundary",
-    "ModeABCBoundary",
 ]

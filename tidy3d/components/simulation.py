@@ -49,7 +49,7 @@ from .data.dataset import Dataset
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
 from .data.utils import CustomSpatialDataType
-from .geometry.base import Box, Geometry
+from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
@@ -67,6 +67,7 @@ from .medium import (
     Medium2D,
     MediumType,
     MediumType3D,
+    PECMedium,
 )
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -174,6 +175,10 @@ FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 # RF frequency warning
 RF_FREQ_WARNING = 300e9
+
+# length and thickness of optional PEC frames around mode sources (in cells)
+MODE_PEC_FRAME_LENGTH = 2
+MODE_PEC_FRAME_THICKNESS = 1e-3
 
 
 def validate_boundaries_for_zero_dims(warn_on_change: bool = True):
@@ -841,7 +846,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[Tuple[float, float]]
+        list[Tuple[float, float]]
             List containing the absorber thickness (micron) in - and + boundaries.
         """
         num_layers = self.num_pml_layers
@@ -859,7 +864,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[MeshOverrideSructure]
+        list[MeshOverrideSructure]
             List of override structures.
         """
         wavelength = self.grid_spec.get_wavelength(self.sources)
@@ -876,7 +881,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[CoordinateOptional]
+        list[CoordinateOptional]
             List of snapping points coordinates.
         """
         return self.grid_spec.internal_snapping_points(
@@ -1215,7 +1220,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        Tuple[:class:`.Grid`, List[CoordinateOptional]]
+        Tuple[:class:`.Grid`, list[CoordinateOptional]]
             :class:`.Grid` storing the spatial locations relevant to the simulation
             the list of snapping points generated during iterative gap meshing.
         """
@@ -1273,7 +1278,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[CoordinateOptional]
+        list[CoordinateOptional]
             List of snapping lines resolving thin gaps and strips.
         """
 
@@ -1337,7 +1342,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[Tuple[float, float]]
+        list[Tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.
         """
         num_layers = [[0, 0], [0, 0], [0, 0]]
@@ -3270,13 +3275,13 @@ class Simulation(AbstractYeeGridSimulation):
     @classmethod
     def _get_mediums_on_abc(
         cls, boundary_spec, medium, center, size, structures
-    ) -> Tuple[
-        List[MediumType3D],
-        List[MediumType3D],
-        List[MediumType3D],
-        List[MediumType3D],
-        List[MediumType3D],
-        List[MediumType3D],
+    ) -> tuple[
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
     ]:
         """For each ABC boundary that needs an automatic medium detection (permittivity=None)
         determine mediums it crosses.
@@ -3295,7 +3300,7 @@ class Simulation(AbstractYeeGridSimulation):
             center=structure_bg.geometry.center, size=structure_bg.geometry.size
         )
 
-        total_structures = [structure_bg] + list(structures)
+        total_structures = [structure_bg, *list(structures)]
 
         mediums = []
         for boundary, surface in zip(np.ravel(boundary_spec.to_list), surfaces):
@@ -4529,7 +4534,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         Returns
         -------
-        List[:class:`.AbstractMedium`]
+        set[:class:`.AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
         log.warning(
@@ -4591,12 +4596,12 @@ class Simulation(AbstractYeeGridSimulation):
         -------
         test_object : :class:`.Box`
             Object for which intersecting media are to be detected.
-        structures : List[:class:`.AbstractMedium`]
+        structures : tuple[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
 
         Returns
         -------
-        List[:class:`.AbstractMedium`]
+        tuple[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
 
@@ -4618,12 +4623,12 @@ class Simulation(AbstractYeeGridSimulation):
         -------
         test_object : :class:`.Box`
             Object for which intersecting media are to be detected.
-        structures : List[:class:`.AbstractMedium`]
+        structures : tuple[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
 
         Returns
         -------
-        List[:class:`.Structure`]
+        tuple[:class:`.Structure`]
             Set of distinct structures that intersect with the given surface, or with the surfaces
             of the given volume.
         """
@@ -5436,3 +5441,101 @@ class Simulation(AbstractYeeGridSimulation):
         )
 
     _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
+
+    def _make_pec_frame(self, mode_source) -> Structure:
+        """Make a pec frame around a mode source."""
+
+        coords = self.grid.boundaries.to_list
+        axis = mode_source.injection_axis
+        direction = mode_source.direction
+        length = mode_source.pec_frame
+
+        span_inds = np.array(self.grid.discretize_inds(mode_source))
+        if direction == "+":
+            span_inds[axis][1] += length - 1
+        else:
+            span_inds[axis][0] -= length - 1
+
+        box_bounds = [
+            [
+                c[beg],
+                c[end],
+            ]
+            for c, (beg, end) in zip(coords, span_inds)
+        ]
+
+        prev_cell = span_inds[axis][0] - 1
+        if prev_cell >= 0:
+            box_bounds[axis][0] = (1 - MODE_PEC_FRAME_THICKNESS) * box_bounds[axis][0] + MODE_PEC_FRAME_THICKNESS * coords[axis][prev_cell]
+
+        next_cell = span_inds[axis][1] + 1
+        if next_cell <= len(coords[axis]) - 1 :
+            box_bounds[axis][1] = (1 - MODE_PEC_FRAME_THICKNESS) * box_bounds[axis][1] + MODE_PEC_FRAME_THICKNESS * coords[axis][next_cell]
+
+        box = Box.from_bounds(*np.transpose(box_bounds))
+        
+        surfaces = Box.surfaces(box.size, box.center)
+        del surfaces[2 * axis: 2 * axis + 2]
+
+        structure = Structure(
+            geometry=GeometryGroup(
+                geometries=surfaces,
+            ),
+            medium=PECMedium(),
+        )
+
+
+        # bounds_outer = [
+        #     [
+        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[beg]
+        #         + MODE_PEC_FRAME_THICKNESS * c[max(0, beg - 1)],
+        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[end]
+        #         + MODE_PEC_FRAME_THICKNESS * c[min(len(c) - 1, end + 1)],
+        #     ]
+        #     for c, (beg, end) in zip(coords, span_inds)
+        # ]
+        # bounds_inner = [
+        #     [
+        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[beg] + MODE_PEC_FRAME_THICKNESS * c[beg + 1],
+        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[end] + MODE_PEC_FRAME_THICKNESS * c[end - 1],
+        #     ]
+        #     for c, (beg, end) in zip(coords, span_inds)
+        # ]
+        # bounds_inner[axis] = [-inf, inf]
+        # structure = Structure(
+        #     geometry=ClipOperation(
+        #         geometry_a=Box.from_bounds(*np.transpose(bounds_outer)),
+        #         geometry_b=Box.from_bounds(*np.transpose(bounds_inner)),
+        #         operation="difference",
+        #     ),
+        #     medium=PECMedium(),
+        # )
+        return structure
+
+    @cached_property
+    def with_mode_source_pec_frames(self) -> Simulation:
+        """Return an instance with added pec frames around mode sources."""
+
+        pec_frames = [
+            self._make_pec_frame(src)
+            for src in self.sources
+            if isinstance(src, ModeSource) and src.pec_frame > 0
+        ]
+
+        if len(pec_frames) == 0:
+            return self
+
+        return self.updated_copy(
+            grid_spec=GridSpec.from_grid(self.grid), structures=list(self.structures) + pec_frames
+        )
+
+    def _validate_with_mode_source_pec_frames(self):
+        """Validate that after adding pec frames simulation setup is still valid."""
+
+        try:
+            _ = self.with_mode_source_pec_frames
+        except Exception:
+            log.error(
+                "Simulation fails after requested mode source PEC frames are added. "
+                "Please inspec '.with_mode_source_pec_frames'."
+            )

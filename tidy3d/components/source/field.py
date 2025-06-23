@@ -403,6 +403,12 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
+    pec_frame: pydantic.NonNegativeInt = pydantic.Field(
+        0,
+        title="PEC Frame.",
+        description="Add a thin pec frame around the source during FDTD run.",
+    )
+
     @cached_property
     def angle_theta(self):
         """Polar angle of propagation."""
