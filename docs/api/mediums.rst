@@ -75,6 +75,7 @@ Medium Perturbations
    tidy3d.PerturbationMedium
    tidy3d.PerturbationPoleResidue
    tidy3d.NedeljkovicSorefMashanovich
+   tidy3d.ParameterPerturbation
 
 
 General Mediums (can be both dispersive and non-dispersive)
