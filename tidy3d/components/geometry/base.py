@@ -2863,7 +2863,7 @@ class ClipOperation(Geometry):
         return val
 
     @staticmethod
-    def to_polygon_list(base_geometry: Shapely) -> list[Shapely]:
+    def to_polygon_list(base_geometry: Shapely, cleanup_afterwards: bool = False) -> list[Shapely]:
         """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
         empty polygons, and empty triangles within polygons.
 
@@ -2871,6 +2871,8 @@ class ClipOperation(Geometry):
         ----------
         base_geometry : shapely.geometry.base.BaseGeometry
             Base geometry for inspection.
+        cleanup_afterwards: bool = False
+            If True, then extremely thin triangles will be deleted from the polygon's boundary.
 
         Returns
         -------
@@ -2887,15 +2889,18 @@ class ClipOperation(Geometry):
         if base_geometry.geom_type == "Polygon" and not base_geometry.is_empty:
             unfiltered_geoms = [base_geometry]
             unfiltered_geoms = [base_geometry]
-        # Now "clean" each of the polygons (by removing empty boundary triangles).
         geoms: list[Shapely] = []
-        for geom in unfiltered_geoms:
-            if isinstance(geom, shapely.Polygon):
-                polygon = cleanup_shapely_polygon(geom)
-                if not polygon.is_empty:
-                    geoms.append(polygon)
-            else:
-                geoms.append(geom)
+        if cleanup_afterwards:
+            # Optional: "clean" each of the polygons (by removing empty boundary triangles).
+            for geom in unfiltered_geoms:
+                if isinstance(geom, shapely.Polygon):
+                    polygon = cleanup_shapely_polygon(geom)
+                    if not polygon.is_empty:
+                        geoms.append(polygon)
+                else:
+                    geoms.append(geom)
+        else:
+            geoms = unfiltered_geoms
         return geoms
 
     @property
@@ -2945,7 +2950,10 @@ class ClipOperation(Geometry):
         b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
-        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
+        return ClipOperation.to_polygon_list(
+            self._shapely_operation(geom_a, geom_b),
+            cleanup_afterwards=True,
+        )
 
     def intersections_plane(
         self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
@@ -2972,7 +2980,10 @@ class ClipOperation(Geometry):
         b = self.geometry_b.intersections_plane(x, y, z)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
-        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
+        return ClipOperation.to_polygon_list(
+            self._shapely_operation(geom_a, geom_b),
+            cleanup_afterwards=True,
+        )
 
     @cached_property
     def bounds(self) -> Bound:
@@ -3341,7 +3352,7 @@ def remove_repeated_polygon_vertices(
 
 def cleanup_simple_polygon(
     crds: npt.ArrayLike,
-    min_thickness: float = 1e-12,
+    min_thickness: float = POLY_GRID_SIZE,
     repeat_first: bool = False,
 ) -> npt.ArrayLike:
     """
@@ -3414,13 +3425,15 @@ def _triangle_thicknesses_sq(r1: npt.ArrayLike, r2: npt.ArrayLike, r3: npt.Array
     return area_parallelogram * area_parallelogram / longest_side_sq
 
 
-def cleanup_shapely_polygon(p: shapely.Polygon, min_thickness: float = 1e-12) -> shapely.Polygon:
+def cleanup_shapely_polygon(
+    p: shapely.Polygon, min_thickness: float = POLY_GRID_SIZE
+) -> shapely.Polygon:
     """Remove pathologically thin triangles from the boundaries of a shapely polygon.
     Parameters
     ----------
     p : shapely.Polygon
         Vector defining the normal direction to the plane.
-    min_thickness : float = 1e-13
+    min_thickness : float = ``POLY_GRID_SIZE``
         Triangles whose thickness (in any direction) falls below this parameter are discarded.
     Returns
     -------
