@@ -400,7 +400,7 @@ def start(
 
 
 @wait_for_connection
-def get_run_info(task_id: TaskId):
+def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
     """Gets the % done and field_decay for a running task.
 
     Parameters
@@ -865,7 +865,7 @@ def delete_old(
 
 
 @wait_for_connection
-def abort(task_id: TaskId):
+def abort(task_id: TaskId) -> TaskInfo:
     """Abort server-side data associated with task.
 
     Parameters
@@ -1077,6 +1077,31 @@ def real_cost(task_id: str, verbose=True) -> float:
 
 @wait_for_connection
 def account(verbose=True) -> Account:
+    """Get account information including FlexCredit balance and usage limits.
+
+    Parameters
+    ----------
+    verbose : bool = True
+        If ``True``, prints account information including credit balance, expiration,
+        and free simulation counts.
+
+    Returns
+    -------
+    Account
+        Object containing account information such as credit balance, expiration dates,
+        and daily free simulation counts.
+
+    Examples
+    --------
+    Get account information:
+
+    .. code-block:: python
+
+        account_info = web.account()
+        # Displays:
+        # Current FlexCredit balance: 10.00 and expiration date: 2024-12-31 23:59:59.
+        # Remaining daily free simulations: 3.
+    """
     account_info = Account.get()
     if verbose and account_info:
         console = get_logging_console()
@@ -1109,8 +1134,28 @@ def account(verbose=True) -> Account:
 
 @wait_for_connection
 def test() -> None:
-    """
-    Confirm whether Tidy3D authentication is configured. Raises exception if not.
+    """Confirm whether Tidy3D authentication is configured.
+
+    Raises
+    ------
+    WebError
+        If Tidy3D authentication is not configured correctly.
+
+    Notes
+    -----
+    This method tests the authentication configuration by attempting to retrieve
+    the task list. If authentication is not properly set up, it will raise an
+    exception with instructions on how to configure authentication.
+
+    Examples
+    --------
+    Test authentication:
+
+    .. code-block:: python
+
+        web.test()
+        # If successful, displays:
+        # Authentication configured successfully!
     """
     try:
         # note, this is a little slow, but the only call that doesn't require providing a task id.
