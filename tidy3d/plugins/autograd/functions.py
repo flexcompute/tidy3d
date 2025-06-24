@@ -208,6 +208,8 @@ def _get_footprint(size, structure, maxval):
     """Helper to generate the morphological footprint from size or structure."""
     if size is None and structure is None:
         raise ValueError("Either size or structure must be provided.")
+    if size is not None and structure is not None:
+        raise ValueError("Cannot specify both size and structure.")
     if structure is None:
         size_np = onp.atleast_1d(size)
         shape = (size_np[0], size_np[-1]) if size_np.size > 1 else (size_np[0], size_np[0])
@@ -238,8 +240,11 @@ def grey_dilation(
         The input array to perform grey dilation on.
     size : Union[Union[int, tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
+        If a single integer is provided, a square structuring element is created.
+        For 1D arrays, use a tuple (size, 1) or (1, size) for horizontal or vertical operations.
     structure : Union[np.ndarray, None] = None
         The structuring element. If None, `size` must be provided.
+        For 1D operations on 2D arrays, use a 2D structure with one dimension being 1.
     mode : PaddingType = "reflect"
         The padding mode to use.
     maxval : float = 1e4
@@ -286,6 +291,10 @@ def _vjp_maker_dilation(ans, array, size=None, structure=None, *, mode="reflect"
     is_max_mask = (dilated_windows == output_reshaped).astype(onp.float64)
 
     # normalize the gradient for cases where multiple elements are the maximum.
+    # When multiple elements in a window equal the maximum value, the gradient
+    # is distributed equally among them. This ensures gradient conservation.
+    # Note: Values can never exceed maxval in the output since we add structure
+    # values (capped at maxval) to the input array values.
     multiplicity = onp.sum(is_max_mask, axis=(-2, -1), keepdims=True)
     is_max_mask /= onp.maximum(multiplicity, 1)
 
