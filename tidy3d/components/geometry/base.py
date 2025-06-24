@@ -571,7 +571,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            print(f"{shapely.get_coordinates(shape)=}")  # DEBUG
+            # print(f"{shapely.get_coordinates(shape)=}")  # DEBUG
             ax = self.plot_shape(shape, plot_params=plot_params, ax=ax, transpose=transpose)
 
         # clean up the axis display

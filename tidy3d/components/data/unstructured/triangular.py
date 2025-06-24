@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -570,9 +570,10 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
     """ Plotting """
 
-    @property
-    def _triangulation_obj(self) -> Triangulation:
+    def _triangulation_obj(self, transpose: bool = False) -> Triangulation:
         """Matplotlib triangular representation of the grid to use in plotting."""
+        if transpose:
+            return Triangulation(self.points[:, 1], self.points[:, 0], self.cells)
         return Triangulation(self.points[:, 0], self.points[:, 1], self.cells)
 
     @equal_aspect
@@ -589,6 +590,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         shading: Literal["gourand", "flat"] = "gouraud",
         cbar_kwargs: Optional[dict] = None,
         pcolor_kwargs: Optional[dict] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 
@@ -616,6 +618,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Additional parameters passed to colorbar object.
         pcolor_kwargs: Dict = {}
             Additional parameters passed to ax.tripcolor()
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
 
         Returns
         -------
@@ -639,7 +643,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
                     f"{self._values_coords_dict} before plotting."
                 )
             plot_obj = ax.tripcolor(
-                self._triangulation_obj,
+                self._triangulation_obj(transpose=transpose),
                 self.values.data.ravel(),
                 shading=shading,
                 cmap=cmap,
@@ -657,14 +661,15 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # plot grid if requested
         if grid:
             ax.triplot(
-                self._triangulation_obj,
+                self._triangulation_obj(transpose=transpose),
                 color=plot_params_grid.edgecolor,
                 linewidth=plot_params_grid.linewidth,
             )
 
         # set labels and titles
-        ax_labels = ["x", "y", "z"]
-        normal_axis_name = ax_labels.pop(self.normal_axis)
+        normal_axis_name, ax_labels = pop_axis_and_swap(
+            "xyz", self.normal_axis, transpose=transpose
+        )
         ax.set_xlabel(ax_labels[0])
         ax.set_ylabel(ax_labels[1])
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
@@ -677,3 +682,18 @@ class TriangularGridDataset(UnstructuredGridDataset):
         e02 = self.points[self.cells.sel(vertex_index=2)] - v0
 
         return 0.5 * np.abs(np.cross(e01, e02))
+
+
+# pop_axis_and_swap() is already defined in tidy3d.components.geometry.base.
+# Unfortunately it is impossible to import this module without causing a
+# circular import error.  It's a very short function, so I redefined it below.
+# Perhaps later, I'll refactor the code to move the pop_axis() and unpop_axis()
+# functions out of that module and into tidy3d.components.base.
+def pop_axis_and_swap(
+    coord: tuple[Any, Any, Any], axis: int, transpose: bool = False
+) -> tuple[Any, tuple[Any, Any]]:
+    plane_vals = list(coord)
+    axis_val = plane_vals.pop(axis)
+    if transpose:
+        plane_vals = [plane_vals[1], plane_vals[0]]
+    return axis_val, tuple(plane_vals)
