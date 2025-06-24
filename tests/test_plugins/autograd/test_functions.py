@@ -248,6 +248,46 @@ class TestMorphology:
             check_grads(op, modes=["rev"], order=1)(x, structure=k, mode=mode)
 
 
+class TestMorphology1D:
+    """Test morphological operations with 1D-like structuring elements."""
+
+    @pytest.mark.parametrize("h, w", [(1, 3), (3, 1), (1, 5), (5, 1)])
+    def test_1d_structuring_elements(self, rng, h, w):
+        """Test grey dilation with 1D-like structuring elements on 2D arrays."""
+        x = rng.random((8, 8))
+
+        # Test with size parameter
+        size_tuple = (h, w)
+        result_size = grey_dilation(x, size=size_tuple)
+
+        # Verify output shape matches input
+        assert result_size.shape == x.shape
+
+        # Verify that dilation actually increases values (or keeps them the same)
+        assert np.all(result_size >= x)
+
+        # Test that we can also use structure parameter with 1D-like arrays
+        structure = np.ones((h, w))
+        result_struct = grey_dilation(x, structure=structure)
+        assert result_struct.shape == x.shape
+
+    def test_1d_gradient_flow(self, rng):
+        """Test gradient flow through 1D-like structuring elements."""
+        x = rng.random((6, 6))
+
+        # Test horizontal 1D structure
+        check_grads(lambda x: grey_dilation(x, size=(1, 3)), modes=["rev"], order=1)(x)
+
+        # Test vertical 1D structure
+        check_grads(lambda x: grey_dilation(x, size=(3, 1)), modes=["rev"], order=1)(x)
+
+        # Test with structure parameter
+        struct_h = np.ones((1, 3))
+        struct_v = np.ones((3, 1))
+        check_grads(lambda x: grey_dilation(x, structure=struct_h), modes=["rev"], order=1)(x)
+        check_grads(lambda x: grey_dilation(x, structure=struct_v), modes=["rev"], order=1)(x)
+
+
 class TestMorphologyExceptions:
     """Test exceptions in morphological operations."""
 
@@ -263,6 +303,13 @@ class TestMorphologyExceptions:
         k_even = np.ones((4, 4))
         with pytest.raises(ValueError, match="Structuring element dimensions must be odd"):
             grey_dilation(x, structure=k_even)
+
+    def test_both_size_and_structure(self, rng):
+        """Test that an exception is raised when both size and structure are provided."""
+        x = rng.random((5, 5))
+        k = np.ones((3, 3))
+        with pytest.raises(ValueError, match="Cannot specify both size and structure"):
+            grey_dilation(x, size=3, structure=k)
 
 
 @pytest.mark.parametrize(
