@@ -295,6 +295,8 @@ def upload(
     )
     estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
 
+    task.validate_post_upload(parent_tasks=parent_tasks)
+
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
     return task.task_id
