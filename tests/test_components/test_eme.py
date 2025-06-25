@@ -967,14 +967,14 @@ def test_eme_sim_data():
     port_modes = _get_eme_port_modes()
     smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5)
 
-    sim_data = td.EMESimulationData(simulation=sim, data=data, smatrix=smatrix, port_modes=None)
+    sim_data = td.EMESimulationData(simulation=sim, data=data, smatrix=smatrix, port_modes_raw=None)
     with pytest.raises(SetupError):
         _ = sim_data.port_modes_tuple
     with pytest.raises(SetupError):
         _ = sim_data.port_modes_list_sweep
 
     sim_data = td.EMESimulationData(
-        simulation=sim, data=data, smatrix=smatrix, port_modes=port_modes
+        simulation=sim, data=data, smatrix=smatrix, port_modes_raw=port_modes
     )
     _ = sim_data.port_modes_tuple
     _ = sim_data.port_modes_list_sweep
@@ -1028,11 +1028,11 @@ def test_eme_sim_data():
     assert len(smatrix_in_basis.S22.coords) == 1
 
     with pytest.raises(SetupError):
-        _ = sim_data.updated_copy(port_modes=None).smatrix_in_basis(
+        _ = sim_data.updated_copy(port_modes_raw=None).smatrix_in_basis(
             modes1=modes_in_data, modes2=modes_out_data
         )
     with pytest.raises(SetupError):
-        _ = sim_data.updated_copy(port_modes=None).field_in_basis(
+        _ = sim_data.updated_copy(port_modes_raw=None).field_in_basis(
             field=sim_data["field"], modes=modes_in_data, port_index=0
         )
 
@@ -1092,7 +1092,7 @@ def test_eme_sim_data():
     smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=10)
     sim = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=np.linspace(1, 2, 10)))
     sim_data = td.EMESimulationData(
-        simulation=sim, data=data, smatrix=smatrix, port_modes=port_modes
+        simulation=sim, data=data, smatrix=smatrix, port_modes_raw=port_modes
     )
 
     # test smatrix_in_basis
@@ -1172,7 +1172,7 @@ def test_eme_sim_data():
     sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=np.linspace(1, 2, 10)))
     port_modes = _get_eme_port_modes(num_sweep=10)
     sim_data = td.EMESimulationData(
-        simulation=sim, data=data, smatrix=smatrix, port_modes=port_modes
+        simulation=sim, data=data, smatrix=smatrix, port_modes_raw=port_modes
     )
     with pytest.raises(SetupError):
         _ = sim_data.port_modes_tuple

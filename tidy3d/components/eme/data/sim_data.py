@@ -39,12 +39,22 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         None, title="S Matrix", description="Scattering matrix of the EME simulation."
     )
 
-    port_modes: Optional[EMEModeSolverData] = pd.Field(
+    port_modes_raw: Optional[EMEModeSolverData] = pd.Field(
         None,
         title="Port Modes",
         description="Modes associated with the two ports of the EME device. "
-        "The scattering matrix is expressed in this basis.",
+        "The scattering matrix is expressed in this basis. "
+        "Note: these modes are not symmetry expanded; use 'port_modes' instead.",
     )
+
+    @cached_property
+    def port_modes(self):
+        """Modes associated with the two ports of the EME device.
+        The scattering matrix is expressed in this basis.
+        Note: these modes are symmetry expanded."""
+        if self.port_modes_raw is None:
+            return None
+        return self.port_modes_raw.symmetry_expanded_copy
 
     def _extract_mode_solver_data(
         self, data: EMEModeSolverData, eme_cell_index: int, sweep_index: Optional[int] = None
@@ -89,7 +99,13 @@ class EMESimulationData(AbstractYeeGridSimulationData):
                 "certain derived quantities, like the flux."
             )
         grid_expanded = self.simulation.discretize_monitor(monitor=monitor)
-        return ModeSolverData(**update_dict, monitor=monitor, grid_expanded=grid_expanded)
+        return ModeSolverData(
+            **update_dict,
+            monitor=monitor,
+            grid_expanded=grid_expanded,
+            symmetry=data.symmetry,
+            symmetry_center=data.symmetry_center,
+        )
 
     @cached_property
     def port_modes_tuple(self) -> tuple[ModeSolverData, ModeSolverData]:
