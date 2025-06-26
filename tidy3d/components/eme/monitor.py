@@ -198,10 +198,10 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
     ... )
     """
 
-    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[pd.PositiveInt, pd.PositiveInt, pd.PositiveInt] = pd.Field(
         (1, 1, 1),
         title="Spatial Interval",
-        description="Note: not yet supported. Number of grid step intervals between monitor recordings. If equal to 1, "
+        description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
         "first and last point of the monitor grid are always included.",
     )
