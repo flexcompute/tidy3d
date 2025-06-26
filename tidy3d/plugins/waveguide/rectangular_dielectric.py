@@ -1072,9 +1072,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
         if transpose:
-            import warnings
-
-            warnings.warn(
+            log.warning(
                 "UNTESTED! The plot_geometry_edges() function has not yet been tested\n"
                 "with `transpose=True`.  To confirm that the plot you are seeing now\n"
                 "is correct, try again with `transpose=False` and compare the two plots.",

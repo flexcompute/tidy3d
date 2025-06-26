@@ -1233,9 +1233,7 @@ class Scene(Tidy3dBaseModel):
 
         if grid is None:
             if transpose:
-                import warnings
-
-                warnings.warn(
+                log.warning(
                     "UNTESTED! The plotting function you are using has not\n"
                     "yet been rigorously tested with `transpose=True`.\n"
                     "To confirm that the plot you are seeing now is correct,\n"
