@@ -7,6 +7,9 @@ import pytest
 
 import tidy3d as td
 from tidy3d.components.boundary import (
+    MIN_NUM_ABSORBER_LAYERS,
+    MIN_NUM_PML_LAYERS,
+    MIN_NUM_STABLE_PML_LAYERS,
     PML,
     Absorber,
     BlochBoundary,
@@ -73,7 +76,7 @@ def test_boundaryedge_types(plane_wave_dir):
 
 
 def test_boundary_validators():
-    """Test the validators in class `Boundary`"""
+    """Test the validators in class ``Boundary``"""
 
     bloch = BlochBoundary(bloch_vec=1)
     pec = PECBoundary()
@@ -91,20 +94,20 @@ def test_boundary_validators():
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
 def test_boundary_validator_warnings(boundary, log_level):
-    """Test the validators in class `Boundary` which should show a warning but not an error"""
+    """Test the validators in class ``Boundary`` which should show a warning but not an error"""
     with AssertLogLevel(log_level):
         _ = Boundary(plus=PECBoundary(), minus=boundary)
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
 def test_boundary_validator_warnings_switched(boundary, log_level):
-    """Test the validators in class `Boundary` which should show a warning but not an error"""
+    """Test the validators in class ``Boundary`` which should show a warning but not an error"""
     with AssertLogLevel(log_level):
         _ = Boundary(minus=PECBoundary(), plus=boundary)
 
 
 def test_boundary():
-    """Test that the various classmethods and combinations for Boundary work correctly."""
+    """Test that the various classmethods and combinations for ``Boundary`` to work correctly."""
 
     # periodic
     boundary = Boundary.periodic()
@@ -144,7 +147,7 @@ def test_boundary():
 
 
 def test_boundaryspec_classmethods():
-    """Test that the classmethods for BoundarySpec work correctly."""
+    """Test that the classmethods for ``BoundarySpec`` work correctly."""
 
     # pml
     boundary_spec = BoundarySpec.pml(x=False, y=True, z=True)
@@ -188,3 +191,26 @@ def test_boundaryspec_classmethods():
     assert all(
         isinstance(boundary, PML) for boundary_dim in boundaries for boundary in boundary_dim
     )
+
+
+@pytest.mark.parametrize("absorber_type", [PML, StablePML, Absorber])
+def test_num_layers_validator(absorber_type):
+    """Test the Field validators that enforce ``num_layers>0``."""
+    with pytest.raises(pydantic.ValidationError):
+        _ = absorber_type(num_layers=0)
+
+
+@pytest.mark.parametrize(
+    "absorber_type, num_layers",
+    [
+        (PML, MIN_NUM_PML_LAYERS),
+        (StablePML, MIN_NUM_STABLE_PML_LAYERS),
+        (Absorber, MIN_NUM_ABSORBER_LAYERS),
+    ],
+)
+def test_num_layers_validator_warning(absorber_type, num_layers):
+    """Test the validators in ``PML`` which should display a warning not an error."""
+    with AssertLogLevel(None):
+        _ = absorber_type(num_layers=num_layers)
+    with AssertLogLevel("WARNING"):
+        _ = absorber_type(num_layers=num_layers - 1)

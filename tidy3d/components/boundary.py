@@ -18,6 +18,30 @@ from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
 from .types import TYPE_TAG_STR, Axis, Complex
 
 MIN_NUM_PML_LAYERS = 6
+MIN_NUM_STABLE_PML_LAYERS = 6
+MIN_NUM_ABSORBER_LAYERS = 6
+
+
+def warn_num_layers_factory(min_num_layers: int, descr: str):
+    """Several similar classes defined have a ``num_layers`` data member, and they generate
+    similar warning messages when ``num_layers`` is too small.  This function creates a pydantic
+    validator which can be shared with all of these classes to create these warning messages."""
+
+    @pd.validator("num_layers", allow_reuse=True, always=True)
+    def _warn_num_layers(cls, val):
+        if val < min_num_layers:
+            cls_name = cls.__name__
+            log.warning(
+                f"A {descr} ({cls_name}) boundary was created with {val} layers. "
+                f"{cls_name}s with less than {min_num_layers} layers are highly subject to "
+                "unwanted numerical artifacts. We strongly recommend "
+                "increasing the number of layers. For more details refer to: "
+                f"'https://docs.flexcompute.com/projects/tidy3d/en/latest/api/_autosummary/tidy3d.{cls_name}.html'.",
+                log_once=True,
+            )
+        return val
+
+    return _warn_num_layers
 
 
 class BoundaryEdge(ABC, Tidy3dBaseModel):
@@ -267,7 +291,7 @@ class AbsorberSpec(BoundaryEdge):
         ...,
         title="Number of Layers",
         description="Number of layers of standard PML.",
-        ge=MIN_NUM_PML_LAYERS,
+        ge=1,
     )
     parameters: AbsorberParams = pd.Field(
         ...,
@@ -384,13 +408,17 @@ class PML(AbsorberSpec):
         12,
         title="Number of Layers",
         description="Number of layers of standard PML.",
-        ge=MIN_NUM_PML_LAYERS,
+        ge=1,
     )
 
     parameters: PMLParams = pd.Field(
         DefaultPMLParameters,
         title="PML Parameters",
         description="Parameters of the complex frequency-shifted absorption poles.",
+    )
+
+    _warn_num_layers = warn_num_layers_factory(
+        min_num_layers=MIN_NUM_PML_LAYERS, descr="perfectly-matched layer"
     )
 
 
@@ -422,13 +450,17 @@ class StablePML(AbsorberSpec):
         40,
         title="Number of Layers",
         description="Number of layers of 'stable' PML.",
-        ge=MIN_NUM_PML_LAYERS,
+        ge=1,
     )
 
     parameters: PMLParams = pd.Field(
         DefaultStablePMLParameters,
         title="Stable PML Parameters",
         description="'Stable' parameters of the complex frequency-shifted absorption poles.",
+    )
+
+    _warn_num_layers = warn_num_layers_factory(
+        min_num_layers=MIN_NUM_STABLE_PML_LAYERS, descr="stable perfectly-matched layer"
     )
 
 
@@ -475,13 +507,17 @@ class Absorber(AbsorberSpec):
         40,
         title="Number of Layers",
         description="Number of layers of absorber to add to + and - boundaries.",
-        ge=MIN_NUM_PML_LAYERS,
+        ge=1,
     )
 
     parameters: AbsorberParams = pd.Field(
         DefaultAbsorberParameters,
         title="Absorber Parameters",
         description="Adiabatic absorber parameters.",
+    )
+
+    _warn_num_layers = warn_num_layers_factory(
+        min_num_layers=MIN_NUM_ABSORBER_LAYERS, descr="absorber"
     )
 
 
