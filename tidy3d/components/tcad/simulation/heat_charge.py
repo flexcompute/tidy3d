@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import copy
 from enum import Enum
 from typing import Optional, Union
 
@@ -23,6 +24,7 @@ from tidy3d.components.bc_placement import (
     StructureSimulationBoundary,
     StructureStructureInterface,
 )
+from tidy3d.components.data.data_array import SpatialDataArray
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
@@ -42,6 +44,7 @@ from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
 )
+from tidy3d.components.tcad.doping import GaussianDoping
 from tidy3d.components.tcad.grid import (
     DistanceUnstructuredGrid,
     UniformUnstructuredGrid,
@@ -1778,3 +1781,112 @@ class HeatChargeSimulation(AbstractSimulation):
         """Returns True if 'HeatFromElectricSource' has been defined."""
 
         return any(isinstance(source, HeatFromElectricSource) for source in self.sources)
+
+    def _create_charge_copy_xy(self) -> HeatChargeSimulation:
+        """If a Charge simulation is not in the x-y plane we need to rotate it to that plane."""
+
+        sim_types = self._get_simulation_types()
+
+        if TCADAnalysisTypes.CHARGE in sim_types:
+            zero_dims = self.zero_dims
+            if len(zero_dims) > 0:
+                if zero_dims[0] != 2:
+                    # check doping boxes
+                    # the following dictionary associates a structure with a modified medium
+                    struct_medium = {}
+                    for structure in self.structures:
+                        if isinstance(structure.medium.charge, SemiconductorMedium):
+                            sc_medium = copy.deepcopy(structure.medium.charge)
+
+                            dopants = {"N_a": sc_medium.N_a, "N_d": sc_medium.N_d}
+                            for key, dopant in dopants.items():
+                                if isinstance(dopant, SpatialDataArray):
+                                    new_dopant = (
+                                        dopant.rename({"z": "z_tmp"})
+                                        .rename({["x", "y"][zero_dims[0]]: "z"})
+                                        .rename({"z_tmp": ["x", "y"][zero_dims[0]]})
+                                    )
+                                    sc_medium = sc_medium.updated_copy(**{key: new_dopant})
+                                elif isinstance(dopant, tuple):
+                                    new_boxes = []
+                                    for doping_box in dopant:
+                                        if isinstance(doping_box, GaussianDoping):
+                                            new_center = list(doping_box.center)
+                                            new_center[zero_dims[0]] = doping_box.center[2]
+                                            new_center[2] = doping_box.center[zero_dims[0]]
+
+                                            new_size = list(doping_box.size)
+                                            new_size[zero_dims[0]] = doping_box.size[2]
+                                            new_size[2] = doping_box.size[zero_dims[0]]
+
+                                            source = doping_box.source
+                                            if "z" in source:
+                                                source = source.replace(
+                                                    "z", ["x", "y"][zero_dims[0]]
+                                                )
+
+                                            new_boxes.append(
+                                                doping_box.updated_copy(
+                                                    center=new_center, size=new_size, source=source
+                                                )
+                                            )
+                                        else:
+                                            new_boxes.append(doping_box)
+                                        sc_medium = sc_medium.updated_copy(**{key: new_boxes})
+                            struct_medium[structure] = structure.medium.updated_copy(
+                                charge=sc_medium
+                            )
+                        else:
+                            struct_medium[structure] = structure.medium
+
+                    # change structures
+                    new_structures = []
+                    for structure in self.structures:
+                        new_center = list(structure.geometry.center)
+                        new_center[zero_dims[0]] = structure.geometry.center[2]
+                        new_center[2] = structure.geometry.center[zero_dims[0]]
+
+                        new_size = list(structure.geometry.size)
+                        new_size[zero_dims[0]] = structure.geometry.size[2]
+                        new_size[2] = structure.geometry.size[zero_dims[0]]
+                        new_structures.append(
+                            structure.updated_copy(
+                                geometry=structure.geometry.updated_copy(
+                                    center=new_center, size=new_size
+                                ),
+                                medium=struct_medium[structure],
+                            )
+                        )
+
+                    # Boundary conditions
+                    new_boundary_spec = []
+                    for boundary in self.boundary_spec:
+                        new_placement = boundary.placement
+                        PlacementTypes = (SimulationBoundary, StructureSimulationBoundary)
+                        if isinstance(boundary.placement, PlacementTypes):
+                            surfaces = []
+                            for s in boundary.placement.surfaces:
+                                if "z" in s:
+                                    new_s = s.replace("z", ["x", "y"][zero_dims[0]])
+                                    surfaces.append(new_s)
+                                else:
+                                    surfaces.append(s)
+                            new_placement = new_placement.updated_copy(surfaces=surfaces)
+
+                        new_boundary_spec.append(boundary.updated_copy(placement=new_placement))
+
+                    new_size = list(self.size)
+                    new_size[zero_dims[0]] = self.size[2]
+                    new_size[2] = self.size[zero_dims[0]]
+
+                    return self.updated_copy(
+                        structures=new_structures,
+                        boundary_spec=new_boundary_spec,
+                        size=new_size,
+                    )
+                else:
+                    return self
+            else:
+                return self
+        else:
+            return self

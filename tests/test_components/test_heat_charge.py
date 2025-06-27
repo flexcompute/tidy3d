@@ -2039,3 +2039,91 @@ def test_heat_conduction_simulations():
     with pytest.raises(pd.ValidationError):
         # This should error since the conduction simulation doesn't have a monitor
         _ = sim.updated_copy(monitors=[temp_monitor])
+
+
+def test_charge_copy_xy():
+    """Test weather the function _create_charge_copy_xy works as expected"""
+    # create a Gaussian doping box
+    d_box = td.GaussianDoping(
+        center=(0, 0, 0),
+        size=(1, 1, 2),
+        ref_con=1e15,
+        concentration=1e18,
+        width=0.1,
+        source="zmin",
+    )
+
+    # create SpatialDataArray doping
+    doping_da = td.SpatialDataArray(
+        data=np.random.random((3, 1, 3)),
+        coords={"x": [0, 1, 2], "y": [0], "z": [0, 1, 2]},
+        name="doping_datarray",
+    )
+
+    #  create a semiconductor medium
+    semiconductor = td.SemiconductorMedium(
+        permittivity=11.7,
+        N_c=1e18,
+        N_v=1e18,
+        E_g=1.12,
+        mobility_n=td.ConstantMobilityModel(mu=1500),
+        mobility_p=td.ConstantMobilityModel(mu=500),
+        N_d=doping_da,
+        N_a=[d_box],
+    )
+
+    # create a structure with the semiconductor medium
+    structure = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1, 2, 3)),
+        medium=td.MultiPhysicsMedium(charge=semiconductor),
+        name="test_structure",
+    )
+
+    # create boundary conditions
+    bc1 = td.HeatChargeBoundarySpec(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1])),
+        placement=td.StructureSimulationBoundary(structure="test_structure", surfaces=["z+", "z-"]),
+    )
+
+    bc2 = td.HeatChargeBoundarySpec(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[0])),
+        placement=td.SimulationBoundary(surfaces=["z+", "x-"]),
+    )
+
+    sim = td.HeatChargeSimulation(
+        structures=[structure],
+        medium=td.Medium(heat_spec=td.FluidMedium()),
+        size=(2, 0, 2),
+        center=(0, 0, 0),
+        boundary_spec=[bc1, bc2],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        monitors=[
+            td.SteadyPotentialMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="potential_monitor",
+                unstructured=True,
+            )
+        ],
+        analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
+            temperature=300,
+            tolerance_settings=td.ChargeToleranceSpec(rel_tol=1e5, abs_tol=1e3, max_iters=400),
+        ),
+    )
+
+    changed_sim = sim._create_charge_copy_xy()
+
+    assert changed_sim.size == (2, 2, 0), "Size should be updated to (2, 2, 0)"
+
+    assert list(changed_sim.structures[0].medium.charge.N_d.coords["x"].data) == [0, 1, 2]
+    assert list(changed_sim.structures[0].medium.charge.N_d.coords["y"].data) == [0, 1, 2]
+    assert list(changed_sim.structures[0].medium.charge.N_d.coords["z"].data) == [0]
+
+    assert changed_sim.structures[0].medium.charge.N_a[0].source == "ymin"
+    assert changed_sim.structures[0].medium.charge.N_a[0].size == (1, 2, 1)
+
+    assert changed_sim.structures[0].geometry.size == (1, 3, 2)
+
+    assert changed_sim.boundary_spec[0].placement.surfaces == ("y+", "y-")
+
+    assert changed_sim.boundary_spec[1].placement.surfaces == ("y+", "x-")
