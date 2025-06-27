@@ -95,7 +95,8 @@ def configure_fn(apikey: str) -> None:
     if not apikey:
         current_apikey = get_description()
         message = f"Current API key: [{current_apikey}]\n" if current_apikey else ""
-        apikey = click.prompt(f"{message}Please enter your api key", type=str)
+        print(message)
+        apikey = click.prompt("Please enter your api key", type=str)
 
     try:
         resp = requests.get(
