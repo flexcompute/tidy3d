@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -23,6 +23,7 @@ from tidy3d.components.data.data_array import (
     SpatialDataArray,
 )
 from tidy3d.components.types import ArrayLike, Ax, Axis, Bound
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_grid
 from tidy3d.constants import inf
 from tidy3d.exceptions import DataError
@@ -682,18 +683,3 @@ class TriangularGridDataset(UnstructuredGridDataset):
         e02 = self.points[self.cells.sel(vertex_index=2)] - v0
 
         return 0.5 * np.abs(np.cross(e01, e02))
-
-
-# pop_axis_and_swap() is already defined in tidy3d.components.geometry.base.
-# Unfortunately it is impossible to import this module without causing a
-# circular import error.  It's a very short function, so I redefined it below.
-# Perhaps later, I'll refactor the code to move the pop_axis() and unpop_axis()
-# functions out of that module and into tidy3d.components.base.
-def pop_axis_and_swap(
-    coord: tuple[Any, Any, Any], axis: int, transpose: bool = False
-) -> tuple[Any, tuple[Any, Any]]:
-    plane_vals = list(coord)
-    axis_val = plane_vals.pop(axis)
-    if transpose:
-        plane_vals = [plane_vals[1], plane_vals[0]]
-    return axis_val, tuple(plane_vals)

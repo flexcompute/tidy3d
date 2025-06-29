@@ -22,6 +22,7 @@ from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
+from tidy3d.components.utils import pop_axis_and_swap, unpop_axis_and_swap
 from tidy3d.constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from tidy3d.exceptions import SetupError, Tidy3dError
 from tidy3d.log import log
@@ -382,8 +383,8 @@ class Scene(Tidy3dBaseModel):
     ) -> tuple[tuple[float, float], tuple[float, float]]:
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis_and_swap(bounds[0], axis=axis, transpose=transpose)
-        _, (hmax, vmax) = Box.pop_axis_and_swap(bounds[1], axis=axis, transpose=transpose)
+        _, (hmin, vmin) = pop_axis_and_swap(bounds[0], axis=axis, transpose=transpose)
+        _, (hmax, vmax) = pop_axis_and_swap(bounds[1], axis=axis, transpose=transpose)
 
         # account for unordered limits
         if hlim is None:
@@ -681,8 +682,8 @@ class Scene(Tidy3dBaseModel):
         """
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = Box.pop_axis_and_swap(self.bounds[0], axis=axis, transpose=transpose)
-        _, (hmax, vmax) = Box.pop_axis_and_swap(self.bounds[1], axis=axis, transpose=transpose)
+        _, (hmin, vmin) = pop_axis_and_swap(self.bounds[0], axis=axis, transpose=transpose)
+        _, (hmax, vmax) = pop_axis_and_swap(self.bounds[1], axis=axis, transpose=transpose)
 
         if hlim is not None:
             (hmin, hmax) = hlim
@@ -696,10 +697,10 @@ class Scene(Tidy3dBaseModel):
         v_size = (vmax - vmin) or inf
 
         axis, center_normal = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        center = Box.unpop_axis_and_swap(
+        center = unpop_axis_and_swap(
             center_normal, (h_center, v_center), axis=axis, transpose=transpose
         )
-        size = Box.unpop_axis_and_swap(0.0, (h_size, v_size), axis=axis, transpose=transpose)
+        size = unpop_axis_and_swap(0.0, (h_size, v_size), axis=axis, transpose=transpose)
         plane = Box(center=center, size=size)
 
         medium_shapes = []
@@ -1210,9 +1211,7 @@ class Scene(Tidy3dBaseModel):
         """
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = Box.pop_axis_and_swap(
-            coords, normal_axis_ind, transpose=transpose
-        )
+        normal_axis, plane_axes = pop_axis_and_swap(coords, normal_axis_ind, transpose=transpose)
 
         comp2ind = {dim + dim: index for dim, index in zip("xyz", range(3))}
 
@@ -1241,7 +1240,7 @@ class Scene(Tidy3dBaseModel):
                     stacklevel=2,
                 )
 
-            _, plane_axes_inds = Box.pop_axis_and_swap(
+            _, plane_axes_inds = pop_axis_and_swap(
                 [0, 1, 2], axis=normal_axis_ind, transpose=transpose
             )
 
@@ -2018,9 +2017,7 @@ class Scene(Tidy3dBaseModel):
         """
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = Box.pop_axis_and_swap(
-            coords, normal_axis_ind, transpose=transpose
-        )
+        normal_axis, plane_axes = pop_axis_and_swap(coords, normal_axis_ind, transpose=transpose)
 
         # make grid for eps interpolation
         # we will do this by combining shape bounds and points where custom properties are provided
@@ -2033,9 +2030,7 @@ class Scene(Tidy3dBaseModel):
         rmax.insert(normal_axis_ind, normal_position)
 
         # for the time being let's assume we'll always need to generate a mesh
-        _, plane_axes_inds = Box.pop_axis_and_swap(
-            [0, 1, 2], axis=normal_axis_ind, transpose=transpose
-        )
+        _, plane_axes_inds = pop_axis_and_swap([0, 1, 2], axis=normal_axis_ind, transpose=transpose)
 
         # build grid
         N = 100

@@ -25,6 +25,7 @@ from tidy3d.components.simulation import (
     validate_boundaries_for_zero_dims,
 )
 from tidy3d.components.types import Ax, Axis, FreqArray, Symmetry, annotate_type
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf
@@ -316,17 +317,17 @@ class EMESimulation(AbstractYeeGridSimulation):
         rmax = self.geometry.bounds[1][self.axis]
         ports = np.array([rmin + self.port_offsets[0], rmax - self.port_offsets[1]])
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
+        _, (axis_x, axis_y) = pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = ports
         if axis_y == self.axis:
             boundaries_y = ports
-        _, (xmin, ymin) = self.pop_axis_and_swap(
+        _, (xmin, ymin) = pop_axis_and_swap(
             self.simulation_bounds[0], axis=axis, transpose=transpose
         )
-        _, (xmax, ymax) = self.pop_axis_and_swap(
+        _, (xmax, ymax) = pop_axis_and_swap(
             self.simulation_bounds[1], axis=axis, transpose=transpose
         )
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
@@ -376,17 +377,17 @@ class EMESimulation(AbstractYeeGridSimulation):
         subgrid_boundaries = np.array(eme_grid_spec.subgrid_boundaries)
         subgrids = eme_grid_spec.subgrids
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
+        _, (axis_x, axis_y) = pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = subgrid_boundaries
         if axis_y == self.axis:
             boundaries_y = subgrid_boundaries
-        _, (xmin, ymin) = self.pop_axis_and_swap(
+        _, (xmin, ymin) = pop_axis_and_swap(
             self.simulation_bounds[0], axis=axis, transpose=transpose
         )
-        _, (xmax, ymax) = self.pop_axis_and_swap(
+        _, (xmax, ymax) = pop_axis_and_swap(
             self.simulation_bounds[1], axis=axis, transpose=transpose
         )
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
@@ -442,17 +443,17 @@ class EMESimulation(AbstractYeeGridSimulation):
         kwargs.setdefault("colors", "black")
         cell_boundaries = self.eme_grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
+        _, (axis_x, axis_y) = pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
         boundaries_x = []
         boundaries_y = []
         if axis_x == self.axis:
             boundaries_x = cell_boundaries
         if axis_y == self.axis:
             boundaries_y = cell_boundaries
-        _, (xmin, ymin) = self.pop_axis_and_swap(
+        _, (xmin, ymin) = pop_axis_and_swap(
             self.simulation_bounds[0], axis=axis, transpose=transpose
         )
-        _, (xmax, ymax) = self.pop_axis_and_swap(
+        _, (xmax, ymax) = pop_axis_and_swap(
             self.simulation_bounds[1], axis=axis, transpose=transpose
         )
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]

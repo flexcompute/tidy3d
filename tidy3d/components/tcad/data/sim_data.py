@@ -19,7 +19,6 @@ from tidy3d.components.data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
 )
-from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.tcad.data.monitor_data.mesh import VolumeMeshData
 from tidy3d.components.tcad.data.types import (
     SteadyPotentialData,
@@ -31,6 +30,7 @@ from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.components.types import Ax, RealFieldVal, annotate_type
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.log import log
@@ -367,12 +367,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
 
             # compute plot bounds
             field_data_bounds = field_data.bounds
-            _, min_bounds = Geometry.pop_axis_and_swap(
-                field_data_bounds[0], axis, transpose=transpose
-            )
-            _, max_bounds = Geometry.pop_axis_and_swap(
-                field_data_bounds[1], axis, transpose=transpose
-            )
+            _, min_bounds = pop_axis_and_swap(field_data_bounds[0], axis, transpose=transpose)
+            _, max_bounds = pop_axis_and_swap(field_data_bounds[1], axis, transpose=transpose)
 
         if isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions
@@ -424,9 +420,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             axis = "xyz".index(planar_coord)
             position = float(field_data.coords[planar_coord])
 
-            _, xy_coord_labels = Geometry.pop_axis_and_swap(
-                list("xyz"), axis=axis, transpose=transpose
-            )
+            _, xy_coord_labels = pop_axis_and_swap(list("xyz"), axis=axis, transpose=transpose)
 
             x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
             field_data.plot(

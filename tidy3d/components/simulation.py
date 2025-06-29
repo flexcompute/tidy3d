@@ -19,6 +19,7 @@ except ImportError:
 import pydantic.v1 as pydantic
 import xarray as xr
 
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
@@ -1045,7 +1046,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         kwargs.setdefault("snapping_linestyle", "--")
         cell_boundaries = self.grid.boundaries
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
+        _, (axis_x, axis_y) = pop_axis_and_swap([0, 1, 2], axis=axis, transpose=transpose)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
 
@@ -1081,7 +1082,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             for structures, plot_param in zip(all_override_structures, plot_params):
                 for structure in structures:
                     bounds = list(zip(*structure.geometry.bounds))
-                    _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis_and_swap(
+                    _, ((xmin, xmax), (ymin, ymax)) = pop_axis_and_swap(
                         bounds, axis=axis, transpose=transpose
                     )
                     xmin, xmax, ymin, ymax = (
@@ -1106,9 +1107,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             plot_params,
         ):
             for point in points:
-                _, (x_point, y_point) = Geometry.pop_axis_and_swap(
-                    point, axis=axis, transpose=transpose
-                )
+                _, (x_point, y_point) = pop_axis_and_swap(point, axis=axis, transpose=transpose)
                 if x_point is None and y_point is None:
                     continue
                 if x_point is None:
@@ -1213,7 +1212,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundaries = self.boundary_spec.to_list
 
         normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dim_u, dim_v) = self.pop_axis_and_swap([0, 1, 2], axis=normal_axis, transpose=transpose)
+        _, (dim_u, dim_v) = pop_axis_and_swap([0, 1, 2], axis=normal_axis, transpose=transpose)
 
         umin, umax = ax.get_xlim()
         vmin, vmax = ax.get_ylim()

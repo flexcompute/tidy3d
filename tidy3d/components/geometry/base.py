@@ -38,6 +38,7 @@ from tidy3d.components.types import (
     Size,
     annotate_type,
 )
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
@@ -277,7 +278,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         if axis != 2:
             print("WARNING: Geometry.intersections_plane(axis!=2)\nDOES PLOT LOOK OKAY?")  # DEBUG
 
-            # last, indices = self.pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
+            # last, indices = pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
             last, indices = self.pop_axis((0, 1, 2), axis)
             to_2D = to_2D[[*list(indices), last, 3]]
         return self.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
@@ -484,8 +485,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Packed as ``(zmin, zmax), ((xmin, ymin), (xmax, ymax))``.
         """
         b_min, b_max = self.bounds
-        zmin, (xmin, ymin) = self.pop_axis_and_swap(b_min, axis=axis, transpose=transpose)
-        zmax, (xmax, ymax) = self.pop_axis_and_swap(b_max, axis=axis, transpose=transpose)
+        zmin, (xmin, ymin) = pop_axis_and_swap(b_min, axis=axis, transpose=transpose)
+        zmax, (xmax, ymax) = pop_axis_and_swap(b_max, axis=axis, transpose=transpose)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
     @staticmethod
@@ -669,7 +670,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         str, str
             Labels of plot, packaged as ``(xlabel, ylabel)``.
         """
-        _, (xlabel, ylabel) = Geometry.pop_axis_and_swap("xyz", axis=axis, transpose=transpose)
+        _, (xlabel, ylabel) = pop_axis_and_swap("xyz", axis=axis, transpose=transpose)
         return xlabel, ylabel
 
     def _get_plot_limits(
@@ -827,40 +828,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis_val, tuple(plane_vals)
 
     @staticmethod
-    def pop_axis_and_swap(
-        coord: tuple[Any, Any, Any],
-        axis: int,
-        transpose: bool = False,
-    ) -> tuple[Any, tuple[Any, Any]]:
-        """
-        ``pop_axis_and_swap()`` is identical to ``pop_axis()``, except that it accepts an
-        additional ``transpose`` argument which reverses the output order.  Examples:
-
-        ``pop_axis_and_swap(("x", "y", "z"), 1, transpose=False)``  ->  ``("y", ("x", "z"))``
-        ``pop_axis_and_swap(("x", "y", "z"), 1, transpose=True)``   ->  ``("y", ("z", "x"))``
-
-        Parameters
-        ----------
-        coord : Tuple[Any, Any, Any]
-            Tuple of three values in original coordinate system.
-        axis : int
-            Integer index into 'xyz' (0,1,2).
-        transpose : bool = False
-            Optional: Swap the order of the data from the two remaining axes in the output tuple.
-
-        Returns
-        -------
-        Any, Tuple[Any, Any]
-            The input coordinates are separated into the one along the axis provided
-            and the two on the planar coordinates,
-            like ``axis_coord, (planar_coord1, planar_coord2)``.
-        """
-        axis_val, plane_vals = Geometry.pop_axis(coord, axis)
-        if transpose:
-            return axis_val, (plane_vals[1], plane_vals[0])
-        return axis_val, plane_vals
-
-    @staticmethod
     def unpop_axis(
         ax_coord: Any,
         plane_coords: tuple[Any, Any],
@@ -885,46 +852,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         coords = list(plane_coords)
         coords.insert(axis, ax_coord)
         return tuple(coords)
-
-    @staticmethod
-    def unpop_axis_and_swap(
-        ax_coord: Any,
-        plane_coords: tuple[Any, Any],
-        axis: int,
-        transpose: bool = False,
-    ) -> tuple[Any, Any, Any]:
-        """
-        ``unpop_axis_and_swap()`` is identical to ``unpop_axis()``, except that
-        it accepts an additional ``transpose`` argument which reverses the order of
-        ``plane_coords`` before sending them to ``unpop_axis()``.  For example:
-
-        ``unpop_axis_and_swap("y", ("x", "z"), 1, transpose=False)``  -->  ``("x", "y", "z")``
-        ``unpop_axis_and_swap("y", ("x", "z"), 1, transpose=True)``   -->  ``("z", "y", "x")``
-
-        This function is the inverse of ``pop_axis_and_swap()``.  For example:
-        ``unpop_axis_and_swap("y", ("z", "x"), 1, transpose=True)``   -->  ``("x", "y", "z")``
-
-        Parameters
-        ----------
-        ax_coord : Any
-            Value along axis direction.
-        plane_coords : Tuple[Any, Any]
-            Values along ordered planar directions.
-        axis : int
-            Integer index into 'xyz' (0,1,2).
-        transpose : bool = False
-            Optional: Swap the order of the entries in plane_coords[].
-            (This overrides the default lexicographic axis order.)
-
-        Returns
-        -------
-        Tuple[Any, Any, Any]
-            The three values in the xyz coordinate system.
-        """
-        coords = plane_coords
-        if transpose:
-            coords = (coords[1], coords[0])
-        return Geometry.unpop_axis(ax_coord, coords, axis)
 
     @staticmethod
     def parse_xyz_kwargs(**xyz) -> tuple[Axis, float]:
@@ -1964,7 +1891,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         """
         vals = 3 * [plane_val]
         vals[self.axis] = axis_val
-        _, (val_x, val_y) = self.pop_axis_and_swap(vals, axis=axis, transpose=transpose)
+        _, (val_x, val_y) = pop_axis_and_swap(vals, axis=axis, transpose=transpose)
         return val_x, val_y
 
     @cached_property
@@ -2271,8 +2198,8 @@ class Box(SimplePlaneIntersection, Centered):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
-        z0, (x0, y0) = self.pop_axis_and_swap(self.center, axis=axis, transpose=transpose)
-        Lz, (Lx, Ly) = self.pop_axis_and_swap(self.size, axis=axis, transpose=transpose)
+        z0, (x0, y0) = pop_axis_and_swap(self.center, axis=axis, transpose=transpose)
+        Lz, (Lx, Ly) = pop_axis_and_swap(self.size, axis=axis, transpose=transpose)
         dz = np.abs(z0 - position)
         if dz > Lz / 2 + fp_eps:
             return []
@@ -2348,7 +2275,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         # intersect all shapes with the input self
         bs_min, bs_max = (
-            self.pop_axis_and_swap(bounds, axis=normal_ind, transpose=transpose)[1]
+            pop_axis_and_swap(bounds, axis=normal_ind, transpose=transpose)[1]
             for bounds in self.bounds
         )
 
@@ -2455,7 +2382,7 @@ class Box(SimplePlaneIntersection, Centered):
         """
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dx, dy) = self.pop_axis_and_swap(direction, axis=plot_axis, transpose=transpose)
+        _, (dx, dy) = pop_axis_and_swap(direction, axis=plot_axis, transpose=transpose)
 
         # conditions to check to determine whether to plot arrow, taking into account the
         # possibility of a custom arrow base
@@ -2469,12 +2396,12 @@ class Box(SimplePlaneIntersection, Centered):
             )
             center = arrow_base
 
-        _, (dx, dy) = self.pop_axis_and_swap(direction, axis=plot_axis, transpose=transpose)
+        _, (dx, dy) = pop_axis_and_swap(direction, axis=plot_axis, transpose=transpose)
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
-            _, (x0, y0) = self.pop_axis_and_swap(center, axis=plot_axis, transpose=transpose)
+            _, (x0, y0) = pop_axis_and_swap(center, axis=plot_axis, transpose=transpose)
 
             # Reasonable value for temporary arrow size.  The correct size and direction
             # have to be calculated after all transforms have been set.  That is why we

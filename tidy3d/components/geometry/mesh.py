@@ -13,6 +13,7 @@ from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataAr
 from tidy3d.components.data.dataset import TriangleMeshDataset
 from tidy3d.components.data.validators import validate_no_nans
 from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.components.utils import unpop_axis_and_swap
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import fp_eps, inf
 from tidy3d.exceptions import DataError, ValidationError
@@ -613,7 +614,7 @@ class TriangleMesh(base.Geometry, ABC):
             # permute so normal is aligned with z axis
             # and (y, z), (x, z), resp. (x, y) are aligned with (x, y)
             identity = np.eye(3)
-            permutation = self.unpop_axis_and_swap(
+            permutation = unpop_axis_and_swap(
                 identity[2], identity[0:2], axis=axis, transpose=transpose
             )
             mapping[:3, :3] = np.array(permutation).T

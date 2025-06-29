@@ -14,6 +14,7 @@ from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.constants import C_0, LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.packaging import verify_packages_import
@@ -147,7 +148,7 @@ class Sphere(base.Centered, base.Circular):
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
-        z0, (x0, y0) = self.pop_axis_and_swap(self.center, axis=axis, transpose=transpose)
+        z0, (x0, y0) = pop_axis_and_swap(self.center, axis=axis, transpose=transpose)
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
@@ -513,9 +514,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         if radius_offset <= 0:
             return []
-        _, (x0, y0) = self.pop_axis_and_swap(
-            static_self.center, axis=self.axis, transpose=transpose
-        )
+        _, (x0, y0) = pop_axis_and_swap(static_self.center, axis=self.axis, transpose=transpose)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis, transpose: bool = False):
@@ -807,7 +806,5 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             axis=axis,
             transpose=transpose,
         )
-        _, (x_center, y_center) = self.pop_axis_and_swap(
-            self.center, axis=axis, transpose=transpose
-        )
+        _, (x_center, y_center) = pop_axis_and_swap(self.center, axis=axis, transpose=transpose)
         return [x_center + lx_offset, y_center + ly_offset]

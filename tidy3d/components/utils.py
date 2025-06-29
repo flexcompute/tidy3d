@@ -1,0 +1,84 @@
+"""Utilities shared by multiple components go here."""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+# pop_axis_and_swap() is already defined in tidy3d.components.geometry.base.
+# Unfortunately it is impossible to import this module without causing a
+# circular import error.  It's a very short function, so I redefined it below.
+# Perhaps later, I'll refactor the code to move the pop_axis() and unpop_axis()
+# functions out of that module and into tidy3d.components.base.
+def pop_axis_and_swap(
+    coord: tuple[Any, Any, Any], axis: int, transpose: bool = False
+) -> tuple[Any, tuple[Any, Any]]:
+    """
+    ``pop_axis_and_swap()`` is identical to ``Geometry.pop_axis()``, except that it accepts
+    an additional ``transpose`` argument which reverses the output order.  Examples:
+
+    ``pop_axis_and_swap(("x", "y", "z"), 1, transpose=False)``  ->  ``("y", ("x", "z"))``
+    ``pop_axis_and_swap(("x", "y", "z"), 1, transpose=True)``   ->  ``("y", ("z", "x"))``
+
+    Parameters
+    ----------
+    coord : Tuple[Any, Any, Any]
+        Tuple of three values in original coordinate system.
+    axis : int
+        Integer index into 'xyz' (0,1,2).
+    transpose : bool = False
+        Optional: Swap the order of the data from the two remaining axes in the output tuple.
+
+    Returns
+    -------
+    Any, Tuple[Any, Any]
+        The input coordinates are separated into the one along the axis provided
+        and the two on the planar coordinates,
+        like ``axis_coord, (planar_coord1, planar_coord2)``.
+    """
+    plane_vals = list(coord)
+    axis_val = plane_vals.pop(axis)
+    if transpose:
+        plane_vals = [plane_vals[1], plane_vals[0]]
+    return axis_val, tuple(plane_vals)
+
+
+def unpop_axis_and_swap(
+    ax_coord: Any,
+    plane_coords: tuple[Any, Any],
+    axis: int,
+    transpose: bool = False,  # <-- newly added
+) -> tuple[Any, Any, Any]:
+    """
+    ``unpop_axis_and_swap()`` is identical to ``Geompetry.unpop_axis()``, except that
+    it accepts an additional ``transpose`` argument which reverses the order of
+    ``plane_coords`` before sending them to ``unpop_axis()``.  For example:
+
+    ``unpop_axis_and_swap("y", ("x", "z"), 1, transpose=False)``  -->  ``("x", "y", "z")``
+    ``unpop_axis_and_swap("y", ("x", "z"), 1, transpose=True)``   -->  ``("z", "y", "x")``
+
+    This function is the inverse of ``pop_axis_and_swap()``.  For example:
+    ``unpop_axis_and_swap("y", ("z", "x"), 1, transpose=True)``   -->  ``("x", "y", "z")``
+
+    Parameters
+    ----------
+    ax_coord : Any
+        Value along axis direction.
+    plane_coords : Tuple[Any, Any]
+        Values along ordered planar directions.
+    axis : int
+        Integer index into 'xyz' (0,1,2).
+    transpose : bool = False
+        Optional: Swap the order of the entries in plane_coords[].
+        (This overrides the default lexicographic axis order.)
+
+    Returns
+    -------
+    Tuple[Any, Any, Any]
+        The three values in the xyz coordinate system.
+    """
+    coords = list(plane_coords)
+    if transpose:  # <-- newly added
+        coords = [coords[1], coords[0]]  # <-- newly added
+    coords.insert(axis, ax_coord)
+    return tuple(coords)

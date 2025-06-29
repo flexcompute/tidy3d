@@ -57,6 +57,7 @@ from tidy3d.components.types import (
     PlotScale,
     Symmetry,
 )
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.validators import (
     validate_freqs_min,
     validate_freqs_not_empty,
@@ -311,9 +312,7 @@ class ModeSolver(Tidy3dBaseModel):
         for dim in range(3):
             if simulation.center[dim] != plane.center[dim]:
                 mode_symmetry[dim] = 0
-        _, solver_sym = plane.pop_axis_and_swap(
-            mode_symmetry, axis=normal_axis, transpose=transpose
-        )
+        _, solver_sym = pop_axis_and_swap(mode_symmetry, axis=normal_axis, transpose=transpose)
         return solver_sym
 
     @cached_property
@@ -2532,14 +2531,14 @@ class ModeSolver(Tidy3dBaseModel):
         """Get the mode plane center and limits."""
         normal_axis = plane.size.index(0.0)
 
-        n_axis, t_axes = plane.pop_axis_and_swap([0, 1, 2], normal_axis, transpose=transpose)
+        n_axis, t_axes = pop_axis_and_swap([0, 1, 2], normal_axis, transpose=transpose)
         a_center = [None, None, None]
         a_center[n_axis] = plane.center[n_axis]
 
-        _, (h_min_s, v_min_s) = Box.pop_axis_and_swap(
+        _, (h_min_s, v_min_s) = pop_axis_and_swap(
             simulation.bounds[0], axis=n_axis, transpose=transpose
         )
-        _, (h_max_s, v_max_s) = Box.pop_axis_and_swap(
+        _, (h_max_s, v_max_s) = pop_axis_and_swap(
             simulation.bounds[1], axis=n_axis, transpose=transpose
         )
 
