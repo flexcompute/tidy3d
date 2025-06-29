@@ -24,6 +24,7 @@ from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError
@@ -452,6 +453,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -488,6 +490,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             matplotlib axes to plot on, if not specified, one is created.
         shading: str = 'flat'
             Shading argument for Xarray plot method ('flat','nearest','goraud')
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -651,6 +655,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             ax=ax,
             shading=shading,
             infer_intervals=True if shading == "flat" else False,
+            transpose=transpose,
         )
 
     def plot_field(
@@ -666,6 +671,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -703,6 +709,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             matplotlib axes to plot on, if not specified, one is created.
         shading: str = 'flat'
             Shading argument for Xarray plot method ('flat','nearest','goraud')
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or ``mode_index``, if applicable.
@@ -730,6 +738,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             vmax=vmax,
             ax=ax,
             shading=shading,
+            transpose=transpose,
             **sel_kwargs,
         )
 
@@ -747,6 +756,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         vmax: Optional[float] = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -780,6 +790,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             Type of color map to use for plotting.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         **kwargs : Extra arguments to ``DataArray.plot``.
 
         Returns
@@ -809,6 +821,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         # plot the field
         xy_coord_labels = list("xyz")
         xy_coord_labels.pop(axis)
+        _, xy_coord_labels = pop_axis_and_swap(list("xyz"), axis, transpose=transpose)
         x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
         field_data.plot(
             ax=ax,
@@ -830,6 +843,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             alpha=eps_alpha,
             reverse=eps_reverse,
             ax=ax,
+            transpose=transpose,
             **interp_kwarg,
         )
 
