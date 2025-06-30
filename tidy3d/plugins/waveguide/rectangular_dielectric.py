@@ -1073,8 +1073,8 @@ class RectangularDielectric(Tidy3dBaseModel):
         """
         if transpose:
             log.warning(
-                "UNTESTED! The plot_geometry_edges() function has not yet been tested\n"
-                "with `transpose=True`.  To confirm that the plot you are seeing now\n"
+                "UNTESTED! The RectangularDielectric.plot_...() functions have not yet been\n"
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now\n"
                 "is correct, try again with `transpose=False` and compare the two plots.",
                 stacklevel=2,
             )
@@ -1132,6 +1132,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         vmax: Optional[float] = None,
         ax: Ax = None,
         geometry_edges: Optional[str] = None,
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
@@ -1160,6 +1161,8 @@ class RectangularDielectric(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
         geometry_edges : Optional color to use for the geometry edges overlaid on the fields.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
@@ -1180,8 +1183,9 @@ class RectangularDielectric(Tidy3dBaseModel):
             vmin=vmin,
             vmax=vmax,
             ax=ax,
+            transpose=transpose,
             **sel_kwargs,
         )
         if geometry_edges is not None:
-            self.plot_geometry_edges(geometry_edges, ax=ax)
+            self.plot_geometry_edges(geometry_edges, ax=ax, transpose=transpose)
         return ax
