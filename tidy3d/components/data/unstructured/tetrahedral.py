@@ -97,6 +97,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         remove_unused_points: bool = False,
         values_type=IndexedDataArray,
         expect_complex: bool = False,
+        ignore_invalid_cells: bool = False,
     ) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -109,8 +110,19 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         # verify cell_types
         cells_types = vtk["vtk_to_numpy"](vtk_obj.GetCellTypesArray())
-        if not np.all(cells_types == cls._vtk_cell_type()):
-            raise DataError("Only tetrahedral 'vtkUnstructuredGrid' is currently supported")
+        invalid_cells = cells_types != cls._vtk_cell_type()
+        if any(invalid_cells):
+            if ignore_invalid_cells:
+                cell_offsets = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetOffsetsArray())
+                valid_cell_offsets = cell_offsets[:-1][invalid_cells == 0]
+                cells_numpy = cells_numpy[
+                    np.ravel(
+                        valid_cell_offsets[:, None]
+                        + np.arange(cls._cell_num_vertices(), dtype=int)[None, :]
+                    )
+                ]
+            else:
+                raise DataError("Only tetrahedral 'vtkUnstructuredGrid' is currently supported")
 
         # pack point and cell information into Tidy3D arrays
         num_cells = len(cells_numpy) // cls._cell_num_vertices()

@@ -14,6 +14,8 @@ import shapely
 import trimesh
 
 import tidy3d as td
+from tidy3d.compat import _shapely_is_older_than
+from tidy3d.components.geometry.base import cleanup_shapely_object
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -1249,3 +1251,50 @@ def test_triangle_mesh_from_height():
     error_message = str(excinfo.value)
     assert f"shape {expected_shape}" in error_message
     assert "shape (3, 3)" in error_message
+
+
+def test_cleanup_shapely_object():
+    if _shapely_is_older_than("2.1"):
+        # (Old versions of shapely don't support `shapely.make_valid()` with the correct arguments.
+        # However older alternatives like `.buffer(0)` are not as robust.  `.buffer(0)` is likely
+        # to generate polygons which look correct, but have extra vertices, causing test to fail.
+        # So if `shapely.make_valid()` is not supported, the safest thing to do is skip this test.)
+        pytest.skip("This test requires `shapely` version 2.1 or later")
+
+    # Test 1: A square containing a triangular hole, and an infinitley thin hole.
+    square_with_spikes_5x5 = np.array(
+        (
+            (0, 0),
+            (5, 0),
+            (5, 0),
+            (5, 10),  # this vertex creates an outward spike and should be removed
+            (5, 5),
+            (0, 5 - 1e-13),  # this vertex should be rounded to (0, 5)
+            (3, 3),  # this vertex creates an inward spike and should be removed
+            (0, 5 + 1e-13),  # this vertex should be removed because it duplicates (0, 5 - 1e-13)
+        )
+    )
+    triangle_empty_tails = np.array(((1, 1), (3, 1), (2, 2), (2.5, 2.5), (0.5, 0.5)))
+    triangle_collinear = np.array(((4, 2), (3, 3), (2, 4), (4, 2)))  # has zero area
+    # NOTE: Test will fail for self intersecting polys like: ((0,0), (1,1), (2,-1), (3,1), (4,0))
+    # Now build a shapely polygon with the 4 small polygons enclosed by big_square_5x5
+    exterior_coords = square_with_spikes_5x5
+    interior_coords_list = [
+        triangle_empty_tails,
+        triangle_collinear,  # this triangle should be eliminated
+    ]
+    # Test using a non-empty exterior polygon (big_square_5x5)
+    orig_polygon = shapely.Polygon(exterior_coords, interior_coords_list)
+    new_polygon = cleanup_shapely_object(orig_polygon, tolerance_ratio=1e-12)
+    # Delete any nearby or overlapping vertices (cleanup_shapely_object() does not do this).
+    new_polygon = shapely.simplify(new_polygon, tolerance=1e-10)
+    # Now `new_polygon` should only contain the coordinates of the square (with a duplicate at end).
+    assert len(new_polygon.exterior.coords) == 5  # squares have 4 vertices but shapely adds 1
+    assert len(new_polygon.interiors) == 1  # only the "triangle_empty_tails" interior hole survives
+    assert len(new_polygon.interiors[0].coords) == 4  # triangles have 3 vertices but shapely adds 1
+    # Test 2: An infinitely thin triangle exterior with some holes (which should be deleted)
+    exterior_coords = triangle_collinear  # has zero area
+    orig_polygon = shapely.Polygon(exterior_coords)
+    new_polygon = cleanup_shapely_object(orig_polygon, tolerance_ratio=1e-12)
+    new_polygon = shapely.simplify(new_polygon, tolerance=1e-10)
+    assert len(new_polygon.exterior.coords) == 0  # empty / collinear polygons should get deleted

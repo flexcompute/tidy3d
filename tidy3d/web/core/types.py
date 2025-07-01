@@ -54,6 +54,7 @@ class TaskType(str, Enum):
     HEAT_CHARGE = "HEAT_CHARGE"
     EME = "EME"
     MODE = "MODE"
+    VOLUME_MESH = "VOLUME_MESH"
 
 
 class PayType(str, Enum):

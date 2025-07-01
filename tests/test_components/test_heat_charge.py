@@ -252,6 +252,8 @@ def monitors():
 
     energy_band_mnt1 = td.SteadyEnergyBandMonitor(size=(1.6, 2, 3), name="bandgap_test")
 
+    mesh_mnt = td.VolumeMeshMonitor(size=(1.6, 2, 3), name="mesh_test")
+
     return [
         temp_mnt1,
         temp_mnt2,
@@ -264,6 +266,7 @@ def monitors():
         capacitance_mnt1,
         free_carrier_mnt1,
         energy_band_mnt1,
+        mesh_mnt,
     ]
 
 
@@ -516,7 +519,7 @@ def temperature_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def voltage_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _, _ = monitors
+    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _, _, _ = monitors
 
     # SpatialDataArray
     nx, ny, nz = 9, 6, 5
@@ -599,6 +602,40 @@ def capacitance_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def mesh_monitor_data(monitors):
+    """Creates different voltage monitor data."""
+    mesh_mnt = monitors[11]
+
+    # TetrahedralGridDataset
+    tet_grid_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values = td.IndexedDataArray(
+        np.zeros((tet_grid_points.shape[0],)),
+        dims=("index",),
+        name="Mesh",
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    # SpatialDataArray
+    mesh_data = td.VolumeMeshData(monitor=mesh_mnt, mesh=tet_grid)
+
+    return (mesh_data,)
+
+
+@pytest.fixture(scope="module")
 def free_carrier_monitor_data(monitors):
     """Creates different voltage monitor data."""
     fc_mnt = monitors[9]
@@ -653,6 +690,7 @@ def simulation_data(
     capacitance_monitor_data,
     free_carrier_monitor_data,
     energy_band_monitor_data,
+    mesh_monitor_data,
 ):
     """Creates 'HeatChargeSimulationData' for both Heat and Conduction simulations."""
     heat_sim_data = td.HeatChargeSimulationData(
@@ -675,7 +713,20 @@ def simulation_data(
         data=(voltage_monitor_data[0], free_carrier_monitor_data[0]),
     )
 
-    return [heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_sim_data]
+    mesh_monitor = mesh_monitor_data[0].monitor
+    mesh_data = td.VolumeMesherData(
+        simulation=conduction_simulation,
+        data=mesh_monitor_data,
+        monitors=[mesh_monitor],
+    )
+
+    return [
+        heat_sim_data,
+        cond_sim_data,
+        voltage_capacitance_sim_data,
+        current_voltage_sim_data,
+        mesh_data,
+    ]
 
 
 # --------------------------
@@ -753,6 +804,7 @@ def test_heat_charge_bcs_validation(boundary_conditions):
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
     temp_mnt = monitors[0]
+    mesh_mnt = monitors[11]
 
     # Invalid monitor name
     with pytest.raises(pd.ValidationError):
@@ -761,6 +813,10 @@ def test_heat_charge_monitors_validation(monitors):
     # Invalid monitor size (negative dimension)
     with pytest.raises(pd.ValidationError):
         temp_mnt.updated_copy(size=(-1, 2, 3))
+
+    # Mesh monitor 1D
+    with pytest.raises(pd.ValidationError):
+        mesh_mnt.updated_copy(size=(0, 1, 0))
 
 
 def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction_simulation):
@@ -854,9 +910,13 @@ def test_heat_charge_sources(structures):
 
 def test_heat_charge_simulation(simulation_data):
     """Tests 'HeatChargeSimulation' and 'ConductionSimulation' objects."""
-    heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_simulation_data = (
-        simulation_data
-    )
+    (
+        heat_sim_data,
+        cond_sim_data,
+        voltage_capacitance_sim_data,
+        current_voltage_simulation_data,
+        mesh_data,
+    ) = simulation_data
 
     # Test Heat Simulation
     heat_sim = heat_sim_data.simulation
@@ -876,10 +936,13 @@ def test_heat_charge_simulation(simulation_data):
         "Current-Voltage simulation should be created successfully."
     )
 
+    mesher = mesh_data.mesher
+    assert mesher is not None, "VolumeMesher should be created successfully."
+
 
 def test_sim_data_plotting(simulation_data):
     """Tests whether simulation data can be plotted and appropriate errors are raised."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Plotting temperature data
     heat_sim_data.plot_field("test", z=0)
@@ -896,7 +959,7 @@ def test_sim_data_plotting(simulation_data):
     with pytest.raises(DataError):
         heat_sim_data.plot_field("empty")
 
-    # Test plotting with invalid data
+    # Test plotting with 3D data
     with pytest.raises(DataError):
         heat_sim_data.plot_field("test")
 
@@ -916,6 +979,44 @@ def test_sim_data_plotting(simulation_data):
 
     with pytest.raises(pd.ValidationError):
         heat_sim_data.updated_copy(simulation=sim)
+
+
+def test_mesh_plotting(simulation_data):
+    """Tests whether mesh can be plotted and appropriate errors are raised."""
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
+
+    # Plotting mesh from unstructured temperature data
+    heat_sim_data.plot_mesh("tri")
+    heat_sim_data.plot_mesh("tet", y=0.5)
+
+    # Plotting mesh from unstructured voltage data
+    cond_sim_data.plot_mesh("v_tri", structures_fill=False)
+    cond_sim_data.plot_mesh("v_tet", y=0.5)
+
+    # Plotting mesh from mesh data
+    mesh_data.plot_mesh("mesh_test", z=0)
+
+    plt.close()
+
+    # Test plotting from structured data
+    with pytest.raises(DataError):
+        heat_sim_data.plot_mesh("test")
+
+    # Test plotting with no data
+    with pytest.raises(DataError):
+        heat_sim_data.plot_mesh("empty")
+
+    # Test plotting with 3D data
+    with pytest.raises(DataError):
+        heat_sim_data.plot_mesh("tet")
+
+    # Test plotting with invalid key
+    with pytest.raises(KeyError):
+        heat_sim_data.plot_mesh("test3", x=0)
+
+    # Test plotting with invalid field_name
+    with pytest.raises(DataError):
+        mesh_data.plot_mesh("mesh_test", z=0, field_name="wrong")
 
 
 def test_conduction_simulation_has_conductors(conduction_simulation, structures):
@@ -1415,7 +1516,7 @@ def test_dynamic_simulation_updates(heat_simulation):
 
 def test_plotting_functions(simulation_data):
     """Test plotting functions with various data."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Valid plotting
     try:

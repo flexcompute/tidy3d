@@ -43,7 +43,7 @@ SIM_FILE_JSON = "simulation.json"
 GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
 
 # if a solver is in beta stage, cost is subject to change
-BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE"]
+BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE", "VOLUME_MESH"]
 
 # map task_type to solver name for display
 SOLVER_NAME = {
@@ -53,6 +53,7 @@ SOLVER_NAME = {
     "EME": "EME",
     "HEAT": "Heat",
     "HEAT_CHARGE": "HeatCharge",
+    "VOLUME_MESH": "VolumeMesher",
 }
 
 

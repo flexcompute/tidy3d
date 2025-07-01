@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
 - Bug in `PlaneWave` defined with a negative `angle_theta` which would lead to wrong injection.
+- Plots of objects defined by shape intersection logic will no longer display thin line artifacts.
 - Fixed incorrect gradient computation in PyTorch plugin (`to_torch`) for functions returning multi-element arrays.
 
 ## [2.9.0rc1] - 2025-06-10

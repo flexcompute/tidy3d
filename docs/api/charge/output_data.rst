@@ -26,25 +26,3 @@ Monitor Data
    tidy3d.SteadyFreeCarrierData
    tidy3d.SteadyCapacitanceData
 
-
-Unstructured Data Classes
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autosummary::
-   :toctree: ../_autosummary/
-   :template: module.rst
-
-   tidy3d.TriangularGridDataset
-   tidy3d.TetrahedralGridDataset
-
-
-Individual Datasets
-^^^^^^^^^^^^^^^^^^^
-
-.. autosummary::
-   :toctree: ../_autosummary/
-   :template: module.rst
-
-   tidy3d.PointDataArray
-   tidy3d.CellDataArray
-   tidy3d.IndexedDataArray
