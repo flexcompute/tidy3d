@@ -11,16 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
 - Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
 
+### Changed
+- Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
+- `GaussianBeam` and `AstigmaticGaussianBeam` default `num_freqs` reset to 1 (it was set to 3 in v2.8.0) and a warning is issued for a broadband, angled beam for which `num_freqs` may not be sufficiently large.
+- Set the maximum `num_freqs` to 20 for all broadband sources (we have been warning about the introduction of this hard limit for a while).
+- Significantly improved performance of the `tidy3d.plugins.autograd.grey_dilation` morphological operation and its gradient calculation. The new implementation is orders of magnitude faster, especially for large arrays and kernel sizes.
+
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
 - Bug in `PlaneWave` defined with a negative `angle_theta` which would lead to wrong injection.
 - Plots of objects defined by shape intersection logic will no longer display thin line artifacts.
-
-### Changed
-- Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
-- Significantly improved performance of the `tidy3d.plugins.autograd.grey_dilation` morphological operation and its gradient calculation. The new implementation is orders of magnitude faster, especially for large arrays and kernel sizes.
-- `GaussianBeam` and `AstigmaticGaussianBeam` default `num_freqs` reset to 1 (it was set to 3 in v2.8.0) and a warning is issued for a broadband, angled beam for which `num_freqs` may not be sufficiently large.
-- Set the maximum `num_freqs` to 20 for all broadband sources (we have been warning about the introduction of this hard limit for a while).
+- Fixed incorrect gradient computation in PyTorch plugin (`to_torch`) for functions returning multi-element arrays.
 
 ## [2.9.0rc1] - 2025-06-10
 

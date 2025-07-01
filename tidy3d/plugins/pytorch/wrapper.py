@@ -4,7 +4,6 @@ import inspect
 
 import torch
 from autograd import make_vjp
-from autograd.extend import vspace
 
 
 def to_torch(fun):
@@ -79,10 +78,11 @@ def to_torch(fun):
 
         @staticmethod
         def backward(ctx, grad_output):
-            _grads = ctx.vjp(vspace(grad_output.detach().cpu().numpy()).ones())
+            numpy_grad_output = grad_output.detach().cpu().numpy()
+            _grads = ctx.vjp(numpy_grad_output)
             grads = [None] * ctx.num_args
             for idx, grad in zip(ctx.grad_argnums, _grads):
-                grads[idx] = torch.as_tensor(grad, device=ctx.device) * grad_output
+                grads[idx] = torch.as_tensor(grad, device=ctx.device)
             return tuple(grads)
 
     def apply(*args, **kwargs):
