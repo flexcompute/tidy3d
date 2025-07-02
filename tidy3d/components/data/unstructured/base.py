@@ -588,7 +588,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Remove explicitly degenerate cells.
         remove_unused_points : bool = False
             Remove unused points.
-        remove_invalid_cells : bool = Flase
+        remove_invalid_cells : bool = False
             Remove invalid cells.
 
         Returns
@@ -702,7 +702,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         Parameters
         ----------
         **kwargs : dict
-            Keyword arguments to pass to the xarray isel() function.
+            Keyword arguments to pass to the xarray sel() function.
         Returns
         -------
         numpy.ndarray
