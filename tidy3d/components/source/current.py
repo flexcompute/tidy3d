@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
+from math import cos, isclose, sin
 from typing import Optional
 
 import pydantic.v1 as pydantic
@@ -16,6 +17,7 @@ from tidy3d.components.validators import assert_single_freq_in_range, warn_if_da
 from tidy3d.constants import MICROMETER
 
 from .base import Source
+from .time import SourceTimeType
 
 
 class CurrentSource(Source, ABC):
@@ -106,6 +108,40 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
         description="Size in x, y, and z directions, constrained to ``(0, 0, 0)``.",
         units=MICROMETER,
     )
+
+    @classmethod
+    def from_angles(
+        cls,
+        source_time: SourceTimeType,
+        angle_theta: float,
+        angle_phi: float,
+        electrical_component: bool = True,
+        **kwargs,
+    ) -> list[PointDipole]:
+        """Returns a list of `PointDipole` objects used to emulate a single dipole polarized in an arbitrary direction. The direction is specificed using a polar and azimuthal angle."""
+        dipoles: list[PointDipole] = []
+        polarizations = ["Ex", "Ey", "Ez"] if electrical_component else ["Hx", "Hy", "Hz"]
+
+        multipliers = [
+            sin(angle_theta) * cos(angle_phi),
+            sin(angle_theta) * sin(angle_phi),
+            cos(angle_theta),
+        ]
+
+        for polarization, mult in zip(polarizations, multipliers):
+            if not isclose(mult, 0.0, rel_tol=0.0, abs_tol=1e-9):
+                modulated_source_time = source_time.updated_copy(
+                    amplitude=source_time.amplitude * mult
+                )
+                dipoles.append(
+                    cls(
+                        source_time=modulated_source_time,
+                        polarization=polarization,
+                        **kwargs,
+                    )
+                )
+
+        return dipoles
 
 
 class CustomCurrentSource(ReverseInterpolatedSource):
