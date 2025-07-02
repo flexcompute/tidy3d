@@ -614,6 +614,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Type of shading to use when plotting the data field.
         cbar_kwargs : Dict = {}
             Additional parameters passed to colorbar object.
+        pcolor_kwargs: Dict = {}
+            Additional parameters passed to ax.tripcolor()
 
         Returns
         -------
