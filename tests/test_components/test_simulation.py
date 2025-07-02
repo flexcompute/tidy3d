@@ -3648,3 +3648,45 @@ def test_create_sim_multiphysics_with_incompatibilities():
                 ),
             ],
         )
+
+
+def test_messages_contain_object_names():
+    """Make sure that errors and warnings contain the name of the object."""
+    # Note: This function currently tests for out-of-bounds errors and warnings.
+    # Create an empty simulation.
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=4),
+        run_time=1e-12,
+    )
+
+    # Test 1) Create a structure lying outside the simulation boundary.
+    # Check that a warning message is generated containing the structure's `name`.
+    name = "structure_123"
+    structure = td.Structure(
+        name=name,
+        geometry=td.Box(center=(1.0, 0.0, 0.0), size=(0.5, 0.5, 0.5)),
+        medium=td.Medium(permittivity=2.0),
+    )
+    with AssertLogLevel("WARNING", contains_str=name):
+        _ = sim.updated_copy(structures=[structure])
+
+    # Test 2) Create a source lying outside the simulation boundary.
+    # Check that an error message is generated containing the source's `name`.
+    name = "source_123"
+    source = td.UniformCurrentSource(
+        name=name,
+        center=(0, -1.0, 0),
+        size=(1, 0, 0.5),
+        polarization="Ex",
+        source_time=td.GaussianPulse(freq0=100e14, fwidth=10e14),
+    )
+    with pytest.raises(pydantic.ValidationError, match=name) as e:
+        _ = sim.updated_copy(sources=[source])
+
+    # Test 3) Create a monitor lying outside the simulation boundary.
+    # Check that an error message is generated containing the monitor's `name`.
+    name = "monitor_123"
+    monitor = td.FieldMonitor(name=name, center=(-1.0, 0, 0), size=(0.5, 0, 1), freqs=[100e14])
+    with pytest.raises(pydantic.ValidationError, match=name) as e:
+        _ = sim.updated_copy(monitors=[monitor])
