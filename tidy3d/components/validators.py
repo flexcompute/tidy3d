@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -50,6 +50,14 @@ from .geometry.base import Box
 
 # Lowest frequency supported (Hz)
 MIN_FREQUENCY = 1e5
+
+
+def named_obj_descr(obj: Any, field_name: str, position_index: int) -> str:
+    """Generate a string describing a named object which can be used in error messages."""
+    descr = f"simulation.{field_name}[{position_index}] (no `name` was specified)"
+    if hasattr(obj, "name") and obj.name:
+        descr = f"'{obj.name}' (simulation.{field_name}[{position_index}])"
+    return descr
 
 
 def assert_line():
@@ -156,10 +164,10 @@ def validate_mode_objects_symmetry(field_name: str):
                         and bounds_min[dim] < sim_center[dim]
                         and geometric_object.center[dim] != sim_center[dim]
                     ):
+                        obj_descr = named_obj_descr(geometric_object, field_name, position_index)
                         raise SetupError(
-                            f"{obj_type} at 'simulation.{field_name}[{position_index}]' "
-                            "in presence of symmetries must be in the main quadrant, "
-                            "or centered on the symmetry axis."
+                            f"{obj_type}: {obj_descr} in presence of symmetries must be in the main "
+                            "quadrant, or centered on the symmetry axis."
                         )
 
         return val
@@ -201,12 +209,9 @@ def assert_objects_in_sim_bounds(
         with log as consolidated_logger:
             for position_index, geometric_object in enumerate(val):
                 if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
-                    message = (
-                        f"'simulation.{field_name}[{position_index}]' "
-                        "is outside of the simulation domain."
-                    )
+                    obj_descr = named_obj_descr(geometric_object, field_name, position_index)
+                    message = f"{obj_descr} is outside of the simulation domain."
                     custom_loc = [field_name, position_index]
-
                     if error:
                         raise SetupError(message)
                     consolidated_logger.warning(message, custom_loc=custom_loc)
@@ -245,12 +250,9 @@ def assert_objects_contained_in_sim_bounds(
                 if not sim_box.contains(
                     geometric_object.geometry, strict_inequality=geo_strict_ineq
                 ):
-                    message = (
-                        f"'simulation.{field_name}[{position_index}]' "
-                        "is not completely inside the simulation domain."
-                    )
+                    obj_descr = named_obj_descr(geometric_object, field_name, position_index)
+                    message = f"{obj_descr} is not completely inside the simulation domain."
                     custom_loc = [field_name, position_index]
-
                     if error:
                         raise SetupError(message)
                     consolidated_logger.warning(message, custom_loc=custom_loc)

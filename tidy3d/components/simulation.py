@@ -117,6 +117,7 @@ from .types import (
 from .validators import (
     assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,
+    named_obj_descr,
     validate_mode_objects_symmetry,
 )
 from .viz import (
@@ -2961,8 +2962,9 @@ class Simulation(AbstractYeeGridSimulation):
                 for geom in flatten_groups(structure.geometry):
                     zero_dims = geom.zero_dims
                     if len(zero_dims) > 0:
+                        obj_descr = named_obj_descr(structure, "structures", i)
                         consolidated_logger.warning(
-                            f"Structure at 'structures[{i}]' has geometry with zero size along "
+                            f"Structure: {obj_descr} has geometry with zero size along "
                             f"dimensions {zero_dims}, and with a medium that is not a 'Medium2D'. "
                             "This is probably not correct, since the resulting simulation will "
                             "depend on the details of the numerical grid. Consider either "
@@ -3018,10 +3020,11 @@ class Simulation(AbstractYeeGridSimulation):
 
         with log as consolidated_logger:
 
-            def warn(istruct, side):
+            def warn(structure, istruct, side):
                 """Warning message for a structure too close to PML."""
+                obj_descr = named_obj_descr(structure, "structures", istruct)
                 consolidated_logger.warning(
-                    f"Structure at structures[{istruct}] was detected as being less "
+                    f"Structure: {obj_descr} was detected as being less "
                     f"than half of a central wavelength from a PML on side {side}. "
                     "To avoid inaccurate results or divergence, please increase gap between "
                     "any structures and PML or fully extend structure through the pml.",
@@ -3044,7 +3047,7 @@ class Simulation(AbstractYeeGridSimulation):
                             and struct_val > sim_val
                             and abs(sim_val - struct_val) < lambda0 / 2
                         ):
-                            warn(istruct, axis + "-min")
+                            warn(structure, istruct, axis + "-min")
 
                     zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
                     for axis, sim_val, struct_val, boundary in zipped:
@@ -3056,7 +3059,7 @@ class Simulation(AbstractYeeGridSimulation):
                             and struct_val < sim_val
                             and abs(sim_val - struct_val) < lambda0 / 2
                         ):
-                            warn(istruct, axis + "-max")
+                            warn(structure, istruct, axis + "-max")
 
         return val
 
@@ -3095,9 +3098,8 @@ class Simulation(AbstractYeeGridSimulation):
                             medium_str = "The simulation background medium"
                             custom_loc = ["medium", "frequency_range"]
                         else:
-                            medium_str = (
-                                f"The medium associated with structures[{medium_index - 1}]"
-                            )
+                            medium_descr = named_obj_descr(medium, "mediums", medium_index)
+                            medium_str = f"The medium associated with {medium_descr}"
                             custom_loc = [
                                 "structures",
                                 medium_index - 1,
@@ -3105,10 +3107,11 @@ class Simulation(AbstractYeeGridSimulation):
                                 "frequency_range",
                             ]
 
+                        monitor_descr = named_obj_descr(monitor, "monitors", monitor_index)
                         consolidated_logger.warning(
                             f"{medium_str} has a frequency range: ({sci_fmin_med}, {sci_fmax_med}) "
-                            "(Hz) that does not fully cover the frequencies contained in "
-                            f"monitors[{monitor_index}]. "
+                            "(Hz) that does not fully cover the frequencies contained "
+                            f"in {monitor_descr}."
                             "This can cause inaccuracies in the recorded results.",
                             custom_loc=custom_loc,
                         )
@@ -3806,8 +3809,9 @@ class Simulation(AbstractYeeGridSimulation):
                     data_times = source.source_time.data_times
                     mint = np.min(data_times)
                     maxt = np.max(data_times)
+                    obj_descr = named_obj_descr(source, "sources", idx)
                     log.warning(
-                        f"'CustomSourceTime' at 'sources[{idx}]' is defined over a time range "
+                        f"'CustomSourceTime': {obj_descr} is defined over a time range "
                         f"'({mint}, {maxt})' which does not include any of the 'Simulation' "
                         f"times '({0, run_time})'. The envelope will be constant extrapolated "
                         "from the first or last value in the 'CustomSourceTime', which may not "
@@ -3837,8 +3841,9 @@ class Simulation(AbstractYeeGridSimulation):
                         if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
                             warn = True
                 if warn:
+                    obj_descr = named_obj_descr(structure, "structures", i)
                     consolidated_logger.warning(
-                        f"A bound of Simulation.structures[{i}] was detected as being "
+                        f"A bound of {obj_descr} was detected as being "
                         "within the simulation PML. We recommend extending structures to "
                         "infinity or completely outside of the simulation PML to avoid "
                         "unexpected effects when the structures are not translationally "
@@ -3956,8 +3961,9 @@ class Simulation(AbstractYeeGridSimulation):
             if isinstance(monitor, AuxFieldTimeMonitor):
                 for aux_field in monitor.fields:
                     if aux_field not in self.aux_fields:
+                        obj_descr = named_obj_descr(monitor, "monitors", i)
                         log.warning(
-                            f"Monitor at 'monitors[{i}]' stores field '{aux_field}', "
+                            f"Monitor: {obj_descr} stores field '{aux_field}', "
                             "which is not used by any of the nonlinear models present "
                             "in the mediums in the simulation. The resulting data "
                             "will be zero."
