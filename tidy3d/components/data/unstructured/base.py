@@ -541,7 +541,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        fname : str
+        file : str
             Full path to the .vtu file to load the unstructured data from.
         field : str = None
             Name of the field to load.
@@ -580,7 +580,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Parameters
         ----------
-        fname : str
+        file : str
             Full path to the .vtk file to load the unstructured data from.
         field : str = None
             Name of the field to load.
@@ -588,6 +588,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Remove explicitly degenerate cells.
         remove_unused_points : bool = False
             Remove unused points.
+        remove_invalid_cells : bool = False
+            Remove invalid cells.
 
         Returns
         -------
@@ -697,6 +699,14 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """This function returns the cell values for the fields stored in the UnstructuredGridDataset.
         If multiple fields are stored per point, like in an IndexedVoltageDataArray, cell values
         will be provided for each of the fields unless a selection argument is provided, e.g., voltage=0.2
+        Parameters
+        ----------
+        **kwargs : dict
+            Keyword arguments to pass to the xarray sel() function.
+        Returns
+        -------
+        numpy.ndarray
+            Extracted data.
         """
 
         values = self.values.sel(**kwargs)
