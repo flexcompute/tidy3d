@@ -2127,6 +2127,17 @@ class Simulation(AbstractYeeGridSimulation):
         gt=0.0,
         le=1.0,
     )
+
+    precision: Literal["hybrid", "double"] = pydantic.Field(
+        "hybrid",
+        title="Floating-point Precision",
+        description="Floating point precision to use in the computations. By default, Tidy3D uses "
+        "a hybrid approach that offers a good balance of speed and accuracy for almost all "
+        "simulations. However, for large simulations (or simulations with a long run time), "
+        "where very high accuracy is needed, the precision can be set to double everywhere. "
+        "Note that this doubles the FlexCredit cost of the simulation.",
+    )
+
     """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio.  A
     physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
     because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\Delta x`
