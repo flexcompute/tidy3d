@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GaussianBeam` and `AstigmaticGaussianBeam` default `num_freqs` reset to 1 (it was set to 3 in v2.8.0) and a warning is issued for a broadband, angled beam for which `num_freqs` may not be sufficiently large.
 - Set the maximum `num_freqs` to 20 for all broadband sources (we have been warning about the introduction of this hard limit for a while).
 - Significantly improved performance of the `tidy3d.plugins.autograd.grey_dilation` morphological operation and its gradient calculation. The new implementation is orders of magnitude faster, especially for large arrays and kernel sizes.
+- Warnings are now generated (instead of errors) when instantiating `PML`, `StablePML`,
+or `Absorber` classes (or when invoking `pml()`, `stable_pml()`, or `absorber()` functions)
+with fewer layers than recommended.
 
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
