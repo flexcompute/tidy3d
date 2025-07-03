@@ -148,6 +148,67 @@ def test_dipole():
         _ = td.PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
 
 
+def test_dipole_from_angles():
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PointDipole.from_angles(
+            size=(1, 1, 1),
+            source_time=g,
+            center=(1, 2, 3),
+            angle_theta=np.pi / 4,
+            angle_phi=np.pi / 4,
+        )
+
+    with pytest.raises(ValueError):
+        _ = td.PointDipole.from_angles(
+            source_time=g,
+            angle_theta=np.pi / 4,
+            angle_phi=np.pi / 4,
+            component="invalid",
+            center=(1, 2, 3),
+        )
+
+    assert (
+        len(
+            td.PointDipole.from_angles(
+                source_time=g,
+                angle_theta=np.pi / 4,
+                angle_phi=np.pi / 4,
+                component="electric",
+                center=(1, 2, 3),
+            )
+        )
+        == 3
+    )
+
+    assert (
+        len(
+            td.PointDipole.from_angles(
+                source_time=g,
+                angle_theta=np.pi / 4,
+                angle_phi=np.pi / 2,
+                component="electric",
+                center=(1, 2, 3),
+            )
+        )
+        == 2
+    )
+
+    assert (
+        len(
+            td.PointDipole.from_angles(
+                source_time=g,
+                angle_theta=np.pi / 2,
+                angle_phi=np.pi / 2,
+                component="electric",
+                center=(1, 2, 3),
+            )
+        )
+        == 1
+    )
+
+
 def test_FieldSource():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     mode_spec = td.ModeSpec(num_modes=2)
