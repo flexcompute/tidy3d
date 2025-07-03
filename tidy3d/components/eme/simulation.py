@@ -1097,6 +1097,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         grid_spec: Union[GridSpec, Literal["identical"]] = None,
         eme_grid_spec: Union[EMEGridSpec, Literal["identical"]] = None,
         symmetry: Optional[tuple[Symmetry, Symmetry, Symmetry]] = None,
+        warn_symmetry_expansion: bool = True,
         monitors: Optional[tuple[MonitorType, ...]] = None,
         remove_outside_structures: bool = True,
         remove_outside_custom_mediums: bool = False,
@@ -1123,6 +1124,8 @@ class EMESimulation(AbstractYeeGridSimulation):
             New simulation symmetry. If ``None``, then it is inherited from the original
             simulation. Note that in this case the size and placement of new simulation domain
             must be commensurate with the original symmetry.
+        warn_symmetry_expansion : bool = True
+            Whether to warn when the subsection is expanded to preserve symmetry.
         monitors : Tuple[MonitorType, ...] = None
             New list of monitors. If ``None``, then the monitors intersecting the new simulation
             domain are inherited from the original simulation.
@@ -1160,7 +1163,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         new_sim = super().subsection(
             region=new_region,
             grid_spec=grid_spec,
-            symmetry=symmetry,
+            warn_symmetry_expansion=warn_symmetry_expansion,
             monitors=monitors,
             remove_outside_structures=remove_outside_structures,
             remove_outside_custom_mediums=remove_outside_custom_mediums,
