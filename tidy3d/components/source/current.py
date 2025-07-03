@@ -115,12 +115,34 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
         source_time: SourceTimeType,
         angle_theta: float,
         angle_phi: float,
-        electrical_component: bool = True,
+        component: Literal["electric", "magnetic"] = "electric",
         **kwargs,
     ) -> list[PointDipole]:
-        """Returns a list of `PointDipole` objects used to emulate a single dipole polarized in an arbitrary direction. The direction is specificed using a polar and azimuthal angle."""
+        """Returns a list of `PointDipole` objects used to emulate a single dipole polarized in an arbitrary direction. The direction is specificed using a polar and azimuthal angle.
+
+        Parameters
+        ----------
+        source_time: :class:`.SourceTime`
+            Specification of the source time-dependence.
+        angle_theta : float
+            Polar angle w.r.t. the z-axis.
+        angle_phi : float
+            Azimuth angle around the z-axis.
+        component : Literal["electric", "magnetic"] = "electric"
+            The type of polarization.
+        kwargs : dict
+            Keyword arguments passed to ``PointDipole()``, excluding ``source_time`` and ``polarization``
+
+        Returns
+        -------
+        list[PointDipole]
+            A list of ``PointDipole`` objects that emulate a single dipole with an arbitrary direction of polarization.
+        """
+        if not (component == "electric" or component == "magnetic"):
+            raise ValueError('Component must be "electric" or "magnetic"')
+
         dipoles: list[PointDipole] = []
-        polarizations = ["Ex", "Ey", "Ez"] if electrical_component else ["Hx", "Hy", "Hz"]
+        polarizations = ["Ex", "Ey", "Ez"] if component == "electric" else ["Hx", "Hy", "Hz"]
 
         multipliers = [
             sin(angle_theta) * cos(angle_phi),
