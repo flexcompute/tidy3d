@@ -321,9 +321,9 @@ def assert_single_freq_in_range(field_name: str):
 def _warn_potential_error(
     field_name: str,
     base_value: float,
-    val_change_range: Tuple[float, float],
-    allowed_real_range: Tuple[float, float],
-    allowed_imag_range: Tuple[float, float],
+    val_change_range: tuple[float, float],
+    allowed_real_range: tuple[float, float],
+    allowed_imag_range: tuple[float, float],
 ):
     """Basic validation that perturbations do not drive a parameter out of physical bounds."""
 
@@ -356,8 +356,8 @@ def _warn_potential_error(
 def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
-    allowed_real_range: Tuple[Tuple[float, float], ...],
-    allowed_imag_range: Tuple[Tuple[float, float], ...] = None,
+    allowed_real_range: tuple[tuple[float, float], ...],
+    allowed_imag_range: tuple[tuple[float, float], ...] = None,
     allowed_complex: bool = True,
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""
@@ -440,7 +440,7 @@ def validate_freqs_not_empty():
 
     @pydantic.validator("freqs", always=True, allow_reuse=True)
     def freqs_not_empty(cls, val):
-        """Raise validation error if ``freqs`` is an empty Tuple."""
+        """Raise validation error if ``freqs`` is an empty tuple."""
         if len(val) == 0:
             raise ValidationError(f"'{cls.__name__}.freqs' cannot be empty (size 0).")
         return val

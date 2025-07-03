@@ -26,12 +26,6 @@ from ..types import (
     EMField,
     FreqArray,
 )
-from tidy3d.components.source.field import ModeSource
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
-from tidy3d.constants import C_0
-from tidy3d.exceptions import SetupError, ValidationError
-from tidy3d.log import log
-
 from .mode_solver import ModeSolver
 
 ModeSimulationMonitorType = PermittivityMonitor
