@@ -1939,7 +1939,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 3,
+            "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -1971,7 +1971,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 3,
+            "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -2081,7 +2081,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 3,
+            "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.5235987755982988,
             "angle_phi": 0.6283185307179586,
@@ -3201,7 +3201,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.8.4",
+    "version": "2.8.5",
     "plot_length_units": "\u03bcm",
     "lumped_elements": [
         {
