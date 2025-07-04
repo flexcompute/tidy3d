@@ -176,6 +176,8 @@ def get_mode_sim():
 def test_mode_sim():
     with AssertLogLevel(None):
         sim = get_mode_sim()
+        _ = sim.plot(ax=AX)
+        _ = sim.plot(ax=AX, fill_structures=False, hlim=(-1, 1), vlim=(-1, 1))
         _ = sim.plot(y=0, ax=AX)
         _ = sim.plot_mode_plane(ax=AX)
         _ = sim.plot_eps_mode_plane(ax=AX)

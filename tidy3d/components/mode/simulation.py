@@ -361,6 +361,75 @@ class ModeSimulation(AbstractYeeGridSimulation):
         )
         return mode_sim
 
+    def plot(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        source_alpha: Optional[float] = 0,
+        monitor_alpha: Optional[float] = 0,
+        lumped_element_alpha: Optional[float] = 0,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        fill_structures: bool = True,
+        **patch_kwargs,
+    ) -> Ax:
+        """Plot the mode simulation. If any of ``x``, ``y``, or ``z`` is provided, the potentially
+        larger FDTD simulation containing the mode plane is plotted at the desired location.
+        Otherwise, the mode plane is plotted by default.
+
+        Parameters
+        ----------
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        source_alpha : float = 0
+            Opacity of the sources. If ``None``, uses Tidy3d default.
+        monitor_alpha : float = 0
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = 0
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        if x is not None or y is not None or z is not None:
+            return super().plot(
+                x=x,
+                y=y,
+                z=z,
+                ax=ax,
+                source_alpha=source_alpha,
+                monitor_alpha=monitor_alpha,
+                lumped_element_alpha=lumped_element_alpha,
+                hlim=hlim,
+                vlim=vlim,
+                fill_structures=fill_structures,
+                **patch_kwargs,
+            )
+        return self._mode_solver.plot(
+            ax=ax,
+            hlim=hlim,
+            vlim=vlim,
+            fill_structures=fill_structures,
+            **patch_kwargs,
+        )
+
     def plot_mode_plane(
         self,
         ax: Ax = None,
