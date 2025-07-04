@@ -336,6 +336,7 @@ jobs:
     steps:
       - name: check-passing-remote-tests
         run: |
+          echo "Local tests result: ${{ needs.local-tests.result }}"
           echo "Remote tests result: ${{ needs.remote-tests.result }}"
 
           if [[ "${{ needs.lint.result }}" != 'success' ]]; then
