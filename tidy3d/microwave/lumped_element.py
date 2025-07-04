@@ -38,8 +38,7 @@ from tidy3d.components.viz import PlotParams, plot_params_lumped_element
 from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log
-
-from .microwave.formulas.circuit_parameters import (
+from tidy3d.microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
     capacitance_rectangular_sheets,
     inductance_straight_rectangular_wire,
