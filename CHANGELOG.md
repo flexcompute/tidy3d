@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
 - Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
+- Added `priority` parameter to `web.run()` and related functions to allow vGPU users to set task priority (1-10) in the queue.
 
 ### Changed
 - Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
