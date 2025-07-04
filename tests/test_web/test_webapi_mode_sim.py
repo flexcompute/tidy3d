@@ -185,9 +185,6 @@ def mock_monitor(monkeypatch):
         current_status = statuses[current_count]
         status_count[0] += 1
         return current_status
-        # return TaskInfo(
-        #     status=current_status, taskName=TASK_NAME, taskId=task_id, realFlexUnit=1.0
-        #     )
 
     run_count = [0]
     perc_dones = (1, 10, 20, 30, 100)
@@ -199,6 +196,8 @@ def mock_monitor(monkeypatch):
         return perc_done, 1
 
     monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path}.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr("tidy3d.web.api.container.web.REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
     monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)

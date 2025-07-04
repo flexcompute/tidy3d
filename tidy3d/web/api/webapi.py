@@ -598,14 +598,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
         else:
             while get_status(task_id) == "running":
                 perc_done, _ = get_run_info(task_id)
-                time.sleep(1.0)
+                time.sleep(RUN_REFRESH_TIME)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
             perc_done, field_decay = get_run_info(task_id)
-            time.sleep(1.0)
+            time.sleep(RUN_REFRESH_TIME)
 
     # post processing
     if verbose:
