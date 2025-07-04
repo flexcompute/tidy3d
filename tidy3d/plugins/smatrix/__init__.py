@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import warnings
 
-from tidy3d.components.microwave.component_modelers.modal import (
+from tidy3d.microwave.component_modelers.modal import (
     AbstractComponentModeler,
     ComponentModeler,
     ModalPortDataArray,
 )
-from tidy3d.components.microwave.component_modelers.terminal import TerminalComponentModeler
-from tidy3d.components.microwave.data.terminal import PortDataArray, TerminalPortDataArray
-from tidy3d.components.microwave.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.components.microwave.ports.modal import Port
-from tidy3d.components.microwave.ports.rectangular_lumped import LumpedPort
-from tidy3d.components.microwave.ports.wave import WavePort
+from tidy3d.microwave.component_modelers.terminal import TerminalComponentModeler
+from tidy3d.microwave.data.terminal import PortDataArray, TerminalPortDataArray
+from tidy3d.microwave.ports.coaxial_lumped import CoaxialLumpedPort
+from tidy3d.microwave.ports.modal import Port
+from tidy3d.microwave.ports.rectangular_lumped import LumpedPort
+from tidy3d.microwave.ports.wave import WavePort
 
 # Instantiate on plugin import till we unite with toplevel
 warnings.filterwarnings(
