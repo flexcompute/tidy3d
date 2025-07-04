@@ -14,7 +14,6 @@ from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, Dir
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.grid.grid_spec import GridSpec, LayerRefinementSpec
-from tidy3d.components.lumped_element import LumpedElement
 from tidy3d.components.medium import Medium, MediumType3D
 from tidy3d.components.monitor import AbstractFieldProjectionMonitor, MonitorType
 from tidy3d.components.simulation import Simulation
@@ -23,6 +22,7 @@ from tidy3d.components.structure import MeshOverrideStructure, Structure
 from tidy3d.components.types import ArrayLike, Axis, Bound, Undefined
 from tidy3d.constants import C_0, inf
 from tidy3d.log import log
+from tidy3d.microwave.lumped_element import LumpedElement
 
 
 class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):

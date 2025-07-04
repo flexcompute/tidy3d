@@ -9,33 +9,22 @@ from typing import Annotated, Literal, Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.grid.grid import Grid
-from tidy3d.components.medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
-from tidy3d.components.monitor import FieldMonitor
-from tidy3d.components.structure import MeshOverrideStructure, Structure
-from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
-from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
-from tidy3d.exceptions import ValidationError
-from tidy3d.log import log
-
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
-from .geometry.primitives import Cylinder
-from .geometry.utils import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup
+from tidy3d.components.geometry.primitives import Cylinder
+from tidy3d.components.geometry.utils import (
     SnapBehavior,
     SnapLocation,
     SnappingSpec,
     snap_box_to_grid,
     snap_point_to_grid,
 )
-from .geometry.utils_2d import increment_float
-from .microwave.formulas.circuit_parameters import (
-    capacitance_colinear_cylindrical_wire_segments,
-    capacitance_rectangular_sheets,
-    inductance_straight_rectangular_wire,
-    total_inductance_colinear_rectangular_wire_segments,
-)
-from .types import (
+from tidy3d.components.geometry.utils_2d import increment_float
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.structure import MeshOverrideStructure, Structure
+from tidy3d.components.types import (
     TYPE_TAG_STR,
     Axis,
     Axis2D,
@@ -44,7 +33,18 @@ from .types import (
     FreqArray,
     LumpDistType,
 )
-from .viz import PlotParams, plot_params_lumped_element
+from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
+from tidy3d.components.viz import PlotParams, plot_params_lumped_element
+from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
+from tidy3d.exceptions import ValidationError
+from tidy3d.log import log
+
+from .microwave.formulas.circuit_parameters import (
+    capacitance_colinear_cylindrical_wire_segments,
+    capacitance_rectangular_sheets,
+    inductance_straight_rectangular_wire,
+    total_inductance_colinear_rectangular_wire_segments,
+)
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 1
 LOSS_FACTOR_INDUCTOR = 1e6

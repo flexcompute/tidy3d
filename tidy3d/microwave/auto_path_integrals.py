@@ -10,8 +10,8 @@ from tidy3d.components.geometry.utils import (
     snap_box_to_grid,
 )
 from tidy3d.components.grid.grid import Grid
-from tidy3d.components.lumped_element import LinearLumpedElement
 from tidy3d.components.types import Direction
+from tidy3d.microwave.lumped_element import LinearLumpedElement
 
 from .path_integrals import (
     CurrentIntegralAxisAligned,

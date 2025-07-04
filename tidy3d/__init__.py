@@ -14,9 +14,6 @@ from tidy3d.components.material.tcad.heat import (
     SolidMedium,
     SolidSpec,
 )
-from tidy3d.components.microwave.data.monitor_data import (
-    AntennaMetricsData,
-)
 from tidy3d.components.spice.analysis.dc import (
     ChargeToleranceSpec,
     IsothermalSteadyChargeDCAnalysis,
@@ -77,6 +74,17 @@ from tidy3d.components.tcad.types import (
     TemperatureBC,
     UniformHeatSource,
     VoltageBC,
+)
+
+# lumped elements
+from tidy3d.microwave.lumped_element import (
+    AdmittanceNetwork,
+    CoaxialLumpedResistor,
+    LinearLumpedElement,
+    LumpedElement,
+    LumpedResistor,
+    RectangularLumpedElement,
+    RLCNetwork,
 )
 
 from .components.apodization import ApodizationSpec
@@ -223,17 +231,6 @@ from .components.grid.grid_spec import (
     LayerRefinementSpec,
     QuasiUniformGrid,
     UniformGrid,
-)
-
-# lumped elements
-from .components.lumped_element import (
-    AdmittanceNetwork,
-    CoaxialLumpedResistor,
-    LinearLumpedElement,
-    LumpedElement,
-    LumpedResistor,
-    RectangularLumpedElement,
-    RLCNetwork,
 )
 
 # medium

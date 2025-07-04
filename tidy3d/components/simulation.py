@@ -22,6 +22,7 @@ import xarray as xr
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
+from tidy3d.microwave.lumped_element import LumpedElementType
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 from tidy3d.updater import Updater
 
@@ -53,7 +54,6 @@ from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Coords1D, Grid
 from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
-from .lumped_element import LumpedElementType
 from .medium import (
     AbstractCustomMedium,
     AbstractMedium,
