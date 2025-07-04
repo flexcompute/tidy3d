@@ -110,7 +110,7 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
     )
 
     @classmethod
-    def from_angles(
+    def sources_from_angles(
         cls,
         source_time: SourceTimeType,
         angle_theta: float,

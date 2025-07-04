@@ -148,11 +148,11 @@ def test_dipole():
         _ = td.PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
 
 
-def test_dipole_from_angles():
+def test_dipole_sources_from_angles():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     with pytest.raises(pydantic.ValidationError):
-        _ = td.PointDipole.from_angles(
+        _ = td.PointDipole.sources_from_angles(
             size=(1, 1, 1),
             source_time=g,
             center=(1, 2, 3),
@@ -161,7 +161,7 @@ def test_dipole_from_angles():
         )
 
     with pytest.raises(ValueError):
-        _ = td.PointDipole.from_angles(
+        _ = td.PointDipole.sources_from_angles(
             source_time=g,
             angle_theta=np.pi / 4,
             angle_phi=np.pi / 4,
@@ -171,7 +171,7 @@ def test_dipole_from_angles():
 
     assert (
         len(
-            td.PointDipole.from_angles(
+            td.PointDipole.sources_from_angles(
                 source_time=g,
                 angle_theta=np.pi / 4,
                 angle_phi=np.pi / 4,
@@ -184,7 +184,7 @@ def test_dipole_from_angles():
 
     assert (
         len(
-            td.PointDipole.from_angles(
+            td.PointDipole.sources_from_angles(
                 source_time=g,
                 angle_theta=np.pi / 4,
                 angle_phi=np.pi / 2,
@@ -197,7 +197,7 @@ def test_dipole_from_angles():
 
     assert (
         len(
-            td.PointDipole.from_angles(
+            td.PointDipole.sources_from_angles(
                 source_time=g,
                 angle_theta=np.pi / 2,
                 angle_phi=np.pi / 2,
