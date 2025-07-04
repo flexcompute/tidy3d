@@ -108,6 +108,7 @@ def run(
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    priority: typing.Optional[int] = None,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -147,6 +148,8 @@ def run(
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: typing.Union[PayType, str] = PayType.AUTO
         Which method to pay for the simulation.
+    priority: int = None
+        Task priority for vGPU queue (1=lowest, 10=highest).
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -191,6 +194,8 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
+    if priority is not None and (priority < 1 or priority > 10):
+        raise ValueError("Priority must be between '1' and '10' if specified.")
     if is_valid_for_autograd(simulation):
         return _run(
             simulation=simulation,
@@ -225,6 +230,7 @@ def run(
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
+        priority=priority,
     )
 
 
