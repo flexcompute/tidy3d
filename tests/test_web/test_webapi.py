@@ -182,29 +182,36 @@ def mock_get_info(monkeypatch, set_api_key):
 def mock_start(monkeypatch, set_api_key, mock_get_info):
     """Mocks webapi.start."""
 
-    responses.add(
-        responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
-        match=[
-            matchers.json_params_matcher(
-                {
-                    "solverVersion": None,
-                    "workerGroup": None,
-                    "protocolVersion": td.version.__version__,
-                    "enableCaching": Env.current.enable_caching,
-                    "payType": PayType.AUTO,
+    def add_mock_response(priority=None):
+        expected_body = {
+            "solverVersion": None,
+            "workerGroup": None,
+            "protocolVersion": td.version.__version__,
+            "enableCaching": Env.current.enable_caching,
+            "payType": PayType.AUTO,
+            "priority": priority,
+        }
+
+        responses.add(
+            responses.POST,
+            f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+            match=[matchers.json_params_matcher(expected_body)],
+            json={
+                "data": {
+                    "taskId": TASK_ID,
+                    "taskName": TASK_NAME,
+                    "createdAt": CREATED_AT,
                 }
-            )
-        ],
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "taskName": TASK_NAME,
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
+            },
+            status=200,
+        )
+
+    # Add response for calls without priority
+    add_mock_response(None)
+
+    # Add responses for calls with specific priority values
+    for priority in [1, 5, 10]:
+        add_mock_response(priority)
 
 
 @pytest.fixture
@@ -217,9 +224,6 @@ def mock_monitor(monkeypatch):
         current_status = statuses[current_count]
         status_count[0] += 1
         return current_status
-        # return TaskInfo(
-        #     status=current_status, taskName=TASK_NAME, taskId=task_id, realFlexUnit=1.0
-        #     )
 
     run_count = [0]
     perc_dones = (1, 10, 20, 30, 100)
@@ -231,6 +235,8 @@ def mock_monitor(monkeypatch):
         return perc_done, 1
 
     monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path}.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr("tidy3d.web.api.container.web.REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
     monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)
@@ -320,6 +326,39 @@ def test_get_info(mock_get_info):
 @responses.activate
 def test_start(mock_start):
     start(TASK_ID)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [1, 5, 10, None])
+def test_start_with_valid_priority(mock_start, priority):
+    """Test start with valid priority values."""
+    start(TASK_ID, priority=priority)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [0, -1, 11, 15])
+def test_start_with_invalid_priority(mock_start, priority):
+    """Test start with invalid priority values."""
+    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+        start(TASK_ID, priority=priority)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [5, None])
+def test_run_with_valid_priority(mock_webapi, monkeypatch, priority):
+    """Test run with valid priority parameter."""
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    sim = make_sim()
+    run(sim, TASK_NAME, folder_name=PROJECT_NAME, priority=priority)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [0, -1, 11, 15])
+def test_run_with_invalid_priority(mock_webapi, priority):
+    """Test run with invalid priority values."""
+    sim = make_sim()
+    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+        run(sim, TASK_NAME, folder_name=PROJECT_NAME, priority=priority)
 
 
 @responses.activate

@@ -218,6 +218,7 @@ def test_submit(set_api_key):
                     "workerGroup": None,
                     "enableCaching": Env.current.enable_caching,
                     "payType": PayType.AUTO,
+                    "priority": None,
                 }
             )
         ],

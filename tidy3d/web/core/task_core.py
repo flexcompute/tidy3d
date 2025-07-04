@@ -429,6 +429,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         solver_version: Optional[str] = None,
         worker_group: Optional[str] = None,
         pay_type: Union[PayType, str] = PayType.AUTO,
+        priority: Optional[int] = None,
     ):
         """Kick off this task.
 
@@ -444,6 +445,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             worker group
         pay_type: Union[PayType, str] = PayType.AUTO
             Which method to pay the simulation.
+        priority: int = None
+            Task priority for vGPU queue (1=lowest, 10=highest).
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
@@ -460,6 +463,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "protocolVersion": protocol_version,
                 "enableCaching": Env.current.enable_caching,
                 "payType": pay_type.value,
+                "priority": priority,
             },
         )
 

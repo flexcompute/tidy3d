@@ -83,6 +83,7 @@ def run(
     parent_tasks: Optional[list[str]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
+    priority: Optional[int] = None,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -117,7 +118,8 @@ def run(
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: Union[PayType, str] = PayType.AUTO
        Which method to pay the simulation.
-
+    priority: int = None
+        Task priority for vGPU queue (1=lowest, 10=highest).
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -179,6 +181,7 @@ def run(
         solver_version=solver_version,
         worker_group=worker_group,
         pay_type=pay_type,
+        priority=priority,
     )
     monitor(task_id, verbose=verbose)
     data = load(
@@ -372,6 +375,7 @@ def start(
     solver_version: Optional[str] = None,
     worker_group: Optional[str] = None,
     pay_type: Union[PayType, str] = PayType.AUTO,
+    priority: Optional[int] = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -386,10 +390,14 @@ def start(
         worker group
     pay_type: Union[PayType, str] = PayType.AUTO
         Which method to pay the simulation
+    priority: int = None
+        Task priority for vGPU queue (1=lowest, 10=highest).
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
+    if priority is not None and (priority < 1 or priority > 10):
+        raise ValueError("Priority must be between '1' and '10' if specified.")
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
@@ -397,6 +405,7 @@ def start(
         solver_version=solver_version,
         worker_group=worker_group,
         pay_type=pay_type,
+        priority=priority,
     )
 
 
@@ -589,14 +598,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
         else:
             while get_status(task_id) == "running":
                 perc_done, _ = get_run_info(task_id)
-                time.sleep(1.0)
+                time.sleep(RUN_REFRESH_TIME)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
             perc_done, field_decay = get_run_info(task_id)
-            time.sleep(1.0)
+            time.sleep(RUN_REFRESH_TIME)
 
     # post processing
     if verbose:
