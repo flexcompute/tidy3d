@@ -326,7 +326,11 @@ jobs:
 
   pr-requirements-pass:
     name: pr-requirements-pass
-    if: always() && ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' ) # always will run if dependent job is skipped
+    if: |
+      always() && 
+      ( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
+      ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
+      ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     needs: [local-tests, remote-tests, lint]
     runs-on: ubuntu-latest
     steps:
