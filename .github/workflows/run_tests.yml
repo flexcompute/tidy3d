@@ -36,6 +36,7 @@ jobs:
     outputs:
       local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
       remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
+      pr_approval_state: ${{ steps.approval.outputs.approved }}
     steps:
       - name: check-current-approval-status
         id: approval
@@ -144,7 +145,8 @@ jobs:
       image: ghcr.io/astral-sh/uv:debian
       options: --user 31001:61001 # Required slurm-batch UID: slurm GID for tmp/ file removal
     concurrency:
-      group: local-tests-${{ github.ref }}
+      group: local-tests-${{ github.ref }}-${{ matrix.python-version }}
+      cancel-in-progress: true # Required so it does not use previous state
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
@@ -324,7 +326,7 @@ jobs:
 
   pr-requirements-pass:
     name: pr-requirements-pass
-    if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
+    if: always() && ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' ) # always will run if dependent job is skipped
     needs: [local-tests, remote-tests, lint]
     runs-on: ubuntu-latest
     steps:
@@ -332,18 +334,18 @@ jobs:
         run: |
           echo "Remote tests result: ${{ needs.remote-tests.result }}"
 
-          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+          if [[ "${{ needs.lint.result }}" != 'success' ]]; then
             echo "❌ Linting failed or was skipped."
             exit 1
-          fi
-
-          if [[ "${{ needs.remote-tests.result }}" != "success" ]]; then
+          elif [[ "${{ needs.remote-tests.result }}" != 'success' ]]; then
             echo "❌ remote-tests failed or were skipped."
-          fi
-
-          if [[ "${{ needs.local-tests.result }}" != "success" ]]; then
+            exit 1 # Given remote-tests always run after a PR is approved
+          elif [[ "${{ needs.local-tests.result }}" != 'success' ]]; then
             echo "❌ local-tests failed or were skipped."
             exit 1
+          elif [[ "${{ needs.determine-test-scope.outputs.pr_approval_state }}" == 'true' && github.event.pull_request ]]; then
+            echo "❌ PR requires approval."
+            exit 1
+          else 
+            echo "✅ All required test jobs passed!"
           fi
-
-          echo "✅ All required test jobs passed!"
