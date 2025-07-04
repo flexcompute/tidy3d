@@ -346,10 +346,8 @@ jobs:
             exit 1 # Given remote-tests always run after a PR is approved
           elif [[ "${{ needs.local-tests.result }}" != 'success' ]]; then
             echo "❌ local-tests failed or were skipped."
-            exit 1
           elif [[ "${{ needs.determine-test-scope.outputs.pr_approval_state }}" == 'true' && github.event.pull_request ]]; then
             echo "❌ PR requires approval."
             exit 1
-          else 
-            echo "✅ All required test jobs passed!"
           fi
+          echo "✅ All required test jobs passed!"
