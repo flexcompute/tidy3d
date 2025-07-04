@@ -185,9 +185,9 @@ class MonitorData(AbstractMonitorData, ABC):
         """Get the complex amplitude out of some data."""
 
         if isinstance(x, DataArray):
-            x = complex(x.values)
+            x = x.values
 
-        return 1j * complex(x)
+        return complex(x)
 
 
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
@@ -2115,7 +2115,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 for mode_index in coords["mode_index"]:
                     amp_single = self.amps.sel(f=freq, direction=direction, mode_index=mode_index)
 
-                    if self.get_amplitude(amp_single) == 0.0:
+                    if abs(self.get_amplitude(amp_single)) == 0.0:
                         continue
 
                     adjoint_source = self._adjoint_source_amp(amp=amp_single, fwidth=fwidth)
@@ -2138,7 +2138,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         amp_complex = self.get_amplitude(amp)
         k0 = 2 * np.pi * freq0 / C_0
         grad_const = k0 / 4 / ETA_0
-        src_amp = grad_const * amp_complex
+        src_amp = 1j * grad_const * amp_complex
 
         # construct source
         src_adj = ModeSource(
@@ -3404,7 +3404,7 @@ class DiffractionData(AbstractFieldProjectionData):
 
                         # ignore any amplitudes of 0.0 or nan
                         amp_complex = self.get_amplitude(amp_single)
-                        if (amp_complex == 0.0) or np.isnan(amp_complex):
+                        if (abs(amp_complex) == 0.0) or np.isnan(amp_complex):
                             continue
 
                         # compute a plane wave for this amplitude (if propagating / not None)
