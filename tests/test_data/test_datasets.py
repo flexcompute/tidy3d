@@ -12,9 +12,10 @@ from ..utils import AssertLogLevel, cartesian_to_unstructured
 np.random.seed(4)
 
 
+@pytest.mark.parametrize("transpose", [True, False])
 @pytest.mark.parametrize("dataset_type_ind", [0, 1, 2])
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
+def test_triangular_dataset(tmp_path, transpose, ds_name, dataset_type_ind, no_vtk=False):
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
@@ -241,37 +242,37 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
 
     if len(extra_dims) > 0:
         with pytest.raises(DataError):
-            _ = tri_grid.plot()
+            _ = tri_grid.plot(transpose=transpose)
 
     tri_grid_one_field = tri_grid.isel(**{key: value[0] for key, value in extra_dims.items()})
 
     # plotting
-    _ = tri_grid_one_field.plot()
+    _ = tri_grid_one_field.plot(transpose=transpose)
     plt.close()
 
-    _ = tri_grid_one_field.plot(grid=False)
+    _ = tri_grid_one_field.plot(grid=False, transpose=transpose)
     plt.close()
 
-    _ = tri_grid_one_field.plot(field=False)
+    _ = tri_grid_one_field.plot(field=False, transpose=transpose)
     plt.close()
 
-    _ = tri_grid_one_field.plot(cbar=False)
+    _ = tri_grid_one_field.plot(cbar=False, transpose=transpose)
     plt.close()
 
-    _ = tri_grid_one_field.plot(vmin=-20, vmax=100)
+    _ = tri_grid_one_field.plot(vmin=-20, vmax=100, transpose=transpose)
     plt.close()
 
-    _ = tri_grid_one_field.plot(cbar_kwargs={"label": "test"})
+    _ = tri_grid_one_field.plot(cbar_kwargs={"label": "test"}, transpose=transpose)
     plt.close()
 
-    _ = tri_grid_one_field.plot(cmap="RdBu")
+    _ = tri_grid_one_field.plot(cmap="RdBu", transpose=transpose)
     plt.close()
 
-    _ = tri_grid_one_field.plot(shading="flat")
+    _ = tri_grid_one_field.plot(shading="flat", transpose=transpose)
     plt.close()
 
     with pytest.raises(DataError):
-        _ = tri_grid.plot(field=False, grid=False)
+        _ = tri_grid.plot(field=False, grid=False, transpose=transpose)
 
     # generalized selection method
     if no_vtk:

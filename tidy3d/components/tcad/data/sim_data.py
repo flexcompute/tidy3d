@@ -204,7 +204,6 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         if isinstance(field_data, TriangularGridDataset):
             field_data.plot(
                 ax=ax,
-                cmap=False,
                 field=False,
                 grid=True,
                 transpose=transpose,
