@@ -201,7 +201,10 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         )
 
         # only then overlay the mesh plot
-        if isinstance(field_data, TriangularGridDataset):
+        if not transpose:
+            # This is the original code (which does not support `transpose=True`)
+            field_data.plot(ax=ax, cmap=False, field=False, grid=True)
+        elif isinstance(field_data, TriangularGridDataset):
             field_data.plot(
                 ax=ax,
                 field=False,
@@ -219,7 +222,10 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
                 grid=True,
             )
         else:
-            raise AssertionError
+            raise NotImplementedError(
+                "`AbstractHeatChargeSimulationData.plot_mesh()` does not support "
+                "`transpose=True` (for {type(field_data)} data)."
+            )
 
         # set the limits based on the xarray coordinates min and max
         ax.set_xlim(min_bounds[0], max_bounds[0])
