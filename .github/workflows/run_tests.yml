@@ -145,7 +145,7 @@ jobs:
       image: ghcr.io/astral-sh/uv:debian
       options: --user 31001:61001 # Required slurm-batch UID: slurm GID for tmp/ file removal
     concurrency:
-      group: local-tests-${{ github.ref }}-${{ matrix.python-version }}
+      group: local-tests-${{ github.ref }}-${{ github.event_name }}-python-${{ matrix.python-version }}
       cancel-in-progress: true # Required so it does not use previous state
     strategy:
       matrix:
