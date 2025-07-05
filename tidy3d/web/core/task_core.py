@@ -13,6 +13,7 @@ from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
 
 import tidy3d as td
+from tidy3d.exceptions import ValidationError
 
 from . import http_util
 from .cache import FOLDER_CACHE
@@ -675,3 +676,33 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return http.put(
             "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
         )
+
+    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None):
+        """Perform checks after task is uploaded and metadata is processed."""
+        if self.task_type == "HEAT_CHARGE" and parent_tasks:
+            try:
+                if len(parent_tasks) > 1:
+                    raise ValueError(
+                        "A single parent 'task_id' corresponding to the task in which the meshing "
+                        "was run must be provided."
+                    )
+                try:
+                    # get mesh task info
+                    mesh_task = SimulationTask.get(parent_tasks[0], verbose=False)
+                    assert mesh_task.task_type == "VOLUME_MESH"
+                    assert mesh_task.status == "success"
+                    # get up-to-date task info
+                    task = SimulationTask.get(self.task_id, verbose=False)
+                    if task.fileMd5 != mesh_task.childFileMd5:
+                        raise ValidationError(
+                            "Simulation stored in parent task 'VolumeMesher' does not match the "
+                            "current simulation."
+                        )
+                except Exception as e:
+                    raise ValidationError(
+                        "The parent task must be a 'VolumeMesher' task which has been successfully "
+                        "run and is associated to the same 'HeatChargeSimulation' as provided here."
+                    ) from e
+
+            except Exception as e:
+                raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
