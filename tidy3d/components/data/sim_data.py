@@ -819,14 +819,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             eps_reverse = False
 
         # plot the field
-        xy_coord_labels = list("xyz")
-        xy_coord_labels.pop(axis)
         _, xy_coord_labels = pop_axis_and_swap(list("xyz"), axis, transpose=transpose)
-        x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
         field_data.plot(
             ax=ax,
-            x=x_coord_label,
-            y=y_coord_label,
+            x=xy_coord_labels[0],
+            y=xy_coord_labels[1],
             cmap=cmap,
             vmin=vmin,
             vmax=vmax,
@@ -848,8 +845,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         )
 
         # set the limits based on the xarray coordinates min and max
-        x_coord_values = field_data.coords[x_coord_label]
-        y_coord_values = field_data.coords[y_coord_label]
+        x_coord_values = field_data.coords[xy_coord_labels[0]]
+        y_coord_values = field_data.coords[xy_coord_labels[1]]
         ax.set_xlim(min(x_coord_values), max(x_coord_values))
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
 

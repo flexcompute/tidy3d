@@ -527,21 +527,22 @@ def make_heat_sim_data():
     return heat_sim_data
 
 
-def test_sim_data():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_sim_data(transpose):
     heat_sim_data = make_heat_sim_data()
-    _ = heat_sim_data.plot_field("test", z=0)
-    _ = heat_sim_data.plot_field("tri")
-    _ = heat_sim_data.plot_field("tet", y=0.5)
+    _ = heat_sim_data.plot_field("test", z=0, transpose=transpose)
+    _ = heat_sim_data.plot_field("tri", transpose=transpose)
+    _ = heat_sim_data.plot_field("tet", y=0.5, transpose=transpose)
     plt.close()
 
     with pytest.raises(DataError):
-        _ = heat_sim_data.plot_field("empty")
+        _ = heat_sim_data.plot_field("empty", transpose=transpose)
 
     with pytest.raises(DataError):
-        _ = heat_sim_data.plot_field("test")
+        _ = heat_sim_data.plot_field("test", transpose=transpose)
 
     with pytest.raises(KeyError):
-        _ = heat_sim_data.plot_field("test3", x=0)
+        _ = heat_sim_data.plot_field("test3", x=0, transpose=transpose)
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim_data.updated_copy(data=[heat_sim_data.data[0]] * 2)

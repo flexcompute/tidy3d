@@ -1072,11 +1072,11 @@ class RectangularDielectric(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
         if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
             log.warning(
-                "UNTESTED! The RectangularDielectric.plot_...() functions have not yet been\n"
-                "tested with `transpose=True`.  To confirm that the plot you are seeing now\n"
+                "UNTESTED! The RectangularDielectric.plot_...() functions have not yet been "
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
                 "is correct, try again with `transpose=False` and compare the two plots.",
-                stacklevel=2,
             )
 
         kwargs = {"color": color, "linewidth": pyplot.rcParams["grid.linewidth"]}

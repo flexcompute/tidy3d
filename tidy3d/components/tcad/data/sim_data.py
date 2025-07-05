@@ -7,6 +7,7 @@ from typing import Literal, Optional
 
 import numpy as np
 import pydantic.v1 as pd
+from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
@@ -121,6 +122,7 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         field_name: Optional[str] = None,
         structures_fill: bool = True,
         ax: Ax = None,
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the simulation mesh in a monitor region with structures overlaid.
@@ -135,6 +137,8 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
             Whether to overlay the mesh on structures filled with color or only show structure outlines.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             or time dimension (``t``) if applicable.
@@ -152,6 +156,12 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        if transpose:
+            log.warning(
+                "UNTESTED! The AbstractHeatChargeSimulationData.plot_...() functions have not yet been "
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
+                "is correct, try again with `transpose=False` and compare the two plots.",
+            )
 
         monitor_data = self[monitor_name]
 
@@ -175,11 +185,8 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         position = field_data.normal_pos
 
         # compute plot bounds
-        field_data_bounds = field_data.bounds
-        min_bounds = list(field_data_bounds[0])
-        max_bounds = list(field_data_bounds[1])
-        min_bounds.pop(axis)
-        max_bounds.pop(axis)
+        _, min_bounds = pop_axis_and_swap(field_data.bounds[0], axis, transpose=transpose)
+        _, max_bounds = pop_axis_and_swap(field_data.bounds[1], axis, transpose=transpose)
 
         # select the cross section data
         interp_kwarg = {"xyz"[axis]: position}
@@ -189,11 +196,31 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
             fill=structures_fill,
             hlim=(min_bounds[0], max_bounds[0]),
             vlim=(min_bounds[1], max_bounds[1]),
+            transpose=transpose,
             **interp_kwarg,
         )
 
         # only then overlay the mesh plot
-        field_data.plot(ax=ax, cmap=False, field=False, grid=True)
+        if isinstance(field_data, TriangularGridDataset):
+            field_data.plot(
+                ax=ax,
+                cmap=False,
+                field=False,
+                grid=True,
+                transpose=transpose,
+            )
+        elif isinstance(field_data, XrDataArray):
+            _, xy_coord_labels = pop_axis_and_swap(list("xyz"), axis, transpose=transpose)
+            field_data.plot(
+                ax=ax,
+                x=xy_coord_labels[0],
+                y=xy_coord_labels[1],
+                cmap=False,
+                field=False,
+                grid=True,
+            )
+        else:
+            raise AssertionError
 
         # set the limits based on the xarray coordinates min and max
         ax.set_xlim(min_bounds[0], max_bounds[0])
@@ -303,6 +330,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             inferred from the data and other keyword arguments.
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             or time dimension (``t``) if applicable.
@@ -315,6 +344,13 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
+            log.warning(
+                "UNTESTED! The HeatChargeSimulationData.plot_...() functions have not yet been "
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
+                "is correct, try again with `transpose=False` and compare the two plots.",
+            )
 
         monitor_data = self[monitor_name]
         property_to_plot = None
@@ -359,6 +395,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
                 vmax=vmax,
                 cbar_kwargs={"label": field_name},
                 grid=False,
+                transpose=transpose,
             )
 
             # compute parameters for structures overlay plot
@@ -366,9 +403,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             position = field_data.normal_pos
 
             # compute plot bounds
-            field_data_bounds = field_data.bounds
-            _, min_bounds = pop_axis_and_swap(field_data_bounds[0], axis, transpose=transpose)
-            _, max_bounds = pop_axis_and_swap(field_data_bounds[1], axis, transpose=transpose)
+            _, min_bounds = pop_axis_and_swap(field_data.bounds[0], axis, transpose=transpose)
+            _, max_bounds = pop_axis_and_swap(field_data.bounds[1], axis, transpose=transpose)
 
         if isinstance(field_data, SpatialDataArray):
             # interp out any monitor.size==0 dimensions
@@ -419,14 +455,11 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             planar_coord = [name for name, c in spatial_coords_in_data.items() if c is False][0]
             axis = "xyz".index(planar_coord)
             position = float(field_data.coords[planar_coord])
-
             _, xy_coord_labels = pop_axis_and_swap(list("xyz"), axis=axis, transpose=transpose)
-
-            x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
             field_data.plot(
                 ax=ax,
-                x=x_coord_label,
-                y=y_coord_label,
+                x=xy_coord_labels[0],
+                y=xy_coord_labels[1],
                 cmap=cmap,
                 vmin=vmin,
                 vmax=vmax,
@@ -435,8 +468,8 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
             )
 
             # compute plot bounds
-            x_coord_values = field_data.coords[x_coord_label]
-            y_coord_values = field_data.coords[y_coord_label]
+            x_coord_values = field_data.coords[xy_coord_labels[0]]
+            y_coord_values = field_data.coords[xy_coord_labels[1]]
             min_bounds = (min(x_coord_values), min(y_coord_values))
             max_bounds = (max(x_coord_values), max(y_coord_values))
 

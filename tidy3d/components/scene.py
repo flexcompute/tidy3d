@@ -1232,12 +1232,12 @@ class Scene(Tidy3dBaseModel):
 
         if grid is None:
             if transpose:
+                # Please remove this warning once someone has verified that `transpose=True` works.
                 log.warning(
-                    "UNTESTED! The plotting function you are using has not\n"
-                    "yet been rigorously tested with `transpose=True`.\n"
-                    "To confirm that the plot you are seeing now is correct,\n"
+                    "UNTESTED! The plotting function you are using has not "
+                    "yet been rigorously tested with `transpose=True`. "
+                    "To confirm that the plot you are seeing now is correct, "
                     "try again with `transpose=False` and compare the two plots.",
-                    stacklevel=2,
                 )
 
             _, plane_axes_inds = pop_axis_and_swap(
