@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
+
+from tidy3d.log import log
 
 
 # pop_axis_and_swap() is already defined in tidy3d.components.geometry.base.
@@ -82,3 +84,14 @@ def unpop_axis_and_swap(
         coords = [coords[1], coords[0]]
     coords.insert(axis, ax_coord)
     return tuple(coords)
+
+
+def warn_untested_argument(cls_name: Optional[str], func_name: str, arg: str, val: str):
+    """Generic warning message if a function has never been manually tested with ``arg=val``. (This"
+    is typically used for plot functions where manual tests and visual confirmation is needed.)"""
+    prefix = ""
+    if cls_name:
+        prefix = cls_name + "."
+    log.warning(
+        f"UNTESTED!  The `{prefix}{func_name}()` function has not yet been tested with `{arg}={val}`."
+    )

@@ -22,7 +22,7 @@ from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
-from tidy3d.components.utils import pop_axis_and_swap, unpop_axis_and_swap
+from tidy3d.components.utils import pop_axis_and_swap, unpop_axis_and_swap, warn_untested_argument
 from tidy3d.constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from tidy3d.exceptions import SetupError, Tidy3dError
 from tidy3d.log import log
@@ -1233,11 +1233,8 @@ class Scene(Tidy3dBaseModel):
         if grid is None:
             if transpose:
                 # Please remove this warning once someone has verified that `transpose=True` works.
-                log.warning(
-                    "UNTESTED! The plotting function you are using has not "
-                    "yet been rigorously tested with `transpose=True`. "
-                    "To confirm that the plot you are seeing now is correct, "
-                    "try again with `transpose=False` and compare the two plots.",
+                warn_untested_argument(
+                    cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
                 )
 
             _, plane_axes_inds = pop_axis_and_swap(

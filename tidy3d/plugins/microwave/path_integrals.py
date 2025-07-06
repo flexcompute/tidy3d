@@ -21,7 +21,7 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.types import Ax, Axis, Coordinate2D, Direction
-from tidy3d.components.utils import pop_axis_and_swap
+from tidy3d.components.utils import pop_axis_and_swap, warn_untested_argument
 from tidy3d.components.validators import assert_line, assert_plane
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import AMP, VOLT, fp_eps
@@ -350,11 +350,10 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         """
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
-            log.warning(
-                "UNTESTED! The `VoltageIntegralAxisaligned.plot()` function has not yet been "
-                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
-                "is correct, try again with `transpose=False` and compare the two plots.",
+            warn_untested_argument(
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
+
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis == self.main_axis or not np.isclose(position, self.center[axis], rtol=fp_eps):
             return ax
@@ -560,11 +559,10 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         """
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
-            log.warning(
-                "UNTESTED! The `CurrentIntegralAxisaligned.plot()` function has not yet been "
-                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
-                "is correct, try again with `transpose=False` and compare the two plots.",
+            warn_untested_argument(
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
+
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.center[axis], rtol=fp_eps):
             return ax

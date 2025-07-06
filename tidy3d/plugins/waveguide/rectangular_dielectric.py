@@ -21,6 +21,7 @@ from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Size1D
+from tidy3d.components.utils import warn_untested_argument
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
 from tidy3d.exceptions import Tidy3dError, ValidationError
@@ -1073,10 +1074,8 @@ class RectangularDielectric(Tidy3dBaseModel):
         """
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
-            log.warning(
-                "UNTESTED! The RectangularDielectric.plot_...() functions have not yet been "
-                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
-                "is correct, try again with `transpose=False` and compare the two plots.",
+            warn_untested_argument(
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
 
         kwargs = {"color": color, "linewidth": pyplot.rcParams["grid.linewidth"]}

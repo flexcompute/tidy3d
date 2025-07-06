@@ -12,10 +12,10 @@ import xarray as xr
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
+from tidy3d.components.utils import warn_untested_argument
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError
-from tidy3d.log import log
 
 from .path_integrals import (
     AbstractAxesRH,
@@ -298,10 +298,8 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         """
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
-            log.warning(
-                "UNTESTED! The `CustomVoltageIntegral2D.plot()` function has not yet been "
-                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
-                "is correct, try again with `transpose=False` and compare the two plots.",
+            warn_untested_argument(
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):
@@ -383,10 +381,8 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         """
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
-            log.warning(
-                "UNTESTED! The `CustomCurrentIntegral2D.plot()` function has not yet been "
-                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
-                "is correct, try again with `transpose=False` and compare the two plots.",
+            warn_untested_argument(
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):
