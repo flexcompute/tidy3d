@@ -261,7 +261,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane. (This overrides the
-            default lexicographic axis order.)
+            default ascending axis order.)
 
         Returns
         -------
@@ -293,7 +293,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Plane specification.
         transpose : bool = False
             Optional: Swap the coordinates in the plane. (This overrides the
-            default lexicographic axis order.)
+            default ascending axis order.)
 
         Returns
         -------
@@ -476,7 +476,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Integer index into 'xyz' (0,1,2).
         transpose : bool = False
             Optional: Swap the coordinates in the plane. (This overrides the
-            default lexicographic axis order.)
+            default ascending axis order.)
 
         Returns
         -------
@@ -548,7 +548,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Plotting parameters associated with a medium to use instead of defaults.
         transpose : bool = False
             Swap horizontal and vertical axes. (This overrides the default
-            lexicographic axis order.)
+            ascending axis order.)
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -663,7 +663,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Integer index into 'xyz' (0,1,2).
         transpose : bool = False
             Optional: Swap horizontal and vertical plot labels.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -686,7 +686,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Amount of space to add around the limits on the + and - sides.
         transpose : bool = False
             Optional: Swap horizontal and vertical axis limits.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -711,7 +711,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Amount of space to place around the limits on the + and - sides.
         transpose : bool = False
             Optional: Swap horizontal and vertical axis limits.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -756,7 +756,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             and title with the proper units.
         transpose : bool = False
             Optional: Swap horizontal and vertical axis labels.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -1790,7 +1790,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -1816,7 +1816,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Position along the axis normal to slab
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -1838,7 +1838,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             Integer index into 'xyz' (0,1,2).
         transpose : bool = False
             Optional: Swap the coordinates in the perpendicular plane before calculating
-            intersections.  (This overrides the default lexicographic axis order.)
+            intersections.  (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -2184,7 +2184,7 @@ class Box(SimplePlaneIntersection, Centered):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -2373,7 +2373,7 @@ class Box(SimplePlaneIntersection, Centered):
             Custom base of the arrow. Uses the geometry's center if not provided.
         transpose : bool = False
             Swap horizontal and vertical axes.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -3138,7 +3138,7 @@ class ClipOperation(Geometry):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -3363,7 +3363,7 @@ class GeometryGroup(Geometry):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         transpose : bool = False
             Optional: Swap the coordinates in the plane before calculating intersections.
-            (This overrides the default lexicographic axis order.)
+            (This overrides the default ascending axis order.)
 
         Returns
         -------

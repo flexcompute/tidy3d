@@ -285,7 +285,7 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -370,7 +370,7 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to

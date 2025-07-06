@@ -514,7 +514,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------

@@ -70,7 +70,7 @@ def unpop_axis_and_swap(
         Integer index into 'xyz' (0,1,2).
     transpose : bool = False
         Optional: Swap the order of the entries in plane_coords[].
-        (This overrides the default lexicographic axis order.)
+        (This overrides the default ascending axis order.)
 
     Returns
     -------

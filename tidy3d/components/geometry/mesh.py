@@ -692,7 +692,7 @@ class TriangleMesh(base.Geometry, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to

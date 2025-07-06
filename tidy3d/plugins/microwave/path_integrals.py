@@ -60,8 +60,8 @@ class AbstractAxesRH(Tidy3dBaseModel, ABC):
             return (axes[1], axes[0])
         return (axes[0], axes[1])
 
-    def remaining_axes_lexicographic(self, transpose: bool = False) -> tuple[Axis, Axis]:
-        """Get in-plane axes, ordered lexicographically, with support for axes swapping."""
+    def remaining_axes_ascending(self, transpose: bool = False) -> tuple[Axis, Axis]:
+        """Get in-plane axes, in ascending order, with support for axes swapping."""
         _, axes = pop_axis_and_swap([0, 1, 2], self.main_axis, transpose=transpose)
         return (axes[0], axes[1])
 
@@ -190,11 +190,11 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
                 return index
         raise Tidy3dError("Failed to identify axis.")
 
-    def _vertices_2D_lexicographic(
+    def _vertices_2D_ascending(
         self, axis: Axis, transpose: bool = False
     ) -> tuple[Coordinate2D, Coordinate2D]:
         """Returns the two vertices of this path in the plane defined by ``axis``.
-        Axis order is lexicographic (unless transpose=True), not right-handed."""
+        Axis order is ascending (unless transpose=True), not right-handed."""
         min = self.bounds[0]
         max = self.bounds[1]
         _, min = pop_axis_and_swap(min, axis, transpose=transpose)
@@ -337,7 +337,7 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -359,7 +359,7 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         if axis == self.main_axis or not np.isclose(position, self.center[axis], rtol=fp_eps):
             return ax
 
-        (xs, ys) = self._vertices_2D_lexicographic(axis, transpose=transpose)
+        (xs, ys) = self._vertices_2D_ascending(axis, transpose=transpose)
 
         # Plot the path
         plot_params = plot_params_voltage_path.include_kwargs(**path_kwargs)
@@ -547,7 +547,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -574,17 +574,17 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         path_integrals = self._to_path_integrals()
         # Plot the path
         for path in path_integrals:
-            (xs, ys) = path._vertices_2D_lexicographic(axis, transpose=transpose)
+            (xs, ys) = path._vertices_2D_ascending(axis, transpose=transpose)
             ax.plot(xs, ys, **plot_kwargs)
 
-        (ax1, ax2) = self.remaining_axes_lexicographic(transpose=transpose)
+        (ax1, ax2) = self.remaining_axes_ascending(transpose=transpose)
 
         # Add arrow to bottom path, unless right path is longer
         arrow_path = path_integrals[0]
         if self.size[ax2] > self.size[ax1]:
             arrow_path = path_integrals[1]
 
-        (xs, ys) = arrow_path._vertices_2D_lexicographic(axis, transpose=transpose)
+        (xs, ys) = arrow_path._vertices_2D_ascending(axis, transpose=transpose)
         X = (xs[0] + xs[1]) / 2
         Y = (ys[0] + ys[1]) / 2
         center = np.array([X, Y])

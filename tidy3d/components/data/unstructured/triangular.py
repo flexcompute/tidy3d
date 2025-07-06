@@ -620,7 +620,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         pcolor_kwargs: Dict = {}
             Additional parameters passed to ax.tripcolor()
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
 
         Returns
         -------

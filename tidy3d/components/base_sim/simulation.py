@@ -277,7 +277,7 @@ class AbstractSimulation(Box, ABC):
         fill_structures : bool = True
             Whether to fill structures with color or just draw outlines.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -349,7 +349,7 @@ class AbstractSimulation(Box, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -409,7 +409,7 @@ class AbstractSimulation(Box, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -545,7 +545,7 @@ class AbstractSimulation(Box, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -589,7 +589,7 @@ class AbstractSimulation(Box, ABC):
         fill : bool = True
             Whether to fill structures with color or just draw outlines.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -650,7 +650,7 @@ class AbstractSimulation(Box, ABC):
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -718,7 +718,7 @@ class AbstractSimulation(Box, ABC):
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         transpose : bool = False
             Swap horizontal and vertical axes. (This overrides the default
-            lexicographic axis order.)
+            ascending axis order.)
 
         Returns
         -------

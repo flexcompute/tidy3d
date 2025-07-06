@@ -340,7 +340,7 @@ class ModeSolver(Tidy3dBaseModel):
         truncate_symmetry : bool = True
             Truncate to symmetry quadrant if symmetry present.
         transpose : bool = False
-            Swap the coordinates in the plane. (This overrides the default lexicographic axis order.)
+            Swap the coordinates in the plane. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -2081,7 +2081,7 @@ class ModeSolver(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
         sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
             These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
             frequency or time dimensions (``f``, ``t``) or `mode_index`, if applicable.
@@ -2123,7 +2123,7 @@ class ModeSolver(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -2179,7 +2179,7 @@ class ModeSolver(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -2244,7 +2244,7 @@ class ModeSolver(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -2293,7 +2293,7 @@ class ModeSolver(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -2373,8 +2373,7 @@ class ModeSolver(Tidy3dBaseModel):
     ]:
         """Thickness of the mode solver pml in the form
         ((plus0, minus0), (plus1, minus1))
-        where 0 and 1 are the lexicographically-ordered tangential axes
-        to the mode plane.
+        where 0 and 1 are the tangential axes to the mode plane (in ascending order).
         """
         # Get the mode plane normal axis, center, and limits.
         solver_symmetry = cls._solver_symmetry(
@@ -2449,7 +2448,7 @@ class ModeSolver(Tidy3dBaseModel):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------

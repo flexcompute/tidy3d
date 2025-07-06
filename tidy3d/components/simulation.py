@@ -485,7 +485,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -600,7 +600,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         eps_lim : Tuple[float, float] = None
             Custom limits for eps coloring.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -727,7 +727,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         eps_lim : Tuple[float, float] = None
             Custom limits for eps coloring.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -797,7 +797,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -967,7 +967,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -1027,7 +1027,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -1176,7 +1176,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         transpose : bool = False
-            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order.)
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order.)
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
