@@ -15,6 +15,7 @@ from tidy3d.components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, D
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError
+from tidy3d.log import log
 
 from .path_integrals import (
     AbstractAxesRH,
@@ -268,6 +269,7 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **path_kwargs,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -282,6 +284,8 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -292,6 +296,13 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
+            log.warning(
+                "UNTESTED! The `CustomVoltageIntegral2D.plot()` function has not yet been "
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
+                "is correct, try again with `transpose=False` and compare the two plots.",
+            )
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):
             return ax
@@ -300,6 +311,8 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         plot_kwargs = plot_params.to_kwargs()
         xs = self.vertices[:, 0]
         ys = self.vertices[:, 1]
+        if transpose:
+            xs, ys = ys, xs
         ax.plot(xs, ys, markevery=[0, -1], **plot_kwargs)
 
         # Plot special end points
@@ -341,6 +354,7 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **path_kwargs,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -355,6 +369,8 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -365,6 +381,13 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
+            log.warning(
+                "UNTESTED! The `CustomCurrentIntegral2D.plot()` function has not yet been "
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
+                "is correct, try again with `transpose=False` and compare the two plots.",
+            )
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):
             return ax
@@ -373,6 +396,8 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         plot_kwargs = plot_params.to_kwargs()
         xs = self.vertices[:, 0]
         ys = self.vertices[:, 1]
+        if transpose:
+            xs, ys = ys, xs
         ax.plot(xs, ys, **plot_kwargs)
 
         # Add arrow at start of contour

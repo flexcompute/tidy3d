@@ -676,6 +676,7 @@ class TriangleMesh(base.Geometry, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
@@ -690,6 +691,8 @@ class TriangleMesh(base.Geometry, ABC):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -707,4 +710,4 @@ class TriangleMesh(base.Geometry, ABC):
             "A 'PermittivityMonitor' can be used to check that the mesh is loaded correctly."
         )
 
-        return base.Geometry.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
+        return base.Geometry.plot(self, x=x, y=y, z=z, ax=ax, transpose=transpose, **patch_kwargs)

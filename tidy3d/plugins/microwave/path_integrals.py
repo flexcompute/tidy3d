@@ -21,6 +21,7 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
 from tidy3d.components.geometry.base import Box, Geometry
 from tidy3d.components.types import Ax, Axis, Coordinate2D, Direction
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.validators import assert_line, assert_plane
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import AMP, VOLT, fp_eps
@@ -57,6 +58,11 @@ class AbstractAxesRH(Tidy3dBaseModel, ABC):
         axes.pop(self.main_axis)
         if self.main_axis == 1:
             return (axes[1], axes[0])
+        return (axes[0], axes[1])
+
+    def remaining_axes_lexicographic(self, transpose: bool = False) -> tuple[Axis, Axis]:
+        """Get in-plane axes, ordered lexicographically, with support for axes swapping."""
+        _, axes = pop_axis_and_swap([0, 1, 2], self.main_axis, transpose=transpose)
         return (axes[0], axes[1])
 
     @cached_property
@@ -184,12 +190,15 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
                 return index
         raise Tidy3dError("Failed to identify axis.")
 
-    def _vertices_2D(self, axis: Axis) -> tuple[Coordinate2D, Coordinate2D]:
-        """Returns the two vertices of this path in the plane defined by ``axis``."""
+    def _vertices_2D_lexicographic(
+        self, axis: Axis, transpose: bool = False
+    ) -> tuple[Coordinate2D, Coordinate2D]:
+        """Returns the two vertices of this path in the plane defined by ``axis``.
+        Axis order is lexicographic (unless transpose=True), not right-handed."""
         min = self.bounds[0]
         max = self.bounds[1]
-        _, min = Box.pop_axis(min, axis)
-        _, max = Box.pop_axis(max, axis)
+        _, min = pop_axis_and_swap(min, axis, transpose=transpose)
+        _, max = pop_axis_and_swap(max, axis, transpose=transpose)
 
         u = [min[0], max[0]]
         v = [min[1], max[1]]
@@ -312,6 +321,7 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **path_kwargs,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -326,6 +336,8 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -336,11 +348,19 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
+            log.warning(
+                "UNTESTED! The `VoltageIntegralAxisaligned.plot()` function has not yet been "
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
+                "is correct, try again with `transpose=False` and compare the two plots.",
+            )
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis == self.main_axis or not np.isclose(position, self.center[axis], rtol=fp_eps):
             return ax
 
-        (xs, ys) = self._vertices_2D(axis)
+        (xs, ys) = self._vertices_2D_lexicographic(axis, transpose=transpose)
+
         # Plot the path
         plot_params = plot_params_voltage_path.include_kwargs(**path_kwargs)
         plot_kwargs = plot_params.to_kwargs()
@@ -419,7 +439,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         raise Tidy3dError("Failed to identify axis.")
 
     def _to_path_integrals(
-        self, h_horizontal=None, h_vertical=None
+        self, h_horizontal=None, h_vertical=None, transpose: bool = False
     ) -> tuple[AxisAlignedPathIntegral, ...]:
         """Returns four ``AxisAlignedPathIntegral`` instances, which represent a contour
         integral around the surface defined by ``self.size``."""
@@ -511,6 +531,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **path_kwargs,
     ) -> Ax:
         """Plot path integral at single (x,y,z) coordinate.
@@ -525,6 +546,8 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         **path_kwargs
             Optional keyword arguments passed to the matplotlib plotting of the line.
             For details on accepted values, refer to
@@ -535,6 +558,13 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        if transpose:
+            # Please remove this warning once someone has verified that `transpose=True` works.
+            log.warning(
+                "UNTESTED! The `CurrentIntegralAxisaligned.plot()` function has not yet been "
+                "tested with `transpose=True`.  To confirm that the plot you are seeing now "
+                "is correct, try again with `transpose=False` and compare the two plots.",
+            )
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.center[axis], rtol=fp_eps):
             return ax
@@ -544,17 +574,17 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         path_integrals = self._to_path_integrals()
         # Plot the path
         for path in path_integrals:
-            (xs, ys) = path._vertices_2D(axis)
+            (xs, ys) = path._vertices_2D_lexicographic(axis, transpose=transpose)
             ax.plot(xs, ys, **plot_kwargs)
 
-        (ax1, ax2) = self.remaining_axes
+        (ax1, ax2) = self.remaining_axes_lexicographic(transpose=transpose)
 
         # Add arrow to bottom path, unless right path is longer
         arrow_path = path_integrals[0]
         if self.size[ax2] > self.size[ax1]:
             arrow_path = path_integrals[1]
 
-        (xs, ys) = arrow_path._vertices_2D(axis)
+        (xs, ys) = arrow_path._vertices_2D_lexicographic(axis, transpose=transpose)
         X = (xs[0] + xs[1]) / 2
         Y = (ys[0] + ys[1]) / 2
         center = np.array([X, Y])

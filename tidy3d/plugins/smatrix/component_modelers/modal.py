@@ -217,6 +217,7 @@ class ComponentModeler(AbstractComponentModeler):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot a :class:`.Simulation` with all sources added for each port, for troubleshooting."""
 
@@ -225,7 +226,7 @@ class ComponentModeler(AbstractComponentModeler):
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update={"sources": plot_sources})
-        return sim_plot.plot(x=x, y=y, z=z, ax=ax)
+        return sim_plot.plot(x=x, y=y, z=z, ax=ax, transpose=transpose)
 
     @equal_aspect
     @add_ax_if_none
@@ -235,6 +236,7 @@ class ComponentModeler(AbstractComponentModeler):
         y: Optional[float] = None,
         z: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
@@ -244,7 +246,7 @@ class ComponentModeler(AbstractComponentModeler):
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update={"sources": plot_sources})
-        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
+        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, transpose=transpose, **kwargs)
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
         """Compute the normalization amplitude based on the measured input mode amplitude."""

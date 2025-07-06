@@ -1,4 +1,4 @@
-# ruff: noqa: W293, W291
+# ruff: noqa: W291
 """Defines heat simulation class"""
 
 from __future__ import annotations
@@ -1572,8 +1572,10 @@ class HeatChargeSimulation(AbstractSimulation):
             Options are ["heat_conductivity", "electric_conductivity"]
         hlim : Tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+            (WARNING: This argument has no effect.  Do not use.)
         vlim : Tuple[float, float] = None
             The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+            (WARNING: This argument has no effect.  Do not use.)
         alpha : float = None
             Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
@@ -1624,6 +1626,12 @@ class HeatChargeSimulation(AbstractSimulation):
         source_min, source_max = self.source_bounds(property=property)
         for source, shape in source_shapes:
             if source is not None:
+                if hlim or vlim:  # Fix this eventually?  For now, just warn users.
+                    log.warning(
+                        "The `hlim` and `vlim` arguments are not implemented for this plot type. "
+                        "Sources may be displayed at the wrong location.",
+                        log_once=True,
+                    )
                 ax = self._plot_shape_structure_source(
                     alpha=alpha,
                     source=source,

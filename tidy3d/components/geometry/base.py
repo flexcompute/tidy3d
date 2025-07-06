@@ -618,7 +618,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
             if transpose:
-                # Define a transformation which swaps horizal<-->vertical coordinates.
+                # Define a transformation which swaps horizal <-> vertical coordinates.
                 transpose_xy = transforms.Affine2D()
                 transpose_xy.set_matrix(
                     np.array(

@@ -248,15 +248,17 @@ def test_validate_batch_supplied(tmp_path):
     )
 
 
-def test_plot_sim():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plot_sim(transpose: bool):
     modeler = make_component_modeler()
-    modeler.plot_sim(z=0)
+    modeler.plot_sim(z=0, transpose=transpose)
     plt.close()
 
 
-def test_plot_sim_eps():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plot_sim_eps(transpose: bool):
     modeler = make_component_modeler()
-    modeler.plot_sim_eps(z=0)
+    modeler.plot_sim_eps(z=0, transpose=transpose)
     plt.close()
 
 

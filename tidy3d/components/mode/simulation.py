@@ -364,6 +364,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def plot_mode_plane(
         self,
         ax: Ax = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -377,6 +378,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
 
         See Also
         ---------
@@ -385,13 +388,14 @@ class ModeSimulation(AbstractYeeGridSimulation):
             * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
 
         """
-        return self._mode_solver.plot(ax=ax, **patch_kwargs)
+        return self._mode_solver.plot(ax=ax, transpose=transpose, **patch_kwargs)
 
     def plot_eps_mode_plane(
         self,
         freq: Optional[float] = None,
         alpha: Optional[float] = None,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot the mode plane simulation's components.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -406,6 +410,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
             Defaults to the structure default alpha.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
 
         Returns
         -------
@@ -418,7 +424,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         **Notebooks**
             * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
         """
-        return self._mode_solver.plot_eps(freq=freq, alpha=alpha, ax=ax)
+        return self._mode_solver.plot_eps(freq=freq, alpha=alpha, ax=ax, transpose=transpose)
 
     def plot_structures_eps_mode_plane(
         self,
@@ -427,6 +433,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot the mode plane simulation's components.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -446,6 +453,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
             If ``True``, it is plotteed in white (suitable for black backgrounds).
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
 
         Returns
         -------
@@ -459,12 +468,13 @@ class ModeSimulation(AbstractYeeGridSimulation):
             * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
         """
         return self._mode_solver.plot_structures_eps(
-            freq=freq, alpha=alpha, cbar=cbar, reverse=reverse, ax=ax
+            freq=freq, alpha=alpha, cbar=cbar, reverse=reverse, ax=ax, transpose=transpose
         )
 
     def plot_grid_mode_plane(
         self,
         ax: Ax = None,
+        transpose: bool = False,
         **kwargs,
     ) -> Ax:
         """Plot the mode plane cell boundaries as lines.
@@ -473,6 +483,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
         ----------
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
         **kwargs
             Optional keyword arguments passed to the matplotlib ``LineCollection``.
             For details on accepted values, refer to
@@ -483,11 +495,12 @@ class ModeSimulation(AbstractYeeGridSimulation):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        return self._mode_solver.plot_grid(ax=ax)
+        return self._mode_solver.plot_grid(ax=ax, transpose=transpose)
 
     def plot_pml_mode_plane(
         self,
         ax: Ax = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot the mode plane absorbing boundaries.
 
@@ -495,13 +508,15 @@ class ModeSimulation(AbstractYeeGridSimulation):
         ----------
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default lexicographic axis order)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        return self._mode_solver.plot_pml(ax=ax)
+        return self._mode_solver.plot_pml(ax=ax, transpose=transpose)
 
     def validate_pre_upload(self, source_required: bool = False):
         self._mode_solver.validate_pre_upload(source_required=source_required)

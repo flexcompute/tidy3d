@@ -572,7 +572,8 @@ def test_impedance_accuracy_on_coaxial():
     assert np.allclose(Z_calc, Z_analytic, rtol=0.04)
 
 
-def test_path_integral_plotting():
+@pytest.mark.parametrize("transpose", [True, False])
+def test_path_integral_plotting(transpose: bool):
     """Test that all types of path integrals correctly plot themselves."""
 
     mean_radius = (COAX_R2 + COAX_R1) * 0.5
@@ -588,12 +589,12 @@ def test_path_integral_plotting():
     )
 
     ax = voltage_integral.plot(z=0)
-    current_integral.plot(z=0, ax=ax)
+    current_integral.plot(z=0, ax=ax, transpose=transpose)
     plt.close()
 
     # Test off center plotting
     ax = voltage_integral.plot(z=2)
-    current_integral.plot(z=2, ax=ax)
+    current_integral.plot(z=2, ax=ax, transpose=transpose)
     plt.close()
 
     # Plot
@@ -610,12 +611,12 @@ def test_path_integral_plotting():
     )
 
     ax = voltage_integral.plot(y=0)
-    current_integral.plot(y=0, ax=ax)
+    current_integral.plot(y=0, ax=ax, transpose=transpose)
     plt.close()
 
     # Test off center plotting
     ax = voltage_integral.plot(y=2)
-    current_integral.plot(y=2, ax=ax)
+    current_integral.plot(y=2, ax=ax, transpose=transpose)
     plt.close()
 
 
