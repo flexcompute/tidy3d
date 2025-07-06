@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
 - Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
+- Add `PointDipole.sources_from_angles()` that constructs a list of `PointDipole` objects needed to emulate a dipole oriented at a user-provided set of polar and azimuthal angles.
 - Added `priority` parameter to `web.run()` and related functions to allow vGPU users to set task priority (1-10) in the queue.
 
 ### Changed
