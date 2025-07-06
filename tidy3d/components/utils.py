@@ -47,7 +47,7 @@ def unpop_axis_and_swap(
     ax_coord: Any,
     plane_coords: tuple[Any, Any],
     axis: int,
-    transpose: bool = False,  # <-- newly added
+    transpose: bool = False,
 ) -> tuple[Any, Any, Any]:
     """
     ``unpop_axis_and_swap()`` is identical to ``Geompetry.unpop_axis()``, except that
@@ -78,7 +78,7 @@ def unpop_axis_and_swap(
         The three values in the xyz coordinate system.
     """
     coords = list(plane_coords)
-    if transpose:  # <-- newly added
-        coords = [coords[1], coords[0]]  # <-- newly added
+    if transpose:
+        coords = [coords[1], coords[0]]
     coords.insert(axis, ax_coord)
     return tuple(coords)

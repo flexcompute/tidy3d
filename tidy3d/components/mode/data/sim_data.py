@@ -50,7 +50,7 @@ class ModeSimulationData(AbstractYeeGridSimulationData):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         ax: Ax = None,
-        transpose: bool = None,
+        transpose: bool = False,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
