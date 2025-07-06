@@ -562,7 +562,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         # find shapes that intersect self at plane
         print(f"invoked Geometry.plot({transpose=})")
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        shapes_intersect = self.intersections_plane(x=x, y=y, z=z)  # , transpose=transpose)
+        shapes_intersect = self.intersections_plane(
+            x=x,
+            y=y,
+            z=z,
+            transpose=False,  # <- Don't transpose yet. Instead, use plot_shape(transpose=transpose)
+        )
         print(f"{shapes_intersect=}")  # DEBUG
 
         plot_params = self.plot_params
