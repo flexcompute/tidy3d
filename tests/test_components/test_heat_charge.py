@@ -2111,6 +2111,10 @@ def test_charge_copy_xy():
         ),
     )
 
+    with pytest.raises(pd.ValidationError):
+        # Simulation must be at least 2D
+        _ = sim.updated_copy(size=(1, 0, 0))
+
     changed_sim = sim._create_charge_copy_xy()
 
     assert changed_sim.size == (2, 2, 0), "Size should be updated to (2, 2, 0)"

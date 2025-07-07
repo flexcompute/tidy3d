@@ -1789,7 +1789,7 @@ class HeatChargeSimulation(AbstractSimulation):
 
         if TCADAnalysisTypes.CHARGE in sim_types:
             zero_dims = self.zero_dims
-            if len(zero_dims) > 0:
+            if len(zero_dims) == 1:
                 if zero_dims[0] != 2:
                     # check doping boxes
                     # the following dictionary associates a structure with a modified medium
@@ -1886,6 +1886,8 @@ class HeatChargeSimulation(AbstractSimulation):
                     )
                 else:
                     return self
+            elif len(zero_dims) > 1:
+                raise SetupError("Charge simulation can only be 2- or 3-D")
             else:
                 return self
         else:
