@@ -13,7 +13,7 @@ from tidy3d.components.grid.grid import Grid, YeeGrid
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.types import Complex, Coordinate, FreqArray
 from tidy3d.constants import OHM
-from tidy3d.microwave.lumped_element import LumpedElementType
+from tidy3d.em.microwave.lumped_element import LumpedElementType
 
 from .base_terminal import AbstractTerminalPort
 

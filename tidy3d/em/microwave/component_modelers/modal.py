@@ -17,8 +17,8 @@ from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Ax, Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.em.microwave.ports.modal import ModalPortDataArray, Port
 from tidy3d.exceptions import SetupError
-from tidy3d.microwave.ports.modal import ModalPortDataArray, Port
 from tidy3d.web.api.container import BatchData
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler

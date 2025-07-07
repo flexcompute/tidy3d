@@ -24,8 +24,8 @@ from tidy3d.components.source.current import UniformCurrentSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Axis, FreqArray, LumpDistType
 from tidy3d.components.validators import assert_line_or_plane
+from tidy3d.em.microwave.lumped_element import LinearLumpedElement, LumpedResistor, RLCNetwork
 from tidy3d.exceptions import SetupError, ValidationError
-from tidy3d.microwave.lumped_element import LinearLumpedElement, LumpedResistor, RLCNetwork
 from tidy3d.plugins.microwave import CurrentIntegralAxisAligned, VoltageIntegralAxisAligned
 
 from .base_lumped import AbstractLumpedPort

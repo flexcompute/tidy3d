@@ -36,14 +36,14 @@ from tidy3d.components.types import (
 from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
 from tidy3d.components.viz import PlotParams, plot_params_lumped_element
 from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
-from tidy3d.exceptions import ValidationError
-from tidy3d.log import log
-from tidy3d.microwave.formulas.circuit_parameters import (
+from tidy3d.em.microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
     capacitance_rectangular_sheets,
     inductance_straight_rectangular_wire,
     total_inductance_colinear_rectangular_wire_segments,
 )
+from tidy3d.exceptions import ValidationError
+from tidy3d.log import log
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 1
 LOSS_FACTOR_INDUCTOR = 1e6

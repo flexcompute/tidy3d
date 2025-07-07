@@ -7,7 +7,7 @@ import pydantic.v1 as pydantic
 import pytest
 
 import tidy3d as td
-from tidy3d.microwave.lumped_element import NetworkConversions
+from tidy3d.em.microwave.lumped_element import NetworkConversions
 
 
 def test_lumped_resistor():

@@ -77,7 +77,7 @@ from tidy3d.components.tcad.types import (
 )
 
 # lumped elements
-from tidy3d.microwave.lumped_element import (
+from tidy3d.em.microwave.lumped_element import (
     AdmittanceNetwork,
     CoaxialLumpedResistor,
     LinearLumpedElement,

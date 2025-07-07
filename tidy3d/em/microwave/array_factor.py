@@ -21,8 +21,8 @@ from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure
 from tidy3d.components.types import ArrayLike, Axis, Bound, Undefined
 from tidy3d.constants import C_0, inf
+from tidy3d.em.microwave.lumped_element import LumpedElement
 from tidy3d.log import log
-from tidy3d.microwave.lumped_element import LumpedElement
 
 
 class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):

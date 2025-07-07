@@ -24,9 +24,9 @@ from tidy3d.components.types import (
     annotate_type,
 )
 from tidy3d.constants import C_0, MICROMETER, dp_eps, inf
+from tidy3d.em.microwave.lumped_element import LumpedElementType
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
-from tidy3d.microwave.lumped_element import LumpedElementType
 
 from .corner_finder import CornerFinderSpec
 from .grid import Coords, Coords1D, Grid

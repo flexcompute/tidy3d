@@ -20,9 +20,9 @@ import pydantic.v1 as pydantic
 import xarray as xr
 
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
+from tidy3d.em.microwave.lumped_element import LumpedElementType
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
-from tidy3d.microwave.lumped_element import LumpedElementType
 from tidy3d.packaging import supports_local_subpixel, tidy3d_extras
 from tidy3d.updater import Updater
 
