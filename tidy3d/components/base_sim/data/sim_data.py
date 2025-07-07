@@ -52,15 +52,15 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         """Dictionary mapping monitor name to its associated :class:`AbstractMonitorData`."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
 
-    @pd.validator("data", always=True)
-    @skip_if_fields_missing(["simulation"])
-    def data_monitors_match_sim(cls, val, values):
+    @pd.root_validator(skip_on_failure=True)
+    def data_monitors_match_sim(cls, values):
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
         sim = values.get("simulation")
+        data = values.get("data")
 
-        for mnt_data in val:
+        for mnt_data in data:
             try:
                 monitor_name = mnt_data.monitor.name
                 sim.get_monitor_by_name(monitor_name)
@@ -69,7 +69,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
                     f"Data with monitor name '{monitor_name}' supplied "
                     f"but not found in the original '{sim.type}'."
                 ) from exc
-        return val
+        return values
 
     @pd.validator("data", always=True)
     @skip_if_fields_missing(["simulation"])
