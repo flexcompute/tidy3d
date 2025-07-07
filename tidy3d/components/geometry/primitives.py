@@ -96,6 +96,8 @@ class Sphere(base.Centered, base.Circular):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+
         normal = np.array(normal)
         unit_normal = normal / (np.sum(normal**2) ** 0.5)
         projection = np.dot(np.array(origin) - np.array(self.center), unit_normal)
@@ -145,6 +147,8 @@ class Sphere(base.Centered, base.Circular):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
+
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
             return []
@@ -409,6 +413,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"Invoked {type(self).__name__}.do_intersections_tilted_plane({transpose=})")  # DEBUG
+
         import trimesh
 
         z0, (x0, y0) = self.pop_axis(self.center, self.axis)
@@ -457,9 +463,6 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             x, y = y, x
         vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
 
-        print("invoked Cylinder._do_intersections_tilted_plane()")  # DEBUG
-        # print(f"Cylinder._do_intersections_tilted_plane({transpose=}), {vertices=}")  # DEBUG
-
         if x_bot.shape[0] == 1:
             m = 1
             n = x_top.shape[0] - 1
@@ -506,6 +509,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"Invoked {type(self).__name__}._intersections_normal({transpose=})")  # DEBUG
 
         static_self = self.to_static()
 
@@ -539,6 +543,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"Invoked {type(self).__name__}.intersections_side({transpose=})")  # DEBUG
+
         # position in the local coordinate of the cylinder
         position_local = position - self.center[axis]
 

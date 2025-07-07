@@ -552,13 +552,17 @@ class TriangleMesh(base.Geometry, ABC):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+
         section = self.trimesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
         if transpose:
             path.vertices = path.vertices[:, ::-1]  # swap column 0 (X) with column 1 (Y)
-        print(f"TriangleMesh.intersections_tilted_plane({transpose=}), {path=}")  # DEBUG
+
+        # print(f"TriangleMesh.intersections_tilted_plane({transpose=}), {path=}")  # DEBUG
+
         return path.polygons_full
 
     def intersections_plane(
@@ -588,6 +592,7 @@ class TriangleMesh(base.Geometry, ABC):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
 
         if self.mesh_dataset is None:
             return []
