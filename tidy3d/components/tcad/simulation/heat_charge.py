@@ -1875,6 +1875,20 @@ class HeatChargeSimulation(AbstractSimulation):
 
                         new_boundary_spec.append(boundary.updated_copy(placement=new_placement))
 
+                    # Monitors
+                    new_monitors = []
+                    for mnt in self.monitors:
+                        new_center = list(mnt.center)
+                        new_center[zero_dims[0]] = mnt.center[2]
+                        new_center[2] = mnt.center[zero_dims[0]]
+
+                        new_size = list(mnt.size)
+                        new_size[zero_dims[0]] = mnt.size[2]
+                        new_size[2] = mnt.size[zero_dims[0]]
+
+                        new_monitors.append(mnt.updated_copy(center=new_center, size=new_size))
+
+                    # simulation size
                     new_size = list(self.size)
                     new_size[zero_dims[0]] = self.size[2]
                     new_size[2] = self.size[zero_dims[0]]
@@ -1883,6 +1897,7 @@ class HeatChargeSimulation(AbstractSimulation):
                         structures=new_structures,
                         boundary_spec=new_boundary_spec,
                         size=new_size,
+                        monitors=new_monitors,
                     )
                 else:
                     return self

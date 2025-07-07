@@ -663,10 +663,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
             )
 
         # set labels and titles
+        coords_indices = list(self.points.coords["axis"].data)
         ax_labels = ["x", "y", "z"]
-        normal_axis_name = ax_labels.pop(self.normal_axis)
-        ax.set_xlabel(ax_labels[0])
-        ax.set_ylabel(ax_labels[1])
+        normal_axis_name = ax_labels[self.normal_axis]
+        ax.set_xlabel(ax_labels[coords_indices[0]])
+        ax.set_ylabel(ax_labels[coords_indices[1]])
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
 

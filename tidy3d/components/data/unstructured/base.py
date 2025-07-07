@@ -71,12 +71,17 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def points_right_dims(cls, val):
         """Check that point coordinates have the right dimensionality."""
         # currently support only the standard axis ordering, that is 01(2)
-        axis_coords_expected = np.arange(cls._point_dims())
-        axis_coords_given = val.axis.data
-        if np.any(axis_coords_given != axis_coords_expected):
+        # axis_coords_expected = np.arange(cls._point_dims())
+        # axis_coords_given = val.axis.data
+        # if np.any(axis_coords_given != axis_coords_expected):
+        #     raise ValidationError(
+        #         f"Points array is expected to have {axis_coords_expected} coord values along 'axis'"
+        #         f" (given: {axis_coords_given})."
+        #     )
+        if len(val.axis.data) != cls._point_dims():
             raise ValidationError(
-                f"Points array is expected to have {axis_coords_expected} coord values along 'axis'"
-                f" (given: {axis_coords_given})."
+                f"Points array is expected to have {cls._point_dims()} coord values along 'axis'"
+                f" (given: {len(val.axis.data)})."
             )
         return val
 

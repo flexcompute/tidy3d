@@ -2103,7 +2103,13 @@ def test_charge_copy_xy():
                 size=(td.inf, td.inf, td.inf),
                 name="potential_monitor",
                 unstructured=True,
-            )
+            ),
+            td.SteadyFreeCarrierMonitor(
+                center=(0, 0, 0),
+                size=(1, 0, 1),
+                name="free_carrier_monitor",
+                unstructured=True,
+            ),
         ],
         analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
             temperature=300,
@@ -2131,3 +2137,6 @@ def test_charge_copy_xy():
     assert changed_sim.boundary_spec[0].placement.surfaces == ("y+", "y-")
 
     assert changed_sim.boundary_spec[1].placement.surfaces == ("y+", "x-")
+
+    assert changed_sim.monitors[0].size == (td.inf, td.inf, td.inf)
+    assert changed_sim.monitors[1].size == (1, 1, 0)
