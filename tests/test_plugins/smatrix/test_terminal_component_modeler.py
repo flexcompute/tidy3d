@@ -8,8 +8,8 @@ import xarray as xr
 
 import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.microwave.ports.base_lumped import AbstractLumpedPort
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
+from tidy3d.microwave.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.microwave import (
     CurrentIntegralAxisAligned,
     CustomCurrentIntegral2D,

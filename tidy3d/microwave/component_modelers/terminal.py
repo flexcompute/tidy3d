@@ -12,12 +12,6 @@ from tidy3d.components.data.data_array import DataArray, FreqDataArray
 from tidy3d.components.data.monitor_data import MonitorData
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
-from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
-from tidy3d.components.microwave.data.terminal import PortDataArray, TerminalPortDataArray
-from tidy3d.components.microwave.ports.base_lumped import AbstractLumpedPort
-from tidy3d.components.microwave.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.components.microwave.ports.rectangular_lumped import LumpedPort
-from tidy3d.components.microwave.ports.wave import WavePort
 from tidy3d.components.monitor import DirectivityMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
@@ -26,6 +20,12 @@ from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, OHM
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
 from tidy3d.log import log
+from tidy3d.microwave.data.monitor_data import AntennaMetricsData
+from tidy3d.microwave.data.terminal import PortDataArray, TerminalPortDataArray
+from tidy3d.microwave.ports.base_lumped import AbstractLumpedPort
+from tidy3d.microwave.ports.coaxial_lumped import CoaxialLumpedPort
+from tidy3d.microwave.ports.rectangular_lumped import LumpedPort
+from tidy3d.microwave.ports.wave import WavePort
 from tidy3d.web.api.container import BatchData
 
 from .base import AbstractComponentModeler, TerminalPortType

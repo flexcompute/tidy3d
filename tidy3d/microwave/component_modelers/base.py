@@ -12,16 +12,16 @@ import pydantic.v1 as pd
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.microwave.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.components.microwave.ports.modal import Port
-from tidy3d.components.microwave.ports.rectangular_lumped import LumpedPort
-from tidy3d.components.microwave.ports.wave import WavePort
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import FreqArray
 from tidy3d.config import config
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.log import log
+from tidy3d.microwave.ports.coaxial_lumped import CoaxialLumpedPort
+from tidy3d.microwave.ports.modal import Port
+from tidy3d.microwave.ports.rectangular_lumped import LumpedPort
+from tidy3d.microwave.ports.wave import WavePort
 from tidy3d.web.api.container import Batch, BatchData
 
 # fwidth of gaussian pulse in units of central frequency

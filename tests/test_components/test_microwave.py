@@ -9,15 +9,15 @@ import pytest
 import xarray as xr
 
 from tidy3d.components.data.monitor_data import FreqDataArray
-from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
-from tidy3d.components.microwave.formulas.circuit_parameters import (
+from tidy3d.constants import EPSILON_0
+from tidy3d.microwave.data.monitor_data import AntennaMetricsData
+from tidy3d.microwave.formulas.circuit_parameters import (
     capacitance_colinear_cylindrical_wire_segments,
     capacitance_rectangular_sheets,
     inductance_straight_rectangular_wire,
     mutual_inductance_colinear_wire_segments,
     total_inductance_colinear_rectangular_wire_segments,
 )
-from tidy3d.constants import EPSILON_0
 
 from ..test_data.test_monitor_data import make_directivity_data
 
