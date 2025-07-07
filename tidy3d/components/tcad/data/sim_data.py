@@ -8,7 +8,7 @@ from typing import Literal, Optional
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
     SpatialDataArray,
@@ -560,23 +560,23 @@ class VolumeMesherData(AbstractHeatChargeSimulationData):
             monitors=self.monitors,
         )
 
-    @pd.validator("data", always=True)
-    @skip_if_fields_missing(["monitors"])
-    def data_monitors_match_sim(cls, val, values):
+    @pd.root_validator(skip_on_failure=True)
+    def data_monitors_match_sim(cls, values):
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
         monitors = values.get("monitors")
+        data = values.get("data")
         mnt_names = {mnt.name for mnt in monitors}
 
-        for mnt_data in val:
+        for mnt_data in data:
             monitor_name = mnt_data.monitor.name
             if monitor_name not in mnt_names:
                 raise DataError(
                     f"Data with monitor name '{monitor_name}' supplied "
                     f"but not found in the list of monitors."
                 )
-        return val
+        return values
 
     def get_monitor_by_name(self, name: str) -> VolumeMeshMonitor:
         """Return monitor named 'name'."""

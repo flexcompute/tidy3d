@@ -114,20 +114,21 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @pd.validator("values", always=True)
-    @skip_if_fields_missing(["points"])
-    def number_of_values_matches_points(cls, val, values):
+    @pd.root_validator(skip_on_failure=True)
+    def number_of_values_matches_points(cls, values):
         """Check that the number of data values matches the number of grid points."""
-        num_values = len(val.index)
-
         points = values.get("points")
-        num_points = len(points)
-        if num_points != num_values:
-            raise ValidationError(
-                f"The number of data values ({num_values}) does not match the number of grid "
-                f"points ({num_points})."
-            )
-        return val
+        vals = values.get("values")
+
+        if points is not None and vals is not None:
+            num_points = len(points)
+            num_values = len(vals.index)
+            if num_points != num_values:
+                raise ValidationError(
+                    f"The number of data values ({num_values}) does not match the number of grid "
+                    f"points ({num_points})."
+                )
+        return values
 
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
