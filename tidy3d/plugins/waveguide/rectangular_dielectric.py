@@ -1075,7 +1075,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
             warn_untested_argument(
-                cls_name="RectangularDielectric", func_name="plot", arg="transpose", val="True"
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
 
         kwargs = {"color": color, "linewidth": pyplot.rcParams["grid.linewidth"]}

@@ -299,7 +299,7 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
             warn_untested_argument(
-                cls_name="CustomVoltageIntegral2D", func_name="plot", arg="transpose", val="True"
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):
@@ -382,7 +382,7 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
             warn_untested_argument(
-                cls_name="CustomCurrentIntegral2D", func_name="plot", arg="transpose", val="True"
+                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
             )
         axis, position = Geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         if axis != self.main_axis or not np.isclose(position, self.position, rtol=fp_eps):

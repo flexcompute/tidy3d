@@ -159,7 +159,7 @@ class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
             warn_untested_argument(
-                cls_name="AbtractHeatChargeSimulationData",
+                cls_name=type(self).__name__,
                 func_name="plot_mesh",
                 arg="transpose",
                 val="True",
@@ -354,7 +354,7 @@ class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
             warn_untested_argument(
-                cls_name="HeatChargeSimulationData",
+                cls_name=type(self).__name__,
                 func_name="plot_field",
                 arg="transpose",
                 val="True",

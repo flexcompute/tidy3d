@@ -1234,7 +1234,7 @@ class Scene(Tidy3dBaseModel):
             if transpose:
                 # Please remove this warning once someone has verified that `transpose=True` works.
                 warn_untested_argument(
-                    cls_name="Scene",
+                    cls_name=type(self).__name__,
                     func_name="_pcolormesh_shape_custom_medium_structure_eps",
                     arg="transpose",
                     val="True",
