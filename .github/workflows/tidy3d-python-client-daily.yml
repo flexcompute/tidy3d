@@ -18,7 +18,7 @@ jobs:
     secrets: inherit
 
   submodule-tests:
-    uses: ./.github/workflows/tidy3d-python-client-submodule-tests.yml
+    uses: ./.github/workflows/tidy3d-python-client-submodules-test.yml
     with:
       run-workflow: true
     secrets: inherit
