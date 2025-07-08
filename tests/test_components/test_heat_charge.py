@@ -1336,6 +1336,14 @@ class TestCharge:
             )
             _ = sim.updated_copy(boundary_spec=[new_bc_p, bc_n])
 
+        # test error is raised with 1D monitors
+        with pytest.raises(pd.ValidationError):
+            _ = sim.updated_copy(
+                monitors=[
+                    charge_global_mnt.updated_copy(size=(1, 0, 0)),
+                ]
+            )
+
     def test_doping_distributions(self):
         """Test doping distributions."""
         # Implementation needed

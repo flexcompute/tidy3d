@@ -586,6 +586,11 @@ class HeatChargeSimulation(AbstractSimulation):
                             "Currently, Charge simulations support only unstructured monitors. Please set "
                             f"monitor '{mnt.name}' to 'unstructured = True'."
                         )
+                    zero_dims = mnt.zero_dims
+                    if len(zero_dims) > 1:
+                        raise SetupError(
+                            f"Monitor '{mnt.name}' is a 1D monitor which are currently not supported in Charge."
+                        )
 
         return values
 
