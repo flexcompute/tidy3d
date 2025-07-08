@@ -3,14 +3,14 @@ name: "tidy3d-submodule-tests"
 on:
   workflow_dispatch:
     inputs:
-      run_workflow:
+      run-workflow:
         required: true
         type: boolean
         default: true
 
   workflow_call:
     inputs:
-      run_workflow:
+      run-workflow:
         required: true
         type: boolean
         default: true
@@ -18,7 +18,7 @@ on:
 jobs:
   test-latest-submodules:
     runs-on: ubuntu-latest
-    if: github.event.inputs.run_workflow || inputs.run_workflow
+    if: github.event.inputs.run-workflow || inputs.run-workflow
     steps:
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
