@@ -276,17 +276,12 @@ class Geometry(Tidy3dBaseModel, ABC):
         origin = self.unpop_axis(position, (0, 0), axis=axis)
         normal = self.unpop_axis(1, (0, 0), axis=axis)
         to_2D = np.eye(4)
-
-        # ----- REMEMBER TO DELETE THIS COMMENT BEFOR POSTING THIS CODE FOR REVIEW  -ANDREW -------
-        #
-        # if axis != 2:
-        #     print("WARNING: Geometry.intersections_plane(axis!=2)\nDOES PLOT LOOK OKAY?")  # DEBUG
-        #     # last, indices = pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
-        #     last, indices = self.pop_axis((0, 1, 2), axis)
-        #     to_2D = to_2D[[*list(indices), last, 3]]
-
         last, indices = pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
+        print(f"  {axis=}, {indices=}, {last=}")  # DEBUG
+        print(f"  {[*list(indices), last, 3]=}")  # DEBUG
+        print(f"  before: {to_2D=}")  # DEBUG
         to_2D = to_2D[[*list(indices), last, 3]]
+        print(f"   after: {to_2D=}")  # DEBUG
         return self.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
 
     def intersections_2dbox(self, plane: Box, transpose: bool = False) -> list[Shapely]:
