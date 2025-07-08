@@ -1,0 +1,23 @@
+name: tidy3d-python-client-daily
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *' # Runs at 5am UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-lockfile:
+    uses: ./.github/workflows/tidy3d-python-client-update-lockfile.yml
+    with:
+      run-workflow: true
+    secrets: inherit
+
+  submodule-tests:
+    uses: ./.github/workflows/tidy3d-python-client-submodule-tests.yml
+    with:
+      run-workflow: true
+    secrets: inherit

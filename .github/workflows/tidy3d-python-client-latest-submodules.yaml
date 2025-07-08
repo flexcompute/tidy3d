@@ -1,14 +1,24 @@
-name: "tidy3d-submodule-daily-tests"
+name: "tidy3d-submodule-tests"
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 9 * * *' # Runs at 9am UK-time every day
+    inputs:
+      run_workflow:
+        required: true
+        type: boolean
+        default: true
 
+  workflow_call:
+    inputs:
+      run_workflow:
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   test-latest-submodules:
     runs-on: ubuntu-latest
+    if: github.event.inputs.run_workflow || inputs.run_workflow
     steps:
       - name: Checkout repository with submodules
         uses: actions/checkout@v4
