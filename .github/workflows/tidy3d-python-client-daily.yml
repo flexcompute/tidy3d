@@ -1,7 +1,6 @@
 name: tidy3d-python-client-daily
 
 on:
-  push:
   workflow_dispatch:
   schedule:
     - cron: '0 5 * * *' # Runs at 5am UTC
