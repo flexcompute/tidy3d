@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
 - Add `PointDipole.sources_from_angles()` that constructs a list of `PointDipole` objects needed to emulate a dipole oriented at a user-provided set of polar and azimuthal angles.
 - Added `priority` parameter to `web.run()` and related functions to allow vGPU users to set task priority (1-10) in the queue.
+- `EMEFieldMonitor` now supports `interval_space`.
 
 ### Changed
 - Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
@@ -28,6 +29,7 @@ with fewer layers than recommended.
 - Plots of objects defined by shape intersection logic will no longer display thin line artifacts.
 - Fixed incorrect gradient computation in PyTorch plugin (`to_torch`) for functions returning multi-element arrays.
 - `MonitorData.get_amplitude()` no longers multiplies by a factor of `1j` and now directly returns the complex value of the data.
+- `EMESimulationData.port_modes_tuple` is now symmetry-expanded.
 
 ## [2.9.0rc1] - 2025-06-10
 
