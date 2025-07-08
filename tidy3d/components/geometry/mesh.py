@@ -552,7 +552,7 @@ class TriangleMesh(base.Geometry, ABC):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"Invoked TriangleMesh.intersections_tilted_plane({transpose=})")  # DEBUG
 
         section = self.trimesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
@@ -592,7 +592,7 @@ class TriangleMesh(base.Geometry, ABC):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
+        print(f"Invoked TriangleMesh.intersections_plane({transpose=})")  # DEBUG
 
         if self.mesh_dataset is None:
             return []

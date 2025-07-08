@@ -270,18 +270,18 @@ class Geometry(Tidy3dBaseModel, ABC):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
+        print(f"Invoked Geometry.intersections_plane({transpose=})")  # DEBUG
 
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         origin = self.unpop_axis(position, (0, 0), axis=axis)
         normal = self.unpop_axis(1, (0, 0), axis=axis)
         to_2D = np.eye(4)
         last, indices = pop_axis_and_swap((0, 1, 2), axis, transpose=transpose)
-        print(f"  {axis=}, {indices=}, {last=}")  # DEBUG
-        print(f"  {[*list(indices), last, 3]=}")  # DEBUG
-        print(f"  before: {to_2D=}")  # DEBUG
+        # print(f"  {axis=}, {indices=}, {last=}")  # DEBUG
+        # print(f"  {[*list(indices), last, 3]=}")  # DEBUG
+        # print(f"  before: {to_2D=}")  # DEBUG
         to_2D = to_2D[[*list(indices), last, 3]]
-        print(f"   after: {to_2D=}")  # DEBUG
+        # print(f"   after: {to_2D=}")  # DEBUG
         return self.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
 
     def intersections_2dbox(self, plane: Box, transpose: bool = False) -> list[Shapely]:
@@ -1684,7 +1684,8 @@ class SimplePlaneIntersection(Geometry, ABC):
         #     return transformed_section
         # # Otherwise compute the arbitrary intersection
 
-        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"Invoked SimplePlaneIntersection.intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"  ({type(self).__name__=})")  # DEBUG
 
         return self._do_intersections_tilted_plane(
             normal=normal,
@@ -1806,7 +1807,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
             For more details refer to
         `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
+        print(f"Invoked Planar.intersections_plane({transpose=})")  # DEBUG
 
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -2140,7 +2141,7 @@ class Box(SimplePlaneIntersection, Centered):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-        print(f"{type(self).__name__}._do_intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"Box._do_intersections_tilted_plane({transpose=})")  # DEBUG
 
         import trimesh
 
@@ -2204,7 +2205,7 @@ class Box(SimplePlaneIntersection, Centered):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
+        print(f"Invoked Box.intersections_plane({transpose=})")  # DEBUG
 
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -2267,7 +2268,7 @@ class Box(SimplePlaneIntersection, Centered):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-        print(f"Invoked {type(self).__name__}.intersections_with({transpose=})")  # DEBUG
+        print(f"Invoked Box.intersections_with({transpose=})")  # DEBUG
 
         # Verify 2D
         if self.size.count(0.0) != 1:
@@ -2804,7 +2805,7 @@ class Transformed(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"Invoked Transformed.intersections_tilted_plane({transpose=})")  # DEBUG
 
         return self.geometry.intersections_tilted_plane(
             tuple(np.dot((normal[0], normal[1], normal[2], 0.0), self.transform)[:3]),
@@ -3120,7 +3121,7 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"Invoked ClipOperation.intersections_tilted_plane({transpose=})")  # DEBUG
 
         a = self.geometry_a.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
         b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D, transpose=transpose)
@@ -3162,7 +3163,7 @@ class ClipOperation(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
+        print(f"Invoked CliOperation.intersections_plane({transpose=})")  # DEBUG
 
         a = self.geometry_a.intersections_plane(x, y, z, transpose=transpose)
         b = self.geometry_b.intersections_plane(x, y, z, transpose=transpose)
@@ -3352,7 +3353,7 @@ class GeometryGroup(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"Invoked GeometryGroup.intersections_tilted_plane({transpose=})")  # DEBUG
 
         return [
             intersection
@@ -3390,7 +3391,7 @@ class GeometryGroup(Geometry):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_plane({transpose=})")  # DEBUG
+        print(f"Invoked GeometryGroup.intersections_plane({transpose=})")  # DEBUG
 
         if not self.intersects_plane(x, y, z):
             return []

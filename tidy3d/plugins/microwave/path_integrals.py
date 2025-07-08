@@ -351,7 +351,7 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
             warn_untested_argument(
-                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
+                cls_name="VoltageIntegralAxisAligned", func_name="plot", arg="transpose", val="True"
             )
 
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -560,7 +560,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         if transpose:
             # Please remove this warning once someone has verified that `transpose=True` works.
             warn_untested_argument(
-                cls_name=type(self).__name__, func_name="plot", arg="transpose", val="True"
+                cls_name="CurrentIntegralAxisAligned", func_name="plot", arg="transpose", val="True"
             )
 
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)

@@ -657,7 +657,7 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_normal({transpose=})")  # DEBUG
+        print(f"Invoked PolySlab.intersections_normal({transpose=})")  # DEBUG
 
         if math.isclose(self.sidewall_angle, 0):
             vertices = self.reference_polygon
@@ -708,7 +708,7 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_side({transpose=})")  # DEBUG
+        print(f"Invoked PolySlab.intersections_side({transpose=})")  # DEBUG
 
         # find out all z_i where the plane will intersect the vertex
         z0 = self.center_axis
@@ -2020,7 +2020,7 @@ class ComplexPolySlabBase(PolySlab):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        print(f"Invoked {type(self).__name__}.intersections_tilted_plane({transpose=})")  # DEBUG
+        print(f"Invoked ComplexPolySlab.intersections_tilted_plane({transpose=})")  # DEBUG
         return [
             shapely.unary_union(
                 [
