@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 import boto3
 from boto3.s3.transfer import TransferConfig
+from botocore.client import Config
 from pydantic.v1 import BaseModel, Field
 from rich.progress import (
     BarColumn,
@@ -59,15 +60,25 @@ class _S3STSToken(BaseModel):
 
     def get_client(self) -> boto3.client:
         """Get the boto client for this token."""
-
-        return boto3.client(
-            "s3",
-            region_name=Env.current.s3_region,
-            aws_access_key_id=self.user_credential.access_key_id,
-            aws_secret_access_key=self.user_credential.secret_access_key,
-            aws_session_token=self.user_credential.session_token,
-            verify=Env.current.ssl_verify,
-        )
+        if Env.nexus.name == Env.current.name:
+            return boto3.client(
+                "s3",
+                endpoint_url=Env.current.file_endpoint,
+                region_name=Env.current.s3_region,
+                aws_access_key_id=self.user_credential.access_key_id,
+                aws_secret_access_key=self.user_credential.secret_access_key,
+                aws_session_token=self.user_credential.session_token,
+                verify=Env.current.ssl_verify
+            )
+        else:
+            return boto3.client(
+                "s3",
+                region_name=Env.current.s3_region,
+                aws_access_key_id=self.user_credential.access_key_id,
+                aws_secret_access_key=self.user_credential.secret_access_key,
+                aws_session_token=self.user_credential.session_token,
+                verify=Env.current.ssl_verify
+            )
 
     def is_expired(self) -> bool:
         """True if token is expired."""

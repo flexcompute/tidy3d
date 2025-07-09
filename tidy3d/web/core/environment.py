@@ -19,6 +19,7 @@ class EnvironmentConfig(BaseSettings):
     name: str
     web_api_endpoint: str
     website_endpoint: str
+    file_endpoint: str = None
     s3_region: str
     ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
     enable_caching: bool = None
@@ -44,11 +45,20 @@ class EnvironmentConfig(BaseSettings):
         return "/".join([self.web_api_endpoint, path])
 
 
+nexus = EnvironmentConfig(
+    name="nexus",
+    s3_region="us-east-1",
+    web_api_endpoint="http://127.0.0.1:5000",
+    website_endpoint="http://127.0.0.1:80",
+    file_endpoint="http://127.0.0.1:9000",
+)
+
 dev = EnvironmentConfig(
     name="dev",
     s3_region="us-east-1",
     web_api_endpoint="https://tidy3d-api.dev-simulation.cloud",
     website_endpoint="https://tidy3d.dev-simulation.cloud",
+    file_endpoint=None,
 )
 
 uat = EnvironmentConfig(
@@ -56,6 +66,7 @@ uat = EnvironmentConfig(
     s3_region="us-west-2",
     web_api_endpoint="https://tidy3d-api.uat-simulation.cloud",
     website_endpoint="https://tidy3d.uat-simulation.cloud",
+    file_endpoint=None,
 )
 
 pre = EnvironmentConfig(
@@ -63,6 +74,7 @@ pre = EnvironmentConfig(
     s3_region="us-gov-west-1",
     web_api_endpoint="https://preprod-tidy3d-api.simulation.cloud",
     website_endpoint="https://preprod-tidy3d.simulation.cloud",
+    file_endpoint=None,
 )
 
 prod = EnvironmentConfig(
@@ -70,6 +82,7 @@ prod = EnvironmentConfig(
     s3_region="us-gov-west-1",
     web_api_endpoint="https://tidy3d-api.simulation.cloud",
     website_endpoint="https://tidy3d.simulation.cloud",
+    file_endpoint=None,
 )
 
 
@@ -85,6 +98,7 @@ class Environment:
     """
 
     env_map = {
+        "nexus": nexus,
         "dev": dev,
         "uat": uat,
         "prod": prod,
@@ -117,6 +131,17 @@ class Environment:
             The config for the current environment.
         """
         return self._current
+
+    @property
+    def nexus(self) -> EnvironmentConfig:
+        """Get the dev environment.
+
+        Returns
+        -------
+        EnvironmentConfig
+            The config for the dev environment.
+        """
+        return nexus
 
     @property
     def dev(self) -> EnvironmentConfig:
@@ -182,6 +207,22 @@ class Environment:
             If ``False``, do not duplicate checking. Just run the task directly.
         """
         self._current.enable_caching = enable_caching
+
+    def set_endpoint(self, web_api_endpoint, website_endpoint, file_endpoint) -> None:
+        """Set the endpoint for nexus.
+
+        Parameters
+        ----------
+        web_api_endpoint: str
+            webapi endpoint.
+        website_endpoint: str
+            website endpoint.
+        file_endpoint: str
+            file endpoint.
+        """
+        self._current.web_api_endpoint = web_api_endpoint
+        self._current.website_endpoint = website_endpoint
+        self._current.file_endpoint = file_endpoint
 
     def set_ssl_version(self, ssl_version: ssl.TLSVersion) -> None:
         """Set the ssl version.
