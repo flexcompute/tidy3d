@@ -11,6 +11,10 @@ import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pydantic
 
+from tidy3d.components.autograd.constants import (
+    AUTOGRAD_MONITOR_INTERVAL_SPACE_CUSTOM,
+    AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY,
+)
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dImportError
 from tidy3d.log import log
@@ -18,11 +22,10 @@ from tidy3d.log import log
 from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap
 from .autograd.types import Box as AutogradBox
-from .autograd.utils import get_static
+from .autograd.utils import contains, get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .data.data_array import ScalarFieldDataArray
 from .geometry.base import Box, Geometry
-from .geometry.polyslab import PolySlab
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
 from .material.types import StructureMediumType
@@ -310,17 +313,13 @@ class Structure(AbstractStructure):
         box = geometry.bounding_box
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
-
         size = [get_static(x) for x in box.size]
         center = [get_static(x) for x in box.center]
 
-        # polyslab only needs fields at the midpoint along axis
-        if (
-            isinstance(geometry, PolySlab)
-            and not isinstance(self.medium, AbstractCustomMedium)
-            and field_keys == [("vertices",)]
-        ):
-            size[geometry.axis] = 0
+        if contains("medium", field_keys):
+            interval_space = AUTOGRAD_MONITOR_INTERVAL_SPACE_CUSTOM
+        else:
+            interval_space = AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY
 
         mnt_fld = FieldMonitor(
             size=size,
@@ -328,6 +327,7 @@ class Structure(AbstractStructure):
             freqs=freqs,
             fields=("Ex", "Ey", "Ez"),
             name=self._get_monitor_name(index=index, data_type="fld"),
+            interval_space=interval_space,
             colocate=False,
         )
 
@@ -336,6 +336,7 @@ class Structure(AbstractStructure):
             center=center,
             freqs=freqs,
             name=self._get_monitor_name(index=index, data_type="eps"),
+            interval_space=interval_space,
             colocate=False,
         )
 

@@ -31,6 +31,8 @@ with fewer layers than recommended.
 - Warnings are now generated (instead of errors) when instantiating `PML`, `StablePML`, or `Absorber` classes (or when invoking `pml()`, `stable_pml()`, or `absorber()` functions) with fewer layers than recommended.
 - `Simulation.subsection` can no longer take `symmetry` as an argument - the symmetry is always taken from the original simulation.
 - If a mode simulation is crossing a symmetry plane of the larger simulation domain, but the mode plane is not symmetric, a warning is issued that it will be expanded symmetrically. Previously this warning only happened during the solver run.
+- Enhanced `PolySlab` and `Cylinder` gradient computation via adaptive field sampling along geometry boundaries instead of fixed-grid center sampling.
+- Shape derivatives have been sped up significantly, especially for simulations containing many structures in a `GeometryGroup`.
 
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
