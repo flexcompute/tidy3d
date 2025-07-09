@@ -11,6 +11,7 @@ import pydantic.v1 as pydantic
 import shapely
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
+from tidy3d.components.autograd.constants import PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
@@ -29,9 +30,6 @@ _N_SHAPELY_QUAD_SEGS = 200
 
 # Default number of points to discretize polyslab in `Cylinder.to_polyslab()`
 _N_PTS_CYLINDER_POLYSLAB = 51
-
-# Default number of points per wvl in material for discretizing cylinder in autograd derivative
-_PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE = 10
 
 
 class Sphere(base.Centered, base.Circular):
@@ -291,7 +289,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         wvls_in_circumference = circumference / wvl_mat
 
         num_pts_circumference = int(
-            np.ceil(_PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE * wvls_in_circumference)
+            np.ceil(PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE * wvls_in_circumference)
         )
         num_pts_circumference = max(3, num_pts_circumference)
 
