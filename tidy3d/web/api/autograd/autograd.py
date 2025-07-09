@@ -14,6 +14,7 @@ from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd.constants import MAX_NUM_ADJOINT_PER_FWD, MAX_NUM_TRACED_STRUCTURES
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
@@ -34,9 +35,6 @@ AUX_KEY_SIM_ORIGINAL = "sim_original"
 # server-side auxiliary files to upload/download
 SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
 SIM_FIELDS_KEYS_FILE = "autograd_sim_fields_keys.hdf5"
-
-MAX_NUM_TRACED_STRUCTURES = 500
-MAX_NUM_ADJOINT_PER_FWD = 10
 
 # default value for whether to do local gradient calculation (True) or server side (False)
 LOCAL_GRADIENT = False
