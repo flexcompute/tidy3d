@@ -5,3 +5,10 @@ repos:
      - id: ruff-check
        args: [ --fix ]
      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: regenerate-schema
+        name: regenerate-schema
+        entry: python scripts/regenerate_schema.py
+        language: system
