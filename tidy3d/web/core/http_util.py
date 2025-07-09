@@ -178,6 +178,7 @@ class HttpSessionManager:
         if ssl_version and not REINITIALIZED:
             self.session.mount("https://", TLSAdapter())
             REINITIALIZED = True
+        self.session.verify = Env.current.ssl_verify
 
     @http_interceptor
     def get(self, path: str, json=None, params=None):
