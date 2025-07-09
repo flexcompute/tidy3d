@@ -1792,123 +1792,122 @@ class HeatChargeSimulation(AbstractSimulation):
 
         sim_types = self._get_simulation_types()
 
-        if TCADAnalysisTypes.CHARGE in sim_types:
-            zero_dims = self.zero_dims
-            if len(zero_dims) == 1:
-                if zero_dims[0] != 2:
-                    # check doping boxes
-                    # the following dictionary associates a structure with a modified medium
-                    struct_medium = {}
-                    for structure in self.structures:
-                        if isinstance(structure.medium.charge, SemiconductorMedium):
-                            sc_medium = copy.deepcopy(structure.medium.charge)
-
-                            dopants = {"N_a": sc_medium.N_a, "N_d": sc_medium.N_d}
-                            for key, dopant in dopants.items():
-                                if isinstance(dopant, SpatialDataArray):
-                                    new_dopant = (
-                                        dopant.rename({"z": "z_tmp"})
-                                        .rename({["x", "y"][zero_dims[0]]: "z"})
-                                        .rename({"z_tmp": ["x", "y"][zero_dims[0]]})
-                                    )
-                                    sc_medium = sc_medium.updated_copy(**{key: new_dopant})
-                                elif isinstance(dopant, tuple):
-                                    new_boxes = []
-                                    for doping_box in dopant:
-                                        if isinstance(doping_box, GaussianDoping):
-                                            new_center = list(doping_box.center)
-                                            new_center[zero_dims[0]] = doping_box.center[2]
-                                            new_center[2] = doping_box.center[zero_dims[0]]
-
-                                            new_size = list(doping_box.size)
-                                            new_size[zero_dims[0]] = doping_box.size[2]
-                                            new_size[2] = doping_box.size[zero_dims[0]]
-
-                                            source = doping_box.source
-                                            if "z" in source:
-                                                source = source.replace(
-                                                    "z", ["x", "y"][zero_dims[0]]
-                                                )
-
-                                            new_boxes.append(
-                                                doping_box.updated_copy(
-                                                    center=new_center, size=new_size, source=source
-                                                )
-                                            )
-                                        else:
-                                            new_boxes.append(doping_box)
-                                        sc_medium = sc_medium.updated_copy(**{key: new_boxes})
-                            struct_medium[structure] = structure.medium.updated_copy(
-                                charge=sc_medium
-                            )
-                        else:
-                            struct_medium[structure] = structure.medium
-
-                    # change structures
-                    new_structures = []
-                    for structure in self.structures:
-                        new_center = list(structure.geometry.center)
-                        new_center[zero_dims[0]] = structure.geometry.center[2]
-                        new_center[2] = structure.geometry.center[zero_dims[0]]
-
-                        new_size = list(structure.geometry.size)
-                        new_size[zero_dims[0]] = structure.geometry.size[2]
-                        new_size[2] = structure.geometry.size[zero_dims[0]]
-                        new_structures.append(
-                            structure.updated_copy(
-                                geometry=structure.geometry.updated_copy(
-                                    center=new_center, size=new_size
-                                ),
-                                medium=struct_medium[structure],
-                            )
-                        )
-
-                    # Boundary conditions
-                    new_boundary_spec = []
-                    for boundary in self.boundary_spec:
-                        new_placement = boundary.placement
-                        PlacementTypes = (SimulationBoundary, StructureSimulationBoundary)
-                        if isinstance(boundary.placement, PlacementTypes):
-                            surfaces = []
-                            for s in boundary.placement.surfaces:
-                                if "z" in s:
-                                    new_s = s.replace("z", ["x", "y"][zero_dims[0]])
-                                    surfaces.append(new_s)
-                                else:
-                                    surfaces.append(s)
-                            new_placement = new_placement.updated_copy(surfaces=surfaces)
-
-                        new_boundary_spec.append(boundary.updated_copy(placement=new_placement))
-
-                    # Monitors
-                    new_monitors = []
-                    for mnt in self.monitors:
-                        new_center = list(mnt.center)
-                        new_center[zero_dims[0]] = mnt.center[2]
-                        new_center[2] = mnt.center[zero_dims[0]]
-
-                        new_size = list(mnt.size)
-                        new_size[zero_dims[0]] = mnt.size[2]
-                        new_size[2] = mnt.size[zero_dims[0]]
-
-                        new_monitors.append(mnt.updated_copy(center=new_center, size=new_size))
-
-                    # simulation size
-                    new_size = list(self.size)
-                    new_size[zero_dims[0]] = self.size[2]
-                    new_size[2] = self.size[zero_dims[0]]
-
-                    return self.updated_copy(
-                        structures=new_structures,
-                        boundary_spec=new_boundary_spec,
-                        size=new_size,
-                        monitors=new_monitors,
-                    )
-                else:
-                    return self
-            elif len(zero_dims) > 1:
-                raise SetupError("Charge simulation can only be 2- or 3-D")
-            else:
-                return self
-        else:
+        if TCADAnalysisTypes.CHARGE not in sim_types:
             return self
+
+        zero_dims = self.zero_dims
+
+        if len(zero_dims) > 1:
+            raise SetupError("Charge simulation can only be 2- or 3-D")
+
+        if len(zero_dims) == 0 or zero_dims[0] == 2:
+            return self
+
+        def _update_center_size(
+            zero_dims: list[int], center: list[float], size: list[float]
+        ) -> tuple[list[float], list[float]]:
+            """Update center and size based on zero dimensions."""
+            new_center = list(center)
+            new_size = list(size)
+
+            new_center[zero_dims[0]] = center[2]
+            new_center[2] = center[zero_dims[0]]
+
+            new_size[zero_dims[0]] = size[2]
+            new_size[2] = size[zero_dims[0]]
+
+            return new_center, new_size
+
+        # check doping boxes
+        # the following dictionary associates a structure with a modified medium
+        struct_medium = {}
+        for structure in self.structures:
+            if not isinstance(structure.medium.charge, SemiconductorMedium):
+                struct_medium[structure] = structure.medium
+            else:
+                sc_medium = copy.deepcopy(structure.medium.charge)
+
+                dopants = {"N_a": sc_medium.N_a, "N_d": sc_medium.N_d}
+                for key, dopant in dopants.items():
+                    if isinstance(dopant, SpatialDataArray):
+                        new_dopant = (
+                            dopant.rename({"z": "z_tmp"})
+                            .rename({["x", "y"][zero_dims[0]]: "z"})
+                            .rename({"z_tmp": ["x", "y"][zero_dims[0]]})
+                        )
+                        sc_medium = sc_medium.updated_copy(**{key: new_dopant})
+                    elif isinstance(dopant, tuple):
+                        new_boxes = []
+                        for doping_box in dopant:
+                            if isinstance(doping_box, GaussianDoping):
+                                new_center, new_size = _update_center_size(
+                                    zero_dims, doping_box.center, doping_box.size
+                                )
+
+                                source = doping_box.source
+                                if "z" in source:
+                                    source = source.replace("z", ["x", "y"][zero_dims[0]])
+
+                                new_boxes.append(
+                                    doping_box.updated_copy(
+                                        center=new_center, size=new_size, source=source
+                                    )
+                                )
+                            else:
+                                new_boxes.append(doping_box)
+                            sc_medium = sc_medium.updated_copy(**{key: new_boxes})
+                struct_medium[structure] = structure.medium.updated_copy(charge=sc_medium)
+
+        # change structures
+        new_structures = []
+        for structure in self.structures:
+            if not isinstance(structure.geometry, Box):
+                raise SetupError(
+                    "2D Charge simulations defined in planes other than xy can only use Box geometries, "
+                )
+            else:
+                new_center, new_size = _update_center_size(
+                    zero_dims, structure.geometry.center, structure.geometry.size
+                )
+
+                new_structures.append(
+                    structure.updated_copy(
+                        geometry=structure.geometry.updated_copy(center=new_center, size=new_size),
+                        medium=struct_medium[structure],
+                    )
+                )
+
+        # Boundary conditions
+        new_boundary_spec = []
+        for boundary in self.boundary_spec:
+            new_placement = boundary.placement
+            PlacementTypes = (SimulationBoundary, StructureSimulationBoundary)
+            if isinstance(boundary.placement, PlacementTypes):
+                surfaces = []
+                for s in boundary.placement.surfaces:
+                    if "z" in s:
+                        new_s = s.replace("z", ["x", "y"][zero_dims[0]])
+                        surfaces.append(new_s)
+                    else:
+                        surfaces.append(s)
+                new_placement = new_placement.updated_copy(surfaces=surfaces)
+
+            new_boundary_spec.append(boundary.updated_copy(placement=new_placement))
+
+        # Monitors
+        new_monitors = []
+        for mnt in self.monitors:
+            new_center, new_size = _update_center_size(zero_dims, mnt.center, mnt.size)
+
+            new_monitors.append(mnt.updated_copy(center=new_center, size=new_size))
+
+        # simulation size
+        new_center, new_size = _update_center_size(zero_dims, self.center, self.size)
+
+        return self.updated_copy(
+            structures=new_structures,
+            boundary_spec=new_boundary_spec,
+            size=new_size,
+            center=new_center,
+            monitors=new_monitors,
+        )

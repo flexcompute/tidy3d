@@ -2077,7 +2077,7 @@ def test_charge_copy_xy():
         mobility_n=td.ConstantMobilityModel(mu=1500),
         mobility_p=td.ConstantMobilityModel(mu=500),
         N_d=doping_da,
-        N_a=[d_box],
+        N_a=[d_box, d_box],
     )
 
     # create a structure with the semiconductor medium
@@ -2085,6 +2085,12 @@ def test_charge_copy_xy():
         geometry=td.Box(center=(0, 0, 0), size=(1, 2, 3)),
         medium=td.MultiPhysicsMedium(charge=semiconductor),
         name="test_structure",
+    )
+
+    structure2 = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1, 2, 3)),
+        medium=td.MultiPhysicsMedium(charge=td.ChargeInsulatorMedium(permittivity=4.0)),
+        name="test_structure2",
     )
 
     # create boundary conditions
@@ -2099,7 +2105,7 @@ def test_charge_copy_xy():
     )
 
     sim = td.HeatChargeSimulation(
-        structures=[structure],
+        structures=[structure, structure2],
         medium=td.Medium(heat_spec=td.FluidMedium()),
         size=(2, 0, 2),
         center=(0, 0, 0),
