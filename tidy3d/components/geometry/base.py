@@ -1663,30 +1663,30 @@ class SimplePlaneIntersection(Geometry, ABC):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-
-        # ------- REMEMBER TO DELETE THIS COMMENT BEFORE PUBLISHING THIS CODE!  -ANDREW --------
-        #
-        # HAVING UNNECESSARY CONDITIONAL BRANCHING MAKES CODE MORE COMPLEX,
-        # AND ADDING "transpose" TO THIS IF-CLAUSE IS A HEADACHE.  DELETING IT FOR NOW.
-        # # Check if normal is a special case, where the normal is aligned with an axis.
-        # if np.sum(np.isclose(normal, 0.0)) == 2:
-        #     axis = np.argmax(np.abs(normal)).item()
-        #     coord = "xyz"[axis]
-        #     kwargs = {coord: origin[axis]}
-        #     section = self.intersections_plane(transpose=transpose, **kwargs)
-        #     # Apply transformation in the plane by removing row and column
-        #     to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
-        #     def transform(p_array):
-        #         return np.dot(
-        #             np.hstack((p_array, np.ones((p_array.shape[0], 1)))), to_2D_in_plane.T
-        #         )[:, :2]
-        #     transformed_section = shapely.transform(section, transformation=transform)
-        #     return transformed_section
-        # # Otherwise compute the arbitrary intersection
-
         print(f"Invoked SimplePlaneIntersection.intersections_tilted_plane({transpose=})")  # DEBUG
-        print(f"  ({type(self).__name__=})")  # DEBUG
 
+        # Check if normal is a special case, where the normal is aligned with an axis.
+        if np.sum(np.isclose(normal, 0.0)) == 2:
+            axis = np.argmax(np.abs(normal)).item()
+            coord = "xyz"[axis]
+            kwargs = {coord: origin[axis]}
+            section = self.intersections_plane(
+                transpose=False,  # we deal with transpose later
+                **kwargs,
+            )
+            # Apply transformation in the plane by removing row and column
+            to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
+            if transpose:
+                to_2D_in_plane[0:2, :] = to_2D_in_plane[1::-1, :]  # swap the first two rows
+
+            def transform(p_array):
+                return np.dot(
+                    np.hstack((p_array, np.ones((p_array.shape[0], 1)))), to_2D_in_plane.T
+                )[:, :2]
+
+            transformed_section = shapely.transform(section, transformation=transform)
+            return transformed_section
+        # Otherwise compute the arbitrary intersection
         return self._do_intersections_tilted_plane(
             normal=normal,
             origin=origin,
