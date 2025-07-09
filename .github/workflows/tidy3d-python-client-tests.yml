@@ -165,7 +165,7 @@ jobs:
       - name: regenerate-pr-schemas
         run: |
           source $GITHUB_WORKSPACE/.venv/bin/activate
-          python $GITHUB_WORKSPACE/pr/scripts/regenerate_schemas.py
+          python $GITHUB_WORKSPACE/pr/scripts/regenerate_schema.py
 
       - name: run-schema-diff
         id: schema-diff
