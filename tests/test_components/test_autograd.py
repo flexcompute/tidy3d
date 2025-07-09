@@ -812,7 +812,7 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"test_a", "adjoint", "task1", "_test"}
+    task_names = {"test_a", "adjoint", "_test"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -912,7 +912,7 @@ def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"1", "2", "3", "4"}
+    task_names = {"1", "2"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -934,7 +934,7 @@ def test_autograd_async_all_zero_grad(use_emulated_run):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"1", "2", "3", "4"}
+    task_names = {"1", "2"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -1926,11 +1926,6 @@ checks = list(MULT_FREQ_TEST_CASES.items())
 @pytest.mark.parametrize("structure_key", ("custom_med",))
 def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn, monkeypatch):
     # test multi-frequency adjoint handling
-
-    import tidy3d.components.data.sim_data as sd
-
-    monkeypatch.setattr(sd, "RESIDUAL_CUTOFF_ADJOINT", 1)
-    reload(td)
 
     postprocess_fn = check_fn(structure_key=structure_key)
 

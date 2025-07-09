@@ -19,6 +19,7 @@ except ImportError:
 
 from tidy3d.compat import _shapely_is_older_than
 from tidy3d.components.autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
+from tidy3d.components.autograd.constants import GRADIENT_DTYPE_FLOAT
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
@@ -3302,19 +3303,29 @@ class GeometryGroup(Geometry):
 
         grad_vjps = {}
 
+        # create interpolators once for all geometries to avoid redundant field data conversions
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators(
+            dtype=GRADIENT_DTYPE_FLOAT
+        )
+
         for field_path in derivative_info.paths:
             _, index, *geo_path = field_path
             geo = self.geometries[index]
+            # pass pre-computed interpolators if available
             geo_info = derivative_info.updated_copy(
-                paths=[geo_path], bounds=geo.bounds, eps_approx=True, deep=False
+                paths=[tuple(geo_path)],
+                bounds=geo.bounds,
+                eps_approx=True,
+                deep=False,
+                interpolators=interpolators,
             )
-            vjp_dict_geo = geo._compute_derivatives(geo_info)
-            grad_vjp_values = list(vjp_dict_geo.values())
 
-            if len(grad_vjp_values) != 1:
+            vjp_dict_geo = geo._compute_derivatives(geo_info)
+
+            if len(vjp_dict_geo) != 1:
                 raise AssertionError("Got multiple gradients for single geometry field.")
 
-            grad_vjps[field_path] = grad_vjp_values[0]
+            grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
 
         return grad_vjps
 

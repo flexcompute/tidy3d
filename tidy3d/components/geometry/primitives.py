@@ -296,9 +296,15 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         # construct equivalent polyslab and compute the derivatives
         polyslab = self.to_polyslab(num_pts_circumference=num_pts_circumference)
 
-        derivative_info_polyslab = derivative_info.updated_copy(
-            paths=[("vertices",), ("slab_bounds", 0), ("slab_bounds", 1)], deep=False
-        )
+        # pass interpolators to PolySlab if available to avoid redundant conversions
+        update_kwargs = {
+            "paths": [("vertices",), ("slab_bounds", 0), ("slab_bounds", 1)],
+            "deep": False,
+        }
+        if derivative_info.interpolators is not None:
+            update_kwargs["interpolators"] = derivative_info.interpolators
+
+        derivative_info_polyslab = derivative_info.updated_copy(**update_kwargs)
         vjps_polyslab = polyslab._compute_derivatives(derivative_info_polyslab)
 
         vjps_vertices_xs, vjps_vertices_ys = vjps_polyslab[("vertices",)].T
