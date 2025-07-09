@@ -153,17 +153,15 @@ jobs:
           ref: 'develop' 
           path: 'develop' 
 
-      - name: setup-python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10' 
-
       - name: install-depedencies
         run: |
+          uv venv $GITHUB_WORKSPACE/.venv -p 3.11
+          source $GITHUB_WORKSPACE/.venv/bin/activate
           uv pip install -e "$GITHUB_WORKSPACE/pr"
 
       - name: regenerate-pr-schemas
         run: |
+          source $GITHUB_WORKSPACE/.venv/bin/activate
           python $GITHUB_WORKSPACE/pr/scripts/regenerate_schemas.py
 
       - name: run-schema-diff
