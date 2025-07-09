@@ -168,6 +168,7 @@ class HttpSessionManager:
         ssl_version = Env.current.ssl_version
         if ssl_version:
             session.mount("https://", TLSAdapter())
+        session.verify = Env.current.ssl_verify
         self.session = session
 
     def reinit(self):
