@@ -6,6 +6,7 @@ from .environment import Env, EnvironmentConfig
 
 
 def use_nexus(ip_address: str = "127.0.0.1"):
+    """Use nexus deployment of tidy3d"""
     local = EnvironmentConfig(
         name="local",
         web_api_endpoint=f"http://{ip_address}:5000",
