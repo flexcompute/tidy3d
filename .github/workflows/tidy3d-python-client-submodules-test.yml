@@ -1,6 +1,13 @@
-name: "tidy3d-submodule-tests"
+name: "public/tidy3d/python-client-submodule-tests"
 
 on:
+  push:
+    branches: [ latest ]
+  
+  pull_request:
+    branches:
+      - latest
+  
   workflow_dispatch:
     inputs:
       run-workflow:
