@@ -1,4 +1,4 @@
-name: "test-develop-cli"
+name: "public/tidy3d/python-client-develop-cli"
 
 on:
   workflow_dispatch:

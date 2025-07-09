@@ -1,4 +1,4 @@
-name: "tidy3d-release"
+name: "public/tidy3d/python-client-release"
 
 permissions:
   contents: write

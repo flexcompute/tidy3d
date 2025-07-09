@@ -1,4 +1,4 @@
-name: update-lockfile-PR
+name: public/tidy3d/python-client-update-lockfile
 
 on:
   workflow_dispatch:

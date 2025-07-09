@@ -1,4 +1,4 @@
-name: tidy3d-python-client-daily
+name: public/tidy3d/python-client-daily-run
 
 on:
   workflow_dispatch:
