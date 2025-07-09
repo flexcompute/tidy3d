@@ -134,12 +134,12 @@ class Environment:
 
     @property
     def nexus(self) -> EnvironmentConfig:
-        """Get the dev environment.
+        """Get the nexus environment.
 
         Returns
         -------
         EnvironmentConfig
-            The config for the dev environment.
+            The config for the nexus environment.
         """
         return nexus
 
