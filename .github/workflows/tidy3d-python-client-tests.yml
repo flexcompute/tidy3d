@@ -160,14 +160,14 @@ jobs:
 
       - name: install-depedencies
         run: |
-          uv pip install -e ./pr
+          uv pip install -e "$GITHUB_WORKSPACE/pr"
 
-      - name: regenerate-schemas
+      - name: regenerate-pr-schemas
         run: |
-          python ./pr/scripts/regenerate_schemas.py
+          python $GITHUB_WORKSPACE/pr/scripts/regenerate_schemas.py
 
-      - name: ↔️ Compare schemas and generate report
-        id: diff
+      - name: run-schema-diff
+        id: schema-diff
         run: |
           # Use git diff to compare the two directories and get a list of changes
           # The command exits with 0 if no changes, 1 if changes are found.
@@ -205,7 +205,7 @@ jobs:
           done
 
       - name: Fail workflow on change
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.schema-diff.outputs.changed == 'true'
         run: |
           echo "Failing the workflow because schema changes were detected."
           exit 1
