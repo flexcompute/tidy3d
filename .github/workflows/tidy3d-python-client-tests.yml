@@ -141,6 +141,9 @@ jobs:
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
     runs-on: ubuntu-latest
     container: ghcr.io/astral-sh/uv:debian
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: checkout-pr-branch
         uses: actions/checkout@v4
