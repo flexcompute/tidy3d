@@ -19,10 +19,17 @@ def auth(req):
     requests.Request
         Enriched request.
     """
-    req.headers[HEADER_APIKEY] = os.getenv("TIDY3D_PROD_API_KEY")
+    req.headers[HEADER_APIKEY] = os.getenv("TIDY3D_API_KEY")
     return req
 
 
+print(Env.current.web_api_endpoint)
+print(Env.current.ssl_verify)
 resp = requests.get(
     f"{Env.current.web_api_endpoint}/apikey", auth=auth, verify=Env.current.ssl_verify
 )
+
+print(Env.current.web_api_endpoint)
+print(Env.current.ssl_verify)
+print(f"status code: {resp.status_code}")
+print(f"content: {resp.content}")
