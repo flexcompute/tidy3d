@@ -18,6 +18,7 @@ try:
     from tidy3d import (
         EMESimulation,
         HeatChargeSimulation,
+        HeatSimulation,
         ModeSimulation,
         Simulation,
     )
@@ -40,6 +41,7 @@ export_api_schema_dictionary = {
     "Simulation": Simulation,
     "ModeSimulation": ModeSimulation,
     "EMESimulation": EMESimulation,
+    "HeatSimulation": HeatSimulation,
     "HeatChargeSimulation": HeatChargeSimulation,
     # "TerminalComponentModeler": TerminalComponentModeler
 }
