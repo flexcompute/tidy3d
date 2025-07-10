@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
 - Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
+- The `TerminalComponentModeler` defaults to the pseudo wave definition of scattering parameters. The new field `s_param_def` can be used to switch between either pseudo or power wave definitions.
 
 ### Fixed
 - Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed warning for running symmetric adjoint simulations by port to not trigger when there is a single port.
 - Bug in `CoaxialLumpedPort` where source injection is off when the `normal_axis` is not `z`.
 - Validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
+- Calculation of voltage and current in the `WavePort`, when one type of path integral is supplied and the transmission line mode is lossy.
 
 ## [2.9.0] - 2025-08-04
 

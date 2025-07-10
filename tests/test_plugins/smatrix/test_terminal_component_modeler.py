@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
+import skrf
 import xarray as xr
 
 import tidy3d as td
@@ -40,7 +41,7 @@ def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
     monkeypatch.setattr(
         TerminalComponentModeler,
         "_compute_F",
-        lambda matrix: 1.0 / (2.0 * np.sqrt(np.abs(matrix) + 1e-4)),
+        lambda Z_numpy, s_param_def: 1.0 / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
     )
     monkeypatch.setattr(
         TerminalComponentModeler,
@@ -75,6 +76,152 @@ def check_lumped_port_components_snapped_correctly(modeler: TerminalComponentMod
             center_current_monitor = monitor_dict[port._current_monitor_name].center[normal_axis]
             assert center_load == center_voltage_monitor
             assert center_load == center_current_monitor
+
+
+def make_t_network_impedance_matrix(
+    series_a: complex, series_b: complex, shunt_c: complex
+) -> np.ndarray:
+    """Create impedance matrix for T-network with series elements A, B and shunt element C.
+
+    Network topology:
+        Port1 ----[A]----+----[B]---- Port2
+                         |
+                        [C]
+                         |
+                        GND
+    """
+    z11 = series_a + shunt_c
+    z21 = shunt_c
+    z12 = shunt_c
+    z22 = series_b + shunt_c
+    return np.array([[z11, z12], [z21, z22]])
+
+
+def calc_transmission_line_S_matrix_pseudo(Z0, Zref1, Zref2, gamma, length):
+    """
+    Calculate complete 2x2 S-parameter matrix for a transmission line
+    using pseudo wave definition
+
+    [1] S. Amakawa, "Scattered reflections on scattering parameters—Demystifying complex-referenced
+        S parameters—," IEICE Trans. Electron., vol. E99-C, no. 10, pp. 1100-1112, Oct. 2016.
+
+    Parameters:
+    -----------
+    Z0 : complex or array-like
+        Characteristic impedance (can be frequency-dependent)
+    Zref1 : complex or array-like
+        Reference impedance at port 1 (can be frequency-dependent)
+    Zref2 : complex or array-like
+        Reference impedance at port 2 (can be frequency-dependent)
+    gamma : complex or array-like
+        Propagation constant (can be frequency-dependent)
+    length : float
+        Length (scalar only)
+
+    Returns:
+    --------
+    np.ndarray :
+        S-parameter matrix of shape (nfreq, 2, 2)
+    """
+
+    # Calculate hyperbolic functions
+    tanh_gamma_ell = np.tanh(gamma * length)
+    cosh_gamma_ell = np.cosh(gamma * length)
+
+    # Common denominator for all S-parameters
+    denom = (Z0**2 + Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref1 + Zref2)
+
+    # Calculate S11
+    numerator_S11 = (Z0**2 - Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref2 - Zref1)
+    S11 = numerator_S11 / denom
+
+    # Calculate S22
+    numerator_S22 = (Z0**2 - Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref1 - Zref2)
+    S22 = numerator_S22 / denom
+
+    # Calculate S21 (transmission from port 1 to port 2)
+    numerator_S21 = (
+        np.sqrt(np.real(Zref1) / np.real(Zref2)) * (np.abs(Zref2) / np.abs(Zref1)) * 2 * Z0 * Zref1
+    )
+    S21 = numerator_S21 / (denom * cosh_gamma_ell)
+
+    # Calculate S12 (transmission from port 2 to port 1)
+    numerator_S12 = (
+        np.sqrt(np.real(Zref2) / np.real(Zref1)) * (np.abs(Zref1) / np.abs(Zref2)) * 2 * Z0 * Zref2
+    )
+    S12 = numerator_S12 / (denom * cosh_gamma_ell)
+
+    # Construct the S-parameter matrix (nfreq, 2, 2)
+    nfreq = len(np.atleast_1d(S11))
+    S_matrix = np.zeros((nfreq, 2, 2), dtype=complex)
+    S_matrix[:, 0, 0] = S11
+    S_matrix[:, 0, 1] = S12
+    S_matrix[:, 1, 0] = S21
+    S_matrix[:, 1, 1] = S22
+
+    return S_matrix
+
+
+def calc_transmission_line_S_matrix_power(Z0, Zref1, Zref2, gamma, length):
+    """
+    Calculate complete 2x2 S-parameter matrix for a transmission line
+    using power wave definition
+
+    [1] S. Amakawa, "Scattered reflections on scattering parameters—Demystifying complex-referenced
+        S parameters—," IEICE Trans. Electron., vol. E99-C, no. 10, pp. 1100-1112, Oct. 2016.
+
+    Parameters:
+    -----------
+    Z0 : complex or array-like
+        Characteristic impedance (can be frequency-dependent)
+    Zref1 : complex or array-like
+        Reference impedance at port 1 (can be frequency-dependent)
+    Zref2 : complex or array-like
+        Reference impedance at port 2 (can be frequency-dependent)
+    gamma : complex or array-like
+        Propagation constant (can be frequency-dependent)
+    length : float
+        Length (scalar only)
+
+    Returns:
+    --------
+    np.ndarray :
+        S-parameter matrix of shape (nfreq, 2, 2)
+    """
+
+    # Calculate hyperbolic functions
+    tanh_gamma_ell = np.tanh(gamma * length)
+    cosh_gamma_ell = np.cosh(gamma * length)
+
+    # Complex conjugates
+    Zref1_conj = np.conj(Zref1)
+    Zref2_conj = np.conj(Zref2)
+
+    # Common denominator
+    denom = (Z0**2 + Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref1 + Zref2)
+
+    # S11 with conjugate terms
+    numerator_S11 = (Z0**2 - Zref1_conj * Zref2) * tanh_gamma_ell + Z0 * (Zref2 - Zref1_conj)
+    S11 = numerator_S11 / denom
+
+    # S22 with conjugate terms
+    numerator_S22 = (Z0**2 - Zref1 * Zref2_conj) * tanh_gamma_ell + Z0 * (Zref1 - Zref2_conj)
+    S22 = numerator_S22 / denom
+
+    # S21 and S12 (transmission parameters)
+    numerator_trans = 2 * Z0 * np.sqrt(np.real(Zref1) * np.real(Zref2))
+    S21 = numerator_trans / (denom * cosh_gamma_ell)
+    S12 = S21  # For reciprocal network
+
+    # Construct the S-parameter matrix (nfreq, 2, 2)
+    nfreq = len(np.atleast_1d(S11))
+    S_matrix = np.zeros((nfreq, 2, 2), dtype=complex)
+    S_matrix[:, 0, 0] = S11
+    S_matrix[:, 0, 1] = S12
+    S_matrix[:, 1, 0] = S21
+    S_matrix[:, 1, 1] = S22
+
+    return S_matrix
 
 
 def test_validate_no_sources(tmp_path):
@@ -178,15 +325,25 @@ def test_run_component_modeler(monkeypatch, tmp_path):
 
 
 def test_s_to_z_component_modeler():
-    # Test case is 2 port T network with reference impedance of 50 Ohm
+    """Test conversion of S parameters to impedance matrix,
+    for a simple test case of 2 port T network with reference impedance of 50 Ohm
+
+    Network topology:
+          Port1 ----[A]----+----[B]---- Port2
+                           |
+                          [C]
+                           |
+                          GND
+    """
     A = 20 + 30j
     B = 50 - 15j
     C = 60
 
-    Z11 = A + C
-    Z21 = C
-    Z12 = C
-    Z22 = B + C
+    Z = make_t_network_impedance_matrix(A, B, C)
+    Z11 = Z[0, 0]
+    Z21 = Z[1, 0]
+    Z12 = Z[0, 1]
+    Z22 = Z[1, 1]
 
     Z0 = 50.0
     # Manual creation of S parameters Pozar Table 4.2
@@ -231,6 +388,53 @@ def test_s_to_z_component_modeler():
     assert np.isclose(z_matrix_at_f[0, 1], Z12)
     assert np.isclose(z_matrix_at_f[1, 0], Z21)
     assert np.isclose(z_matrix_at_f[1, 1], Z22)
+
+
+def test_complex_reference_s_to_z_component_modeler():
+    """Test conversion of S parameters to impedance matrix,
+    for a test case of 2 port T network with complex reference impedances, which requires
+    identifying the precise definition used for S parameters
+
+    Network topology:
+          Port1 ----[A]----+----[B]---- Port2
+                           |
+                          [C]
+                           |
+                          GND
+    """
+    A = np.array([0, 21 + 31j, 60])
+    B = np.array([0, 51 - 16j, 40])
+    C = np.array([50, 61, 0])
+
+    freqs = np.array([1e9, 2e9, 3e9])
+    # Build Z for each frequency with different A, B, C
+    Z = np.stack([make_t_network_impedance_matrix(a, b, c) for a, b, c in zip(A, B, C)], axis=0)
+    # Choose some port reference impedances
+    z0 = np.stack(3 * [np.array([50 + 5j, 60 - 2j])], axis=0)
+
+    skrf_S_50ohm = skrf.Network.from_z(z=Z, f=freqs)
+    skrf_S_power = skrf.Network.from_z(z=Z, f=freqs, s_def="power", z0=z0)
+    skrf_S_pseudo = skrf.Network.from_z(z=Z, f=freqs, s_def="pseudo", z0=z0)
+
+    ports = ["port1", "port2"]
+    smatrix = TerminalPortDataArray(
+        skrf_S_50ohm.s, coords={"f": freqs, "port_out": ports, "port_in": ports}
+    )
+    # Test real reference impedance calculations
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=50, s_param_def="power")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=50, s_param_def="pseudo")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+
+    # Test complex reference impedance calculations
+    z0_tidy3d = PortDataArray(data=z0, coords={"f": freqs, "port": ports})
+    smatrix.values = skrf_S_power.s
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=z0_tidy3d, s_param_def="power")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+
+    smatrix.values = skrf_S_pseudo.s
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=z0_tidy3d, s_param_def="pseudo")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
 
 
 def test_ab_to_s_component_modeler():
@@ -979,3 +1183,109 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     element_mappings = ((S11, S22, 1), (S12, S21, 1))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
     assert len(modeler_with_mappings.sim_dict) == 2
+
+
+def test_internal_construct_smatrix_with_port_vi(monkeypatch):
+    """Test _internal_construct_smatrix method by monkeypatching compute_port_VI
+    with precomputed voltage and current values and comparing the final S-matrix to expected results.
+    """
+    # Create a simple 2-port modeler for testing
+    modeler = make_component_modeler(planar_pec=False)
+    freqs = np.array([1e9, 5e9, 10e9])
+    modeler = modeler.updated_copy(freqs=freqs)
+
+    # Some test data from a 20 mm lossy microstrip
+    # Data is given using engineering convention exp(jwt)
+    length = 0.02
+    gamma = np.array(
+        [
+            35.845260386378 + 52.964956959149j,
+            48.283102945750 + 208.91753284900j,
+            50.594134809653 + 397.12168963974j,
+        ]
+    )
+    Z0 = np.array(
+        [
+            18.725191534567 + 12.672421364213j,
+            34.038884625562 + 7.8654410284980j,
+            35.725175635077 + 4.5490999181327j,
+        ]
+    )
+    # Break the reference impedance symmetry
+    Zref = np.column_stack((0.5 * Z0, 2 * Z0))
+    # Calculate analytical S matrices for power and pseudo wave formulations
+    S_pseudo = calc_transmission_line_S_matrix_pseudo(Z0, Zref[:, 0], Zref[:, 1], gamma, length)
+    S_power = calc_transmission_line_S_matrix_power(Z0, Zref[:, 0], Zref[:, 1], gamma, length)
+
+    # Calculate A and B matrices where A is diagonal and B = S @ A
+    A = np.tile(np.eye(2), (len(freqs), 1, 1))  # Identity matrix for each frequency
+    B = S_pseudo @ A
+    # Now get Voltages and Currents at each port due to excitations from each port
+    Vscale = np.abs(Zref[:, :, np.newaxis]) / np.sqrt(np.real(Zref[:, :, np.newaxis]))
+    Iscale = Vscale / Zref[:, :, np.newaxis]
+    voltages = Vscale * (A + B)  # (f x port_out x port_in)
+    currents = Iscale * (A - B)  # (f x port_out x port_in)
+
+    port_names = [port.name for port in modeler.ports]
+
+    # Create mock batch data
+    batch_data = {}
+    for j, port_in in enumerate(modeler.ports):
+        task_name = modeler._task_name(port_in)
+        batch_data[task_name] = {}
+        for i, port_out in enumerate(modeler.ports):
+            # Initialize with zeros - user should replace with actual values
+            batch_data[task_name][port_out.name] = {
+                "voltage": FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
+                "current": FreqDataArray(currents[:, i, j], coords={"f": freqs}),
+            }
+
+    # Mock the compute_port_VI method
+    def mock_compute_port_vi(port_out, sim_data):
+        """Mock compute_port_VI to return voltage and current from dummy sim_data."""
+        port_name = port_out.name
+        voltage = sim_data[port_name]["voltage"]
+        current = sim_data[port_name]["current"]
+        return voltage, current
+
+    # Mock port reference impedances to return constant Z0
+    def mock_port_impedances(self, batch_data):
+        coords = {"f": np.array(freqs), "port": port_names}
+        return PortDataArray(Zref, coords=coords)
+
+    # Apply monkeypatches
+    monkeypatch.setattr(
+        TerminalComponentModeler, "compute_port_VI", staticmethod(mock_compute_port_vi)
+    )
+    monkeypatch.setattr(
+        TerminalComponentModeler, "_port_reference_impedances", mock_port_impedances
+    )
+
+    # Test the _internal_construct_smatrix method
+    S_computed = modeler._internal_construct_smatrix(batch_data).values
+
+    def check_S_matrix(S_computed, S_expected, tol=1e-12):
+        # Check that S-matrix has correct shape
+        assert S_computed.shape == (len(freqs), len(port_names), len(port_names))
+
+        # Compare computed S-matrix with analytical values at each frequency
+        for freq_idx in range(len(freqs)):
+            S_computed_at_freq = S_computed[freq_idx, :, :]
+            S_expected_at_freq = S_expected[freq_idx, :, :]
+            max_rel_err = np.max(
+                np.abs((S_computed_at_freq - S_expected_at_freq) / (S_expected_at_freq + 1e-14))
+            )
+            assert np.allclose(S_computed_at_freq, S_expected_at_freq, rtol=tol, atol=tol), (
+                f"S-matrix mismatch at frequency index {freq_idx}\n"
+                f"Expected:\n{S_expected_at_freq}\n"
+                f"Computed:\n{S_computed_at_freq}\n"
+                f"Difference:\n{S_computed_at_freq - S_expected_at_freq}\n"
+                f"Max relative error: {max_rel_err:.2e}"
+            )
+
+    # Check pseudo wave S matrix
+    check_S_matrix(S_computed, S_pseudo)
+
+    # Check power wave S matrix
+    S_computed = modeler._internal_construct_smatrix(batch_data, s_param_def="power").values
+    check_S_matrix(S_computed, S_power)
