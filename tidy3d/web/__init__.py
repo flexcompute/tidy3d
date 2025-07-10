@@ -7,7 +7,6 @@ from tidy3d.log import get_logging_console, log
 from tidy3d.version import __version__
 
 from .core import core_config
-from .core.nexus import use_nexus
 
 # set logger to tidy3d.log before it's invoked in other imports
 core_config.set_config(log, get_logging_console(), __version__)
@@ -67,5 +66,4 @@ __all__ = [
     "test",
     "tidy3d_cli",
     "upload",
-    "use_nexus",
 ]
