@@ -119,7 +119,7 @@ jobs:
   lint:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
-    name: Run linting
+    name: verify-linting
     runs-on: ubuntu-latest 
     container: ghcr.io/astral-sh/uv:debian
     steps:
