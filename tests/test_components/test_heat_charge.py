@@ -257,6 +257,10 @@ def monitors():
 
     electric_field_mnt = td.SteadyElectricFieldMonitor(size=(1.6, 2, 3), name="electric_field_test")
 
+    current_density_mnt = td.SteadyCurrentDensityMonitor(
+        size=(1.6, 2, 3), name="current_density_mnt"
+    )
+
     return [
         temp_mnt1,  # 0
         temp_mnt2,  # 1
@@ -271,6 +275,7 @@ def monitors():
         energy_band_mnt1,  # 10
         mesh_mnt,  # 11
         electric_field_mnt,  # 12
+        current_density_mnt,  # 13
     ]
 
 
@@ -757,6 +762,19 @@ def electric_field_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def current_density_monitor_data(monitors, electric_field_monitor_data):
+    """Creates different current density monitor data."""
+    monitor = monitors[13]
+    e_data1, e_data2, e_data3 = electric_field_monitor_data
+
+    mnt_data1 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data1.E)
+    mnt_data2 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data2.E)
+    mnt_data3 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data3.E)
+
+    return (mnt_data1, mnt_data2, mnt_data3)
+
+
+@pytest.fixture(scope="module")
 def simulation_data(
     heat_simulation,
     conduction_simulation,
@@ -930,52 +948,68 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
 
 
 def test_heat_charge_mnt_data(
-    temperature_monitor_data, voltage_monitor_data, electric_field_monitor_data
+    temperature_monitor_data,
+    voltage_monitor_data,
+    electric_field_monitor_data,
+    current_density_monitor_data,
 ):
     """Tests whether different heat-charge monitor data can be created."""
     assert len(temperature_monitor_data) == 4, "Expected 4 temperature monitor data entries."
     assert len(voltage_monitor_data) == 4, "Expected 4 voltage monitor data entries."
     assert len(electric_field_monitor_data) == 3, "Expected 3 electric field monitor data entries."
+    assert len(current_density_monitor_data) == 3, (
+        "Expected 3 current density monitor data entries."
+    )
 
-    for mnt_data in electric_field_monitor_data:
-        assert "E" in mnt_data.field_components.keys()
+    for var, mnt_data_lists in [
+        ("E", electric_field_monitor_data),
+        ("J", current_density_monitor_data),
+    ]:
+        for mnt_data in mnt_data_lists:
+            assert var in mnt_data.field_components.keys()
 
-        symm_data = mnt_data.symmetry_expanded_copy
-        assert symm_data.E == mnt_data.E
+            symm_data = mnt_data.symmetry_expanded_copy
+            if var == "E":
+                assert symm_data.E == mnt_data.E
+            elif var == "J":
+                assert symm_data.J == mnt_data.J
 
-        names = mnt_data.field_name("abs^2")
-        assert names == "E²"
-        names = mnt_data.field_name()
-        assert names == "E"
+            names = mnt_data.field_name("abs^2")
+            assert names == var + "²"
+            names = mnt_data.field_name()
+            assert names == var
 
-        # make sure an error is raised if we don't use a field data array
-        # TriangularGridDataset
-        tri_grid_points = td.PointDataArray(
-            [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
-            dims=("index", "axis"),
-        )
+            # make sure an error is raised if we don't use a field data array
+            # TriangularGridDataset
+            tri_grid_points = td.PointDataArray(
+                [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+                dims=("index", "axis"),
+            )
 
-        tri_grid_cells = td.CellDataArray(
-            [[0, 1, 2], [1, 2, 3]],
-            dims=("cell_index", "vertex_index"),
-        )
+            tri_grid_cells = td.CellDataArray(
+                [[0, 1, 2], [1, 2, 3]],
+                dims=("cell_index", "vertex_index"),
+            )
 
-        tri_grid_values = td.IndexedDataArray(
-            [1.0, 2.0, 3.0, 4.0],
-            dims=("index",),
-            name="T",
-        )
+            tri_grid_values = td.IndexedDataArray(
+                [1.0, 2.0, 3.0, 4.0],
+                dims=("index",),
+                name="T",
+            )
 
-        tri_grid = td.TriangularGridDataset(
-            normal_axis=1,
-            normal_pos=0,
-            points=tri_grid_points,
-            cells=tri_grid_cells,
-            values=tri_grid_values,
-        )
+            tri_grid = td.TriangularGridDataset(
+                normal_axis=1,
+                normal_pos=0,
+                points=tri_grid_points,
+                cells=tri_grid_cells,
+                values=tri_grid_values,
+            )
 
-        with pytest.raises(pd.ValidationError):
-            _ = mnt_data.updated_copy(E=tri_grid)
+            with pytest.raises(pd.ValidationError):
+                if var == "E":
+                    _ = mnt_data.updated_copy(E=tri_grid)
+                elif var == "J":
+                    _ = mnt_data.updated_copy(J=tri_grid)
 
 
 def test_grid_spec_validation(grid_specs):
