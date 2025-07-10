@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 or `Absorber` classes (or when invoking `pml()`, `stable_pml()`, or `absorber()` functions)
 with fewer layers than recommended.
 - Warnings and error messages originating from `Structure`, `Source`, or `Monitor` classes now refer to problematic objects by their user-supplied `name` attribute, alongside their index.
+- File downloads are atomic. Interruptions or failures during download will no longer result in incomplete files.
 
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
