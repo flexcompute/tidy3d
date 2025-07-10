@@ -161,12 +161,26 @@ jobs:
           uv venv $GITHUB_WORKSPACE/.venv -p 3.11
           source $GITHUB_WORKSPACE/.venv/bin/activate
           uv pip install -e "$GITHUB_WORKSPACE/pr"
-
-      - name: regenerate-pr-schemas
+      
+      - name: get-tidy3d-version
+        id: get-version
         run: |
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          version=$(python -c "import tidy3d; print(tidy3d.__version__)")
+          echo "tidy3d version is $version"
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: verify-committed-schema
+        run: |
+          echo "Regenerating schema to check if committed files are up-to-date..."
           source $GITHUB_WORKSPACE/.venv/bin/activate
           python $GITHUB_WORKSPACE/pr/scripts/regenerate_schema.py
 
+          echo "Checking for differences..."
+          cd pr
+          git diff --exit-code -- tidy3d/schemas
+          echo "✅ Committed schema is up-to-date."
+     
       - name: run-schema-diff
         id: schema-diff
         run: |
@@ -204,13 +218,18 @@ jobs:
             
             echo "| $status | \`$file_path\` |" >> $GITHUB_STEP_SUMMARY
           done
-
-      - name: Fail workflow on change
+      
+      - name: verify-allowed-changes
         if: steps.schema-diff.outputs.changed == 'true'
         run: |
-          echo "Failing the workflow because schema changes were detected."
-          exit 1
-
+          version="${{ steps.get-version.outputs.version }}"
+          if [[ "$version" == *rc* ]]; then
+            echo "✅ Passing: Schema changed on a release candidate version ($version), which is permitted."
+          else
+            echo "❌ Failing: Schema changed on a non-rc release version ($version)."
+            exit 1
+          fi
+           
   local-tests:
     # Run on open PRs OR when manually triggered with local_tests=true
     needs: determine-test-scope
