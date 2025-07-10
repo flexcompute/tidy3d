@@ -1,4 +1,4 @@
-name: "tidy3d-frontend-tests"
+name: "public/tidy3d/python-client-tests"
 
 on:
   workflow_dispatch:
@@ -213,7 +213,8 @@ jobs:
       if: >- 
         matrix.python-version == '3.13' &&
         github.event_name == 'pull_request' &&
-        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage')
+        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage') &&
+        github.event.pull_request.head.repo.fork == false
       with:
         result-encoding: string
         script: |

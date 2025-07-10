@@ -337,6 +337,7 @@ from .components.source.field import (
     ModeSource,
     PlaneWave,
 )
+from .components.source.freq_range import FreqRange
 
 # sources
 from .components.source.time import (
@@ -540,6 +541,7 @@ __all__ = [
     "FluxTimeDataArray",
     "FluxTimeMonitor",
     "FossumCarrierLifetime",
+    "FreqRange",
     "FullyAnisotropicMedium",
     "GaussianBeam",
     "GaussianBeamProfile",
