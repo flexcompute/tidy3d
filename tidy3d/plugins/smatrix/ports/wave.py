@@ -76,14 +76,21 @@ class WavePort(AbstractTerminalPort, Box):
         "Must be greater than or equal to 3. When set to `None`, no grid refinement is performed.",
     )
 
+    conjugated_dot_product: bool = pd.Field(
+        False,
+        title="Conjugated Dot Product",
+        description="Use conjugated or non-conjugated dot product for mode decomposition.",
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.
         """
         mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.voltage_integral is None:
+            flux_sign = 1 if mode_data.monitor.store_fields_direction == "+" else -1
             current_coeffs = self.current_integral.compute_current(mode_data)
-            voltage_coeffs = 2 * np.abs(mode_data.flux) / np.conj(current_coeffs)
+            voltage_coeffs = 2 * flux_sign * mode_data.complex_flux / np.conj(current_coeffs)
         else:
             voltage_coeffs = self.voltage_integral.compute_voltage(mode_data)
         return voltage_coeffs.squeeze()
@@ -94,8 +101,9 @@ class WavePort(AbstractTerminalPort, Box):
         """
         mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.current_integral is None:
+            flux_sign = 1 if mode_data.monitor.store_fields_direction == "+" else -1
             voltage_coeffs = self.voltage_integral.compute_voltage(mode_data)
-            current_coeffs = (2 * np.abs(mode_data.flux) / voltage_coeffs).conj()
+            current_coeffs = (2 * flux_sign * mode_data.complex_flux / voltage_coeffs).conj()
         else:
             current_coeffs = self.current_integral.compute_current(mode_data)
         return current_coeffs.squeeze()
@@ -149,6 +157,7 @@ class WavePort(AbstractTerminalPort, Box):
             colocate=False,
             mode_spec=self.mode_spec,
             store_fields_direction=self.direction,
+            conjugated_dot_product=self.conjugated_dot_product,
         )
         return [mode_mon]
 

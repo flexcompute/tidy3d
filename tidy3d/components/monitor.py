@@ -352,6 +352,12 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         "primal grid nodes).",
     )
 
+    conjugated_dot_product: bool = pydantic.Field(
+        True,
+        title="Conjugated Dot Product",
+        description="Use conjugated or non-conjugated dot product for mode decomposition.",
+    )
+
     def plot(
         self,
         x: Optional[float] = None,

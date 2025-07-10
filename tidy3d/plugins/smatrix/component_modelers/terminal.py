@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -33,10 +33,25 @@ from .base import AbstractComponentModeler, TerminalPortType
 NetworkIndex = str  # the 'i' in S_ij
 NetworkElement = tuple[NetworkIndex, NetworkIndex]  # the 'ij' in S_ij
 
+# The definition of wave amplitudes used to construct scattering matrix
+SParamDef = Literal["pseudo", "power"]
+
 
 class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkElement]):
     """Tool for modeling two-terminal multiport devices and computing port parameters
-    with lumped and wave ports."""
+    with lumped and wave ports.
+
+    Notes
+    -----
+
+    **References**
+
+    .. [1]  R. B. Marks and D. F. Williams, "A general waveguide circuit theory,"
+            J. Res. Natl. Inst. Stand. Technol., vol. 97, pp. 533, 1992.
+
+    .. [2]  D. M. Pozar, Microwave Engineering, 4th ed. Hoboken, NJ, USA:
+            John Wiley & Sons, 2012.
+    """
 
     ports: tuple[TerminalPortType, ...] = pd.Field(
         (),
@@ -55,13 +70,18 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
     assume_ideal_excitation: bool = pd.Field(
         False,
         title="Assume Ideal Excitation",
-        description="If ``True``, only the excited port is assumed to have incident power, so the "
-        "vector of incident power wave amplitudes (a) is assumed to be all zeros except for the "
-        "entry associated with the excited port. This choice simplifies the calculation of the "
-        "scattering matrix. If ``False``, every entry in the vector of incident power wave "
-        "amplitudes (a) is calculated explicitly. This choice requires a matrix inversion when "
-        "calculating the scattering matrix, but may lead to more accurate scattering parameters "
-        "when there are reflections from simulation boundaries. ",
+        description="If ``True``, only the excited port is assumed to have a nonzero incident wave "
+        "amplitude power. This choice simplifies the calculation of the scattering matrix. "
+        "If ``False``, every entry in the vector of incident wave amplitudes (a) is calculated "
+        "explicitly. This choice requires a matrix inversion when calculating the scattering "
+        "matrix, but may lead to more accurate scattering parameters when there are "
+        "reflections from simulation boundaries. ",
+    )
+
+    s_param_def: SParamDef = pd.Field(
+        "pseudo",
+        title="Scattering Parameter Definition",
+        description="Whether to compute scattering parameters using the 'pseudo' or 'power' wave definitions.",
     )
 
     @pd.root_validator(pre=False)
@@ -112,7 +132,7 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
 
     @staticmethod
     def network_index(port: TerminalPortType, mode_index: Optional[int] = None) -> NetworkIndex:
-        """Converts the port, and a ``mode_index`` when the port is a :class:`.WavePort``, to a unique string specifier.
+        """Converts the port, and a ``mode_index`` when the port is a :class:`.WavePort`, to a unique string specifier.
 
         Parameters
         ----------
@@ -120,7 +140,7 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             The port to convert to an index.
         mode_index : Optional[int]
             Selects a single mode from those supported by the ``port``, which is only used when
-            the ``port`` is a :class:`.WavePort``
+            the ``port`` is a :class:`.WavePort`
 
         Returns
         -------
@@ -259,11 +279,16 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
     def _construct_smatrix(self) -> TerminalPortDataArray:
         """Post process :class:`.BatchData` to generate scattering matrix."""
         return self._internal_construct_smatrix(
-            batch_data=self.batch_data, assume_ideal_excitation=self.assume_ideal_excitation
+            batch_data=self.batch_data,
+            assume_ideal_excitation=self.assume_ideal_excitation,
+            s_param_def=self.s_param_def,
         )
 
     def _internal_construct_smatrix(
-        self, batch_data: BatchData, assume_ideal_excitation: bool = True
+        self,
+        batch_data: BatchData,
+        assume_ideal_excitation: bool = False,
+        s_param_def: SParamDef = "pseudo",
     ) -> TerminalPortDataArray:
         """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
@@ -290,7 +315,9 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         for source_index in run_source_indices:
             port, mode_index = self.network_dict[source_index]
             sim_data = batch_data[self._task_name(port=port, mode_index=mode_index)]
-            a, b = self.compute_power_wave_amplitudes_at_each_port(port_impedances, sim_data)
+            a, b = self.compute_wave_amplitudes_at_each_port(
+                port_impedances, sim_data, s_param_def=s_param_def
+            )
 
             indexer = {"port_in": source_index}
             a_matrix = a_matrix._with_updated_data(data=a.data, coords=indexer)
@@ -373,10 +400,13 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
                         "for the simulation passed to the 'TerminalComponentModeler'."
                     )
 
-    def compute_power_wave_amplitudes_at_each_port(
-        self, port_reference_impedances: PortDataArray, sim_data: SimulationData
+    def compute_wave_amplitudes_at_each_port(
+        self,
+        port_reference_impedances: PortDataArray,
+        sim_data: SimulationData,
+        s_param_def: SParamDef = "pseudo",
     ) -> tuple[PortDataArray, PortDataArray]:
-        """Compute the incident and reflected power wave amplitudes at each port.
+        """Compute the incident and reflected amplitudes at each port.
         The computed amplitudes have not been normalized.
 
         Parameters
@@ -385,11 +415,14 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             Reference impedance at each port.
         sim_data : :class:`.SimulationData`
             Results from the simulation.
+        s_param_def : SParamDef
+            The type of waves computed, either pseudo waves defined by Equation 53 and Equation 54 in [1],
+            or power waves defined by Equation 4.67 in [2].
 
         Returns
         -------
         tuple[:class:`.PortDataArray`, :class:`.PortDataArray`]
-            Incident (a) and reflected (b) power wave amplitudes at each port.
+            Incident (a) and reflected (b) wave amplitudes at each port.
         """
         network_indices = list(self.matrix_indices_monitor)
         values = np.zeros(
@@ -425,13 +458,40 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         V_numpy = np.where(negative_real_Z, -V_numpy, V_numpy)
         Z_numpy = np.where(negative_real_Z, -Z_numpy, Z_numpy)
 
-        F_numpy = TerminalComponentModeler._compute_F(Z_numpy)
+        F_numpy = TerminalComponentModeler._compute_F(Z_numpy, s_param_def)
 
+        b_Zref = Z_numpy
+        if s_param_def == "power":
+            b_Zref = np.conj(Z_numpy)
+
+        # Equations 53 and 54 from [1]
         # Equation 4.67 - Pozar - Microwave Engineering 4ed
         a.values = F_numpy * (V_numpy + Z_numpy * I_numpy)
-        b.values = F_numpy * (V_numpy - np.conj(Z_numpy) * I_numpy)
+        b.values = F_numpy * (V_numpy - b_Zref * I_numpy)
 
         return a, b
+
+    def compute_power_wave_amplitudes_at_each_port(
+        self, port_reference_impedances: PortDataArray, sim_data: SimulationData
+    ) -> tuple[PortDataArray, PortDataArray]:
+        """Compute the incident and reflected power wave amplitudes at each port.
+        The computed amplitudes have not been normalized.
+
+        Parameters
+        ----------
+        port_reference_impedances : :class:`.PortDataArray`
+            Reference impedance at each port.
+        sim_data : :class:`.SimulationData`
+            Results from the simulation.
+
+        Returns
+        -------
+        tuple[:class:`.PortDataArray`, :class:`.PortDataArray`]
+            Incident (a) and reflected (b) power wave amplitudes at each port.
+        """
+        return self.compute_wave_amplitudes_at_each_port(
+            port_reference_impedances, sim_data, s_param_def="power"
+        )
 
     @staticmethod
     def compute_port_VI(
@@ -482,7 +542,8 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
 
     @staticmethod
     def compute_power_delivered_by_port(
-        port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData
+        port: Union[LumpedPort, CoaxialLumpedPort],
+        sim_data: SimulationData,
     ) -> FreqDataArray:
         """Compute the power delivered to the network by a lumped port.
 
@@ -506,7 +567,7 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
     def ab_to_s(
         a_matrix: TerminalPortDataArray, b_matrix: TerminalPortDataArray
     ) -> TerminalPortDataArray:
-        """Get the scattering matrix given the power wave matrices."""
+        """Get the scattering matrix given the wave amplitude matrices."""
         TerminalComponentModeler._validate_square_matrix(a_matrix, "ab_to_s")
         # Ensure dimensions are ordered properly
         a_matrix = a_matrix.transpose(*TerminalPortDataArray._dims)
@@ -523,38 +584,64 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
 
     @staticmethod
     def s_to_z(
-        s_matrix: TerminalPortDataArray, reference: Union[complex, PortDataArray]
+        s_matrix: TerminalPortDataArray,
+        reference: Union[complex, PortDataArray],
+        s_param_def: SParamDef = "pseudo",
     ) -> DataArray:
-        """Get the impedance matrix given the scattering matrix and a reference impedance."""
+        """Get the impedance matrix given the scattering matrix and a reference impedance.
+
+        Parameters
+        ----------
+        s_matrix : :class:`.TerminalPortDataArray`
+            Scattering matrix computed using either the pseudo or power wave formulation.
+        reference : Union[complex, :class:`.PortDataArray`]
+            The reference impedance used at each port.
+        s_param_def : SParamDef
+            The type of wave amplitudes used for computing the scattering matrix, either pseudo waves
+            defined by Equation 53 and Equation 54 in [1] or power waves defined by Equation 4.67 in [2].
+        """
         TerminalComponentModeler._validate_square_matrix(s_matrix, "s_to_z")
         # Ensure dimensions are ordered properly
         z_matrix = s_matrix.transpose(*TerminalPortDataArray._dims).copy(deep=True)
         s_vals = z_matrix.values
-        eye = np.eye(len(s_matrix.port_out.values), len(s_matrix.port_in.values))
+        eye = np.eye(len(s_matrix.port_out.values), len(s_matrix.port_in.values))[np.newaxis, :, :]
+        # Ensure that Zport, F, and Finv act as diagonal matrices when multiplying by left or right
+        shape_left = (len(s_matrix.f), len(s_matrix.port_out), 1)
+        shape_right = (len(s_matrix.f), 1, len(s_matrix.port_in))
+        # Setup the port reference impedance array (scalar)
         if isinstance(reference, PortDataArray):
-            # From Equation 4.68 - Pozar - Microwave Engineering 4ed
-            # Ensure that Zport, F, and Finv act as diagonal matrices when multiplying by left or right
-            shape_left = (len(s_matrix.f), len(s_matrix.port_out), 1)
-            shape_right = (len(s_matrix.f), 1, len(s_matrix.port_in))
             Zport = reference.values.reshape(shape_right)
-            F = TerminalComponentModeler._compute_F(Zport).reshape(shape_right)
+            F = TerminalComponentModeler._compute_F(Zport, s_param_def).reshape(shape_right)
             Finv = (1.0 / F).reshape(shape_left)
-            FinvSF = Finv * s_vals * F
-            RHS = eye * np.conj(Zport) + FinvSF * Zport
-            LHS = eye - FinvSF
-            z_vals = np.matmul(AbstractComponentModeler.inv(LHS), RHS)
         else:
-            # Simpler case when all port impedances are the same
-            z_vals = (
-                np.matmul(AbstractComponentModeler.inv(eye - s_vals), (eye + s_vals)) * reference
-            )
+            Zport = reference
+            F = TerminalComponentModeler._compute_F(Zport, s_param_def)
+            Finv = 1.0 / F
+        # Use conjugate when S matrix is power-wave based
+        if s_param_def == "power":
+            Zport_mod = np.conj(Zport)
+        else:
+            Zport_mod = Zport
+
+        # From equation 74 from [1] for pseudo waves
+        # From Equation 4.68 - Pozar - Microwave Engineering 4ed for power waves
+        FinvSF = Finv * s_vals * F
+        RHS = eye * Zport_mod + FinvSF * Zport
+        LHS = eye - FinvSF
+        z_vals = np.linalg.solve(LHS, RHS)
 
         z_matrix.data = z_vals
         return z_matrix
 
     @cached_property
     def port_reference_impedances(self) -> PortDataArray:
-        """The reference impedance used at each port for definining power wave amplitudes."""
+        """The reference impedance used at each port for definining wave amplitudes.
+
+        Note
+        ----
+        By default, we choose reference impedances to be the load impedance.
+        For wave ports, this corresponds with the the characteristic impedance.
+        """
         return self._port_reference_impedances(self.batch_data)
 
     def _port_reference_impedances(self, batch_data: BatchData) -> PortDataArray:
@@ -594,10 +681,15 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         return port_impedances
 
     @staticmethod
-    def _compute_F(Z_numpy: np.array):
+    def _compute_F(Z_numpy: np.array, s_param_def: SParamDef = "pseudo"):
         """Helper to convert port impedance matrix to F, which is used for
-        computing generalized scattering parameters."""
-        return 1.0 / (2.0 * np.sqrt(np.real(Z_numpy)))
+        computing scattering parameters
+        """
+        # Defined in [2] after equation 4.67
+        if s_param_def == "power":
+            return 1.0 / (2.0 * np.sqrt(np.real(Z_numpy)))
+        # Equation 75 from [1]
+        return np.sqrt(np.real(Z_numpy)) / (2.0 * np.abs(Z_numpy))
 
     @cached_property
     def _lumped_ports(self) -> list[AbstractLumpedPort]:
@@ -716,6 +808,8 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             Dictionary mapping port names to their desired excitation amplitudes. For each port,
             :math:`\\frac{1}{2}|a|^2` represents the incident power from that port into the system.
             If None, uses only the first port without any scaling of the raw simulation data.
+            Note that in this method ``a`` represents the incident wave amplitude
+            using the power wave definition in [2].
         monitor_name : str = None
             Name of the :class:`.DirectivityMonitor` to use for calculating far fields.
             If None, uses the first monitor in `radiation_monitors`.
@@ -755,8 +849,8 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
             sim_data_port = self.batch_data[self._task_name(port=port)]
             radiation_data = sim_data_port[rad_mon.name]
 
-            a, b = self.compute_power_wave_amplitudes_at_each_port(
-                self.port_reference_impedances, sim_data_port
+            a, b = self.compute_wave_amplitudes_at_each_port(
+                self.port_reference_impedances, sim_data_port, s_param_def="power"
             )
             # Select a possible subset of frequencies
             a = a.sel(f=f)
