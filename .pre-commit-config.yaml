@@ -12,3 +12,5 @@ repos:
         name: regenerate-schema
         entry: python scripts/regenerate_schema.py
         language: system
+        files: ^tidy3d/.*\.py$  # Run only when Python files in the core 'tidy3d' directory are modified.
+        stages: [commit] # Explicitly run during the commit stage.
