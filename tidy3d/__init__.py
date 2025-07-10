@@ -37,6 +37,7 @@ from tidy3d.components.tcad.data.sim_data import (
 )
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
+    SteadyCurrentDensityData,
     SteadyElectricFieldData,
     SteadyEnergyBandData,
     SteadyFreeCarrierData,
@@ -54,6 +55,7 @@ from tidy3d.components.tcad.grid import (
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
@@ -673,6 +675,8 @@ __all__ = [
     "Staircasing",
     "SteadyCapacitanceData",
     "SteadyCapacitanceMonitor",
+    "SteadyCurrentDensityData",
+    "SteadyCurrentDensityMonitor",
     "SteadyElectricFieldData",
     "SteadyElectricFieldMonitor",
     "SteadyEnergyBandData",

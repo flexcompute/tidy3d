@@ -6,7 +6,6 @@ from typing import Optional, Union
 
 import pydantic.v1 as pd
 
-from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.data_array import (
     DataArray,
     ScalarFieldTimeDataArray,
@@ -19,7 +18,6 @@ from tidy3d.components.tcad.monitors.heat import (
 )
 from tidy3d.components.types import annotate_type
 from tidy3d.constants import KELVIN
-from tidy3d.log import log
 
 FieldDataset = Union[
     SpatialDataArray,
@@ -61,32 +59,3 @@ class TemperatureData(HeatChargeMonitorData):
     def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
         return {"temperature": self.temperature}
-
-    @pd.validator("temperature", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def warn_no_data(cls, val, values):
-        """Warn if no data provided."""
-
-        mnt = values.get("monitor")
-
-        if val is None:
-            log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
-            )
-
-        return val
-
-    def field_name(self, val: str = "") -> str:
-        """Gets the name of the fields to be plot."""
-        if val == "abs^2":
-            return "|T|², K²"
-        else:
-            return "T, K"
-
-    @property
-    def symmetry_expanded_copy(self) -> TemperatureData:
-        """Return copy of self with symmetry applied."""
-
-        new_temp = self._symmetry_expanded_copy(property=self.temperature)
-        return self.updated_copy(temperature=new_temp, symmetry=(0, 0, 0))
