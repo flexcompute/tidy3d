@@ -457,7 +457,7 @@ def test_finite_difference_mode_data_polyslab(
     fd_mag = np.linalg.norm(fd_grad)
     adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
     percentage_error = 100.0 * np.mean(
-        (fd_grad - pattern_dot_adj_gradient) / (fd_grad + np.finfo(np.float64).eps)
+        np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
     )
 
     print("\n" * 3)
