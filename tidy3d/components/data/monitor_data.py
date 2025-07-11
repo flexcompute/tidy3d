@@ -3448,7 +3448,13 @@ class DiffractionData(AbstractFieldProjectionData):
         k0 = 2 * np.pi * freq0 / C_0
         bck_eps = self.medium.eps_model(freq0)
         grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
-        src_amp = 1j * grad_const * amp_complex
+
+        normal_factor = 1.0 if (self.monitor.normal_dir == "+") else -1.0
+        src_amp = 1j * grad_const * amp_complex * normal_factor
+        # the angular direction for sources and monitors when the normal is "-"
+        # differs by a sign, so we need to flip the angle here when the normal
+        # is "-"
+        src_angle_theta = normal_factor * angle_theta
 
         # construct plane wave source
         adj_src = PlaneWave(
@@ -3461,7 +3467,7 @@ class DiffractionData(AbstractFieldProjectionData):
                 fwidth=fwidth,
             ),
             direction=self.flip_direction(monitor.normal_dir),
-            angle_theta=angle_theta,
+            angle_theta=src_angle_theta,
             angle_phi=angle_phi,
             pol_angle=pol_angle,
         )
