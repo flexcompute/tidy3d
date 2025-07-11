@@ -1242,8 +1242,6 @@ class SimulationData(AbstractYeeGridSimulationData):
                 "This can introduce errors into the gradient computation."
             )
 
-        print(f"source widths: {decay_by_f0_fwidth}, {fwidth_to_min_f0}")
-
         # Choose a wider pulse width in frequency especially when the min/max frequencies
         # for the broadband pulse might be very close together
         adj_src_fwidth = np.maximum(decay_by_f0_fwidth, fwidth_to_min_f0)
