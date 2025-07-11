@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.8.5] - 2025-07-07
 
+### Added
+- Support for automatic differentiation through `web.Job().run()` and `web.Batch().run()`.
+
 ### Fixed
 - Bug in `PlaneWave` defined with a negative `angle_theta` which would lead to wrong injection.
 - `GaussianBeam` and `AstigmaticGaussianBeam` default `num_freqs` reset to 1 (it was set to 3 in v2.8.0) and a warning is issued for a broadband, angled beam for which `num_freqs` may not be sufficiently large.

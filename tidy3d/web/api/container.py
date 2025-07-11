@@ -230,10 +230,14 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-        self.upload()
-        self.start()
-        self.monitor()
-        return self.load(path=path)
+        from tidy3d.web.api.autograd.autograd import run as run_autograd
+
+        return run_autograd(
+            simulation=self.simulation,
+            task_name=self.task_name,
+            folder_name=self.folder_name,
+            path=path,
+        )
 
     @cached_property
     def task_id(self) -> TaskId:
@@ -574,34 +578,23 @@ class Batch(WebContainer):
 
     _job_type = Job
 
-    def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
-        """Upload and run each simulation in :class:`Batch`.
+    def run(self, path_dir: str = DEFAULT_DATA_DIR, _from_autograd: bool = False) -> BatchData:
+        if not _from_autograd:
+            from .autograd.autograd import run_async as autograd_run_async
 
-        Parameters
-        ----------
-        path_dir : str
-            Base directory where data will be downloaded, by default current working directory.
-
-        Returns
-        ------
-        :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData] for
-            each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
-
-        Note
-        ----
-        A typical usage might look like:
-
-        >>> from tidy3d.web.api.container import Batch
-        >>> custom_batch = Batch()
-        >>> batch_data = custom_batch.run() # doctest: +SKIP
-        >>> for task_name, sim_data in batch_data.items(): # doctest: +SKIP
-        ...     # do something with data. # doctest: +SKIP
-
-        ``bach_data`` does not store all of the data objects in memory,
-        rather it iterates over the task names and loads the corresponding
-        data from file one by one. If no file exists for that task, it downloads it.
-        """
+            return autograd_run_async(
+                self.simulations,
+                folder_name=self.folder_name,
+                path_dir=path_dir,
+                callback_url=self.callback_url,
+                num_workers=self.num_workers,
+                verbose=self.verbose,
+                simulation_type=self.simulation_type,
+                parent_tasks=self.parent_tasks,
+                reduce_simulation=self.reduce_simulation,
+                pay_type=self.pay_type,
+                _from_batch=True,
+            )
         self._check_path_dir(path_dir)
         self.upload()
         self.start()
