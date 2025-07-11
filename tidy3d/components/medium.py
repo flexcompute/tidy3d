@@ -7036,8 +7036,8 @@ class Medium2D(AbstractMedium):
             )
         return val
 
-    @skip_if_fields_missing(["ss"])
     @pd.validator("tt", always=True)
+    @skip_if_fields_missing(["ss"])
     def _validate_inplane_pec(cls, val, values):
         """ss/tt components must be both PEC or non-PEC."""
         if isinstance(val, PECMedium) != isinstance(values["ss"], PECMedium):

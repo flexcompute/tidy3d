@@ -32,6 +32,7 @@ with fewer layers than recommended.
 - Fixed incorrect gradient computation in PyTorch plugin (`to_torch`) for functions returning multi-element arrays.
 - `MonitorData.get_amplitude()` no longers multiplies by a factor of `1j` and now directly returns the complex value of the data.
 - `EMESimulationData.port_modes_tuple` is now symmetry-expanded.
+- Fixed `Medium2D` validation error message when invalid data is passed to `ss`.
 
 ## [2.9.0rc1] - 2025-06-10
 
