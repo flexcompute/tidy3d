@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
 
+### Fixed
+- Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.
+
 ## [2.9.0] - 2025-08-04
 
 ### Added
