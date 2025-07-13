@@ -208,7 +208,7 @@ from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EM
 from .components.field_projection import FieldProjector
 
 # frequency conversion utilities
-from .components.frequencies import frequencies, wavelengths
+from .components.frequencies import FreqRange, frequencies, wavelengths
 
 # geometry
 from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
@@ -339,7 +339,6 @@ from .components.source.field import (
     ModeSource,
     PlaneWave,
 )
-from .components.source.freq_range import FreqRange
 
 # sources
 from .components.source.time import (
