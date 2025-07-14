@@ -343,7 +343,7 @@ jobs:
     # Run tests on a push event OR a workflow dispatch with remote_tests
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.remote_tests == 'true'
-    name: Python ${{ matrix.python-version }} - ${{ matrix.platform }}
+    name: python-${{ matrix.python-version }}-${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     permissions:
       contents: read
@@ -369,7 +369,7 @@ jobs:
         fetch-depth: 1
         submodules: false
 
-    - name: Install Poetry
+    - name: install-poetry
       uses: snok/install-poetry@v1
       with:
         version: 2.1.1
