@@ -153,7 +153,7 @@ jobs:
       - name: checkout-develop-branch
         uses: actions/checkout@v4
         with:
-          ref: 'develop' 
+          ref: develop 
           path: 'develop' 
 
       - name: install-depedencies
@@ -188,7 +188,7 @@ jobs:
           # The command exits with 0 if no changes, 1 if changes are found.
           # We use '|| true' to prevent the workflow from stopping here on failure.
           cd $GITHUB_WORKSPACE
-          ls
+          ls $GITHUB_WORKSPACE/develop
           diff_output=$(git diff --no-index --name-status $GITHUB_WORKSPACE/develop/tidy3d/schemas $GITHUB_WORKSPACE/pr/tidy3d/schemas || true)
 
           # Check if there are any changes
