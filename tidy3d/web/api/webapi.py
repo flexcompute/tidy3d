@@ -806,7 +806,7 @@ def load(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str
         Download path to .hdf5 data file (including filename).
-    replace_existing: bool = True
+    replace_existing : bool = True
         Downloads the data even if path exists (overwriting the existing).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
