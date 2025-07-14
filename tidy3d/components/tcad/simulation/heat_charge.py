@@ -889,7 +889,6 @@ class HeatChargeSimulation(AbstractSimulation):
             )
         return values
 
-    @skip_if_fields_missing(["analysis_spec", "monitors", "structures", "size"])
     @pd.root_validator(skip_on_failure=True)
     def check_transient_heat(cls, values):
         """Make sure transient heat simulations can run."""
