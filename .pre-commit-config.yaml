@@ -5,3 +5,12 @@ repos:
      - id: ruff-check
        args: [ --fix ]
      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: regenerate-schema
+        name: regenerate-schema
+        entry: python scripts/regenerate_schema.py
+        language: system
+        files: ^tidy3d/.*\.py$  # Run only when Python files in the core 'tidy3d' directory are modified.
+        stages: [pre-commit] # Explicitly run during the commit stage.

@@ -119,7 +119,7 @@ jobs:
   lint:
     needs: determine-test-scope
     if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
-    name: Run linting
+    name: verify-linting
     runs-on: ubuntu-latest 
     container: ghcr.io/astral-sh/uv:debian
     steps:
@@ -134,7 +134,102 @@ jobs:
         run: ruff format --check --diff
       - name: Run ruff check
         run: ruff check tidy3d
-  
+
+  verify-schema-change:
+    name: verify-schema-change
+    needs: determine-test-scope
+    if: (( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )) && (github.event_name == 'pull_request') 
+    runs-on: ubuntu-latest
+    container: ghcr.io/astral-sh/uv:debian
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: checkout-pr-branch
+        uses: actions/checkout@v4
+        with:
+          path: 'pr' 
+
+      - name: checkou-develop-branch
+        uses: actions/checkout@v4
+        with:
+          ref: 'develop' 
+          path: 'develop' 
+
+      - name: install-depedencies
+        run: |
+          uv venv $GITHUB_WORKSPACE/.venv -p 3.11
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          uv pip install -e "$GITHUB_WORKSPACE/pr"
+      
+      - name: get-tidy3d-version
+        id: get-version
+        run: |
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          version=$(python -c "import tidy3d; print(tidy3d.__version__)")
+          echo "tidy3d version is $version"
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: verify-committed-schema
+        run: |
+          echo "Regenerating schema to check if committed files are up-to-date..."
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          python $GITHUB_WORKSPACE/pr/scripts/regenerate_schema.py
+
+          echo "Checking for differences..."
+          cd pr
+          git diff --exit-code -- tidy3d/schemas
+          echo "✅ Committed schema is up-to-date."
+     
+      - name: run-schema-diff
+        id: schema-diff
+        run: |
+          # Use git diff to compare the two directories and get a list of changes
+          # The command exits with 0 if no changes, 1 if changes are found.
+          # We use '|| true' to prevent the workflow from stopping here on failure.
+          diff_output=$(git diff --no-index --name-status ./develop/tidy3d/schemas ./pr/tidy3d/schemas || true)
+
+          # Check if there are any changes
+          if [ -z "$diff_output" ]; then
+            echo "✅ Schemas are up-to-date."
+            echo "changed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # If there are changes, create a Markdown table
+          echo "❌ Schema has changed! Please regenerate and commit the changes."
+          echo "changed=true" >> $GITHUB_OUTPUT
+
+          # Write the report to the GitHub Step Summary
+          echo "### Schema Change Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | File |" >> $GITHUB_STEP_SUMMARY
+          echo "|:---:|:---|" >> $GITHUB_STEP_SUMMARY
+          
+          echo "$diff_output" | while read -r line; do
+            status_code=$(echo "$line" | cut -f1)
+            file_path=$(echo "$line" | cut -f2 | sed 's#pr/tidy3d/schemas/##') # Clean up path
+            
+            case $status_code in
+              "A") status="Added 🟢";;
+              "M") status="Modified 🟡";;
+              "D") status="Removed 🔴";;
+              *)   status="Unknown";;
+            esac
+            
+            echo "| $status | \`$file_path\` |" >> $GITHUB_STEP_SUMMARY
+          done
+      
+      - name: verify-allowed-changes
+        if: steps.schema-diff.outputs.changed == 'true'
+        run: |
+          version="${{ steps.get-version.outputs.version }}"
+          if [[ "$version" == *rc* ]]; then
+            echo "✅ Passing: Schema changed on a release candidate version ($version), which is permitted."
+          else
+            echo "❌ Failing: Schema changed on a non-rc release version ($version)."
+            exit 1
+          fi
+           
   local-tests:
     # Run on open PRs OR when manually triggered with local_tests=true
     needs: determine-test-scope
@@ -332,7 +427,7 @@ jobs:
       ( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
       ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
       ( needs.determine-test-scope.outputs.remote_tests == 'true' )
-    needs: [local-tests, remote-tests, lint]
+    needs: [local-tests, remote-tests, lint, verify-schema-change]
     runs-on: ubuntu-latest
     steps:
       - name: check-passing-remote-tests
@@ -342,6 +437,9 @@ jobs:
 
           if [[ "${{ needs.lint.result }}" != 'success' ]]; then
             echo "❌ Linting failed or was skipped."
+            exit 1
+          elif [[ "${{ needs.verify-schema-change.result }}" != 'success' ]]; then
+            echo "❌ verify-schema-change failed or was skipped."
             exit 1
           elif [[ "${{ needs.remote-tests.result }}" != 'success' ]]; then
             echo "❌ remote-tests failed or were skipped."
