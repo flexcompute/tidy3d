@@ -234,7 +234,7 @@ jobs:
     # Run on open PRs OR when manually triggered with local_tests=true
     needs: determine-test-scope
     if: needs.determine-test-scope.outputs.local_tests == 'true'
-    name: Python ${{ matrix.python-version }} - self-hosted-runner 
+    name: python-${{ matrix.python-version }}-self-hosted-runner 
     runs-on: [ slurm-runner, 4xcpu ]
     container: 
       image: ghcr.io/astral-sh/uv:debian
@@ -258,7 +258,7 @@ jobs:
         fetch-depth: 0 # Required 0 for diff report.
         submodules: false
 
-    - name: Install project
+    - name: install-project
       env:
         PYTHON_VERSION: ${{ matrix.python-version }}
       run: |
@@ -279,7 +279,7 @@ jobs:
         echo "Testing vtk is correctly installed."
         python -c "import vtk"
 
-    - name: Run tests with coverage
+    - name: run-tests-coverage
       env:
         PYTHONUNBUFFERED: "1"
       run: |
@@ -292,7 +292,7 @@ jobs:
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
-    - name: Produce the diff coverage report
+    - name: diff-coverage-report
       if: >- 
         matrix.python-version == '3.13' &&
         github.event_name == 'pull_request' &&
@@ -376,12 +376,12 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: set-python-${{ matrix.python-version }}
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Install project
+    - name: install-project
       run: |
         poetry --version
         poetry env use python
@@ -390,11 +390,11 @@ jobs:
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
 
-    - name: Run doctests
+    - name: run-doctests
       run: |
         poetry run pytest -rF --tb=short tidy3d
 
-    - name: Run tests with coverage
+    - name: run-tests-coverage
       env:
         PYTHONUNBUFFERED: "1"
       run: |
@@ -405,7 +405,7 @@ jobs:
         echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
         echo "### Total coverage: ${TOTAL_COVERAGE}%"
 
-    - name: "Create badge"
+    - name: create-badge
       if: ${{ github.ref == 'refs/heads/develop' }}
       # https://gist.githubusercontent.com/nedbat/8c6980f77988a327348f9b02bbaf67f5
       uses: schneegans/dynamic-badges-action@v1.7.0
@@ -423,10 +423,11 @@ jobs:
   pr-requirements-pass:
     name: pr-requirements-pass
     if: |
-      always() && 
-      ( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
+      always() &&
+      ((github.event_name == 'pull_request') || (github.event_name == 'pull_request_review'))  && 
+      (( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
       ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
-      ( needs.determine-test-scope.outputs.remote_tests == 'true' )
+      ( needs.determine-test-scope.outputs.remote_tests == 'true' ))
     needs: [local-tests, remote-tests, lint, verify-schema-change]
     runs-on: ubuntu-latest
     steps:
