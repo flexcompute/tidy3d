@@ -431,12 +431,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
         task_id = self.task_ids[task_name]
         web.get_info(task_id)
 
-        return web.load(
-            task_id=task_id,
-            path=task_data_path,
-            replace_existing=False,
-            verbose=False,
-        )
+        return web.load(task_id=task_id, path=task_data_path, verbose=False)
 
     def __getitem__(self, task_name: TaskName) -> SimulationDataType:
         """Get the simulation data object for a given ``task_name``."""
@@ -451,7 +446,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
         return len(self.task_paths)
 
     @classmethod
-    def load(cls, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
+    def load(cls, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> BatchData:
         """Load :class:`Batch` from file, download results, and load them.
 
         Parameters
@@ -459,6 +454,8 @@ class BatchData(Tidy3dBaseModel, Mapping):
         path_dir : str = './'
             Base directory where data will be downloaded, by default current working directory.
             A `batch.hdf5` file must be present in the directory.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing).
 
         Returns
         ------
@@ -469,7 +466,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
         batch_file = Batch._batch_path(path_dir=path_dir)
         batch = Batch.from_file(batch_file)
-        return batch.load(path_dir=path_dir)
+        return batch.load(path_dir=path_dir, replace_existing=replace_existing)
 
 
 class Batch(WebContainer):
@@ -606,7 +603,6 @@ class Batch(WebContainer):
         self.upload()
         self.start()
         self.monitor()
-        self.download(path_dir=path_dir)
         return self.load(path_dir=path_dir)
 
     @cached_property
@@ -900,13 +896,15 @@ class Batch(WebContainer):
         """
         return os.path.join(path_dir, "batch.hdf5")
 
-    def download(self, path_dir: str = DEFAULT_DATA_DIR) -> None:
+    def download(self, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> None:
         """Download results of each task.
 
         Parameters
         ----------
         path_dir : str = './'
             Base directory where data will be downloaded, by default the current working directory.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing).
 
         Note
         ----
@@ -919,17 +917,36 @@ class Batch(WebContainer):
         self._check_path_dir(path_dir=path_dir)
         self.to_file(self._batch_path(path_dir=path_dir))
 
+        num_existing = 0
+        for _, job in self.jobs.items():
+            job_path_str = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+            if os.path.exists(job_path_str):
+                num_existing += 1
+        if num_existing > 0:
+            files_plural = "files have" if num_existing > 1 else "file has"
+            log.warning(
+                f"{num_existing} {files_plural} already been downloaded "
+                f"and will be skipped. To forcibly overwrite existing files, invoke "
+                "the load or download function with `replace_existing=True`.",
+                log_once=True,
+            )
+
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             fns = []
             for task_name, job in self.jobs.items():
-                job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-
+                job_path_str = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+                if os.path.exists(job_path_str):
+                    if replace_existing:
+                        log.info(f"File '{job_path_str}' already exists. Overwriting.")
+                    else:
+                        log.info(f"File '{job_path_str}' already exists. Skipping.")
+                        continue
                 if "error" in job.status:
                     log.warning(f"Not downloading '{task_name}' as the task errored.")
                     continue
 
-                def fn(job=job, job_path=job_path) -> None:
-                    return job.download(path=job_path)
+                def fn(job=job, job_path_str=job_path_str) -> None:
+                    return job.download(path=job_path_str)
 
                 fns.append(fn)
 
@@ -951,13 +968,15 @@ class Batch(WebContainer):
                         completed += 1
                         progress.update(pbar, completed=completed)
 
-    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
+    def load(self, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> BatchData:
         """Download results and load them into :class:`.BatchData` object.
 
         Parameters
         ----------
         path_dir : str = './'
             Base directory where data will be downloaded, by default current working directory.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing).
 
         Returns
         ------
@@ -969,7 +988,7 @@ class Batch(WebContainer):
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
         self._check_path_dir(path_dir=path_dir)
-        self.to_file(self._batch_path(path_dir=path_dir))
+        self.download(path_dir=path_dir, replace_existing=replace_existing)
 
         if self.jobs is None:
             raise DataError("Can't load batch results, hasn't been uploaded.")
