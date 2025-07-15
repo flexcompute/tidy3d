@@ -1,12 +1,14 @@
 # utilities for autograd derivative passing
 from __future__ import annotations
 
+import typing
+
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
+from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.types import ArrayLike, Bound, tidycomplex
 from tidy3d.constants import LARGE_NUMBER
 
@@ -136,14 +138,14 @@ class DerivativeInfo(Tidy3dBaseModel):
         "Used for automatically computing permittivity inside or outside of a simple geometry.",
     )
 
-    eps_in: tidycomplex = pd.Field(
+    eps_in: typing.Union[tidycomplex, FreqDataArray] = pd.Field(
         title="Permittivity Inside",
         description="Permittivity inside of the ``Structure``. "
         "Typically computed from ``Structure.medium.eps_model``."
         "Used when it can not be computed from ``eps_data`` or when ``eps_approx==True``.",
     )
 
-    eps_out: tidycomplex = pd.Field(
+    eps_out: typing.Union[tidycomplex, FreqDataArray] = pd.Field(
         ...,
         title="Permittivity Outside",
         description="Permittivity outside of the ``Structure``. "
@@ -151,7 +153,7 @@ class DerivativeInfo(Tidy3dBaseModel):
         "Used when it can not be computed from ``eps_data`` or when ``eps_approx==True``.",
     )
 
-    eps_background: tidycomplex = pd.Field(
+    eps_background: typing.Union[tidycomplex, FreqDataArray] = pd.Field(
         None,
         title="Permittivity in Background",
         description="Permittivity outside of the ``Structure`` as manually specified by. "
@@ -171,13 +173,13 @@ class DerivativeInfo(Tidy3dBaseModel):
         "structure and the simulation it is contained in.",
     )
 
-    frequency: float = pd.Field(
+    frequencies: ArrayLike = pd.Field(
         ...,
-        title="Frequency of adjoint simulation",
-        description="Frequency at which the adjoint gradient is computed.",
+        title="Adjoint Gradient Frequencies",
+        description="Frequencies at which the adjoint gradient should be computed.",
     )
 
-    eps_no_structure: SpatialDataArray = pd.Field(
+    eps_no_structure: ScalarFieldDataArray = pd.Field(
         None,
         title="Permittivity Without Structure",
         description="The permittivity of the original simulation without the structure that is "
@@ -185,7 +187,7 @@ class DerivativeInfo(Tidy3dBaseModel):
         "structure for shape optimization.",
     )
 
-    eps_inf_structure: SpatialDataArray = pd.Field(
+    eps_inf_structure: ScalarFieldDataArray = pd.Field(
         None,
         title="Permittivity With Infinite Structure",
         description="The permittivity of the original simulation where the structure being "
@@ -251,16 +253,20 @@ class DerivativeInfo(Tidy3dBaseModel):
 
         # compute the E and D fields at the edge centers
         E_fwd_at_coords = self.evaluate_flds_at(
-            fld_dataset=E_fwd, spatial_coords=spatial_coords, freq=self.frequency
+            fld_dataset=E_fwd,
+            spatial_coords=spatial_coords,
         )
         E_adj_at_coords = self.evaluate_flds_at(
-            fld_dataset=E_adj, spatial_coords=spatial_coords, freq=self.frequency
+            fld_dataset=E_adj,
+            spatial_coords=spatial_coords,
         )
         D_fwd_at_coords = self.evaluate_flds_at(
-            fld_dataset=D_fwd, spatial_coords=spatial_coords, freq=self.frequency
+            fld_dataset=D_fwd,
+            spatial_coords=spatial_coords,
         )
         D_adj_at_coords = self.evaluate_flds_at(
-            fld_dataset=D_adj, spatial_coords=spatial_coords, freq=self.frequency
+            fld_dataset=D_adj,
+            spatial_coords=spatial_coords,
         )
 
         # project the relevant field quantities into their respective basis for gradient calculation
@@ -294,7 +300,7 @@ class DerivativeInfo(Tidy3dBaseModel):
             contrib_E = E_der * delta_eps
             vjps += contrib_E
 
-        return surface_mesh.areas * vjps
+        return (surface_mesh.areas * vjps).sum("f")
 
     def evaluate_eps(
         self,
@@ -312,7 +318,6 @@ class DerivativeInfo(Tidy3dBaseModel):
         eps_out = self.evaluate_flds_at(
             fld_dataset={key: permittivity_array},
             spatial_coords=spatial_coords,
-            freq=self.frequency,
         )[key]
         return eps_out.values
 
@@ -320,7 +325,6 @@ class DerivativeInfo(Tidy3dBaseModel):
     def evaluate_flds_at(
         fld_dataset: dict[str, ScalarFieldDataArray],
         spatial_coords: np.ndarray,  # (N, 3)
-        freq: float,
     ) -> dict[str, ScalarFieldDataArray]:
         """Compute the value of an dict with keys Ex, Ey, Ez at a set of spatial locations."""
 
@@ -333,19 +337,27 @@ class DerivativeInfo(Tidy3dBaseModel):
         n_points = coords.shape[0]
 
         for fld_name, arr in fld_dataset.items():
-            data = arr.sel(f=freq).values if "f" in arr.dims else arr.values
-            points = tuple(arr.coords[dim].values for dim in "xyz")
+            components_by_freq = []
+            for freq in arr.coords["f"]:
+                data = arr.sel(f=freq).values
+                points = tuple(arr.coords[dim].values for dim in "xyz")
 
-            interpolator = RegularGridInterpolator(
-                points, data, method="linear", bounds_error=False, fill_value=None
-            )
-            result = interpolator(coords)
+                interpolator = RegularGridInterpolator(
+                    points, data, method="linear", bounds_error=False, fill_value=None
+                )
+                result = interpolator(coords)
 
-            components[fld_name] = xr.DataArray(
-                result,
-                coords={edge_index_dim: np.arange(n_points)},
-                dims=[edge_index_dim],
-                name=fld_name,
+                components_by_freq.append(
+                    xr.DataArray(
+                        result,
+                        coords={edge_index_dim: np.arange(n_points)},
+                        dims=[edge_index_dim],
+                        name=fld_name,
+                    )
+                )
+
+            components[fld_name] = xr.concat(components_by_freq, dim="f").assign_coords(
+                f=arr.coords["f"]
             )
 
         return components

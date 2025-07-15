@@ -285,7 +285,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         # compute number of points in the circumference of the polyslab using resolution info
         wvl0 = C_0 / derivative_info.frequency
-        wvl_mat = wvl0 / max(1.0, np.sqrt(abs(derivative_info.eps_in)))
+        wvl_mat = wvl0 / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
 
         circumference = 2 * np.pi * self.radius
         wvls_in_circumference = circumference / wvl_mat
