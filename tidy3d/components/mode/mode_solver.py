@@ -11,8 +11,6 @@ from typing import Literal, Optional, Union, get_args
 import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
-from matplotlib.collections import PatchCollection
-from matplotlib.patches import Rectangle
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
@@ -2394,6 +2392,10 @@ class ModeSolver(Tidy3dBaseModel):
         cls, simulation: Simulation, plane: Box, mode_spec: ModeSpec, ax: Ax = None
     ) -> Ax:
         """Plot the mode plane absorbing boundaries."""
+
+        from matplotlib.collections import PatchCollection
+        from matplotlib.patches import Rectangle
+
         # Get the mode plane normal axis, center, and limits.
         _, h_lim, v_lim, _ = cls._center_and_lims(simulation=simulation, plane=plane)
 

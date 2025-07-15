@@ -3,9 +3,6 @@ from __future__ import annotations
 from functools import wraps
 from typing import Optional
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-
 from tidy3d.components.types import Ax, Axis, LengthUnit
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
@@ -13,6 +10,8 @@ from tidy3d.exceptions import Tidy3dKeyError
 
 def make_ax() -> Ax:
     """makes an empty ``ax``."""
+    import matplotlib.pyplot as plt
+
     _, ax = plt.subplots(1, 1, tight_layout=True)
     return ax
 
@@ -60,6 +59,9 @@ def set_default_labels_and_title(
     When the ``plot_length_units`` are specified, the plot axes are scaled, and
     the title and axis labels include the desired units.
     """
+
+    import matplotlib.ticker as ticker
+
     xlabel = axis_labels[0]
     ylabel = axis_labels[1]
     if plot_length_units is not None:
