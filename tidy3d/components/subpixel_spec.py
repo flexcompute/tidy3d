@@ -1,7 +1,7 @@
 # Defines specifications for subpixel averaging
 from __future__ import annotations
 
-from typing import Union
+from typing import Literal, Union
 
 import pydantic.v1 as pd
 
@@ -15,8 +15,8 @@ DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL = 0.3
 DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL = 0.0
 
 
-class AbstractSubpixelAveragingMethod(Tidy3dBaseModel):
-    """Base class defining how to handle material assignment on structure interfaces."""
+class AbstractYeeCellDiscretizationMethod(Tidy3dBaseModel):
+    """Base class defining how to handle material assignment in a Yee Cell."""
 
     @cached_property
     def courant_ratio(self) -> float:
@@ -26,7 +26,25 @@ class AbstractSubpixelAveragingMethod(Tidy3dBaseModel):
         return 1.0
 
 
-class Staircasing(AbstractSubpixelAveragingMethod):
+class AbstractSubpixelAveragingMethod(AbstractYeeCellDiscretizationMethod):
+    """Base class defining how material properties are averaged in a voxel around the grid point."""
+
+    voxel_size_comp: Literal[1, 2] = pd.Field(
+        1,
+        title="Voxel Size Along Component Direction",
+        description="Voxel size along component direction for performing subpixel averaging, "
+        "in unit of local grid step size.",
+    )
+
+    voxel_size_trans: Literal[1, 2] = pd.Field(
+        1,
+        title="Voxel Size Along Transverse Direction",
+        description="Voxel size along transverse direction for performing subpixel averaging, "
+        "in unit of local grid step size.",
+    )
+
+
+class Staircasing(AbstractYeeCellDiscretizationMethod):
     """Apply staircasing scheme to material assignment of Yee grids on structure boundaries.
 
     Note
@@ -86,13 +104,13 @@ class VolumetricAveraging(AbstractSubpixelAveragingMethod):
 MetalSubpixelType = Union[Staircasing, VolumetricAveraging]
 
 
-class HeuristicPECStaircasing(AbstractSubpixelAveragingMethod):
+class HeuristicPECStaircasing(AbstractYeeCellDiscretizationMethod):
     """Apply a variant of staircasing scheme to PEC boundaries: the electric field grid is set to PEC
     if the field is substantially parallel to the interface.
     """
 
 
-class PECConformal(AbstractSubpixelAveragingMethod):
+class PECConformal(AbstractYeeCellDiscretizationMethod):
     """Apply a subpixel averaging method known as conformal mesh scheme to PEC boundaries.
 
     Note
