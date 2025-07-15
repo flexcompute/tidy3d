@@ -211,6 +211,30 @@ class ModeSolver(Tidy3dBaseModel):
             raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
         return val
 
+    @pydantic.validator("plane", always=True)
+    @skip_if_fields_missing(["simulation"])
+    def _warn_plane_crosses_symmetry(cls, val, values):
+        """Warn if the mode plane crosses the symmetry plane of the underlying simulation but
+        the centers do not match."""
+        simulation = values.get("simulation")
+        bounds = val.bounds
+        # now check in each dimension whether we cross symmetry plane
+        for dim in range(3):
+            if simulation.symmetry[dim] != 0:
+                crosses_symmetry = (
+                    bounds[0][dim] < simulation.center[dim]
+                    and bounds[1][dim] > simulation.center[dim]
+                )
+                if crosses_symmetry:
+                    if not isclose(val.center[dim], simulation.center[dim]):
+                        log.warning(
+                            f"The original simulation is symmetric along {'xyz'[dim]} direction. "
+                            "The mode simulation region does cross the symmetry plane but is "
+                            "not symmetric with respect to it. To preserve correct symmetry, "
+                            "the requested simulation region will be expanded by the solver."
+                        )
+        return val
+
     def _post_init_validators(self) -> None:
         self._validate_mode_plane_radius(
             mode_spec=self.mode_spec,
@@ -2093,6 +2117,9 @@ class ModeSolver(Tidy3dBaseModel):
     def plot(
         self,
         ax: Ax = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -2101,6 +2128,12 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
 
         Returns
         -------
@@ -2115,20 +2148,26 @@ class ModeSolver(Tidy3dBaseModel):
 
         """
         # Get the mode plane normal axis, center, and limits.
-        a_center, h_lim, v_lim, _ = self._center_and_lims(
+        a_center, hlim_plane, vlim_plane, _ = self._center_and_lims(
             simulation=self.simulation, plane=self.plane
         )
+
+        if hlim is None:
+            hlim = hlim_plane
+        if vlim is None:
+            vlim = vlim_plane
 
         ax = self.simulation.plot(
             x=a_center[0],
             y=a_center[1],
             z=a_center[2],
-            hlim=h_lim,
-            vlim=v_lim,
+            hlim=hlim,
+            vlim=vlim,
             source_alpha=0,
             monitor_alpha=0,
             lumped_element_alpha=0,
             ax=ax,
+            fill_structures=fill_structures,
             **patch_kwargs,
         )
 
@@ -2539,6 +2578,7 @@ class ModeSolver(Tidy3dBaseModel):
             region=new_sim_box,
             monitors=[],
             sources=[],
+            warn_symmetry_expansion=False,  # we already warn upon mode solver creation
             grid_spec="identical",
             boundary_spec=new_bspec,
             remove_outside_custom_mediums=True,

@@ -1701,6 +1701,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundary_spec: BoundarySpec = None,
         grid_spec: Union[GridSpec, Literal["identical"]] = None,
         symmetry: Optional[tuple[Symmetry, Symmetry, Symmetry]] = None,
+        warn_symmetry_expansion: bool = True,
         sources: Optional[tuple[SourceType, ...]] = None,
         monitors: Optional[tuple[MonitorType, ...]] = None,
         remove_outside_structures: bool = True,
@@ -1728,6 +1729,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             New simulation symmetry. If ``None``, then it is inherited from the original
             simulation. Note that in this case the size and placement of new simulation domain
             must be commensurate with the original symmetry.
+        warn_symmetry_expansion : bool = True
+            Whether to warn when the subsection is expanded to preserve symmetry.
         sources : Tuple[SourceType, ...] = None
             New list of sources. If ``None``, then the sources intersecting the new simulation
             domain are inherited from the original simulation.
@@ -1805,12 +1808,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                         center = (new_bounds[0][dim] + new_bounds[1][dim]) / 2
 
                         if not math.isclose(center, self.center[dim]):
-                            log.warning(
-                                f"The original simulation is symmetric along {'xyz'[dim]} direction. "
-                                "The requested new simulation region does cross the symmetry plane but is "
-                                "not symmetric with respect to it. To preserve correct symmetry, "
-                                "the requested simulation region is expanded symmetrically."
-                            )
+                            if warn_symmetry_expansion:
+                                log.warning(
+                                    f"The original simulation is symmetric along {'xyz'[dim]} direction. "
+                                    "The requested new simulation region does cross the symmetry plane but is "
+                                    "not symmetric with respect to it. To preserve correct symmetry, "
+                                    "the requested simulation region is expanded symmetrically."
+                                )
                             new_bounds[0][dim] = 2 * self.center[dim] - new_bounds[1][dim]
 
         # symmetry and grid spec treatments could change new simulation bounds

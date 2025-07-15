@@ -176,6 +176,8 @@ def get_mode_sim():
 def test_mode_sim():
     with AssertLogLevel(None):
         sim = get_mode_sim()
+        _ = sim.plot(ax=AX)
+        _ = sim.plot(ax=AX, fill_structures=False, hlim=(-1, 1), vlim=(-1, 1))
         _ = sim.plot(y=0, ax=AX)
         _ = sim.plot_mode_plane(ax=AX)
         _ = sim.plot_eps_mode_plane(ax=AX)
@@ -328,3 +330,54 @@ def get_mode_sim_data():
 def test_mode_sim_data():
     sim_data = get_mode_sim_data()
     _ = sim_data.plot_field("Ey", ax=AX, mode_index=0, f=FS[0])
+
+
+def test_plane_crosses_symmetry_plane_warning(monkeypatch):
+    """Test that a warning is issued if the mode plane crosses a symmetry plane but the centers do not match."""
+
+    # Simulation with symmetry in x (axis 0), center at (0, 0, 0)
+    sim_center = (0, 0, 0)
+    sim_size = (10, 5, 5)
+    sim_symmetry = (1, 0, 0)  # symmetry in x
+
+    # Plane crosses x=0 (symmetry plane), but plane center != sim center
+    plane_center = (2, 0, 0)
+    plane_size = (5, 0, 5)
+    plane = td.Box(center=plane_center, size=plane_size)
+
+    # Should warn
+    with AssertLogLevel("WARNING"):
+        _ = td.ModeSimulation(
+            center=sim_center,
+            size=sim_size,
+            symmetry=sim_symmetry,
+            plane=plane,
+            mode_spec=td.ModeSpec(),
+            freqs=[td.C_0],
+        )
+
+    # Now, plane center matches sim center: should NOT warn
+    plane_center2 = (0, 0, 0)
+    plane2 = td.Box(center=plane_center2, size=plane_size)
+    with AssertLogLevel("INFO"):
+        _ = td.ModeSimulation(
+            center=sim_center,
+            size=sim_size,
+            symmetry=sim_symmetry,
+            plane=plane2,
+            mode_spec=td.ModeSpec(),
+            freqs=[td.C_0],
+        )
+
+    # Plane does NOT cross symmetry plane: should NOT warn
+    plane_center3 = (5, 0, 0)
+    plane3 = td.Box(center=plane_center3, size=plane_size)
+    with AssertLogLevel("INFO"):
+        _ = td.ModeSimulation(
+            center=sim_center,
+            size=sim_size,
+            symmetry=sim_symmetry,
+            plane=plane3,
+            mode_spec=td.ModeSpec(),
+            freqs=[td.C_0],
+        )
