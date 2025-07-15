@@ -199,6 +199,20 @@ class SubpixelSpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    voxel_size_comp: Literal[1, 2] = pd.Field(
+        1,
+        title="Voxel Size Along Component Direction",
+        description="Voxel size along component direction for performing subpixel averaging, "
+        "in unit of local grid step size.",
+    )
+
+    voxel_size_trans: Literal[1, 2] = pd.Field(
+        1,
+        title="Voxel Size Along Transverse Direction",
+        description="Voxel size along transverse direction for performing subpixel averaging, "
+        "in unit of local grid step size.",
+    )
+
     @classmethod
     def staircasing(cls) -> SubpixelSpec:
         """Apply staircasing on all material boundaries."""
