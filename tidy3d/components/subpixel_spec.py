@@ -18,6 +18,12 @@ DEFAULT_COURANT_REDUCTION_SIBC_CONFORMAL = 0.0
 class AbstractSubpixelAveragingMethod(Tidy3dBaseModel):
     """Base class defining how to handle material assignment on structure interfaces."""
 
+    enlarged_volume: bool = pd.Field(
+        False,
+        title="Enlarged Control Volume",
+        description="Enlarged control volume.",
+    )
+
     @cached_property
     def courant_ratio(self) -> float:
         """The scaling ratio applied to Courant number so that the courant number
