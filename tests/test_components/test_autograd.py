@@ -2321,10 +2321,16 @@ def test_sim_traced_center_size(use_emulated_run):
         sim_data = run_emulated(sim, task_name="adjoint_test")
         return postprocess(sim_data)
 
-    with AssertLogLevel("WARNING", contains_str="autograd tracer"):
+    with (
+        AssertLogLevel("WARNING", contains_str="autograd tracer"),
+        pytest.warns(UserWarning, match="Output seems independent of input."),
+    ):
         grad = ag.grad(objective, argnum=0)(base_sim.center, base_sim.size)
 
-    with AssertLogLevel("WARNING", contains_str="autograd tracer"):
+    with (
+        AssertLogLevel("WARNING", contains_str="autograd tracer"),
+        pytest.warns(UserWarning, match="Output seems independent of input."),
+    ):
         grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
 
 

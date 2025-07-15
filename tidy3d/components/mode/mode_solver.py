@@ -1619,15 +1619,25 @@ class ModeSolver(Tidy3dBaseModel):
         if not np.all(np.isfinite(array)):  # make sure the array is valid
             return 0, 0
 
-        m = array * u.reshape(-1, 1)
-        i = np.arange(array.shape[0])
-        i = (m * i.reshape(-1, 1)).sum() / m.sum()
-        i = int(0.5 + i) if np.isfinite(i) else 0  # in case m.sum() ~ 0
+        m_i = array * u.reshape(-1, 1)
+        total_weight_i = m_i.sum()
 
-        m = array * v
-        j = np.arange(array.shape[1])
-        j = (m * j).sum() / m.sum()
-        j = int(0.5 + j) if np.isfinite(j) else 0
+        if total_weight_i == 0:
+            i = 0
+        else:
+            indices_i = np.arange(array.shape[0])
+            weighted_sum = (m_i * indices_i.reshape(-1, 1)).sum()
+            i = int(0.5 + weighted_sum / total_weight_i)
+
+        m_j = array * v
+        total_weight_j = m_j.sum()
+
+        if total_weight_j == 0:
+            j = 0
+        else:
+            indices_j = np.arange(array.shape[1])
+            weighted_sum = (m_j * indices_j).sum()
+            j = int(0.5 + weighted_sum / total_weight_j)
 
         return i, j
 

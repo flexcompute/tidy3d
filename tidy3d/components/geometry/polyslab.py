@@ -634,7 +634,7 @@ class PolySlab(base.Planar):
         section = mesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
             return []
-        path, _ = section.to_planar(to_2D=to_2D)
+        path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
     def _intersections_normal(self, z: float):

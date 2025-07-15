@@ -675,5 +675,5 @@ class TriangularGridDataset(UnstructuredGridDataset):
         v0 = self.points[self.cells.sel(vertex_index=0)]
         e01 = self.points[self.cells.sel(vertex_index=1)] - v0
         e02 = self.points[self.cells.sel(vertex_index=2)] - v0
-
-        return 0.5 * np.abs(np.cross(e01, e02))
+        areas = e01[:, 0] * e02[:, 1] - e01[:, 1] * e02[:, 0]
+        return 0.5 * np.abs(areas)

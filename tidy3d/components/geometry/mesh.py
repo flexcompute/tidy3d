@@ -550,7 +550,7 @@ class TriangleMesh(base.Geometry, ABC):
         section = self.trimesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
             return []
-        path, _ = section.to_planar(to_2D=to_2D)
+        path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
     def intersections_plane(
@@ -603,7 +603,7 @@ class TriangleMesh(base.Geometry, ABC):
             permutation = self.unpop_axis(identity[2], identity[0:2], axis=axis)
             mapping[:3, :3] = np.array(permutation).T
 
-            section2d, _ = section.to_planar(to_2D=mapping)
+            section2d, _ = section.to_2D(to_2D=mapping)
             return list(section2d.polygons_full)
 
         except ValueError as e:

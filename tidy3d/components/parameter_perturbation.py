@@ -6,10 +6,6 @@ import functools
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
 
-try:
-    import matplotlib.pyplot as plt
-except ImportError:
-    pass
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
@@ -590,7 +586,7 @@ class ChargePerturbation(AbstractPerturbation):
         else:
             e_mesh, h_mesh = np.meshgrid(electron_density, hole_density, indexing="ij")
             pc = ax.pcolormesh(e_mesh, h_mesh, values, shading="gouraud")
-            plt.colorbar(pc, ax=ax)
+            ax.figure.colorbar(pc, ax=ax)
             ax.set_xlabel("electron density (1/cm^3)")
             ax.set_ylabel("hole density (1/cm^3)")
 

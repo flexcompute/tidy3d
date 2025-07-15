@@ -1140,7 +1140,7 @@ def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, fiel
 
 def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
     """Emulates a simulation run."""
-    from scipy.ndimage.filters import gaussian_filter
+    from scipy.ndimage import gaussian_filter
 
     x = kwargs.get("x0", 1.0)
 

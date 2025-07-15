@@ -383,6 +383,13 @@ class Scene(Tidy3dBaseModel):
         if vlim[0] > vlim[1]:
             raise Tidy3dError("Error: 'vmin' > 'vmax'")
 
+        if hlim[0] == hlim[1]:
+            margin = 0.1 * abs(hlim[0]) if hlim[0] != 0 else 0.05
+            hlim = (hlim[0] - margin, hlim[1] + margin)
+        if vlim[0] == vlim[1]:
+            margin = 0.1 * abs(vlim[0]) if vlim[0] != 0 else 0.05
+            vlim = (vlim[0] - margin, vlim[1] + margin)
+
         return hlim, vlim
 
     @equal_aspect
