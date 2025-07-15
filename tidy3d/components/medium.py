@@ -129,7 +129,19 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         # don't warn for evaluating infinite frequency
         if is_inf_scalar:
             return eps_model(self, frequency)
-        if np.any(frequency < fmin * (1 - fp_eps)) or np.any(frequency > fmax * (1 + fp_eps)):
+
+        outside_lower = np.zeros_like(frequency, dtype=bool)
+        outside_upper = np.zeros_like(frequency, dtype=bool)
+
+        if fmin > 0:
+            outside_lower = frequency / fmin < 1 - fp_eps
+        elif fmin == 0:
+            outside_lower = frequency < 0
+
+        if fmax > 0:
+            outside_upper = frequency / fmax > 1 + fp_eps
+
+        if np.any(outside_lower | outside_upper):
             log.warning(
                 "frequency passed to 'Medium.eps_model()'"
                 f"is outside of 'Medium.frequency_range' = {self.frequency_range}",

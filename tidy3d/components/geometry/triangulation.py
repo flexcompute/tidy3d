@@ -60,9 +60,11 @@ def update_convexity(vertices: list[Vertex], i: int) -> int:
     """
     result = -1 if vertices[i].convexity == 0.0 else 0
     j = (i + 1) % len(vertices)
-    vertices[i].convexity = np.cross(
-        vertices[i].coordinate - vertices[i - 1].coordinate,
-        vertices[j].coordinate - vertices[i].coordinate,
+    vertices[i].convexity = np.linalg.det(
+        [
+            vertices[i].coordinate - vertices[i - 1].coordinate,
+            vertices[j].coordinate - vertices[i].coordinate,
+        ]
     )
     if vertices[i].convexity == 0.0:
         result += 1
@@ -87,7 +89,8 @@ def is_inside(
         Flag indicating if the vertex is inside the triangle.
     """
     return all(
-        np.cross(triangle[i] - triangle[i - 1], vertex - triangle[i - 1]) > 0 for i in range(3)
+        np.linalg.det([triangle[i] - triangle[i - 1], vertex - triangle[i - 1]]) > 0
+        for i in range(3)
     )
 
 
