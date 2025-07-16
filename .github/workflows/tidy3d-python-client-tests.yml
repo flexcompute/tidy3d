@@ -1,6 +1,7 @@
 name: "public/tidy3d/python-client-tests"
 
 on:
+  merge_group:
   workflow_dispatch:
     inputs:
       remote_tests:
@@ -12,7 +13,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [ develop, latest , 'pre/*']
+    branches: [ develop, latest ]
   pull_request:
     branches:
       - latest
@@ -103,6 +104,11 @@ jobs:
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
               local_tests=true
               [[ "$APPROVED" == "true" ]] && remote_tests=true
+          fi
+
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+              local_tests=true
+              remote_tests=true
           fi
 
           # If it's a push to develop
