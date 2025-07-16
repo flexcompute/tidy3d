@@ -39,6 +39,7 @@ from .boundary import (
     PECBoundary,
     Periodic,
     PMCBoundary,
+    PortAbsorber,
     StablePML,
 )
 from .data.data_array import (
@@ -49,7 +50,7 @@ from .data.dataset import Dataset
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
 from .data.utils import CustomSpatialDataType
-from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
+from .geometry.base import Box, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
@@ -127,6 +128,7 @@ from .viz import (
     PlotParams,
     add_ax_if_none,
     equal_aspect,
+    plot_params_abc,
     plot_params_bloch,
     plot_params_override_structures,
     plot_params_pec,
@@ -178,7 +180,7 @@ RF_FREQ_WARNING = 300e9
 
 # length and thickness of optional PEC frames around mode sources (in cells)
 MODE_PEC_FRAME_LENGTH = 2
-MODE_PEC_FRAME_THICKNESS = 1e-3
+MODE_PEC_FRAME_THICKNESS = 1e-5
 
 
 def validate_boundaries_for_zero_dims(warn_on_change: bool = True):
@@ -306,23 +308,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         "``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` "
         ", or ``False`` to apply staircasing.",
     )
-
-    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = (
-        pydantic.Field(
-            "tidy3d",
-            title="Simulation Type",
-            description="Tag used internally to distinguish types of simulations for "
-            "``autograd`` gradient processing.",
-        )
-    )
-
-    post_norm: Union[float, FreqDataArray] = pydantic.Field(
-        1.0,
-        title="Post Normalization Values",
-        description="Factor to multiply the fields by after running, "
-        "given the adjoint source pipeline used. Note: this is used internally only.",
-    )
-
     """
     Supply :class:`SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
     PEC material interfaces. Alternatively, supply ``True`` to use default subpixel averaging methods,
@@ -366,6 +351,28 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
         *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
     """
+
+    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = (
+        pydantic.Field(
+            "tidy3d",
+            title="Simulation Type",
+            description="Tag used internally to distinguish types of simulations for "
+            "``autograd`` gradient processing.",
+        )
+    )
+
+    post_norm: Union[float, FreqDataArray] = pydantic.Field(
+        1.0,
+        title="Post Normalization Values",
+        description="Factor to multiply the fields by after running, "
+        "given the adjoint source pipeline used. Note: this is used internally only.",
+    )
+
+    absorbers: tuple[PortAbsorber, ...] = pydantic.Field(
+        (),
+        title="Inner Absorbers",
+        description="Inner absorbers.",
+    )
 
     @pydantic.validator("simulation_type", always=True)
     def _validate_simulation_type_tidy3d(cls, val):
@@ -454,6 +461,64 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     @equal_aspect
     @add_ax_if_none
+    def plot_absorbers(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        alpha: Optional[float] = None,
+        ax: Ax = None,
+        shifted: bool = False,
+    ) -> Ax:
+        """Plot each of simulation's inner absorbers on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the absorbers, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        for absorber in self.absorbers:
+            if shifted:
+                absorber_to_plot = self._shift_object(
+                    obj=absorber,
+                    axis=absorber._normal_axis,
+                    direction=absorber.direction,
+                    shift=absorber.shift,
+                )
+            else:
+                absorber_to_plot = absorber
+            ax = absorber_to_plot.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
     def plot(
         self,
         x: Optional[float] = None,
@@ -463,6 +528,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
         lumped_element_alpha: Optional[float] = None,
+        absorber_alpha: Optional[float] = None,
+        absorber_actual_placement: bool = False,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
@@ -520,6 +587,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         )
 
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_absorbers(
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            alpha=absorber_alpha,
+            shifted=absorber_actual_placement,
+        )
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_lumped_elements(
             ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
@@ -545,6 +622,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
         lumped_element_alpha: Optional[float] = None,
+        absorber_alpha: Optional[float] = None,
+        absorber_actual_placement: bool = False,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         ax: Ax = None,
@@ -628,6 +707,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             eps_lim=eps_lim,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_absorbers(
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            alpha=absorber_alpha,
+            shifted=absorber_actual_placement,
+        )
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_lumped_elements(
             ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
@@ -1123,6 +1212,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 plot_params = plot_params_pmc.copy(deep=True)
             elif isinstance(boundary_edge, BlochBoundary):
                 plot_params = plot_params_bloch.copy(deep=True)
+            elif isinstance(boundary_edge, (ABCBoundary, ModeABCBoundary)):
+                plot_params = plot_params_abc.copy(deep=True)
             else:
                 plot_params = PlotParams(alpha=0)
 
@@ -1969,6 +2060,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             symmetry=symmetry,
             structures=aux_new_structures,
             lumped_elements=new_lumped_elements,
+            absorbers=[],
             **kwargs,
         )
 
@@ -1982,6 +2074,58 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     def _invalidate_solver_cache(self) -> None:
         """Clear cached attributes that become stale when subpixel changes."""
         self._cached_properties.pop("_mode_solver", None)
+
+    def _shift_value_signed(self, obj, direction, shift) -> float:
+        """How far (signed) to shift the source from the monitor."""
+
+        # get the grid boundaries and sizes along port normal from the simulation
+        normal_axis = obj._normal_axis
+        grid_boundaries = self.grid.boundaries.to_list[normal_axis]
+        grid_centers = self.grid.centers.to_list[normal_axis]
+
+        # get the index of the grid cell where the port lies
+        port_position = obj.center[normal_axis]
+        port_pos_gt_grid_bounds = np.argwhere(port_position > grid_boundaries)
+
+        # no port index can be determined
+        if len(port_pos_gt_grid_bounds) == 0:
+            raise SetupError(f"Port position '{port_position}' outside of simulation bounds.")
+        port_index = port_pos_gt_grid_bounds[-1]
+
+        # shift the port to the left
+        signed_shift = shift if direction == "+" else -shift
+        if signed_shift < 0:
+            shifted_index = port_index + signed_shift
+            if shifted_index < 0 or grid_centers[shifted_index] <= self.bounds[0][normal_axis]:
+                raise SetupError(
+                    # f"Port {port.name} normal is less than 2 cells to the boundary "
+                    f"on -{'xyz'[normal_axis]} side. "
+                    "Please either increase the mesh resolution near the port or "
+                    "move the port away from the boundary."
+                )
+
+        # shift the port to the right
+        else:
+            shifted_index = port_index + signed_shift
+            if (
+                shifted_index >= len(grid_centers)
+                or grid_centers[shifted_index] >= self.bounds[1][normal_axis]
+            ):
+                raise SetupError(
+                    # f"Port {port.name} normal is tless than 2 cells to the boundary "
+                    f"on +{'xyz'[normal_axis]} side."
+                    "Please either increase the mesh resolution near the port or "
+                    "move the port away from the boundary."
+                )
+
+        new_pos = grid_centers[shifted_index]
+        return new_pos - port_position
+
+    def _shift_object(self, obj, axis, direction, shift) -> float:
+        shift = self._shift_value_signed(obj, direction, shift)
+        new_center = np.array(obj.center)
+        new_center[axis] += shift
+        return obj.updated_copy(center=tuple(new_center))
 
 
 class Simulation(AbstractYeeGridSimulation):
@@ -2914,7 +3058,7 @@ class Simulation(AbstractYeeGridSimulation):
         ]
 
     @pydantic.root_validator()
-    @skip_if_fields_missing(["sources", "structures", "medium", "monitors"], root=True)
+    @skip_if_fields_missing(["sources", "structures", "medium", "monitors", "absorbers"], root=True)
     def check_fixed_angle_components(cls, values):
         """Error if a fixed-angle plane wave is combined with other sources
         or fully anisotropic mediums or gain mediums."""
@@ -2955,16 +3099,27 @@ class Simulation(AbstractYeeGridSimulation):
             if any(isinstance(mnt, TimeMonitor) for mnt in values["monitors"]):
                 raise SetupError("Time monitors cannot be used in fixed-angle simulations.")
 
+            if len(values.get("absorbers")) > 0:
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of internal absorbers."
+                )
+
         return values
 
-    @pydantic.validator("boundary_spec", always=True)
-    @skip_if_fields_missing(["sources"])
-    def _validate_frequency_mode_abc(cls, val, values):
+    @pydantic.root_validator()
+    @skip_if_fields_missing(["sources", "boundary_spec", "absorbers"], root=True)
+    def _validate_frequency_mode_abc(cls, values):
         """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
-        boundaries = val.to_list
+        boundaries = values["boundary_spec"].to_list
         need_wavelength = any(
             isinstance(edge, ModeABCBoundary) and edge.frequency is None
             for edge in np.ravel(boundaries)
+        )
+
+        need_wavelength = need_wavelength or any(
+            isinstance(port_abc.boundary_spec, ModeABCBoundary)
+            and port_abc.boundary_spec.frequency is None
+            for port_abc in values["absorbers"]
         )
 
         if need_wavelength:
@@ -2976,6 +3131,23 @@ class Simulation(AbstractYeeGridSimulation):
                     "At least one 'ModeABCBoundary' does not specify frequency at which the absorbed mode must be evaluated. "
                     "The central frequency of the first source will be used.",
                     capture=False,
+                )
+
+        return values
+
+    @pydantic.validator("absorbers", always=True)
+    @skip_if_fields_missing(["size"])
+    def _validate_absorber_in_zero_dims(cls, val, values):
+        """Error if too many sources present."""
+
+        if val is None:
+            return val
+
+        sim_size = values["size"]
+        for abc in val:
+            if sim_size[abc._normal_axis] == 0:
+                raise SetupError(
+                    "Port absorbers are not allowed to be oriented along simulation zero size dimensions."
                 )
 
         return val
@@ -3359,6 +3531,32 @@ class Simulation(AbstractYeeGridSimulation):
                             "An anisotropic medium is detected on an 'ABCBoundary. "
                             "Boundary medium must be homogeneous and isotropic."
                         )
+
+        return val
+
+    @pydantic.validator("absorbers", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures"])
+    def _port_abc_no_fully_anisotropic(cls, val, values):
+        """Error if abc boundaries intersect multiple mediums or anisotropic mediums."""
+
+        if val is None:
+            return val
+
+        # list of structures including background as a Box()
+        structure_bg = Structure(
+            geometry=Box(
+                size=values["size"],
+                center=values["center"],
+            ),
+            medium=values["medium"],
+        )
+        total_structures = [structure_bg, *list(values["structures"])]
+
+        for abc in val:
+            mediums = Scene.intersecting_media(abc, total_structures)
+
+            if any(isinstance(med, FullyAnisotropicMedium) for med in mediums):
+                raise SetupError("A 'PortAbsorber' cannot cross a 'FullyAnisotropicMedium'.")
 
         return val
 
@@ -4967,6 +5165,18 @@ class Simulation(AbstractYeeGridSimulation):
         float
             Time step (seconds).
         """
+
+        return self.with_pec_frames._dt
+
+    @cached_property
+    def _dt(self) -> float:
+        """Simulation time step (distance).
+
+        Returns
+        -------
+        float
+            Time step (seconds).
+        """
         dl_mins = [
             np.min(sizes)
             for dim, sizes in enumerate(self.grid.sizes.to_list)
@@ -5442,18 +5652,24 @@ class Simulation(AbstractYeeGridSimulation):
 
     _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
 
-    def _make_pec_frame(self, mode_source) -> Structure:
+    def _make_pec_frame(self, obj) -> Structure:
         """Make a pec frame around a mode source."""
+        span_inds = np.array(self.grid.discretize_inds(obj))
 
         coords = self.grid.boundaries.to_list
-        axis = mode_source.injection_axis
-        direction = mode_source.direction
-        length = mode_source.pec_frame
+        direction = obj.direction
+        if isinstance(obj, ModeSource):
+            axis = obj.injection_axis
+            length = obj.pec_frame
+        else:
+            axis = obj.size.index(0.0)
+            length = 1
 
-        span_inds = np.array(self.grid.discretize_inds(mode_source))
         if direction == "+":
             span_inds[axis][1] += length - 1
+            span_inds[axis][0] -= 1
         else:
+            span_inds[axis][1] += 1
             span_inds[axis][0] -= length - 1
 
         box_bounds = [
@@ -5464,18 +5680,16 @@ class Simulation(AbstractYeeGridSimulation):
             for c, (beg, end) in zip(coords, span_inds)
         ]
 
-        prev_cell = span_inds[axis][0] - 1
-        if prev_cell >= 0:
-            box_bounds[axis][0] = (1 - MODE_PEC_FRAME_THICKNESS) * box_bounds[axis][0] + MODE_PEC_FRAME_THICKNESS * coords[axis][prev_cell]
-
-        next_cell = span_inds[axis][1] + 1
-        if next_cell <= len(coords[axis]) - 1 :
-            box_bounds[axis][1] = (1 - MODE_PEC_FRAME_THICKNESS) * box_bounds[axis][1] + MODE_PEC_FRAME_THICKNESS * coords[axis][next_cell]
-
         box = Box.from_bounds(*np.transpose(box_bounds))
-        
+
         surfaces = Box.surfaces(box.size, box.center)
-        del surfaces[2 * axis: 2 * axis + 2]
+        if isinstance(obj, ModeSource):
+            del surfaces[2 * axis : 2 * axis + 2]
+        else:
+            if direction == "-":
+                del surfaces[2 * axis + 1]
+            else:
+                del surfaces[2 * axis]
 
         structure = Structure(
             geometry=GeometryGroup(
@@ -5484,42 +5698,23 @@ class Simulation(AbstractYeeGridSimulation):
             medium=PECMedium(),
         )
 
-
-        # bounds_outer = [
-        #     [
-        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[beg]
-        #         + MODE_PEC_FRAME_THICKNESS * c[max(0, beg - 1)],
-        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[end]
-        #         + MODE_PEC_FRAME_THICKNESS * c[min(len(c) - 1, end + 1)],
-        #     ]
-        #     for c, (beg, end) in zip(coords, span_inds)
-        # ]
-        # bounds_inner = [
-        #     [
-        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[beg] + MODE_PEC_FRAME_THICKNESS * c[beg + 1],
-        #         (1 - MODE_PEC_FRAME_THICKNESS) * c[end] + MODE_PEC_FRAME_THICKNESS * c[end - 1],
-        #     ]
-        #     for c, (beg, end) in zip(coords, span_inds)
-        # ]
-        # bounds_inner[axis] = [-inf, inf]
-        # structure = Structure(
-        #     geometry=ClipOperation(
-        #         geometry_a=Box.from_bounds(*np.transpose(bounds_outer)),
-        #         geometry_b=Box.from_bounds(*np.transpose(bounds_inner)),
-        #         operation="difference",
-        #     ),
-        #     medium=PECMedium(),
-        # )
         return structure
 
     @cached_property
-    def with_mode_source_pec_frames(self) -> Simulation:
+    def with_pec_frames(self) -> Simulation:
         """Return an instance with added pec frames around mode sources."""
 
         pec_frames = [
             self._make_pec_frame(src)
             for src in self.sources
             if isinstance(src, ModeSource) and src.pec_frame > 0
+        ]
+
+        pec_frames = pec_frames + [
+            self._make_pec_frame(
+                self._shift_object(abc, abc._normal_axis, abc.direction, abc.shift)
+            )
+            for abc in self.absorbers
         ]
 
         if len(pec_frames) == 0:
@@ -5529,13 +5724,13 @@ class Simulation(AbstractYeeGridSimulation):
             grid_spec=GridSpec.from_grid(self.grid), structures=list(self.structures) + pec_frames
         )
 
-    def _validate_with_mode_source_pec_frames(self):
+    def _validate_with_pec_frames(self):
         """Validate that after adding pec frames simulation setup is still valid."""
 
         try:
-            _ = self.with_mode_source_pec_frames
+            _ = self.with_pec_frames
         except Exception:
             log.error(
                 "Simulation fails after requested mode source PEC frames are added. "
-                "Please inspec '.with_mode_source_pec_frames'."
+                "Please inspect '.with_pec_frames'."
             )

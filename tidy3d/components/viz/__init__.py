@@ -7,6 +7,8 @@ from .plot_params import (
     AbstractPlotParams,
     PathPlotParams,
     PlotParams,
+    plot_params_abc,
+    plot_params_absorber,
     plot_params_bloch,
     plot_params_fluid,
     plot_params_geometry,
@@ -24,6 +26,7 @@ from .plot_params import (
 from .plot_sim_3d import plot_sim_3d
 from .styles import (
     ARROW_ALPHA,
+    ARROW_COLOR_ABSORBER,
     ARROW_COLOR_MONITOR,
     ARROW_COLOR_POLARIZATION,
     ARROW_COLOR_SOURCE,
@@ -42,6 +45,7 @@ apply_tidy3d_params()
 
 __all__ = [
     "ARROW_ALPHA",
+    "ARROW_COLOR_ABSORBER",
     "ARROW_COLOR_MONITOR",
     "ARROW_COLOR_POLARIZATION",
     "ARROW_COLOR_SOURCE",
@@ -62,6 +66,8 @@ __all__ = [
     "arrow_style",
     "equal_aspect",
     "make_ax",
+    "plot_params_abc",
+    "plot_params_absorber",
     "plot_params_bloch",
     "plot_params_fluid",
     "plot_params_geometry",

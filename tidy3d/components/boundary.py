@@ -8,6 +8,13 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d.components.validators import assert_plane
+from tidy3d.components.viz import (
+    ARROW_ALPHA,
+    ARROW_COLOR_ABSORBER,
+    PlotParams,
+    plot_params_absorber,
+)
 from tidy3d.constants import EPSILON_0, MU_0, PML_SIGMA
 from tidy3d.exceptions import DataError, SetupError, ValidationError
 from tidy3d.log import log
@@ -18,7 +25,7 @@ from .medium import Medium
 from .mode_spec import ModeSpec
 from .monitor import ModeMonitor, ModeSolverMonitor
 from .source.field import TFSF, GaussianBeam, ModeSource, PlaneWave
-from .types import TYPE_TAG_STR, Axis, Complex
+from .types import TYPE_TAG_STR, Ax, Axis, Complex, Direction
 
 MIN_NUM_PML_LAYERS = 6
 MIN_NUM_STABLE_PML_LAYERS = 6
@@ -45,6 +52,7 @@ def warn_num_layers_factory(min_num_layers: int, descr: str):
         return val
 
     return _warn_num_layers
+
 
 DEFAULT_MODE_SPEC_MODE_ABC = ModeSpec()
 
@@ -221,6 +229,88 @@ class ModeABCBoundary(AbstractABCBoundary):
             mode_index=mode_index,
             frequency=frequency,
         )
+
+
+class PortAbsorber(Box):
+    """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
+
+    direction: Direction = pd.Field(
+        ...,
+        title="Absorption Direction",
+        description="Direction in which field is absorbed.",
+    )
+
+    shift: int = pd.Field(
+        0,
+        title="Absorber Shift",
+        description="Displacement of absorber in the normal positive direction in number of cells.",
+    )
+
+    boundary_spec: Union[ModeABCBoundary, ABCBoundary] = pd.Field(
+        ...,
+        title="Boundary Specification",
+        description="Boundary specification.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    _plane_validator = assert_plane()
+
+    @pd.validator("boundary_spec", always=True)
+    def _must_provide_permittivity(cls, val):
+        """Validate that permittivity is provided for ABCBoundary."""
+        if isinstance(val, ABCBoundary) and val.permittivity is None:
+            raise ValidationError(
+                "Must provide 'permittivity' in 'ABCBoundary' when used in an internal absorber."
+            )
+        return val
+
+    @cached_property
+    def _dir_vector(self) -> tuple[float, float, float]:
+        """Returns a vector indicating the absorption direction for arrow plotting."""
+
+        dir_vec = [0, 0, 0]
+        dir_vec[self._normal_axis] = 1 if self.direction == "+" else -1
+        return dir_vec
+
+    @cached_property
+    def plot_params(self) -> PlotParams:
+        """Default parameters for plotting a port absorber object."""
+        return plot_params_absorber
+
+    def plot(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **patch_kwargs,
+    ) -> Ax:
+        """Plot this absorber."""
+
+        # extract arrow base parameter
+        kwargs_arrow_base = patch_kwargs.pop("arrow_base", None)
+
+        # plot the plane
+        ax = Box.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
+
+        # get arrow alpha
+        kwargs_alpha = patch_kwargs.get("alpha")
+        arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
+
+        # plot arrow
+        ax = self._plot_arrow(
+            x=x,
+            y=y,
+            z=z,
+            ax=ax,
+            direction=self._dir_vector,
+            color=ARROW_COLOR_ABSORBER,
+            alpha=arrow_alpha,
+            both_dirs=False,
+            arrow_base=kwargs_arrow_base,
+        )
+
+        return ax
 
 
 # """ Bloch boundary """

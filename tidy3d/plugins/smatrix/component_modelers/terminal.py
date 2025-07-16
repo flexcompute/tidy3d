@@ -57,6 +57,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
         )
         return values
 
+    @property
+    def _sim_with_sources(self) -> Simulation:
+        """Instance of :class:`.Simulation` with all sources and absorbers added for each port, for troubleshooting."""
+
+        sources = [port.to_source(self._source_time) for port in self.ports]
+        absorbers = [port.to_absorber() for port in self.ports if port.absorber]
+        return self.simulation.updated_copy(sources=sources, absorbers=absorbers)
+
     @equal_aspect
     @add_ax_if_none
     def plot_sim(
@@ -67,14 +75,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        """Plot a :class:`.Simulation` with all sources added for each port, for troubleshooting."""
+        """Plot a :class:`.Simulation` with all sources and absorbers added for each port, for troubleshooting."""
 
-        plot_sources = []
-        for port_source in self.ports:
-            source_0 = port_source.to_source(self._source_time)
-            plot_sources.append(source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
-        return sim_plot.plot(x=x, y=y, z=z, ax=ax, **kwargs)
+        return self._sim_with_sources.plot(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @equal_aspect
     @add_ax_if_none
@@ -86,14 +89,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
+        """Plot permittivity of the :class:`.Simulation` with all sources and absorbers added for each port."""
 
-        plot_sources = []
-        for port_source in self.ports:
-            source_0 = port_source.to_source(self._source_time)
-            plot_sources.append(source_0)
-        sim_plot = self.simulation.copy(update={"sources": plot_sources})
-        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
+        return self._sim_with_sources.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @cached_property
     def sim_dict(self) -> dict[str, Simulation]:
@@ -149,10 +147,22 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 mesh_overrides.extend(wave_port.to_mesh_overrides())
         new_grid_spec = sim_wo_source.grid_spec.updated_copy(override_structures=mesh_overrides)
 
+        # Add port absorbers
+        new_absorbers = list(sim_wo_source.absorbers)
+        for wave_port in self._wave_ports:
+            if wave_port.absorber:
+                # absorbers are shifted together with sources
+                mode_src_pos = wave_port.center[
+                    wave_port.injection_axis
+                ] + self._shift_value_signed(wave_port)
+                port_absorber = wave_port.to_absorber(snap_center=mode_src_pos)
+                new_absorbers.append(port_absorber)
+
         update_dict = {
             "monitors": new_mnts,
             "lumped_elements": new_lumped_elements,
             "grid_spec": new_grid_spec,
+            "absorbers": new_absorbers,
         }
 
         # This is the new default simulation will all shared components added

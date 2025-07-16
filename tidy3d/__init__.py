@@ -120,6 +120,7 @@ from .components.boundary import (
     PMCBoundary,
     PMLParams,
     PMLTypes,
+    PortAbsorber,
     StablePML,
 )
 
@@ -635,6 +636,7 @@ __all__ = [
     "PolarizedAveraging",
     "PoleResidue",
     "PolySlab",
+    "PortAbsorber",
     "Q_e",
     "QuasiUniformGrid",
     "RLCNetwork",

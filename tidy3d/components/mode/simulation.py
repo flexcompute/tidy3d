@@ -168,6 +168,12 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "simulations.",
     )
 
+    absorbers: tuple[()] = pd.Field(
+        (),
+        title="Inner Absorbers",
+        description="Inner absorbers.",
+    )
+
     grid_spec: GridSpec = pd.Field(
         GridSpec(),
         title="Grid Specification",

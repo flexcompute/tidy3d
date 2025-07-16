@@ -209,6 +209,12 @@ class EMESimulation(AbstractYeeGridSimulation):
         "use 'smatrix_in_basis' to use another set of modes or input field.",
     )
 
+    absorbers: tuple[()] = pd.Field(
+        (),
+        title="Inner Absorbers",
+        description="Inner absorbers.",
+    )
+
     grid_spec: GridSpec = pd.Field(
         GridSpec(),
         title="Grid Specification",

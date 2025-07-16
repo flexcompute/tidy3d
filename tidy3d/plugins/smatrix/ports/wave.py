@@ -8,6 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.boundary import ModeABCBoundary, PortAbsorber
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.monitor_data import ModeData
 from tidy3d.components.data.sim_data import SimulationData
@@ -82,14 +83,28 @@ class WavePort(AbstractTerminalPort, Box):
         description="Add a thin pec frame around the source during FDTD run.",
     )
 
+    conjugated_dot_product: bool = pd.Field(
+        False,
+        title="Conjugated Dot Product",
+        description="Use conjugated or non-conjugated dor product for mode decomposition.",
+    )
+
+    absorber: bool = pd.Field(
+        True,
+        title="Absorber.",
+        description="Place a mode absorber in the port.",
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.
         """
+        flux_sign = 1 if self.direction == "+" else -1
+
         mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.voltage_integral is None:
             current_coeffs = self.current_integral.compute_current(mode_data)
-            voltage_coeffs = 2 * np.abs(mode_data.flux) / np.conj(current_coeffs)
+            voltage_coeffs = 2 * flux_sign * mode_data.complex_flux / np.conj(current_coeffs)
         else:
             voltage_coeffs = self.voltage_integral.compute_voltage(mode_data)
         return voltage_coeffs.squeeze()
@@ -98,10 +113,11 @@ class WavePort(AbstractTerminalPort, Box):
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port current.
         """
+        flux_sign = 1 if self.direction == "+" else -1
         mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.current_integral is None:
             voltage_coeffs = self.voltage_integral.compute_voltage(mode_data)
-            current_coeffs = (2 * np.abs(mode_data.flux) / voltage_coeffs).conj()
+            current_coeffs = (2 * flux_sign * mode_data.complex_flux / voltage_coeffs).conj()
         else:
             current_coeffs = self.current_integral.compute_current(mode_data)
         return current_coeffs.squeeze()
@@ -156,6 +172,7 @@ class WavePort(AbstractTerminalPort, Box):
             colocate=False,
             mode_spec=self.mode_spec,
             store_fields_direction=self.direction,
+            conjugated_dot_product=self.conjugated_dot_product,
         )
         return [mode_mon]
 
@@ -170,6 +187,23 @@ class WavePort(AbstractTerminalPort, Box):
             colocate=False,
         )
         return mode_solver
+
+    def to_absorber(self, snap_center: Optional[float] = None) -> PortAbsorber:
+        """Create a mode source from the wave port."""
+        center = list(self.center)
+        if snap_center:
+            center[self.injection_axis] = snap_center
+        return PortAbsorber(
+            center=center,
+            size=self.size,
+            boundary_spec=ModeABCBoundary(
+                mode_spec=self.mode_spec, mode_index=self.mode_index, plane=self.bounding_box
+            ),
+            direction="-"
+            if self.direction == "+"
+            else "+",  # absorb in the opposite direction of source
+            shift=1,  # absorb in the next pixel
+        )
 
     def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute voltage across the port."""
