@@ -12,16 +12,12 @@ on:
         description: 'local-tests'
         type: boolean
         default: false
-  push:
-    branches: [ develop, latest ]
   pull_request:
     branches:
       - latest
       - develop
       - 'pre/*'
     types: ['opened', 'reopened', 'synchronize', 'ready_for_review']
-  pull_request_review:
-    types: [submitted]
 
 permissions:
   contents: read
@@ -89,17 +85,6 @@ jobs:
             fi
           fi
 
-          # If triggered by PR review and approved
-          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
-            if [[ "$REVIEW_STATE" == "approved" ]]; then
-              local_tests=true
-              remote_tests=true
-            else
-              local_tests=false
-              remote_tests=false
-            fi
-          fi
-
           # All PRs that have been triggered need local tests and approved ones need to re-run the remote tests
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
               local_tests=true
@@ -144,7 +129,9 @@ jobs:
   verify-schema-change:
     name: verify-schema-change
     needs: determine-test-scope
-    if: (( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )) && (github.event_name == 'pull_request') 
+    if: |
+      (( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
+      ( needs.determine-test-scope.outputs.remote_tests == 'true' )) 
     runs-on: ubuntu-latest
     container: ghcr.io/astral-sh/uv:debian
     defaults:
@@ -247,8 +234,8 @@ jobs:
       image: ghcr.io/astral-sh/uv:debian
       options: --user 31001:61001 # Required slurm-batch UID: slurm GID for tmp/ file removal
     concurrency:
-      group: local-tests-${{ github.ref }}-${{ github.event_name }}-python-${{ matrix.python-version }}
-      cancel-in-progress: true # Required so it does not use previous state
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }-${{ matrix.python-version }}-local
+      cancel-in-progress: true
     strategy:
       matrix:
         python-version: ['3.9', '3.13']
@@ -355,6 +342,9 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }}-${{ matrix.platform }}-${{ matrix.python-version }}-remote
+      cancel-in-progress: true
     strategy:
       matrix:
         python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
@@ -365,10 +355,6 @@ jobs:
     env:  # Set environment variables for the whole job
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
-
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{ github.event_name }}-${{ matrix.platform }}-${{ matrix.python-version }}-remote
-      cancel-in-progress: true
 
     steps:
     - uses: actions/checkout@v4
