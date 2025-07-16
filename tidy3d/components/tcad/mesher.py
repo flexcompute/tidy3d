@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pydantic as pd
+import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
@@ -11,7 +11,9 @@ class VolumeMesher(Tidy3dBaseModel):
     """Specification for a standalone volume mesher."""
 
     simulation: HeatChargeSimulation = pd.Field(
-        ..., description="HeatCharge simulation instance for the mesh specification."
+        ...,
+        title="Simulation",
+        description="HeatCharge simulation instance for the mesh specification.",
     )
 
     monitors: tuple[VolumeMeshMonitor, ...] = pd.Field(

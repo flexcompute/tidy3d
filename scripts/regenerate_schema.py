@@ -22,7 +22,7 @@ try:
         ModeSimulation,
         Simulation,
     )
-    # from tidy3d.plugins.smatrix import TerminalComponentModeler
+    from tidy3d.plugins.smatrix import TerminalComponentModeler
 except ImportError as e:
     print(
         f"Error: Failed to import from 'tidy3d'. Ensure it's installed. Details: {e}",
@@ -43,7 +43,7 @@ export_api_schema_dictionary = {
     "EMESimulation": EMESimulation,
     "HeatSimulation": HeatSimulation,
     "HeatChargeSimulation": HeatChargeSimulation,
-    # "TerminalComponentModeler": TerminalComponentModeler
+    "TerminalComponentModeler": TerminalComponentModeler,
 }
 
 
