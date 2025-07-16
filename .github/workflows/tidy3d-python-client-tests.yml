@@ -18,6 +18,8 @@ on:
       - develop
       - 'pre/*'
     types: ['opened', 'reopened', 'synchronize', 'ready_for_review']
+  pull_request_review:
+    types: [submitted]
 
 permissions:
   contents: read
@@ -94,6 +96,17 @@ jobs:
           if [[ "$EVENT_NAME" == "merge_group" ]]; then
               local_tests=true
               remote_tests=true
+          fi
+          
+          # If triggered by PR review and approved
+          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            if [[ "$REVIEW_STATE" == "approved" ]]; then
+              local_tests=true
+              remote_tests=true
+            else
+              local_tests=false
+              remote_tests=false
+            fi
           fi
 
           # If it's a push to develop
@@ -234,7 +247,7 @@ jobs:
       image: ghcr.io/astral-sh/uv:debian
       options: --user 31001:61001 # Required slurm-batch UID: slurm GID for tmp/ file removal
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }-${{ matrix.python-version }}-local
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }}-${{ matrix.python-version }}-local
       cancel-in-progress: true
     strategy:
       matrix:
