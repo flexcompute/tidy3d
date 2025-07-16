@@ -835,6 +835,19 @@ class HeatChargeSimulation(AbstractSimulation):
                                 "has been defined. This is not supported in Conduction simulations."
                             )
 
+            # make sure that at least one structure has appropriate charge medium
+            ValidConductionMediums = ChargeConductorMedium
+            structures = values.get("structures")
+            if all(isinstance(s.medium, Medium) for s in structures):
+                raise SetupError(
+                    "Conduction simulations must be defined using 'MultiPhysicsMedium' but none have been defined."
+                )
+            if not any(isinstance(s.medium.charge, ValidConductionMediums) for s in structures):
+                raise SetupError(
+                    "Conduction simulations require at least one structure with a 'ChargeConductorMedium' "
+                    "but none have been defined."
+                )
+
         return values
 
     @pd.root_validator(skip_on_failure=True)

@@ -1364,7 +1364,7 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
             structures=[
                 td.Structure(
                     geometry=td.Box(size=(1, 1, 1), center=shifted_center),
-                    medium=td.Medium(),
+                    medium=td.MultiPhysicsMedium(charge=td.ChargeConductorMedium(conductivity=1)),
                 )
             ],
             boundary_spec=[
@@ -1409,7 +1409,10 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
 )
 def test_sim_structure_extent(box_size, log_level):
     """Ensure we warn if structure extends exactly to simulation edges."""
-    box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
+    box = td.Structure(
+        geometry=td.Box(size=box_size),
+        medium=td.MultiPhysicsMedium(charge=td.ChargeConductorMedium(conductivity=1)),
+    )
 
     with AssertLogLevel(log_level):
         _ = td.HeatChargeSimulation(
@@ -2040,3 +2043,15 @@ def test_heat_conduction_simulations():
     with pytest.raises(pd.ValidationError):
         # This should error since the conduction simulation doesn't have a monitor
         _ = sim.updated_copy(monitors=[temp_monitor])
+
+    # test error if structures defined with Medium instead of MultiPhysicsMedium
+    with pytest.raises(pd.ValidationError):
+        struct_error = struct1.updated_copy(medium=td.Medium(conductivity=1))
+        _ = sim.updated_copy(structures=[struct_error])
+
+    # test error if structures aren't conducting
+    with pytest.raises(pd.ValidationError):
+        struct_error = struct1.updated_copy(
+            medium=struct1.medium.updated_copy(charge=td.ChargeInsulatorMedium)
+        )
+        _ = sim.updated_copy(structures=[struct_error])

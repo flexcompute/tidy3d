@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ModeSimulation.plot()` method that plots the mode simulation plane by default, or the containing FDTD simulation if any of ``x``, ``y``, or ``z`` is passed. 
 - Enable singularity correction at PEC and lossy metal edges.
 - New `VolumeMesher` simulation type and associated `VolumeMeshMonitor` and `VolumeMesherData`, which can be used to run the unstructured meshing for a `HeatChargeSimulation` separately before running the solver.
+- The current validator for Conduction simulations has been modified so that it checks that in a Conduction simulation there is at least one structure defined with `ChargeConductorMedium` in the `charge` field of a `MultiPhysicsMedium`. This is necessary to ensure simulations are properly set up in the back-end since it relies on the `conductivity` field of `ChargeConductorMedium` and not that of `Medium`.
 
 ### Changed
 - Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
