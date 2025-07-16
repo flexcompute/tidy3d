@@ -5,6 +5,8 @@ This script iterates through a predefined dictionary of Tidy3D classes,
 generates a Pydantic JSON schema for each, and saves it as a formatted
 JSON file in the 'schemas' directory. It's designed to be run as a
 standalone utility to update schema definitions.
+
+All are GUI supported classes.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ try:
         ModeSimulation,
         Simulation,
     )
-    # from tidy3d.plugins.smatrix import TerminalComponentModeler
+    from tidy3d.plugins.smatrix import TerminalComponentModeler
 except ImportError as e:
     print(
         f"Error: Failed to import from 'tidy3d'. Ensure it's installed. Details: {e}",
@@ -43,7 +45,7 @@ export_api_schema_dictionary = {
     "EMESimulation": EMESimulation,
     "HeatSimulation": HeatSimulation,
     "HeatChargeSimulation": HeatChargeSimulation,
-    # "TerminalComponentModeler": TerminalComponentModeler
+    "TerminalComponentModeler": TerminalComponentModeler,
 }
 
 
