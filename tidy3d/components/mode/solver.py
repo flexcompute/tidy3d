@@ -17,7 +17,7 @@ from .transforms import angled_transform, radial_transform
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = 1e-10
 # Tolerance for eigs
-TOL_EIGS = fp_eps
+TOL_EIGS = fp_eps / 10
 # Tolerance for deciding on the matrix to be diagonal or tensorial
 TOL_TENSORIAL = 1e-6
 # shift target neff by this value, both rel and abs, whichever results in larger shift

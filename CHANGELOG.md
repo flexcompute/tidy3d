@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - By default, batch downloads will skip files that already exist locally. To force re-downloading and replace existing files, pass the `replace_existing=True` argument to `Batch.load()`, `Batch.download()`, or `BatchData.load()`.
 - The `BatchData.load_sim_data()` function now overwrites any previously downloaded simulation files (instead of skipping them).
+- Tighter `TOL_EIGS` used for mode solver, since `scipy` sometimes failed to find modes.
 
 ### Fixed
 - Giving opposite boundaries different names no longer causes a symmetry validator failure.
