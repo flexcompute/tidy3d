@@ -101,6 +101,7 @@ def mediums():
         charge=td.ChargeConductorMedium(
             conductivity=1,
         ),
+        heat=td.SolidMedium(conductivity=1.1, capacity=1.2, density=2.3),
         name="solid_medium",
     )
 

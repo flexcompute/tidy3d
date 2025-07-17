@@ -908,21 +908,25 @@ class HeatChargeSimulation(AbstractSimulation):
             conductivities = []
             structures = values.get("structures")
             for structure in structures:
-                if isinstance(structure.medium.heat, SolidMedium):
-                    if structure.medium.heat_spec.capacity is None:
-                        raise SetupError(
-                            f"Unsteady simulations require the medium '{structure.medium.name}' to have capacity defined."
-                        )
-                    else:
-                        capacities.append(structure.medium.heat_spec.capacity)
-                    if structure.medium.heat_spec.density is None:
-                        raise SetupError(
-                            f"Unsteady simulations require the medium '{structure.medium.name}' to have density defined."
-                        )
-                    else:
-                        densities.append(structure.medium.heat_spec.density)
+                heat_properties = None
+                if isinstance(structure.medium, MultiPhysicsMedium):
+                    heat_properties = structure.medium.heat
+                # now check legacy Medium too
+                elif isinstance(structure.medium, Medium):
+                    heat_properties = structure.medium.heat_spec
 
-                    conductivities.append(structure.medium.heat_spec.conductivity)
+                if isinstance(heat_properties, SolidMedium):
+                    if heat_properties.capacity is not None:
+                        capacities.append(heat_properties.capacity)
+                    if heat_properties.density is not None:
+                        densities.append(heat_properties.density)
+                    conductivities.append(heat_properties.conductivity)
+
+            if len(capacities) == 0 or len(densities) == 0 or len(conductivities) == 0:
+                raise SetupError(
+                    "Unsteady simulations require the SolidSpec to have 'capacity', 'density', and 'conductivity' "
+                    "defined. Please check the definition of the SolidSpec in the Medium or MultiPhysicsMedium."
+                )
 
             # check that we don't have too many time-steps
             if analysis_type.unsteady_spec.total_time_steps > TRANSIENT_HEAT_MAX_STEPS:
