@@ -46,6 +46,10 @@ class AbstractDopingBox(Box):
                 normal_axis = dim
                 # normal_position = coords[var_name][0]
 
+        if all(len(coords[var_name]) == 1 for var_name in "xyz"):
+            # if all coordinates have 1 point, we don't assume  2D unless the box itself is.
+            normal_axis = None
+
         # if provided coordinates are 3D, check if box is 2D
         if normal_axis is None:
             normal_axis = self._normal_dim()
