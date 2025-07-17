@@ -402,7 +402,7 @@ def test_microstrip_models():
     freqs = Frequency(start=1, stop=1, npoints=1, unit="ghz")
     mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
 
-    assert np.isclose(Z0, mline.Z0[0])
+    assert np.isclose(Z0, mline.z0[0])
     assert np.isclose(eps_eff, mline.ep_reff[0])
 
     # Check end effect length computation
@@ -414,7 +414,7 @@ def test_microstrip_models():
     Z0, eps_eff = mw.models.microstrip.compute_line_params(eps_r, width, height, thickness)
     mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
 
-    assert np.isclose(Z0, mline.Z0[0])
+    assert np.isclose(Z0, mline.z0[0])
     assert np.isclose(eps_eff, mline.ep_reff[0])
 
 
@@ -667,7 +667,7 @@ def test_lobe_measurer_validation():
 
     Urad = np.cos(theta) + 1j * np.sin(theta)
     # Raise error when radiation pattern is complex
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(pd.ValidationError), pytest.warns(np.exceptions.ComplexWarning):
         mw.LobeMeasurer(
             angle=theta,
             radiation_pattern=Urad,
@@ -794,4 +794,3 @@ def test_lobe_plots(min_value):
     _, ax = plt.subplots(1, 1, subplot_kw={"projection": "polar"})
     ax.plot(theta, Urad, "k")
     lobe_measurer.plot(0, ax)
-    plt.show()

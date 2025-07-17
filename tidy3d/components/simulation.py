@@ -1701,6 +1701,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         boundary_spec: BoundarySpec = None,
         grid_spec: Union[GridSpec, Literal["identical"]] = None,
         symmetry: Optional[tuple[Symmetry, Symmetry, Symmetry]] = None,
+        warn_symmetry_expansion: bool = True,
         sources: Optional[tuple[SourceType, ...]] = None,
         monitors: Optional[tuple[MonitorType, ...]] = None,
         remove_outside_structures: bool = True,
@@ -1728,6 +1729,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             New simulation symmetry. If ``None``, then it is inherited from the original
             simulation. Note that in this case the size and placement of new simulation domain
             must be commensurate with the original symmetry.
+        warn_symmetry_expansion : bool = True
+            Whether to warn when the subsection is expanded to preserve symmetry.
         sources : Tuple[SourceType, ...] = None
             New list of sources. If ``None``, then the sources intersecting the new simulation
             domain are inherited from the original simulation.
@@ -1805,12 +1808,13 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                         center = (new_bounds[0][dim] + new_bounds[1][dim]) / 2
 
                         if not math.isclose(center, self.center[dim]):
-                            log.warning(
-                                f"The original simulation is symmetric along {'xyz'[dim]} direction. "
-                                "The requested new simulation region does cross the symmetry plane but is "
-                                "not symmetric with respect to it. To preserve correct symmetry, "
-                                "the requested simulation region is expanded symmetrically."
-                            )
+                            if warn_symmetry_expansion:
+                                log.warning(
+                                    f"The original simulation is symmetric along {'xyz'[dim]} direction. "
+                                    "The requested new simulation region does cross the symmetry plane but is "
+                                    "not symmetric with respect to it. To preserve correct symmetry, "
+                                    "the requested simulation region is expanded symmetrically."
+                                )
                             new_bounds[0][dim] = 2 * self.center[dim] - new_bounds[1][dim]
 
         # symmetry and grid spec treatments could change new simulation bounds
@@ -2127,6 +2131,17 @@ class Simulation(AbstractYeeGridSimulation):
         gt=0.0,
         le=1.0,
     )
+
+    precision: Literal["hybrid", "double"] = pydantic.Field(
+        "hybrid",
+        title="Floating-point Precision",
+        description="Floating point precision to use in the computations. By default, Tidy3D uses "
+        "a hybrid approach that offers a good balance of speed and accuracy for almost all "
+        "simulations. However, for large simulations (or simulations with a long run time), "
+        "where very high accuracy is needed, the precision can be set to double everywhere. "
+        "Note that this doubles the FlexCredit cost of the simulation.",
+    )
+
     """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio.  A
     physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
     because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\Delta x`
@@ -3512,8 +3527,8 @@ class Simulation(AbstractYeeGridSimulation):
                 freq0 = source.source_time.freq0
 
                 for medium_index, medium in enumerate(mediums):
-                    # min wavelength in PEC is meaningless and we'll get divide by inf errors
-                    if medium.is_pec:
+                    # min wavelength in PEC/PMC is meaningless and we'll get divide by inf errors
+                    if medium.is_pec or medium.is_pmc:
                         continue
                     # min wavelength in Medium2D is meaningless
                     if isinstance(medium, Medium2D):
@@ -3525,8 +3540,10 @@ class Simulation(AbstractYeeGridSimulation):
                     for comp, (key, grid_spec) in enumerate(
                         zip("xyz", (val.grid_x, val.grid_y, val.grid_z))
                     ):
-                        if medium.is_pec or (
-                            isinstance(medium, AnisotropicMedium) and medium.is_comp_pec(comp)
+                        if (
+                            medium.is_pec
+                            or medium.is_pmc
+                            or (isinstance(medium, AnisotropicMedium) and medium.is_comp_pec(comp))
                         ):
                             n_material = 1.0
                         lambda_min = C_0 / freq0 / n_material

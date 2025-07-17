@@ -1476,16 +1476,16 @@ def test_gaussian_doping_get_contrib():
 
     coords = {"x": [0], "y": [0], "z": [0]}
     contrib = box._get_contrib(coords)
-    assert np.isclose(float(contrib), max_N, rtol=1e-6)
+    assert np.isclose(contrib.item(), max_N, rtol=1e-6)
 
     coords = {"x": [0.5], "y": [0], "z": [0]}
     contrib = box._get_contrib(coords)
-    assert np.isclose(float(contrib), min_N, rtol=1e-6)
+    assert np.isclose(contrib.item(), min_N, rtol=1e-6)
 
     coords = {"x": [0.5 - width / 2], "y": [0], "z": [0]}
     contrib = box._get_contrib(coords)
     expected_value = max_N * np.exp(-width * width / 4 / box.sigma / box.sigma / 2)
-    assert np.isclose(float(contrib), expected_value, rtol=1e-6)
+    assert np.isclose(contrib.item(), expected_value, rtol=1e-6)
 
 
 def test_gaussian_doping_get_contrib_2d_coords():

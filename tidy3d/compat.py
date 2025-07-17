@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import importlib
 
 from packaging.version import parse as parse_version
@@ -12,13 +13,9 @@ except ImportError:
     from xarray.core import alignment
 
 
-_SHAPELY_VERSION = parse_version(importlib.metadata.version("shapely"))
-
-
+@functools.lru_cache(maxsize=8)
 def _shapely_is_older_than(version: str) -> bool:
-    if _SHAPELY_VERSION < parse_version(version):
-        return True
-    return False
+    return parse_version(importlib.metadata.version("shapely")) < parse_version(version)
 
 
 __all__ = ["alignment"]

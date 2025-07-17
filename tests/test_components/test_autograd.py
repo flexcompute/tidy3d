@@ -19,13 +19,13 @@ from autograd.test_util import check_grads
 
 import tidy3d as td
 import tidy3d.web as web
+from tidy3d.components.autograd.constants import MAX_NUM_TRACED_STRUCTURES
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import is_tidy_box
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
-from tidy3d.web.api.autograd.autograd import MAX_NUM_TRACED_STRUCTURES
 from tidy3d.web.api.autograd.utils import FieldMap
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
@@ -812,7 +812,7 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"test_a", "adjoint", "task1", "_test"}
+    task_names = {"test_a", "adjoint", "_test"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -912,7 +912,7 @@ def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"1", "2", "3", "4"}
+    task_names = {"1", "2"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -934,7 +934,7 @@ def test_autograd_async_all_zero_grad(use_emulated_run):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"1", "2", "3", "4"}
+    task_names = {"1", "2"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -1927,11 +1927,6 @@ checks = list(MULT_FREQ_TEST_CASES.items())
 def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn, monkeypatch):
     # test multi-frequency adjoint handling
 
-    import tidy3d.components.data.sim_data as sd
-
-    monkeypatch.setattr(sd, "RESIDUAL_CUTOFF_ADJOINT", 1)
-    reload(td)
-
     postprocess_fn = check_fn(structure_key=structure_key)
 
     def objective(params):
@@ -2326,10 +2321,16 @@ def test_sim_traced_center_size(use_emulated_run):
         sim_data = run_emulated(sim, task_name="adjoint_test")
         return postprocess(sim_data)
 
-    with AssertLogLevel("WARNING", contains_str="autograd tracer"):
+    with (
+        AssertLogLevel("WARNING", contains_str="autograd tracer"),
+        pytest.warns(UserWarning, match="Output seems independent of input."),
+    ):
         grad = ag.grad(objective, argnum=0)(base_sim.center, base_sim.size)
 
-    with AssertLogLevel("WARNING", contains_str="autograd tracer"):
+    with (
+        AssertLogLevel("WARNING", contains_str="autograd tracer"),
+        pytest.warns(UserWarning, match="Output seems independent of input."),
+    ):
         grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
 
 

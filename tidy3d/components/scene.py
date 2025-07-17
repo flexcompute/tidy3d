@@ -383,6 +383,13 @@ class Scene(Tidy3dBaseModel):
         if vlim[0] > vlim[1]:
             raise Tidy3dError("Error: 'vmin' > 'vmax'")
 
+        if hlim[0] == hlim[1]:
+            margin = 0.1 * abs(hlim[0]) if hlim[0] != 0 else 0.05
+            hlim = (hlim[0] - margin, hlim[1] + margin)
+        if vlim[0] == vlim[1]:
+            margin = 0.1 * abs(vlim[0]) if vlim[0] != 0 else 0.05
+            vlim = (vlim[0] - margin, vlim[1] + margin)
+
         return hlim, vlim
 
     @equal_aspect
@@ -519,9 +526,11 @@ class Scene(Tidy3dBaseModel):
 
         if isinstance(medium, MultiPhysicsMedium):
             is_pec = medium.optical is not None and medium.optical.is_pec
+            is_pmc = medium.optical is not None and medium.optical.is_pmc
             is_time_modulated = medium.optical is not None and medium.optical.is_time_modulated
         else:
             is_pec = medium.is_pec
+            is_pmc = medium.is_pmc
             is_time_modulated = medium.is_time_modulated
 
         if mat_index == 0 or medium == self.medium:
@@ -531,6 +540,11 @@ class Scene(Tidy3dBaseModel):
             # perfect electrical conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
+            )
+        elif is_pmc:
+            # perfect magnetic conductor
+            plot_params = plot_params.copy(
+                update={"facecolor": "purple", "edgecolor": "k", "linewidth": 1}
             )
         elif is_time_modulated:
             # time modulated medium
@@ -1284,6 +1298,11 @@ class Scene(Tidy3dBaseModel):
             # perfect electrical conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
+            )
+        elif medium.is_pmc:
+            # perfect magnetic conductor
+            plot_params = plot_params.copy(
+                update={"facecolor": "purple", "edgecolor": "k", "linewidth": 1}
             )
         elif isinstance(medium, Medium2D):
             # 2d material

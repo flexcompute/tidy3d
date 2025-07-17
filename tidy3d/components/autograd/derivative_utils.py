@@ -1,391 +1,474 @@
-# utilities for autograd derivative passing
+"""Utilities for autograd derivative computation and field gradient evaluation."""
+
 from __future__ import annotations
 
+from dataclasses import dataclass, field, replace
+from typing import Callable, Optional
+
 import numpy as np
-import pydantic.v1 as pd
 import xarray as xr
 
-from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
-from tidy3d.components.types import ArrayLike, Bound, tidycomplex
-from tidy3d.constants import LARGE_NUMBER
+from tidy3d.components.types import Bound, tidycomplex
+from tidy3d.constants import C_0, LARGE_NUMBER
 
+from .constants import (
+    DEFAULT_WAVELENGTH_FRACTION,
+    GRADIENT_DTYPE_COMPLEX,
+    GRADIENT_DTYPE_FLOAT,
+    MINIMUM_SPACING,
+)
 from .types import PathType
 from .utils import get_static
 
-# we do this because importing these creates circular imports
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
 
 
-class DerivativeSurfaceMesh(Tidy3dBaseModel):
-    """Stores information about the surfaces of an object to be used for derivative calculation.
+class LazyInterpolator:
+    """Lazy wrapper for interpolators that creates them on first access."""
 
-    User guide: this class is used to construct derivatives with respect to surface elements
-    given some forward and adjoint fields stored in a ``DerivativeInfo`` class. To use it,
-    you must specify the central locations of all the surface elements in ``centers``,
-    along with the area of each element in ``areas``. Then you need to specify three orthogonal
-    vectors (``normals``, ``perps1`` and ``perps2``). The derivative will be computed with
-    respect to a change in material along the ``normals`` direction. It is important to note
-    that the sign of these basis vectors is irrelevant since we end up multiplying the forward
-    and adjoint fields together in these bases.
+    def __init__(self, creator_func: Callable):
+        """Initialize with a function that creates the interpolator when called."""
+        self.creator_func = creator_func
+        self._interpolator = None
 
-    The gradient is with respect to a change from the surface element permittivity from the
-    ``eps_in`` to ``eps_out`` field. So in principle it is always computing gradients with
-    respect to an infinitesimal outward shift in the normal direction. For example, for
-    ``PolySlab.vertices``, this means shifting each edge to the background.
-    For ``PolySlab.slab_bounds``, this means shifting the bound in either + or - direction if it
-    is index ``[1]`` or ``[0]`` respectively. This renders the sign of the normal vector
-    irrelevant.
+    def __call__(self, *args, **kwargs):
+        """Create interpolator on first call and delegate to it."""
+        if self._interpolator is None:
+            self._interpolator = self.creator_func()
+        return self._interpolator(*args, **kwargs)
 
-    After this ``DerivativeSurfaceMesh`` is constructed, given some ``DerivativeInfo`` in the
-    gradient calculation, a call to ``DerivativeInfo.grad_surfaces(x: DerivativeSurfaceMesh)``
-    will return the gradient with respect to a change in all of the provided surfaces.
 
+@dataclass
+class DerivativeInfo:
+    """Stores derivative information passed to the ``._compute_derivatives`` methods.
+
+    This dataclass contains all the field data and parameters needed for computing
+    gradients with respect to geometry perturbations.
     """
 
-    centers: ArrayLike = pd.Field(
-        ...,
-        title="Centers",
-        description="(N, 3) array storing the centers of each surface element.",
-    )
+    # Required fields
+    paths: list[PathType]
+    """List of paths to the traced fields that need derivatives calculated."""
 
-    areas: ArrayLike = pd.Field(
-        ...,
-        title="Area Elements",
-        description="(N,) array storing the first perpendicular vectors of each surface element.",
-    )
+    E_der_map: FieldData
+    """Electric field gradient map.
+    Dataset where the field components ("Ex", "Ey", "Ez") store the multiplication
+    of the forward and adjoint electric fields. The tangential components of this
+    dataset are used when computing adjoint gradients for shifting boundaries.
+    All components are used when computing volume-based gradients."""
 
-    normals: ArrayLike = pd.Field(
-        ...,
-        title="Normals",
-        description="(N, 3) array storing the normal vectors of each surface element.",
-    )
+    D_der_map: FieldData
+    """Displacement field gradient map.
+    Dataset where the field components ("Ex", "Ey", "Ez") store the multiplication
+    of the forward and adjoint displacement fields. The normal component of this
+    dataset is used when computing adjoint gradients for shifting boundaries."""
 
-    perps1: ArrayLike = pd.Field(
-        ...,
-        title="Perpendiculars 1",
-        description="(N, 3) array storing the first perpendicular vectors of each surface element.",
-    )
+    E_fwd: FieldData
+    """Forward electric fields.
+    Dataset where the field components ("Ex", "Ey", "Ez") represent the forward
+    electric fields used for computing gradients for a given structure."""
 
-    perps2: ArrayLike = pd.Field(
-        ...,
-        title="Perpendiculars 1",
-        description="(N, 3) array storing the first perpendicular vectors of each surface element.",
-    )
+    E_adj: FieldData
+    """Adjoint electric fields.
+    Dataset where the field components ("Ex", "Ey", "Ez") represent the adjoint
+    electric fields used for computing gradients for a given structure."""
 
+    D_fwd: FieldData
+    """Forward displacement fields.
+    Dataset where the field components ("Ex", "Ey", "Ez") represent the forward
+    displacement fields used for computing gradients for a given structure."""
 
-class DerivativeInfo(Tidy3dBaseModel):
-    """Stores derivative information passed to the ``.compute_derivatives`` methods."""
+    D_adj: FieldData
+    """Adjoint displacement fields.
+    Dataset where the field components ("Ex", "Ey", "Ez") represent the adjoint
+    displacement fields used for computing gradients for a given structure."""
 
-    paths: list[PathType] = pd.Field(
-        ...,
-        title="Paths to Traced Fields",
-        description="List of paths to the traced fields that need derivatives calculated.",
-    )
+    eps_data: PermittivityData
+    """Permittivity dataset.
+    Dataset of relative permittivity values along all three dimensions.
+    Used for automatically computing permittivity inside or outside of a simple geometry."""
 
-    E_der_map: FieldData = pd.Field(
-        ...,
-        title="Electric Field Gradient Map",
-        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` store the '
-        "multiplication of the forward and adjoint electric fields. The tangential components "
-        "of this dataset is used when computing adjoint gradients for shifting boundaries. "
-        "All components are used when computing volume-based gradients.",
-    )
+    eps_in: tidycomplex
+    """Permittivity inside the Structure.
+    Typically computed from Structure.medium.eps_model.
+    Used when it cannot be computed from eps_data or when eps_approx=True."""
 
-    D_der_map: FieldData = pd.Field(
-        ...,
-        title="Displacement Field Gradient Map",
-        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` store the '
-        "multiplication of the forward and adjoint displacement fields. The normal component "
-        "of this dataset is used when computing adjoint gradients for shifting boundaries.",
-    )
+    eps_out: tidycomplex
+    """Permittivity outside the Structure.
+    Typically computed from Simulation.medium.eps_model.
+    Used when it cannot be computed from eps_data or when eps_approx=True."""
 
-    E_fwd: FieldData = pd.Field(
-        ...,
-        title="Forward Electric Fields",
-        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
-        "forward electric fields used for computing gradients for a given structure.",
-    )
+    bounds: Bound
+    """Geometry bounds.
+    Bounds corresponding to the structure, used in Medium calculations."""
 
-    E_adj: FieldData = pd.Field(
-        ...,
-        title="Adjoint Electric Fields",
-        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
-        "adjoint electric fields used for computing gradients for a given structure.",
-    )
+    bounds_intersect: Bound
+    """Geometry and simulation intersection bounds.
+    Bounds corresponding to the minimum intersection between the structure
+    and the simulation it is contained in."""
 
-    D_fwd: FieldData = pd.Field(
-        ...,
-        title="Forward Displacement Fields",
-        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
-        "forward displacement fields used for computing gradients for a given structure.",
-    )
+    frequency: float
+    """Frequency of adjoint simulation at which the gradient is computed."""
 
-    D_adj: FieldData = pd.Field(
-        ...,
-        title="Adjoint Displacement Fields",
-        description='Dataset where the field components ``("Ex", "Ey", "Ez")`` represent the '
-        "adjoint displacement fields used for computing gradients for a given structure.",
-    )
+    # Optional fields with defaults
+    eps_background: Optional[tidycomplex] = None
+    """Permittivity in background.
+    Permittivity outside of the Structure as manually specified by
+    Structure.background_medium."""
 
-    eps_data: PermittivityData = pd.Field(
-        ...,
-        title="Permittivity Dataset",
-        description="Dataset of relative permittivity values along all three dimensions. "
-        "Used for automatically computing permittivity inside or outside of a simple geometry.",
-    )
+    eps_no_structure: Optional[SpatialDataArray] = None
+    """Permittivity without structure.
+    The permittivity of the original simulation without the structure that is
+    being differentiated with respect to. Used to approximate permittivity
+    outside of the structure for shape optimization."""
 
-    eps_in: tidycomplex = pd.Field(
-        title="Permittivity Inside",
-        description="Permittivity inside of the ``Structure``. "
-        "Typically computed from ``Structure.medium.eps_model``."
-        "Used when it can not be computed from ``eps_data`` or when ``eps_approx==True``.",
-    )
+    eps_inf_structure: Optional[SpatialDataArray] = None
+    """Permittivity with infinite structure.
+    The permittivity of the original simulation where the structure being
+    differentiated with respect to is infinitely large. Used to approximate
+    permittivity inside of the structure for shape optimization."""
 
-    eps_out: tidycomplex = pd.Field(
-        ...,
-        title="Permittivity Outside",
-        description="Permittivity outside of the ``Structure``. "
-        "Typically computed from ``Simulation.medium.eps_model``."
-        "Used when it can not be computed from ``eps_data`` or when ``eps_approx==True``.",
-    )
+    eps_approx: bool = False
+    """Use permittivity approximation.
+    If True, approximates outside permittivity using Simulation.medium and
+    the inside permittivity using Structure.medium. Only set True for
+    GeometryGroup handling where it is difficult to automatically evaluate
+    the inside and outside relative permittivity for each geometry."""
 
-    eps_background: tidycomplex = pd.Field(
-        None,
-        title="Permittivity in Background",
-        description="Permittivity outside of the ``Structure`` as manually specified by. "
-        "``Structure.background_medium``. ",
-    )
+    interpolators: Optional[dict] = None
+    """Pre-computed interpolators.
+    Optional pre-computed interpolators for field components and permittivity data.
+    When provided, avoids redundant interpolator creation for multiple geometries
+    sharing the same field data. This significantly improves performance for
+    GeometryGroup processing."""
 
-    bounds: Bound = pd.Field(
-        ...,
-        title="Geometry Bounds",
-        description="Bounds corresponding to the structure, used in ``Medium`` calculations.",
-    )
+    # private cache for interpolators
+    _interpolators_cache: dict = field(default_factory=dict, init=False, repr=False)
 
-    bounds_intersect: Bound = pd.Field(
-        ...,
-        title="Geometry and Simulation Intersections Bounds",
-        description="Bounds corresponding to the minimum intersection between the "
-        "structure and the simulation it is contained in.",
-    )
+    def updated_copy(self, **kwargs):
+        """Create a copy with updated fields."""
+        kwargs.pop("deep", None)
+        kwargs.pop("validate", None)
+        return replace(self, **kwargs)
 
-    frequency: float = pd.Field(
-        ...,
-        title="Frequency of adjoint simulation",
-        description="Frequency at which the adjoint gradient is computed.",
-    )
+    @staticmethod
+    def _get_freq_index(arr: ScalarFieldDataArray, freq: float) -> int:
+        """Get the index of the frequency in the array's frequency coordinates."""
+        if "f" not in arr.dims:
+            return None
+        freq_coords = arr.coords["f"].data
+        idx = np.argmin(np.abs(freq_coords - freq))
+        return int(idx)
 
-    eps_no_structure: SpatialDataArray = pd.Field(
-        None,
-        title="Permittivity Without Structure",
-        description="The permittivity of the original simulation without the structure that is "
-        "being differentiated with respect to. Used to approximate permittivity outside of the "
-        "structure for shape optimization.",
-    )
+    @staticmethod
+    def _nan_to_num_if_needed(coords: np.ndarray) -> np.ndarray:
+        """Convert NaN and infinite values to finite numbers, optimized for finite inputs."""
+        # skip check for small arrays - overhead exceeds benefit
+        if coords.size < 1000:
+            return np.nan_to_num(coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
 
-    eps_inf_structure: SpatialDataArray = pd.Field(
-        None,
-        title="Permittivity With Infinite Structure",
-        description="The permittivity of the original simulation where the structure being "
-        " differentiated with respect to is inifinitely large. Used to approximate permittivity "
-        "inside of the structure for shape optimization.",
-    )
+        if np.isfinite(coords).all():
+            return coords
+        return np.nan_to_num(coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
 
-    eps_approx: bool = pd.Field(
-        False,
-        title="Use Permittivity Approximation",
-        description="If ``True``, approximates outside permittivity using ``Simulation.medium``"
-        "and the inside permittivity using ``Structure.medium``. "
-        "Only set ``True`` for ``GeometryGroup`` handling where it is difficult to automatically "
-        "evaluate the inside and outside relative permittivity for each geometry.",
-    )
+    @staticmethod
+    def _evaluate_with_interpolators(
+        interpolators: dict, coords: np.ndarray
+    ) -> dict[str, np.ndarray]:
+        """Evaluate field components at coordinates using cached interpolators.
 
-    def updated_paths(self, paths: list[PathType]) -> DerivativeInfo:
-        """Update this ``DerivativeInfo`` with new set of paths."""
-        return self.updated_copy(paths=paths)
+        Parameters
+        ----------
+        interpolators : dict
+            Dictionary mapping field component names to ``RegularGridInterpolator`` objects.
+        coords : np.ndarray
+            Spatial coordinates (N, 3) where fields are evaluated.
 
-    def _eps_in(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
-        """permittivity inside, used internally."""
-        # determine inside medium
+        Returns
+        -------
+        dict[str, np.ndarray]
+            Dictionary mapping component names to field values at coordinates.
+        """
+        coords = DerivativeInfo._nan_to_num_if_needed(coords)
+        if coords.dtype != GRADIENT_DTYPE_FLOAT and coords.dtype != GRADIENT_DTYPE_COMPLEX:
+            coords = coords.astype(GRADIENT_DTYPE_FLOAT, copy=False)
+        return {name: interp(coords) for name, interp in interpolators.items()}
+
+    def create_interpolators(self, dtype=GRADIENT_DTYPE_FLOAT) -> dict:
+        """Create interpolators for field components and permittivity data.
+
+        Creates and caches ``RegularGridInterpolator`` objects for all field components
+        (E_fwd, E_adj, D_fwd, D_adj) and permittivity data (eps_inf, eps_no).
+        This caching strategy significantly improves performance by avoiding
+        repeated interpolator construction in gradient evaluation loops.
+
+        Parameters
+        ----------
+        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
+            Data type for interpolation coordinates and values.
+
+        Returns
+        -------
+        dict
+            Nested dictionary structure:
+            - Field data: {"E_fwd": {"Ex": interpolator, ...}, ...}
+            - Permittivity: {"eps_inf": interpolator, "eps_no": interpolator}
+        """
+        from scipy.interpolate import RegularGridInterpolator
+
+        cache_key = str(dtype)
+        if cache_key in self._interpolators_cache:
+            return self._interpolators_cache[cache_key]
+
+        interpolators = {}
+        coord_cache = {}
+
+        def _make_lazy_interpolator_group(field_data_dict, group_key, is_field_group=True):
+            """Helper to create a group of lazy interpolators."""
+            if is_field_group:
+                interpolators[group_key] = {}
+
+            for component_name, arr in field_data_dict.items():
+                # use object ID for caching to handle shared grids
+                arr_id = id(arr.data)
+                if arr_id not in coord_cache:
+                    points = tuple(c.data.astype(dtype, copy=False) for c in (arr.x, arr.y, arr.z))
+                    coord_cache[arr_id] = points
+                points = coord_cache[arr_id]
+
+                # defer data selection until the interpolator is called
+                def creator_func(arr=arr, points=points):
+                    freq_idx = self._get_freq_index(arr, self.frequency)
+                    data = arr.data if freq_idx is None else arr.isel(f=freq_idx).data
+                    data = data.astype(
+                        GRADIENT_DTYPE_COMPLEX if np.iscomplexobj(data) else dtype, copy=False
+                    )
+                    return RegularGridInterpolator(
+                        points, data, method="linear", bounds_error=False, fill_value=None
+                    )
+
+                if is_field_group:
+                    interpolators[group_key][component_name] = LazyInterpolator(creator_func)
+                else:
+                    # for permittivity, store directly with the key (not nested)
+                    interpolators[component_name] = LazyInterpolator(creator_func)
+
+        # process field interpolators (nested dictionaries)
+        for group_key, data_dict in [
+            ("E_fwd", self.E_fwd),
+            ("E_adj", self.E_adj),
+            ("D_fwd", self.D_fwd),
+            ("D_adj", self.D_adj),
+        ]:
+            _make_lazy_interpolator_group(data_dict, group_key, is_field_group=True)
+
+        # process permittivity interpolators
         if self.eps_inf_structure is not None:
-            return self.evaluate_eps(spatial_coords, is_inside=True)
-
-        return self.eps_in
-
-    def _eps_out(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
-        """permittivity outside, used internally."""
-
-        # determine background medium
-        if self.eps_background is not None:
-            return self.eps_background
-
+            _make_lazy_interpolator_group(
+                {"eps_inf": self.eps_inf_structure}, None, is_field_group=False
+            )
         if self.eps_no_structure is not None:
-            return self.evaluate_eps(spatial_coords, is_inside=False)
+            _make_lazy_interpolator_group(
+                {"eps_no": self.eps_no_structure}, None, is_field_group=False
+            )
 
-        return self.eps_out
+        self._interpolators_cache[cache_key] = interpolators
+        return interpolators
 
-    def delta_eps(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
-        """Change in the permittivity across interface (for E field grads)."""
-        return self._eps_in(spatial_coords) - self._eps_out(spatial_coords)
+    def evaluate_gradient_at_points(
+        self,
+        spatial_coords: np.ndarray,
+        normals: np.ndarray,
+        perps1: np.ndarray,
+        perps2: np.ndarray,
+        interpolators: Optional[dict] = None,
+    ) -> np.ndarray:
+        """Compute adjoint gradients at surface points for shape optimization.
 
-    def delta_eps_inv(self, spatial_coords: np.ndarray) -> complex | np.ndarray:
-        """Change in 1 / permittivity across interface (for D field grads)."""
-        return 1.0 / self._eps_in(spatial_coords) - 1.0 / self._eps_out(spatial_coords)
+        Implements the surface integral formulation for computing gradients with respect
+        to geometry perturbations.
 
-    def grad_surfaces(self, surface_mesh: DerivativeSurfaceMesh) -> dict:
-        """Derivative with respect to the surface mesh elements, given the derivative fields."""
+        Parameters
+        ----------
+        spatial_coords : np.ndarray
+            (N, 3) array of surface evaluation points.
+        normals : np.ndarray
+            (N, 3) array of outward-pointing normal vectors at each surface point.
+        perps1 : np.ndarray
+            (N, 3) array of first tangent vectors perpendicular to normals.
+        perps2 : np.ndarray
+            (N, 3) array of second tangent vectors perpendicular to both normals and perps1.
+        interpolators : dict = None
+            Pre-computed field interpolators for efficiency.
 
-        # strip out relevant info from `surface_mesh`
-        spatial_coords = surface_mesh.centers
-        normals = surface_mesh.normals
-        perps1 = surface_mesh.perps1
-        perps2 = surface_mesh.perps2
+        Returns
+        -------
+        np.ndarray
+            (N,) array of gradient values at each surface point. Must be integrated
+            with appropriate quadrature weights to get total gradient.
+        """
+        if interpolators is None:
+            raise NotImplementedError(
+                "Direct field evaluation without interpolators is not implemented. "
+                "Please create interpolators using 'create_interpolators()' first."
+            )
 
-        # unpack electric and displacement fields
-        E_fwd = self.E_fwd
-        E_adj = self.E_adj
-        D_fwd = self.D_fwd
-        D_adj = self.D_adj
+        # evaluate all field components at surface points
+        E_fwd_at_coords = {
+            name: interp(spatial_coords) for name, interp in interpolators["E_fwd"].items()
+        }
+        E_adj_at_coords = {
+            name: interp(spatial_coords) for name, interp in interpolators["E_adj"].items()
+        }
+        D_fwd_at_coords = {
+            name: interp(spatial_coords) for name, interp in interpolators["D_fwd"].items()
+        }
+        D_adj_at_coords = {
+            name: interp(spatial_coords) for name, interp in interpolators["D_adj"].items()
+        }
 
-        # compute the E and D fields at the edge centers
-        E_fwd_at_coords = self.evaluate_flds_at(
-            fld_dataset=E_fwd, spatial_coords=spatial_coords, freq=self.frequency
-        )
-        E_adj_at_coords = self.evaluate_flds_at(
-            fld_dataset=E_adj, spatial_coords=spatial_coords, freq=self.frequency
-        )
-        D_fwd_at_coords = self.evaluate_flds_at(
-            fld_dataset=D_fwd, spatial_coords=spatial_coords, freq=self.frequency
-        )
-        D_adj_at_coords = self.evaluate_flds_at(
-            fld_dataset=D_adj, spatial_coords=spatial_coords, freq=self.frequency
-        )
+        # project fields onto local surface basis (normal + two tangents)
+        D_fwd_norm = self._project_in_basis(D_fwd_at_coords, basis_vector=normals)
+        D_adj_norm = self._project_in_basis(D_adj_at_coords, basis_vector=normals)
 
-        # project the relevant field quantities into their respective basis for gradient calculation
-        D_fwd_norm = self.project_in_basis(D_fwd_at_coords, basis_vector=normals)
-        D_adj_norm = self.project_in_basis(D_adj_at_coords, basis_vector=normals)
+        E_fwd_perp1 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps1)
+        E_adj_perp1 = self._project_in_basis(E_adj_at_coords, basis_vector=perps1)
 
-        E_fwd_perp1 = self.project_in_basis(E_fwd_at_coords, basis_vector=perps1)
-        E_adj_perp1 = self.project_in_basis(E_adj_at_coords, basis_vector=perps1)
+        E_fwd_perp2 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps2)
+        E_adj_perp2 = self._project_in_basis(E_adj_at_coords, basis_vector=perps2)
 
-        E_fwd_perp2 = self.project_in_basis(E_fwd_at_coords, basis_vector=perps2)
-        E_adj_perp2 = self.project_in_basis(E_adj_at_coords, basis_vector=perps2)
-
-        # multiply forward and adjoint
+        # compute field products
         D_der_norm = D_fwd_norm * D_adj_norm
         E_der_perp1 = E_fwd_perp1 * E_adj_perp1
         E_der_perp2 = E_fwd_perp2 * E_adj_perp2
 
-        # approximate permittivity in and out
-        delta_eps_inv = self.delta_eps_inv(spatial_coords=spatial_coords)
-        delta_eps = self.delta_eps(spatial_coords=spatial_coords)
+        # get permittivity jumps across interface
+        if "eps_inf" in interpolators:
+            eps_in = interpolators["eps_inf"](spatial_coords)
+        else:
+            eps_in = self.eps_in
 
-        # put together VJP using D_normal and E_perp integration
-        vjps = 0.0
+        if "eps_no" in interpolators:
+            eps_out = interpolators["eps_no"](spatial_coords)
+        elif self.eps_background is not None:
+            eps_out = self.eps_background
+        else:
+            eps_out = self.eps_out
 
-        # perform D-normal integral
-        contrib_D = -delta_eps_inv * D_der_norm
-        vjps += contrib_D
+        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+        delta_eps = eps_in - eps_out
 
-        # perform E-perpendicular integrals
-        for E_der in (E_der_perp1, E_der_perp2):
-            contrib_E = E_der * delta_eps
-            vjps += contrib_E
+        vjps = -delta_eps_inv * D_der_norm + E_der_perp1 * delta_eps + E_der_perp2 * delta_eps
 
-        return surface_mesh.areas * vjps
-
-    def evaluate_eps(
-        self,
-        spatial_coords: np.ndarray,  # (N, 3)
-        is_inside: bool,
-    ) -> SpatialDataArray:
-        """Evaluate permittivity without the structure at a set of points."""
-
-        permittivity_array = self.eps_inf_structure if is_inside else self.eps_no_structure
-
-        if permittivity_array is None:
-            raise ValueError("Can't evaluate eps because the permittivity array is missing.")
-
-        key = "key"
-        eps_out = self.evaluate_flds_at(
-            fld_dataset={key: permittivity_array},
-            spatial_coords=spatial_coords,
-            freq=self.frequency,
-        )[key]
-        return eps_out.values
+        return vjps
 
     @staticmethod
-    def evaluate_flds_at(
-        fld_dataset: dict[str, ScalarFieldDataArray],
-        spatial_coords: np.ndarray,  # (N, 3)
-        freq: float,
-    ) -> dict[str, ScalarFieldDataArray]:
-        """Compute the value of an dict with keys Ex, Ey, Ez at a set of spatial locations."""
-
-        from scipy.interpolate import RegularGridInterpolator
-
-        coords = np.nan_to_num(spatial_coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
-        components = {}
-
-        edge_index_dim = "edge_index"
-        n_points = coords.shape[0]
-
-        for fld_name, arr in fld_dataset.items():
-            data = arr.sel(f=freq).values if "f" in arr.dims else arr.values
-            points = tuple(arr.coords[dim].values for dim in "xyz")
-
-            interpolator = RegularGridInterpolator(
-                points, data, method="linear", bounds_error=False, fill_value=None
-            )
-            result = interpolator(coords)
-
-            components[fld_name] = xr.DataArray(
-                result,
-                coords={edge_index_dim: np.arange(n_points)},
-                dims=[edge_index_dim],
-                name=fld_name,
-            )
-
-        return components
-
-    @staticmethod
-    def project_in_basis(
-        der_dataset: xr.Dataset,
+    def _project_in_basis(
+        field_components: dict[str, np.ndarray],
         basis_vector: np.ndarray,
-    ) -> xr.DataArray:
-        """Project a derivative dataset along a supplied basis vector."""
-        value = 0.0
-        for coeffs, dim in zip(basis_vector.T, "xyz"):
-            value += coeffs * der_dataset[f"E{dim}"]
-        return value
+    ) -> np.ndarray:
+        """Project 3D field components onto a basis vector.
+
+        Parameters
+        ----------
+        field_components : dict[str, np.ndarray]
+            Dictionary with keys like "Ex", "Ey", "Ez" or "Dx", "Dy", "Dz" containing field values.
+        basis_vector : np.ndarray
+            (N, 3) array of basis vectors, one per evaluation point.
+
+        Returns
+        -------
+        np.ndarray
+            (N,) array of projected field values.
+        """
+        prefix = next(iter(field_components.keys()))[0]
+        field_matrix = np.stack([field_components[f"{prefix}{dim}"] for dim in "xyz"], axis=1)
+        return np.einsum("ij,ij->i", field_matrix, basis_vector)
+
+    def adaptive_vjp_spacing(
+        self,
+        wl_fraction: float = DEFAULT_WAVELENGTH_FRACTION,
+        min_allowed_spacing: float = MINIMUM_SPACING,
+    ) -> float:
+        """Compute adaptive spacing for finite-difference gradient evaluation.
+
+        Determines an appropriate spatial resolution based on the material
+        properties and electromagnetic wavelength/skin depth.
+
+        Parameters
+        ----------
+        wl_fraction : float = 0.1
+            Fraction of wavelength/skin depth to use as spacing.
+        min_allowed_spacing : float = 1e-2
+            Minimum allowed spacing to prevent numerical issues.
+
+        Returns
+        -------
+        float
+            Adaptive spacing value for gradient evaluation.
+        """
+        eps_real = np.asarray(self.eps_in, dtype=np.complex128).real
+
+        dx_candidates = []
+
+        # wavelength-based sampling for dielectric materials
+        if np.any(eps_real > 0):
+            eps_max = eps_real[eps_real > 0].max()
+            lambda_min = C_0 / (self.frequency * np.sqrt(eps_max))
+            dx_candidates.append(wl_fraction * lambda_min)
+
+        # skin depth-based sampling for metallic materials
+        if np.any(eps_real <= 0):
+            omega = 2 * np.pi * self.frequency
+            eps_neg = eps_real[eps_real <= 0]
+            delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
+            dx_candidates.append(wl_fraction * delta_min)
+
+        return max(min(dx_candidates), min_allowed_spacing)
 
 
-# TODO: could we move this into a DataArray method?
 def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -> xr.DataArray:
-    """integrate a data array within bounds, assumes bounds are [2, N] for N dims."""
+    """Integrate a data array within specified spatial bounds.
 
-    # order bounds with dimension first (N, 2)
+    Clips the integration domain to the specified bounds and performs
+    numerical integration using the trapezoidal rule.
+
+    Parameters
+    ----------
+    arr : xr.DataArray
+        Data array to integrate.
+    dims : list[str]
+        Dimensions to integrate over (e.g., ['x', 'y', 'z']).
+    bounds : Bound
+        Integration bounds as [[xmin, ymin, zmin], [xmax, ymax, zmax]].
+
+    Returns
+    -------
+    xr.DataArray
+        Result of integration with specified dimensions removed.
+
+    Notes
+    -----
+    - Coordinates outside bounds are clipped, effectively setting dL=0
+    - Only integrates dimensions with more than one coordinate point
+    - Uses xarray's integrate method (trapezoidal rule)
+    """
     bounds = np.asarray(bounds).T
     all_coords = {}
 
-    # loop over all dimensions
     for dim, (bmin, bmax) in zip(dims, bounds):
         bmin = get_static(bmin)
         bmax = get_static(bmax)
 
-        coord_values = np.copy(arr.coords[dim].data)
-
-        # reset all coordinates outside of bounds to the bounds, so that dL = 0 in integral
-        np.clip(coord_values, bmin, bmax, out=coord_values)
-
-        all_coords[dim] = coord_values
+        # clip coordinates to bounds (sets dL=0 outside bounds)
+        coord_values = arr.coords[dim].data
+        all_coords[dim] = np.clip(coord_values, bmin, bmax)
 
     _arr = arr.assign_coords(**all_coords)
 
-    # uses trapezoidal rule
-    # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html
+    # only integrate dimensions with multiple points
     dims_integrate = [dim for dim in dims if len(_arr.coords[dim]) > 1]
     return _arr.integrate(coord=dims_integrate)
 

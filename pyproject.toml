@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.9.0rc2"
+version = "2.9.0"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -277,6 +277,9 @@ extend-ignore = [
 [tool.ruff.lint.isort]
 required-imports = ["from __future__ import annotations"]
 
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = ["scipy", "matplotlib"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*" = [
     "B015",   # useless comparison
@@ -287,6 +290,10 @@ required-imports = ["from __future__ import annotations"]
     "S101",   # asserts allowed in tests
     "NPY201", # numpy 2.* compatibility check
     "TID252", # allow relative imports in tests
+    "TID253", # allow heavy imports in tests
+]
+"tidy3d/plugins/**/*" = [
+    "TID253", # allow heavy imports in plugins (not used by MC)
 ]
 
 [tool.pytest.ini_options]

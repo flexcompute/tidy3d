@@ -129,7 +129,19 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         # don't warn for evaluating infinite frequency
         if is_inf_scalar:
             return eps_model(self, frequency)
-        if np.any(frequency < fmin * (1 - fp_eps)) or np.any(frequency > fmax * (1 + fp_eps)):
+
+        outside_lower = np.zeros_like(frequency, dtype=bool)
+        outside_upper = np.zeros_like(frequency, dtype=bool)
+
+        if fmin > 0:
+            outside_lower = frequency / fmin < 1 - fp_eps
+        elif fmin == 0:
+            outside_lower = frequency < 0
+
+        if fmax > 0:
+            outside_upper = frequency / fmax > 1 + fp_eps
+
+        if np.any(outside_lower | outside_upper):
             log.warning(
                 "frequency passed to 'Medium.eps_model()'"
                 f"is outside of 'Medium.frequency_range' = {self.frequency_range}",
@@ -884,7 +896,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         nonlinear_spec = values.get("nonlinear_spec")
         if val is not None and nonlinear_spec is not None:
             raise ValidationError(
-                f"For medium class {cls}, 'modulation_spec' of class {type(val)} and "
+                f"For medium class {cls.__name__}, 'modulation_spec' of class {type(val)} and "
                 f"'nonlinear_spec' of class {type(nonlinear_spec)} are "
                 "not simultaneously supported."
             )
@@ -1350,6 +1362,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """Whether the medium is a PEC."""
         return False
 
+    @cached_property
+    def is_pmc(self):
+        """Whether the medium is a PMC."""
+        return False
+
     def sel_inside(self, bounds: Bound) -> AbstractMedium:
         """Return a new medium that contains the minimal amount data necessary to cover
         a spatial region defined by ``bounds``.
@@ -1740,7 +1757,7 @@ class PECMedium(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
+                f"currently supported for medium class {cls.__name__}."
             )
         return val
 
@@ -1765,6 +1782,52 @@ class PECMedium(AbstractMedium):
 
 # PEC builtin instance
 PEC = PECMedium(name="PEC")
+
+
+# PMC keyword
+class PMCMedium(AbstractMedium):
+    """Perfect magnetic conductor class.
+
+    Note
+    ----
+
+        To avoid confusion from duplicate PMCs, must import ``tidy3d.PMC`` instance directly.
+
+
+
+    """
+
+    @pd.validator("modulation_spec", always=True)
+    def _validate_modulation_spec(cls, val):
+        """Check compatibility with modulation_spec."""
+        if val is not None:
+            raise ValidationError(
+                f"A 'modulation_spec' of class {type(val)} is not "
+                f"currently supported for medium class {cls.__name__}."
+            )
+        return val
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        # permittivity of a PMC.
+        return 1.0 + 0j
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
+        return 1.0
+
+    @cached_property
+    def is_pmc(self):
+        """Whether the medium is a PMC."""
+        return True
+
+
+# PEC builtin instance
+PMC = PMCMedium(name="PMC")
 
 
 class Medium(AbstractMedium):
@@ -5643,9 +5706,10 @@ class LossyMetalMedium(Medium):
         return ax
 
 
-IsotropicUniformMediumType = Union[
+IsotropicUniformMediumFor2DType = Union[
     Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
 ]
+IsotropicUniformMediumType = Union[IsotropicUniformMediumFor2DType, PMCMedium]
 IsotropicCustomMediumType = Union[
     CustomPoleResidue,
     CustomSellmeier,
@@ -5719,7 +5783,7 @@ class AnisotropicMedium(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}. "
+                f"currently supported for medium class {cls.__name__}. "
                 "Please add modulation to each component."
             )
         return val
@@ -5852,9 +5916,18 @@ class AnisotropicMedium(AbstractMedium):
         """Whether the medium is a PEC."""
         return any(self.is_comp_pec(i) for i in range(3))
 
+    @cached_property
+    def is_pmc(self):
+        """Whether the medium is a PMC."""
+        return any(self.is_comp_pmc(i) for i in range(3))
+
     def is_comp_pec(self, comp: Axis):
         """Whether the medium is a PEC."""
         return isinstance(self.components[["xx", "yy", "zz"][comp]], PECMedium)
+
+    def is_comp_pmc(self, comp: Axis):
+        """Whether the medium is a PMC."""
+        return isinstance(self.components[["xx", "yy", "zz"][comp]], PMCMedium)
 
     def sel_inside(self, bounds: Bound):
         """Return a new medium that contains the minimal amount data necessary to cover
@@ -5945,7 +6018,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
+                f"currently supported for medium class {cls.__name__}."
             )
         return val
 
@@ -6970,6 +7043,7 @@ MediumType3D = Union[
     Medium,
     AnisotropicMedium,
     PECMedium,
+    PMCMedium,
     PoleResidue,
     Sellmeier,
     Lorentz,
@@ -7004,7 +7078,7 @@ class Medium2D(AbstractMedium):
 
     """
 
-    ss: IsotropicUniformMediumType = pd.Field(
+    ss: IsotropicUniformMediumFor2DType = pd.Field(
         ...,
         title="SS Component",
         description="Medium describing the ss-component of the diagonal permittivity tensor. "
@@ -7015,7 +7089,7 @@ class Medium2D(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    tt: IsotropicUniformMediumType = pd.Field(
+    tt: IsotropicUniformMediumFor2DType = pd.Field(
         ...,
         title="TT Component",
         description="Medium describing the tt-component of the diagonal permittivity tensor. "
@@ -7032,12 +7106,12 @@ class Medium2D(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
+                f"currently supported for medium class {cls.__name__}."
             )
         return val
 
-    @skip_if_fields_missing(["ss"])
     @pd.validator("tt", always=True)
+    @skip_if_fields_missing(["ss"])
     def _validate_inplane_pec(cls, val, values):
         """ss/tt components must be both PEC or non-PEC."""
         if isinstance(val, PECMedium) != isinstance(values["ss"], PECMedium):
@@ -7049,7 +7123,7 @@ class Medium2D(AbstractMedium):
 
     @classmethod
     def _weighted_avg(
-        cls, meds: list[IsotropicUniformMediumType], weights: list[float]
+        cls, meds: list[IsotropicUniformMediumFor2DType], weights: list[float]
     ) -> Union[PoleResidue, PECMedium]:
         """Average ``meds`` with weights ``weights``."""
         eps_inf = 1
@@ -7103,7 +7177,7 @@ class Medium2D(AbstractMedium):
             The 3D material corresponding to this 2D material.
         """
 
-        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumType:
+        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumFor2DType:
             """Extract the ``comp`` component of ``med``."""
             if isinstance(med, AnisotropicMedium):
                 dim = "xyz"[comp]
@@ -7365,7 +7439,7 @@ class Medium2D(AbstractMedium):
         return np.mean([self.ss.sigma_model(freq), self.tt.sigma_model(freq)], axis=0)
 
     @property
-    def elements(self) -> dict[str, IsotropicUniformMediumType]:
+    def elements(self) -> dict[str, IsotropicUniformMediumFor2DType]:
         """The diagonal elements of the 2D medium as a dictionary."""
         return {"ss": self.ss, "tt": self.tt}
 

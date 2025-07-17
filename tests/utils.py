@@ -474,6 +474,10 @@ SIM_FULL = td.Simulation(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=td.AnisotropicMedium(xx=td.PEC, yy=td.Medium(), zz=td.Medium()),
         ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.AnisotropicMedium(xx=td.PMC, yy=td.Medium(), zz=td.Medium()),
+        ),
         # Test a fully anistropic medium
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -484,6 +488,10 @@ SIM_FULL = td.Simulation(
             geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),
             medium=td.PEC,
             name="pec_group",
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.PMC,
         ),
         td.Structure(
             geometry=td.Cylinder(radius=1.0, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
@@ -1132,7 +1140,7 @@ def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, fiel
 
 def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
     """Emulates a simulation run."""
-    from scipy.ndimage.filters import gaussian_filter
+    from scipy.ndimage import gaussian_filter
 
     x = kwargs.get("x0", 1.0)
 

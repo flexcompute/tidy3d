@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0rc2] - 2025-07-17
+
 ### Added
 - Implemented `FreqRange` utility class for frequency/wavelength handling with constructor methods `from_freq_interval()`, `from_wavelength()`, and `from_wvl_interval()`. 
 - Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
@@ -14,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `PointDipole.sources_from_angles()` that constructs a list of `PointDipole` objects needed to emulate a dipole oriented at a user-provided set of polar and azimuthal angles.
 - Added `priority` parameter to `web.run()` and related functions to allow vGPU users to set task priority (1-10) in the queue.
 - `EMEFieldMonitor` now supports `interval_space`.
+- `Simulation.precision` option allows to select `"double"` precision for very high-accuracy results. Note that this is very rarely needed, and doubles the simulation computational weight and correspondingly FlexCredit cost.
+- Added material type `PMCMedium` for perfect magnetic conductor.
+- `ModeSimulation.plot()` method that plots the mode simulation plane by default, or the containing FDTD simulation if any of ``x``, ``y``, or ``z`` is passed. 
+- Enable singularity correction at PEC and lossy metal edges.
+- New `VolumeMesher` simulation type and associated `VolumeMeshMonitor` and `VolumeMesherData`, which can be used to run the unstructured meshing for a `HeatChargeSimulation` separately before running the solver.
 
 ### Changed
 - Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
@@ -24,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 or `Absorber` classes (or when invoking `pml()`, `stable_pml()`, or `absorber()` functions)
 with fewer layers than recommended.
 - Warnings and error messages originating from `Structure`, `Source`, or `Monitor` classes now refer to problematic objects by their user-supplied `name` attribute, alongside their index.
+- File downloads are atomic. Interruptions or failures during download will no longer result in incomplete files.
+- Warnings are now generated (instead of errors) when instantiating `PML`, `StablePML`, or `Absorber` classes (or when invoking `pml()`, `stable_pml()`, or `absorber()` functions) with fewer layers than recommended.
+- `Simulation.subsection` can no longer take `symmetry` as an argument - the symmetry is always taken from the original simulation.
+- If a mode simulation is crossing a symmetry plane of the larger simulation domain, but the mode plane is not symmetric, a warning is issued that it will be expanded symmetrically. Previously this warning only happened during the solver run.
+- Enhanced `PolySlab` and `Cylinder` gradient computation via adaptive field sampling along geometry boundaries instead of fixed-grid center sampling.
+- Shape derivatives have been sped up significantly, especially for simulations containing many structures in a `GeometryGroup`.
 
 ### Fixed
 - Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
@@ -32,6 +45,8 @@ with fewer layers than recommended.
 - Fixed incorrect gradient computation in PyTorch plugin (`to_torch`) for functions returning multi-element arrays.
 - `MonitorData.get_amplitude()` no longers multiplies by a factor of `1j` and now directly returns the complex value of the data.
 - `EMESimulationData.port_modes_tuple` is now symmetry-expanded.
+- Fixed `Medium2D` validation error message when invalid data is passed to `ss`.
+- The phase of the amplitudes of a `DiffractionMonitor` was correctly centered such that the origin is at the monitor center.
 
 ## [2.9.0rc1] - 2025-06-10
 
@@ -74,7 +89,7 @@ with fewer layers than recommended.
 - Upon initialization, an FDTD `Simulation` will now try to create all `ModeSolver` objects associated to `ModeSource`-s and `ModeMonitor`-s so they can be validated.
 - `tidy3d.plugins.autograd.interpolate_spline()` and `tidy3d.plugins.autograd.add_at()` can now be called with keyword arguments during tracing.
 - Zero-size dimensions automatically receive periodic boundary conditions instead of raising an error.
-- Set `ModeSpec` precision to `double` by deafult for more accurate mode solver results. Does not apply to `EMEModeSpec`, where the `auto` precision is still default for speed and cost.
+- Set `ModeSpec` precision to `double` by default for more accurate mode solver results. Does not apply to `EMEModeSpec`, where the `auto` precision is still default for speed and cost.
 
 ## [2.8.4] - 2025-05-15
 

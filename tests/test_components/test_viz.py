@@ -336,6 +336,9 @@ def test_sim_plot_structures_fill():
 
 def test_tidy3d_matplotlib_style_application_on_import():
     """Test restore_matplotlib_rcparams() to reset the automatically applied matplotlib.rcParams"""
-    assert mpl.rcParams.get("axes.edgecolor") == "#ECEBEA"
+    assert mpl.rcParams.get("axes.prop_cycle").by_key()["color"][0] == "#176737"
     restore_matplotlib_rcparams()
-    assert mpl.rcParams.get("axes.edgecolor") == mpl.rcParamsDefault.get("axes.edgecolor")
+    assert (
+        mpl.rcParams.get("axes.prop_cycle").by_key()["color"][0]
+        == mpl.rcParamsDefault.get("axes.prop_cycle").by_key()["color"][0]
+    )

@@ -11,8 +11,6 @@ from typing import Literal, Optional, Union, get_args
 import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
-from matplotlib.collections import PatchCollection
-from matplotlib.patches import Rectangle
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
@@ -211,6 +209,30 @@ class ModeSolver(Tidy3dBaseModel):
 
         if not sim_box.intersects(val):
             raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
+        return val
+
+    @pydantic.validator("plane", always=True)
+    @skip_if_fields_missing(["simulation"])
+    def _warn_plane_crosses_symmetry(cls, val, values):
+        """Warn if the mode plane crosses the symmetry plane of the underlying simulation but
+        the centers do not match."""
+        simulation = values.get("simulation")
+        bounds = val.bounds
+        # now check in each dimension whether we cross symmetry plane
+        for dim in range(3):
+            if simulation.symmetry[dim] != 0:
+                crosses_symmetry = (
+                    bounds[0][dim] < simulation.center[dim]
+                    and bounds[1][dim] > simulation.center[dim]
+                )
+                if crosses_symmetry:
+                    if not isclose(val.center[dim], simulation.center[dim]):
+                        log.warning(
+                            f"The original simulation is symmetric along {'xyz'[dim]} direction. "
+                            "The mode simulation region does cross the symmetry plane but is "
+                            "not symmetric with respect to it. To preserve correct symmetry, "
+                            "the requested simulation region will be expanded by the solver."
+                        )
         return val
 
     def _post_init_validators(self) -> None:
@@ -1597,15 +1619,25 @@ class ModeSolver(Tidy3dBaseModel):
         if not np.all(np.isfinite(array)):  # make sure the array is valid
             return 0, 0
 
-        m = array * u.reshape(-1, 1)
-        i = np.arange(array.shape[0])
-        i = (m * i.reshape(-1, 1)).sum() / m.sum()
-        i = int(0.5 + i) if np.isfinite(i) else 0  # in case m.sum() ~ 0
+        m_i = array * u.reshape(-1, 1)
+        total_weight_i = m_i.sum()
 
-        m = array * v
-        j = np.arange(array.shape[1])
-        j = (m * j).sum() / m.sum()
-        j = int(0.5 + j) if np.isfinite(j) else 0
+        if total_weight_i == 0:
+            i = 0
+        else:
+            indices_i = np.arange(array.shape[0])
+            weighted_sum = (m_i * indices_i.reshape(-1, 1)).sum()
+            i = int(0.5 + weighted_sum / total_weight_i)
+
+        m_j = array * v
+        total_weight_j = m_j.sum()
+
+        if total_weight_j == 0:
+            j = 0
+        else:
+            indices_j = np.arange(array.shape[1])
+            weighted_sum = (m_j * indices_j).sum()
+            j = int(0.5 + weighted_sum / total_weight_j)
 
         return i, j
 
@@ -1810,6 +1842,8 @@ class ModeSolver(Tidy3dBaseModel):
         apply_sibc = isinstance(sim._subpixel.lossy_metal, SurfaceImpedance)
         for medium in sim.scene.mediums:
             if medium.is_pec:
+                return True
+            if medium.is_pmc:
                 return True
             if apply_sibc and isinstance(medium, LossyMetalMedium):
                 return True
@@ -2093,6 +2127,9 @@ class ModeSolver(Tidy3dBaseModel):
     def plot(
         self,
         ax: Ax = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        fill_structures: bool = True,
         **patch_kwargs,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -2101,6 +2138,12 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
 
         Returns
         -------
@@ -2115,20 +2158,26 @@ class ModeSolver(Tidy3dBaseModel):
 
         """
         # Get the mode plane normal axis, center, and limits.
-        a_center, h_lim, v_lim, _ = self._center_and_lims(
+        a_center, hlim_plane, vlim_plane, _ = self._center_and_lims(
             simulation=self.simulation, plane=self.plane
         )
+
+        if hlim is None:
+            hlim = hlim_plane
+        if vlim is None:
+            vlim = vlim_plane
 
         ax = self.simulation.plot(
             x=a_center[0],
             y=a_center[1],
             z=a_center[2],
-            hlim=h_lim,
-            vlim=v_lim,
+            hlim=hlim,
+            vlim=vlim,
             source_alpha=0,
             monitor_alpha=0,
             lumped_element_alpha=0,
             ax=ax,
+            fill_structures=fill_structures,
             **patch_kwargs,
         )
 
@@ -2392,6 +2441,10 @@ class ModeSolver(Tidy3dBaseModel):
         cls, simulation: Simulation, plane: Box, mode_spec: ModeSpec, ax: Ax = None
     ) -> Ax:
         """Plot the mode plane absorbing boundaries."""
+
+        from matplotlib.collections import PatchCollection
+        from matplotlib.patches import Rectangle
+
         # Get the mode plane normal axis, center, and limits.
         _, h_lim, v_lim, _ = cls._center_and_lims(simulation=simulation, plane=plane)
 
@@ -2535,6 +2588,7 @@ class ModeSolver(Tidy3dBaseModel):
             region=new_sim_box,
             monitors=[],
             sources=[],
+            warn_symmetry_expansion=False,  # we already warn upon mode solver creation
             grid_spec="identical",
             boundary_spec=new_bspec,
             remove_outside_custom_mediums=True,
