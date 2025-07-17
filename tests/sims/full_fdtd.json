@@ -632,6 +632,76 @@
                     1.0
                 ]
             },
+            "name": null,
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": null,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "viz_spec": null,
+                "heat_spec": null,
+                "type": "AnisotropicMedium",
+                "xx": {
+                    "attrs": {},
+                    "name": "PMC",
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "PMCMedium"
+                },
+                "yy": {
+                    "attrs": {},
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "Medium",
+                    "permittivity": 1.0,
+                    "conductivity": 0.0
+                },
+                "zz": {
+                    "attrs": {},
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "viz_spec": null,
+                    "heat_spec": null,
+                    "type": "Medium",
+                    "permittivity": 1.0,
+                    "conductivity": 0.0
+                }
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
             "name": "fully_anisotropic_box",
             "background_permittivity": null,
             "background_medium": null,
@@ -720,6 +790,39 @@
                 "viz_spec": null,
                 "heat_spec": null,
                 "type": "PECMedium"
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "PMC",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "viz_spec": null,
+                "heat_spec": null,
+                "type": "PMCMedium"
             }
         },
         {
@@ -2028,7 +2131,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 3,
+            "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -2060,7 +2163,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 3,
+            "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
@@ -2170,7 +2273,7 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "num_freqs": 3,
+            "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.5235987755982988,
             "angle_phi": 0.6283185307179586,
@@ -3291,7 +3394,7 @@
         "layer_refinement_specs": [],
         "type": "GridSpec"
     },
-    "version": "2.9.0rc1",
+    "version": "2.9.0rc2",
     "plot_length_units": "\u03bcm",
     "structure_priority_mode": "equal",
     "lumped_elements": [
@@ -3364,6 +3467,7 @@
     "simulation_type": "tidy3d",
     "post_norm": 1.0,
     "courant": 0.8,
+    "precision": "hybrid",
     "normalize_index": 0,
     "shutoff": 0.0001,
     "run_time": 1e-12
