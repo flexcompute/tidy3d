@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Updated the autograd check for if a `PolySlab` is inside the simulation bounds to work when the slab thickness is zero.
+
 ## [2.9.0rc2] - 2025-07-17
 
 ### Added

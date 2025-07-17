@@ -1449,11 +1449,13 @@ class PolySlab(base.Planar):
 
         sim_min, sim_max = map(np.asarray, derivative_info.bounds_intersect)
         extents = sim_max - sim_min
-        is_2d = np.isclose(extents[self.axis], 0.0)
+        polyslab_2d = np.isclose(np.diff(self.slab_bounds), 0.0)
+        sim_2d = np.isclose(extents[self.axis], 0.0)
+        is_2d = polyslab_2d and sim_2d
 
         # early return if polyslab is not in simulation domain
         slab_min, slab_max = self.slab_bounds
-        if (slab_max <= sim_min[self.axis]) or (slab_min >= sim_max[self.axis]):
+        if (slab_max < sim_min[self.axis]) or (slab_min > sim_max[self.axis]):
             log.warning(
                 "'PolySlab' lies completely outside the simulation domain.",
                 log_once=True,
