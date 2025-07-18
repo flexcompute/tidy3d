@@ -595,24 +595,28 @@ def test_validate_symmetry_boundaries():
     # simulation with symmetry along an axis should have the same boundaries defined on both sides
     td.Simulation(
         size=(1, 1, 1),
-        symmetry=(0, 1, 0),
+        symmetry=(1, 1, 1),
         grid_spec=td.GridSpec.uniform(dl=0.1),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.periodic(),
-            y=td.Boundary.periodic(),
+            y=td.Boundary(
+                # Now give the plus and minus boundaries different names to confirm it does not matter.
+                plus=td.PML(name="b1"),
+                minus=td.PML(name="b2"),
+            ),
             z=td.Boundary.pml(),
         ),
     )
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(pydantic.ValidationError, match="Symmetry"):
         td.Simulation(
             size=(1, 1, 1),
-            symmetry=(0, 1, 0),
+            symmetry=(1, 1, 1),
             grid_spec=td.GridSpec.uniform(dl=0.1),
             run_time=1e-12,
             boundary_spec=td.BoundarySpec(
                 x=td.Boundary.periodic(),
-                y=td.Boundary(plus=td.Boundary.pml(), minus=td.Boundary.periodic()),
+                y=td.Boundary(plus=td.PML(num_layers=10), minus=td.PML(num_layers=20)),
                 z=td.Boundary.pml(),
             ),
         )
