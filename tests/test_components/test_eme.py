@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 import pydantic.v1 as pd
 import pytest
@@ -48,6 +50,7 @@ def make_eme_sim():
 
     # field monitor stores field on FDTD grid
     field_monitor = td.EMEFieldMonitor(size=(0, td.inf, td.inf), name="field", colocate=True)
+    field_monitor2 = td.EMEFieldMonitor(size=(td.inf, td.inf, 0), name="field2", colocate=True)
 
     coeff_monitor = td.EMECoefficientMonitor(
         size=monitor_size,
@@ -74,7 +77,7 @@ def make_eme_sim():
         name="modes_out",
     )
 
-    monitors = [mode_monitor, coeff_monitor, field_monitor, modes_in, modes_out]
+    monitors = [mode_monitor, coeff_monitor, field_monitor, modes_in, modes_out, field_monitor2]
     structures = [waveguide]
 
     sim = td.EMESimulation(
@@ -605,8 +608,8 @@ def test_eme_simulation():
 
 
 def _get_eme_scalar_mode_field_data_array(num_sweep=0):
-    x = np.linspace(-1, 1, 35)
-    y = np.linspace(-1, 1, 38)
+    x = np.linspace(-1.5, 1.5, 35)
+    y = np.linspace(-1.5, 1.5, 38)
     z = [3]
     f = [td.C_0, 3e14]
     mode_index = np.arange(10)
@@ -632,6 +635,7 @@ def _get_eme_scalar_mode_field_data_array(num_sweep=0):
         coords=coords,
     )
     data[:, :, :, :, 0, :, 1] = np.nan
+    data = data.drop_vars("z")
     if num_sweep == 0:
         data = data.drop_vars("sweep_index")
     return data
@@ -645,6 +649,36 @@ def _get_eme_scalar_field_data_array(num_sweep=0):
     x = [0]
     y = np.linspace(-1.5, 1.5, 38)
     z = np.linspace(-1.5, 1.5, 35)
+    f = [td.C_0, 3e14]
+    mode_index = np.arange(5)
+    eme_port_index = [0, 1]
+    if num_sweep != 0:
+        sweep_index = np.arange(num_sweep)
+    else:
+        sweep_index = [0]
+    coords = {
+        "x": x,
+        "y": y,
+        "z": z,
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_port_index": eme_port_index,
+        "mode_index": mode_index,
+    }
+    data = td.EMEScalarFieldDataArray(
+        (1 + 1j) * np.random.random((len(x), len(y), len(z), 2, len(sweep_index), 2, 5)),
+        coords=coords,
+    )
+    data[:, :, :, :, 0, 0, 0] = np.nan
+    if num_sweep == 0:
+        data = data.drop_vars("sweep_index")
+    return data
+
+
+def _get_eme_scalar_field2_data_array(num_sweep=0):
+    x = np.linspace(-1.5, 1.5, 35)
+    y = np.linspace(-1.5, 1.5, 38)
+    z = [0]
     f = [td.C_0, 3e14]
     mode_index = np.arange(5)
     eme_port_index = [0, 1]
@@ -822,6 +856,12 @@ def _get_eme_field_dataset(num_sweep=0):
     return td.EMEFieldDataset(**fields)
 
 
+def _get_eme_field2_dataset(num_sweep=0):
+    field = _get_eme_scalar_field2_data_array(num_sweep=num_sweep)
+    fields = dict.fromkeys(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"], field)
+    return td.EMEFieldDataset(**fields)
+
+
 def test_eme_dataset():
     # test s matrix
     _ = _get_eme_smatrix_dataset()
@@ -877,19 +917,33 @@ def _get_eme_mode_solver_data(num_sweep=0):
     if num_sweep == 0:
         grid_primal_correction = grid_primal_correction.drop_vars("sweep_index")
         grid_dual_correction = grid_dual_correction.drop_vars("sweep_index")
+    sim = make_eme_sim()
+    grid_expanded = sim.discretize_monitor(monitor)
     return td.EMEModeSolverData(
         monitor=monitor,
         grid_primal_correction=grid_primal_correction,
         grid_dual_correction=grid_dual_correction,
+        grid_expanded=grid_expanded,
         **kwargs,
     )
 
 
 def _get_eme_field_data(num_sweep=0):
+    sim = make_eme_sim()
     dataset = _get_eme_field_dataset(num_sweep=num_sweep)
     kwargs = dataset.field_components
     monitor = td.EMEFieldMonitor(size=(0, td.inf, td.inf), name="field", colocate=True)
-    return td.EMEFieldData(monitor=monitor, **kwargs)
+    grid_expanded = sim.discretize_monitor(monitor)
+    return td.EMEFieldData(monitor=monitor, **kwargs, grid_expanded=grid_expanded)
+
+
+def _get_eme_field2_data(num_sweep=0):
+    sim = make_eme_sim()
+    dataset = _get_eme_field2_dataset(num_sweep=num_sweep)
+    kwargs = dataset.field_components
+    monitor = td.EMEFieldMonitor(size=(td.inf, td.inf, 0), name="field2", colocate=True)
+    grid_expanded = sim.discretize_monitor(monitor)
+    return td.EMEFieldData(monitor=monitor, **kwargs, grid_expanded=grid_expanded)
 
 
 def _get_eme_coeff_data(num_sweep=0):
@@ -955,12 +1009,14 @@ def test_eme_sim_data():
     mode_monitor_data = _get_eme_mode_solver_data()
     coeff_monitor_data = _get_eme_coeff_data()
     field_monitor_data = _get_eme_field_data()
+    field2_monitor_data = _get_eme_field2_data()
     modes_in_data = _get_mode_solver_data(modes_out=False, num_modes=3)
     modes_out_data = _get_mode_solver_data(modes_out=True, num_modes=2)
     data = [
         mode_monitor_data,
         coeff_monitor_data,
         field_monitor_data,
+        field2_monitor_data,
         modes_in_data,
         modes_out_data,
     ]
@@ -1220,6 +1276,14 @@ def test_eme_sim_data():
     assert "mode_index" not in field_in_basis.Ex.coords
     field_in_basis = sim_data.field_in_basis(field=sim_data["field"], modes=modes_in0, port_index=1)
     assert "mode_index" not in field_in_basis.Ex.coords
+
+    # test dot and outer dot with EME field and mode data
+    eme_field_data = sim_data["field2"]
+    mode_data = sim_data.port_modes_list_sweep[0][0]
+    eme_mode_data = sim_data["modes"]
+    datas = [eme_field_data, mode_data, eme_mode_data]
+    for data1, data2 in itertools.product(datas, datas):
+        _ = data1.outer_dot(data2)
 
 
 def test_eme_sim_subsection():

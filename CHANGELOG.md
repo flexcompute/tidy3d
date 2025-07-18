@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add support for computing `outer_dot` directly with monitor data from EME simulations.
+
 ## [2.9.0rc2] - 2025-07-17
 
 ### Added
