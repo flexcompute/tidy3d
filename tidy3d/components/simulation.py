@@ -113,6 +113,7 @@ from .types import (
     Ax,
     Axis,
     CoordinateOptional,
+    Direction,
     FreqBound,
     InterpMethod,
     PermittivityComponent,
@@ -368,7 +369,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     absorbers: tuple[PortAbsorber, ...] = pydantic.Field(
         (),
         title="Port Absorbers",
-        description="Absorbers based on the first order boundary conditions placed inside the computational domain.",
+        description="Planes with the first order absorbing boundary conditions placed inside the computational domain.",
     )
 
     @pydantic.validator("simulation_type", always=True)
@@ -550,6 +551,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         lumped_element_alpha : float = None
             Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        absorber_alpha : float = None
+            Opacity of the port absorbers. If ``None``, uses Tidy3d default.
+        absorber_actual_placement : bool = False
+            Use the exact placement of port absorbers which take into account their ``shift`` values.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -652,6 +657,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         lumped_element_alpha : float = None
             Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        absorber_alpha : float = None
+            Opacity of the port absorbers. If ``None``, uses Tidy3d default.
+        absorber_actual_placement : bool = False
+            Use the exact placement of port absorbers which take into account their ``shift`` values.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -2072,8 +2081,15 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """Clear cached attributes that become stale when subpixel changes."""
         self._cached_properties.pop("_mode_solver", None)
 
-    def _shift_value_signed(self, obj, direction, shift) -> float:
-        """How far (signed) to shift the source from the monitor."""
+    def _shift_value_signed(
+        self, obj: Box, direction: Direction, shift: int, name: Optional[str] = None
+    ) -> float:
+        """Calculate the signed distance corresponding to moving the object by ``shift`` number
+        of cells in the positive or negative ``direction`` along the dimension given by
+        ``obj._normal_axis``.
+        """
+        if name is None:
+            name = f"A '{obj.type}'"
 
         # get the grid boundaries and sizes along port normal from the simulation
         normal_axis = obj._normal_axis
@@ -2095,7 +2111,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             shifted_index = port_index + signed_shift
             if shifted_index < 0 or grid_centers[shifted_index] <= self.bounds[0][normal_axis]:
                 raise SetupError(
-                    # f"Port {port.name} normal is less than 2 cells to the boundary "
+                    f"{name} normal is less than 2 cells to the boundary "
                     f"on -{'xyz'[normal_axis]} side. "
                     "Please either increase the mesh resolution near the port or "
                     "move the port away from the boundary."
@@ -2109,7 +2125,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 or grid_centers[shifted_index] >= self.bounds[1][normal_axis]
             ):
                 raise SetupError(
-                    # f"Port {port.name} normal is tless than 2 cells to the boundary "
+                    f"{name} normal is less than 2 cells to the boundary "
                     f"on +{'xyz'[normal_axis]} side."
                     "Please either increase the mesh resolution near the port or "
                     "move the port away from the boundary."

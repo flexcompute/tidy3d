@@ -212,7 +212,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     absorbers: tuple[()] = pd.Field(
         (),
         title="Port Absorbers",
-        description="Absorbers based on the first order boundary conditions placed inside the computational domain.",
+        description="Planes with the first order absorbing boundary conditions placed inside the computational domain.",
     )
 
     grid_spec: GridSpec = pd.Field(

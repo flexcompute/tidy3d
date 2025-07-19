@@ -243,7 +243,9 @@ class PortAbsorber(Box):
     shift: int = pd.Field(
         0,
         title="Absorber Shift",
-        description="Displacement of absorber in the normal positive direction in number of cells.",
+        description="Displacement of absorber in the normal positive direction in number of cells. "
+        "This could be used to conveniently place an absorber right behind a source: "
+        "one can use the same `size` and `center` as for the source and simply set `shift` to 1.",
     )
 
     boundary_spec: Union[ModeABCBoundary, ABCBoundary] = pd.Field(
