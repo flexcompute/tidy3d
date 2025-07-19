@@ -18,6 +18,7 @@ from tidy3d.components.grid.grid import Grid
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource, ModeSpec
+from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import MeshOverrideStructure
 from tidy3d.components.types import Axis, Direction, FreqArray
@@ -30,6 +31,7 @@ from .base_terminal import AbstractTerminalPort
 
 DEFAULT_WAVE_PORT_NUM_CELLS = 5
 MIN_WAVE_PORT_NUM_CELLS = 3
+DEFAULT_WAVE_PORT_FRAME = PECFrame()
 
 
 class WavePort(AbstractTerminalPort, Box):
@@ -77,10 +79,10 @@ class WavePort(AbstractTerminalPort, Box):
         "Must be greater than or equal to 3. When set to `None`, no grid refinement is performed.",
     )
 
-    pec_frame: pd.NonNegativeInt = pd.Field(
-        0,
-        title="PEC Frame.",
-        description="Add a thin pec frame around the source during FDTD run.",
+    frame: Optional[PECFrame] = pd.Field(
+        DEFAULT_WAVE_PORT_FRAME,
+        title="Port Frame",
+        description="Add a thin frame around the port source during FDTD run for an improved injection.",
     )
 
     conjugated_dot_product: bool = pd.Field(
@@ -153,7 +155,7 @@ class WavePort(AbstractTerminalPort, Box):
             mode_index=self.mode_index,
             direction=self.direction,
             name=self.name,
-            pec_frame=self.pec_frame,
+            frame=self.frame,
         )
 
     def to_monitors(

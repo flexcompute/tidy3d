@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
 import pydantic.v1 as pydantic
 import pytest
 
@@ -391,7 +390,9 @@ def test_abc_boundaries_simulations():
             ),
             sources=[],
             medium=td.CustomMedium(
-                permittivity=td.SpatialDataArray([[[2, 3]]], coords=dict(x=[0], y=[0], z=[0, 1]))
+                permittivity=td.SpatialDataArray(
+                    [[[2, 3]]], coords={"x": [0], "y": [0], "z": [0, 1]}
+                )
             ),
             run_time=1e-20,
             boundary_spec=td.BoundarySpec.all_sides(td.ABCBoundary()),

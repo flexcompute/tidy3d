@@ -62,7 +62,11 @@ class TerminalComponentModeler(AbstractComponentModeler):
         """Instance of :class:`.Simulation` with all sources and absorbers added for each port, for troubleshooting."""
 
         sources = [port.to_source(self._source_time) for port in self.ports]
-        absorbers = [port.to_absorber() for port in self.ports if port.absorber]
+        absorbers = [
+            port.to_absorber()
+            for port in self.ports
+            if isinstance(port, WavePort) and port.absorber
+        ]
         return self.simulation.updated_copy(sources=sources, absorbers=absorbers)
 
     @equal_aspect

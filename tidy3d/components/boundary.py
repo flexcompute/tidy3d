@@ -232,7 +232,7 @@ class ModeABCBoundary(AbstractABCBoundary):
 
 
 class PortAbsorber(Box):
-    """One-way wave equation absorbing boundary conditions for absorbing a waveguide mode."""
+    """Internally placed plane with one-way wave equation boundary conditions for absorption of electromagnetic waves."""
 
     direction: Direction = pd.Field(
         ...,
@@ -249,7 +249,7 @@ class PortAbsorber(Box):
     boundary_spec: Union[ModeABCBoundary, ABCBoundary] = pd.Field(
         ...,
         title="Boundary Specification",
-        description="Boundary specification.",
+        description="Boundary specification for defining effective propagation index in the one-way wave equation.",
         discriminator=TYPE_TAG_STR,
     )
 

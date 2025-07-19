@@ -12,6 +12,7 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fie
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
 from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
 from tidy3d.components.validators import (
     assert_plane,
@@ -403,10 +404,10 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
-    pec_frame: pydantic.NonNegativeInt = pydantic.Field(
-        0,
-        title="PEC Frame.",
-        description="Add a thin pec frame around the source during FDTD run.",
+    frame: Optional[PECFrame] = pydantic.Field(
+        None,
+        title="Source Frame.",
+        description="Add a thin frame around the source during FDTD run for an improved injection.",
     )
 
     @cached_property

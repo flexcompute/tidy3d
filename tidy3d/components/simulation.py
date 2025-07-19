@@ -103,6 +103,7 @@ from .source.field import (
     ModeSource,
     PlaneWave,
 )
+from .source.frame import PECFrame
 from .source.time import ContinuousWave, CustomSourceTime
 from .source.utils import SourceType
 from .structure import MeshOverrideStructure, Structure
@@ -177,10 +178,6 @@ FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
 
 # RF frequency warning
 RF_FREQ_WARNING = 300e9
-
-# length and thickness of optional PEC frames around mode sources (in cells)
-MODE_PEC_FRAME_LENGTH = 2
-MODE_PEC_FRAME_THICKNESS = 1e-5
 
 
 def validate_boundaries_for_zero_dims(warn_on_change: bool = True):
@@ -370,8 +367,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
     absorbers: tuple[PortAbsorber, ...] = pydantic.Field(
         (),
-        title="Inner Absorbers",
-        description="Inner absorbers.",
+        title="Port Absorbers",
+        description="Absorbers based on the first order boundary conditions placed inside the computational domain.",
     )
 
     @pydantic.validator("simulation_type", always=True)
@@ -472,7 +469,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         ax: Ax = None,
         shifted: bool = False,
     ) -> Ax:
-        """Plot each of simulation's inner absorbers on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of simulation's port absorbers on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
         ----------
@@ -5166,7 +5163,7 @@ class Simulation(AbstractYeeGridSimulation):
             Time step (seconds).
         """
 
-        return self.with_pec_frames._dt
+        return self.with_port_frames._dt
 
     @cached_property
     def _dt(self) -> float:
@@ -5660,7 +5657,7 @@ class Simulation(AbstractYeeGridSimulation):
         direction = obj.direction
         if isinstance(obj, ModeSource):
             axis = obj.injection_axis
-            length = obj.pec_frame
+            length = obj.frame.length
         else:
             axis = obj.size.index(0.0)
             length = 1
@@ -5701,13 +5698,13 @@ class Simulation(AbstractYeeGridSimulation):
         return structure
 
     @cached_property
-    def with_pec_frames(self) -> Simulation:
+    def with_port_frames(self) -> Simulation:
         """Return an instance with added pec frames around mode sources."""
 
         pec_frames = [
             self._make_pec_frame(src)
             for src in self.sources
-            if isinstance(src, ModeSource) and src.pec_frame > 0
+            if isinstance(src, ModeSource) and isinstance(src.frame, PECFrame)
         ]
 
         pec_frames = pec_frames + [
@@ -5724,13 +5721,13 @@ class Simulation(AbstractYeeGridSimulation):
             grid_spec=GridSpec.from_grid(self.grid), structures=list(self.structures) + pec_frames
         )
 
-    def _validate_with_pec_frames(self):
+    def _validate_with_port_frames(self):
         """Validate that after adding pec frames simulation setup is still valid."""
 
         try:
-            _ = self.with_pec_frames
+            _ = self.with_port_frames
         except Exception:
             log.error(
                 "Simulation fails after requested mode source PEC frames are added. "
-                "Please inspect '.with_pec_frames'."
+                "Please inspect '.with_port_frames'."
             )

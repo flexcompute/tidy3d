@@ -342,6 +342,9 @@ from .components.source.field import (
     ModeSource,
     PlaneWave,
 )
+from .components.source.frame import (
+    PECFrame,
+)
 from .components.source.freq_range import FreqRange
 
 # sources
@@ -616,6 +619,7 @@ __all__ = [
     "NonlinearSusceptibility",
     "PECBoundary",
     "PECConformal",
+    "PECFrame",
     "PECMedium",
     "PMCBoundary",
     "PMCMedium",
