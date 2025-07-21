@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Dict, Literal, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
 try:
+    from matplotlib import colormaps
     from matplotlib import pyplot as plt
+    from matplotlib.colors import Normalize
 except ImportError:
     pass
 
-from matplotlib import colormaps
-from matplotlib.colors import Normalize
 from xarray import DataArray as XrDataArray
 
 from tidy3d.components.base import cached_property
@@ -140,7 +140,7 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] = None,
+        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
         **sel_kwargs,
     ) -> Union[TriangularSurfaceDataset, XrDataArray]:
         """Extract/interpolate data along one or more spatial or non-spatial directions.
@@ -193,10 +193,10 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         grid: bool = False,
         cbar: bool = True,
         cmap: str = "viridis",
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         buffer: float = 0.1,
-        cbar_kwargs: Dict = None,
+        cbar_kwargs: Optional[dict] = None,
     ) -> Ax:
         """Plot the surface mesh and/or associated data.
 
@@ -303,8 +303,8 @@ class TriangularSurfaceDataset(UnstructuredDataset):
         color: str = "magnitude",
         cbar: bool = True,
         cmap: str = "Spectral",
-        cbar_kwargs: Dict = None,
-        quiver_kwargs: Dict = None,
+        cbar_kwargs: Optional[dict] = None,
+        quiver_kwargs: Optional[dict] = None,
     ) -> Ax:
         """Plot the associated data as quiver plot. Field ``values`` must have length 3 along
         the dimension representing x, y, and z components.

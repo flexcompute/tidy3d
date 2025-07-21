@@ -85,8 +85,8 @@ from .monitor import (
     MonitorType,
     PermittivityMonitor,
     SurfaceIntegrationMonitor,
-    TimeMonitor,
     SurfaceMonitorType,
+    TimeMonitor,
 )
 from .run_time_spec import RunTimeSpec
 from .scene import MAX_NUM_MEDIUMS, Scene
@@ -109,14 +109,14 @@ from .types import (
     TYPE_TAG_STR,
     Ax,
     Axis,
+    Bound,
+    Coordinate,
     CoordinateOptional,
     FreqBound,
     InterpMethod,
     PermittivityComponent,
     Symmetry,
     annotate_type,
-    Coordinate,
-    Bound,
 )
 from .validators import (
     assert_objects_contained_in_sim_bounds,
@@ -3520,9 +3520,9 @@ class Simulation(AbstractYeeGridSimulation):
                 if not np.all(index_k == 0):
                     raise SetupError(f"'{monitor.type}' must not lie in a lossy medium.")
         return val
-    
+
     @classmethod
-    def _get_surface_monitor_bounds(cls, center: Coordinate, size: Coordinate, monitor: SurfaceMonitorType, medium: MediumType3D, structures: List[Structure]) -> List[Bound]:
+    def _get_surface_monitor_bounds(cls, center: Coordinate, size: Coordinate, monitor: SurfaceMonitorType, medium: MediumType3D, structures: list[Structure]) -> list[Bound]:
         """Intersect a surface monitor with the bounding box of each PEC structure."""
 
         sim_box = Box(center=center, size=size)
@@ -3530,7 +3530,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         if _is_pec_like(medium):
             return [mnt_bounds]
-        
+
         bounds = []
         for structure in structures:
             if _is_pec_like(structure.medium):

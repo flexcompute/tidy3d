@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from .axes_utils import add_ax_if_none, equal_aspect, make_ax, set_default_labels_and_title
+from .axes_utils import (
+    add_ax_3d_if_none,
+    add_ax_if_none,
+    equal_aspect,
+    make_ax,
+    set_default_labels_and_title,
+)
 from .descartes import Polygon, polygon_patch, polygon_path
 from .flex_style import apply_tidy3d_params, restore_matplotlib_rcparams
 from .plot_params import (
@@ -58,6 +64,7 @@ __all__ = [
     "PlotParams",
     "Polygon",
     "VisualizationSpec",
+    "add_ax_3d_if_none",
     "add_ax_if_none",
     "arrow_style",
     "equal_aspect",

@@ -1538,7 +1538,7 @@ class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, ABC):
 
     monitor: Union[SurfaceFieldMonitor, SurfaceFieldTimeMonitor]
 
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
+    symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetry",
         description="Symmetry eigenvalues of the original simulation in x, y, and z.",
@@ -1587,7 +1587,7 @@ class AbstractSurfaceFieldData(MonitorData, AbstractFieldDataset, ABC):
         return self.copy(update=self._symmetry_update_dict)
 
     @property
-    def _symmetry_update_dict(self) -> Dict:
+    def _symmetry_update_dict(self) -> dict:
         """Dictionary of data fields to create data with expanded symmetry."""
 
         raise Tidy3dNotImplementedError("Surface monitors currently do not support symmetry.")
@@ -1599,7 +1599,7 @@ class ElectromagneticSurfaceFieldData(
     """Collection of electromagnetic fields on a surface."""
 
     @property
-    def intensity(self) -> Tuple[TriangularSurfaceDataset, TriangularSurfaceDataset]:
+    def intensity(self) -> tuple[TriangularSurfaceDataset, TriangularSurfaceDataset]:
         """Return the sum of the squared absolute electric field components."""
         intensity = [None, None]
         for ind in range(2):
@@ -1609,7 +1609,7 @@ class ElectromagneticSurfaceFieldData(
         return intensity
 
     @property
-    def poynting(self) -> Tuple[TriangularSurfaceDataset, TriangularSurfaceDataset]:
+    def poynting(self) -> tuple[TriangularSurfaceDataset, TriangularSurfaceDataset]:
         """Time-averaged Poynting vector for frequency-domain data."""
 
         poynting = [None, None]

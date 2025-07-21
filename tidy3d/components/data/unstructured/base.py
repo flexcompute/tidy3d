@@ -507,9 +507,9 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         remove_unused_points: bool = False,
         values_type=IndexedDataArray,
         expect_complex: bool = False,
-        ignore_invalid_cells=False,
+        ignore_invalid_cells: bool = False,
     ) -> UnstructuredDataset:
-    """Initialize from a vtkUnstructuredGrid instance."""
+        """Initialize from a vtkUnstructuredGrid instance."""
 
         # read point, cells, and values info from a vtk instance
         cells_numpy = vtk["vtk_to_numpy"](vtk_obj.GetCells().GetConnectivityArray())
@@ -926,7 +926,7 @@ class UnstructuredDataset(Tidy3dBaseModel, np.lib.mixins.NDArrayOperatorsMixin, 
         x: Union[float, ArrayLike] = None,
         y: Union[float, ArrayLike] = None,
         z: Union[float, ArrayLike] = None,
-        method: Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"] = None,
+        method: Optional[Literal["None", "nearest", "pad", "ffill", "backfill", "bfill"]] = None,
         **sel_kwargs,
     ) -> Union[UnstructuredGridDataset, XrDataArray]:
         """Extract/interpolate data along one or more spatial or non-spatial directions. Must provide at least one argument

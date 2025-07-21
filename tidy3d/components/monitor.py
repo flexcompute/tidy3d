@@ -1542,13 +1542,13 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 class AbstractSurfaceMonitor(Monitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z on PEC surfaces."""
 
-    fields: Tuple[EMSurfaceField, ...] = pydantic.Field(
+    fields: tuple[EMSurfaceField, ...] = pydantic.Field(
         ["E", "H"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
     )
 
-    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -1689,7 +1689,7 @@ class SurfaceFieldTimeMonitor(AbstractSurfaceMonitor, TimeMonitor):
         storage += BYTES_REAL * num_cells * 7 * 4
 
         return storage
-    
+
 
 SurfaceMonitorType = Union[
     SurfaceFieldMonitor,

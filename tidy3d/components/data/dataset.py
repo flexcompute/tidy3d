@@ -29,8 +29,8 @@ from .data_array import (
     TimeDataArray,
     TriangleMeshDataArray,
 )
-from .zbf import ZBFData
 from .unstructured.surface import TriangularSurfaceDataset
+from .zbf import ZBFData
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
@@ -486,13 +486,13 @@ class AuxFieldTimeDataset(AuxFieldDataset):
 class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
     """Stores a collection of E and H fields with x, y, z components."""
 
-    E: Tuple[Optional[TriangularSurfaceDataset], Optional[TriangularSurfaceDataset]] = pd.Field(
+    E: tuple[Optional[TriangularSurfaceDataset], Optional[TriangularSurfaceDataset]] = pd.Field(
         (None, None),
         title="E",
         description="Spatial distribution of the electric field on the internal and external sides of the surface.",
     )
 
-    H: Tuple[Optional[TriangularSurfaceDataset], Optional[TriangularSurfaceDataset]] = pd.Field(
+    H: tuple[Optional[TriangularSurfaceDataset], Optional[TriangularSurfaceDataset]] = pd.Field(
         (None, None),
         title="H",
         description="Spatial distribution of the magnetic field on the internal and external sides of the surface.",
@@ -505,7 +505,7 @@ class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
         fields = {
             "E": self.E,
@@ -535,22 +535,22 @@ class ElectromagneticSurfaceFieldDataset(AbstractFieldDataset, ABC):
         return template.updated_copy(values=xr.cross(h_diff, self.normal.values, dim="axis"))
 
     @property
-    def grid_locations(self) -> Dict[str, str]:
+    def grid_locations(self) -> dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
         raise RuntimeError("Function 'grid_location' does not apply to surface monitors.")
 
     @property
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-        return dict(
-            Ex=lambda dim: -1 if (dim == 0) else +1,
-            Ey=lambda dim: -1 if (dim == 1) else +1,
-            Ez=lambda dim: -1 if (dim == 2) else +1,
-            Hx=lambda dim: +1 if (dim == 0) else -1,
-            Hy=lambda dim: +1 if (dim == 1) else -1,
-            Hz=lambda dim: +1 if (dim == 2) else -1,
-        )
+        return {
+            "Ex": lambda dim: -1 if (dim == 0) else +1,
+            "Ey": lambda dim: -1 if (dim == 1) else +1,
+            "Ez": lambda dim: -1 if (dim == 2) else +1,
+            "Hx": lambda dim: +1 if (dim == 0) else -1,
+            "Hy": lambda dim: +1 if (dim == 1) else -1,
+            "Hz": lambda dim: +1 if (dim == 2) else -1,
+        }
 
 
 class ModeSolverDataset(ElectromagneticFieldDataset):
