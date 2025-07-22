@@ -22,7 +22,7 @@ from tidy3d.web.api import webapi as web
 from tidy3d.web.core.constants import TaskId, TaskName
 from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.task_info import RunInfo, TaskInfo
-from tidy3d.web.core.types import PayType
+from tidy3d.web.core.types import BatchType, PayType
 
 from .tidy3d_stub import SimulationDataType, SimulationType
 
@@ -560,6 +560,19 @@ class Batch(WebContainer):
         description="Specify the payment method.",
     )
 
+    use_batch_endpoint: bool = pd.Field(
+        False,
+        title="Use Batch Endpoint",
+        description="Use new batch submission endpoint for improved performance. "
+        "When True, submits all simulations in a single API call.",
+    )
+
+    batch_type: BatchType = pd.Field(
+        BatchType.DEFAULT,
+        title="Batch Type",
+        description="Internal batch type for server-side optimization.",
+    )
+
     jobs_cached: dict[TaskName, Job] = pd.Field(
         None,
         title="Jobs (Cached)",
@@ -617,6 +630,16 @@ class Batch(WebContainer):
         if self.jobs_cached is not None:
             return self.jobs_cached
 
+        if self.use_batch_endpoint:
+            jobs = self._create_jobs_from_batch()
+            # store in cache to avoid re-submitting
+            object.__setattr__(self, "jobs_cached", jobs)
+            return jobs
+
+        return self._create_individual_jobs()
+
+    def _create_individual_jobs(self) -> dict[TaskName, Job]:
+        """Create jobs individually using the existing approach."""
         # the type of job to upload (to generalize to subclasses)
         JobType = self._job_type
         self_dict = self.dict()
@@ -639,6 +662,53 @@ class Batch(WebContainer):
                 job_kwargs["parent_tasks"] = self.parent_tasks[task_name]
             job = JobType(**job_kwargs)
             jobs[task_name] = job
+        return jobs
+
+    def _submit_batch(self) -> tuple[str, dict[str, str]]:
+        """Submit all simulations using the batch endpoint."""
+        return web.upload_batch(
+            simulations=self.simulations,
+            folder_name=self.folder_name,
+            callback_url=self.callback_url,
+            verbose=self.verbose,
+            simulation_type=self.simulation_type,
+            parent_tasks=self.parent_tasks,
+            source_required=True,
+            solver_version=self.solver_version,
+            reduce_simulation=self.reduce_simulation,
+            batch_type=self.batch_type.value,
+        )
+
+    def _create_jobs_from_batch(self) -> dict[TaskName, Job]:
+        """Create jobs from batch submission response."""
+        batch_id, task_ids = self._submit_batch()
+
+        # create Job objects with pre-assigned task_ids
+        JobType = self._job_type
+        self_dict = self.dict()
+
+        jobs = {}
+        for task_name, task_id in task_ids.items():
+            job_kwargs = {}
+
+            for key in JobType._upload_fields:
+                if key in self_dict:
+                    job_kwargs[key] = self_dict.get(key)
+
+            job_kwargs["task_name"] = task_name
+            job_kwargs["simulation"] = self.simulations[task_name]
+            job_kwargs["verbose"] = False
+            job_kwargs["solver_version"] = self.solver_version
+            job_kwargs["pay_type"] = self.pay_type
+            job_kwargs["reduce_simulation"] = self.reduce_simulation
+            job_kwargs["task_id_cached"] = task_id
+
+            if self.parent_tasks and task_name in self.parent_tasks:
+                job_kwargs["parent_tasks"] = self.parent_tasks[task_name]
+
+            job = JobType(**job_kwargs)
+            jobs[task_name] = job
+
         return jobs
 
     def to_file(self, fname: str) -> None:
@@ -709,12 +779,23 @@ class Batch(WebContainer):
 
         Note
         ----
+        Current implementation starts each job individually using ThreadPoolExecutor.
+        This could be enhanced with a dedicated batch start endpoint when using
+        the batch endpoint flow (use_batch_endpoint=True).
+
+        Future enhancement for batch endpoint mode:
+        - Could use BatchTask.submit() for atomic batch submission
+        - Benefits: Single API call, server-side coordination, better error handling
+        - Would eliminate need for client-side thread pool management
+
         To monitor the running simulations, can call :meth:`Batch.monitor`.
         """
         if self.verbose:
             console = get_logging_console()
             console.log(f"Started working on Batch containing {self.num_jobs} tasks.")
 
+        # TODO: For batch endpoint mode (use_batch_endpoint=True), consider using
+        # BatchTask.submit() for atomic batch submission instead of ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             for _, job in self.jobs.items():
                 executor.submit(job.start)
@@ -734,7 +815,19 @@ class Batch(WebContainer):
         return run_info_dict
 
     def monitor(self) -> None:
-        """Monitor progress of each of the running tasks."""
+        """Monitor progress of each of the running tasks.
+
+        Note
+        ----
+        Current implementation monitors each task individually. For batch endpoint mode
+        (use_batch_endpoint=True), this could be enhanced with batch monitoring endpoints
+        for better performance.
+
+        Future enhancement:
+        - Batch Status Endpoint: GET /tidy3d/projects/{folder_id}/batch/{batch_id}/status
+        - Benefits: Single API call for all task statuses, reduced polling overhead
+        - Could provide aggregate progress information and batch-level status
+        """
 
         def pbar_description(
             task_name: str, status: str, max_name_length: int, status_width: int

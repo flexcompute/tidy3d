@@ -68,3 +68,16 @@ class PayType(str, Enum):
             if key in cls.__members__:
                 return cls.__members__[key]
         return super()._missing_(value)
+
+
+class BatchType(str, Enum):
+    """Batch type for server-side batch processing optimization."""
+
+    BATCH = "BATCH"
+    INVDES = "INVDES"
+    PERMUTATION = "Permutation"
+    PARALLEL = "Parallel"
+    MONTE_CARLO = "MONTE_CARLO"
+    RF_SWEEP = "RF_SWEEP"
+
+    DEFAULT = "RF_SWEEP"  # noqa: PIE796

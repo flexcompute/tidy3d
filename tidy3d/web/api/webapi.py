@@ -26,9 +26,9 @@ from tidy3d.web.core.constants import (
     TaskId,
 )
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.task_core import Folder, SimulationTask
+from tidy3d.web.core.task_core import BatchTask, Folder, Task
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
-from tidy3d.web.core.types import PayType
+from tidy3d.web.core.types import BatchType, PayType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
 from .tidy3d_stub import SimulationDataType, SimulationType, Tidy3dStub, Tidy3dStubData
@@ -263,7 +263,7 @@ def upload(
 
     task_type = stub.get_type()
 
-    task = SimulationTask.create(
+    task = Task.create(
         task_type, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
     )
     if verbose:
@@ -300,6 +300,134 @@ def upload(
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
     return task.task_id
+
+
+@wait_for_connection
+def upload_batch(
+    simulations: dict[str, SimulationType],
+    folder_name: str = "default",
+    callback_url: Optional[str] = None,
+    verbose: bool = True,
+    simulation_type: str = "tidy3d",
+    parent_tasks: Optional[dict[str, list[str]]] = None,
+    source_required: bool = True,
+    solver_version: Optional[str] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
+    batch_type: str = BatchType.DEFAULT.value,
+) -> tuple[str, dict[str, str]]:
+    """
+    Upload multiple simulations to server in a single batch, but do not start running.
+
+    Parameters
+    ----------
+    simulations : dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
+        Mapping of task names to simulation objects.
+    folder_name : str
+        Name of folder to store tasks on web UI
+    callback_url : str = None
+        Http PUT url to receive simulation finish event.
+    verbose : bool = True
+        If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
+    parent_tasks : dict[str, list[str]]
+        Mapping of task names to lists of parent task ids.
+    source_required : bool = True
+        If ``True``, simulations without sources will raise an error before being uploaded.
+    solver_version : str = None
+        Target solver version.
+    reduce_simulation : Literal["auto", True, False] = "auto"
+        Whether to reduce structures in the simulation to the simulation domain only.
+    batch_type : str = BatchType.DEFAULT.value
+        Internal batch type for server-side optimization.
+
+    Returns
+    -------
+    tuple[str, dict[str, str]]
+        Batch ID and mapping of task names to task IDs.
+    """
+    if verbose:
+        console = get_logging_console()
+        console.log(f"Uploading batch of {len(simulations)} simulations to '{folder_name}'...")
+
+    # validate all simulations first
+    for task_name, simulation in simulations.items():
+        if isinstance(simulation, (ModeSolver, ModeSimulation)):
+            simulation = get_reduced_simulation(simulation, reduce_simulation)
+            simulations[task_name] = simulation
+
+        stub = Tidy3dStub(simulation=simulation)
+        stub.validate_pre_upload(source_required=source_required)
+
+    # create batch on server
+    batch_task = BatchTask.create(
+        simulations=simulations,
+        folder_name=folder_name,
+        callback_url=callback_url,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+        batch_type=batch_type,
+    )
+
+    if verbose:
+        console.log(f"Created batch '{batch_task.batch_id}' with {len(batch_task.task_ids)} tasks.")
+
+    # upload simulation files for each task
+    for task_name, task_id in batch_task.task_ids.items():
+        simulation = simulations[task_name]
+        stub = Tidy3dStub(simulation=simulation)
+        task_type = stub.get_type()
+
+        remote_sim_file = SIM_FILE_HDF5_GZ
+        if task_type == "MODE_SOLVER":
+            remote_sim_file = MODE_FILE_HDF5_GZ
+
+        # get the task object to upload the simulation
+        task = Task.get(task_id, verbose=False)
+        task.upload_simulation(
+            stub=stub,
+            verbose=False,
+            progress_callback=None,
+            remote_sim_file=remote_sim_file,
+        )
+
+        if solver_version is not None:
+            estimate_cost(task_id=task_id, solver_version=solver_version, verbose=False)
+
+    if verbose:
+        console.log(f"Batch upload complete. Batch ID: '{batch_task.batch_id}'")
+
+    return batch_task.batch_id, batch_task.task_ids
+
+
+# TODO: Future batch webapi functions
+# ====================================
+# The following batch operations are currently handled individually but could benefit
+# from dedicated batch endpoints for improved performance and atomicity:
+#
+# def start_batch(batch_id: str, folder_name: str = "default", **kwargs) -> None:
+#     """Start all tasks in a batch simultaneously."""
+#     # Would use: POST /tidy3d/projects/{folder_id}/batch/{batch_id}/submit
+#     # Benefits: Atomic batch submission, server-side coordination
+#
+# def delete_batch(batch_id: str, folder_name: str = "default") -> None:
+#     """Delete entire batch and all associated tasks."""
+#     # Would use: DELETE /tidy3d/projects/{folder_id}/batch/{batch_id}
+#     # Benefits: Atomic batch deletion, server-side cleanup
+#
+# def get_batch_info(batch_id: str, folder_name: str = "default") -> BatchInfo:
+#     """Get batch status and metadata."""
+#     # Would use: GET /tidy3d/projects/{folder_id}/batch/{batch_id}
+#     # Benefits: Single API call for batch overview, aggregate status
+#
+# def monitor_batch(batch_id: str, folder_name: str = "default") -> dict[str, str]:
+#     """Monitor progress of all tasks in a batch."""
+#     # Would use: GET /tidy3d/projects/{folder_id}/batch/{batch_id}/status
+#     # Benefits: Efficient batch progress tracking, reduced API calls
+#
+# These functions would complement the existing upload_batch() function to provide
+# a complete batch operations API that minimizes HTTP overhead and enables
+# server-side optimizations.
 
 
 def get_reduced_simulation(simulation, reduce_simulation):
@@ -365,7 +493,7 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
     :class:`TaskInfo`
         Object containing information about status, size, credits of task.
     """
-    task = SimulationTask.get(task_id, verbose)
+    task = Task.get(task_id, verbose)
     if not task:
         raise ValueError("Task not found.")
     return TaskInfo(**{"taskId": task.task_id, "taskType": task.task_type, **task.dict()})
@@ -400,7 +528,7 @@ def start(
     """
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
-    task = SimulationTask.get(task_id)
+    task = Task.get(task_id)
     if not task:
         raise ValueError("Task not found.")
     task.submit(
@@ -429,7 +557,7 @@ def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
         Average field intensity normalized to max value (1.0).
         Is ``None`` if run info not available.
     """
-    task = SimulationTask(taskId=task_id)
+    task = Task(taskId=task_id)
     return task.get_running_info()
 
 
@@ -448,7 +576,7 @@ def get_status(task_id) -> str:
     if status == "error":
         try:
             # Try to obtain the error message
-            task = SimulationTask(taskId=task_id)
+            task = Task(taskId=task_id)
             with tempfile.NamedTemporaryFile(suffix=".json") as tmp_file:
                 task.get_error_json(to_file=tmp_file.name)
                 with open(tmp_file.name) as f:
@@ -660,7 +788,7 @@ def download(
     if task_type == "MODE_SOLVER":
         remote_data_file = MODE_DATA_HDF5_GZ
 
-    task = SimulationTask(taskId=task_id)
+    task = Task(taskId=task_id)
     task.get_sim_data_hdf5(
         path,
         verbose=verbose,
@@ -684,7 +812,7 @@ def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = Tr
 
     """
 
-    task = SimulationTask(taskId=task_id)
+    task = Task(taskId=task_id)
     task.get_simulation_json(path, verbose=verbose)
 
 
@@ -716,7 +844,7 @@ def download_hdf5(
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
 
-    task = SimulationTask(taskId=task_id)
+    task = Task(taskId=task_id)
     task.get_simulation_hdf5(
         path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
     )
@@ -743,7 +871,7 @@ def load_simulation(
         Simulation loaded from downloaded json file.
     """
 
-    task = SimulationTask.get(task_id)
+    task = Task.get(task_id)
     task.get_simulation_json(path, verbose=verbose)
     return Tidy3dStub.from_file(path)
 
@@ -772,7 +900,7 @@ def download_log(
     ----
     To load downloaded results into data, call :meth:`load` with option ``replace_existing=False``.
     """
-    task = SimulationTask(taskId=task_id)
+    task = Task(taskId=task_id)
     task.get_log(path, verbose=verbose, progress_callback=progress_callback)
 
 
@@ -845,7 +973,7 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
     TaskInfo
         Object containing information about status, size, credits of task.
     """
-    task = SimulationTask(taskId=task_id)
+    task = Task(taskId=task_id)
     task.delete(versions=versions)
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
@@ -891,7 +1019,7 @@ def abort(task_id: TaskId) -> TaskInfo:
         Object containing information about status, size, credits of task.
     """
 
-    task = SimulationTask.get(task_id)
+    task = Task.get(task_id)
     if not task:
         raise ValueError("Task not found.")
     task.abort()
@@ -985,7 +1113,7 @@ def estimate_cost(
         print(f'The estimated maximum cost is {estimated_cost:.3f} Flex Credits.')
 
     """
-    task = SimulationTask.get(task_id)
+    task = Task.get(task_id)
     if not task:
         raise ValueError("Task not found.")
 

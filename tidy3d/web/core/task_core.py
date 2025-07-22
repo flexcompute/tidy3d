@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import pathlib
 import tempfile
+import uuid
+from abc import ABC
 from datetime import datetime
 from typing import Callable, Optional, Union
 
@@ -25,7 +27,14 @@ from .file_util import read_simulation_from_hdf5
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
 from .stub import TaskStub
-from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
+from .types import (
+    BatchType,
+    PayType,
+    Queryable,
+    ResourceLifecycle,
+    Submittable,
+    Tidy3DResource,
+)
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
@@ -115,13 +124,13 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
         Returns
         -------
-        tasks : List[:class:`.SimulationTask`]
+        tasks : List[:class:`.Task`]
             List of tasks in this folder
         """
         resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
         return (
             parse_obj_as(
-                list[SimulationTask],
+                list[Task],
                 resp,
             )
             if resp
@@ -129,33 +138,14 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         )
 
 
-class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
-    """Interface for managing the running of a :class:`.Simulation` task on server."""
+class BaseTask(ResourceLifecycle, ABC):
+    """Base class for all task types with shared server communication functionality."""
 
-    task_id: Optional[str] = Field(
-        ...,
-        title="task_id",
-        description="Task ID number, set when the task is uploaded, leave as None.",
-        alias="taskId",
-    )
     folder_id: Optional[str] = Field(
         None,
         title="folder_id",
         description="Folder ID number, set when the task is uploaded, leave as None.",
         alias="folderId",
-    )
-    status: Optional[str] = Field(title="status", description="Simulation task status.")
-
-    real_flex_unit: float = Field(
-        None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
-    )
-
-    created_at: Optional[datetime] = Field(
-        title="created_at", description="Time at which this task was created.", alias="createdAt"
-    )
-
-    task_type: Optional[str] = Field(
-        title="task_type", description="The type of task.", alias="taskType"
     )
 
     folder_name: Optional[str] = Field(
@@ -171,6 +161,229 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         description="Http PUT url to receive simulation finish event. "
         "The body content is a json file with fields "
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
+    )
+
+    @classmethod
+    def _get_folder(cls, folder_name: str) -> Folder:
+        """Get or create folder by name."""
+        return Folder.get(folder_name, create=True)
+
+    @classmethod
+    def _validate_simulations(
+        cls,
+        simulations: dict[str, td.components.base_sim.simulation.AbstractSimulation],
+        source_required: bool = True,
+    ) -> None:
+        """Validate simulations before upload."""
+        for simulation in simulations.values():
+            from tidy3d.web.api.tidy3d_stub import Tidy3dStub
+
+            stub = Tidy3dStub(simulation=simulation)
+            stub.validate_pre_upload(source_required=source_required)
+
+
+class BatchTask(BaseTask):
+    """Batch simulation task for handling multiple simulations."""
+
+    batch_id: str = Field(
+        ...,
+        title="Batch ID",
+        description="Unique identifier for the batch",
+    )
+    task_ids: dict[str, str] = Field(
+        ...,
+        title="Task IDs",
+        description="Mapping of task names to task IDs",
+    )
+
+    @classmethod
+    def create(
+        cls,
+        simulations: dict[str, td.components.base_sim.simulation.AbstractSimulation],
+        folder_name: str = "default",
+        callback_url: Optional[str] = None,
+        simulation_type: str = "tidy3d",
+        parent_tasks: Optional[dict[str, list[str]]] = None,
+        file_type: str = "Gz",
+        batch_type: str = BatchType.DEFAULT.value,
+    ) -> BatchTask:
+        """Create multiple simulation tasks in a single batch on the server.
+
+        Parameters
+        ----------
+        simulations : dict[str, AbstractSimulation]
+            Mapping of task names to simulation objects.
+        folder_name : str
+            The name of the folder to store the tasks. Default is "default".
+        callback_url : str
+            Http PUT url to receive simulation finish event.
+        simulation_type : str
+            Type of simulation being uploaded.
+        parent_tasks : dict[str, list[str]]
+            Mapping of task names to lists of parent task ids.
+        file_type : str
+            The simulation file type Json, Hdf5, Gz
+        batch_type : str
+            Internal batch type for server-side optimization.
+
+        Returns
+        -------
+        BatchTask
+            Object containing batch_id and mapping of task names to task IDs.
+        """
+        # Handle backwards compatibility
+        if simulation_type is None:
+            simulation_type = "tidy3d"
+
+        folder = cls._get_folder(folder_name)
+
+        cls._validate_simulations(simulations)
+
+        from tidy3d.web.api.tidy3d_stub import Tidy3dStub
+
+        batch_data = []
+        for task_name, sim in simulations.items():
+            stub = Tidy3dStub(simulation=sim)
+            task_data = {
+                "taskName": task_name,
+                "taskType": stub.get_type(),
+                "callbackUrl": callback_url,
+                "simulationType": simulation_type,
+                "fileType": file_type,
+            }
+            if parent_tasks and task_name in parent_tasks:
+                task_data["parentTasks"] = parent_tasks[task_name]
+            batch_data.append(task_data)
+
+        # generate a unique group name using a short UUID
+        short_uuid = str(uuid.uuid4())[:8]
+        group_name = f"batch_{short_uuid}"
+
+        for task in batch_data:
+            task["groupName"] = group_name
+
+        request_data = {
+            "tasks": batch_data,
+            "batchType": batch_type,
+            "groupName": group_name,
+        }
+
+        resp = http.post(
+            f"tidy3d/projects/{folder.folder_id}/batch-tasks",
+            request_data,
+        )
+
+        task_ids = {task["taskName"]: task["taskId"] for task in resp["tasks"]}
+
+        return cls(
+            batch_id=resp["batchId"],
+            task_ids=task_ids,
+            folder_id=folder.folder_id,
+            folder_name=folder_name,
+            callback_url=callback_url,
+        )
+
+    def delete(self) -> None:
+        """Delete all tasks in this batch.
+
+        Note
+        ----
+        Current implementation deletes each task individually. This could be enhanced
+        with a dedicated batch delete endpoint for better performance and atomicity.
+
+        Future enhancement:
+        - Batch Delete Endpoint: DELETE /tidy3d/projects/{folder_id}/batch/{batch_id}
+        - Benefits: Atomic batch deletion, server-side cleanup optimizations
+        - Would allow deleting entire batch and all associated tasks in single operation
+        - Could support options like deleting only completed tasks, preserving data, etc.
+        """
+        # TODO: Replace with batch delete endpoint when available
+        # DELETE /tidy3d/projects/{folder_id}/batch/{batch_id}
+        for task_id in self.task_ids.values():
+            http.delete(f"tidy3d/tasks/{task_id}")
+
+    def submit(self) -> None:
+        """Submit all tasks in the batch to start running.
+
+        Note
+        ----
+        Current implementation submits each task individually. This could be enhanced
+        with a dedicated batch submit endpoint for better performance and atomicity.
+
+        Future enhancement:
+        - Batch Submit Endpoint: POST /tidy3d/projects/{folder_id}/batch/{batch_id}/submit
+        - Benefits: Reduced HTTP overhead, atomic batch submission, server-side optimizations
+        - Would allow submitting all tasks in a single API call with batch-level parameters
+        """
+        # TODO: Replace with batch submit endpoint when available
+        # POST /tidy3d/projects/{folder_id}/batch/{batch_id}/submit
+        for task_id in self.task_ids.values():
+            http.post(f"tidy3d/tasks/{task_id}/submit")
+
+    @classmethod
+    def get(cls, batch_id: str, verbose: bool = True) -> BatchTask:
+        """Get batch from the server by batch_id.
+
+        Note
+        ----
+        This is a placeholder implementation as batch retrieval endpoints do not exist yet.
+        Current workaround would require storing batch_id and task_ids locally or retrieving
+        them through individual task queries.
+
+        Future enhancement:
+        - Batch Retrieval Endpoint: GET /tidy3d/projects/{folder_id}/batch/{batch_id}
+        - Should return: batch_id, task_ids mapping, batch metadata, status summary
+        - Could include aggregate batch status (all_completed, some_failed, etc.)
+        - May support filtering (only completed tasks, failed tasks, etc.)
+
+        Alternative implementation approaches:
+        1. Add batch_id field to individual tasks for reverse lookup
+        2. Store batch metadata in separate batch management system
+        3. Use task naming conventions to group related tasks
+
+        Parameters
+        ----------
+        batch_id: str
+            Unique identifier of batch on server.
+        verbose: bool
+            If `True`, will print progress, otherwise, will run silently.
+
+        Returns
+        -------
+        BatchTask
+            BatchTask object containing batch info.
+        """
+        # TODO: Implement batch retrieval endpoint when available
+        # GET /tidy3d/projects/{folder_id}/batch/{batch_id}
+        # For now, this is a placeholder to satisfy the abstract method requirement
+        raise NotImplementedError(
+            "Batch retrieval not yet implemented. "
+            "Future batch retrieval endpoint (GET /tidy3d/projects/{folder_id}/batch/{batch_id}) "
+            "would return batch metadata and task IDs mapping."
+        )
+
+
+class Task(BaseTask, Submittable, extra=Extra.allow):
+    """Interface for managing the running of a :class:`.Simulation` task on server."""
+
+    task_id: Optional[str] = Field(
+        ...,
+        title="task_id",
+        description="Task ID number, set when the task is uploaded, leave as None.",
+        alias="taskId",
+    )
+    status: Optional[str] = Field(title="status", description="Simulation task status.")
+
+    real_flex_unit: float = Field(
+        None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
+    )
+
+    created_at: Optional[datetime] = Field(
+        title="created_at", description="Time at which this task was created.", alias="createdAt"
+    )
+
+    task_type: Optional[str] = Field(
+        title="task_type", description="The type of task.", alias="taskType"
     )
 
     # simulation_type: str = pd.Field(
@@ -209,7 +422,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         simulation_type: str = "tidy3d",
         parent_tasks: Optional[list[str]] = None,
         file_type: str = "Gz",
-    ) -> SimulationTask:
+    ) -> Task:
         """Create a new task on the server.
 
         Parameters
@@ -232,8 +445,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         Returns
         -------
-        :class:`SimulationTask`
-            :class:`SimulationTask` object containing info about status, size,
+        :class:`Task`
+            :class:`Task` object containing info about status, size,
             credits of task and others.
         """
 
@@ -241,7 +454,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         if simulation_type is None:
             simulation_type = "tidy3d"
 
-        folder = Folder.get(folder_name, create=True)
+        folder = cls._get_folder(folder_name)
         resp = http.post(
             f"tidy3d/projects/{folder.folder_id}/tasks",
             {
@@ -253,10 +466,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "fileType": file_type,
             },
         )
-        return SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
+        return Task(**resp, taskType=task_type, folder_name=folder_name)
 
     @classmethod
-    def get(cls, task_id: str, verbose: bool = True) -> SimulationTask:
+    def get(cls, task_id: str, verbose: bool = True) -> Task:
         """Get task from the server by id.
 
         Parameters
@@ -268,8 +481,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         Returns
         -------
-        :class:`.SimulationTask`
-            :class:`.SimulationTask` object containing info about status,
+        :class:`.Task`
+            :class:`.Task` object containing info about status,
              size, credits of task and others.
         """
         try:
@@ -278,23 +491,23 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             td.log.error(f"The requested task ID '{task_id}' does not exist.")
             raise e
 
-        task = SimulationTask(**resp) if resp else None
+        task = Task(**resp) if resp else None
         return task
 
     @classmethod
-    def get_running_tasks(cls) -> list[SimulationTask]:
+    def get_running_tasks(cls) -> list[Task]:
         """Get a list of running tasks from the server"
 
         Returns
         -------
-        List[:class:`.SimulationTask`]
-            :class:`.SimulationTask` object containing info about status,
+        List[:class:`.Task`]
+            :class:`.Task` object containing info about status,
              size, credits of task and others.
         """
         resp = http.get("tidy3d/py/tasks")
         if not resp:
             return []
-        return parse_obj_as(list[SimulationTask], resp)
+        return parse_obj_as(list[Task], resp)
 
     def delete(self, versions: bool = False):
         """Delete current task from server.
@@ -688,11 +901,11 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                     )
                 try:
                     # get mesh task info
-                    mesh_task = SimulationTask.get(parent_tasks[0], verbose=False)
+                    mesh_task = Task.get(parent_tasks[0], verbose=False)
                     assert mesh_task.task_type == "VOLUME_MESH"
                     assert mesh_task.status == "success"
                     # get up-to-date task info
-                    task = SimulationTask.get(self.task_id, verbose=False)
+                    task = Task.get(self.task_id, verbose=False)
                     if task.fileMd5 != mesh_task.childFileMd5:
                         raise ValidationError(
                             "Simulation stored in parent task 'VolumeMesher' does not match the "
@@ -706,3 +919,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
             except Exception as e:
                 raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
+
+
+# Backward compatibility alias
+SimulationTask = Task
