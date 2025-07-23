@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Giving opposite boundaries different names no longer causes a symmetry validator failure.
 - Fixed issue with parameters in `InverseDesignResult` sometimes being outside of the valid parameter range.
+- Fixed performance regression for multi-frequency adjoint calculations.
 
 ## [2.9.0rc2] - 2025-07-17
 

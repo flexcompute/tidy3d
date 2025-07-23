@@ -103,7 +103,7 @@ class DummyDI:
         self.b = coeffs["b"]
         self.c = coeffs["c"]
         self.d = coeffs["d"]
-        self.frequency = 200e12
+        self.frequencies = [200e12]
         self.eps_in = 12.0
         self.interpolators = None
 
@@ -114,6 +114,8 @@ class DummyDI:
         )
 
     adaptive_vjp_spacing = DerivativeInfo.adaptive_vjp_spacing
+    wavelength_min = property(lambda self: DerivativeInfo.wavelength_min.fget(self))
+    wavelength_max = property(lambda self: DerivativeInfo.wavelength_max.fget(self))
 
     def create_interpolators(self, dtype=None):
         return {}

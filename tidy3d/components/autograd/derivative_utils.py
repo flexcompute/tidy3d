@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import numpy as np
 import xarray as xr
 
-from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
-from tidy3d.components.types import Bound, tidycomplex
+from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
+from tidy3d.components.types import ArrayLike, Bound, tidycomplex
 from tidy3d.constants import C_0, LARGE_NUMBER
 
 from .constants import (
@@ -23,6 +23,7 @@ from .utils import get_static
 
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
+EpsType = Union[tidycomplex, FreqDataArray]
 
 
 class LazyInterpolator:
@@ -90,12 +91,12 @@ class DerivativeInfo:
     Dataset of relative permittivity values along all three dimensions.
     Used for automatically computing permittivity inside or outside of a simple geometry."""
 
-    eps_in: tidycomplex
+    eps_in: EpsType
     """Permittivity inside the Structure.
     Typically computed from Structure.medium.eps_model.
     Used when it cannot be computed from eps_data or when eps_approx=True."""
 
-    eps_out: tidycomplex
+    eps_out: EpsType
     """Permittivity outside the Structure.
     Typically computed from Simulation.medium.eps_model.
     Used when it cannot be computed from eps_data or when eps_approx=True."""
@@ -109,22 +110,22 @@ class DerivativeInfo:
     Bounds corresponding to the minimum intersection between the structure
     and the simulation it is contained in."""
 
-    frequency: float
-    """Frequency of adjoint simulation at which the gradient is computed."""
+    frequencies: ArrayLike
+    """Frequencies at which the adjoint gradient should be computed."""
 
     # Optional fields with defaults
-    eps_background: Optional[tidycomplex] = None
+    eps_background: Optional[EpsType] = None
     """Permittivity in background.
     Permittivity outside of the Structure as manually specified by
     Structure.background_medium."""
 
-    eps_no_structure: Optional[SpatialDataArray] = None
+    eps_no_structure: Optional[ScalarFieldDataArray] = None
     """Permittivity without structure.
     The permittivity of the original simulation without the structure that is
     being differentiated with respect to. Used to approximate permittivity
     outside of the structure for shape optimization."""
 
-    eps_inf_structure: Optional[SpatialDataArray] = None
+    eps_inf_structure: Optional[ScalarFieldDataArray] = None
     """Permittivity with infinite structure.
     The permittivity of the original simulation where the structure being
     differentiated with respect to is infinitely large. Used to approximate
@@ -154,18 +155,9 @@ class DerivativeInfo:
         return replace(self, **kwargs)
 
     @staticmethod
-    def _get_freq_index(arr: ScalarFieldDataArray, freq: float) -> int:
-        """Get the index of the frequency in the array's frequency coordinates."""
-        if "f" not in arr.dims:
-            return None
-        freq_coords = arr.coords["f"].data
-        idx = np.argmin(np.abs(freq_coords - freq))
-        return int(idx)
-
-    @staticmethod
     def _nan_to_num_if_needed(coords: np.ndarray) -> np.ndarray:
         """Convert NaN and infinite values to finite numbers, optimized for finite inputs."""
-        # skip check for small arrays - overhead exceeds benefit
+        # skip check for small arrays
         if coords.size < 1000:
             return np.nan_to_num(coords, posinf=LARGE_NUMBER, neginf=-LARGE_NUMBER)
 
@@ -238,24 +230,50 @@ class DerivativeInfo:
                     coord_cache[arr_id] = points
                 points = coord_cache[arr_id]
 
-                # defer data selection until the interpolator is called
                 def creator_func(arr=arr, points=points):
-                    freq_idx = self._get_freq_index(arr, self.frequency)
-                    data = arr.data if freq_idx is None else arr.isel(f=freq_idx).data
-                    data = data.astype(
-                        GRADIENT_DTYPE_COMPLEX if np.iscomplexobj(data) else dtype, copy=False
+                    data = arr.data.astype(
+                        GRADIENT_DTYPE_COMPLEX if np.iscomplexobj(arr.data) else dtype, copy=False
                     )
-                    return RegularGridInterpolator(
-                        points, data, method="linear", bounds_error=False, fill_value=None
+
+                    # create interpolator with frequency dimension
+                    if "f" in arr.dims:
+                        freq_coords = arr.coords["f"].data.astype(dtype, copy=False)
+                        # ensure frequency dimension is last
+                        if arr.dims != ("x", "y", "z", "f"):
+                            freq_dim_idx = arr.dims.index("f")
+                            axes = list(range(data.ndim))
+                            axes.append(axes.pop(freq_dim_idx))
+                            data = np.transpose(data, axes)
+                    else:
+                        # single frequency case - add singleton dimension
+                        freq_coords = np.array([0.0], dtype=dtype)
+                        data = data[..., np.newaxis]
+
+                    points_with_freq = (*points, freq_coords)
+                    interpolator_obj = RegularGridInterpolator(
+                        points_with_freq, data, method="linear", bounds_error=False, fill_value=None
                     )
+
+                    def interpolator(coords):
+                        # coords: (N, 3) spatial points
+                        n_points = coords.shape[0]
+                        n_freqs = len(freq_coords)
+
+                        # build coordinates with frequency dimension
+                        coords_with_freq = np.empty((n_points * n_freqs, 4), dtype=coords.dtype)
+                        coords_with_freq[:, :3] = np.repeat(coords, n_freqs, axis=0)
+                        coords_with_freq[:, 3] = np.tile(freq_coords, n_points)
+
+                        result = interpolator_obj(coords_with_freq)
+                        return result.reshape(n_points, n_freqs)
+
+                    return interpolator
 
                 if is_field_group:
                     interpolators[group_key][component_name] = LazyInterpolator(creator_func)
                 else:
-                    # for permittivity, store directly with the key (not nested)
                     interpolators[component_name] = LazyInterpolator(creator_func)
 
-        # process field interpolators (nested dictionaries)
         for group_key, data_dict in [
             ("E_fwd", self.E_fwd),
             ("E_adj", self.E_adj),
@@ -264,7 +282,6 @@ class DerivativeInfo:
         ]:
             _make_lazy_interpolator_group(data_dict, group_key, is_field_group=True)
 
-        # process permittivity interpolators
         if self.eps_inf_structure is not None:
             _make_lazy_interpolator_group(
                 {"eps_inf": self.eps_inf_structure}, None, is_field_group=False
@@ -339,30 +356,49 @@ class DerivativeInfo:
         E_fwd_perp2 = self._project_in_basis(E_fwd_at_coords, basis_vector=perps2)
         E_adj_perp2 = self._project_in_basis(E_adj_at_coords, basis_vector=perps2)
 
-        # compute field products
         D_der_norm = D_fwd_norm * D_adj_norm
         E_der_perp1 = E_fwd_perp1 * E_adj_perp1
         E_der_perp2 = E_fwd_perp2 * E_adj_perp2
 
-        # get permittivity jumps across interface
         if "eps_inf" in interpolators:
             eps_in = interpolators["eps_inf"](spatial_coords)
         else:
-            eps_in = self.eps_in
+            eps_in = self._prepare_epsilon(self.eps_in)
 
         if "eps_no" in interpolators:
             eps_out = interpolators["eps_no"](spatial_coords)
-        elif self.eps_background is not None:
-            eps_out = self.eps_background
         else:
-            eps_out = self.eps_out
+            # use eps_background if available, otherwise use eps_out
+            eps_to_prepare = (
+                self.eps_background if self.eps_background is not None else self.eps_out
+            )
+            eps_out = self._prepare_epsilon(eps_to_prepare)
 
         delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
         delta_eps = eps_in - eps_out
 
         vjps = -delta_eps_inv * D_der_norm + E_der_perp1 * delta_eps + E_der_perp2 * delta_eps
 
+        # sum over frequency dimension
+        vjps = np.sum(vjps, axis=-1)
+
         return vjps
+
+    @staticmethod
+    def _prepare_epsilon(eps: EpsType) -> np.ndarray:
+        """Prepare epsilon values for multi-frequency.
+
+        For FreqDataArray, extracts values and broadcasts to shape (1, n_freqs).
+        For scalar values, broadcasts to shape (1, 1) for consistency with multi-frequency.
+        """
+        if isinstance(eps, FreqDataArray):
+            # data is already sliced, just extract values
+            eps_values = eps.values
+            # shape: (n_freqs,) - need to broadcast to (1, n_freqs)
+            return eps_values[np.newaxis, :]
+        else:
+            # scalar value - broadcast to (1, 1)
+            return np.array([[eps]])
 
     @staticmethod
     def _project_in_basis(
@@ -375,17 +411,21 @@ class DerivativeInfo:
         ----------
         field_components : dict[str, np.ndarray]
             Dictionary with keys like "Ex", "Ey", "Ez" or "Dx", "Dy", "Dz" containing field values.
+            Values have shape (N, F) where F is the number of frequencies.
         basis_vector : np.ndarray
             (N, 3) array of basis vectors, one per evaluation point.
 
         Returns
         -------
         np.ndarray
-            (N,) array of projected field values.
+            Projected field values with shape (N, F).
         """
         prefix = next(iter(field_components.keys()))[0]
-        field_matrix = np.stack([field_components[f"{prefix}{dim}"] for dim in "xyz"], axis=1)
-        return np.einsum("ij,ij->i", field_matrix, basis_vector)
+        field_matrix = np.stack([field_components[f"{prefix}{dim}"] for dim in "xyz"], axis=0)
+
+        # always expect (3, N, F) shape, transpose to (N, 3, F)
+        field_matrix = np.transpose(field_matrix, (1, 0, 2))
+        return np.einsum("ij...,ij->i...", field_matrix, basis_vector)
 
     def adaptive_vjp_spacing(
         self,
@@ -409,24 +449,37 @@ class DerivativeInfo:
         float
             Adaptive spacing value for gradient evaluation.
         """
-        eps_real = np.asarray(self.eps_in, dtype=np.complex128).real
+        # handle FreqDataArray or scalar eps_in
+        if isinstance(self.eps_in, FreqDataArray):
+            eps_real = np.asarray(self.eps_in.values, dtype=np.complex128).real
+        else:
+            eps_real = np.asarray(self.eps_in, dtype=np.complex128).real
 
         dx_candidates = []
+        max_frequency = np.max(self.frequencies)
 
-        # wavelength-based sampling for dielectric materials
+        # wavelength-based sampling for dielectrics
         if np.any(eps_real > 0):
             eps_max = eps_real[eps_real > 0].max()
-            lambda_min = C_0 / (self.frequency * np.sqrt(eps_max))
+            lambda_min = self.wavelength_min / np.sqrt(eps_max)
             dx_candidates.append(wl_fraction * lambda_min)
 
-        # skin depth-based sampling for metallic materials
+        # skin depth sampling for metals
         if np.any(eps_real <= 0):
-            omega = 2 * np.pi * self.frequency
+            omega = 2 * np.pi * max_frequency
             eps_neg = eps_real[eps_real <= 0]
             delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
             dx_candidates.append(wl_fraction * delta_min)
 
         return max(min(dx_candidates), min_allowed_spacing)
+
+    @property
+    def wavelength_min(self) -> float:
+        return C_0 / np.max(self.frequencies)
+
+    @property
+    def wavelength_max(self) -> float:
+        return C_0 / np.min(self.frequencies)
 
 
 def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -> xr.DataArray:

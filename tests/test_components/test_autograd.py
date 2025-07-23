@@ -1575,10 +1575,15 @@ def test_pole_residue(monkeypatch):
 
     dJ_deps = ag.holomorphic_grad(J)(eps0)
 
+    # Wrap the scalar as a DataArray to match expected return type
+    import xarray as xr
+
+    dJ_deps_array = xr.DataArray([dJ_deps], dims=["f"], coords={"f": [freq]})
+
     monkeypatch.setattr(
         td.PoleResidue,
         "_derivative_eps_complex_volume",
-        lambda self, E_der_map, bounds, freqs: dJ_deps,
+        lambda self, E_der_map, bounds: dJ_deps_array,
     )
 
     import importlib
@@ -1603,10 +1608,14 @@ def test_pole_residue(monkeypatch):
         eps_data={},
         eps_in=2.0,
         eps_out=1.0,
-        frequency=freq,
+        frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords={"x": [0], "y": [0], "z": [0]}),
-        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords={"x": [0], "y": [0], "z": [0]}),
+        eps_no_structure=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
+        eps_inf_structure=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
@@ -1661,7 +1670,7 @@ def test_custom_pole_residue(monkeypatch):
     monkeypatch.setattr(
         td.CustomPoleResidue,
         "_derivative_field_cmp",
-        lambda self, E_der_map, eps_data, dim, freqs: dJ_deps / 3.0,
+        lambda self, E_der_map, eps_data, dim: dJ_deps / 3.0,
     )
 
     import importlib
@@ -1685,10 +1694,14 @@ def test_custom_pole_residue(monkeypatch):
         eps_data={},
         eps_in=2.0,
         eps_out=1.0,
-        frequency=freq,
+        frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords={"x": [0], "y": [0], "z": [0]}),
-        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords={"x": [0], "y": [0], "z": [0]}),
+        eps_no_structure=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
+        eps_inf_structure=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
     )
 
