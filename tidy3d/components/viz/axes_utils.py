@@ -8,95 +8,6 @@ from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
 
 
-def _create_unit_aware_locator():
-    """Create UnitAwareLocator lazily due to matplotlib import restrictions."""
-    import matplotlib.ticker as ticker
-
-    class UnitAwareLocator(ticker.Locator):
-        """Custom tick locator that places ticks at nice positions in the target unit."""
-
-        def __init__(self, scale_factor: float):
-            """
-            Parameters
-            ----------
-            scale_factor : float
-                Factor to convert from micrometers to the target unit.
-            """
-            super().__init__()
-            self.scale_factor = scale_factor
-
-        def __call__(self):
-            vmin, vmax = self.axis.get_view_interval()
-            return self.tick_values(vmin, vmax)
-
-        def view_limits(self, vmin, vmax):
-            """Override to prevent matplotlib from adjusting our limits."""
-            return vmin, vmax
-
-        def tick_values(self, vmin, vmax):
-            # convert the view range to the target unit
-            vmin_unit = vmin * self.scale_factor
-            vmax_unit = vmax * self.scale_factor
-
-            # tolerance for floating point comparisons in target unit
-            unit_range = vmax_unit - vmin_unit
-            unit_tol = unit_range * 1e-8
-
-            locator = ticker.MaxNLocator(nbins=11, prune=None, min_n_ticks=2)
-
-            ticks_unit = locator.tick_values(vmin_unit, vmax_unit)
-
-            # ensure we have ticks that cover the full range
-            if len(ticks_unit) > 0:
-                if ticks_unit[0] > vmin_unit + unit_tol or ticks_unit[-1] < vmax_unit - unit_tol:
-                    # try with fewer bins to get better coverage
-                    for n in [10, 9, 8, 7, 6, 5]:
-                        locator = ticker.MaxNLocator(nbins=n, prune=None, min_n_ticks=2)
-                        ticks_unit = locator.tick_values(vmin_unit, vmax_unit)
-                        if (
-                            len(ticks_unit) >= 3
-                            and ticks_unit[0] <= vmin_unit + unit_tol
-                            and ticks_unit[-1] >= vmax_unit - unit_tol
-                        ):
-                            break
-
-                # if still no good coverage, manually ensure edge coverage
-                if len(ticks_unit) > 0:
-                    if (
-                        ticks_unit[0] > vmin_unit + unit_tol
-                        or ticks_unit[-1] < vmax_unit - unit_tol
-                    ):
-                        # find a reasonable step size from existing ticks
-                        if len(ticks_unit) > 1:
-                            step = ticks_unit[1] - ticks_unit[0]
-                        else:
-                            step = unit_range / 5
-
-                        # extend the range to ensure coverage
-                        extended_min = vmin_unit - step
-                        extended_max = vmax_unit + step
-
-                        # try one more time with extended range
-                        locator = ticker.MaxNLocator(nbins=8, prune=None, min_n_ticks=2)
-                        ticks_unit = locator.tick_values(extended_min, extended_max)
-
-                        # filter to reasonable bounds around the original range
-                        ticks_unit = [
-                            t
-                            for t in ticks_unit
-                            if t >= vmin_unit - step / 2 and t <= vmax_unit + step / 2
-                        ]
-
-            # convert the nice ticks back to the original data unit (micrometers)
-            ticks_um = ticks_unit / self.scale_factor
-
-            # filter to ensure ticks are within bounds (with small tolerance)
-            eps = (vmax - vmin) * 1e-8
-            return [tick for tick in ticks_um if vmin - eps <= tick <= vmax + eps]
-
-    return UnitAwareLocator
-
-
 def make_ax() -> Ax:
     """makes an empty ``ax``."""
     import matplotlib.pyplot as plt
@@ -161,24 +72,14 @@ def set_default_labels_and_title(
             )
         ax.set_xlabel(f"{xlabel} ({plot_length_units})")
         ax.set_ylabel(f"{ylabel} ({plot_length_units})")
-
+        # Formatter to help plot in arbitrary units
         scale_factor = UnitScaling[plot_length_units]
-
-        # for imperial units, use custom tick locator for nice tick positions
-        if plot_length_units in ["mil", "in"]:
-            UnitAwareLocator = _create_unit_aware_locator()
-            x_locator = UnitAwareLocator(scale_factor)
-            y_locator = UnitAwareLocator(scale_factor)
-            ax.xaxis.set_major_locator(x_locator)
-            ax.yaxis.set_major_locator(y_locator)
-
         formatter = ticker.FuncFormatter(lambda y, _: f"{y * scale_factor:.2f}")
-
         ax.xaxis.set_major_formatter(formatter)
         ax.yaxis.set_major_formatter(formatter)
-
-        position_scaled = position * scale_factor
-        ax.set_title(f"cross section at {'xyz'[axis]}={position_scaled:.2f} ({plot_length_units})")
+        ax.set_title(
+            f"cross section at {'xyz'[axis]}={position * scale_factor:.2f} ({plot_length_units})"
+        )
     else:
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)

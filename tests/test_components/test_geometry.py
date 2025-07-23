@@ -96,8 +96,6 @@ def test_plot(component):
 def test_plot_with_units():
     _ = BOX.plot(z=0, ax=AX, plot_length_units="nm")
     plt.close()
-    _ = BOX.plot(z=0, ax=AX, plot_length_units="mil")
-    plt.close()
 
 
 def test_base_inside():
