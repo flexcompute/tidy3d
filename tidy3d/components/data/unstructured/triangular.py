@@ -23,6 +23,7 @@ from tidy3d.components.data.data_array import (
     SpatialDataArray,
 )
 from tidy3d.components.types import ArrayLike, Ax, Axis, Bound
+from tidy3d.components.utils import pop_axis_and_swap
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_grid
 from tidy3d.constants import inf
 from tidy3d.exceptions import DataError
@@ -570,9 +571,10 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
     """ Plotting """
 
-    @property
-    def _triangulation_obj(self) -> Triangulation:
+    def _triangulation_obj(self, transpose: bool = False) -> Triangulation:
         """Matplotlib triangular representation of the grid to use in plotting."""
+        if transpose:
+            return Triangulation(self.points[:, 1], self.points[:, 0], self.cells)
         return Triangulation(self.points[:, 0], self.points[:, 1], self.cells)
 
     @equal_aspect
@@ -589,6 +591,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         shading: Literal["gourand", "flat"] = "gouraud",
         cbar_kwargs: Optional[dict] = None,
         pcolor_kwargs: Optional[dict] = None,
+        transpose: bool = False,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 
@@ -616,6 +619,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Additional parameters passed to colorbar object.
         pcolor_kwargs: Dict = {}
             Additional parameters passed to ax.tripcolor()
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default ascending axis order)
 
         Returns
         -------
@@ -639,7 +644,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
                     f"{self._values_coords_dict} before plotting."
                 )
             plot_obj = ax.tripcolor(
-                self._triangulation_obj,
+                self._triangulation_obj(transpose=transpose),
                 self.values.data.ravel(),
                 shading=shading,
                 cmap=cmap,
@@ -657,14 +662,15 @@ class TriangularGridDataset(UnstructuredGridDataset):
         # plot grid if requested
         if grid:
             ax.triplot(
-                self._triangulation_obj,
+                self._triangulation_obj(transpose=transpose),
                 color=plot_params_grid.edgecolor,
                 linewidth=plot_params_grid.linewidth,
             )
 
         # set labels and titles
-        ax_labels = ["x", "y", "z"]
-        normal_axis_name = ax_labels.pop(self.normal_axis)
+        normal_axis_name, ax_labels = pop_axis_and_swap(
+            "xyz", self.normal_axis, transpose=transpose
+        )
         ax.set_xlabel(ax_labels[0])
         ax.set_ylabel(ax_labels[1])
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")

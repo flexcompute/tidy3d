@@ -39,6 +39,7 @@ from tidy3d.components.types import (
     Size,
     annotate_type,
 )
+from tidy3d.components.utils import pop_axis_and_swap, shape_swap_xy
 from tidy3d.components.viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
@@ -263,14 +264,18 @@ class Geometry(Tidy3dBaseModel, ABC):
         origin = self.unpop_axis(position, (0, 0), axis=axis)
         normal = self.unpop_axis(1, (0, 0), axis=axis)
         to_2D = np.eye(4)
-        if axis != 2:
-            last, indices = self.pop_axis((0, 1, 2), axis)
-            to_2D = to_2D[[*list(indices), last, 3]]
+        last, indices = self.pop_axis((0, 1, 2), axis)
+        to_2D = to_2D[[*list(indices), last, 3]]
         return self.intersections_tilted_plane(normal, origin, to_2D)
 
     def intersections_2dbox(self, plane: Box) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         a 2D box.
+
+        Parameters
+        ----------
+        plane : Box
+            Plane specification.
 
         Returns
         -------
@@ -442,13 +447,18 @@ class Geometry(Tidy3dBaseModel, ABC):
                 zero_dims.append(dim)
         return zero_dims
 
-    def _pop_bounds(self, axis: Axis) -> tuple[Coordinate2D, tuple[Coordinate2D, Coordinate2D]]:
+    def _pop_bounds(
+        self, axis: Axis, transpose: bool = False
+    ) -> tuple[Coordinate2D, tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
         Parameters
         ----------
         axis : int
             Integer index into 'xyz' (0,1,2).
+        transpose : bool = False
+            Optional: Swap the coordinates in the plane. (This overrides the
+            default ascending axis order.)
 
         Returns
         -------
@@ -457,8 +467,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             Packed as ``(zmin, zmax), ((xmin, ymin), (xmax, ymax))``.
         """
         b_min, b_max = self.bounds
-        zmin, (xmin, ymin) = self.pop_axis(b_min, axis=axis)
-        zmax, (xmax, ymax) = self.pop_axis(b_max, axis=axis)
+        zmin, (xmin, ymin) = pop_axis_and_swap(b_min, axis=axis, transpose=transpose)
+        zmax, (xmax, ymax) = pop_axis_and_swap(b_max, axis=axis, transpose=transpose)
         return (zmin, zmax), ((xmin, ymin), (xmax, ymax))
 
     @staticmethod
@@ -499,6 +509,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         ax: Ax = None,
         plot_length_units: LengthUnit = None,
         viz_spec: VisualizationSpec = None,
+        transpose: bool = False,
         **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
@@ -517,6 +528,9 @@ class Geometry(Tidy3dBaseModel, ABC):
             Specify units to use for axis labels, tick labels, and the title.
         viz_spec : VisualizationSpec = None
             Plotting parameters associated with a medium to use instead of defaults.
+        transpose : bool = False
+            Swap horizontal and vertical axes. (This overrides the default
+            ascending axis order.)
         **patch_kwargs
             Optional keyword arguments passed to the matplotlib patch plotting of structure.
             For details on accepted values, refer to
@@ -527,7 +541,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
         # find shapes that intersect self at plane
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         shapes_intersect = self.intersections_plane(x=x, y=y, z=z)
@@ -539,16 +552,24 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # for each intersection, plot the shape
         for shape in shapes_intersect:
-            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax)
+            ax = self.plot_shape(shape, plot_params=plot_params, ax=ax, transpose=transpose)
 
         # clean up the axis display
-        ax = self.add_ax_lims(axis=axis, ax=ax)
+        ax = self.add_ax_lims(axis=axis, ax=ax, transpose=transpose)
         ax.set_aspect("equal")
         # Add the default axis labels, tick labels, and title
-        ax = Box.add_ax_labels_and_title(ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units)
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=plot_length_units, transpose=transpose
+        )
         return ax
 
-    def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
+    def plot_shape(
+        self,
+        shape: Shapely,
+        plot_params: PlotParams,
+        ax: Ax,
+        transpose: bool = False,
+    ) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
         if shape.geom_type in (
             "MultiPoint",
@@ -562,12 +583,17 @@ class Geometry(Tidy3dBaseModel, ABC):
             return ax
 
         _shape = Geometry.evaluate_inf_shape(shape)
+        if transpose:
+            _shape = shape_swap_xy(_shape)
 
         if _shape.geom_type == "LineString":
             xs, ys = zip(*_shape.coords)
             ax.plot(xs, ys, color=plot_params.facecolor, linewidth=plot_params.linewidth)
         elif _shape.geom_type == "Point":
-            ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
+            xcrds, ycrds = shape.x, shape.y
+            if transpose:  # shape.x and shape.y might be infinite, so shape_swap_xy(shape) won't
+                xcrds, ycrds = ycrds, xcrds  # work.  Instead we must swap coordinates manually.
+            ax.scatter(xcrds, ycrds, color=plot_params.facecolor)
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
             ax.add_artist(patch)
@@ -593,24 +619,27 @@ class Geometry(Tidy3dBaseModel, ABC):
         return False
 
     @staticmethod
-    def _get_plot_labels(axis: Axis) -> tuple[str, str]:
+    def _get_plot_labels(axis: Axis, transpose: bool = False) -> tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
 
         Parameters
         ----------
         axis : int
             Integer index into 'xyz' (0,1,2).
+        transpose : bool = False
+            Optional: Swap horizontal and vertical plot labels.
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
         str, str
             Labels of plot, packaged as ``(xlabel, ylabel)``.
         """
-        _, (xlabel, ylabel) = Geometry.pop_axis("xyz", axis=axis)
+        _, (xlabel, ylabel) = pop_axis_and_swap("xyz", axis=axis, transpose=transpose)
         return xlabel, ylabel
 
     def _get_plot_limits(
-        self, axis: Axis, buffer: float = PLOT_BUFFER
+        self, axis: Axis, buffer: float = PLOT_BUFFER, transpose: bool = False
     ) -> tuple[Coordinate2D, Coordinate2D]:
         """Gets planar coordinate limits for cross section plots.
 
@@ -620,17 +649,22 @@ class Geometry(Tidy3dBaseModel, ABC):
             Integer index into 'xyz' (0,1,2).
         buffer : float = 0.3
             Amount of space to add around the limits on the + and - sides.
+        transpose : bool = False
+            Optional: Swap horizontal and vertical axis limits.
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
             Tuple[float, float], Tuple[float, float]
         The x and y plot limits, packed as ``(xmin, xmax), (ymin, ymax)``.
         """
-        _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis)
+        _, ((xmin, ymin), (xmax, ymax)) = self._pop_bounds(axis=axis, transpose=transpose)
         return (xmin - buffer, xmax + buffer), (ymin - buffer, ymax + buffer)
 
-    def add_ax_lims(self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER) -> Ax:
-        """Sets the x,y limits based on ``self.bounds``.
+    def add_ax_lims(
+        self, axis: Axis, ax: Ax, buffer: float = PLOT_BUFFER, transpose: bool = False
+    ) -> Ax:
+        """Sets the horizontal and vertical axis limits based on ``self.bounds``.
 
         Parameters
         ----------
@@ -640,13 +674,18 @@ class Geometry(Tidy3dBaseModel, ABC):
             Matplotlib axes to add labels and limits on.
         buffer : float = 0.3
             Amount of space to place around the limits on the + and - sides.
+        transpose : bool = False
+            Optional: Swap horizontal and vertical axis limits.
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer)
+        (xmin, xmax), (ymin, ymax) = self._get_plot_limits(
+            axis=axis, buffer=buffer, transpose=transpose
+        )
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
         xmin, xmax, ymin, ymax = self._evaluate_inf((xmin, xmax, ymin, ymax))
@@ -662,6 +701,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         y: Optional[float] = None,
         z: Optional[float] = None,
         plot_length_units: LengthUnit = None,
+        transpose: bool = False,
     ) -> Ax:
         """Sets the axis labels, tick labels, and title based on ``axis``
         and an optional ``plot_length_units`` argument.
@@ -679,6 +719,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         plot_length_units : LengthUnit = None
             When set to a supported ``LengthUnit``, plots will be produced with annotated axes
             and title with the proper units.
+        transpose : bool = False
+            Optional: Swap horizontal and vertical axis labels.
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -686,7 +729,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             The supplied matplotlib axes.
         """
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        axis_labels = Box._get_plot_labels(axis)
+        axis_labels = Box._get_plot_labels(axis, transpose=transpose)
         ax = set_default_labels_and_title(
             axis_labels=axis_labels,
             axis=axis,
@@ -1567,7 +1610,6 @@ class SimplePlaneIntersection(Geometry, ABC):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-
         # Check if normal is a special case, where the normal is aligned with an axis.
         if np.sum(np.isclose(normal, 0.0)) == 2:
             axis = np.argmax(np.abs(normal)).item()
@@ -2033,6 +2075,7 @@ class Box(SimplePlaneIntersection, Centered):
         if section is None:
             return []
         path, _ = section.to_2D(to_2D=to_2D)
+
         return path.polygons_full
 
     def intersections_plane(
@@ -2116,7 +2159,6 @@ class Box(SimplePlaneIntersection, Centered):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-
         # Verify 2D
         if self.size.count(0.0) != 1:
             raise ValidationError(
@@ -2203,6 +2245,7 @@ class Box(SimplePlaneIntersection, Centered):
         both_dirs: bool = False,
         ax: Ax = None,
         arrow_base: Coordinate = None,
+        transpose: bool = False,
     ) -> Ax:
         """Adds an arrow to the axis if with options if certain conditions met.
 
@@ -2228,6 +2271,9 @@ class Box(SimplePlaneIntersection, Centered):
             If True, plots an arrow pointing in direction and one in -direction.
         arrow_base : :class:`.Coordinate` = None
             Custom base of the arrow. Uses the geometry's center if not provided.
+        transpose : bool = False
+            Swap horizontal and vertical axes.
+            (This overrides the default ascending axis order.)
 
         Returns
         -------
@@ -2236,7 +2282,7 @@ class Box(SimplePlaneIntersection, Centered):
         """
 
         plot_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
+        _, (dx, dy) = pop_axis_and_swap(direction, axis=plot_axis, transpose=transpose)
 
         # conditions to check to determine whether to plot arrow, taking into account the
         # possibility of a custom arrow base
@@ -2248,12 +2294,12 @@ class Box(SimplePlaneIntersection, Centered):
             )
             center = arrow_base
 
-        _, (dx, dy) = self.pop_axis(direction, axis=plot_axis)
+        _, (dx, dy) = pop_axis_and_swap(direction, axis=plot_axis, transpose=transpose)
         components_in_plane = any(not np.isclose(component, 0) for component in (dx, dy))
 
         # plot if arrow in plotting plane and some non-zero component can be displayed.
         if arrow_intersecting_plane and components_in_plane:
-            _, (x0, y0) = self.pop_axis(center, axis=plot_axis)
+            _, (x0, y0) = pop_axis_and_swap(center, axis=plot_axis, transpose=transpose)
 
             # Reasonable value for temporary arrow size.  The correct size and direction
             # have to be calculated after all transforms have been set.  That is why we

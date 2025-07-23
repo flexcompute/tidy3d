@@ -486,7 +486,6 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-
         static_self = self.to_static()
 
         # radius at z
@@ -494,7 +493,6 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         if radius_offset <= 0:
             return []
-
         _, (x0, y0) = self.pop_axis(static_self.center, axis=self.axis)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
@@ -735,7 +733,11 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         return radius_middle - (z - self.center_axis) * self._tanq
 
-    def _local_to_global_side_cross_section(self, coords: list[float], axis: int) -> list[float]:
+    def _local_to_global_side_cross_section(
+        self,
+        coords: list[float],
+        axis: int,
+    ) -> list[float]:
         """Map a point (x,y) from local to global coordinate system in the
         side cross section.
 

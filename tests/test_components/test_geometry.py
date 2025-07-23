@@ -87,14 +87,15 @@ GEO_TYPES = [
 _, AX = plt.subplots()
 
 
-@pytest.mark.parametrize("component", GEO_TYPES)
-def test_plot(component):
-    _ = component.plot(z=0, ax=AX)
+@pytest.mark.parametrize("component, transpose", zip(GEO_TYPES, [True, False]))
+def test_plot(component, transpose):
+    _ = component.plot(z=0, ax=AX, transpose=transpose)
     plt.close()
 
 
-def test_plot_with_units():
-    _ = BOX.plot(z=0, ax=AX, plot_length_units="nm")
+@pytest.mark.parametrize("transpose", [True, False])
+def test_plot_with_units(transpose):
+    _ = BOX.plot(z=0, ax=AX, plot_length_units="nm", transpose=transpose)
     plt.close()
 
 
@@ -768,13 +769,12 @@ def test_geometry_touching_intersections_plane(x0):
 
 
 def test_pop_axis():
-    b = td.Box(size=(1, 1, 1))
     for axis in range(3):
         coords = (1, 2, 3)
-        Lz, (Lx, Ly) = b.pop_axis(coords, axis=axis)
-        _coords = b.unpop_axis(Lz, (Lx, Ly), axis=axis)
+        Lz, (Lx, Ly) = td.Box.pop_axis(coords, axis=axis)
+        _coords = td.Box.unpop_axis(Lz, (Lx, Ly), axis=axis)
         assert all(c == _c for (c, _c) in zip(coords, _coords))
-        _Lz, (_Lx, _Ly) = b.pop_axis(_coords, axis=axis)
+        _Lz, (_Lx, _Ly) = td.Box.pop_axis(_coords, axis=axis)
         assert Lz == _Lz
         assert Lx == _Lx
         assert Ly == _Ly
@@ -939,7 +939,8 @@ def test_to_gds(geometry, tmp_path):
     assert len(cell.polygons) == 0
 
 
-def test_custom_surface_geometry(tmp_path):
+@pytest.mark.parametrize("transpose", [True, False])
+def test_custom_surface_geometry(transpose, tmp_path):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
@@ -972,9 +973,13 @@ def test_custom_surface_geometry(tmp_path):
     assert np.isclose(geom.volume(), 1 / 6)
 
     # test intersections
-    assert shapely.equals(geom.intersections_plane(x=0), shapely.Polygon([[0, 0], [0, 1], [1, 0]]))
     assert shapely.equals(
-        geom.intersections_plane(z=0.5), shapely.Polygon([[0, 0], [0, 0.5], [0.5, 0]])
+        geom.intersections_plane(x=0),
+        shapely.Polygon([[0, 0], [0, 1], [1, 0]]),
+    )
+    assert shapely.equals(
+        geom.intersections_plane(z=0.5),
+        shapely.Polygon([[0, 0], [0, 0.5], [0.5, 0]]),
     )
 
     # test inside
@@ -983,7 +988,7 @@ def test_custom_surface_geometry(tmp_path):
 
     # test plot
     _, ax = plt.subplots()
-    _ = geom.plot(z=0.1, ax=ax)
+    _ = geom.plot(z=0.1, ax=ax, transpose=transpose)
     plt.close()
 
     # test inconsistent winding
@@ -1033,7 +1038,7 @@ def test_custom_surface_geometry(tmp_path):
         boundary_spec=td.BoundarySpec.all_sides(td.PML()),
     )
     _, ax = plt.subplots()
-    _ = sim.plot(y=0, ax=ax)
+    _ = sim.plot(y=0, ax=ax, transpose=transpose)
     plt.close()
 
     # allow small triangles

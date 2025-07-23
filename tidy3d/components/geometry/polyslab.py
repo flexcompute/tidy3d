@@ -629,6 +629,7 @@ class PolySlab(base.Planar):
         y = np.hstack((self.base_polygon[:, 1], self.top_polygon[:, 1]))
         z = np.hstack((np.full(n, self.slab_bounds[0]), np.full(n, self.slab_bounds[1])))
         vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
+
         mesh = trimesh.Trimesh(vertices, faces)
 
         section = mesh.section(plane_origin=origin, plane_normal=normal)
@@ -652,14 +653,16 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-        if math.isclose(self.sidewall_angle, 0):
-            return [self.make_shapely_polygon(self.reference_polygon)]
 
+        if math.isclose(self.sidewall_angle, 0):
+            vertices = self.reference_polygon
+            return [self.make_shapely_polygon(vertices)]
         z0 = self.center_axis
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-        return [self.make_shapely_polygon(vertices_z)]
+        vertices = vertices_z
+        return [self.make_shapely_polygon(vertices)]
 
     def _intersections_side(self, position, axis) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
@@ -694,12 +697,12 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-
         # find out all z_i where the plane will intersect the vertex
         z0 = self.center_axis
         z_base = z0 - self.finite_length_axis / 2
 
         axis_ordered = self._order_axis(axis)
+
         height_list = self._find_intersecting_height(position, axis_ordered)
         polys = []
 

@@ -20,6 +20,7 @@ from tidy3d.components.types import (
     PlanePosition,
     Shapely,
 )
+from tidy3d.components.utils import shape_swap_xy
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import SetupError, Tidy3dError
 
@@ -42,6 +43,7 @@ def merging_geometries_on_plane(
     geometries: list[GeometryType],
     plane: Box,
     property_list: list[Any],
+    transpose: bool = False,
 ) -> list[tuple[Any, Shapely]]:
     """Compute list of shapes on plane. Overlaps are removed or merged depending on
     provided property_list.
@@ -54,13 +56,14 @@ def merging_geometries_on_plane(
         Plane specification.
     property_list : List = None
         Property value for each structure.
+    transpose : bool = False
+            Optional: Swap the coordinates in the plane. (This overrides the default ascending axis order.)
 
     Returns
     -------
     List[Tuple[Any, shapely]]
         List of shapes and their property value on the plane after merging.
     """
-
     if len(geometries) != len(property_list):
         raise SetupError(
             "Number of provided property values is not equal to the number of geometries."
@@ -73,6 +76,8 @@ def merging_geometries_on_plane(
 
         # Append each of them and their property information to the list of shapes
         for shape in shapes_plane:
+            if transpose:
+                shape = shape_swap_xy(shape)
             shapes.append((prop, shape, shape.bounds))
 
     background_shapes = []
