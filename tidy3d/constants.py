@@ -245,7 +245,6 @@ UnitScaling = MappingProxyType(
         "mm": 1e-3,
         "cm": 1e-4,
         "m": 1e-6,
-        "mil": 1.0 / 25.4,
         "in": 1.0 / 25400,
     }
 )

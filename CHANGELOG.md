@@ -7,9 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Added "mil" and "in" (inch) units to `plot_length_units`.
-
 ### Changed
 - By default, batch downloads will skip files that already exist locally. To force re-downloading and replace existing files, pass the `replace_existing=True` argument to `Batch.load()`, `Batch.download()`, or `BatchData.load()`.
 - The `BatchData.load_sim_data()` function now overwrites any previously downloaded simulation files (instead of skipping them).
