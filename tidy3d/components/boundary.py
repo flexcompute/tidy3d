@@ -104,7 +104,7 @@ class ABCBoundary(AbstractABCBoundary):
         "the domain boundary and the central frequency of the source.",
     )
 
-    conductivity: Optional[pd.NonNegativeFloat] = pd.Field(
+    conductivity: Optional[float] = pd.Field(
         None,
         title="Effective Conductivity",
         description="Effective conductivity for determining propagation constant."
