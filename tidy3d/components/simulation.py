@@ -3540,6 +3540,24 @@ class Simulation(AbstractYeeGridSimulation):
 
         return bounds
 
+    def _get_surface_monitor_bounds_self(self, monitor: SurfaceMonitorType) -> list[Bound]:
+        """Intersect a surface monitor with the bounding box of each PEC structure."""
+
+        sim_box = Box(center=self.center, size=self.size)
+        mnt_bounds = Box.bounds_intersection(monitor.bounds, sim_box.bounds)
+
+        if _is_pec_like(self.medium):
+            return [mnt_bounds]
+
+        bounds = []
+        for structure in self.structures:
+            if _is_pec_like(structure.medium):
+                intersection_bounds = Box.bounds_intersection(mnt_bounds, structure.geometry.bounds)
+                if all(bmin <= bmax for bmin, bmax in zip(*intersection_bounds)):
+                    bounds.append(intersection_bounds)
+
+        return bounds
+
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["medium", "structures", "size", "medium"])
     def error_empty_surface_monitor(cls, val, values):
@@ -3557,6 +3575,7 @@ class Simulation(AbstractYeeGridSimulation):
                             f"Surface monitor {mnt.name} does not cross any PEC of LossyMetalMedium structures."
                         )
         return val
+        
 
     @pydantic.validator("grid_spec", always=True)
     @skip_if_fields_missing(["medium", "sources", "structures"])
