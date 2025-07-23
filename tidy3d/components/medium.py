@@ -13,7 +13,6 @@ import autograd.numpy as np
 import numpy as npo
 import pydantic.v1 as pd
 import xarray as xr
-from numpy.typing import NDArray
 
 from tidy3d.components.material.tcad.heat import ThermalSpecType
 from tidy3d.constants import (
@@ -1396,17 +1395,19 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
 
     def _derivative_eps_sigma_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self._derivative_eps_complex_volume(
-            E_der_map=E_der_map, bounds=bounds, freqs=freqs
-        )
+        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
 
         values = vjp_eps_complex.values
 
-        eps_vjp, sigma_vjp = self.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
+        # compute directly with frequency dimension
+        freqs = vjp_eps_complex.coords["f"].values
+        omegas = 2 * np.pi * freqs
+        eps_vjp = np.real(values)
+        sigma_vjp = -np.imag(values) / omegas / EPSILON_0
 
         eps_vjp = np.sum(eps_vjp)
         sigma_vjp = np.sum(sigma_vjp)
@@ -1414,21 +1415,24 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
 
     def _derivative_eps_complex_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> xr.DataArray:
         """Get the derivative w.r.t complex-valued permittivity in the volume."""
 
-        vjp_value = 0.0
+        vjp_value = None
         for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map[field_name].sel(f=freqs)
+            fld = E_der_map[field_name]
             vjp_value_fld = integrate_within_bounds(
                 arr=fld,
                 dims=("x", "y", "z"),
                 bounds=bounds,
             )
-            vjp_value += vjp_value_fld
+            if vjp_value is None:
+                vjp_value = vjp_value_fld
+            else:
+                vjp_value += vjp_value_fld
 
-        return vjp_value.sum("f")
+        return vjp_value
 
     def __repr__(self):
         """If the medium has a name, use it as the representation. Otherwise, use the default representation."""
@@ -1680,7 +1684,6 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         E_der_map: ElectromagneticFieldDataset,
         eps_data: PermittivityDataset,
         dim: str,
-        freqs: NDArray,
     ) -> np.ndarray:
         coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
         dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
@@ -1713,7 +1716,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             d_vol = np.array(1.0)
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        E_der_dim = E_der_map[f"E{dim}"].sel(f=freqs)
+        E_der_dim = E_der_map[f"E{dim}"]
         E_der_dim_interp = (
             E_der_dim.interp(**coords_interp, assume_sorted=True).fillna(0.0).sum(dims_sum).sum("f")
         )
@@ -1981,9 +1984,7 @@ class Medium(AbstractMedium):
 
         # get vjps w.r.t. permittivity and conductivity of the bulk
         vjps_volume = self._derivative_eps_sigma_volume(
-            E_der_map=derivative_info.E_der_map,
-            bounds=derivative_info.bounds,
-            freqs=np.atleast_1d(derivative_info.frequency),
+            E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
         )
 
         # store the fields asked for by ``field_paths``
@@ -1996,18 +1997,16 @@ class Medium(AbstractMedium):
         return derivative_map
 
     def _derivative_eps_sigma_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self._derivative_eps_complex_volume(
-            E_der_map=E_der_map, bounds=bounds, freqs=freqs
-        )
+        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
 
         values = vjp_eps_complex.values
 
         # vjp of eps_complex_to_eps_sigma
-        omegas = 2 * np.pi * freqs
+        omegas = 2 * np.pi * vjp_eps_complex.coords["f"].values
         eps_vjp = np.real(values)
         sigma_vjp = -np.imag(values) / omegas / EPSILON_0
 
@@ -2017,21 +2016,24 @@ class Medium(AbstractMedium):
         return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
 
     def _derivative_eps_complex_volume(
-        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound, freqs: NDArray
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> xr.DataArray:
         """Get the derivative w.r.t complex-valued permittivity in the volume."""
 
-        vjp_value = 0.0
+        vjp_value = None
         for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map[field_name].sel(f=freqs)
+            fld = E_der_map[field_name]
             vjp_value_fld = integrate_within_bounds(
                 arr=fld,
                 dims=("x", "y", "z"),
                 bounds=bounds,
             )
-            vjp_value += vjp_value_fld
+            if vjp_value is None:
+                vjp_value = vjp_value_fld
+            else:
+                vjp_value += vjp_value_fld
 
-        return vjp_value.sum("f")
+        return vjp_value
 
 
 class CustomIsotropicMedium(AbstractCustomMedium, Medium):
@@ -2903,7 +2905,6 @@ class CustomMedium(AbstractCustomMedium):
                         E_der_map=derivative_info.E_der_map,
                         eps_data=self.permittivity,
                         dim=dim,
-                        freqs=np.atleast_1d(derivative_info.frequency),
                     )
                 vjps[field_path] = vjp_array
 
@@ -2914,7 +2915,6 @@ class CustomMedium(AbstractCustomMedium):
                     E_der_map=derivative_info.E_der_map,
                     eps_data=self.eps_dataset.field_components[key],
                     dim=dim,
-                    freqs=np.atleast_1d(derivative_info.frequency),
                 )
 
             else:
@@ -2929,7 +2929,6 @@ class CustomMedium(AbstractCustomMedium):
         E_der_map: ElectromagneticFieldDataset,
         eps_data: PermittivityDataset,
         dim: str,
-        freqs: NDArray,
     ) -> np.ndarray:
         """Compute derivative with respect to the ``dim`` components within the custom medium."""
         coords_interp = {key: eps_data.coords[key] for key in "xyz"}
@@ -2937,7 +2936,7 @@ class CustomMedium(AbstractCustomMedium):
 
         eps_coordinate_shape = [len(eps_data.coords[dim]) for dim in eps_data.dims if dim in "xyz"]
 
-        E_der_dim_interp = E_der_map[f"E{dim}"].sel(f=freqs)
+        E_der_dim_interp = E_der_map[f"E{dim}"]
 
         for dim_ in "xyz":
             if dim_ not in coords_interp:
@@ -3521,17 +3520,28 @@ class PoleResidue(DispersiveMedium):
         dJ_deps_complex = self._derivative_eps_complex_volume(
             E_der_map=derivative_info.E_der_map,
             bounds=derivative_info.bounds,
-            freqs=np.atleast_1d(derivative_info.frequency),
         )
 
         poles_vals = [(complex(a), complex(c)) for a, c in self.poles]
 
-        return self._get_vjps_from_params(
-            dJ_deps_complex=complex(dJ_deps_complex),
-            poles_vals=poles_vals,
-            omega=2 * np.pi * derivative_info.frequency,
-            requested_paths=derivative_info.paths,
-        )
+        freqs = dJ_deps_complex.coords["f"].values
+        vjps_total = {}
+
+        for freq in freqs:
+            dJ_deps_complex_f = dJ_deps_complex.sel(f=freq)
+            vjps_f = self._get_vjps_from_params(
+                dJ_deps_complex=complex(dJ_deps_complex_f),
+                poles_vals=poles_vals,
+                omega=2 * np.pi * freq,
+                requested_paths=derivative_info.paths,
+            )
+            for path, vjp in vjps_f.items():
+                if path not in vjps_total:
+                    vjps_total[path] = vjp
+                else:
+                    vjps_total[path] += vjp
+
+        return vjps_total
 
     @classmethod
     def _real_partial_fraction_decomposition(
@@ -3974,7 +3984,6 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                 E_der_map=derivative_info.E_der_map,
                 eps_data=self.eps_inf,
                 dim=dim,
-                freqs=np.atleast_1d(derivative_info.frequency),
             )
 
         poles_vals = [
@@ -3982,12 +3991,20 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             for a, c in self.poles
         ]
 
-        return PoleResidue._get_vjps_from_params(
-            dJ_deps_complex=dJ_deps_complex,
-            poles_vals=poles_vals,
-            omega=2 * np.pi * derivative_info.frequency,
-            requested_paths=derivative_info.paths,
-        )
+        vjps_total = {}
+        for freq in derivative_info.frequencies:
+            vjps_f = PoleResidue._get_vjps_from_params(
+                dJ_deps_complex=dJ_deps_complex,
+                poles_vals=poles_vals,
+                omega=2 * np.pi * freq,
+                requested_paths=derivative_info.paths,
+            )
+            for path, vjp in vjps_f.items():
+                if path not in vjps_total:
+                    vjps_total[path] = vjp
+                else:
+                    vjps_total[path] += vjp
+        return vjps_total
 
 
 class Sellmeier(DispersiveMedium):

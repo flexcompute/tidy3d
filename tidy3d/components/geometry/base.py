@@ -2441,15 +2441,12 @@ class Box(SimplePlaneIntersection, Centered):
         dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal)
         fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
 
-        # normal and tangential fields
-        D_normal = derivative_info.D_der_map[fld_normal].sel(f=derivative_info.frequency)
-        Es_perp = tuple(
-            derivative_info.E_der_map[key].sel(f=derivative_info.frequency) for key in flds_perp
+        # fields and bounds
+        D_normal = derivative_info.D_der_map[fld_normal]
+        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_perp)
+        bounds_normal, bounds_perp = self.pop_axis(
+            np.array(derivative_info.bounds).T, axis=axis_normal
         )
-
-        # normal and tangential bounds
-        bounds_T = np.array(derivative_info.bounds).T  # put (xyz) first dimension
-        bounds_normal, bounds_perp = self.pop_axis(bounds_T, axis=axis_normal)
 
         # define the integration plane
         coord_normal_face = bounds_normal[min_max_index]
@@ -2469,11 +2466,8 @@ class Box(SimplePlaneIntersection, Centered):
             )
             return 0.0
 
-        # grab permittivity data inside and outside edge in normal direction
-        eps_xyz = [
-            derivative_info.eps_data[f"eps_{dim}{dim}"].sel(f=derivative_info.frequency)
-            for dim in "xyz"
-        ]
+        # permittivity data
+        eps_xyz = [derivative_info.eps_data[f"eps_{dim}{dim}"] for dim in "xyz"]
 
         # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
         num_cells_in = 4
@@ -2514,9 +2508,9 @@ class Box(SimplePlaneIntersection, Centered):
                 bounds=bounds_perp,
             )
 
-            return complex(integral_result)
+            return complex(integral_result.sum("f"))
 
-        # put together VJP using D_normal and E_perp integration
+        # compute vjp from field integrals
         vjp_value = 0.0
 
         # perform D-normal integral

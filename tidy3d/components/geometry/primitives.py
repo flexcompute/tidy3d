@@ -15,7 +15,7 @@ from tidy3d.components.autograd.constants import PTS_PER_WVL_MAT_CYLINDER_DISCRE
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
-from tidy3d.constants import C_0, LARGE_NUMBER, MICROMETER
+from tidy3d.constants import LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.packaging import verify_packages_import
 
@@ -281,9 +281,9 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
-        # compute number of points in the circumference of the polyslab using resolution info
-        wvl0 = C_0 / derivative_info.frequency
-        wvl_mat = wvl0 / max(1.0, np.sqrt(abs(derivative_info.eps_in)))
+        # compute circumference discretization
+        wvl0_min = derivative_info.wavelength_min
+        wvl_mat = wvl0_min / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
 
         circumference = 2 * np.pi * self.radius
         wvls_in_circumference = circumference / wvl_mat

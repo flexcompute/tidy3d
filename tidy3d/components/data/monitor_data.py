@@ -3448,7 +3448,7 @@ class DiffractionData(AbstractFieldProjectionData):
         k0 = 2 * np.pi * freq0 / C_0
         bck_eps = self.medium.eps_model(freq0)
         grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
-        src_amp = grad_const * amp_complex
+        src_amp = 1j * grad_const * amp_complex
 
         # construct plane wave source
         adj_src = PlaneWave(

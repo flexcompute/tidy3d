@@ -22,3 +22,7 @@ DEFAULT_WAVELENGTH_FRACTION = 0.1
 MINIMUM_SPACING = 1e-2
 
 EDGE_CLIP_TOLERANCE = 1e-9
+
+# chunk size for processing multiple frequencies in adjoint gradient computation.
+# None = process all frequencies at once (no chunking)
+ADJOINT_FREQ_CHUNK_SIZE = None
