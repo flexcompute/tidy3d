@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Giving opposite boundaries different names no longer causes a symmetry validator failure.
+- Fixed issue with parameters in `InverseDesignResult` sometimes being outside of the valid parameter range.
+- Disallow `EMEFieldMonitor` in EME simulations with `EMELengthSweep`.
 
 
 ## [2.9.0] - 2025-08-04
