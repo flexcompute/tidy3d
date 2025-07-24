@@ -1163,9 +1163,14 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         else:
             freq = freq.item()
 
-        mode_area = mode_area.interp(f=freq)
-        e_x = e_x.interp(f=freq)
-        e_y = e_y.interp(f=freq)
+        # If the data has just one frequency, avoid Nans at the interpolation
+        if len(e_x.f) > 1:
+            mode_area = mode_area.interp(f=freq)
+            e_x = e_x.interp(f=freq)
+            e_y = e_y.interp(f=freq)
+        else:
+            e_x = e_x.isel(f=0, drop=True)
+            e_y = e_y.isel(f=0, drop=True)
 
         # If the data is ModeData, choose one of the modes to save
         if "mode_index" in e_x.coords:
@@ -1241,7 +1246,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             )
             fout.write(struct.pack("<8d", 0, 0, 0, 0, 0, 0, 0, 0))  # unused values
             for e in (e_x, e_y):
-                e_flat = e.values.flatten(order="C")
+                e_flat = e.values.flatten(order="F")
                 # Interweave real and imaginary parts
                 e_values = np.ravel(np.column_stack((e_flat.real, e_flat.imag)))
                 fout.write(struct.pack(f"<{2 * n_x * n_y}d", *e_values))

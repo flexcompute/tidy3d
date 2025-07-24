@@ -121,11 +121,11 @@ class ZBFData(Tidy3dBaseModel):
             ) from None
 
         # load E field
-        Ex_real = np.asarray(rawx[0::2]).reshape(nx, ny)
-        Ex_imag = np.asarray(rawx[1::2]).reshape(nx, ny)
+        Ex_real = np.asarray(rawx[0::2]).reshape(nx, ny, order="F")
+        Ex_imag = np.asarray(rawx[1::2]).reshape(nx, ny, order="F")
         if ispol:
-            Ey_real = np.asarray(rawy[0::2]).reshape(nx, ny)
-            Ey_imag = np.asarray(rawy[1::2]).reshape(nx, ny)
+            Ey_real = np.asarray(rawy[0::2]).reshape(nx, ny, order="F")
+            Ey_imag = np.asarray(rawy[1::2]).reshape(nx, ny, order="F")
         else:
             Ey_real = np.zeros((nx, ny))
             Ey_imag = np.zeros((nx, ny))
