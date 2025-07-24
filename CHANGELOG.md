@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Giving opposite boundaries different names no longer causes a symmetry validator failure.
+- Fixed issue with parameters in `InverseDesignResult` sometimes being outside of the valid parameter range.
 
 ## [2.9.0rc2] - 2025-07-17
 
