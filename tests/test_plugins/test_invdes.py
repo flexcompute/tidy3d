@@ -645,3 +645,35 @@ def test_pixel_size_warn_validator_no_sources():
 
     with AssertLogLevel("WARNING", contains_str="Cannot validate pixel size"):
         invdes_multi = invdes_multi.updated_copy(design_region=region_coarse)
+
+
+def test_result_params_out_of_bounds():
+    """Test that out-of-bounds parameters are automatically clipped with warning."""
+    invdes = make_invdes()
+
+    # create result with out-of-bounds parameters
+    out_of_bounds_params = np.ones(invdes.design_region.params_shape)
+    out_of_bounds_params[0, 0, 0] = 1.5  # above 1
+    out_of_bounds_params[1, 1, 0] = -0.1  # below 0
+
+    # the validator should trigger when creating the result
+    with AssertLogLevel("WARNING", contains_str="Parameters outside [0,1] bounds"):
+        result = tdi.InverseDesignResult(
+            design=invdes,
+            params=(out_of_bounds_params,),
+            objective_fn_val=(1.0,),
+            grad=(out_of_bounds_params * 0,),
+            penalty=(0.0,),
+            post_process_val=(1.0,),
+            opt_state=({"test": 1},),
+        )
+
+    # verify parameters were clipped
+    clipped_params = result.params[0]
+    assert np.all(clipped_params >= 0.0)
+    assert np.all(clipped_params <= 1.0)
+    assert clipped_params[0, 0, 0] == 1.0
+    assert clipped_params[1, 1, 0] == 0.0
+
+    # get_sim should work without issues
+    sim = result.get_sim(index=0)

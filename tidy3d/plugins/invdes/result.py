@@ -67,6 +67,41 @@ class InverseDesignResult(InvdesBaseModel):
         description="History of optimizer states throughout the optimization.",
     )
 
+    @pd.validator("params", pre=False, allow_reuse=True)
+    def _validate_and_clip_params(cls, params_tuple):
+        """Ensure all parameters in history are within [0,1] bounds, clipping if necessary."""
+        if not params_tuple:
+            return params_tuple
+
+        clipped_params = []
+        total_below = 0
+        total_above = 0
+
+        for param_array in params_tuple:
+            if param_array is None:
+                clipped_params.append(param_array)
+                continue
+
+            below = np.sum(param_array < 0)
+            above = np.sum(param_array > 1)
+
+            if below > 0 or above > 0:
+                total_below += below
+                total_above += above
+                param_array = np.clip(param_array, 0.0, 1.0)
+
+            clipped_params.append(param_array)
+
+        if total_below > 0 or total_above > 0:
+            td.log.warning(
+                f"Parameters outside [0,1] bounds detected in optimization history "
+                f"({total_below} total below 0, {total_above} total above 1). "
+                f"Automatically clipped to valid range. This may indicate an issue "
+                f"with the optimization process or loading from a legacy file."
+            )
+
+        return tuple(clipped_params)
+
     @property
     def history(self) -> dict[str, list]:
         """The history-containing fields as a dictionary of lists."""
