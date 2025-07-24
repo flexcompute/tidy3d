@@ -907,6 +907,17 @@ class TestZBF:
         return self.simdata(monitor)["fields"]
 
     @pytest.fixture(scope="class")
+    def field_data_single_frequency(self) -> td.FieldData:
+        """Make random field data with single frequency from an emulated simulation run."""
+        monitor = td.FieldMonitor(
+            size=(td.inf, td.inf, 0),
+            freqs=self.freqs[0],
+            name="fields",
+            colocate=True,
+        )
+        return self.simdata(monitor)["fields"]
+
+    @pytest.fixture(scope="class")
     def mode_data(self) -> td.ModeData:
         """Make random ModeData from an emulated simulation run."""
         monitor = td.ModeMonitor(
@@ -919,18 +930,41 @@ class TestZBF:
         )
         return self.simdata(monitor)["modes"]
 
+    @pytest.fixture(scope="class")
+    def mode_data_single_frequency(self) -> td.ModeData:
+        """Make random ModeData from an emulated simulation run."""
+        monitor = td.ModeMonitor(
+            size=(td.inf, td.inf, 0),
+            freqs=self.freqs[0],
+            name="modes",
+            colocate=True,
+            mode_spec=td.ModeSpec(num_modes=2, target_neff=4.0),
+            store_fields_direction="+",
+        )
+        return self.simdata(monitor)["modes"]
+
+    @pytest.mark.parametrize("field_data_fixture", ["field_data", "field_data_single_frequency"])
     @pytest.mark.parametrize("background_index", [1, 2, 3])
     @pytest.mark.parametrize("freq", [*list(freqs), None])
     @pytest.mark.parametrize("n_x", [2**5, 2**6])
     @pytest.mark.parametrize("n_y", [2**5, 2**6])
     @pytest.mark.parametrize("units", ["mm", "cm", "in", "m"])
     def test_fielddata_tozbf_readzbf(
-        self, tmp_path, field_data, background_index, freq, n_x, n_y, units
+        self,
+        tmp_path,
+        request,
+        field_data_fixture,
+        background_index,
+        freq,
+        n_x,
+        n_y,
+        units,
     ):
         """Test that FieldData.to_zbf() -> ZBFData.read_zbf() works"""
         zbf_filename = tmp_path / "testzbf.zbf"
 
         # write to zbf and then load it back in
+        field_data = request.getfixturevalue(field_data_fixture)
         ex, ey = field_data.to_zbf(
             fname=zbf_filename,
             background_refractive_index=background_index,
@@ -960,13 +994,20 @@ class TestZBF:
         assert np.allclose(ex.values, zbfdata.Ex)
         assert np.allclose(ey.values, zbfdata.Ey)
 
+    @pytest.mark.parametrize("mode_data_fixture", ["mode_data", "mode_data_single_frequency"])
     @pytest.mark.parametrize("mode_index", [0, 1])
-    def test_tozbf_modedata(self, tmp_path, mode_data, mode_index):
+    def test_tozbf_modedata(
+        self,
+        tmp_path,
+        request,
+        mode_data_fixture,
+        mode_index,
+    ):
         """Tests ModeData.to_zbf()"""
         zbf_filename = tmp_path / "testzbf_modedata.zbf"
 
         # write to zbf and then load it back in
-        ex, ey = mode_data.to_zbf(
+        ex, ey = request.getfixturevalue(mode_data_fixture).to_zbf(
             fname=zbf_filename,
             background_refractive_index=1,
             freq=self.freq0,
