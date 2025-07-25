@@ -229,6 +229,38 @@ def test_final_decay():
     assert dv == 0.11
 
 
+def test_field_decay_array():
+    sim_data = make_sim_data()
+    log_extended = (
+        sim_data.log + "\n- Time step   1392 / time 1.33e-13s ( 19 % done), field decay: 6.58e-01"
+    )
+    sim_data = sim_data.copy(update={"log": log_extended})
+
+    fd = sim_data.field_decay
+    steps = fd.coords["t"].values
+    decay_values = fd.values
+
+    assert len(fd) == 2
+    assert int(steps[0]) == 827
+    assert int(steps[1]) == 1392
+    assert float(decay_values[0]) == 0.11
+    assert float(decay_values[1]) == 0.658
+
+
+def test_decay_missing_in_log():
+    sim_data = make_sim_data()
+    sim_data = sim_data.copy(update={"log": "no regex matches in this log"})
+    dv = sim_data.final_decay_value
+    assert dv == 1.0
+
+
+def test_field_decay_log_none():
+    sim_data = make_sim_data()
+    sim_data = sim_data.copy(update={"log": None})
+    with pytest.raises(DataError):
+        _ = sim_data.field_decay
+
+
 def test_to_dict():
     sim_data = make_sim_data()
     j = sim_data.dict()
