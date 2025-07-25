@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 from abc import ABC
 from collections import defaultdict
 from typing import Callable, Optional, Union
@@ -14,7 +15,7 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.autograd.utils import split_list
-from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel
+from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel, cached_property
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.file_util import replace_values
 from tidy3d.components.monitor import Monitor
@@ -29,7 +30,7 @@ from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError
 from tidy3d.log import log
 
-from .data_array import FreqDataArray
+from .data_array import FreqDataArray, TimeDataArray
 from .monitor_data import AbstractFieldData, FieldTimeData, MonitorDataType, MonitorDataTypes
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
@@ -931,21 +932,29 @@ class SimulationData(AbstractYeeGridSimulationData):
         description="A boolean flag denoting whether the simulation run diverged.",
     )
 
-    @property
-    def final_decay_value(self) -> float:
-        """Returns value of the field decay at the final time step."""
+    @cached_property
+    def field_decay(self) -> TimeDataArray:
+        """Returns a TimeDataArray of field decay values over time steps."""
         log_str = self.log
         if log_str is None:
             raise DataError(
-                "No log string in the SimulationData object, can't find final decay value."
+                "No log string in the SimulationData object, can't extract field decay."
             )
-        lines = log_str.split("\n")
-        decay_lines = [line for line in lines if "field decay" in line]
-        final_decay = 1.0
-        if len(decay_lines) > 0:
-            final_decay_line = decay_lines[-1]
-            final_decay = float(final_decay_line.split("field decay: ")[-1])
-        return final_decay
+
+        matches = re.findall(r"- Time step\s+(\d+)\s+/.*?field decay:\s*([0-9.eE+-]+)", log_str)
+
+        steps = [int(m[0]) for m in matches]
+        decays = [float(m[1]) for m in matches]
+        return TimeDataArray(decays, coords={"t": steps})
+
+    @property
+    def final_decay_value(self) -> float:
+        """Returns value of the field decay at the final time step."""
+        field_decay = self.field_decay
+        if len(field_decay) == 0:
+            log.warning("No field decay values found, using 1.0 as final decay value.")
+            return 1.0
+        return float(field_decay.values[-1])
 
     def source_spectrum(self, source_index: int) -> Callable:
         """Get a spectrum normalization function for a given source index."""
