@@ -286,6 +286,26 @@ def test_mode_solver_validation():
         direction="+",
     )
 
+    # num of modes * plane grid points too large
+    # 1) number of modes too big
+    with pytest.raises(SetupError):
+        ms = ModeSolver(
+            simulation=simulation,
+            plane=PLANE,
+            mode_spec=mode_spec.updated_copy(num_modes=2**32),
+            freqs=[1e12],
+            direction="+",
+        )
+    # 2) number of grid points too big
+    with pytest.raises(SetupError):
+        ms = ModeSolver(
+            simulation=simulation.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.0001)),
+            plane=PLANE,
+            mode_spec=mode_spec,
+            freqs=[1e12],
+            direction="+",
+        )
+
     # mode data too large
     simulation = td.Simulation(
         size=SIM_SIZE,
