@@ -243,6 +243,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
         self._warn_thick_pml(simulation=self.simulation, plane=self.plane, mode_spec=self.mode_spec)
         self._validate_rotate_structures()
+        self._validate_num_grid_points()
 
     @classmethod
     def _warn_thick_pml(
@@ -302,6 +303,18 @@ class ModeSolver(Tidy3dBaseModel):
         """Validate that structures can be rotated if angle_rotation is True."""
         if np.abs(self.mode_spec.angle_theta) > 0 and self.mode_spec.angle_rotation:
             _ = self._rotate_structures
+
+    def _validate_num_grid_points(self) -> None:
+        """Upper bound of the product of the number of grid points and the number of modes. The bound is very loose: subspace
+        size times the size of eigenvector can be indexed by a 32bit integer.
+        """
+        num_cells, _, num_modes = self._num_cells_freqs_modes
+        relaxation_factor = 2
+        if num_cells * (20 + 2 * num_modes) * relaxation_factor > 2**32 - 1:
+            raise SetupError(
+                "Too many grid points on the modal plane. Please reduce the modal plane size, apply a coarser grid, "
+                "or reduce the number of modes."
+            )
 
     @cached_property
     def normal_axis(self) -> Axis:
