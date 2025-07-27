@@ -1,0 +1,37 @@
+FROM ghcr.io/astral-sh/uv:debian AS tidy3d-python-client-dev
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    xsel \
+    xclip
+
+ENV POETRY_HOME=/opt/poetry
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/root/.local/bin:${POETRY_HOME}/bin:${PATH}"
+
+RUN apt-get update && DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y curl \
+    && curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz \
+    && tar -C /opt -xzf nvim-linux-x86_64.tar.gz \
+    && rm nvim-linux-x86_64.tar.gz
+ENV PATH="/opt/nvim-linux-x86_64/bin:$PATH"
+
+RUN addgroup --gid 1000 flexdaemon && \
+    adduser --uid 1000 --gid 1000 \
+        --home /home/flexdaemon \
+        --shell /bin/bash \
+        --disabled-password \
+        flexdaemon \
+    && if getent group video >/dev/null 2>&1; then usermod -aG video flexdaemon; fi \
+    && if getent group render >/dev/null 2>&1; then usermod -aG render flexdaemon; fi \
+    && mkdir -p /home/flexdaemon \
+    && chown -R flexdaemon:flexdaemon /home/flexdaemon \
+    && chmod a+rX /home \
+    && chmod a+rwX /home/flexdaemon
+
+USER flexdaemon
+WORKDIR /home/flexdaemon
+CMD ["sleep", "infinity"]
