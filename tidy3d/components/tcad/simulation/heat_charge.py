@@ -968,6 +968,31 @@ class HeatChargeSimulation(AbstractSimulation):
                 )
         return values
 
+    @pd.root_validator(skip_on_failure=True)
+    def check_structured_temperature_monitors(cls, values):
+        """In Heat simulations, make sure that if structured monitors are defined,
+        these are 3D."""
+        simulation_types = cls._check_simulation_types(values=values)
+        if TCADAnalysisTypes.HEAT not in simulation_types:
+            return values
+
+        monitors = values.get("monitors")
+        # this is only an issue if we don't have a volumetric monitor
+        volumetric_monitor = any(len(m.zero_dims) == 0 for m in monitors)
+        if not volumetric_monitor:
+            structured_monitors = [m for m in monitors if m.unstructured is False]
+            if len(structured_monitors) > 0:
+                # In this case we need to either add a volumetric monitor or change monitors to be unstructured.
+                # NOTE: for efficiency, it's preferable to change them to unstructured.
+                new_monitors = [m.updated_copy(unstructured=True) for m in monitors]
+                values["monitors"] = tuple(new_monitors)
+
+                log.warning(
+                    "No volumetric monitor has been defined in a Heat simulation with structured monitors. "
+                    "Monitors have been changed from structured to unstructured."
+                )
+        return values
+
     @equal_aspect
     @add_ax_if_none
     def plot_property(
