@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:debian AS tidy3d-python-client-dev
+FROM ghcr.io/astral-sh/uv:0.8-debian AS tidy3d-python-client-dev
 
 ENV DEBIAN_FRONTEND=noninteractive
 
