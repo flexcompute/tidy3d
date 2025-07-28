@@ -12,7 +12,7 @@ _DOC_URL = "https://github.com/flexcompute/tidy3d/blob/develop/tidy3d/plugins/au
 
 _MSG = dedent(
     f"""
-    The 'adjoint' plugin (legacy JAX-based adjoint plugin) was deprecated in Tidy3D '2.7.0' and will be disabled as of '2.9.0'.
+    The 'adjoint' plugin (legacy JAX-based adjoint plugin) was deprecated in Tidy3D '2.7.0' and will be removed in '2.10.0'.
 
     Migrate to the native autograd workflow:
         import tidy3d as td
