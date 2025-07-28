@@ -32,6 +32,8 @@ DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
 
+BatchCategoryType = Literal["tidy3d", "microwave", "tidy3d_design"]
+
 
 class WebContainer(Tidy3dBaseModel, ABC):
     """Base class for :class:`Job` and :class:`Batch`, technically not used"""
@@ -44,9 +46,18 @@ class WebContainer(Tidy3dBaseModel, ABC):
         """Make sure local output directory exists and create it if not."""
 
     @staticmethod
-    def _check_folder(folder_name: str) -> None:
+    def _check_folder(
+        folder_name: str,
+        projects_endpoint: str = "tidy3d/projects",
+        project_endpoint: str = "tidy3d/project",
+    ) -> None:
         """Make sure ``folder_name`` exists on the web UI and create it if not."""
-        Folder.get(folder_name, create=True)
+        Folder.get(
+            folder_name,
+            create=True,
+            projects_endpoint=projects_endpoint,
+            project_endpoint=project_endpoint,
+        )
 
 
 class Job(WebContainer):
@@ -158,7 +169,7 @@ class Job(WebContainer):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
-    simulation_type: str = pd.Field(
+    simulation_type: BatchCategoryType = pd.Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of simulation, used internally only.",
@@ -527,7 +538,7 @@ class Batch(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    simulation_type: str = pd.Field(
+    simulation_type: BatchCategoryType = pd.Field(
         "tidy3d",
         title="Simulation Type",
         description="Type of each simulation in the batch, used internally only.",

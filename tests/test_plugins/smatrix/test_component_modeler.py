@@ -8,10 +8,8 @@ import pytest
 
 import tidy3d as td
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from tidy3d.plugins.smatrix import (
-    ComponentModeler,
-    Port,
-)
+from tidy3d import IndexSimulationData
+from tidy3d.plugins.smatrix import ComponentModeler, ComponentModelerData, Port
 from tidy3d.web.api.container import Batch
 
 from ...utils import run_emulated
@@ -193,12 +191,20 @@ def make_component_modeler(**kwargs):
     return ComponentModeler(simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, **kwargs)
 
 
-def run_component_modeler(monkeypatch, modeler: ComponentModeler):
+def run_component_modeler(monkeypatch, modeler: ComponentModeler) -> ComponentModelerData:
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
-    monkeypatch.setattr(ComponentModeler, "batch_data", property(lambda self: batch_data))
-    s_matrix = modeler._construct_smatrix()
-    return s_matrix
+    port_data = IndexSimulationData(
+        index=list(batch_data.keys()),
+        data=list(batch_data.values()),
+    )
+    modeler_data = ComponentModelerData(modeler=modeler, data=port_data)
+    return modeler_data
+
+
+def get_port_data_array(monkeypatch, modeler: ComponentModeler):
+    modeler_data = run_component_modeler(monkeypatch=monkeypatch, modeler=modeler)
+    return modeler_data.smatrix.data
 
 
 def test_validate_no_sources():
@@ -244,7 +250,9 @@ def test_ports_too_close_boundary():
 def test_validate_batch_supplied(tmp_path):
     sim = make_coupler()
     _ = ComponentModeler(
-        simulation=sim, ports=[], freqs=sim.monitors[0].freqs, path_dir=str(tmp_path)
+        simulation=sim,
+        ports=[],
+        freqs=sim.monitors[0].freqs,
     )
 
 
@@ -266,13 +274,13 @@ def test_make_component_modeler():
 
 def test_run(monkeypatch):
     modeler = make_component_modeler()
-    monkeypatch.setattr(ComponentModeler, "run", lambda self, path_dir=None: None)
-    modeler.run()
+    _ = run_component_modeler(monkeypatch, modeler=modeler)
 
 
 def test_run_component_modeler(monkeypatch):
     modeler = make_component_modeler()
-    s_matrix = run_component_modeler(monkeypatch, modeler)
+    modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
+    s_matrix = modeler_data.smatrix
 
     for port_in in modeler.ports:
         for mode_index_in in range(port_in.mode_spec.num_modes):
@@ -295,7 +303,8 @@ def test_component_modeler_run_only(monkeypatch):
     ONLY_SOURCE = (port_run_only, mode_index_run_only) = ("right_bot", 0)
     run_only = [ONLY_SOURCE]
     modeler = make_component_modeler(run_only=run_only)
-    s_matrix = run_component_modeler(monkeypatch, modeler)
+    modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
+    s_matrix = modeler_data.smatrix
 
     coords_in_run_only = {"port_in": port_run_only, "mode_index_in": mode_index_run_only}
 
@@ -340,7 +349,8 @@ def test_run_component_modeler_mappings(monkeypatch):
         ((("left_bot", 0), ("right_top", 0)), (("left_top", 0), ("right_bot", 0)), +1),
     )
     modeler = make_component_modeler(element_mappings=element_mappings)
-    s_matrix = run_component_modeler(monkeypatch, modeler)
+    modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
+    s_matrix = modeler_data.smatrix
     _test_mappings(element_mappings, s_matrix)
 
 
@@ -366,55 +376,54 @@ def test_mapping_exclusion(monkeypatch):
     element_mappings.append(mapping)
 
     modeler = make_component_modeler(element_mappings=element_mappings)
+    modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
+    s_matrix = modeler_data.smatrix
 
     run_sim_indices = modeler.matrix_indices_run_sim
     assert EXCLUDE_INDEX not in run_sim_indices, "mapping didnt exclude row properly"
 
-    s_matrix = run_component_modeler(monkeypatch, modeler)
     _test_mappings(element_mappings, s_matrix)
 
 
-def test_batch_filename(tmp_path):
-    modeler = make_component_modeler()
-    path = modeler._batch_path
-    assert path
+# def test_batch_filename(tmp_path):
+#     modeler = make_component_modeler()
+#     path = modeler._batch_path
+#     assert path
+# def test_import_smatrix_smatrix():
+#     from tidy3d.plugins.smatrix.smatrix import ComponentModeler, Port
 
-
-def test_import_smatrix_smatrix():
-    from tidy3d.plugins.smatrix.smatrix import ComponentModeler, Port  # noqa: F401
-
-
-def test_to_from_file_empty_batch(tmp_path):
-    modeler = make_component_modeler()
-
-    fname = str(tmp_path) + "/modeler.json"
-
-    modeler.to_file(fname)
-    modeler2 = modeler.from_file(fname)
-
-    assert modeler2.batch_cached is None
-
-
-def test_to_from_file_batch(tmp_path, monkeypatch):
-    modeler = make_component_modeler()
-    _ = run_component_modeler(monkeypatch, modeler)
-
-    batch = td.web.Batch(simulations={})
-
-    modeler._cached_properties["batch"] = batch
-
-    fname = str(tmp_path) + "/modeler.json"
-
-    modeler.to_file(fname)
-    modeler2 = modeler.from_file(fname)
-
-    assert modeler2.batch_cached == modeler2.batch == batch
-
-
-def test_non_default_path_dir(monkeypatch):
-    modeler = make_component_modeler(path_dir="not_default")
-    monkeypatch.setattr(ComponentModeler, "_construct_smatrix", lambda self: None)
-    modeler.run()
-    modeler.run(path_dir="not_default")
-    with pytest.raises(ValueError):
-        modeler.run(path_dir="a_new_path")
+# def test_to_from_file_empty_batch(tmp_path):
+#     modeler = make_component_modeler()
+#
+#     fname = str(tmp_path) + "/modeler.json"
+#
+#     modeler.to_file(fname)
+#     modeler2 = modeler.from_file(fname)
+#
+#     assert modeler2.batch_cached is None
+#
+#
+# def test_to_from_file_batch(tmp_path, monkeypatch):
+#     modeler = make_component_modeler()
+#     _ = run_component_modeler(monkeypatch, modeler)
+#
+#     batch = td.web.Batch(simulations={})
+#
+#     modeler._cached_properties["batch"] = batch
+#
+#     fname = str(tmp_path) + "/modeler.json"
+#
+#     modeler.to_file(fname)
+#     modeler2 = modeler.from_file(fname)
+#
+#     # BREAK this test because it introduces mutability which shouldn't exist
+#     assert modeler2.batch_cached == modeler2.batch == batch
+#
+#
+# def test_non_default_path_dir(monkeypatch):
+#     modeler = make_component_modeler(path_dir="not_default")
+#     monkeypatch.setattr(ComponentModeler, "_construct_smatrix", lambda self: None)
+#     modeler.run()
+#     modeler.run(path_dir="not_default")
+#     with pytest.raises(ValueError):
+#         modeler.run(path_dir="a_new_path")

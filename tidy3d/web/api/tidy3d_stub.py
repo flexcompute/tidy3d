@@ -26,6 +26,12 @@ from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.plugins.mode.mode_solver import ModeSolver
+from tidy3d.plugins.smatrix import (
+    ComponentModeler,
+    ComponentModelerData,
+    TerminalComponentModeler,
+    TerminalComponentModelerData,
+)
 from tidy3d.web.core.file_util import (
     read_simulation_from_hdf5,
     read_simulation_from_hdf5_gz,
@@ -42,6 +48,8 @@ SimulationType = Union[
     ModeSolver,
     ModeSimulation,
     VolumeMesher,
+    ComponentModeler,
+    TerminalComponentModeler,
 ]
 SimulationDataType = Union[
     SimulationData,
@@ -50,6 +58,8 @@ SimulationDataType = Union[
     EMESimulationData,
     ModeSolverData,
     ModeSimulationData,
+    ComponentModelerData,
+    TerminalComponentModelerData,
 ]
 
 
@@ -100,6 +110,10 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = ModeSimulation.from_file(file_path)
         elif type_ == "VolumeMesher":
             sim = VolumeMesher.from_file(file_path)
+        elif type_ == "ComponentModeler":
+            sim = ComponentModeler.from_file(file_path)
+        elif type_ == "TerminalComponentModeler":
+            sim = TerminalComponentModeler.from_file(file_path)
 
         return sim
 
@@ -162,6 +176,10 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.MODE.name
         elif isinstance(self.simulation, VolumeMesher):
             return TaskType.VOLUME_MESH.name
+        elif isinstance(self.simulation, ComponentModeler):
+            return TaskType.COMPONENT_MODELER.name
+        elif isinstance(self.simulation, TerminalComponentModeler):
+            return TaskType.TERMINAL_COMPONENT_MODELER.name
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
@@ -216,6 +234,10 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             sim_data = ModeSimulationData.from_file(file_path)
         elif type_ == "VolumeMesherData":
             sim_data = VolumeMesherData.from_file(file_path)
+        elif type_ == "ComponentModelerData":
+            sim_data = ComponentModelerData.from_file(file_path)
+        elif type_ == "TerminalComponentModelerData":
+            sim_data = TerminalComponentModelerData.from_file(file_path)
 
         return sim_data
 

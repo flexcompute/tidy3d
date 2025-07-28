@@ -35,6 +35,8 @@ from tidy3d.components.tcad.data.sim_data import (
     HeatSimulationData,
     VolumeMesherData,
 )
+from tidy3d.components.index import IndexSimulation
+from tidy3d.components.data.index import IndexSimulationData
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
     SteadyElectricFieldData,
@@ -570,6 +572,8 @@ __all__ = [
     "HeatSource",
     "HeuristicPECStaircasing",
     "HuraySurfaceRoughness",
+    "IndexSimulation",
+    "IndexSimulationData",
     "IndexPerturbation",
     "IndexedDataArray",
     "IndexedFieldVoltageDataArray",
