@@ -8,27 +8,24 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
-from tidy3d.components.data.data_array import DataArray, FreqDataArray
-from tidy3d.components.data.monitor_data import MonitorData
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
-from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.components.monitor import DirectivityMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Ax
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, OHM
-from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
+from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 from tidy3d.log import log
-from tidy3d.plugins.smatrix.data.terminal import PortDataArray, TerminalPortDataArray
+from tidy3d.plugins.smatrix.component_modelers.base import (
+    AbstractComponentModeler,
+    TerminalPortType,
+)
+from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.wave import WavePort
-from tidy3d.web.api.container import BatchData
-
-from .base import AbstractComponentModeler, TerminalPortType
 
 
 class TerminalComponentModeler(AbstractComponentModeler):
@@ -53,6 +50,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
     def _warn_rf_license(cls, values):
         log.warning(
             "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
+
+    @pd.root_validator(pre=False)
+    def _warn_deprecation_2_10(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ Backwards compatibility will be broken for the TerminalComponentModeler class in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
             log_once=True,
         )
         return values
@@ -163,7 +168,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
             port_source = port.to_source(
                 self._source_time, snap_center=snap_centers[port.name], grid=sim_wo_source.grid
             )
-            task_name = self._task_name(port=port)
+            task_name = self.get_task_name(port=port)
             sim_dict[task_name] = sim_wo_source.updated_copy(sources=[port_source])
 
         # Now, create simulations with wave port sources and mode solver monitors for computing port modes
@@ -176,7 +181,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
             update_dict = {"sources": [port_source]}
 
-            task_name = self._task_name(port=wave_port)
+            task_name = self.get_task_name(port=wave_port)
             sim_dict[task_name] = sim_wo_source.copy(update=update_dict)
 
         # Check final simulations for grid size at ports
@@ -192,41 +197,6 @@ class TerminalComponentModeler(AbstractComponentModeler):
         return GaussianPulse.from_frequency_range(
             fmin=min(self.freqs), fmax=max(self.freqs), remove_dc_component=self.remove_dc_component
         )
-
-    def _construct_smatrix(self) -> TerminalPortDataArray:
-        """Post process :class:`.BatchData` to generate scattering matrix."""
-        return self._internal_construct_smatrix(batch_data=self.batch_data)
-
-    def _internal_construct_smatrix(self, batch_data: BatchData) -> TerminalPortDataArray:
-        """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
-
-        port_names = [port.name for port in self.ports]
-
-        values = np.zeros(
-            (len(self.freqs), len(port_names), len(port_names)),
-            dtype=complex,
-        )
-        coords = {
-            "f": np.array(self.freqs),
-            "port_out": port_names,
-            "port_in": port_names,
-        }
-        a_matrix = TerminalPortDataArray(values, coords=coords)
-        b_matrix = a_matrix.copy(deep=True)
-
-        # Tabulate the reference impedances at each port and frequency
-        port_impedances = self._port_reference_impedances(batch_data=batch_data)
-
-        # loop through source ports
-        for port_in in self.ports:
-            sim_data = batch_data[self._task_name(port=port_in)]
-            a, b = self.compute_power_wave_amplitudes_at_each_port(port_impedances, sim_data)
-            indexer = {"f": a.f, "port_in": port_in.name, "port_out": a.port}
-            a_matrix.loc[indexer] = a
-            b_matrix.loc[indexer] = b
-
-        s_matrix = self.ab_to_s(a_matrix, b_matrix)
-        return s_matrix
 
     @pd.validator("simulation")
     def _validate_3d_simulation(cls, val):
@@ -280,221 +250,6 @@ class TerminalComponentModeler(AbstractComponentModeler):
                         "for the simulation passed to the 'TerminalComponentModeler'."
                     )
 
-    def compute_power_wave_amplitudes_at_each_port(
-        self, port_reference_impedances: PortDataArray, sim_data: SimulationData
-    ) -> tuple[PortDataArray, PortDataArray]:
-        """Compute the incident and reflected power wave amplitudes at each port.
-        The computed amplitudes have not been normalized.
-
-        Parameters
-        ----------
-        port_reference_impedances : :class:`.PortDataArray`
-            Reference impedance at each port.
-        sim_data : :class:`.SimulationData`
-            Results from the simulation.
-
-        Returns
-        -------
-        tuple[:class:`.PortDataArray`, :class:`.PortDataArray`]
-            Incident (a) and reflected (b) power wave amplitudes at each port.
-        """
-        port_names = [port.name for port in self.ports]
-        values = np.zeros(
-            (len(self.freqs), len(port_names)),
-            dtype=complex,
-        )
-        coords = {
-            "f": np.array(self.freqs),
-            "port": port_names,
-        }
-
-        V_matrix = PortDataArray(values, coords=coords)
-        I_matrix = V_matrix.copy(deep=True)
-        a = V_matrix.copy(deep=True)
-        b = V_matrix.copy(deep=True)
-
-        for port_out in self.ports:
-            V_out, I_out = self.compute_port_VI(port_out, sim_data)
-            indexer = {"port": port_out.name}
-            V_matrix.loc[indexer] = V_out
-            I_matrix.loc[indexer] = I_out
-
-        V_numpy = V_matrix.values
-        I_numpy = I_matrix.values
-        Z_numpy = port_reference_impedances.values
-
-        # Check to make sure sign is consistent for all impedance values
-        self._check_port_impedance_sign(Z_numpy)
-
-        # # Check for negative real part of port impedance and flip the V and Z signs accordingly
-        negative_real_Z = np.real(Z_numpy) < 0
-        V_numpy = np.where(negative_real_Z, -V_numpy, V_numpy)
-        Z_numpy = np.where(negative_real_Z, -Z_numpy, Z_numpy)
-
-        F_numpy = TerminalComponentModeler._compute_F(Z_numpy)
-
-        # Equation 4.67 - Pozar - Microwave Engineering 4ed
-        a.values = F_numpy * (V_numpy + Z_numpy * I_numpy)
-        b.values = F_numpy * (V_numpy - np.conj(Z_numpy) * I_numpy)
-
-        return a, b
-
-    @staticmethod
-    def compute_port_VI(
-        port_out: TerminalPortType, sim_data: SimulationData
-    ) -> tuple[FreqDataArray, FreqDataArray]:
-        """Compute the port voltages and currents.
-
-        Parameters
-        ----------
-        port_out : ``TerminalPortType``
-            Port for computing voltage and current.
-        sim_data : :class:`.SimulationData`
-            Results from simulation containing field data.
-
-        Returns
-        -------
-        tuple[FreqDataArray, FreqDataArray]
-            Voltage and current values at the port as frequency arrays.
-        """
-        voltage = port_out.compute_voltage(sim_data)
-        current = port_out.compute_current(sim_data)
-        return voltage, current
-
-    @staticmethod
-    def compute_power_wave_amplitudes(
-        port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData
-    ) -> tuple[FreqDataArray, FreqDataArray]:
-        """Compute the incident and reflected power wave amplitudes at a lumped port.
-        The computed amplitudes have not been normalized.
-
-        Parameters
-        ----------
-        port : Union[:class:`.LumpedPort`, :class:`.CoaxialLumpedPort`]
-            Port for computing voltage and current.
-        sim_data : :class:`.SimulationData`
-            Results from the simulation.
-
-        Returns
-        -------
-        tuple[FreqDataArray, FreqDataArray]
-            Incident (a) and reflected (b) power wave amplitude frequency arrays.
-        """
-        voltage, current = TerminalComponentModeler.compute_port_VI(port, sim_data)
-        # Amplitudes for the incident and reflected power waves
-        a = (voltage + port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
-        b = (voltage - port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
-        return a, b
-
-    @staticmethod
-    def compute_power_delivered_by_port(
-        port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData
-    ) -> FreqDataArray:
-        """Compute the power delivered to the network by a lumped port.
-
-        Parameters
-        ----------
-        port : Union[:class:`.LumpedPort`, :class:`.CoaxialLumpedPort`]
-            Port for computing voltage and current.
-        sim_data : :class:`.SimulationData`
-            Results from the simulation.
-
-        Returns
-        -------
-        FreqDataArray
-            Power in units of Watts as a frequency array.
-        """
-        a, b = TerminalComponentModeler.compute_power_wave_amplitudes(sim_data=sim_data, port=port)
-        # Power delivered is the incident power minus the reflected power
-        return 0.5 * (np.abs(a) ** 2 - np.abs(b) ** 2)
-
-    @staticmethod
-    def ab_to_s(
-        a_matrix: TerminalPortDataArray, b_matrix: TerminalPortDataArray
-    ) -> TerminalPortDataArray:
-        """Get the scattering matrix given the power wave matrices."""
-        # Ensure dimensions are ordered properly
-        a_matrix = a_matrix.transpose(*TerminalPortDataArray._dims)
-        b_matrix = b_matrix.transpose(*TerminalPortDataArray._dims)
-
-        s_matrix = a_matrix.copy(deep=True)
-        a_vals = s_matrix.copy(deep=True).values
-        b_vals = b_matrix.copy(deep=True).values
-
-        s_vals = np.matmul(b_vals, AbstractComponentModeler.inv(a_vals))
-
-        s_matrix.data = s_vals
-        return s_matrix
-
-    @staticmethod
-    def s_to_z(
-        s_matrix: TerminalPortDataArray, reference: Union[complex, PortDataArray]
-    ) -> DataArray:
-        """Get the impedance matrix given the scattering matrix and a reference impedance."""
-
-        # Ensure dimensions are ordered properly
-        z_matrix = s_matrix.transpose(*TerminalPortDataArray._dims).copy(deep=True)
-        s_vals = z_matrix.values
-        eye = np.eye(len(s_matrix.port_out.values), len(s_matrix.port_in.values))
-        if isinstance(reference, PortDataArray):
-            # From Equation 4.68 - Pozar - Microwave Engineering 4ed
-            # Ensure that Zport, F, and Finv act as diagonal matrices when multiplying by left or right
-            shape_left = (len(s_matrix.f), len(s_matrix.port_out), 1)
-            shape_right = (len(s_matrix.f), 1, len(s_matrix.port_in))
-            Zport = reference.values.reshape(shape_right)
-            F = TerminalComponentModeler._compute_F(Zport).reshape(shape_right)
-            Finv = (1.0 / F).reshape(shape_left)
-            FinvSF = Finv * s_vals * F
-            RHS = eye * np.conj(Zport) + FinvSF * Zport
-            LHS = eye - FinvSF
-            z_vals = np.matmul(AbstractComponentModeler.inv(LHS), RHS)
-        else:
-            # Simpler case when all port impedances are the same
-            z_vals = (
-                np.matmul(AbstractComponentModeler.inv(eye - s_vals), (eye + s_vals)) * reference
-            )
-
-        z_matrix.data = z_vals
-        return z_matrix
-
-    @cached_property
-    def port_reference_impedances(self) -> PortDataArray:
-        """The reference impedance used at each port for definining power wave amplitudes."""
-        return self._port_reference_impedances(self.batch_data)
-
-    def _port_reference_impedances(self, batch_data: BatchData) -> PortDataArray:
-        """Tabulates the reference impedance of each port at each frequency using the
-        supplied :class:`.BatchData`.
-        """
-        port_names = [port.name for port in self.ports]
-
-        values = np.zeros(
-            (len(self.freqs), len(port_names)),
-            dtype=complex,
-        )
-        coords = {"f": np.array(self.freqs), "port": port_names}
-        port_impedances = PortDataArray(values, coords=coords)
-        for port in self.ports:
-            if isinstance(port, WavePort):
-                # Mode solver data for each wave port is stored in its associated SimulationData
-                sim_data_port = batch_data[self._task_name(port=port)]
-                # WavePorts have a port impedance calculated from its associated modal field distribution
-                # and is frequency dependent.
-                impedances = port.compute_port_impedance(sim_data_port).values
-                port_impedances.loc[{"port": port.name}] = impedances.squeeze()
-            else:
-                # LumpedPorts have a constant reference impedance
-                port_impedances.loc[{"port": port.name}] = np.full(len(self.freqs), port.impedance)
-
-        port_impedances = TerminalComponentModeler._set_port_data_array_attributes(port_impedances)
-        return port_impedances
-
-    @staticmethod
-    def _compute_F(Z_numpy: np.array):
-        """Helper to convert port impedance matrix to F, which is used for
-        computing generalized scattering parameters."""
-        return 1.0 / (2.0 * np.sqrt(np.real(Z_numpy)))
-
     @cached_property
     def _lumped_ports(self) -> list[AbstractLumpedPort]:
         """A list of all lumped ports in the ``TerminalComponentModeler``"""
@@ -510,19 +265,6 @@ class TerminalComponentModeler(AbstractComponentModeler):
         """Helper to set additional metadata for ``PortDataArray``."""
         data_array.name = "Z0"
         return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
-
-    @staticmethod
-    def _check_port_impedance_sign(Z_numpy: np.ndarray):
-        """Sanity check for consistent sign of real part of Z for each port across all frequencies."""
-        for port_idx in range(Z_numpy.shape[1]):
-            port_Z = Z_numpy[:, port_idx]
-            signs = np.sign(np.real(port_Z))
-            if not np.all(signs == signs[0]):
-                raise Tidy3dError(
-                    f"Inconsistent sign of real part of Z detected for port {port_idx}. "
-                    "If you received this error, please create an issue in the Tidy3D "
-                    "github repository."
-                )
 
     def get_radiation_monitor_by_name(self, monitor_name: str) -> DirectivityMonitor:
         """Find and return a :class:`.DirectivityMonitor` monitor by its name.
@@ -547,113 +289,5 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 return monitor
         raise Tidy3dKeyError(f"No radiation monitor named '{monitor_name}'.")
 
-    def _monitor_data_at_port_amplitude(
-        self,
-        port: TerminalPortType,
-        sim_data: SimulationData,
-        monitor_data: MonitorData,
-        a_port: Union[FreqDataArray, complex],
-    ) -> MonitorData:
-        """Normalize the monitor data to a desired complex amplitude of a port,
-        represented by ``a_port``, where :math:`\\frac{1}{2}|a|^2` is the power
-        incident from the port into the system.
-        """
-        a_raw, _ = self.compute_power_wave_amplitudes_at_each_port(
-            self.port_reference_impedances, sim_data
-        )
-        a_raw_port = a_raw.sel(port=port.name)
-        if not isinstance(a_port, FreqDataArray):
-            freqs = list(monitor_data.monitor.freqs)
-            array_vals = a_port * np.ones(len(freqs))
-            a_port = FreqDataArray(array_vals, coords={"f": freqs})
-        scale_array = a_port / a_raw_port
-        return monitor_data.scale_fields_by_freq_array(scale_array, method="nearest")
 
-    def get_antenna_metrics_data(
-        self,
-        port_amplitudes: Optional[dict[str, complex]] = None,
-        monitor_name: Optional[str] = None,
-    ) -> AntennaMetricsData:
-        """Calculate antenna parameters using superposition of fields from multiple port excitations.
-
-        The method computes the radiated far fields and port excitation power wave amplitudes
-        for a superposition of port excitations, which can be used to analyze antenna radiation
-        characteristics.
-
-        Parameters
-        ----------
-        port_amplitudes : dict[str, complex] = None
-            Dictionary mapping port names to their desired excitation amplitudes. For each port,
-            :math:`\\frac{1}{2}|a|^2` represents the incident power from that port into the system.
-            If None, uses only the first port without any scaling of the raw simulation data.
-        monitor_name : str = None
-            Name of the :class:`.DirectivityMonitor` to use for calculating far fields.
-            If None, uses the first monitor in `radiation_monitors`.
-
-        Returns
-        -------
-        :class:`.AntennaMetricsData`
-            Container with antenna parameters including directivity, gain, and radiation efficiency,
-            computed from the superposition of fields from all excited ports.
-        """
-        # Use the first port as default if none specified
-        if port_amplitudes is None:
-            port_amplitudes = {self.ports[0].name: None}
-        port_names = [port.name for port in self.ports]
-        # Check port names, and create map from port to amplitude
-        port_dict = {}
-        for key in port_amplitudes.keys():
-            port = self.get_port_by_name(port_name=key)
-            port_dict[port] = port_amplitudes[key]
-        # Get the radiation monitor, use first as default
-        # if none specified
-        if monitor_name is None:
-            rad_mon = self.radiation_monitors[0]
-        else:
-            rad_mon = self.get_radiation_monitor_by_name(monitor_name)
-
-        # Create data arrays for holding the superposition of all port power wave amplitudes
-        f = list(rad_mon.freqs)
-        coords = {"f": f, "port": port_names}
-        a_sum = PortDataArray(np.zeros((len(f), len(port_names)), dtype=complex), coords=coords)
-        b_sum = a_sum.copy()
-        # Retrieve associated simulation data
-        combined_directivity_data = None
-        for port, amplitude in port_dict.items():
-            sim_data_port = self.batch_data[self._task_name(port=port)]
-            radiation_data = sim_data_port[rad_mon.name]
-
-            a, b = self.compute_power_wave_amplitudes_at_each_port(
-                self.port_reference_impedances, sim_data_port
-            )
-            # Select a possible subset of frequencies
-            a = a.sel(f=f)
-            b = b.sel(f=f)
-            a_raw = a.sel(port=port.name)
-
-            if amplitude is None:
-                # No scaling performed when amplitude is None
-                scaled_directivity_data = sim_data_port[rad_mon.name]
-                scale_factor = 1.0
-            else:
-                scaled_directivity_data = self._monitor_data_at_port_amplitude(
-                    port, sim_data_port, radiation_data, amplitude
-                )
-                scale_factor = amplitude / a_raw
-            a = scale_factor * a
-            b = scale_factor * b
-
-            # Combine the possibly scaled directivity data and the power wave amplitudes
-            if combined_directivity_data is None:
-                combined_directivity_data = scaled_directivity_data
-            else:
-                combined_directivity_data = combined_directivity_data + scaled_directivity_data
-            a_sum += a
-            b_sum += b
-
-        # Compute and add power measures to results
-        power_incident = np.real(0.5 * a_sum * np.conj(a_sum)).sum(dim="port")
-        power_reflected = np.real(0.5 * b_sum * np.conj(b_sum)).sum(dim="port")
-        return AntennaMetricsData.from_directivity_data(
-            combined_directivity_data, power_incident, power_reflected
-        )
+TerminalComponentModeler.update_forward_refs()

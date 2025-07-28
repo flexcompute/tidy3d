@@ -37,7 +37,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
     )
 
     @classmethod
-    def list(cls) -> []:
+    def list(cls, projects_endpoint: str = "tidy3d/projects") -> []:
         """List all folders.
 
         Returns
@@ -45,7 +45,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         folders : [Folder]
             List of folders
         """
-        resp = http.get("tidy3d/projects")
+        resp = http.get(projects_endpoint)
         return (
             parse_obj_as(
                 list[Folder],
@@ -56,7 +56,13 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         )
 
     @classmethod
-    def get(cls, folder_name: str, create: bool = False):
+    def get(
+        cls,
+        folder_name: str,
+        create: bool = False,
+        projects_endpoint: str = "tidy3d/projects",
+        project_endpoint: str = "tidy3d/project",
+    ):
         """Get folder by name.
 
         Parameters
@@ -72,11 +78,11 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         """
         folder = FOLDER_CACHE.get(folder_name)
         if not folder:
-            resp = http.get("tidy3d/project", params={"projectName": folder_name})
+            resp = http.get(project_endpoint, params={"projectName": folder_name})
             if resp:
                 folder = Folder(**resp)
         if create and not folder:
-            resp = http.post("tidy3d/projects", {"projectName": folder_name})
+            resp = http.post(projects_endpoint, {"projectName": folder_name})
             if resp:
                 folder = Folder(**resp)
         FOLDER_CACHE[folder_name] = folder
@@ -97,10 +103,10 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         """
         return Folder.get(folder_name, True)
 
-    def delete(self):
+    def delete(self, projects_endpoint: str = "tidy3d/projects"):
         """Remove this folder."""
 
-        http.delete(f"tidy3d/projects/{self.folder_id}")
+        http.delete(f"{projects_endpoint}/{self.folder_id}")
 
     def delete_old(self, days_old: int) -> int:
         """Remove folder contents older than ``days_old``."""
@@ -110,7 +116,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
             params={"daysOld": days_old},
         )
 
-    def list_tasks(self) -> list[Tidy3DResource]:
+    def list_tasks(self, projects_endpoint: str = "tidy3d/projects") -> list[Tidy3DResource]:
         """List all tasks in this folder.
 
         Returns
@@ -118,7 +124,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         tasks : List[:class:`.SimulationTask`]
             List of tasks in this folder
         """
-        resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
+        resp = http.get(f"{projects_endpoint}/{self.folder_id}/tasks")
         return (
             parse_obj_as(
                 list[SimulationTask],
@@ -209,6 +215,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         simulation_type: str = "tidy3d",
         parent_tasks: Optional[list[str]] = None,
         file_type: str = "Gz",
+        projects_endpoint: str = "tidy3d/projects",
     ) -> SimulationTask:
         """Create a new task on the server.
 
@@ -243,7 +250,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         folder = Folder.get(folder_name, create=True)
         resp = http.post(
-            f"tidy3d/projects/{folder.folder_id}/tasks",
+            f"{projects_endpoint}/{folder.folder_id}/tasks",
             {
                 "taskName": task_name,
                 "taskType": task_type,
