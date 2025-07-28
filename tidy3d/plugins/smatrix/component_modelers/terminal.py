@@ -57,6 +57,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
         )
         return values
 
+    @pd.root_validator(pre=False)
+    def _warn_deprecation_2_10(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ Backwards compatibility will be broken for the TerminalComponentModeler class in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
+            log_once=True,
+        )
+        return values
+
     @equal_aspect
     @add_ax_if_none
     def plot_sim(
