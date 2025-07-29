@@ -1,7 +1,19 @@
 .. currentmodule:: tidy3d
 
-Structures
-==========
+Structure and Scene
+===================
+
+Overview
+--------
+
+Structures in Tidy3D represent the physical objects to be included in the simulation. A structure is typically made of a `geometry <./geometry.html>`_ and an `EM medium <./mediums.html>`_ (material).
+
+A scene in Tidy3D holds a collection of structures. It is typically used to visualize the physical layout prior to setting up the full simulation.
+
+~~~~
+
+Structure
+---------
 
 .. autosummary::
    :toctree: _autosummary/
@@ -48,5 +60,34 @@ Once a list of structures have been defined, they can be added to the ``Simulati
    + `Defining common photonic crystal structures <../notebooks/PhotonicCrystalsComponents.html>`_
    + `Defining common integrated photonic components <../notebooks/PICComponents.html>`_
 
+~~~~
 
- 
+Scene
+-----
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.Scene
+
+A ``Scene`` holds a collection of objects and a background medium. You can also define the plotting units. Typically, one would use a ``Scene`` to visualize the physical layout prior to defining the rest of the simulation.
+
+.. code-block:: python
+
+   # Create a scene using previously defined structures
+   my_scene = Scene(
+       structures = [my_structure1, my_structure2, my_structure3],
+       medium = my_background_medium,
+       plot_length_units='mm',
+   )
+
+You can visualize the ``Scene`` using methods such as ``plot()``, ``plot_eps()`` and so on.
+
+.. code-block:: python
+
+   # Plot the previously defined Scene
+   my_scene.plot(z=0)
+
+
+~~~~

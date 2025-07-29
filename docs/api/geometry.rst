@@ -146,6 +146,23 @@ The ``ClipOperation`` class supports union, intersection, difference, and symmet
    :width: 480
    :alt: Geometries created with ``ClipOperation``
 
+You can use the following binary operators as convenient shorthand for the respective operation:
+
++ Union: ``a + b``
++ Difference: ``a - b``
++ Intersection: ``a * b``
++ Symmetric difference: ``a ^ b``
+
+Note that ``a`` and ``b`` must be ``Geometry`` objects.
+
+.. code-block:: python
+
+   # using binary operator as shorthand
+   my_box = Box(center=(-2,0,0), size=(1,1,2)),
+   my_cylinder = Cylinder(center=(-2,0,0), axis=2, radius=0.25, length=2)
+   my_boolean1 = my_box - my_cylinder
+
+
 ~~~~
 
 Spatial Transformations
