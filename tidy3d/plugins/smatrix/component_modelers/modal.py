@@ -15,9 +15,8 @@ from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax, Complex
+from tidy3d.components.types import Ax
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.exceptions import SetupError
 from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray, Port
 from tidy3d.web.api.container import BatchData
 
@@ -27,7 +26,7 @@ MatrixIndex = tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
 Element = tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
 
 
-class ComponentModeler(AbstractComponentModeler):
+class ComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
     """
     Tool for modeling devices and computing scattering matrix elements.
 
@@ -46,52 +45,6 @@ class ComponentModeler(AbstractComponentModeler):
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
-
-    element_mappings: tuple[tuple[Element, Element, Complex], ...] = pd.Field(
-        (),
-        title="Element Mappings",
-        description="Mapping between elements of the scattering matrix, "
-        "as specified by pairs of ``(port name, mode index)`` matrix indices, where the "
-        "first element of the pair is the output and the second element of the pair is the input."
-        "Each item of ``element_mappings`` is a tuple of ``(element1, element2, c)``, where "
-        "the scattering matrix ``Smatrix[element2]`` is set equal to ``c * Smatrix[element1]``."
-        "If all elements of a given column of the scattering matrix are defined by "
-        " ``element_mappings``, the simulation corresponding to this column "
-        "is skipped automatically.",
-    )
-
-    run_only: Optional[tuple[MatrixIndex, ...]] = pd.Field(
-        None,
-        title="Run Only",
-        description="If given, a tuple of matrix indices, specified by (:class:`.Port`, ``int``),"
-        " to run only, excluding the other rows from the scattering matrix. "
-        "If this option is used, "
-        "the data corresponding to other inputs will be missing in the resulting matrix.",
-    )
-    """Finally, to exclude some rows of the scattering matrix, one can supply a ``run_only`` parameter to the
-    :class:`ComponentModeler`. ``run_only`` contains the scattering matrix indices that the user wants to run as a
-    source. If any indices are excluded, they will not be run."""
-
-    verbose: bool = pd.Field(
-        False,
-        title="Verbosity",
-        description="Whether the :class:`.ComponentModeler` should print status and progressbars.",
-    )
-
-    callback_url: str = pd.Field(
-        None,
-        title="Callback URL",
-        description="Http PUT url to receive simulation finish event. "
-        "The body content is a json file with fields "
-        "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
-    )
-
-    @pd.validator("simulation", always=True)
-    def _sim_has_no_sources(cls, val):
-        """Make sure simulation has no sources as they interfere with tool."""
-        if len(val.sources) > 0:
-            raise SetupError("'ComponentModeler.simulation' must not have any sources.")
-        return val
 
     @cached_property
     def sim_dict(self) -> dict[str, Simulation]:
@@ -120,39 +73,6 @@ class ComponentModeler(AbstractComponentModeler):
             for mode_index in range(port.mode_spec.num_modes):
                 matrix_indices.append((port.name, mode_index))
         return tuple(matrix_indices)
-
-    @cached_property
-    def matrix_indices_source(self) -> tuple[MatrixIndex, ...]:
-        """Tuple of all the source matrix indices (port, mode_index) in the Component Modeler."""
-        if self.run_only is not None:
-            return self.run_only
-        return self.matrix_indices_monitor
-
-    @cached_property
-    def matrix_indices_run_sim(self) -> tuple[MatrixIndex, ...]:
-        """Tuple of all the source matrix indices (port, mode_index) in the Component Modeler."""
-
-        if self.element_mappings is None or self.element_mappings == {}:
-            return self.matrix_indices_source
-
-        # all the (i, j) pairs in `S_ij` that are tagged as covered by `element_mappings`
-        elements_determined_by_map = [element_out for (_, element_out, _) in self.element_mappings]
-
-        # loop through rows of the full s matrix and record rows that still need running.
-        source_indices_needed = []
-        for col_index in self.matrix_indices_source:
-            # loop through columns and keep track of whether each element is covered by mapping.
-            matrix_elements_covered = []
-            for row_index in self.matrix_indices_monitor:
-                element = (row_index, col_index)
-                element_covered_by_map = element in elements_determined_by_map
-                matrix_elements_covered.append(element_covered_by_map)
-
-            # if any matrix elements in row still not covered by map, a source is needed for row.
-            if not all(matrix_elements_covered):
-                source_indices_needed.append(col_index)
-
-        return source_indices_needed
 
     @cached_property
     def port_names(self) -> tuple[list[str], list[str]]:
