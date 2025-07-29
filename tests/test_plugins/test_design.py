@@ -13,7 +13,7 @@ import tidy3d as td
 import tidy3d.web as web
 from tidy3d.plugins import design as tdd
 
-from ..utils import run_emulated
+from ..test_components.test_autograd import run_emulated
 
 SWEEP_METHODS = {
     "grid": tdd.MethodGrid(),
@@ -28,6 +28,7 @@ SWEEP_METHODS = {
         keep_parents=0,
     ),
     "part_swarm": tdd.MethodParticleSwarm(n_particles=3, n_iter=2, seed=1),
+    "gradient_based": tdd.MethodGradientBased(max_iter=10, tolerance=1e-6, seed=1),
 }
 
 # Task names that should be produced for the different methods
@@ -37,6 +38,7 @@ expected_task_names = {
     "MethodBayOpt": ["MethodBayOpt_2_2", "MethodBayOpt_0_5"],
     "MethodGenAlg": ["MethodGenAlg_3_3", "MethodGenAlg_0_8"],
     "MethodParticleSwarm": ["MethodParticleSwarm_2_2", "MethodParticleSwarm_1_4"],
+    "MethodGradientBased": ["MethodGradientBased_0_0", "MethodGradientBased_1_1"],
 }
 
 
@@ -557,7 +559,12 @@ method_module_convert = {
 
 @pytest.mark.parametrize(
     "sweep_method",
-    [SWEEP_METHODS["bay_opt"], SWEEP_METHODS["gen_alg"], SWEEP_METHODS["part_swarm"]],
+    [
+        SWEEP_METHODS["bay_opt"],
+        SWEEP_METHODS["gen_alg"],
+        SWEEP_METHODS["part_swarm"],
+        SWEEP_METHODS["gradient_based"],
+    ],
 )
 def test_optimize_specific(sweep_method, monkeypatch):
     """Run tests that are only relevant to MethodOptimize"""
