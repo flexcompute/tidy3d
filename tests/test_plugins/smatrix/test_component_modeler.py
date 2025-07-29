@@ -374,6 +374,35 @@ def test_mapping_exclusion(monkeypatch):
     _test_mappings(element_mappings, s_matrix)
 
 
+def test_mapping_with_run_only():
+    """Make sure that the Modeler is correctly validated when both run_only and
+    element_mappings are provided."""
+    ports = make_ports()
+
+    EXCLUDE_INDEX = ("right_bot", 0)
+    element_mappings = []
+    run_only = []
+    # add a mapping to each element in the row of EXCLUDE_INDEX
+    for port in ports:
+        for mode_index in range(port.mode_spec.num_modes):
+            row_index = (port.name, mode_index)
+            run_only.append(row_index)
+            if row_index != EXCLUDE_INDEX:
+                mapping = ((row_index, row_index), (row_index, EXCLUDE_INDEX), +1)
+                element_mappings.append(mapping)
+
+    # add the self-self coupling element to complete row
+    mapping = ((("right_bot", 1), ("right_bot", 1)), (EXCLUDE_INDEX, EXCLUDE_INDEX), +1)
+    element_mappings.append(mapping)
+
+    # Will pass, since run_only covers all source indices in element_mapping
+    _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
+
+    run_only.remove(EXCLUDE_INDEX)
+    with pytest.raises(pydantic.ValidationError):
+        _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
+
+
 def test_batch_filename(tmp_path):
     modeler = make_component_modeler()
     path = modeler._batch_path

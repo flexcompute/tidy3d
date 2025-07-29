@@ -30,8 +30,11 @@ from tidy3d.web.api.container import BatchData
 
 from .base import AbstractComponentModeler, TerminalPortType
 
+NetworkIndex = str  # the 'i' in S_ij
+NetworkElement = tuple[NetworkIndex, NetworkIndex]  # the 'ij' in S_ij
 
-class TerminalComponentModeler(AbstractComponentModeler):
+
+class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkElement]):
     """Tool for modeling two-terminal multiport devices and computing port parameters
     with lumped and wave ports."""
 
@@ -47,6 +50,18 @@ class TerminalComponentModeler(AbstractComponentModeler):
         title="Radiation Monitors",
         description="Facilitates the calculation of figures-of-merit for antennas. "
         "These monitor will be included in every simulation and record the radiated fields. ",
+    )
+
+    assume_ideal_excitation: bool = pd.Field(
+        False,
+        title="Assume Ideal Excitation",
+        description="If ``True``, only the excited port is assumed to have incident power, so the "
+        "vector of incident power wave amplitudes (a) is assumed to be all zeros except for the "
+        "entry associated with the excited port. This choice simplifies the calculation of the "
+        "scattering matrix. If ``False``, every entry in the vector of incident power wave "
+        "amplitudes (a) is calculated explicitly. This choice requires a matrix inversion when "
+        "calculating the scattering matrix, but may lead to more accurate scattering parameters "
+        "when there are reflections from simulation boundaries. ",
     )
 
     @pd.root_validator(pre=False)
@@ -95,12 +110,70 @@ class TerminalComponentModeler(AbstractComponentModeler):
         sim_plot = self.simulation.copy(update={"sources": plot_sources})
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
+    @staticmethod
+    def network_index(port: TerminalPortType, mode_index: Optional[int] = None) -> NetworkIndex:
+        """Converts the port, and a ``mode_index`` when the port is a :class:`.WavePort``, to a unique string specifier.
+
+        Parameters
+        ----------
+        port : ``TerminalPortType``
+            The port to convert to an index.
+        mode_index : Optional[int]
+            Selects a single mode from those supported by the ``port``, which is only used when
+            the ``port`` is a :class:`.WavePort``
+
+        Returns
+        -------
+        NetworkIndex
+            A unique string that is used to identify the row/column of the scattering matrix.
+        """
+        # Currently the mode_index is ignored, but will be supported once multimodal WavePorts are enabled.
+        return f"{port.name}"
+
+    @cached_property
+    def network_dict(self) -> dict[NetworkIndex, tuple[TerminalPortType, int]]:
+        """Dictionary associating each unique ``NetworkIndex`` to a port and mode index."""
+        network_dict = {}
+        for port in self.ports:
+            mode_index = None
+            if isinstance(port, WavePort):
+                mode_index = port.mode_index
+            key = TerminalComponentModeler.network_index(port, mode_index)
+            network_dict[key] = (port, mode_index)
+        return network_dict
+
+    @cached_property
+    def matrix_indices_monitor(self) -> tuple[NetworkIndex, ...]:
+        """Tuple of all the possible matrix indices."""
+        matrix_indices = []
+        for port in self.ports:
+            if isinstance(port, WavePort):
+                matrix_indices.append(self.network_index(port, port.mode_index))
+            else:
+                matrix_indices.append(self.network_index(port))
+        return tuple(matrix_indices)
+
     @cached_property
     def sim_dict(self) -> dict[str, Simulation]:
         """Generate all the :class:`.Simulation` objects for the port parameter calculation."""
-
         sim_dict = {}
+        # Now, create simulations with wave port sources and mode solver monitors for computing port modes
+        for network_index in self.matrix_indices_run_sim:
+            task_name, sim_with_src = self._add_source_to_sim(network_index)
+            sim_dict[task_name] = sim_with_src
 
+        # Check final simulations for grid size at ports
+        for _, sim in sim_dict.items():
+            TerminalComponentModeler._check_grid_size_at_ports(sim, self._lumped_ports)
+            TerminalComponentModeler._check_grid_size_at_wave_ports(sim, self._wave_ports)
+
+        return sim_dict
+
+    @cached_property
+    def base_sim(self) -> Simulation:
+        """The base simulation with all grid refinement options, port loads (if present), and monitors added,
+        which is only missing the source excitations.
+        """
         # internal mesh override and snapping points are automatically generated from lumped elements.
         lumped_resistors = [port.to_load() for port in self._lumped_ports]
 
@@ -156,35 +229,25 @@ class TerminalComponentModeler(AbstractComponentModeler):
         }
 
         # This is the new default simulation will all shared components added
-        sim_wo_source = sim_wo_source.copy(update=update_dict)
+        return sim_wo_source.copy(update=update_dict)
 
-        # Next, simulations are generated that include the source corresponding with the excitation port
-        for port in self._lumped_ports:
-            port_source = port.to_source(
-                self._source_time, snap_center=snap_centers[port.name], grid=sim_wo_source.grid
-            )
-            task_name = self._task_name(port=port)
-            sim_dict[task_name] = sim_wo_source.updated_copy(sources=[port_source])
-
-        # Now, create simulations with wave port sources and mode solver monitors for computing port modes
-        for wave_port in self._wave_ports:
+    def _add_source_to_sim(self, source_index: NetworkIndex) -> tuple[str, Simulation]:
+        """Adds the source corresponding to the ``source_index`` to the base simulation."""
+        port, mode_index = self.network_dict[source_index]
+        if isinstance(port, WavePort):
             # Source is placed just before the field monitor of the port
-            mode_src_pos = wave_port.center[wave_port.injection_axis] + self._shift_value_signed(
-                wave_port
+            mode_src_pos = port.center[port.injection_axis] + self._shift_value_signed(port)
+            port_source = port.to_source(self._source_time, snap_center=mode_src_pos)
+        else:
+            port_center_on_axis = port.center[port.injection_axis]
+            new_port_center = snap_coordinate_to_grid(
+                self.base_sim.grid, port_center_on_axis, port.injection_axis
             )
-            port_source = wave_port.to_source(self._source_time, snap_center=mode_src_pos)
-
-            update_dict = {"sources": [port_source]}
-
-            task_name = self._task_name(port=wave_port)
-            sim_dict[task_name] = sim_wo_source.copy(update=update_dict)
-
-        # Check final simulations for grid size at ports
-        for _, sim in sim_dict.items():
-            TerminalComponentModeler._check_grid_size_at_ports(sim, self._lumped_ports)
-            TerminalComponentModeler._check_grid_size_at_wave_ports(sim, self._wave_ports)
-
-        return sim_dict
+            port_source = port.to_source(
+                self._source_time, snap_center=new_port_center, grid=self.base_sim.grid
+            )
+        task_name = self._task_name(port=port, mode_index=mode_index)
+        return (task_name, self.base_sim.updated_copy(sources=[port_source]))
 
     @cached_property
     def _source_time(self):
@@ -195,21 +258,27 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
     def _construct_smatrix(self) -> TerminalPortDataArray:
         """Post process :class:`.BatchData` to generate scattering matrix."""
-        return self._internal_construct_smatrix(batch_data=self.batch_data)
+        return self._internal_construct_smatrix(
+            batch_data=self.batch_data, assume_ideal_excitation=self.assume_ideal_excitation
+        )
 
-    def _internal_construct_smatrix(self, batch_data: BatchData) -> TerminalPortDataArray:
+    def _internal_construct_smatrix(
+        self, batch_data: BatchData, assume_ideal_excitation: bool = True
+    ) -> TerminalPortDataArray:
         """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
-        port_names = [port.name for port in self.ports]
+        monitor_indices = list(self.matrix_indices_monitor)
+        source_indices = list(self.matrix_indices_source)
+        run_source_indices = list(self.matrix_indices_run_sim)
 
         values = np.zeros(
-            (len(self.freqs), len(port_names), len(port_names)),
+            (len(self.freqs), len(monitor_indices), len(source_indices)),
             dtype=complex,
         )
         coords = {
             "f": np.array(self.freqs),
-            "port_out": port_names,
-            "port_in": port_names,
+            "port_out": monitor_indices,
+            "port_in": source_indices,
         }
         a_matrix = TerminalPortDataArray(values, coords=coords)
         b_matrix = a_matrix.copy(deep=True)
@@ -218,14 +287,36 @@ class TerminalComponentModeler(AbstractComponentModeler):
         port_impedances = self._port_reference_impedances(batch_data=batch_data)
 
         # loop through source ports
-        for port_in in self.ports:
-            sim_data = batch_data[self._task_name(port=port_in)]
+        for source_index in run_source_indices:
+            port, mode_index = self.network_dict[source_index]
+            sim_data = batch_data[self._task_name(port=port, mode_index=mode_index)]
             a, b = self.compute_power_wave_amplitudes_at_each_port(port_impedances, sim_data)
-            indexer = {"f": a.f, "port_in": port_in.name, "port_out": a.port}
+            indexer = {"f": a.f, "port_out": a.port, "port_in": source_index}
             a_matrix.loc[indexer] = a
             b_matrix.loc[indexer] = b
 
-        s_matrix = self.ab_to_s(a_matrix, b_matrix)
+        # If excitation is assumed ideal, a_matrix is assumed to be diagonal
+        # and the explicit inverse can be avoided. When only a subset of excitations
+        # have been run, we cannot find the inverse anyways so must make this assumption.
+        if len(monitor_indices) == len(run_source_indices) and not assume_ideal_excitation:
+            s_matrix = self.ab_to_s(a_matrix, b_matrix)
+        else:
+            a_diag = np.diagonal(a_matrix, axis1=1, axis2=2)
+            # Scale each column by the corresponding diagonal entry
+            s_matrix = b_matrix / a_diag[:, np.newaxis, :]
+
+        # element can be determined by user-defined mapping
+        for (row_in, col_in), (row_out, col_out), mult_by in self.element_mappings:
+            coords_from = {
+                "port_in": col_in,
+                "port_out": row_in,
+            }
+            coords_to = {
+                "port_in": col_out,
+                "port_out": row_out,
+            }
+            s_matrix.loc[coords_to] = mult_by * s_matrix.loc[coords_from].values
+
         return s_matrix
 
     @pd.validator("simulation")
@@ -298,14 +389,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
         tuple[:class:`.PortDataArray`, :class:`.PortDataArray`]
             Incident (a) and reflected (b) power wave amplitudes at each port.
         """
-        port_names = [port.name for port in self.ports]
+        network_indices = list(self.matrix_indices_monitor)
         values = np.zeros(
-            (len(self.freqs), len(port_names)),
+            (len(self.freqs), len(network_indices)),
             dtype=complex,
         )
         coords = {
             "f": np.array(self.freqs),
-            "port": port_names,
+            "port": network_indices,
         }
 
         V_matrix = PortDataArray(values, coords=coords)
@@ -313,9 +404,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
         a = V_matrix.copy(deep=True)
         b = V_matrix.copy(deep=True)
 
-        for port_out in self.ports:
-            V_out, I_out = self.compute_port_VI(port_out, sim_data)
-            indexer = {"port": port_out.name}
+        for network_index in network_indices:
+            port, mode_index = self.network_dict[network_index]
+            V_out, I_out = self.compute_port_VI(port, sim_data)
+            indexer = {"port": network_index}
             V_matrix.loc[indexer] = V_out
             I_matrix.loc[indexer] = I_out
 
@@ -413,6 +505,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         a_matrix: TerminalPortDataArray, b_matrix: TerminalPortDataArray
     ) -> TerminalPortDataArray:
         """Get the scattering matrix given the power wave matrices."""
+        TerminalComponentModeler._validate_square_matrix(a_matrix, "ab_to_s")
         # Ensure dimensions are ordered properly
         a_matrix = a_matrix.transpose(*TerminalPortDataArray._dims)
         b_matrix = b_matrix.transpose(*TerminalPortDataArray._dims)
@@ -431,7 +524,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         s_matrix: TerminalPortDataArray, reference: Union[complex, PortDataArray]
     ) -> DataArray:
         """Get the impedance matrix given the scattering matrix and a reference impedance."""
-
+        TerminalComponentModeler._validate_square_matrix(s_matrix, "s_to_z")
         # Ensure dimensions are ordered properly
         z_matrix = s_matrix.transpose(*TerminalPortDataArray._dims).copy(deep=True)
         s_vals = z_matrix.values
@@ -466,25 +559,34 @@ class TerminalComponentModeler(AbstractComponentModeler):
         """Tabulates the reference impedance of each port at each frequency using the
         supplied :class:`.BatchData`.
         """
-        port_names = [port.name for port in self.ports]
-
         values = np.zeros(
-            (len(self.freqs), len(port_names)),
+            (len(self.freqs), len(self.matrix_indices_monitor)),
             dtype=complex,
         )
-        coords = {"f": np.array(self.freqs), "port": port_names}
+        coords = {"f": np.array(self.freqs), "port": list(self.matrix_indices_monitor)}
         port_impedances = PortDataArray(values, coords=coords)
-        for port in self.ports:
+        # Mode solver data is available in each SimulationData,
+        # so just choose the first available one
+        if batch_data:
+            sim_data = next(iter(batch_data.values()))
+        else:
+            raise Tidy3dError(
+                "'batch_data' must contain at least one valid simulation result."
+                "If you received this error, please create an issue in the Tidy3D "
+                "github repository."
+            )
+        for network_index in self.matrix_indices_monitor:
+            port, mode_index = self.network_dict[network_index]
             if isinstance(port, WavePort):
-                # Mode solver data for each wave port is stored in its associated SimulationData
-                sim_data_port = batch_data[self._task_name(port=port)]
                 # WavePorts have a port impedance calculated from its associated modal field distribution
                 # and is frequency dependent.
-                impedances = port.compute_port_impedance(sim_data_port).values
-                port_impedances.loc[{"port": port.name}] = impedances.squeeze()
+                impedances = port.compute_port_impedance(sim_data).values
+                port_impedances.loc[{"port": network_index}] = impedances.squeeze()
             else:
                 # LumpedPorts have a constant reference impedance
-                port_impedances.loc[{"port": port.name}] = np.full(len(self.freqs), port.impedance)
+                port_impedances.loc[{"port": network_index}] = np.full(
+                    len(self.freqs), port.impedance
+                )
 
         port_impedances = TerminalComponentModeler._set_port_data_array_attributes(port_impedances)
         return port_impedances
@@ -524,6 +626,32 @@ class TerminalComponentModeler(AbstractComponentModeler):
                     "github repository."
                 )
 
+    @staticmethod
+    def _validate_square_matrix(matrix: TerminalPortDataArray, method_name: str) -> None:
+        """Check if the matrix has equal input and output port dimensions.
+
+        Parameters
+        ----------
+        matrix : TerminalPortDataArray
+            Matrix to validate
+        method_name : str
+            Name of the calling method for error message
+
+        Raises
+        ------
+        DataError
+            If the matrix is not square (unequal input/output dimensions).
+        """
+        n_out = len(matrix.port_out)
+        n_in = len(matrix.port_in)
+        if n_out != n_in:
+            raise Tidy3dError(
+                f"Cannot compute {method_name}: number of input ports ({n_in}) "
+                f"!= the number of output ports ({n_out}). This usually means the 'TerminalComponentModeler' "
+                "was run with only a subset of port excitations. Please ensure that the `run_only` field in "
+                "the 'TerminalComponentModeler' is not being used."
+            )
+
     def get_radiation_monitor_by_name(self, monitor_name: str) -> DirectivityMonitor:
         """Find and return a :class:`.DirectivityMonitor` monitor by its name.
 
@@ -561,7 +689,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         a_raw, _ = self.compute_power_wave_amplitudes_at_each_port(
             self.port_reference_impedances, sim_data
         )
-        a_raw_port = a_raw.sel(port=port.name)
+        a_raw_port = a_raw.sel(port=self.network_index(port))
         if not isinstance(a_port, FreqDataArray):
             freqs = list(monitor_data.monitor.freqs)
             array_vals = a_port * np.ones(len(freqs))
@@ -599,11 +727,11 @@ class TerminalComponentModeler(AbstractComponentModeler):
         # Use the first port as default if none specified
         if port_amplitudes is None:
             port_amplitudes = {self.ports[0].name: None}
-        port_names = [port.name for port in self.ports]
+
         # Check port names, and create map from port to amplitude
         port_dict = {}
         for key in port_amplitudes.keys():
-            port = self.get_port_by_name(port_name=key)
+            port, _ = self.network_dict[key]
             port_dict[port] = port_amplitudes[key]
         # Get the radiation monitor, use first as default
         # if none specified
@@ -614,8 +742,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
         # Create data arrays for holding the superposition of all port power wave amplitudes
         f = list(rad_mon.freqs)
-        coords = {"f": f, "port": port_names}
-        a_sum = PortDataArray(np.zeros((len(f), len(port_names)), dtype=complex), coords=coords)
+        coords = {"f": f, "port": list(self.matrix_indices_monitor)}
+        a_sum = PortDataArray(
+            np.zeros((len(f), len(self.matrix_indices_monitor)), dtype=complex), coords=coords
+        )
         b_sum = a_sum.copy()
         # Retrieve associated simulation data
         combined_directivity_data = None
@@ -629,7 +759,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
             # Select a possible subset of frequencies
             a = a.sel(f=f)
             b = b.sel(f=f)
-            a_raw = a.sel(port=port.name)
+            a_raw = a.sel(port=self.network_index(port))
 
             if amplitude is None:
                 # No scaling performed when amplitude is None
