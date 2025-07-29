@@ -1192,7 +1192,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             # warn if the forward simulation had symmetry and we are grouping by port, which
             # which means the individual adjoint simulations may not respect the original symmetry
             #
-            if np.any(np.abs(self.simulation.symmetry) > 0):
+            if np.any(np.abs(self.simulation.symmetry) > 0) and (num_ports > 1):
                 log.warning(
                     "The adjoint simulations for this problem are being broken into "
                     "multiple simulations that may not individually respect the symmetry of the "
