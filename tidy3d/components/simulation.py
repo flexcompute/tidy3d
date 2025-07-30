@@ -2139,17 +2139,6 @@ class Simulation(AbstractYeeGridSimulation):
         gt=0.0,
         le=1.0,
     )
-
-    precision: Literal["hybrid", "double"] = pydantic.Field(
-        "hybrid",
-        title="Floating-point Precision",
-        description="Floating point precision to use in the computations. By default, Tidy3D uses "
-        "a hybrid approach that offers a good balance of speed and accuracy for almost all "
-        "simulations. However, for large simulations (or simulations with a long run time), "
-        "where very high accuracy is needed, the precision can be set to double everywhere. "
-        "Note that this doubles the FlexCredit cost of the simulation.",
-    )
-
     """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio.  A
     physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
     because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\Delta x`
@@ -2220,6 +2209,24 @@ class Simulation(AbstractYeeGridSimulation):
     **Lectures:**
         *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
         *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
+    """
+
+    precision: Literal["hybrid", "double"] = pydantic.Field(
+        "hybrid",
+        title="Floating-point Precision",
+        description="Floating point precision to use in the computations.",
+    )
+    """
+    By default, Tidy3D uses
+    a hybrid approach that offers a good balance of speed and accuracy for almost all
+    simulations. However, for large simulations (or simulations with a long run time),
+    where very high accuracy is needed, the precision can be set to double everywhere.
+    Note that this doubles the FlexCredit cost of the simulation. Note that this argument
+    affects not only the fields in the time stepping, but also the the structure
+    discretization on the grid. Thus, results stored in a ``PermittivityMonitor`` or a
+    ``ModeSolverMonitor`` can be affected. For the latter, note also that the precision set
+    here affects the structure discretization, and is independent from the
+    ``ModeSpec.precision`` argument, which only affects the eigenvalue solver.
     """
 
     lumped_elements: tuple[LumpedElementType, ...] = pydantic.Field(
