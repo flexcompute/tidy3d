@@ -9,3 +9,4 @@ Simulation
 
    tidy3d.Simulation
    tidy3d.RunTimeSpec
+   tidy3d.FreqRange
