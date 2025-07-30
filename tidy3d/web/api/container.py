@@ -601,6 +601,7 @@ class Batch(WebContainer):
         """
         self._check_path_dir(path_dir)
         self.upload()
+        self.to_file(self._batch_path(path_dir=path_dir))
         self.start()
         self.monitor()
         return self.load(path_dir=path_dir)
@@ -988,7 +989,6 @@ class Batch(WebContainer):
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
         self._check_path_dir(path_dir=path_dir)
-        self.download(path_dir=path_dir, replace_existing=replace_existing)
 
         if self.jobs is None:
             raise DataError("Can't load batch results, hasn't been uploaded.")
@@ -1009,6 +1009,8 @@ class Batch(WebContainer):
             if isinstance(job.simulation, ModeSolver):
                 job_data = data[task_name]
                 job.simulation._patch_data(data=job_data)
+
+        self.download(path_dir=path_dir, replace_existing=replace_existing)
 
         return data
 
