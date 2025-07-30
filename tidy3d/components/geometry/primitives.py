@@ -11,12 +11,16 @@ import pydantic.v1 as pydantic
 import shapely
 
 from tidy3d.components.autograd import AutogradFieldMap, TracedSize1D
-from tidy3d.components.autograd.constants import PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE
+from tidy3d.components.autograd.constants import (
+    MIN_WVL_FRACTION_CYLINDER_DISCRETIZE,
+    PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE,
+)
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
 from tidy3d.packaging import verify_packages_import
 
 from . import base
@@ -278,12 +282,29 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         ys = np.sin(angles)
         return np.stack((xs, ys), axis=0)
 
+    def _discretization_wavelength(self, derivative_info: DerivativeInfo) -> float:
+        """Choose a reference wavelength for discretizing the cylinder into a `PolySlab`."""
+        wvl0_min = derivative_info.wavelength_min
+        wvl_mat = wvl0_min / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
+
+        min_wvl_mat = MIN_WVL_FRACTION_CYLINDER_DISCRETIZE * wvl0_min
+        if wvl_mat < min_wvl_mat:
+            log.warning(
+                f"The minimum wavelength inside the cylinder material is {wvl_mat:.3e} μm, which would "
+                f"create a large number of discretization points for computing the gradient. "
+                f"To prevent performance degradation, the discretization wavelength has "
+                f"been clipped to {min_wvl_mat:.3e} μm.",
+                log_once=True,
+            )
+        wvl_mat = max(wvl_mat, min_wvl_mat)
+
+        return wvl_mat
+
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # compute circumference discretization
-        wvl0_min = derivative_info.wavelength_min
-        wvl_mat = wvl0_min / np.max([1.0, np.max(np.sqrt(abs(derivative_info.eps_in)))])
+        wvl_mat = self._discretization_wavelength(derivative_info=derivative_info)
 
         circumference = 2 * np.pi * self.radius
         wvls_in_circumference = circumference / wvl_mat

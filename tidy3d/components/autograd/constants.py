@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
+# minimum fraction of minimum free space wavelength for discretizing cylinder in autograd derivative
+MIN_WVL_FRACTION_CYLINDER_DISCRETIZE = 5e-2
 # default number of points per wvl in material for discretizing cylinder in autograd derivative
 PTS_PER_WVL_MAT_CYLINDER_DISCRETIZE = 10
 
@@ -19,7 +21,8 @@ AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY = (1, 1, 1)
 AUTOGRAD_MONITOR_INTERVAL_SPACE_CUSTOM = (1, 1, 1)
 
 DEFAULT_WAVELENGTH_FRACTION = 0.1
-MINIMUM_SPACING = 1e-2
+# minimum fraction of minimum free space wavelength to be used when computing adaptive spacing
+MINIMUM_SPACING_FRACTION = 1e-2
 
 EDGE_CLIP_TOLERANCE = 1e-9
 
