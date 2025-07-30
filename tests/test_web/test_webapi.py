@@ -1,6 +1,8 @@
 # Tests webapi and things that depend on it
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 import responses
@@ -654,6 +656,40 @@ def test_create_output_dirs(mock_webapi, tmp_path, monkeypatch):
 
     assert non_existent_dirs_batch.exists()
     assert non_existent_dirs_batch.is_dir()
+
+
+@responses.activate
+def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_path, monkeypatch):
+    """Test that batch.run() saves batch file with task_ids immediately after upload."""
+    sims = {TASK_NAME: make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
+
+    batch_file_saved = {"saved": False, "has_task_ids": False}
+    original_to_file = Batch.to_file
+
+    def track_to_file(self, fname):
+        batch_file_saved["saved"] = True
+        batch_file_saved["has_task_ids"] = self.jobs is not None and TASK_NAME in self.jobs
+        return original_to_file(self, fname)
+
+    # mock start to interrupt run() after upload and to_file
+    def mock_start_interrupt(self):
+        # at this point, upload() and to_file() should have been called
+        assert batch_file_saved["saved"], "Batch file should be saved before start()"
+        assert batch_file_saved["has_task_ids"], "Batch file should have task_ids"
+        # verify file actually exists and can be loaded
+        batch_path = self._batch_path(path_dir=str(tmp_path))
+        assert os.path.exists(batch_path)
+        recovered = Batch.from_file(batch_path)
+        assert recovered.jobs[TASK_NAME].task_id == TASK_ID
+        raise RuntimeError("Simulated interruption after upload")
+
+    monkeypatch.setattr(Batch, "to_file", track_to_file)
+    monkeypatch.setattr(Batch, "start", mock_start_interrupt)
+
+    # run should save the batch file after upload, even if interrupted
+    with pytest.raises(RuntimeError, match="Simulated interruption"):
+        batch.run(path_dir=str(tmp_path))
 
 
 """ Async """
