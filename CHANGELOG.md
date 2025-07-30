@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
+- Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
 
 ### Fixed
 - Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.

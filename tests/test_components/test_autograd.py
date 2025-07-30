@@ -19,7 +19,11 @@ from autograd.test_util import check_grads
 
 import tidy3d as td
 import tidy3d.web as web
-from tidy3d.components.autograd.constants import MAX_NUM_TRACED_STRUCTURES
+from tidy3d.components.autograd.constants import (
+    MAX_NUM_TRACED_STRUCTURES,
+    MIN_WVL_FRACTION_CYLINDER_DISCRETIZE,
+    MINIMUM_SPACING_FRACTION,
+)
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import is_tidy_box
 from tidy3d.components.data.data_array import DataArray
@@ -1636,6 +1640,70 @@ def test_pole_residue(monkeypatch):
         for j in range(2):
             field_path = ("poles", i, j)
             assert np.isclose(grads_computed[field_path], grad_poles[i][j])
+
+
+@pytest.mark.parametrize("eps_real", [1e6, -1e8])
+def test_adaptive_spacing(eps_real):
+    freq = 5e9
+
+    info = DerivativeInfo(
+        paths={},
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        eps_in=eps_real,
+        eps_out=1.0,
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure={},
+        eps_inf_structure={},
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+    )
+
+    with AssertLogLevel("WARNING", contains_str="Based on the material, the adaptive spacing"):
+        expected_vjp_spacing = info.wavelength_min * MINIMUM_SPACING_FRACTION
+        vjp_spacing = info.adaptive_vjp_spacing()
+
+        assert np.isclose(expected_vjp_spacing, vjp_spacing), "Unexpected adaptive vjp spacing!"
+
+
+@pytest.mark.parametrize("eps_real", [1e6, -1e8])
+def test_cylinder_discretization(eps_real):
+    freq = 5e9
+
+    info = DerivativeInfo(
+        paths={},
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        eps_in=eps_real,
+        eps_out=1.0,
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure={},
+        eps_inf_structure={},
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+    )
+
+    with AssertLogLevel(
+        "WARNING", contains_str="The minimum wavelength inside the cylinder material"
+    ):
+        cylinder = td.Cylinder(axis=2, length=info.wavelength_min, radius=2 * info.wavelength_min)
+
+        expected_wvl_mat = info.wavelength_min * MIN_WVL_FRACTION_CYLINDER_DISCRETIZE
+        wvl_mat = cylinder._discretization_wavelength(derivative_info=info)
+
+        assert np.isclose(expected_wvl_mat, wvl_mat), (
+            "Unexpected wavelength for discretizing cylinder!"
+        )
 
 
 def test_custom_pole_residue(monkeypatch):

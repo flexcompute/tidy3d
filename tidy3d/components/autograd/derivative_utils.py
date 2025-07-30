@@ -11,12 +11,13 @@ import xarray as xr
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
 from tidy3d.components.types import ArrayLike, Bound, tidycomplex
 from tidy3d.constants import C_0, LARGE_NUMBER
+from tidy3d.log import log
 
 from .constants import (
     DEFAULT_WAVELENGTH_FRACTION,
     GRADIENT_DTYPE_COMPLEX,
     GRADIENT_DTYPE_FLOAT,
-    MINIMUM_SPACING,
+    MINIMUM_SPACING_FRACTION,
 )
 from .types import PathType
 from .utils import get_static
@@ -430,7 +431,7 @@ class DerivativeInfo:
     def adaptive_vjp_spacing(
         self,
         wl_fraction: float = DEFAULT_WAVELENGTH_FRACTION,
-        min_allowed_spacing: float = MINIMUM_SPACING,
+        min_allowed_spacing_fraction: float = MINIMUM_SPACING_FRACTION,
     ) -> float:
         """Compute adaptive spacing for finite-difference gradient evaluation.
 
@@ -441,8 +442,9 @@ class DerivativeInfo:
         ----------
         wl_fraction : float = 0.1
             Fraction of wavelength/skin depth to use as spacing.
-        min_allowed_spacing : float = 1e-2
-            Minimum allowed spacing to prevent numerical issues.
+        min_allowed_spacing_fraction : float = 1e-2
+            Minimum allowed spacing fraction of free space wavelength to
+            prevent numerical issues.
 
         Returns
         -------
@@ -471,7 +473,17 @@ class DerivativeInfo:
             delta_min = C_0 / (omega * np.sqrt(np.abs(eps_neg).max()))
             dx_candidates.append(wl_fraction * delta_min)
 
-        return max(min(dx_candidates), min_allowed_spacing)
+        computed_spacing = min(dx_candidates)
+        min_allowed_spacing = self.wavelength_min * min_allowed_spacing_fraction
+
+        if computed_spacing < min_allowed_spacing:
+            log.warning(
+                f"Based on the material, the adaptive spacing for integrating the polyslab surface "
+                f"would be {computed_spacing:.3e} μm. The spacing has been clipped to {min_allowed_spacing:.3e} μm "
+                f"to prevent a performance degradation.",
+                log_once=True,
+            )
+        return max(computed_spacing, min_allowed_spacing)
 
     @property
     def wavelength_min(self) -> float:
