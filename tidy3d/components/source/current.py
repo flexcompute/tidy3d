@@ -9,7 +9,8 @@ from typing import Optional
 import pydantic.v1 as pydantic
 from typing_extensions import Literal
 
-from tidy3d.components.autograd.types import AutogradFieldMap, DerivativeInfo
+from tidy3d.components.autograd import AutogradFieldMap
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
@@ -224,9 +225,9 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute derivatives with respect to CustomCurrentSource parameters.
 
-        This is a placeholder implementation. Future versions will support
-        differentiation with respect to source parameters such as current_dataset
-        field values, source center, size, etc.
+        The VJP rule for CustomCurrentSource is similar to CustomMedium.permittivity,
+        but we only use E_adj (ignore E_fwd) and compute derivatives with respect to
+        the current_dataset field components (Ex, Ey, Ez, Hx, Hy, Hz).
 
         Parameters
         ----------
@@ -239,21 +240,38 @@ class CustomCurrentSource(ReverseInterpolatedSource):
             Dictionary mapping parameter paths to their gradients.
         """
         # Import here to avoid circular imports
+        from tidy3d.components.autograd.derivative_utils import integrate_within_bounds
 
-        # For now, return placeholder gradients with expected structure
-        # This is a placeholder for future implementation
-        import tidy3d as td
+        # Get the source bounds for integration
+        source_bounds = derivative_info.bounds
 
-        td.log.info("CustomCurrentSource gradient computation not yet implemented")
+        # Compute derivatives with respect to each field component in current_dataset
+        derivative_map = {}
 
-        # Return placeholder gradients with expected structure
-        # When source gradient computation is implemented, this will compute actual gradients
-        placeholder_gradients = {}
-        for path in derivative_info.paths:
-            # Convert list path to tuple for use as dictionary key
-            path_tuple = tuple(path)
-            # For CustomCurrentSource, the paths are typically like ('current_dataset', 'Ex')
-            # We return 0.0 as placeholder gradient for each traced field
-            placeholder_gradients[path_tuple] = 0.0
+        # For CustomCurrentSource, we compute derivatives with respect to the field components
+        # in current_dataset (Ex, Ey, Ez, Hx, Hy, Hz)
+        for field_path in derivative_info.paths:
+            field_name = field_path[-1]  # e.g., 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'
 
-        return placeholder_gradients
+            # Get the corresponding adjoint field component
+            if field_name in derivative_info.E_adj:
+                adjoint_field = derivative_info.E_adj[field_name]
+
+                # Integrate the adjoint field within the source bounds
+                # This gives us the gradient with respect to the current_dataset field component
+                vjp_value = integrate_within_bounds(
+                    arr=adjoint_field,
+                    dims=("x", "y", "z"),
+                    bounds=source_bounds,
+                )
+
+                # Sum over frequency dimension to get scalar gradient
+                vjp_scalar = vjp_value.sum().values
+
+                # Store the gradient for this field component
+                derivative_map[tuple(field_path)] = vjp_scalar
+            else:
+                # If the field component is not in E_adj, set gradient to 0
+                derivative_map[tuple(field_path)] = 0.0
+
+        return derivative_map

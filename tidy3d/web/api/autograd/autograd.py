@@ -1225,25 +1225,50 @@ def _process_source_gradients(
 
     # Check if source has _compute_derivatives method
     if hasattr(source, "_compute_derivatives"):
-        # Create derivative info for source (similar to structure derivative info)
-        # For now, we'll pass minimal info - this can be expanded later
+        # For sources, we need to get field data from the forward simulation
+        # We'll look for field monitors that capture the source region
+        source_bounds = source.geometry.bounds
+
+        # Get field data from forward simulation
+        # For now, we'll use a simple approach: get field data from all field monitors
+        # and let the source's _compute_derivatives method handle the integration
+        E_adj = {}
+
+        # Look for field monitors in the forward simulation data
+        for _monitor_name, monitor_data in sim_data_fwd.monitor_data.items():
+            if isinstance(monitor_data, td.FieldData):
+                # Get field components from this monitor
+                for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+                    if hasattr(monitor_data, field_name):
+                        field_data = getattr(monitor_data, field_name)
+                        if field_name not in E_adj:
+                            E_adj[field_name] = field_data
+                        else:
+                            # If we have multiple monitors with the same field,
+                            # we'll use the first one for now
+                            # In a more sophisticated implementation, we'd merge them
+                            pass
+
+        # Create derivative info for source
         derivative_info = DerivativeInfo(
             paths=source_paths,
-            E_der_map={},  # Placeholder - source-specific field maps needed
-            D_der_map={},  # Placeholder - source-specific field maps needed
-            E_fwd=None,  # Placeholder - source-specific forward fields needed
-            E_adj=None,  # Placeholder - source-specific adjoint fields needed
-            D_fwd=None,  # Placeholder - source-specific forward fields needed
-            D_adj=None,  # Placeholder - source-specific adjoint fields needed
+            E_der_map={},  # Not used for sources
+            D_der_map={},  # Not used for sources
+            E_fwd=None,  # Not used for sources (we only use E_adj)
+            E_adj=E_adj,  # Field data from forward simulation
+            D_fwd=None,  # Not used for sources
+            D_adj=None,  # Not used for sources
             eps_data=None,  # Not applicable for sources
             eps_in=None,  # Not applicable for sources
             eps_out=None,  # Not applicable for sources
             eps_background=None,  # Not applicable for sources
-            frequencies=np.array([]),  # Placeholder
+            frequencies=np.array(list(sim_data_fwd.simulation.freqs_adjoint))
+            if hasattr(sim_data_fwd.simulation, "freqs_adjoint")
+            else np.array([]),
             eps_no_structure=None,  # Not applicable for sources
             eps_inf_structure=None,  # Not applicable for sources
-            bounds=((0, 0, 0), (0, 0, 0)),  # Placeholder
-            bounds_intersect=((0, 0, 0), (0, 0, 0)),  # Placeholder
+            bounds=source_bounds,  # Source bounds for integration
+            bounds_intersect=source_bounds,  # Same as bounds for sources
         )
 
         # Call source's derivative computation method
