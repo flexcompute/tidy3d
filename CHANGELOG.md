@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Access field decay values in `SimulationData` via `sim_data.field_decay` as `TimeDataArray`.
-- Infrastructure for source differentiation in autograd. Added `_compute_derivatives` method to `CustomCurrentSource` and updated autograd pipeline to support differentiation with respect to source parameters. Currently returns placeholder gradients (empty dict) ready for future implementation of actual source gradient computation.
+- Infrastructure for source differentiation in autograd. Added `_compute_derivatives` method to `CustomCurrentSource` and `CustomFieldSource` and updated autograd pipeline to support differentiation with respect to source parameters. Currently returns placeholder gradients (empty dict) ready for future implementation of actual source gradient computation.
 
 ### Changed
 - By default, batch downloads will skip files that already exist locally. To force re-downloading and replace existing files, pass the `replace_existing=True` argument to `Batch.load()`, `Batch.download()`, or `BatchData.load()`.

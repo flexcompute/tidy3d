@@ -197,7 +197,7 @@ The following components are traceable as inputs to the `td.Simulation`
 | dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
 | spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
 | cylinders                                                         | `Cylinder.radius`, `Cylinder.center`                    |
-| sources                                                           | `CustomCurrentSource.current_dataset` (placeholder)     |
+| sources                                                           | `CustomCurrentSource.current_dataset`, `CustomFieldSource.field_dataset` (placeholder)     |
 
 The following components are traceable as outputs of the `td.SimulationData`
 
@@ -232,42 +232,34 @@ We currently have the following restrictions:
 
 ### Source Differentiation
 
-Tidy3D now supports infrastructure for differentiating with respect to source parameters. Currently, this is implemented as a placeholder system that enables the autograd pipeline to handle sources, but returns empty gradients.
+Tidy3D now supports infrastructure for differentiating with respect to source parameters. Currently, this is implemented as a placeholder system that enables the autograd pipeline to handle source differentiation, with actual gradient computation ready for future implementation.
 
 **Supported Sources:**
 - `CustomCurrentSource`: The `current_dataset` field can be traced for differentiation
+- `CustomFieldSource`: The `field_dataset` field can be traced for differentiation
+
+**VJP Implementation:**
+The VJP rule for sources follows the same pattern as `CustomMedium.permittivity` but uses only the adjoint field (`E_adj`) and ignores the forward field (`E_fwd`). The gradient computation integrates the adjoint field within the source bounds to compute derivatives with respect to the field components (Ex, Ey, Ez, Hx, Hy, Hz) in the source datasets.
 
 **Example Usage:**
 ```python
-import autograd.numpy as anp
 import tidy3d as td
+import autograd.numpy as anp
 
-def objective(source_amplitude):
-    # Create traced field data for the source
-    field_data = source_amplitude * np.ones((10, 10, 1, 1))
-    scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
-    field_dataset = td.FieldDataset(Ex=scalar_field)
-    
-    # Create CustomCurrentSource with traced dataset
-    custom_source = td.CustomCurrentSource(
-        center=(0, 0, 0),
-        size=(1.0, 1.0, 0.0),
-        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
-        current_dataset=field_dataset
-    )
-    
-    sim = td.Simulation(
-        size=(2.0, 2.0, 2.0),
-        sources=[custom_source],
-        monitors=[td.FieldMonitor(size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14])]
-    )
-    
-    sim_data = td.web.run(sim)
-    field_data = sim_data.load_field_monitor("field_monitor")
-    return anp.abs(field_data.Ex.isel(x=5, y=5, z=0, f=0).values) ** 2
+# Create a traced CustomCurrentSource
+field_data = traced_val * np.ones((10, 10, 1, 1))
+scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+field_dataset = td.FieldDataset(Ex=scalar_field)
 
-# Compute gradient (currently returns placeholder gradients)
-grad = autograd.grad(objective)(1.0)
+custom_source = td.CustomCurrentSource(
+    center=(0, 0, 0),
+    size=(1.0, 1.0, 0.0),
+    source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+    current_dataset=field_dataset,
+)
+
+# The source parameters can now be differentiated with respect to
+# using the same autograd API as structures
 ```
 
 **Current Status:**

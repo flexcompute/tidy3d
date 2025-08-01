@@ -8,6 +8,8 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pydantic
 
+from tidy3d.components.autograd import AutogradFieldMap
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
@@ -238,6 +240,60 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 if tangential_field in val.field_components:
                     return val
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives with respect to CustomFieldSource parameters.
+
+        The VJP rule for CustomFieldSource is similar to CustomMedium.permittivity,
+        but we only use E_adj (ignore E_fwd) and compute derivatives with respect to
+        the field_dataset field components (Ex, Ey, Ez, Hx, Hy, Hz).
+
+        Parameters
+        ----------
+        derivative_info : DerivativeInfo
+            Information needed for derivative computation.
+
+        Returns
+        -------
+        AutogradFieldMap
+            Dictionary mapping parameter paths to their gradients.
+        """
+        # Import here to avoid circular imports
+        from tidy3d.components.autograd.derivative_utils import integrate_within_bounds
+
+        # Get the source bounds for integration
+        source_bounds = derivative_info.bounds
+
+        # Compute derivatives with respect to each field component in field_dataset
+        derivative_map = {}
+
+        # For CustomFieldSource, we compute derivatives with respect to the field components
+        # in field_dataset (Ex, Ey, Ez, Hx, Hy, Hz)
+        for field_path in derivative_info.paths:
+            field_name = field_path[-1]  # e.g., 'Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'
+
+            # Get the corresponding adjoint field component
+            if field_name in derivative_info.E_adj:
+                adjoint_field = derivative_info.E_adj[field_name]
+
+                # Integrate the adjoint field within the source bounds
+                # This gives us the gradient with respect to the field_dataset field component
+                vjp_value = integrate_within_bounds(
+                    arr=adjoint_field,
+                    dims=("x", "y", "z"),
+                    bounds=source_bounds,
+                )
+
+                # Sum over frequency dimension to get scalar gradient
+                vjp_scalar = vjp_value.sum().values
+
+                # Store the gradient for this field component
+                derivative_map[tuple(field_path)] = vjp_scalar
+            else:
+                # If the field component is not in E_adj, set gradient to 0
+                derivative_map[tuple(field_path)] = 0.0
+
+        return derivative_map
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
