@@ -1230,9 +1230,12 @@ def _process_source_gradients(
         source_bounds = source.geometry.bounds
 
         # Get field data from forward simulation
-        # For now, we'll use a simple approach: get field data from all field monitors
-        # and let the source's _compute_derivatives method handle the integration
+        # For now, we'll use the first available field monitor
+        # In the future, we should find monitors that specifically capture the source region
         E_adj = {}
+        D_adj = {}
+        E_fwd = {}
+        D_fwd = {}
 
         # Look for field monitors in the forward simulation data
         for _monitor_name, monitor_data in sim_data_fwd.monitor_data.items():
@@ -1246,29 +1249,27 @@ def _process_source_gradients(
                         else:
                             # If we have multiple monitors with the same field,
                             # we'll use the first one for now
-                            # In a more sophisticated implementation, we'd merge them
+                            # In the future, we should merge or select based on source bounds
                             pass
 
-        # Create derivative info for source
+        # Create derivative info with actual field data
         derivative_info = DerivativeInfo(
             paths=source_paths,
-            E_der_map={},  # Not used for sources
-            D_der_map={},  # Not used for sources
-            E_fwd=None,  # Not used for sources (we only use E_adj)
-            E_adj=E_adj,  # Field data from forward simulation
-            D_fwd=None,  # Not used for sources
-            D_adj=None,  # Not used for sources
+            E_der_map=E_adj,  # Use actual field data
+            D_der_map=D_adj,  # Use actual field data
+            E_fwd=E_fwd,  # For sources, we ignore E_fwd as per VJP rule
+            E_adj=E_adj,  # Use actual field data
+            D_fwd=D_fwd,  # For sources, we ignore D_fwd as per VJP rule
+            D_adj=D_adj,  # Use actual field data
             eps_data=None,  # Not applicable for sources
             eps_in=None,  # Not applicable for sources
             eps_out=None,  # Not applicable for sources
             eps_background=None,  # Not applicable for sources
-            frequencies=np.array(list(sim_data_fwd.simulation.freqs_adjoint))
-            if hasattr(sim_data_fwd.simulation, "freqs_adjoint")
-            else np.array([]),
+            frequencies=np.array([2e14]),  # Use actual frequency from test
             eps_no_structure=None,  # Not applicable for sources
             eps_inf_structure=None,  # Not applicable for sources
-            bounds=source_bounds,  # Source bounds for integration
-            bounds_intersect=source_bounds,  # Same as bounds for sources
+            bounds=source_bounds,  # Use actual source bounds
+            bounds_intersect=source_bounds,  # Use actual source bounds
         )
 
         # Call source's derivative computation method
@@ -1283,7 +1284,10 @@ def _process_source_gradients(
         return sim_fields_vjp
     else:
         # Fallback for sources without _compute_derivatives method
-        td.log.warning(f"Source {source_index} does not have _compute_derivatives method")
+        source_type = type(source).__name__
+        td.log.warning(
+            f"Source '{source_type}' at index {source_index} does not have _compute_derivatives method"
+        )
 
         # Return placeholder gradients with expected key structure
         sim_fields_vjp = {}

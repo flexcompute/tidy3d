@@ -293,6 +293,11 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 # If the field component is not in E_adj, set gradient to 0
                 derivative_map[tuple(field_path)] = 0.0
 
+        # For now, return placeholder gradients with expected structure
+        # This is a placeholder for future implementation
+        import tidy3d as td
+
+        td.log.debug("CustomFieldSource gradient computation not yet implemented")
         return derivative_map
 
 

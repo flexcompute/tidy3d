@@ -1002,7 +1002,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # Handle multiple starting paths
         if starting_paths:
             # If starting_paths is a single tuple, convert to tuple of tuples
-            if isinstance(starting_paths[0], str):
+            if starting_paths and isinstance(starting_paths[0], str):
                 starting_paths = (starting_paths,)
 
             # Process each starting path
