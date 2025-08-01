@@ -2850,7 +2850,7 @@ class ClipOperation(Geometry):
     @pydantic.validator("geometry_a", "geometry_b", always=True)
     def _geometries_untraced(cls, val):
         """Make sure that ``ClipOperation`` geometries do not contain tracers."""
-        traced = val._strip_traced_fields()
+        traced = val._strip_traced_fields(starting_paths=())
         if traced:
             raise ValidationError(
                 f"{val.type} contains traced fields {list(traced.keys())}. Note that "

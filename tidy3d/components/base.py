@@ -951,14 +951,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return json_string
 
     def _strip_traced_fields(
-        self, starting_path: tuple[str] = (), include_untraced_data_arrays: bool = False
+        self,
+        starting_paths: tuple[tuple[str, ...], ...] = (),
+        include_untraced_data_arrays: bool = False,
     ) -> AutogradFieldMap:
         """Extract a dictionary mapping paths in the model to the data traced by ``autograd``.
 
         Parameters
         ----------
-        starting_path : tuple[str, ...] = ()
-            If provided, starts recursing in self.dict() from this path of field names
+        starting_paths : tuple[tuple[str, ...], ...] = ()
+            If provided, starts recursing in self.dict() from these paths of field names.
+            Can be a single path tuple or multiple path tuples.
         include_untraced_data_arrays : bool = False
             Whether to include ``DataArray`` objects without tracers.
             We need to include these when returning data, but are unnecessary for structures.
@@ -996,12 +999,24 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # recursively parse the dictionary of this object
         self_dict = self.dict()
 
-        # if an include_only string was provided, only look at that subset of the dict
-        if starting_path:
-            for key in starting_path:
-                self_dict = self_dict[key]
+        # Handle multiple starting paths
+        if starting_paths:
+            # If starting_paths is a single tuple, convert to tuple of tuples
+            if isinstance(starting_paths[0], str):
+                starting_paths = (starting_paths,)
 
-        handle_value(self_dict, path=starting_path)
+            # Process each starting path
+            for starting_path in starting_paths:
+                # Navigate to the starting path in the dictionary
+                current_dict = self_dict
+                for key in starting_path:
+                    current_dict = current_dict[key]
+
+                # Handle the subtree starting from this path
+                handle_value(current_dict, path=starting_path)
+        else:
+            # No starting paths specified, process entire dictionary
+            handle_value(self_dict, path=())
 
         # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)
@@ -1039,7 +1054,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """Version of object with all autograd-traced fields removed."""
 
         # get dictionary of all traced fields
-        field_mapping = self._strip_traced_fields()
+        field_mapping = self._strip_traced_fields(starting_paths=())
 
         # shortcut to just return self if no tracers found, for performance
         if not field_mapping:

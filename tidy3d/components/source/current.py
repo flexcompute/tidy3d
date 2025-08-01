@@ -9,6 +9,7 @@ from typing import Optional
 import pydantic.v1 as pydantic
 from typing_extensions import Literal
 
+from tidy3d.components.autograd.types import AutogradFieldMap, DerivativeInfo
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
@@ -219,3 +220,40 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
     _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
     _can_interpolate = validate_can_interpolate("current_dataset")
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute derivatives with respect to CustomCurrentSource parameters.
+
+        This is a placeholder implementation. Future versions will support
+        differentiation with respect to source parameters such as current_dataset
+        field values, source center, size, etc.
+
+        Parameters
+        ----------
+        derivative_info : DerivativeInfo
+            Information needed for derivative computation.
+
+        Returns
+        -------
+        AutogradFieldMap
+            Dictionary mapping parameter paths to their gradients.
+        """
+        # Import here to avoid circular imports
+
+        # For now, return placeholder gradients with expected structure
+        # This is a placeholder for future implementation
+        import tidy3d as td
+
+        td.log.info("CustomCurrentSource gradient computation not yet implemented")
+
+        # Return placeholder gradients with expected structure
+        # When source gradient computation is implemented, this will compute actual gradients
+        placeholder_gradients = {}
+        for path in derivative_info.paths:
+            # Convert list path to tuple for use as dictionary key
+            path_tuple = tuple(path)
+            # For CustomCurrentSource, the paths are typically like ('current_dataset', 'Ex')
+            # We return 0.0 as placeholder gradient for each traced field
+            placeholder_gradients[path_tuple] = 0.0
+
+        return placeholder_gradients

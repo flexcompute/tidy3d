@@ -62,7 +62,7 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
 
     # if no tracers just use regular web.run()
     traced_fields = simulation._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_path=("structures",)
+        include_untraced_data_arrays=False, starting_paths=(("structures",), ("sources",))
     )
     if not traced_fields:
         return False
@@ -415,7 +415,7 @@ def setup_run(simulation: td.Simulation) -> AutogradFieldMap:
 
     # get a mapping of all the traced fields in the provided simulation
     return simulation._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_path=("structures",)
+        include_untraced_data_arrays=False, starting_paths=(("structures",), ("sources",))
     )
 
 
@@ -478,7 +478,7 @@ def _run_primitive(
         aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
         aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
         field_map = sim_data_orig._strip_traced_fields(
-            include_untraced_data_arrays=True, starting_path=("data",)
+            include_untraced_data_arrays=True, starting_paths=(("data",),)
         )
 
     return field_map
@@ -542,7 +542,7 @@ def _run_async_primitive(
             aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID] = task_id_fwd
             aux_data_dict[task_name][AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
             field_map = sim_data_orig._strip_traced_fields(
-                include_untraced_data_arrays=True, starting_path=("data",)
+                include_untraced_data_arrays=True, starting_paths=(("data",),)
             )
             field_map_fwd_dict[task_name] = field_map
 
@@ -579,7 +579,7 @@ def postprocess_fwd(
 
     # strip out the tracer AutogradFieldMap for the .data from the original sim
     data_traced = sim_data_original._strip_traced_fields(
-        include_untraced_data_arrays=True, starting_path=("data",)
+        include_untraced_data_arrays=True, starting_paths=(("data",),)
     )
 
     # return the AutogradFieldMap that autograd registers as the "output" of the primitive
@@ -911,7 +911,7 @@ def setup_adj(
     # start with the full simulation data structure and either zero out the fields
     # that have no tracer data for them or insert the tracer data
     full_sim_data_dict = sim_data_orig._strip_traced_fields(
-        include_untraced_data_arrays=True, starting_path=("data",)
+        include_untraced_data_arrays=True, starting_paths=(("data",),)
     )
     for path in full_sim_data_dict.keys():
         if path in data_fields_vjp:
@@ -1015,172 +1015,258 @@ def postprocess_adj(
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
-    # map of index into 'structures' to the list of paths we need vjps for
+    # group the paths by component type and index
     sim_vjp_map = defaultdict(list)
-    for _, structure_index, *structure_path in sim_fields_keys:
-        structure_path = tuple(structure_path)
-        sim_vjp_map[structure_index].append(structure_path)
+    for component_type, component_index, *component_path in sim_fields_keys:
+        sim_vjp_map[(component_type, component_index)].append(component_path)
 
-    # store the derivative values given the forward and adjoint data
+    # compute the VJP for each component
     sim_fields_vjp = {}
-    for structure_index, structure_paths in sim_vjp_map.items():
-        # grab the forward and adjoint data
-        E_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
-        eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
-        E_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
-        eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
-
-        # post normalize the adjoint fields if a single, broadband source
-        adj_flds_normed = {}
-        for key, val in E_adj.field_components.items():
-            adj_flds_normed[key] = val * sim_data_adj.simulation.post_norm
-
-        E_adj = E_adj.updated_copy(**adj_flds_normed)
-
-        # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
-        der_maps = get_derivative_maps(
-            fld_fwd=E_fwd, eps_fwd=eps_fwd, fld_adj=E_adj, eps_adj=eps_adj
-        )
-        E_der_map = der_maps["E"]
-        D_der_map = der_maps["D"]
-
-        D_fwd = E_to_D(E_fwd, eps_fwd)
-        D_adj = E_to_D(E_adj, eps_fwd)
-
-        # compute the derivatives for this structure
-        structure = sim_data_fwd.simulation.structures[structure_index]
-
-        # compute epsilon arrays for all frequencies
-        adjoint_frequencies = np.array(E_adj.monitor.freqs)
-
-        eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
-        eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
-
-        # handle background medium if present
-        if structure.background_medium:
-            eps_background = _compute_eps_array(structure.background_medium, adjoint_frequencies)
-        else:
-            eps_background = None
-
-        # auto permittivity detection for non-box geometries
-        if not isinstance(structure.geometry, td.Box):
-            sim_orig = sim_data_orig.simulation
-            plane_eps = eps_fwd.monitor.geometry
-
-            # permittivity without this structure
-            structs_no_struct = list(sim_orig.structures)
-            structs_no_struct.pop(structure_index)
-            sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
-
-            eps_no_structure_data = [
-                sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-                for f in adjoint_frequencies
-            ]
-
-            # permittivity with infinite structure
-            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-            sim_inf_structure = sim_orig.updated_copy(
-                structures=structs_inf_struct,
-                medium=structure.medium,
-                monitors=[],
+    for (component_type, component_index), component_paths in sim_vjp_map.items():
+        if component_type == "structures":
+            # Handle structure gradients (existing logic)
+            sim_fields_vjp.update(
+                _process_structure_gradients(
+                    sim_data_adj, sim_data_orig, sim_data_fwd, component_index, component_paths
+                )
             )
-
-            eps_inf_structure_data = [
-                sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
-                for f in adjoint_frequencies
-            ]
-
-            eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
-                f=adjoint_frequencies
-            )
-            eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
-                f=adjoint_frequencies
+        elif component_type == "sources":
+            # Handle source gradients (new logic)
+            sim_fields_vjp.update(
+                _process_source_gradients(
+                    sim_data_adj, sim_data_orig, sim_data_fwd, component_index, component_paths
+                )
             )
         else:
-            eps_no_structure = eps_inf_structure = None
-
-        # compute bounds intersection
-        struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
-        rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
-        rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
-        rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
-        bounds_intersect = (rmin_intersect, rmax_intersect)
-
-        # get chunk size - if None, process all frequencies as one chunk
-        freq_chunk_size = ADJOINT_FREQ_CHUNK_SIZE
-        n_freqs = len(adjoint_frequencies)
-        if freq_chunk_size is None:
-            freq_chunk_size = n_freqs
-
-        # process in chunks
-        vjp_value_map = {}
-
-        for chunk_start in range(0, n_freqs, freq_chunk_size):
-            chunk_end = min(chunk_start + freq_chunk_size, n_freqs)
-            freq_slice = slice(chunk_start, chunk_end)
-
-            # slice field data for current chunk
-            E_der_map_chunk = _slice_field_data(E_der_map.field_components, freq_slice)
-            D_der_map_chunk = _slice_field_data(D_der_map.field_components, freq_slice)
-            E_fwd_chunk = _slice_field_data(E_fwd.field_components, freq_slice)
-            E_adj_chunk = _slice_field_data(E_adj.field_components, freq_slice)
-            D_fwd_chunk = _slice_field_data(D_fwd.field_components, freq_slice)
-            D_adj_chunk = _slice_field_data(D_adj.field_components, freq_slice)
-            eps_data_chunk = _slice_field_data(eps_fwd.field_components, freq_slice)
-
-            # slice epsilon arrays
-            eps_in_chunk = eps_in.isel(f=freq_slice)
-            eps_out_chunk = eps_out.isel(f=freq_slice)
-            eps_background_chunk = (
-                eps_background.isel(f=freq_slice) if eps_background is not None else None
-            )
-            eps_no_structure_chunk = (
-                eps_no_structure.isel(f=freq_slice) if eps_no_structure is not None else None
-            )
-            eps_inf_structure_chunk = (
-                eps_inf_structure.isel(f=freq_slice) if eps_inf_structure is not None else None
-            )
-
-            # create derivative info with sliced data
-            derivative_info = DerivativeInfo(
-                paths=structure_paths,
-                E_der_map=E_der_map_chunk,
-                D_der_map=D_der_map_chunk,
-                E_fwd=E_fwd_chunk,
-                E_adj=E_adj_chunk,
-                D_fwd=D_fwd_chunk,
-                D_adj=D_adj_chunk,
-                eps_data=eps_data_chunk,
-                eps_in=eps_in_chunk,
-                eps_out=eps_out_chunk,
-                eps_background=eps_background_chunk,
-                frequencies=adjoint_frequencies[freq_slice],  # only chunk frequencies
-                eps_no_structure=eps_no_structure_chunk,
-                eps_inf_structure=eps_inf_structure_chunk,
-                bounds=struct_bounds,
-                bounds_intersect=bounds_intersect,
-            )
-
-            # compute derivatives for chunk
-            vjp_chunk = structure._compute_derivatives(derivative_info)
-
-            # accumulate results
-            for path, value in vjp_chunk.items():
-                if path in vjp_value_map:
-                    val = vjp_value_map[path]
-                    if isinstance(val, (list, tuple)) and isinstance(value, (list, tuple)):
-                        vjp_value_map[path] = type(val)(x + y for x, y in zip(val, value))
-                    else:
-                        vjp_value_map[path] += value
-                else:
-                    vjp_value_map[path] = value
-
-        # store vjps in output map
-        for structure_path, vjp_value in vjp_value_map.items():
-            sim_path = ("structures", structure_index, *list(structure_path))
-            sim_fields_vjp[sim_path] = vjp_value
+            # Unknown component type
+            td.log.warning(f"Unknown component type '{component_type}' in autograd processing")
 
     return sim_fields_vjp
+
+
+def _process_structure_gradients(
+    sim_data_adj: td.SimulationData,
+    sim_data_orig: td.SimulationData,
+    sim_data_fwd: td.SimulationData,
+    structure_index: int,
+    structure_paths: list[tuple],
+) -> AutogradFieldMap:
+    """Process gradients for a specific structure."""
+
+    # get the adjoint data for this structure
+    E_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
+    eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
+    E_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
+    eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
+
+    # post normalize the adjoint fields if a single, broadband source
+    adj_flds_normed = {}
+    for key, val in E_adj.field_components.items():
+        adj_flds_normed[key] = val * sim_data_adj.simulation.post_norm
+
+    E_adj = E_adj.updated_copy(**adj_flds_normed)
+
+    # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
+    der_maps = get_derivative_maps(fld_fwd=E_fwd, eps_fwd=eps_fwd, fld_adj=E_adj, eps_adj=eps_adj)
+    E_der_map = der_maps["E"]
+    D_der_map = der_maps["D"]
+
+    D_fwd = E_to_D(E_fwd, eps_fwd)
+    D_adj = E_to_D(E_adj, eps_fwd)
+
+    # compute the derivatives for this structure
+    structure = sim_data_fwd.simulation.structures[structure_index]
+
+    # compute epsilon arrays for all frequencies
+    adjoint_frequencies = np.array(E_adj.monitor.freqs)
+
+    eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
+    eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
+
+    # handle background medium if present
+    if structure.background_medium:
+        eps_background = _compute_eps_array(structure.background_medium, adjoint_frequencies)
+    else:
+        eps_background = None
+
+    # auto permittivity detection for non-box geometries
+    if not isinstance(structure.geometry, td.Box):
+        sim_orig = sim_data_orig.simulation
+        plane_eps = eps_fwd.monitor.geometry
+
+        # permittivity without this structure
+        structs_no_struct = list(sim_orig.structures)
+        structs_no_struct.pop(structure_index)
+        sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
+
+        eps_no_structure_data = [
+            sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+            for f in adjoint_frequencies
+        ]
+
+        # permittivity with infinite structure
+        structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+        sim_inf_structure = sim_orig.updated_copy(
+            structures=structs_inf_struct,
+            medium=structure.medium,
+            monitors=[],
+        )
+
+        eps_inf_structure_data = [
+            sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+            for f in adjoint_frequencies
+        ]
+
+        eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
+            f=adjoint_frequencies
+        )
+        eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
+            f=adjoint_frequencies
+        )
+    else:
+        eps_no_structure = eps_inf_structure = None
+
+    # compute bounds intersection
+    struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
+    rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
+    rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
+    rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
+    bounds_intersect = (rmin_intersect, rmax_intersect)
+
+    # get chunk size - if None, process all frequencies as one chunk
+    freq_chunk_size = ADJOINT_FREQ_CHUNK_SIZE
+    n_freqs = len(adjoint_frequencies)
+    if freq_chunk_size is None:
+        freq_chunk_size = n_freqs
+
+    # process in chunks
+    vjp_value_map = {}
+
+    for chunk_start in range(0, n_freqs, freq_chunk_size):
+        chunk_end = min(chunk_start + freq_chunk_size, n_freqs)
+        freq_slice = slice(chunk_start, chunk_end)
+
+        # slice field data for current chunk
+        E_der_map_chunk = _slice_field_data(E_der_map.field_components, freq_slice)
+        D_der_map_chunk = _slice_field_data(D_der_map.field_components, freq_slice)
+        E_fwd_chunk = _slice_field_data(E_fwd.field_components, freq_slice)
+        E_adj_chunk = _slice_field_data(E_adj.field_components, freq_slice)
+        D_fwd_chunk = _slice_field_data(D_fwd.field_components, freq_slice)
+        D_adj_chunk = _slice_field_data(D_adj.field_components, freq_slice)
+        eps_data_chunk = _slice_field_data(eps_fwd.field_components, freq_slice)
+
+        # slice epsilon arrays
+        eps_in_chunk = eps_in.isel(f=freq_slice)
+        eps_out_chunk = eps_out.isel(f=freq_slice)
+        eps_background_chunk = (
+            eps_background.isel(f=freq_slice) if eps_background is not None else None
+        )
+        eps_no_structure_chunk = (
+            eps_no_structure.isel(f=freq_slice) if eps_no_structure is not None else None
+        )
+        eps_inf_structure_chunk = (
+            eps_inf_structure.isel(f=freq_slice) if eps_inf_structure is not None else None
+        )
+
+        # create derivative info with sliced data
+        derivative_info = DerivativeInfo(
+            paths=structure_paths,
+            E_der_map=E_der_map_chunk,
+            D_der_map=D_der_map_chunk,
+            E_fwd=E_fwd_chunk,
+            E_adj=E_adj_chunk,
+            D_fwd=D_fwd_chunk,
+            D_adj=D_adj_chunk,
+            eps_data=eps_data_chunk,
+            eps_in=eps_in_chunk,
+            eps_out=eps_out_chunk,
+            eps_background=eps_background_chunk,
+            frequencies=adjoint_frequencies[freq_slice],  # only chunk frequencies
+            eps_no_structure=eps_no_structure_chunk,
+            eps_inf_structure=eps_inf_structure_chunk,
+            bounds=struct_bounds,
+            bounds_intersect=bounds_intersect,
+        )
+
+        # compute derivatives for chunk
+        vjp_chunk = structure._compute_derivatives(derivative_info)
+
+        # accumulate results
+        for path, value in vjp_chunk.items():
+            if path in vjp_value_map:
+                val = vjp_value_map[path]
+                if isinstance(val, (list, tuple)) and isinstance(value, (list, tuple)):
+                    vjp_value_map[path] = type(val)(x + y for x, y in zip(val, value))
+                else:
+                    vjp_value_map[path] += value
+            else:
+                vjp_value_map[path] = value
+
+    # store vjps in output map
+    sim_fields_vjp = {}
+    for structure_path, vjp_value in vjp_value_map.items():
+        sim_path = ("structures", structure_index, *list(structure_path))
+        sim_fields_vjp[sim_path] = vjp_value
+
+    return sim_fields_vjp
+
+
+def _process_source_gradients(
+    sim_data_adj: td.SimulationData,
+    sim_data_orig: td.SimulationData,
+    sim_data_fwd: td.SimulationData,
+    source_index: int,
+    source_paths: list[tuple],
+) -> AutogradFieldMap:
+    """Process gradients for a specific source."""
+
+    # Get the source object
+    source = sim_data_fwd.simulation.sources[source_index]
+
+    # Check if source has _compute_derivatives method
+    if hasattr(source, "_compute_derivatives"):
+        # Create derivative info for source (similar to structure derivative info)
+        # For now, we'll pass minimal info - this can be expanded later
+        derivative_info = DerivativeInfo(
+            paths=source_paths,
+            E_der_map={},  # Placeholder - source-specific field maps needed
+            D_der_map={},  # Placeholder - source-specific field maps needed
+            E_fwd=None,  # Placeholder - source-specific forward fields needed
+            E_adj=None,  # Placeholder - source-specific adjoint fields needed
+            D_fwd=None,  # Placeholder - source-specific forward fields needed
+            D_adj=None,  # Placeholder - source-specific adjoint fields needed
+            eps_data=None,  # Not applicable for sources
+            eps_in=None,  # Not applicable for sources
+            eps_out=None,  # Not applicable for sources
+            eps_background=None,  # Not applicable for sources
+            frequencies=np.array([]),  # Placeholder
+            eps_no_structure=None,  # Not applicable for sources
+            eps_inf_structure=None,  # Not applicable for sources
+            bounds=((0, 0, 0), (0, 0, 0)),  # Placeholder
+            bounds_intersect=((0, 0, 0), (0, 0, 0)),  # Placeholder
+        )
+
+        # Call source's derivative computation method
+        source_vjp = source._compute_derivatives(derivative_info)
+
+        # Convert source VJP to simulation field format
+        sim_fields_vjp = {}
+        for source_path, vjp_value in source_vjp.items():
+            sim_path = ("sources", source_index, *list(source_path))
+            sim_fields_vjp[sim_path] = vjp_value
+
+        return sim_fields_vjp
+    else:
+        # Fallback for sources without _compute_derivatives method
+        td.log.warning(f"Source {source_index} does not have _compute_derivatives method")
+
+        # Return placeholder gradients with expected key structure
+        sim_fields_vjp = {}
+        for source_path in source_paths:
+            sim_path = ("sources", source_index, *list(source_path))
+            sim_fields_vjp[sim_path] = 0.0  # Placeholder gradient value
+
+        return sim_fields_vjp
 
 
 """ Register primitives and VJP makers used by the user-facing functions."""

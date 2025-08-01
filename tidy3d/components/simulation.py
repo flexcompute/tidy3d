@@ -1984,7 +1984,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
 class Simulation(AbstractYeeGridSimulation):
     """
-    Custom implementation of Maxwell’s equations which represents the physical model to be solved using the FDTD
+    Custom implementation of Maxwell's equations which represents the physical model to be solved using the FDTD
     method.
 
     Notes
@@ -4337,8 +4337,17 @@ class Simulation(AbstractYeeGridSimulation):
 
         index_to_keys = defaultdict(list)
 
-        for _, index, *fields in sim_fields_keys:
-            index_to_keys[index].append(fields)
+        for component_type, index, *fields in sim_fields_keys:
+            if component_type == "structures":
+                index_to_keys[index].append(fields)
+            elif component_type == "sources":
+                # For sources, we don't need adjoint monitors in the same way as structures
+                # Sources don't have permittivity monitors, and field monitors are handled differently
+                # For now, we'll skip source adjoint monitors until source gradient computation is implemented
+                continue
+            else:
+                # Unknown component type
+                continue
 
         freqs = self._freqs_adjoint
 

@@ -2694,7 +2694,7 @@ class GridSpec(Tidy3dBaseModel):
 
         grids_1d = [self.grid_x, self.grid_y, self.grid_z]
 
-        if any(s._strip_traced_fields() for s in self.override_structures):
+        if any(s._strip_traced_fields(starting_paths=()) for s in self.override_structures):
             log.warning(
                 "The override structures were detected as having a dependence on the objective "
                 "function parameters. This is not supported by our automatic differentiation "

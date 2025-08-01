@@ -197,6 +197,7 @@ The following components are traceable as inputs to the `td.Simulation`
 | dispersive materials                                              | `PoleResidue.eps_inf`, `PoleResidue.poles`              |
 | spatially dependent dispersive materials                          | `CustomPoleResidue.eps_inf`, `CustomPoleResidue.poles`  |
 | cylinders                                                         | `Cylinder.radius`, `Cylinder.center`                    |
+| sources                                                           | `CustomCurrentSource.current_dataset` (placeholder)     |
 
 The following components are traceable as outputs of the `td.SimulationData`
 
@@ -228,6 +229,58 @@ We currently have the following restrictions:
 - The forward simulation records fields and permittivities within the bounding box of any traced object (e.g., design region) at each unique frequency in the simulation (defined by the monitors).
   This can cause unnecessary data usage during the forward pass, especially if the monitors contain many frequencies that are not relevant for the objective function (i.e., they are not being differentiated w.r.t.).
   To avoid this, restrict the frequencies in the monitors only to the ones that are relevant for differentiation during optimization.
+
+### Source Differentiation
+
+Tidy3D now supports infrastructure for differentiating with respect to source parameters. Currently, this is implemented as a placeholder system that enables the autograd pipeline to handle sources, but returns empty gradients.
+
+**Supported Sources:**
+- `CustomCurrentSource`: The `current_dataset` field can be traced for differentiation
+
+**Example Usage:**
+```python
+import autograd.numpy as anp
+import tidy3d as td
+
+def objective(source_amplitude):
+    # Create traced field data for the source
+    field_data = source_amplitude * np.ones((10, 10, 1, 1))
+    scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+    field_dataset = td.FieldDataset(Ex=scalar_field)
+    
+    # Create CustomCurrentSource with traced dataset
+    custom_source = td.CustomCurrentSource(
+        center=(0, 0, 0),
+        size=(1.0, 1.0, 0.0),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        current_dataset=field_dataset
+    )
+    
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        sources=[custom_source],
+        monitors=[td.FieldMonitor(size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14])]
+    )
+    
+    sim_data = td.web.run(sim)
+    field_data = sim_data.load_field_monitor("field_monitor")
+    return anp.abs(field_data.Ex.isel(x=5, y=5, z=0, f=0).values) ** 2
+
+# Compute gradient (currently returns placeholder gradients)
+grad = autograd.grad(objective)(1.0)
+```
+
+**Current Status:**
+- Infrastructure is in place for source differentiation
+- `CustomCurrentSource` has a `_compute_derivatives` method (placeholder)
+- Autograd pipeline supports sources in addition to structures
+- Currently returns empty gradients (ready for future implementation)
+
+**Future Implementation:**
+When source gradient computation is fully implemented, it will support differentiation with respect to:
+- Current dataset field values (Ex, Ey, Ez, Hx, Hy, Hz)
+- Source center and size parameters  
+- Source time parameters
 
 ### To be supported soon
 

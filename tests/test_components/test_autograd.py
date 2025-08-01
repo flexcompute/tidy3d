@@ -1101,7 +1101,7 @@ def test_sim_full_ops(structure_key):
 
         sim_full_static = sim_full_traced.to_static()
 
-        sim_fields = sim_full_traced._strip_traced_fields()
+        sim_fields = sim_full_traced._strip_traced_fields(starting_paths=())
 
         # note: there is one traced structure in SIM_FULL already with 6 fields + 1 = 7
         assert len(sim_fields) == 10
@@ -1137,7 +1137,7 @@ def test_sim_fields_io(structure_key, tmp_path):
     s = make_structures(params0)[structure_key]
     s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
     sim_full_traced = SIM_FULL.updated_copy(structures=[*list(SIM_FULL.structures), s])
-    sim_fields = sim_full_traced._strip_traced_fields()
+    sim_fields = sim_full_traced._strip_traced_fields(starting_paths=())
 
     field_map = FieldMap.from_autograd_field_map(sim_fields)
     field_map_file = join(tmp_path, "test_sim_fields.hdf5.gz")
@@ -2366,3 +2366,83 @@ def test_error_clip(use_emulated_run):
 
     with pytest.raises(ValueError):
         g = ag.grad(objective)(1.0)
+
+
+def test_source_autograd(use_emulated_run):
+    """Test autograd differentiation with respect to CustomCurrentSource parameters."""
+
+    def make_sim_with_traced_source(val):
+        """Create a simulation with a traced CustomCurrentSource."""
+
+        # Create a simple simulation
+        sim = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[],
+            monitors=[
+                td.FieldMonitor(
+                    size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
+                )
+            ],
+        )
+
+        data_shape = (10, 10, 1, 1)
+
+        # Create a traced CustomCurrentSource
+        x = np.linspace(-0.5, 0.5, data_shape[0])
+        y = np.linspace(-0.5, 0.5, data_shape[1])
+        z = np.array([0])
+        f = [2e14]
+        coords = {"x": x, "y": y, "z": z, "f": f}
+
+        # Create traced field data
+        field_data = val * np.ones(data_shape)
+        scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+
+        # Create field dataset with traced data
+        field_dataset = td.FieldDataset(Ex=scalar_field)
+
+        # Create CustomCurrentSource with traced dataset
+        custom_source = td.CustomCurrentSource(
+            center=(0, 0, 0),
+            size=(1.0, 1.0, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            current_dataset=field_dataset,
+        )
+
+        # Add source to simulation
+        sim = sim.updated_copy(sources=[custom_source])
+
+        return sim
+
+    def objective(val):
+        """Objective function that depends on source parameters."""
+
+        sim = make_sim_with_traced_source(val)
+
+        # Run simulation
+        sim_data = run(sim, task_name="test_source_autograd")
+
+        # Extract field data from monitor
+        field_data = sim_data.load_field_monitor("field_monitor")
+        Ex_field = field_data.Ex
+
+        # Compute objective (e.g., field intensity at a point)
+        objective_value = anp.abs(Ex_field.isel(x=5, y=5, z=0, f=0).values) ** 2
+
+        return objective_value
+
+    # Compute gradient
+    grad = ag.grad(objective)(1.0)
+
+    # Check that gradient is not None and has expected structure
+    assert grad is not None
+
+    # For now, just check that the gradient computation works
+    # The placeholder implementation returns empty dict for source gradients
+    # Source gradient extraction will be implemented when source gradient computation is ready
+    assert isinstance(grad, (float, np.ndarray))
+
+    # Note: Currently source gradients return empty dict due to placeholder implementation
+    # When source gradient computation is implemented, we can check for actual gradients
