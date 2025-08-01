@@ -17,6 +17,7 @@ from tidy3d.components.data.validators import validate_can_interpolate, validate
 from tidy3d.components.types import Polarization
 from tidy3d.components.validators import assert_single_freq_in_range, warn_if_dataset_none
 from tidy3d.constants import MICROMETER
+from tidy3d.log import log
 
 from .base import Source
 from .time import SourceTimeType
@@ -266,7 +267,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
                 )
 
                 # Sum over frequency dimension to get scalar gradient
-                vjp_scalar = vjp_value.sum().values
+                vjp_scalar = vjp_value.sum(dim="f").values
 
                 # Store the gradient for this field component
                 derivative_map[tuple(field_path)] = vjp_scalar
@@ -276,8 +277,6 @@ class CustomCurrentSource(ReverseInterpolatedSource):
 
         # For now, return placeholder gradients with expected structure
         # This is a placeholder for future implementation
-        import tidy3d as td
-
-        td.log.debug("CustomCurrentSource gradient computation not yet implemented")
+        log.debug("CustomCurrentSource gradient computation not yet implemented")
 
         return derivative_map

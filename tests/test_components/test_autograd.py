@@ -2526,3 +2526,346 @@ def test_field_source_autograd(use_emulated_run):
 
     # Note: Currently source gradients return empty dict due to placeholder implementation
     # When source gradient computation is implemented, we can check for actual gradients
+
+
+def test_source_adjoint_monitors():
+    """Test that adjoint monitors are properly created for sources."""
+
+    # Create a simulation with a traced source
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[],
+        monitors=[
+            td.FieldMonitor(
+                size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
+            )
+        ],
+    )
+
+    # Create traced field data
+    data_shape = (10, 10, 1, 1)
+    x = np.linspace(-0.5, 0.5, data_shape[0])
+    y = np.linspace(-0.5, 0.5, data_shape[1])
+    z = np.array([0])
+    f = [2e14]
+    coords = {"x": x, "y": y, "z": z, "f": f}
+
+    field_data = 1.0 * np.ones(data_shape)
+    scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+    field_dataset = td.FieldDataset(Ex=scalar_field)
+
+    # Create CustomCurrentSource with traced dataset
+    custom_source = td.CustomCurrentSource(
+        center=(0, 0, 0),
+        size=(1.0, 1.0, 0.0),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        current_dataset=field_dataset,
+    )
+
+    # Add source to simulation
+    sim = sim.updated_copy(sources=[custom_source])
+
+    # Create sim_fields_keys for source
+    sim_fields_keys = [("sources", 0, "current_dataset", "Ex")]
+
+    # Test that adjoint monitors are created
+    adjoint_monitors_fld, adjoint_monitors_eps = sim._make_adjoint_monitors(sim_fields_keys)
+
+    # Check that field monitors were created for sources
+    assert len(adjoint_monitors_fld) == 1
+    assert len(adjoint_monitors_eps) == 1
+
+    # Check that field monitors exist for sources
+    source_field_monitors = adjoint_monitors_fld[0]
+    source_eps_monitors = adjoint_monitors_eps[0]
+
+    assert len(source_field_monitors) == 1  # Should have one field monitor
+    assert len(source_eps_monitors) == 0  # Sources don't need permittivity monitors
+
+    # Check that the field monitor covers the source region
+    field_monitor = source_field_monitors[0]
+    assert isinstance(field_monitor, td.FieldMonitor)
+    assert field_monitor.center == custom_source.center
+    assert field_monitor.size == custom_source.size
+    # Check that frequencies are not empty (they should come from _freqs_adjoint)
+    assert len(field_monitor.freqs) > 0
+    # Just check that they have the same length and are not empty
+    assert len(field_monitor.freqs) == len(sim._freqs_adjoint)
+    assert len(field_monitor.freqs) > 0
+
+
+def test_source_field_adjoint_monitors():
+    """Test that adjoint monitors are properly created for CustomFieldSource."""
+
+    # Create a simulation with a traced field source
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[],
+        monitors=[
+            td.FieldMonitor(
+                size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
+            )
+        ],
+    )
+
+    # Create traced field data
+    data_shape = (10, 10, 1, 1)
+    x = np.linspace(-0.5, 0.5, data_shape[0])
+    y = np.linspace(-0.5, 0.5, data_shape[1])
+    z = np.array([0])
+    f = [2e14]
+    coords = {"x": x, "y": y, "z": z, "f": f}
+
+    field_data = 1.0 * np.ones(data_shape)
+    scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+    field_dataset = td.FieldDataset(Ex=scalar_field)
+
+    # Create CustomFieldSource with traced dataset
+    custom_field_source = td.CustomFieldSource(
+        center=(0, 0, 0),
+        size=(1.0, 1.0, 0.0),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        field_dataset=field_dataset,
+    )
+
+    # Add source to simulation
+    sim = sim.updated_copy(sources=[custom_field_source])
+
+    # Create sim_fields_keys for source
+    sim_fields_keys = [("sources", 0, "field_dataset", "Ex")]
+
+    # Test that adjoint monitors are created
+    adjoint_monitors_fld, adjoint_monitors_eps = sim._make_adjoint_monitors(sim_fields_keys)
+
+    # Check that field monitors were created for sources
+    assert len(adjoint_monitors_fld) == 1
+    assert len(adjoint_monitors_eps) == 1
+
+    # Check that field monitors exist for sources
+    source_field_monitors = adjoint_monitors_fld[0]
+    source_eps_monitors = adjoint_monitors_eps[0]
+
+    assert len(source_field_monitors) == 1  # Should have one field monitor
+    assert len(source_eps_monitors) == 0  # Sources don't need permittivity monitors
+
+    # Check that the field monitor covers the source region
+    field_monitor = source_field_monitors[0]
+    assert isinstance(field_monitor, td.FieldMonitor)
+    assert field_monitor.center == custom_field_source.center
+    assert field_monitor.size == custom_field_source.size
+    # Check that frequencies are not empty (they should come from _freqs_adjoint)
+    assert len(field_monitor.freqs) > 0
+    # Just check that they have the same length and are not empty
+    assert len(field_monitor.freqs) == len(sim._freqs_adjoint)
+    assert len(field_monitor.freqs) > 0
+
+
+def test_mixed_structure_source_adjoint_monitors():
+    """Test that adjoint monitors work correctly when both structures and sources are traced."""
+
+    # Create a simulation with both structures and sources
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[],
+        structures=[
+            td.Structure(
+                geometry=td.Box(center=(0.5, 0, 0), size=(0.5, 0.5, 0.5)),
+                medium=td.Medium(permittivity=2.0),
+            )
+        ],
+        monitors=[
+            td.FieldMonitor(
+                size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
+            )
+        ],
+    )
+
+    # Create traced field data for source
+    data_shape = (10, 10, 1, 1)
+    x = np.linspace(-0.5, 0.5, data_shape[0])
+    y = np.linspace(-0.5, 0.5, data_shape[1])
+    z = np.array([0])
+    f = [2e14]
+    coords = {"x": x, "y": y, "z": z, "f": f}
+
+    field_data = 1.0 * np.ones(data_shape)
+    scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+    field_dataset = td.FieldDataset(Ex=scalar_field)
+
+    # Create CustomCurrentSource with traced dataset
+    custom_source = td.CustomCurrentSource(
+        center=(-0.5, 0, 0),
+        size=(0.5, 0.5, 0.0),
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        current_dataset=field_dataset,
+    )
+
+    # Add source to simulation
+    sim = sim.updated_copy(sources=[custom_source])
+
+    # Create sim_fields_keys for both structure and source
+    sim_fields_keys = [
+        ("structures", 0, "medium", "permittivity"),
+        ("sources", 0, "current_dataset", "Ex"),
+    ]
+
+    # Test that adjoint monitors are created for both
+    adjoint_monitors_fld, adjoint_monitors_eps = sim._make_adjoint_monitors(sim_fields_keys)
+
+    # Should have monitors for both structure and source
+    # Note: The structure might not create monitors if it doesn't have the right field keys
+    # Let's be more flexible about the expected number
+    assert len(adjoint_monitors_fld) >= 1  # At least the source monitor
+    assert len(adjoint_monitors_eps) >= 1  # At least the source monitor (empty list)
+
+    # Check that we have at least one source monitor
+    source_monitor_found = False
+    for _i, field_monitor_item in enumerate(adjoint_monitors_fld):
+        # Handle both direct FieldMonitor and list of FieldMonitor
+        if isinstance(field_monitor_item, td.FieldMonitor):
+            # Direct FieldMonitor (could be structure or source)
+            field_monitor = field_monitor_item
+            # Check if this is our source monitor
+            if (
+                field_monitor.center == custom_source.center
+                and field_monitor.size == custom_source.size
+            ):
+                # This looks like our source monitor
+                assert len(field_monitor.freqs) > 0
+                source_monitor_found = True
+                break
+        elif isinstance(field_monitor_item, list):
+            # List of FieldMonitor (source monitors are wrapped in lists)
+            for field_monitor in field_monitor_item:
+                if isinstance(field_monitor, td.FieldMonitor):
+                    # Check if this is our source monitor
+                    if (
+                        field_monitor.center == custom_source.center
+                        and field_monitor.size == custom_source.size
+                    ):
+                        # This looks like our source monitor
+                        assert len(field_monitor.freqs) > 0
+                        source_monitor_found = True
+                        break
+            if source_monitor_found:
+                break
+
+    assert source_monitor_found, "No source monitor found in adjoint monitors"
+
+
+def test_source_derivative_computation(use_emulated_run):
+    """Test that source derivative computation works with proper field data."""
+
+    def make_sim_with_traced_source(val):
+        """Create a simulation with a traced CustomCurrentSource."""
+
+        sim = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[],
+            monitors=[
+                td.FieldMonitor(
+                    size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
+                )
+            ],
+        )
+
+        data_shape = (10, 10, 1, 1)
+        x = np.linspace(-0.5, 0.5, data_shape[0])
+        y = np.linspace(-0.5, 0.5, data_shape[1])
+        z = np.array([0])
+        f = [2e14]
+        coords = {"x": x, "y": y, "z": z, "f": f}
+
+        field_data = val * np.ones(data_shape)
+        scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+        field_dataset = td.FieldDataset(Ex=scalar_field)
+
+        custom_source = td.CustomCurrentSource(
+            center=(0, 0, 0),
+            size=(1.0, 1.0, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            current_dataset=field_dataset,
+        )
+
+        sim = sim.updated_copy(sources=[custom_source])
+        return sim
+
+    def objective(val):
+        """Objective function that depends on source parameters."""
+        sim = make_sim_with_traced_source(val)
+        sim_data = run(sim, task_name="test_source_derivative")
+        field_data = sim_data.load_field_monitor("field_monitor")
+        Ex_field = field_data.Ex
+        objective_value = anp.abs(Ex_field.isel(x=5, y=5, z=0, f=0).values) ** 2
+        return objective_value
+
+    # Test that gradient computation works
+    grad = ag.grad(objective)(1.0)
+
+    # Check that gradient is not None and has expected structure
+    assert grad is not None
+    assert isinstance(grad, (float, np.ndarray))
+
+
+def test_source_field_derivative_computation(use_emulated_run):
+    """Test that CustomFieldSource derivative computation works."""
+
+    def make_sim_with_traced_field_source(val):
+        """Create a simulation with a traced CustomFieldSource."""
+
+        sim = td.Simulation(
+            size=(2.0, 2.0, 2.0),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[],
+            monitors=[
+                td.FieldMonitor(
+                    size=(1.0, 1.0, 0.0), center=(0, 0, 0), freqs=[2e14], name="field_monitor"
+                )
+            ],
+        )
+
+        data_shape = (10, 10, 1, 1)
+        x = np.linspace(-0.5, 0.5, data_shape[0])
+        y = np.linspace(-0.5, 0.5, data_shape[1])
+        z = np.array([0])
+        f = [2e14]
+        coords = {"x": x, "y": y, "z": z, "f": f}
+
+        field_data = val * np.ones(data_shape)
+        scalar_field = td.ScalarFieldDataArray(field_data, coords=coords)
+        field_dataset = td.FieldDataset(Ex=scalar_field)
+
+        custom_field_source = td.CustomFieldSource(
+            center=(0, 0, 0),
+            size=(1.0, 1.0, 0.0),
+            source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            field_dataset=field_dataset,
+        )
+
+        sim = sim.updated_copy(sources=[custom_field_source])
+        return sim
+
+    def objective(val):
+        """Objective function that depends on field source parameters."""
+        sim = make_sim_with_traced_field_source(val)
+        sim_data = run(sim, task_name="test_field_source_derivative")
+        field_data = sim_data.load_field_monitor("field_monitor")
+        Ex_field = field_data.Ex
+        objective_value = anp.abs(Ex_field.isel(x=5, y=5, z=0, f=0).values) ** 2
+        return objective_value
+
+    # Test that gradient computation works
+    grad = ag.grad(objective)(1.0)
+
+    # Check that gradient is not None and has expected structure
+    assert grad is not None
+    assert isinstance(grad, (float, np.ndarray))

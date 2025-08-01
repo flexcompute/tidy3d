@@ -4329,22 +4329,40 @@ class Simulation(AbstractYeeGridSimulation):
         """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
         mnts_fld, mnts_eps = self._make_adjoint_monitors(sim_fields_keys=sim_fields_keys)
-        monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
+
+        # Flatten the monitor lists - each element in mnts_fld/mnts_eps is a list of monitors
+        all_field_monitors = []
+        all_eps_monitors = []
+
+        for field_monitors in mnts_fld:
+            if isinstance(field_monitors, list):
+                all_field_monitors.extend(field_monitors)
+            else:
+                # Handle case where it's a single monitor
+                all_field_monitors.append(field_monitors)
+
+        for eps_monitors in mnts_eps:
+            if isinstance(eps_monitors, list):
+                all_eps_monitors.extend(eps_monitors)
+            else:
+                # Handle case where it's a single monitor
+                all_eps_monitors.append(eps_monitors)
+
+        monitors = list(self.monitors) + all_field_monitors + all_eps_monitors
         return self.copy(update={"monitors": monitors})
 
     def _make_adjoint_monitors(self, sim_fields_keys: list) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
 
-        index_to_keys = defaultdict(list)
+        # Separate structures and sources into different dictionaries
+        structure_index_to_keys = defaultdict(list)
+        source_index_to_keys = defaultdict(list)
 
         for component_type, index, *fields in sim_fields_keys:
             if component_type == "structures":
-                index_to_keys[index].append(fields)
+                structure_index_to_keys[index].append(fields)
             elif component_type == "sources":
-                # For sources, we don't need adjoint monitors in the same way as structures
-                # Sources don't have permittivity monitors, and field monitors are handled differently
-                # For now, we'll skip source adjoint monitors until source gradient computation is implemented
-                continue
+                source_index_to_keys[index].append(fields)
             else:
                 # Unknown component type
                 continue
@@ -4354,16 +4372,37 @@ class Simulation(AbstractYeeGridSimulation):
         adjoint_monitors_fld = []
         adjoint_monitors_eps = []
 
-        # make a field and permittivity monitor for every structure needing one
-        for i, field_keys in index_to_keys.items():
-            structure = self.structures[i]
+        # Handle structures first
+        for i, field_keys in structure_index_to_keys.items():
+            if i < len(self.structures):
+                structure = self.structures[i]
+                mnt_fld, mnt_eps = structure._make_adjoint_monitors(
+                    freqs=freqs, index=i, field_keys=field_keys
+                )
+                adjoint_monitors_fld.append(mnt_fld)
+                adjoint_monitors_eps.append(mnt_eps)
 
-            mnt_fld, mnt_eps = structure._make_adjoint_monitors(
-                freqs=freqs, index=i, field_keys=field_keys
-            )
+        # Handle sources
+        for i, _field_keys in source_index_to_keys.items():
+            if i < len(self.sources):
+                source = self.sources[i]
 
-            adjoint_monitors_fld.append(mnt_fld)
-            adjoint_monitors_eps.append(mnt_eps)
+                # For sources, we only need field monitors (no permittivity monitors)
+                # Create a field monitor that covers the source region
+                source_center = source.center
+                source_size = source.size
+
+                # Create field monitor for the source
+                field_monitor = FieldMonitor(
+                    center=source_center,
+                    size=source_size,
+                    freqs=freqs,
+                    name=f"source_adjoint_{i}",
+                )
+
+                # For sources, we only return field monitors (no permittivity monitors)
+                adjoint_monitors_fld.append([field_monitor])
+                adjoint_monitors_eps.append([])  # Empty list for sources
 
         return adjoint_monitors_fld, adjoint_monitors_eps
 

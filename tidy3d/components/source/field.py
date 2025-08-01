@@ -285,7 +285,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 )
 
                 # Sum over frequency dimension to get scalar gradient
-                vjp_scalar = vjp_value.sum().values
+                vjp_scalar = vjp_value.sum(dim="f").values
 
                 # Store the gradient for this field component
                 derivative_map[tuple(field_path)] = vjp_scalar
@@ -295,9 +295,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
         # For now, return placeholder gradients with expected structure
         # This is a placeholder for future implementation
-        import tidy3d as td
-
-        td.log.debug("CustomFieldSource gradient computation not yet implemented")
+        log.debug("CustomFieldSource gradient computation not yet implemented")
         return derivative_map
 
 
