@@ -4,16 +4,34 @@ from typing import Union
 
 import numpy as np
 
-from tidy3d.components.data.data_array import DataArray, FreqDataArray
+from tidy3d.components.data.data_array import (
+    CurrentFreqDataArray,
+    CurrentFreqModeDataArray,
+    CurrentIntegralResultTypes,
+    CurrentTimeDataArray,
+    DataArray,
+    FreqDataArray,
+    FreqModeDataArray,
+    ImpedanceFreqDataArray,
+    ImpedanceFreqModeDataArray,
+    ImpedanceResultTypes,
+    ImpedanceTimeDataArray,
+    IntegralResultTypes,
+    TimeDataArray,
+    VoltageFreqDataArray,
+    VoltageFreqModeDataArray,
+    VoltageIntegralResultTypes,
+    VoltageTimeDataArray,
+)
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.exceptions import Tidy3dError
-from tidy3d.plugins.smatrix.component_modelers.base import (
-    AbstractComponentModeler,
-    TerminalPortType,
-)
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
-from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
+from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
+
+
+def port_array_inv(matrix: DataArray):
+    """Helper to invert a port matrix."""
+    return np.linalg.inv(matrix)
 
 
 def ab_to_s(
@@ -39,7 +57,7 @@ def ab_to_s(
     a_vals = s_matrix.copy(deep=True).values
     b_vals = b_matrix.copy(deep=True).values
 
-    s_vals = np.matmul(b_vals, AbstractComponentModeler.inv(a_vals))
+    s_vals = np.matmul(b_vals, port_array_inv(a_vals))
 
     s_matrix.data = s_vals
     return s_matrix
@@ -109,7 +127,7 @@ def compute_port_VI(
 
 
 def compute_power_wave_amplitudes(
-    port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData
+    port: LumpedPortType, sim_data: SimulationData
 ) -> tuple[FreqDataArray, FreqDataArray]:
     """Calculates the unnormalized power wave amplitudes from port voltage (V),
     current (I), and impedance (Z0) using:
@@ -120,7 +138,7 @@ def compute_power_wave_amplitudes(
 
     Parameters
     ----------
-    port : Union[:class:`.LumpedPort`, :class:`.CoaxialLumpedPort`]
+    port : :class:`.LumpedPortType`
         Port for computing voltage and current.
     sim_data : :class:`.SimulationData`
         Results from the simulation.
@@ -138,7 +156,7 @@ def compute_power_wave_amplitudes(
 
 
 def compute_power_delivered_by_port(
-    port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData
+    port: LumpedPortType, sim_data: SimulationData
 ) -> FreqDataArray:
     """Compute the power delivered to the network by a lumped port.
 
@@ -147,7 +165,7 @@ def compute_power_delivered_by_port(
 
     Parameters
     ----------
-    port : Union[:class:`.LumpedPort`, :class:`.CoaxialLumpedPort`]
+    port : :class:`.LumpedPortType`
         Port for computing voltage and current.
     sim_data : :class:`.SimulationData`
         Results from the simulation.
@@ -192,10 +210,50 @@ def s_to_z(s_matrix: TerminalPortDataArray, reference: Union[complex, PortDataAr
         FinvSF = Finv * s_vals * F
         RHS = eye * np.conj(Zport) + FinvSF * Zport
         LHS = eye - FinvSF
-        z_vals = np.matmul(AbstractComponentModeler.inv(LHS), RHS)
+        z_vals = np.matmul(port_array_inv(LHS), RHS)
     else:
         # Simpler case when all port impedances are the same
-        z_vals = np.matmul(AbstractComponentModeler.inv(eye - s_vals), (eye + s_vals)) * reference
+        z_vals = np.matmul(port_array_inv(eye - s_vals), (eye + s_vals)) * reference
 
     z_matrix.data = z_vals
     return z_matrix
+
+
+def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
+    """Helper for creating the proper base result type."""
+    cls = FreqDataArray
+    if "t" in result.coords:
+        cls = TimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = FreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
+
+
+def _make_voltage_data_array(result: DataArray) -> CurrentIntegralResultTypes:
+    """Helper for creating the proper voltage array type."""
+    cls = CurrentFreqDataArray
+    if "t" in result.coords:
+        cls = CurrentTimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = CurrentFreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
+
+
+def _make_current_data_array(result: DataArray) -> VoltageIntegralResultTypes:
+    """Helper for creating the proper current array type."""
+    cls = VoltageFreqDataArray
+    if "t" in result.coords:
+        cls = VoltageTimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = VoltageFreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
+
+
+def _make_impedance_data_array(result: DataArray) -> ImpedanceResultTypes:
+    """Helper for creating the proper impedance array type."""
+    cls = ImpedanceFreqDataArray
+    if "t" in result.coords:
+        cls = ImpedanceTimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = ImpedanceFreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))

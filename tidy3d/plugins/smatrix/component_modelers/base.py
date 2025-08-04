@@ -9,7 +9,6 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import FreqArray
 from tidy3d.constants import HERTZ
@@ -99,11 +98,6 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         if len(ports) == 0:
             raise Tidy3dKeyError(f'Port "{port_name}" not found.')
         return ports[0]
-
-    @staticmethod
-    def inv(matrix: DataArray):
-        """Helper to invert a port matrix."""
-        return np.linalg.inv(matrix)
 
     def _shift_value_signed(self, port: Union[Port, WavePort]) -> float:
         """How far (signed) to shift the source from the monitor."""
