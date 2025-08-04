@@ -23,11 +23,14 @@ from tidy3d.components.autograd import TidyArrayBox, get_static, interpn, is_tid
 from tidy3d.components.geometry.bound_ops import bounds_contains
 from tidy3d.components.types import Axis, Bound
 from tidy3d.constants import (
+    AMP,
     HERTZ,
     MICROMETER,
+    OHM,
     PICOSECOND_PER_NANOMETER_PER_KILOMETER,
     RADIAN,
     SECOND,
+    VOLT,
     WATT,
 )
 from tidy3d.exceptions import DataError, FileError
@@ -1338,6 +1341,165 @@ class PerturbationCoefficientDataArray(DataArray):
     _dims = ("wvl", "coeff")
 
 
+class VoltageArray(DataArray):
+    # Always set __slots__ = () to avoid xarray warnings
+    __slots__ = ()
+    _data_attrs = {"units": VOLT, "long_name": "voltage"}
+
+
+class CurrentArray(DataArray):
+    # Always set __slots__ = () to avoid xarray warnings
+    __slots__ = ()
+    _data_attrs = {"units": AMP, "long_name": "current"}
+
+
+class ImpedanceArray(DataArray):
+    # Always set __slots__ = () to avoid xarray warnings
+    __slots__ = ()
+    _data_attrs = {"units": OHM, "long_name": "impedance"}
+
+
+# Voltage arrays
+class VoltageFreqDataArray(VoltageArray, FreqDataArray):
+    """Voltage data array in frequency domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> f = [2e9, 3e9, 4e9]
+    >>> coords = dict(f=f)
+    >>> data = np.random.random(3) + 1j * np.random.random(3)
+    >>> vfd = VoltageFreqDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+class VoltageTimeDataArray(VoltageArray, TimeDataArray):
+    """Voltage data array in time domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> t = [0, 1e-9, 2e-9, 3e-9]
+    >>> coords = dict(t=t)
+    >>> data = np.sin(2 * np.pi * 1e9 * np.array(t))
+    >>> vtd = VoltageTimeDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+class VoltageFreqModeDataArray(VoltageArray, FreqModeDataArray):
+    """Voltage data array in frequency-mode domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> f = [2e9, 3e9]
+    >>> mode_index = [0, 1]
+    >>> coords = dict(f=f, mode_index=mode_index)
+    >>> data = np.random.random((2, 2)) + 1j * np.random.random((2, 2))
+    >>> vfmd = VoltageFreqModeDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+# Current arrays
+class CurrentFreqDataArray(CurrentArray, FreqDataArray):
+    """Current data array in frequency domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> f = [2e9, 3e9, 4e9]
+    >>> coords = dict(f=f)
+    >>> data = np.random.random(3) + 1j * np.random.random(3)
+    >>> cfd = CurrentFreqDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+class CurrentTimeDataArray(CurrentArray, TimeDataArray):
+    """Current data array in time domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> t = [0, 1e-9, 2e-9, 3e-9]
+    >>> coords = dict(t=t)
+    >>> data = np.cos(2 * np.pi * 1e9 * np.array(t))
+    >>> ctd = CurrentTimeDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+class CurrentFreqModeDataArray(CurrentArray, FreqModeDataArray):
+    """Current data array in frequency-mode domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> f = [2e9, 3e9]
+    >>> mode_index = [0, 1]
+    >>> coords = dict(f=f, mode_index=mode_index)
+    >>> data = np.random.random((2, 2)) + 1j * np.random.random((2, 2))
+    >>> cfmd = CurrentFreqModeDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+# Impedance arrays
+class ImpedanceFreqDataArray(ImpedanceArray, FreqDataArray):
+    """Impedance data array in frequency domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> f = [2e9, 3e9, 4e9]
+    >>> coords = dict(f=f)
+    >>> data = 50.0 + 1j * np.random.random(3)
+    >>> zfd = ImpedanceFreqDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+class ImpedanceTimeDataArray(ImpedanceArray, TimeDataArray):
+    """Impedance data array in time domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> t = [0, 1e-9, 2e-9, 3e-9]
+    >>> coords = dict(t=t)
+    >>> data = 50.0 * np.ones_like(t)
+    >>> ztd = ImpedanceTimeDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
+class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
+    """Impedance data array in frequency-mode domain.
+
+    Example
+    -------
+    >>> import numpy as np
+    >>> f = [2e9, 3e9]
+    >>> mode_index = [0, 1]
+    >>> coords = dict(f=f, mode_index=mode_index)
+    >>> data = 50.0 + 10.0 * np.random.random((2, 2))
+    >>> zfmd = ImpedanceFreqModeDataArray(data, coords=coords)
+    """
+
+    __slots__ = ()
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
@@ -1375,6 +1537,15 @@ DATA_ARRAY_TYPES = [
     SpatialVoltageDataArray,
     PerturbationCoefficientDataArray,
     IndexedTimeDataArray,
+    VoltageFreqDataArray,
+    VoltageTimeDataArray,
+    VoltageFreqModeDataArray,
+    CurrentFreqDataArray,
+    CurrentTimeDataArray,
+    CurrentFreqModeDataArray,
+    ImpedanceFreqDataArray,
+    ImpedanceTimeDataArray,
+    ImpedanceFreqModeDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
@@ -1384,4 +1555,15 @@ IndexedDataArrayTypes = Union[
     IndexedTimeDataArray,
     IndexedFieldVoltageDataArray,
     PointDataArray,
+]
+
+IntegralResultTypes = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
+VoltageIntegralResultTypes = Union[
+    VoltageFreqDataArray, VoltageFreqModeDataArray, VoltageTimeDataArray
+]
+CurrentIntegralResultTypes = Union[
+    CurrentFreqDataArray, CurrentFreqModeDataArray, CurrentTimeDataArray
+]
+ImpedanceResultTypes = Union[
+    ImpedanceFreqDataArray, ImpedanceFreqModeDataArray, ImpedanceTimeDataArray
 ]

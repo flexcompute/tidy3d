@@ -19,10 +19,10 @@ from tidy3d.exceptions import SetupError
 from .path_integrals import (
     AbstractAxesRH,
     AxisAlignedPathIntegral,
-    CurrentIntegralAxisAligned,
+    CurrentIntegralResultTypes,
     IntegralResultTypes,
     MonitorDataTypes,
-    VoltageIntegralAxisAligned,
+    VoltageIntegralResultTypes,
 )
 from .viz import (
     ARROW_CURRENT,
@@ -89,6 +89,10 @@ class CustomPathIntegral2D(AbstractAxesRH):
             Result of integral over remaining dimensions (frequency, time, mode indices).
         """
 
+        from tidy3d.plugins.smatrix.utils import (
+            _make_base_result_data_array,
+        )
+
         (dim1, dim2, dim3) = self.local_dims
 
         h_field_name = f"{field}{dim1}"
@@ -130,7 +134,7 @@ class CustomPathIntegral2D(AbstractAxesRH):
         # Integrate along the path
         result = integrand.integrate(coord="s")
         result = result.reset_coords(drop=True)
-        return AxisAlignedPathIntegral._make_result_data_array(result)
+        return _make_base_result_data_array(result)
 
     @staticmethod
     def _compute_dl_component(coord_array: xr.DataArray, closed_contour=False) -> np.array:
@@ -243,7 +247,7 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
 
     .. TODO Improve by including extrapolate_to_endpoints field, non-trivial extension."""
 
-    def compute_voltage(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
+    def compute_voltage(self, em_field: MonitorDataTypes) -> VoltageIntegralResultTypes:
         """Compute voltage along path defined by a line.
 
         Parameters
@@ -253,13 +257,16 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
 
         Returns
         -------
-        :class:`.IntegralResultTypes`
+        :class:`.VoltageIntegralResultTypes`
             Result of voltage computation over remaining dimensions (frequency, time, mode indices).
         """
+        from tidy3d.plugins.smatrix.utils import (
+            _make_voltage_data_array,
+        )
+
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         voltage = -1.0 * self.compute_integral(field="E", em_field=em_field)
-        voltage = VoltageIntegralAxisAligned._set_data_array_attributes(voltage)
-        return voltage
+        return _make_voltage_data_array(voltage)
 
     @add_ax_if_none
     def plot(
@@ -316,7 +323,7 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
     To compute the current flowing in the positive ``axis`` direction, the vertices should be
     ordered in a counterclockwise direction."""
 
-    def compute_current(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
+    def compute_current(self, em_field: MonitorDataTypes) -> CurrentIntegralResultTypes:
         """Compute current flowing in a custom loop.
 
         Parameters
@@ -326,13 +333,16 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
 
         Returns
         -------
-        :class:`.IntegralResultTypes`
+        :class:`.CurrentIntegralResultTypes`
             Result of current computation over remaining dimensions (frequency, time, mode indices).
         """
+        from tidy3d.plugins.smatrix.utils import (
+            _make_current_data_array,
+        )
+
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         current = self.compute_integral(field="H", em_field=em_field)
-        current = CurrentIntegralAxisAligned._set_data_array_attributes(current)
-        return current
+        return _make_current_data_array(current)
 
     @add_ax_if_none
     def plot(
