@@ -2,6 +2,11 @@ name: "docs/tidy3d/sync-to-readthedocs-repo"
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Target mirror repo branch. Defaults to source branch/tag.'
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -24,7 +29,7 @@ jobs:
         shell: bash
         run: |
           REF_NAME="${GITHUB_REF#refs/*/}"
-          echo "::set-output name=ref_name::$REF_NAME"
+          echo "ref_name=$REF_NAME" >> $GITHUB_OUTPUT
           echo "Extracted ref: $REF_NAME"
 
   build-and-deploy:
@@ -33,29 +38,8 @@ jobs:
     needs: extract_branch_or_tag
     runs-on: ubuntu-latest
     steps:
-      # Conditional Checkout for Branch
-      - name: Checkout Branch if branch-triggered-sync
-        if: contains(github.ref, 'refs/heads/')
-        uses: actions/checkout@v3
-        with:
-          submodules: true
-          token: ${{ secrets.GH_PAT }}
-          ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-
-      - name: Push corresponding reference to mirror repo if a branch
-        if: contains(github.ref, 'refs/heads/')
-        run: |
-          git fetch --unshallow origin ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-          git pull origin ${{ needs.extract_branch_or_tag.outputs.ref_name }}
-          git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
-          git push mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }} --force # overwrites always
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-
-      # Conditional Checkout for Tag
-      - name: Checkout Tag if tag-triggered-sync
-        if: contains(github.ref, 'refs/tags/')
-        uses: actions/checkout@v3
+      - name: full-checkout
+        uses: actions/checkout@v4
         with:
           submodules: true
           token: ${{ secrets.GH_PAT }}
@@ -63,11 +47,21 @@ jobs:
           ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           fetch-tags: true
 
-
-      - name: Push corresponding reference to mirror repo if a tag
-        if: contains(github.ref, 'refs/tags/')
-        run: |
-          git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
-          git push mirror ${{ needs.extract_branch_or_tag.outputs.ref_name }} --force # overwrites always
+      - name: push-mirror-repo
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          SOURCE_REF: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
+          TARGET_BRANCH_INPUT: ${{ github.event.inputs.target_branch }}
+        run: |
+          echo "Source reference: $SOURCE_REF"
+          git pull origin "$SOURCE_REF"
+          git remote add mirror https://github.com/flexcompute-readthedocs/tidy3d-docs.git
+         
+          if [[ -n "$TARGET_BRANCH_INPUT" && "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Manual trigger detected. Pushing contents of '$SOURCE_REF' to remote branch '$TARGET_BRANCH_INPUT'."
+            git push mirror "$SOURCE_REF:refs/heads/$TARGET_BRANCH_INPUT" --force
+          else
+            echo "Automatic trigger or manual run without target. Pushing '$SOURCE_REF' to the same ref on the mirror."
+            # This preserves the original behavior: pushes a branch to a branch, or a tag to a tag.
+            git push mirror "$SOURCE_REF" --force
+          fi
