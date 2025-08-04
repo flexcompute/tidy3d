@@ -7,16 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-### Changed
-
-### Fixed
-- Giving opposite boundaries different names no longer causes a symmetry validator failure.
-- Fixed issue with parameters in `InverseDesignResult` sometimes being outside of the valid parameter range.
-- Disallow `EMEFieldMonitor` in EME simulations with `EMELengthSweep`.
-
-
 ## [2.9.0] - 2025-08-04
 
 ### Added
@@ -94,6 +84,10 @@ with fewer layers than recommended.
 - Giving opposite boundaries different names no longer causes a symmetry validator failure.
 - Fixed issue with parameters in `InverseDesignResult` sometimes being outside of the valid parameter range.
 - Fixed performance regression for multi-frequency adjoint calculations.
+- Disallow `EMEFieldMonitor` in EME simulations with `EMELengthSweep`.
+- Fixed bug in adjoint postprocessing frequency batching that was causing gradients to be zero or incorrect. The error was surfacing when selecting a subset of the monitor frequencies in the objective function.
+
+
 
 ## [2.8.5] - 2025-07-07
 
