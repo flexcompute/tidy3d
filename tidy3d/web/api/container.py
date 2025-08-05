@@ -66,6 +66,10 @@ class Job(WebContainer):
         Another convenient thing about :class:`Job` objects is that they can be saved and loaded just like other
         ``tidy3d`` components.
 
+        **Autograd Support**: The :meth:`run` method automatically supports autograd functionality when the simulation
+        contains traced fields. Autograd parameters can be controlled via the ``local_gradient`` and
+        ``max_num_adjoint_per_fwd`` fields.
+
     Examples
     --------
 
@@ -189,6 +193,20 @@ class Job(WebContainer):
         description="Specify the payment method.",
     )
 
+    # Add autograd parameters
+    local_gradient: bool = pd.Field(
+        False,
+        title="Local Gradient",
+        description="Whether to perform gradient calculation locally, requiring more downloads but potentially "
+        "more stable with experimental features.",
+    )
+
+    max_num_adjoint_per_fwd: int = pd.Field(
+        10,
+        title="Max Num Adjoint Per Forward",
+        description="Maximum number of adjoint simulations allowed to run automatically.",
+    )
+
     _upload_fields = (
         "simulation",
         "task_name",
@@ -199,6 +217,8 @@ class Job(WebContainer):
         "parent_tasks",
         "solver_version",
         "reduce_simulation",
+        "local_gradient",
+        "max_num_adjoint_per_fwd",
     )
 
     def to_file(self, fname: str) -> None:
@@ -230,10 +250,18 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-        self.upload()
-        self.start()
-        self.monitor()
-        return self.load(path=path)
+        # Import autograd functions here to avoid circular imports
+        from tidy3d.web.api.autograd.autograd import run as web_run
+
+        # Use the autograd-compatible web_run() function which handles autograd detection and fallback
+        return web_run(
+            simulation=self.simulation,
+            task_name=self.task_name,
+            folder_name=self.folder_name,
+            path=path,
+            local_gradient=self.local_gradient,
+            max_num_adjoint_per_fwd=self.max_num_adjoint_per_fwd,
+        )
 
     @cached_property
     def task_id(self) -> TaskId:
@@ -245,8 +273,13 @@ class Job(WebContainer):
 
     def _upload(self) -> TaskId:
         """Upload this job and return the task ID for handling."""
-        # upload kwargs with all fields except task_id
+        # upload kwargs with all fields except task_id and autograd parameters
         upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
+
+        # Filter out autograd parameters that are not accepted by web.upload()
+        autograd_params = {"local_gradient", "max_num_adjoint_per_fwd"}
+        upload_kwargs = {k: v for k, v in upload_kwargs.items() if k not in autograd_params}
+
         task_id = web.upload(**upload_kwargs)
         return task_id
 
@@ -480,6 +513,10 @@ class Batch(WebContainer):
         start, monitor, and load a series of tasks. The batch object is like a :class:`Job`, but stores task metadata
         for a series of simulations.
 
+        **Autograd Support**: The :meth:`run` method automatically supports autograd functionality when any simulation
+        contains traced fields. Autograd parameters can be controlled via the ``local_gradient`` and
+        ``max_num_adjoint_per_fwd`` fields.
+
     See Also
     --------
 
@@ -560,6 +597,20 @@ class Batch(WebContainer):
         description="Specify the payment method.",
     )
 
+    # Add autograd parameters
+    local_gradient: bool = pd.Field(
+        False,
+        title="Local Gradient",
+        description="Whether to perform gradient calculation locally, requiring more downloads but potentially "
+        "more stable with experimental features.",
+    )
+
+    max_num_adjoint_per_fwd: int = pd.Field(
+        10,
+        title="Max Num Adjoint Per Forward",
+        description="Maximum number of adjoint simulations allowed to run automatically.",
+    )
+
     jobs_cached: dict[TaskName, Job] = pd.Field(
         None,
         title="Jobs (Cached)",
@@ -591,19 +642,73 @@ class Batch(WebContainer):
 
         >>> from tidy3d.web.api.container import Batch
         >>> custom_batch = Batch()
-        >>> batch_data = custom_batch.run() # doctest: +SKIP
-        >>> for task_name, sim_data in batch_data.items(): # doctest: +SKIP
-        ...     # do something with data. # doctest: +SKIP
+        >>> custom_batch.add_simulation(simulation, task_name="task_name")
+        >>> batch_data = custom_batch.run()
 
-        ``bach_data`` does not store all of the data objects in memory,
-        rather it iterates over the task names and loads the corresponding
-        data from file one by one. If no file exists for that task, it downloads it.
+        **Autograd Support**: The :meth:`run` method automatically supports autograd functionality when any simulation
+        contains traced fields. Autograd parameters can be controlled via the ``local_gradient`` and
+        ``max_num_adjoint_per_fwd`` fields.
         """
         self._check_path_dir(path_dir)
-        self.upload()
-        self.start()
-        self.monitor()
-        return self.load(path_dir=path_dir)
+
+        # Check if any simulation has traced fields
+        has_traced_fields = False
+        for simulation in self.simulations.values():
+            try:
+                stripped_fields = simulation._strip_traced_fields()
+                if len(stripped_fields) > 0:
+                    has_traced_fields = True
+                    break
+            except AttributeError:
+                continue
+
+        if has_traced_fields:
+            # If any simulation has traced fields, run each job individually with autograd support
+            batch_data = {}
+            task_ids = {}
+            task_paths = {}
+
+            for task_name, job in self.jobs.items():
+                # Use the job's run method which has autograd support
+                sim_data = job.run(path=path_dir)
+                batch_data[task_name] = sim_data
+                task_ids[task_name] = job.task_id
+                task_paths[task_name] = self._job_data_path(job.task_id, path_dir)
+
+            return BatchData(
+                task_paths=task_paths,
+                task_ids=task_ids,
+                verbose=self.verbose,
+            )
+        else:
+            # Use regular batch processing for simulations without traced fields
+            # Use the low-level webapi functions directly to avoid recursion
+
+            # Upload all jobs
+            self.upload()
+
+            # Start all jobs
+            self.start()
+
+            # Monitor all jobs
+            self.monitor()
+
+            # Load all jobs
+            batch_data = {}
+            task_ids = {}
+            task_paths = {}
+
+            for task_name, job in self.jobs.items():
+                sim_data = job.load(path=path_dir)
+                batch_data[task_name] = sim_data
+                task_ids[task_name] = job.task_id
+                task_paths[task_name] = self._job_data_path(job.task_id, path_dir)
+
+            return BatchData(
+                task_paths=task_paths,
+                task_ids=task_ids,
+                verbose=self.verbose,
+            )
 
     @cached_property
     def jobs(self) -> dict[TaskName, Job]:
