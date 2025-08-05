@@ -192,7 +192,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
         return CustomCurrentSource(
             center=center,
-            size=(self.outer_diameter, self.outer_diameter, 0),
+            size=size,
             source_time=source_time,
             name=self.name,
             interpolate=True,
