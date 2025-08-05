@@ -8,9 +8,11 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.web.api import webapi as web
-from tidy3d.web.api.container import DEFAULT_DATA_DIR
 from tidy3d.web.api.tidy3d_stub import SimulationDataType
 from tidy3d.web.core.constants import TaskName
+
+# Default data directory for batch operations
+DEFAULT_DATA_DIR = "."
 
 
 class BatchData(Tidy3dBaseModel, Mapping):

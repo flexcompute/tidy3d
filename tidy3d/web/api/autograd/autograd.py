@@ -23,12 +23,10 @@ from tidy3d.components.autograd.constants import (
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.exceptions import AdjointError
-from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
-from tidy3d.web.api.batch_data import BatchData
+from tidy3d.web.api.batch_data import DEFAULT_DATA_DIR, BatchData
 from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, Job
 from tidy3d.web.api.tidy3d_stub import SimulationDataType, SimulationType
-from tidy3d.web.api.webapi import run as run_webapi
 from tidy3d.web.core.s3utils import download_file, upload_file
 from tidy3d.web.core.types import PayType
 
@@ -220,7 +218,7 @@ def run(
             pay_type=pay_type,
         )
 
-    return run_webapi(
+    return run_async_webapi(
         simulation=simulation,
         task_name=task_name,
         folder_name=folder_name,

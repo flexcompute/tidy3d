@@ -28,6 +28,12 @@ from .tidy3d_stub import SimulationDataType, SimulationType
 if TYPE_CHECKING:
     from tidy3d.web.api.batch_data import BatchData
 
+# Import BatchData for runtime use
+# Import abstractmethod for WebContainer
+from abc import abstractmethod
+
+from tidy3d.web.api.batch_data import BatchData
+
 # Max # of workers for parallel upload / download: above 10, performance is same but with warnings
 DEFAULT_NUM_WORKERS = 10
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
@@ -37,8 +43,6 @@ BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
 
 class WebContainer(Tidy3dBaseModel, ABC):
     """Base class for :class:`Job` and :class:`Batch`, technically not used"""
-
-    from abc import abstractmethod
 
     @staticmethod
     @abstractmethod
@@ -265,7 +269,8 @@ class Job(WebContainer):
         ``max_num_adjoint_per_fwd`` fields.
         """
         # Use the autograd-compatible run function via lazy import
-        autograd_run = _get_autograd_run()
+        from tidy3d.web.api.autograd.autograd import run as autograd_run
+
         return autograd_run(
             simulation=self.simulation,
             task_name=self.task_name,
@@ -581,9 +586,6 @@ class Batch(WebContainer):
         ``max_num_adjoint_per_fwd`` fields.
         """
         self._check_path_dir(path_dir)
-
-        # Import BatchData here to avoid circular imports
-        from tidy3d.web.api.batch_data import BatchData
 
         # Use the low-level webapi functions directly to avoid recursion
 
@@ -998,9 +1000,6 @@ class Batch(WebContainer):
         self._check_path_dir(path_dir=path_dir)
         self.download(path_dir=path_dir, replace_existing=replace_existing)
 
-        # Import BatchData here to avoid circular imports
-        from tidy3d.web.api.batch_data import BatchData
-
         if self.jobs is None:
             raise DataError("Can't load batch results, hasn't been uploaded.")
 
@@ -1098,10 +1097,3 @@ class Batch(WebContainer):
         """
         if len(path_dir) > 0 and not os.path.exists(path_dir):
             os.makedirs(path_dir, exist_ok=True)
-
-
-def _get_autograd_run():
-    """Lazy import of autograd run function to avoid circular imports."""
-    from tidy3d.web.api.autograd.autograd import run as autograd_run
-
-    return autograd_run

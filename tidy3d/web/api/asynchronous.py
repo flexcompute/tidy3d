@@ -7,8 +7,8 @@ from typing import Literal, Optional, Union
 from tidy3d.log import log
 from tidy3d.web.core.types import PayType
 
-from .batch_data import BatchData
-from .container import DEFAULT_DATA_DIR, Batch
+from .batch_data import DEFAULT_DATA_DIR, BatchData
+from .container import Batch
 from .tidy3d_stub import SimulationType
 
 
