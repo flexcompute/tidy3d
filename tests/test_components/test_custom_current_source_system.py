@@ -28,13 +28,13 @@ def to_float(x):
         return float(x)
 
 
-def test_custom_current_source_two_simulation_workflow(use_emulated_run):
+def test_custom_field_source_two_simulation_workflow(use_emulated_run):
     """
-    Test the complete two-simulation workflow with CustomCurrentSource differentiation.
+    Test the complete two-simulation workflow with CustomFieldSource differentiation.
 
     This test validates that:
-    1. FieldData can be used to create CustomCurrentSource
-    2. The CustomCurrentSource can be used in a second simulation
+    1. FieldData can be used to create CustomFieldSource
+    2. The CustomFieldSource can be used in a second simulation
     3. Gradients flow through the entire chain
     4. Numerical derivatives match autograd derivatives
     """
@@ -65,7 +65,7 @@ def test_custom_current_source_two_simulation_workflow(use_emulated_run):
         return sim
 
     def make_sim2(amplitude, custom_source):
-        """Create the second simulation using CustomCurrentSource."""
+        """Create the second simulation using CustomFieldSource."""
 
         sim = td.Simulation(
             size=(4.0, 4.0, 2.0),
@@ -86,8 +86,8 @@ def test_custom_current_source_two_simulation_workflow(use_emulated_run):
 
         1. Run first simulation with traced amplitude
         2. Extract field data from monitor
-        3. Create CustomCurrentSource from field data
-        4. Run second simulation with CustomCurrentSource
+        3. Create CustomFieldSource from field data
+        4. Run second simulation with CustomFieldSource
         5. Extract and process results
         """
 
@@ -98,14 +98,14 @@ def test_custom_current_source_two_simulation_workflow(use_emulated_run):
         # Step 2: Extract field data
         field_data = data1.load_field_monitor("field_monitor_1")
 
-        # Step 3: Create CustomCurrentSource from field data
-        # Convert field data to current dataset format
+        # Step 3: Create CustomFieldSource from field data
+        # Convert field data to field dataset format
         field_components = {}
         for comp_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
             if hasattr(field_data, comp_name):
                 field_comp = getattr(field_data, comp_name)
                 if field_comp is not None:
-                    # Create current dataset with same data but as current components
+                    # Create field dataset with same data
                     field_components[comp_name] = field_comp
 
         if not field_components:
@@ -121,14 +121,14 @@ def test_custom_current_source_two_simulation_workflow(use_emulated_run):
             scalar_field = td.ScalarFieldDataArray(field_data_array, coords=coords)
             field_components["Ex"] = scalar_field
 
-        current_dataset = td.FieldDataset(**field_components)
+        field_dataset = td.FieldDataset(**field_components)
 
-        # Create CustomCurrentSource
-        custom_source = td.CustomCurrentSource(
+        # Create CustomFieldSource directly with traced dataset
+        custom_source = td.CustomFieldSource(
             center=(0, 0, 0),
             size=(2.0, 2.0, 0.0),
             source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
-            current_dataset=current_dataset,
+            field_dataset=field_dataset,
         )
 
         # Step 4: Run second simulation
@@ -604,7 +604,10 @@ def test_custom_current_source_basic_functionality():
 
 if __name__ == "__main__":
     # Run the tests
-    print("Running CustomCurrentSource system tests...")
+    print("Running CustomFieldSource system tests...")
+
+    # Test the main workflow
+    test_custom_field_source_two_simulation_workflow(None)
 
     # Test field data conversion
     test_custom_current_source_field_data_conversion()
