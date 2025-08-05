@@ -264,11 +264,9 @@ class Job(WebContainer):
         contains traced fields. Autograd parameters can be controlled via the ``local_gradient`` and
         ``max_num_adjoint_per_fwd`` fields.
         """
-        # Import autograd functions here to avoid circular imports
-        from tidy3d.web.api.autograd.autograd import run as web_run
-
-        # Use the autograd-compatible web_run() function which handles autograd detection and fallback
-        return web_run(
+        # Use the autograd-compatible run function via lazy import
+        autograd_run = _get_autograd_run()
+        return autograd_run(
             simulation=self.simulation,
             task_name=self.task_name,
             folder_name=self.folder_name,
@@ -1100,3 +1098,10 @@ class Batch(WebContainer):
         """
         if len(path_dir) > 0 and not os.path.exists(path_dir):
             os.makedirs(path_dir, exist_ok=True)
+
+
+def _get_autograd_run():
+    """Lazy import of autograd run function to avoid circular imports."""
+    from tidy3d.web.api.autograd.autograd import run as autograd_run
+
+    return autograd_run
