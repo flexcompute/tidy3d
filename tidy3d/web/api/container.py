@@ -258,12 +258,14 @@ class Job(WebContainer):
         >>> custom_job = Job(simulation=sim, task_name="task_name")
         >>> sim_data = custom_job.run()
 
-        **Autograd Support**: The :meth:`run` method automatically supports autograd functionality.
+        **Autograd Support**: The :meth:`run` method automatically supports autograd functionality when any simulation
+        contains traced fields. Autograd parameters can be controlled via the ``local_gradient`` and
+        ``max_num_adjoint_per_fwd`` fields.
         """
         # Import autograd functions here to avoid circular imports
         from tidy3d.web.api.autograd.autograd import run as web_run
 
-        # Use the autograd-compatible web_run() function
+        # Use the autograd-compatible web_run() function which handles autograd detection and fallback
         return web_run(
             simulation=self.simulation,
             task_name=self.task_name,
@@ -657,7 +659,9 @@ class Batch(WebContainer):
         >>> custom_batch.add_simulation(simulation, task_name="task_name")
         >>> batch_data = custom_batch.run()
 
-        **Autograd Support**: The :meth:`run` method automatically supports autograd functionality.
+        **Autograd Support**: The :meth:`run` method automatically supports autograd functionality when any simulation
+        contains traced fields. Autograd parameters can be controlled via the ``local_gradient`` and
+        ``max_num_adjoint_per_fwd`` fields.
         """
         self._check_path_dir(path_dir)
 
