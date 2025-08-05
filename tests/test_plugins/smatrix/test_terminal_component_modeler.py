@@ -386,6 +386,22 @@ def test_coaxial_port_snapping(tmp_path):
     check_lumped_port_components_snapped_correctly(modeler=modeler)
 
 
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_coaxial_port_source_size(axis):
+    """Make sure source size is correct."""
+    port = CoaxialLumpedPort(
+        center=(0, 0, 0),
+        inner_diameter=1,
+        outer_diameter=2,
+        normal_axis=axis,
+        direction="+",
+        name="port",
+        impedance=50,
+    )
+    source = port.to_source(td.GaussianPulse(freq0=1e10, fwidth=1e9))
+    assert np.isclose(source.size[axis], 0)
+
+
 def test_power_delivered_helper(monkeypatch, tmp_path):
     """Test computations involving power waves are correct by manually setting voltage and current
     at ports using monkeypatch.
