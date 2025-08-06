@@ -1202,8 +1202,8 @@ def run_async(
     Submits a batch of simulations to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.BatchData` object.
 
-    This is the autograd-compatible version of batch processing that operates at the
-    webapi level, similar to how :func:`run` works for single simulations.
+    This is the autograd-compatible version of batch processing that uses the async functions
+    for proper batch handling while maintaining autograd compatibility.
 
     Parameters
     ----------
@@ -1217,7 +1217,7 @@ def run_async(
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'task_id', 'status', 'task_name', 'task_type'}``.
     num_workers : int = None
-        Number of workers for parallel processing (ignored in this autograd-compatible version).
+        Number of workers for parallel processing.
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
     simulation_type : str = "tidy3d"
@@ -1236,9 +1236,11 @@ def run_async(
 
     Note
     ----
-    This function is autograd-compatible and handles batches of simulations by calling
-    the low-level webapi functions (upload, start, monitor, load) for each simulation.
+    This function is autograd-compatible and uses the async batch processing functions
+    (upload_async, start_async, monitor_async, load_async) for efficient batch handling.
     """
+
+    from .asynchronous import load_async, monitor_async, start_async, upload_async
 
     if not simulations:
         raise ValueError("No simulations provided")
@@ -1247,48 +1249,36 @@ def run_async(
     if not isinstance(simulations, dict):
         raise AssertionError("simulations must be a dictionary mapping task names to simulations")
 
-    # For autograd compatibility, run each simulation individually using the working run() function
-    # This preserves the autograd tracing that works for single simulations
-    task_ids = {}
-    task_paths = {}
+    # Set default num_workers
+    if num_workers is None:
+        num_workers = len(simulations)
 
-    if verbose:
-        log.info(
-            f"Running {len(simulations)} simulations individually for autograd compatibility..."
-        )
-
-    # Ensure path_dir exists
-    os.makedirs(path_dir, exist_ok=True)
-
-    for task_name, simulation in simulations.items():
-        parent_task_ids = parent_tasks.get(task_name, []) if parent_tasks else []
-        data_path = os.path.join(path_dir, f"{task_name}.hdf5")
-
-        if verbose:
-            log.info(f"Running simulation {task_name}...")
-
-        # Call the working single-simulation run() function for each simulation
-        # This preserves autograd compatibility
-        run(
-            simulation=simulation,
-            task_name=task_name,
-            folder_name=folder_name,
-            path=data_path,
-            callback_url=callback_url,
-            verbose=verbose,
-            simulation_type=simulation_type,
-            parent_tasks=parent_task_ids,
-            reduce_simulation=reduce_simulation,
-            pay_type=pay_type,
-        )
-
-        # For now, use a placeholder task_id since the individual run() calls handle everything
-        task_ids[task_name] = f"run_async_{task_name}"
-        task_paths[task_name] = data_path
-
-    # Create and return BatchData
-    return BatchData(
-        task_paths=task_paths,
-        task_ids=task_ids,
+    # Use the async functions for proper batch processing
+    # Upload all simulations
+    task_ids = upload_async(
+        simulations=simulations,
+        folder_name=folder_name,
+        callback_url=callback_url,
+        num_workers=num_workers,
         verbose=verbose,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+        reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
+    )
+
+    # Start all simulations
+    start_async(task_ids=task_ids, num_workers=num_workers, verbose=verbose)
+
+    # Monitor all simulations until completion
+    monitor_async(task_ids=task_ids, verbose=verbose)
+
+    # Load the results
+    return load_async(
+        task_ids=task_ids,
+        simulations=simulations,
+        path_dir=path_dir,
+        num_workers=num_workers,
+        verbose=verbose,
+        replace_existing=False,
     )

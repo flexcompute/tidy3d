@@ -19,6 +19,8 @@ from tidy3d.web.core.types import PayType
 
 from . import webapi as web
 from .asynchronous import download_async, load_async, monitor_async, start_async, upload_async
+from .autograd.autograd import run as run_autograd
+from .autograd.autograd import run_async as run_async_autograd
 from .batch_data import DEFAULT_DATA_DIR, DEFAULT_DATA_PATH, BatchData
 from .tidy3d_stub import SimulationDataType, SimulationType
 
@@ -223,9 +225,6 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-        # Use lazy import to avoid circular dependency
-        from .autograd.autograd import run as run_autograd
-
         # Use autograd-compatible run function instead of manual upload/start/monitor/load
         return run_autograd(
             simulation=self.simulation,
@@ -521,9 +520,6 @@ class Batch(WebContainer):
         rather it iterates over the task names and loads the corresponding
         data from file one by one. If no file exists for that task, it downloads it.
         """
-        # Use lazy import to avoid circular dependency
-        from .autograd.autograd import run_async as run_async_autograd
-
         # Use autograd-compatible run_async function instead of manual upload/start/monitor/load
         return run_async_autograd(
             simulations=self.simulations,
