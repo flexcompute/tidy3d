@@ -143,7 +143,26 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
-            raise SetupError("'AbstractComponentModeler.simulation' must not have any sources.")
+            raise SetupError(f"'{cls.__name__}.simulation' must not have any sources.")
+        return val
+
+    @pd.validator("freqs", always=True)
+    def _validate_freqs(cls, val):
+        """The array of frequencies must be sorted, unique and non-negative."""
+        if len(val) < 2:
+            raise SetupError(f"You must supply at least 2 entries for '{cls.__name__}.freqs'.")
+        np_val = np.array(val)
+        if not np.all(np_val >= 0):
+            raise SetupError(f"'{cls.__name__}.freqs' must be an array of non-negative numbers.")
+        # Ensure freqs is sorted
+        diff = np.diff(np_val)
+        if not np.all(diff > 0):
+            violations = np.where(diff <= 0)[0] + 1
+            raise SetupError(
+                f"'{cls.__name__}.freqs' must be strictly increasing (unique values sorted "
+                "in ascending order). "
+                f"The entries at the following indices violated this requirement: {violations}."
+            )
         return val
 
     @pd.validator("ports", always=True)
