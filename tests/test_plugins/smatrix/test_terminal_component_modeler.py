@@ -87,6 +87,28 @@ def test_validate_no_sources(tmp_path):
         _ = modeler.copy(update={"simulation": sim_w_source})
 
 
+def test_validate_freqs():
+    """Ensure the 'freqs' array is strictly increasing and length of at least 2."""
+    modeler = make_component_modeler(planar_pec=False)
+    freqs = np.array([1.0])
+    with pytest.raises(pd.ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
+    freqs = np.array([-1.0, 5])
+    with pytest.raises(pd.ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
+    freqs = np.array([1, 2, 1.9])
+    with pytest.raises(pd.ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
+
+    # Test case with non-unique value
+    f_min, f_max = (0.5e9, 1.5e9)
+    f0 = (f_min + f_max) / 2
+    f_target = 1.35e9
+    freqs = np.sort(np.append(np.linspace(f_min, f_max, 21), f_target))
+    with pytest.raises(pd.ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
+
+
 def test_validate_3D_sim(tmp_path):
     modeler = make_component_modeler(planar_pec=False, path_dir=str(tmp_path))
     sim = td.Simulation(
