@@ -23,11 +23,11 @@ from tidy3d.components.autograd.constants import (
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.exceptions import AdjointError
-from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
-from tidy3d.web.api.asynchronous import run_async as run_async_webapi
+from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR, monitor_async, start_async, upload_async
 from tidy3d.web.api.batch_data import DEFAULT_DATA_PATH, BatchData
 from tidy3d.web.api.tidy3d_stub import SimulationDataType, SimulationType
 from tidy3d.web.api.webapi import run as run_webapi
+from tidy3d.web.api.webapi import run_async as run_async_webapi
 from tidy3d.web.core.s3utils import download_file, upload_file
 from tidy3d.web.core.types import PayType
 
@@ -1293,29 +1293,44 @@ def _run_async_tidy3d_bwd(
     simulations: dict[str, td.Simulation],
     **run_kwargs,
 ) -> dict[str, AutogradFieldMap]:
-    """Run a batch of adjoint simulations using regular web.run_async()."""
+    """Run a batch of adjoint simulations using async functions to get real task IDs."""
 
     web_kwargs = parse_run_kwargs(**run_kwargs)
     _ = run_kwargs.pop("path_dir", None)
     simulation_type = web_kwargs.get("simulation_type", "tidy3d")
     verbose = web_kwargs.get("verbose", True)
+    num_workers = web_kwargs.get("num_workers", len(simulations))
+    folder_name = web_kwargs.get("folder_name", "default")
+    callback_url = web_kwargs.get("callback_url", None)
+    parent_tasks = web_kwargs.get("parent_tasks", None)
+    reduce_simulation = web_kwargs.get("reduce_simulation", "auto")
+    pay_type = web_kwargs.get("pay_type", "auto")
+
     td.log.info(f"running {simulation_type} batch with '_run_async_tidy3d_bwd()'")
 
-    # Use run_async_webapi to run the batch
-    # Note: This function is used for adjoint simulations where we need task_ids
-    # For now, we'll need to handle this differently since we can't easily get task_ids
-    # from run_async_webapi without using Batch
+    # Use the individual async functions to get real task IDs
+    # Upload the simulations
+    task_ids = upload_async(
+        simulations=simulations,
+        folder_name=folder_name,
+        callback_url=callback_url,
+        num_workers=num_workers,
+        verbose=verbose,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+        reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
+    )
 
-    # TODO: This needs to be fixed to get real task IDs for VJP download
-    _ = run_async_webapi(simulations=simulations, **web_kwargs)
+    # Start the simulations
+    start_async(task_ids=task_ids, num_workers=num_workers, verbose=verbose)
 
-    # Generate placeholder task_ids for now
-    # In practice, we'd need the real task_ids to get the VJP data
-    task_ids = {task_name: f"adjoint_batch_{task_name}" for task_name in simulations.keys()}
+    # Monitor until completion
+    monitor_async(task_ids=task_ids, verbose=verbose)
 
+    # Now use the real task IDs to get the VJP data
     vjp_traced_fields_dict = {}
-    for task_name in simulations.keys():
-        task_id = task_ids[task_name]
+    for task_name, task_id in task_ids.items():
         vjp = get_vjp_traced_fields(task_id_adj=task_id, verbose=verbose)
         vjp_traced_fields_dict[task_name] = vjp
 

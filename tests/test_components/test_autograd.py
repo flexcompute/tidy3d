@@ -254,6 +254,12 @@ def use_emulated_run(monkeypatch):
             return vjp_dict
 
         monkeypatch.setattr(webapi, "run", run_emulated)
+        # Add patch for our new webapi.run_async function
+        monkeypatch.setattr(
+            webapi,
+            "run_async",
+            lambda simulations, **kwargs: emulated_run_async_fwd(simulations, **kwargs)[0],
+        )
         monkeypatch.setattr(tidy3d.web.api.autograd.autograd, "_run_tidy3d", emulated_run_fwd)
         monkeypatch.setattr(
             tidy3d.web.api.autograd.autograd, "_run_async_tidy3d", emulated_run_async_fwd
@@ -262,46 +268,9 @@ def use_emulated_run(monkeypatch):
             tidy3d.web.api.autograd.autograd, "_run_async_tidy3d_bwd", emulated_run_async_bwd
         )
 
-        # Mock Job and Batch to use emulated runs instead of real web API
-        # This ensures they fail due to autograd incompatibility, not web API errors
-        def mock_job_run(self, path="simulation_data.hdf5"):
-            """Mock Job.run() to use emulated run instead of real web API."""
-            return run_emulated(self.simulation, task_name=self.task_name)
-
-        def mock_batch_run(self, path_dir="./"):
-            """Mock Batch.run() to use emulated run_async instead of real web API."""
-            from tidy3d.web.api.batch_data import BatchData
-
-            # Create emulated batch data
-            task_paths = {}
-            task_ids = {}
-            sim_data_dict = {}
-
-            for task_name, simulation in self.simulations.items():
-                sim_data = run_emulated(simulation, task_name=task_name)
-                sim_data_dict[task_name] = sim_data
-                task_paths[task_name] = f"{path_dir}/{task_name}.hdf5"
-                task_ids[task_name] = f"emulated_{task_name}"
-
-            # Create a mock BatchData that returns the emulated data
-            class MockBatchData(BatchData):
-                def __init__(self, sim_data_dict, **kwargs):
-                    super().__init__(**kwargs)
-                    # Store the data as a class attribute to avoid Pydantic field issues
-                    MockBatchData._sim_data_dict = sim_data_dict
-
-                def load_sim_data(self, task_name):
-                    return MockBatchData._sim_data_dict[task_name]
-
-            return MockBatchData(
-                sim_data_dict=sim_data_dict, task_paths=task_paths, task_ids=task_ids, verbose=False
-            )
-
-        # Apply the mocks
-        import tidy3d.web.api.container as container_module
-
-        monkeypatch.setattr(container_module.Job, "run", mock_job_run)
-        monkeypatch.setattr(container_module.Batch, "run", mock_batch_run)
+        # Remove Job and Batch mocks - we want to test the real refactored methods
+        # The refactored Job.run() and Batch.run() now call autograd-compatible functions internally
+        # The lower-level patches will ensure emulated data is used
 
         _run_was_emulated[0] = True
         return emulated_run_fwd, emulated_run_bwd
@@ -2468,113 +2437,61 @@ def test_batch_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
 
 def test_job_simple_autograd_compatibility(use_emulated_run):
-    """Simple test for Job autograd compatibility with basic setup."""
+    """Simple test for Job autograd compatibility using parameter-dependent structures."""
 
-    def objective(center_x):
-        """Simple objective function with one parameter."""
-        src = td.PointDipole(
-            center=(center_x, 0, 0),
-            source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
-            polarization="Ex",
-        )
+    # Use the same combination that works in test_autograd_objective
+    fn_dict = get_functions("medium", "<ALL>")
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
 
-        monitor = td.FieldMonitor(
-            size=(0, 0, 0),
-            center=(0.5, 0, 0),
-            freqs=[FREQ0],
-            name="field",
-        )
+    def objective(*args):
+        """Objective function using Job.run() with parameter-dependent simulation."""
+        sim = make_sim(*args)
 
-        sim = td.Simulation(
-            size=(2, 2, 2),
-            grid_spec=td.GridSpec.auto(wavelength=1.0, min_steps_per_wvl=10),
-            sources=[src],
-            monitors=[monitor],
-            run_time=1e-12,
-        )
-
-        # Use Job.run() - should be autograd compatible but currently is NOT
+        # Use Job.run() - now autograd compatible!
         job = web.Job(simulation=sim, task_name="simple_job_test", verbose=False)
         data = job.run()
-        return anp.sum(data["field"].intensity.item())
+        value = postprocess(data)
+        return value
 
-    # This should work once we implement the autograd refactor
-    # For now, we expect autograd to work through our emulated Job.run() but with warning
-    with pytest.warns(UserWarning, match="Output seems independent of input"):
-        val, grad = ag.value_and_grad(objective)(0.0)
-    print(f"Job.run() with emulation - value: {val}, grad: {grad}")
-    assert grad == 0.0, f"Expected zero gradient from emulated Job.run(), got {grad}"
-
-    # The test passes with emulation, demonstrating the desired end state
-    # When we implement the refactor, Job.run() should call autograd.run() internally
-    # and this test should still pass but without needing the emulation mocking
+    # Job.run() now calls autograd.run() internally, so it should be fully autograd compatible
+    val, grad = ag.value_and_grad(objective)(params0)
+    print(f"✓ Job.run() autograd integration - grad: {grad}")
+    assert not anp.all(grad == 0.0), "gradient should not be zero"
 
 
 def test_batch_simple_autograd_compatibility(use_emulated_run):
-    """Simple test for Batch autograd compatibility with basic setup."""
+    """Simple test for Batch autograd compatibility using parameter-dependent structures."""
 
-    def objective(center_x):
-        """Simple objective function with one parameter using multiple tasks."""
+    # Use the same combination that works in test_autograd_objective
+    fn_dict = get_functions("medium", "<ALL>")
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
 
-        def make_sim(task_name_suffix=""):
-            src = td.PointDipole(
-                center=(center_x, 0, 0),
-                source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
-                polarization="Ex",
-            )
+    def objective(*args):
+        """Objective function using Batch.run() with parameter-dependent simulation."""
+        sim = make_sim(*args)
 
-            monitor = td.FieldMonitor(
-                size=(0, 0, 0),
-                center=(0.5, 0, 0),
-                freqs=[FREQ0],
-                name=f"field{task_name_suffix}",
-            )
-
-            return td.Simulation(
-                size=(2, 2, 2),
-                grid_spec=td.GridSpec.auto(wavelength=1.0, min_steps_per_wvl=10),
-                sources=[src],
-                monitors=[monitor],
-                run_time=1e-12,
-            )
-
+        # Create single simulation batch for autograd testing
         sims = {
-            "task_1": make_sim("_1"),
-            "task_2": make_sim("_2"),
+            "batch_task": sim,
         }
 
-        # Use Batch.run() - should be autograd compatible
+        # Use Batch.run() - now autograd compatible!
         batch = web.Batch(simulations=sims, verbose=False)
         batch_data = batch.run()
 
-        total_value = 0.0
-        for task_name, sim_data in batch_data.items():
-            monitor_name = f"field_{task_name.split('_')[1]}"
-            total_value += anp.sum(sim_data[monitor_name].intensity.item())
+        # Get the value from the single task
+        sim_data = batch_data["batch_task"]
+        value = postprocess(sim_data)
 
-        return total_value
+        return value
 
-    # This should work once we implement the autograd refactor
-    # For now, we expect autograd to work through our emulated Batch.run()
-    # The gradient may be zero (with warning) or non-zero (if emulated data has dependencies)
-    import warnings
+    # Batch.run() now calls autograd.run_async() internally, so it should be fully autograd compatible
+    val, grad = ag.value_and_grad(objective)(params0)
+    print(f"Batch.run() with autograd integration - value: {val}, grad: {grad}")
 
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        val, grad = ag.value_and_grad(objective)(0.0)
-
-    print(f"Batch.run() with emulation - value: {val}, grad: {grad}")
-
-    # Check if we got the "independent of input" warning
-    independence_warnings = [
-        warning for warning in w if "Output seems independent of input" in str(warning.message)
-    ]
-    if independence_warnings:
-        print("Got expected 'Output seems independent of input' warning")
-        assert grad == 0.0, f"With independence warning, expected zero gradient, got {grad}"
-    else:
-        print("No independence warning - emulated output depends on input as expected")
-
-    # The test passes with emulation, demonstrating the desired end state
-    # When we implement the refactor, Batch.run() should call autograd.run_async() internally
-    # and this test should still pass but without needing the emulation mocking
+    # Verify that Batch.run() is calling the autograd function internally
+    # and that we get non-zero gradients (proving the integration works)
+    print(f"✓ Batch.run() autograd integration - grad: {grad}")
+    assert not anp.all(grad == 0.0), "gradient should not be zero"
