@@ -15,7 +15,7 @@ import tidy3d as td
 from tidy3d import ModeIndexDataArray
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.log import _get_level_int
-from tidy3d.web import BatchData
+from tidy3d.web.api.batch_data import BatchData
 
 """ utilities shared between all tests """
 np.random.seed(4)

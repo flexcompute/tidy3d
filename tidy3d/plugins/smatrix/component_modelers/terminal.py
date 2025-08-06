@@ -26,7 +26,7 @@ from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.wave import WavePort
-from tidy3d.web.api.container import BatchData
+from tidy3d.web.api.batch_data import BatchData
 
 from .base import AbstractComponentModeler, TerminalPortType
 

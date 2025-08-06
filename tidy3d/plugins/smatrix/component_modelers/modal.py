@@ -19,7 +19,7 @@ from tidy3d.components.types import Ax, Complex
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.exceptions import SetupError
 from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray, Port
-from tidy3d.web.api.container import BatchData
+from tidy3d.web.api.batch_data import BatchData
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler
 

@@ -270,7 +270,7 @@ def use_emulated_run(monkeypatch):
 
         def mock_batch_run(self, path_dir="./"):
             """Mock Batch.run() to use emulated run_async instead of real web API."""
-            from tidy3d.web.api.container import BatchData
+            from tidy3d.web.api.batch_data import BatchData
 
             # Create emulated batch data
             task_paths = {}

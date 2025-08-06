@@ -16,7 +16,8 @@ from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import Literal
 from tidy3d.web.api.asynchronous import run_async as web_run_async
-from tidy3d.web.api.container import DEFAULT_DATA_DIR, Batch, BatchData, Job
+from tidy3d.web.api.batch_data import DEFAULT_DATA_DIR, BatchData
+from tidy3d.web.api.container import Batch, Job
 from tidy3d.web.api.webapi import run as web_run
 from tidy3d.web.api.webapi import wait_for_connection
 from tidy3d.web.core.s3utils import download_file, upload_file

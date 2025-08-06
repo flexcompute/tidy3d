@@ -59,7 +59,7 @@ from tidy3d.plugins.adjoint.utils.filter import BinaryProjector, CircularFilter,
 from tidy3d.plugins.adjoint.utils.penalty import ErosionDilationPenalty, RadiusPenalty
 from tidy3d.plugins.adjoint.web import run, run_async, run_async_local, run_local
 from tidy3d.plugins.polyslab import ComplexPolySlab
-from tidy3d.web.api.container import BatchData
+from tidy3d.web.api.batch_data import BatchData
 
 from ..test_components.test_custom import CUSTOM_MEDIUM
 from ..utils import AssertLogLevel, run_async_emulated, run_emulated

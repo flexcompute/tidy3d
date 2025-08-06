@@ -11,7 +11,8 @@ from tidy3d.components.base import TYPE_TAG_STR, Tidy3dBaseModel, cached_propert
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
 from tidy3d.log import Console, get_logging_console, log
-from tidy3d.web.api.container import Batch, BatchData, Job
+from tidy3d.web.api.batch_data import BatchData
+from tidy3d.web.api.container import Batch, Job
 
 from .method import (
     MethodBayOpt,
