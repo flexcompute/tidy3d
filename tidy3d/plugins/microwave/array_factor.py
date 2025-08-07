@@ -7,7 +7,9 @@ from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-from pydantic.v1 import NonNegativeFloat, PositiveInt
+from pydantic.v1 import NonNegativeFloat, PositiveInt, conint
+from scipy.signal.windows import blackman, blackmanharris, chebwin, hamming, hann, kaiser, taylor
+from scipy.special import j0, jn_zeros
 
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
 from tidy3d.components.data.monitor_data import AbstractFieldProjectionData, DirectivityData
@@ -20,13 +22,21 @@ from tidy3d.components.monitor import AbstractFieldProjectionMonitor, MonitorTyp
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure
-from tidy3d.components.types import ArrayLike, Axis, Bound, Undefined
+from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Axis, Bound, Undefined
 from tidy3d.constants import C_0, inf
+from tidy3d.exceptions import Tidy3dNotImplementedError
 from tidy3d.log import log
 
 
 class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
     """Abstract base for phased array calculators."""
+
+    taper: Union[RectangularTaper, RadialTaper] = pd.Field(
+        None,
+        discriminator=TYPE_TAG_STR,
+        title="Antenna Array Taper",
+        description="Amplitude weighting of array elements to control main lobe width and suppress side lobes.",
+    )
 
     @property
     @abstractmethod
@@ -484,15 +494,15 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
     ) -> AbstractFieldProjectionData:
         """Apply the array factor to the monitor data of a single antenna.
 
-        Parameters:
+        Parameters
         ----------
         monitor_data : AbstractFieldProjectionData
             The monitor data of a single antenna.
         new_monitor : AbstractFieldProjectionMonitor = None
             The new monitor to be used in the resulting data.
 
-        Returns:
-        --------
+        Returns
+        -------
         AbstractFieldProjectionData
             The monitor data of the antenna array.
         """
@@ -550,13 +560,13 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
 
         Note that any near-field monitor data will be ignored.
 
-        Parameters:
+        Parameters
         ----------
         antenna_data : SimulationData
             The far-field data of a single antenna.
 
-        Returns:
-        --------
+        Returns
+        -------
         SimulationData
             The far-field data of the antenna array.
         """
@@ -592,6 +602,112 @@ class AbstractAntennaArrayCalculator(Tidy3dBaseModel, ABC):
             log_once=True,
         )
         return values
+
+    def _rect_taper_array_factor(
+        self, exp_x: ArrayLike, exp_y: ArrayLike, exp_z: ArrayLike
+    ) -> ArrayLike:
+        """
+        Compute the array factor assuming a separable rectangular (Cartesian) taper.
+
+        This method evaluates the array factor using separable amplitude weights
+        along the x, y, and z dimensions.
+
+        Parameters
+        ----------
+        exp_x: ArrayLike
+            3D array of phases along x axis [N_x, N_theta, N_freq].
+        exp_y: ArrayLike
+            3D array of phases along x axis [N_y, N_theta, N_freq].
+        exp_z: ArrayLike
+            3D array of phases along x axis [N_z, N_theta, N_freq].
+
+        Returns
+        -------
+        ArrayLike
+            Array factor values for each combination of theta and phi.
+        """
+
+        # if taper is not defined set all amplitudes to 1.0
+        if self.taper is None:
+            amp_x = (
+                1.0 if self.amp_multipliers[0] is None else self.amp_multipliers[0][:, None, None]
+            )
+            amp_y = (
+                1.0 if self.amp_multipliers[1] is None else self.amp_multipliers[1][:, None, None]
+            )
+            amp_z = (
+                1.0 if self.amp_multipliers[2] is None else self.amp_multipliers[2][:, None, None]
+            )
+
+        # if rectangular taper is spacified
+        elif isinstance(self.taper, RectangularTaper):
+            # get amplitudes along x, y and z axes
+            amp_x, amp_y, amp_z = self.taper.amp_multipliers(self.array_size)
+
+            # broadcast amplitudes to [N_x,1,1], [N_y,1,1] and [Nz,1,1], respectively
+            amp_x = amp_x[:, None, None]
+            amp_y = amp_y[:, None, None]
+            amp_z = amp_z[:, None, None]
+
+        # Tapers with non-separable amplitude weights are not supported by this function
+        else:
+            raise ValueError(f"Unsupported taper type {type(self.taper)} was passed.")
+
+        # Calculate individual array factors in x, y, and z directions
+        af_x = np.sum(
+            amp_x * exp_x,
+            axis=0,
+        )
+        af_y = np.sum(
+            amp_y * exp_y,
+            axis=0,
+        )
+        af_z = np.sum(
+            amp_z * exp_z,
+            axis=0,
+        )
+
+        # Calculate the overall array factor
+        array_factor = af_x * af_y * af_z
+
+        return array_factor
+
+    def _general_taper_array_factor(
+        self, exp_x: ArrayLike, exp_y: ArrayLike, exp_z: ArrayLike
+    ) -> ArrayLike:
+        """
+        Compute the array factor assuming a non-separable (non-Cartesian) taper.
+
+        This method evaluates the array factor using non-separable amplitude weights
+        along the x, y, and z dimensions.
+
+        Parameters
+        ----------
+        exp_x: ArrayLike
+            3D array of phases along x axis [N_x, N_theta, N_freq].
+        exp_y: ArrayLike
+            3D array of phases along x axis [N_y, N_theta, N_freq].
+        exp_z: ArrayLike
+            3D array of phases along x axis [N_z, N_theta, N_freq].
+
+        Returns
+        -------
+        ArrayLike
+            Array factor values for each combination of theta / phi and frequency.
+        """
+        # get taper weights
+        amps = self.taper.amp_multipliers(self.array_size)
+
+        # ensure amplitude weights are in format tuple[ArrayLike, ]
+        if len(amps) != 1:
+            raise ValueError(
+                "Non-cartesian taper was expected. Please ensure a valid taper is used."
+            )
+
+        # compute array factor: AF(theta,f) = sum_{x,y,z} amp(x,y,z) * exp_x(x,theta,f)*exp_y(y,theta,f)*exp_z(z,theta,f)
+        array_factor = np.einsum("xpf,ypf,zpf,xyz->pf", exp_x, exp_y, exp_z, amps[0])
+
+        return array_factor
 
 
 class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
@@ -681,12 +797,27 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
     def _antenna_amps(self) -> ArrayLike:
         """Amplitude multipliers of antennas in an array."""
 
+        if self.taper is not None:
+            if isinstance(self.taper, RectangularTaper):
+                amp_x, amp_y, amp_z = self.taper.amp_multipliers(self.array_size)
+
+                # broadcast amplitudes to [N_x,1,1], [N_y,1,1] and [Nz,1,1], respectively
+                amp_x = amp_x[:, None, None]
+                amp_y = amp_y[None, :, None]
+                amp_z = amp_z[None, None, :]
+
+                amps = amp_x * amp_y * amp_z
+
+            else:
+                amps = self.taper.amp_multipliers(self.array_size)
+            return np.ravel(amps)
+
         amps_per_dim = [
             np.ones(size) if multiplier is None else multiplier
             for multiplier, size in zip(self.amp_multipliers, self.array_size)
         ]
 
-        amps_grid = np.meshgrid(*amps_per_dim)
+        amps_grid = np.meshgrid(*amps_per_dim, indexing="ij")
 
         return np.ravel(amps_grid[0] * amps_grid[1] * amps_grid[2])
 
@@ -717,8 +848,8 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         """
         Compute the array factor for a 3D antenna array.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         theta : Union[float, ArrayLike]
             Observation angles in the elevation plane (in radians).
         phi : Union[float, ArrayLike]
@@ -726,10 +857,10 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         frequency : Union[NonNegativeFloat, ArrayLike]
             Signal frequency (in Hz).
 
-        Returns:
-        --------
+        Returns
+        -------
         ArrayLike
-            Array factor values for each combination of theta and phi.
+            Array factor values for each combination of azimuth and zenith angles.
         """
         if medium is Undefined:
             medium = Medium()
@@ -740,7 +871,7 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
 
         # ensure that theta and phi have the same length
         if len(theta_array) != len(phi_array):
-            raise ValueError("'theta' and 'phi' must have the same length")
+            raise ValueError("'theta' and 'phi' must have the same length.")
 
         # reshape inputs for easier broadcasting
         theta_array = np.reshape(theta_array, (len(theta_array), 1))
@@ -761,28 +892,412 @@ class RectangularAntennaArrayCalculator(AbstractAntennaArrayCalculator):
         )
         psi_z = k * self.spacings[2] * np.cos(theta_array) - self.phase_shifts[2]
 
-        amp_x = 1.0 if self.amp_multipliers[0] is None else self.amp_multipliers[0][:, None, None]
-        amp_y = 1.0 if self.amp_multipliers[1] is None else self.amp_multipliers[1][:, None, None]
-        amp_z = 1.0 if self.amp_multipliers[2] is None else self.amp_multipliers[2][:, None, None]
+        # Calculate resulting complex exponentials
+        exp_x = np.exp(-1j * np.arange(self.array_size[0])[:, None, None] * psi_x[np.newaxis, :])
+        exp_y = np.exp(-1j * np.arange(self.array_size[1])[:, None, None] * psi_y[np.newaxis, :])
+        exp_z = np.exp(-1j * np.arange(self.array_size[2])[:, None, None] * psi_z[np.newaxis, :])
 
-        # Calculate the array factor in the x, y, and z directions
-        af_x = np.sum(
-            amp_x
-            * np.exp(-1j * np.arange(self.array_size[0])[:, None, None] * psi_x[np.newaxis, :]),
-            axis=0,
-        )
-        af_y = np.sum(
-            amp_y
-            * np.exp(-1j * np.arange(self.array_size[1])[:, None, None] * psi_y[np.newaxis, :]),
-            axis=0,
-        )
-        af_z = np.sum(
-            amp_z
-            * np.exp(-1j * np.arange(self.array_size[2])[:, None, None] * psi_z[np.newaxis, :]),
-            axis=0,
+        # Compute array factor based on the defined taper
+        if self.taper is None or isinstance(self.taper, RectangularTaper):
+            return self._rect_taper_array_factor(exp_x, exp_y, exp_z)
+        else:
+            return self._general_taper_array_factor(exp_x, exp_y, exp_z)
+
+
+class AbstractWindow(Tidy3dBaseModel, ABC):
+    """This class provides interface for window selection."""
+
+    def _get_weights_discrete(self, N: int) -> ArrayLike:
+        """Interface function for computing window weights at N points."""
+        raise Tidy3dNotImplementedError(
+            f"Calculation of antenna amplitudes at a discrete number of points is not yet implemented for window type {self.type}."
         )
 
-        # Calculate the overall array factor
-        array_factor = af_x * af_y * af_z
+    def _get_weights_continuous(self, p_vec: ArrayLike) -> ArrayLike:
+        """Interface function for computing window weights at given locations."""
+        raise Tidy3dNotImplementedError(
+            f"Calculation of antenna amplitudes at arbitrary locations is not yet implemented for window type {self.type}."
+        )
 
-        return array_factor
+
+class HammingWindow(AbstractWindow):
+    """Standard Hamming window for tapering or spectral shaping."""
+
+    def _get_weights_discrete(self, N: int) -> ArrayLike:
+        """
+        Generate a 1D Hamming window of length N.
+
+        Parameters
+        ----------
+        N : int
+            Number of points in the window.
+
+        Returns
+        -------
+        ArrayLike
+            1D array of Hamming window weights.
+        """
+        return hamming(N)
+
+
+class BlackmanWindow(AbstractWindow):
+    """Standard Blackman window for tapering or spectral shaping."""
+
+    def _get_weights_discrete(self, N: int) -> ArrayLike:
+        """
+        Generate a 1D Blackman window of length N.
+
+        Parameters
+        ----------
+        N : int
+            Number of points in the window.
+
+        Returns
+        -------
+        ArrayLike
+            1D array of Blackman window weights.
+        """
+        return blackman(N)
+
+
+class BlackmanHarrisWindow(AbstractWindow):
+    """Standard Blackman-Harris window for tapering or spectral shaping."""
+
+    def _get_weights_discrete(self, N: int) -> ArrayLike:
+        """
+        Generate a 1D Blackman-Harris window of length N.
+
+        Parameters
+        ----------
+        N : int
+            Number of points in the window.
+
+        Returns
+        -------
+        ArrayLike
+            1D array of Blackman-Harris window weights.
+        """
+        return blackmanharris(N)
+
+
+class HannWindow(AbstractWindow):
+    """Hann window with configurable sidelobe suppression and sidelobe count."""
+
+    def _get_weights_discrete(self, N: int) -> ArrayLike:
+        """
+        Generate a 1D Hann window of length N.
+
+        Parameters
+        ----------
+        N : int
+            Number of points in the window.
+
+        Returns
+        -------
+        ArrayLike
+            1D array of Hann window weights.
+        """
+        return hann(N)
+
+
+class ChebWindow(AbstractWindow):
+    """Standard Chebyshev window for tapering with configurable sidelobe attenuation."""
+
+    attenuation: pd.PositiveFloat = pd.Field(
+        default=30,
+        title="Attenuation",
+        description="Desired attenuation level of sidelobes.",
+        units="dB",
+    )
+
+    def _get_weights_discrete(self, N: int) -> ArrayLike:
+        """
+        Generate a 1D Chebyshev window of length N.
+
+        Parameters
+        ----------
+        N : int
+            Number of points in the window.
+
+        Returns
+        -------
+        ArrayLike
+            1D array of Chebyshev window weights.
+        """
+        return chebwin(N, self.attenuation)
+
+
+class KaiserWindow(AbstractWindow):
+    """Class for Kaiser window."""
+
+    beta: pd.NonNegativeFloat = pd.Field(
+        ...,
+        title="Shape Parameter",
+        description="Shape parameter, determines trade-off between main-lobe width and side lobe level.",
+    )
+
+    def _get_weights_discrete(self, N: int) -> ArrayLike:
+        """
+        Generate a 1D Kaiser window of length N.
+
+        Parameters
+        ----------
+        N : int
+            Number of points in the window.
+
+        Returns
+        -------
+        ArrayLike
+            1D array of Kaiser window weights.
+        """
+        return kaiser(N, self.beta)
+
+
+class TaylorWindow(AbstractWindow):
+    """Taylor window with configurable sidelobe suppression and sidelobe count."""
+
+    sll: pd.PositiveFloat = pd.Field(
+        default=30,
+        title="Sidelobe Suppression Level",
+        description="Desired suppression of sidelobe level relative to the DC gain.",
+        units="dB",
+    )
+
+    nbar: conint(gt=0, le=10) = pd.Field(
+        default=4,
+        title="Number of Nearly Constant Sidelobes",
+        description="Number of nearly constant level sidelobes adjacent to the mainlobe.",
+    )
+
+    def _get_weights_discrete(self, N):
+        """
+        Generate a 1D Taylor window of length N.
+
+        Parameters
+        ----------
+        N : int
+            Number of points in the window.
+
+        Returns
+        -------
+        ArrayLike
+            1D array of Taylor window weights.
+        """
+        return taylor(N, self.nbar, self.sll)
+
+    def _get_exp_weights(self, mus: np.ndarray):
+        """
+        Compute expansion coefficients B_l for the circular Taylor taper.
+
+        The aperture field E_a(p) is represented as a sum over Bessel functions:
+            E_a(p) ≈ 1 + sum_l B_l * J0(mu_l * p)
+
+        where mu_l are the zeros of J1(pi * mu), and B_l are the expansion coefficients
+        chosen to enforce a specified sidelobe level (sll) via the Taylor design method.
+
+        Parameters:
+        -----------
+        mus : np.ndarray
+            Roots of J1(pi * mu) / pi (used to construct the Bessel function basis).
+
+        Returns:
+        --------
+        B : np.ndarray
+            Expansion coefficients (1D array of shape (nbar - 1,)).
+        """
+
+        # calculate real-valued parameter from sidelobe attenuation level
+        A = np.arccosh(10 ** (self.sll / 20)) / np.pi
+        sigma = mus[-1] / np.sqrt(A**2 + (self.nbar - 0.5) ** 2)
+
+        u = np.sqrt(A**2 + (np.arange(1, self.nbar) - 0.5) ** 2)
+        B = np.zeros(self.nbar - 1)
+
+        for i in range(self.nbar - 1):
+            mu_i_sq = mus[i] ** 2
+
+            # Numerator: product over (1 - mu_i^2 / (sigma * u_n)^2)
+            num_terms = 1 - mu_i_sq / (sigma * u) ** 2
+            num = np.prod(num_terms)
+
+            # Denominator
+            denom_terms = [1 - mu_i_sq / mus[n] ** 2 for n in range(self.nbar - 1) if n != i]
+            denom = np.prod(denom_terms)
+            B[i] = -num / (denom * j0(np.pi * mus[i]))
+
+        return B
+
+    def _get_weights_continuous(self, p_vec: ArrayLike) -> ArrayLike:
+        """
+        Sample weights from the circular Taylor taper at specified radial positions.
+
+        Parameters
+        ----------
+        p_vec : ArrayLike
+            1D array of radial sampling points in the range [0, π].
+
+        Returns
+        -------
+        g_p_norm : ArrayLike
+            1D array of Taylor taper weights evaluated at the points in ``p_vec``.
+        """
+
+        # get locations J1(np.pi * mu)=0
+        mus = jn_zeros(1, self.nbar) / np.pi
+
+        B_m = self._get_exp_weights(mus=mus)
+
+        J = j0(np.outer(mus[0:-1], p_vec))
+
+        g_p = 1 + B_m @ J
+
+        return g_p
+
+
+# define a list of acceptable rectangular windows
+RectangularWindowType = Union[
+    HammingWindow,
+    HannWindow,
+    KaiserWindow,
+    TaylorWindow,
+    ChebWindow,
+    BlackmanWindow,
+    BlackmanHarrisWindow,
+]
+
+
+class AbstractTaper(Tidy3dBaseModel, ABC):
+    """Abstract taper class provides an interface for taper of Array antennas."""
+
+    @abstractmethod
+    def amp_multipliers(
+        self, array_size: tuple[PositiveInt, PositiveInt, PositiveInt]
+    ) -> tuple[np.ndarray, ...]:
+        """
+        Compute taper amplitudes for phased array antennas.
+
+        Parameters:
+        ----------
+        array_size: tuple[PositiveInt, PositiveInt, PositiveInt]
+            A tuple of array size along x,y, and z axes.
+        """
+
+
+class RectangularTaper(AbstractTaper):
+    """Class for rectangular taper."""
+
+    window_x: Optional[RectangularWindowType] = pd.Field(
+        None,
+        title="X Axis Window",
+        description="Window type used to taper array antenna along x axis.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    window_y: Optional[RectangularWindowType] = pd.Field(
+        None,
+        title="Y Axis Window",
+        description="Window type used to taper array antenna along y axis.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    window_z: Optional[RectangularWindowType] = pd.Field(
+        None,
+        title="Z Axis Window",
+        description="Window type used to taper array antenna along z axis.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @classmethod
+    def from_isotropic_window(cls, window: RectangularWindowType) -> RectangularTaper:
+        """
+        Set the same window along x, y, and z dimensions.
+
+        Parameters
+        ----------
+        window: RectangularWindowType
+            A supported 1D window type from ``RectangularWindowType``.
+
+        Returns
+        -------
+        RectangularTaper
+            A ``RectangularTaper`` instance with all three dimensions set to the specified window.
+        """
+        return cls(window_x=window, window_y=window, window_z=window)
+
+    @pd.root_validator
+    def check_at_least_one_window(cls, values):
+        if not any([values.get("window_x"), values.get("window_y"), values.get("window_z")]):
+            raise ValueError("At least one window (x, y, or z) must be provided.")
+        return values
+
+    def amp_multipliers(
+        self, array_size: tuple[PositiveInt, PositiveInt, PositiveInt]
+    ) -> tuple[ArrayLike, ArrayLike, ArrayLike]:
+        """
+        Method ``amp_multipliers()`` computes rectangular taper amplitude for phased array antennas.
+
+        Parameters:
+        ----------
+        array_size: tuple[PositiveInt, PositiveInt, PositiveInt]
+            A tuple of array size along x,y, and z axes.
+
+        Returns:
+        --------
+        tuple[ArrayLike, ArrayLike, ArrayLike]
+            a tuple of three 1D numpy arrays with taper amplitudes along x,y, and z axes.
+        """
+
+        effective_size = tuple(dim if dim is not None else 1 for dim in array_size)
+
+        amps = (
+            window._get_weights_discrete(effective_size[ind])
+            if window is not None
+            else np.ones(effective_size[ind])
+            for ind, window in enumerate([self.window_x, self.window_y, self.window_z])
+        )
+
+        return amps
+
+
+class RadialTaper(AbstractTaper):
+    """Class for Radial Taper."""
+
+    window: TaylorWindow = pd.Field(
+        ..., title="Window Object", description="Window type used to taper array antenna."
+    )
+
+    def amp_multipliers(
+        self, array_size: tuple[PositiveInt, PositiveInt, PositiveInt]
+    ) -> tuple[ArrayLike,]:
+        """
+        Method ``amp_multipliers()`` computes radial taper amplitude for phased array antennas.
+
+        Parameters:
+        ----------
+        array_size: tuple[PositiveInt, PositiveInt, PositiveInt]
+            A tuple of array size along x,y, and z axes.
+
+        Returns:
+        --------
+        tuple[ArrayLike,]
+            a tuple of one 3D numpy array with taper amplitudes.
+        """
+        effective_size = tuple(dim if dim is not None else 1 for dim in array_size)
+
+        # Generate grid of indices
+        grid = np.indices(effective_size)
+        idx_c = np.array(effective_size) // 2
+
+        # Compute distances to center
+        dists = np.linalg.norm(grid - idx_c[:, None, None, None], axis=0)
+
+        norm_dists = dists / np.max(dists) * np.pi
+
+        amps = self.window._get_weights_continuous(norm_dists)
+
+        amps = np.reshape(amps, effective_size)
+
+        return (amps,)
+
+
+RectangularAntennaArrayCalculator.update_forward_refs()

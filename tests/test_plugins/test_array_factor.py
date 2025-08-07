@@ -722,3 +722,105 @@ def test_rectangular_array_calculator_simulation_data_from_array_factor():
 
     sim_data_from_array_factor = array_calculator.simulation_data_from_array_factor(sim_data)
     assert len(sim_data_from_array_factor.data) == 2
+
+
+def test_rectangular_array_calculator_array_factor_taper():
+    """Test the array factor for a rectangular array."""
+
+    n_x = 1
+    n_y = 2
+    n_z = 3
+
+    d_x = 0.4
+    d_y = 0.5
+    d_z = 0.6
+
+    phi_x = np.pi / 6
+    phi_y = np.pi / 4
+    phi_z = np.pi / 3
+
+    with pytest.raises(pydantic.ValidationError):
+        # Test for type mismatch
+        taper = mw.RadialTaper(window=mw.ChebWindow(attenuation=45))
+
+    array_calculator = mw.RectangularAntennaArrayCalculator(
+        array_size=(n_x, n_y, n_z),
+        spacings=(d_x, d_y, d_z),
+        phase_shifts=(phi_x, phi_y, phi_z),
+        taper=None,
+    )
+
+    # Test basic array factor calculation
+    theta = np.linspace(0, np.pi, 10)
+    phi = np.linspace(0, 2 * np.pi, 10)
+    theta_grid, phi_grid = np.meshgrid(theta, phi)
+    theta_grid = theta_grid.flatten()
+    phi_grid = phi_grid.flatten()
+    medium = td.Medium(permittivity=1)
+    freqs = np.array([1e9, 2e9, 3e9])
+
+    af = array_calculator.array_factor(theta_grid, phi_grid, freqs, medium)
+    assert af.shape == (100, 3)
+
+    af_exact = analytical_array_factor(
+        (n_x, n_y, n_z), (d_x, d_y, d_z), (phi_x, phi_y, phi_z), theta_grid, phi_grid, freqs, medium
+    )
+
+    assert np.allclose(np.abs(af), np.abs(af_exact))
+
+    cheb_window = mw.ChebWindow(attenuation=45)
+    taper = mw.RectangularTaper.from_isotropic_window(window=cheb_window)
+
+    # Test array factor with amplitude multipliers
+    array_calculator_amps = mw.RectangularAntennaArrayCalculator(
+        array_size=(n_x, n_y, n_z),
+        spacings=(d_x, d_y, d_z),
+        phase_shifts=(phi_x, phi_y, phi_z),
+        taper=taper,
+    )
+    af_amps = array_calculator_amps.array_factor(theta_grid, phi_grid, freqs, medium)
+    assert af_amps.shape == (100, 3)
+
+    window = mw.TaylorWindow(sll=35, nbar=5)
+    taper = mw.RadialTaper(window=window)
+
+    # Test array factor with radial taper
+    n_x = 5
+    n_y = 8
+    n_z = 9
+    array_calculator_amps_nonuniform = mw.RectangularAntennaArrayCalculator(
+        array_size=(n_x, n_y, n_z),
+        spacings=(d_x, d_y, d_z),
+        phase_shifts=(phi_x, phi_y, phi_z),
+        taper=taper,
+    )
+
+    af_amps_nonuniform = array_calculator_amps_nonuniform.array_factor(
+        theta_grid, phi_grid, freqs, medium
+    )
+
+    assert af_amps_nonuniform.shape == (100, 3)
+
+    # test 1D Rectrangular Taper along x
+    window = mw.TaylorWindow(sll=35, nbar=5)
+    taper = mw.RectangularTaper(window_x=window)
+
+    array_calculator_amps_1d = mw.RectangularAntennaArrayCalculator(
+        array_size=(n_x, n_y, n_z),
+        spacings=(d_x, d_y, d_z),
+        phase_shifts=(phi_x, phi_y, phi_z),
+        taper=taper,
+    )
+
+    af_amps_1d = array_calculator_amps_1d.array_factor(theta_grid, phi_grid, freqs, medium)
+
+    assert af_amps_1d.shape == (100, 3)
+
+    with pytest.raises(pydantic.ValidationError):
+        # assert that Rectangular Taper has at least one set window
+        taper = mw.RectangularTaper()
+
+    # Test validation
+    with pytest.raises(ValueError):
+        # Test mismatched theta/phi lengths
+        array_calculator_amps_nonuniform.array_factor(theta, phi[:5], freqs, medium)
