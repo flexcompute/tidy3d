@@ -15,7 +15,6 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.components.types import annotate_type
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
@@ -230,6 +229,30 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
+        # If autograd-capable, delegate to autograd-aware path; else preserve legacy flow
+        try:
+            from tidy3d.web.api.autograd.autograd import is_valid_for_autograd
+        except Exception:
+            is_valid_for_autograd = None
+
+        if is_valid_for_autograd is not None and is_valid_for_autograd(self.simulation):
+            from tidy3d.web import run as web_run
+
+            return web_run(
+                simulation=self.simulation,
+                task_name=self.task_name,
+                folder_name=self.folder_name,
+                path=path,
+                callback_url=self.callback_url,
+                verbose=self.verbose,
+                solver_version=self.solver_version,
+                simulation_type=self.simulation_type,
+                parent_tasks=list(self.parent_tasks) if self.parent_tasks else None,
+                reduce_simulation=self.reduce_simulation,
+                pay_type=self.pay_type,
+            )
+
+        # Legacy non-autograd behavior (respects Job.load monkeypatches and creates output dirs)
         self.upload()
         self.start()
         self.monitor()
@@ -496,7 +519,7 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: dict[TaskName, annotate_type(SimulationType)] = pd.Field(
+    simulations: dict[TaskName, SimulationType] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
@@ -599,6 +622,29 @@ class Batch(WebContainer):
         rather it iterates over the task names and loads the corresponding
         data from file one by one. If no file exists for that task, it downloads it.
         """
+        # If autograd-capable, delegate; else preserve legacy batch flow
+        try:
+            from tidy3d.web.api.autograd.autograd import is_valid_for_autograd_async
+        except Exception:
+            is_valid_for_autograd_async = None
+
+        if is_valid_for_autograd_async is not None and is_valid_for_autograd_async(
+            self.simulations
+        ):
+            from tidy3d.web import run_async as web_run_async
+
+            return web_run_async(
+                simulations=self.simulations,
+                folder_name=self.folder_name,
+                path_dir=path_dir,
+                callback_url=self.callback_url,
+                num_workers=self.num_workers,
+                verbose=self.verbose,
+                parent_tasks=self.parent_tasks,
+                reduce_simulation=self.reduce_simulation,
+                pay_type=self.pay_type,
+            )
+
         self._check_path_dir(path_dir)
         self.upload()
         self.to_file(self._batch_path(path_dir=path_dir))

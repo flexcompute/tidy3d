@@ -31,6 +31,7 @@ from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import PayType
 
 from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
+from .runner import run_job as _runner_run_job
 from .tidy3d_stub import SimulationDataType, SimulationType, Tidy3dStub, Tidy3dStubData
 
 # time between checking run status
@@ -164,28 +165,23 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
-    task_id = upload(
+    data = None
+    data, _task_id = _runner_run_job(
         simulation=simulation,
         task_name=task_name,
         folder_name=folder_name,
+        path=path,
         callback_url=callback_url,
         verbose=verbose,
-        progress_callback=progress_callback_upload,
-        simulation_type=simulation_type,
-        parent_tasks=parent_tasks,
-        solver_version=solver_version,
-        reduce_simulation=reduce_simulation,
-    )
-    start(
-        task_id,
+        progress_callback_upload=progress_callback_upload,
+        progress_callback_download=progress_callback_download,
         solver_version=solver_version,
         worker_group=worker_group,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+        reduce_simulation=reduce_simulation,
         pay_type=pay_type,
         priority=priority,
-    )
-    monitor(task_id, verbose=verbose)
-    data = load(
-        task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
     )
     if isinstance(simulation, ModeSolver):
         simulation._patch_data(data=data)

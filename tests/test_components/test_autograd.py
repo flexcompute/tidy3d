@@ -651,6 +651,40 @@ def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
     return {"sim": make_sim, "postprocess": postprocess}
 
 
+@pytest.mark.parametrize("structure_key, monitor_key", [("custom_med", "mode")])
+def test_autograd_job_run(use_emulated_run, structure_key, monitor_key):
+    import tidy3d.web as web
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(params):
+        sim = make_sim(params)
+        data = web.Job(simulation=sim, task_name="autograd_job").run(path="data/sim_job.hdf5")
+        return postprocess(data)
+
+    grad = ag.grad(objective)(params0)
+    assert anp.all(grad != 0.0)
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", [("custom_med", "mode")])
+def test_autograd_batch_run(use_emulated_run, structure_key, monitor_key):
+    import tidy3d.web as web
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(params):
+        sim = make_sim(params)
+        datas = web.Batch(simulations={"job": sim}).run(path_dir="data")
+        return postprocess(datas["job"])
+
+    grad = ag.grad(objective)(params0)
+    assert anp.all(grad != 0.0)
+
+
 @pytest.mark.parametrize("axis", (0, 1, 2))
 def test_polyslab_axis_ops(axis):
     vertices = ((0, 0), (0, 1), (1, 1), (1, 0))

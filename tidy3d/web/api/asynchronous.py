@@ -7,7 +7,8 @@ from typing import Literal, Optional, Union
 from tidy3d.log import log
 from tidy3d.web.core.types import PayType
 
-from .container import DEFAULT_DATA_DIR, Batch, BatchData
+from .container import DEFAULT_DATA_DIR, BatchData
+from .runner import run_batch as _runner_run_batch
 from .tidy3d_stub import SimulationType
 
 
@@ -73,16 +74,16 @@ def run_async(
             "simulations will now be uploaded in a single batch."
         )
 
-    batch = Batch(
+    batch_data, _ = _runner_run_batch(
         simulations=simulations,
         folder_name=folder_name,
+        path_dir=path_dir,
         callback_url=callback_url,
+        num_workers=num_workers,
         verbose=verbose,
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
     )
-
-    batch_data = batch.run(path_dir=path_dir)
     return batch_data

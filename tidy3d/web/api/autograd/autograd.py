@@ -7,6 +7,7 @@ import typing
 from collections import defaultdict
 from os.path import basename, dirname, join
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import xarray as xr
@@ -25,7 +26,12 @@ from tidy3d.components.data.data_array import DataArray
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
-from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
+from tidy3d.web.api.container import DEFAULT_DATA_PATH
+
+if TYPE_CHECKING:
+    from tidy3d.web.api.container import BatchData
+from tidy3d.web.api.runner import run_batch as runner_run_batch
+from tidy3d.web.api.runner import run_job as runner_run_job
 from tidy3d.web.api.tidy3d_stub import SimulationDataType, SimulationType
 from tidy3d.web.api.webapi import run as run_webapi
 from tidy3d.web.core.s3utils import download_file, upload_file
@@ -1201,63 +1207,73 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 """ The fundamental Tidy3D run and run_async functions used above. """
 
 
-def parse_run_kwargs(**run_kwargs):
-    """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
-    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type"]
-    job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
-    return job_init_kwargs
-
-
 def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs
 ) -> tuple[td.SimulationData, str]:
-    """Run a simulation without any tracers using regular web.run()."""
+    """Run a simulation without any tracers using the unified runner."""
 
-    job_init_kwargs = parse_run_kwargs(**run_kwargs)
-    job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
-    td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
-    if job.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
+    td.log.info("running simulation with unified runner '_run_tidy3d()'")
+
     path = run_kwargs.get("path", DEFAULT_DATA_PATH)
     if task_name.endswith("_adjoint"):
         path_parts = basename(path).split(".")
         path = join(dirname(path), path_parts[0] + "_adjoint." + ".".join(path_parts[1:]))
-    data = job.run(path)
-    return data, job.task_id
+
+    def post_upload(task_id: str):
+        if run_kwargs.get("simulation_type") == "autograd_fwd":
+            verbose = run_kwargs.get("verbose", False)
+            upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=task_id, verbose=verbose)
+
+    data, task_id = runner_run_job(
+        simulation=simulation,
+        task_name=task_name,
+        folder_name=run_kwargs.get("folder_name", "default"),
+        path=path,
+        callback_url=run_kwargs.get("callback_url"),
+        verbose=run_kwargs.get("verbose", True),
+        progress_callback_upload=run_kwargs.get("progress_callback_upload"),
+        progress_callback_download=run_kwargs.get("progress_callback_download"),
+        solver_version=run_kwargs.get("solver_version"),
+        worker_group=run_kwargs.get("worker_group"),
+        simulation_type=run_kwargs.get("simulation_type", "tidy3d"),
+        parent_tasks=run_kwargs.get("parent_tasks"),
+        reduce_simulation=run_kwargs.get("reduce_simulation", "auto"),
+        pay_type=run_kwargs.get("pay_type"),
+        priority=run_kwargs.get("priority"),
+        post_upload=post_upload,
+    )
+    return data, task_id
 
 
 def _run_async_tidy3d(
     simulations: dict[str, td.Simulation], **run_kwargs
 ) -> tuple[BatchData, dict[str, str]]:
-    """Run a batch of simulations using regular web.run()."""
+    """Run a batch of simulations using the unified runner."""
 
-    batch_init_kwargs = parse_run_kwargs(**run_kwargs)
-    path_dir = run_kwargs.pop("path_dir", None)
-    batch = Batch(simulations=simulations, **batch_init_kwargs)
-    td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
+    td.log.info("running batch with unified runner '_run_async_tidy3d()'")
 
-    if batch.simulation_type == "autograd_fwd":
-        verbose = run_kwargs.get("verbose", False)
-        # Need to upload to get the task_ids
-        sims = {
-            task_name: sim.updated_copy(simulation_type="autograd_fwd", deep=False)
-            for task_name, sim in batch.simulations.items()
-        }
-        batch = batch.updated_copy(simulations=sims)
+    def post_upload(task_ids: dict[str, str]):
+        if run_kwargs.get("simulation_type") == "autograd_fwd":
+            verbose = run_kwargs.get("verbose", False)
+            for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
+                upload_sim_fields_keys(
+                    sim_fields_keys, task_id=task_ids[task_name], verbose=verbose
+                )
 
-        batch.upload()
-        task_ids = {key: job.task_id for key, job in batch.jobs.items()}
-        for task_name, sim_fields_keys in run_kwargs["sim_fields_keys_dict"].items():
-            task_id = task_ids[task_name]
-            upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
-
-    if path_dir:
-        batch_data = batch.run(path_dir)
-    else:
-        batch_data = batch.run()
-
-    task_ids = {key: job.task_id for key, job in batch.jobs.items()}
+    batch_data, task_ids = runner_run_batch(
+        simulations=simulations,
+        folder_name=run_kwargs.get("folder_name", "default"),
+        path_dir=run_kwargs.get("path_dir", DEFAULT_DATA_DIR),
+        callback_url=run_kwargs.get("callback_url"),
+        num_workers=run_kwargs.get("num_workers"),
+        verbose=run_kwargs.get("verbose", True),
+        simulation_type=run_kwargs.get("simulation_type", "tidy3d"),
+        parent_tasks=run_kwargs.get("parent_tasks"),
+        reduce_simulation=run_kwargs.get("reduce_simulation", "auto"),
+        pay_type=run_kwargs.get("pay_type"),
+        solver_version=run_kwargs.get("solver_version"),
+        post_upload=post_upload,
+    )
     return batch_data, task_ids
 
 
@@ -1267,9 +1283,30 @@ def _run_async_tidy3d_bwd(
 ) -> dict[str, AutogradFieldMap]:
     """Run a batch of adjoint simulations using regular web.run()."""
 
-    batch_init_kwargs = parse_run_kwargs(**run_kwargs)
-    _ = run_kwargs.pop("path_dir", None)
-    batch = Batch(simulations=simulations, **batch_init_kwargs)
+    # Build batch with explicit fields to avoid coupling to Job._upload_fields
+    folder_name = run_kwargs.get("folder_name", "default")
+    callback_url = run_kwargs.get("callback_url")
+    verbose = run_kwargs.get("verbose", True)
+    simulation_type = run_kwargs.get("simulation_type", "tidy3d")
+    parent_tasks = run_kwargs.get("parent_tasks")
+    solver_version = run_kwargs.get("solver_version")
+    reduce_simulation = run_kwargs.get("reduce_simulation", "auto")
+    pay_type = run_kwargs.get("pay_type", PayType.AUTO)
+
+    # Local import to avoid circular import at import time
+    from tidy3d.web.api.container import Batch
+
+    batch = Batch(
+        simulations=simulations,
+        folder_name=folder_name,
+        callback_url=callback_url,
+        verbose=verbose,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+        reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
+        solver_version=solver_version,
+    )
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d_bwd()'")
 
     batch.start()
