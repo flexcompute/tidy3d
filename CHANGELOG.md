@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
+- Improved `DataArray` rendering in the API reference.
 
 ### Fixed
 - Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.

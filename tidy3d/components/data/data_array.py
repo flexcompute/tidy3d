@@ -150,6 +150,19 @@ class DataArray(xr.DataArray):
         return val
 
     @classmethod
+    def _type_str_for_docs(cls) -> str:
+        """Returns a string representation of this type for documentation.
+
+        Returns
+        -------
+        str
+            String representation including dimensions and link to docs.
+        """
+        dims = getattr(cls, "_dims", ())
+        dims_str = ", ".join(f'"{d}"' for d in dims)
+        return f":class:`~tidy3d.components.data.data_array.DataArray`[dims=({dims_str})]"
+
+    @classmethod
     def __modify_schema__(cls, field_schema):
         """Sets the schema of DataArray object."""
 

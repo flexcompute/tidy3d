@@ -260,3 +260,42 @@ def test_scientific_notation(min_val, max_val, min_digits, expected):
     """Test the _scientific_notation method with various inputs."""
     result = Tidy3dBaseModel._scientific_notation(min_val, max_val, min_digits=min_digits)
     assert result == expected
+
+
+import pydantic.v1 as pydantic
+
+from tidy3d.components.data.data_array import FreqDataArray, SpatialDataArray
+
+
+class TestModel(Tidy3dBaseModel):
+    """A test model."""
+
+    freq_data: FreqDataArray
+    spatial_data: SpatialDataArray
+    wavelength: float = pydantic.Field(1.55, description="Center wavelength of the simulation.")
+    medium: td.Medium = pydantic.Field(td.Medium(), description="Material properties.")
+
+
+def test_data_array_type_display():
+    """Test the special handling of DataArray types in docstrings."""
+
+    # Test docstring generation for a model with DataArray fields
+    docstring = TestModel.generate_docstring()
+    print(docstring)  # Print the docstring to see what's wrong
+    assert (
+        'freq_data : :class:`~tidy3d.components.data.data_array.DataArray`[dims=("f")]' in docstring
+    )
+    assert (
+        'spatial_data : :class:`~tidy3d.components.data.data_array.DataArray`[dims=("x", "y", "z")]'
+        in docstring
+    )
+
+    # Check primitive type field
+    assert "wavelength : float = 1.55" in docstring
+    assert "Center wavelength of the simulation." in docstring
+
+    # Check pydantic model field
+    assert (
+        "medium : Medium = Medium(attrs={}, name=None" in docstring
+    )  # Just check the start of the default value
+    assert "Material properties." in docstring

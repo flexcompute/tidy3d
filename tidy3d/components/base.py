@@ -1067,6 +1067,24 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         )
         cls.__fields__[TYPE_TAG_STR] = tag_field
 
+    @staticmethod
+    def _get_data_type(field) -> str:
+        """Get the string representation of a field type for documentation.
+
+        Parameters
+        ----------
+        field : ModelField
+            The field to get type representation for.
+
+        Returns
+        -------
+        str
+            String representation of the field type.
+        """
+        if isinstance(field.type_, type) and issubclass(field.type_, DataArray):
+            return field.type_._type_str_for_docs()
+        return field._type_display()
+
     @classmethod
     def generate_docstring(cls) -> str:
         """Generates a docstring for a Tidy3D mode and saves it to the __doc__ of the class."""
@@ -1089,8 +1107,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             if field_name == TYPE_TAG_STR:
                 continue
 
-            # get data type
-            data_type = field._type_display()
+            # get data type string representation
+            data_type = cls._get_data_type(field)
 
             # get default values
             default_val = field.get_default()
