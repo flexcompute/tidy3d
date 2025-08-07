@@ -10,6 +10,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.geometry.base import Box, ClipOperation
+from tidy3d.components.geometry.utils_2d import increment_float
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
@@ -1323,6 +1324,13 @@ class LayerRefinementSpec(Box):
             self.size[(self.axis + 2) % 3]
         )
 
+    @cached_property
+    def _slightly_enlarged_box(self) -> Box:
+        """Slightly enlarged box for robust point containment querying."""
+        # increase size slightly
+        size = [increment_float(orig_length, 1) for orig_length in self.size]
+        return Box(center=self.center, size=size)
+
     def _unpop_axis(self, ax_coord: float, plane_coord: Any) -> CoordinateOptional:
         """Combine coordinate along axis with identical coordinates on the plane tangential to the axis.
 
@@ -1411,7 +1419,7 @@ class LayerRefinementSpec(Box):
         point_3d = self.unpop_axis(
             ax_coord=self.center[self.axis], plane_coords=point, axis=self.axis
         )
-        return self.inside(point_3d[0], point_3d[1], point_3d[2])
+        return self._slightly_enlarged_box.inside(point_3d[0], point_3d[1], point_3d[2])
 
     def _corners_and_convexity_2d(
         self, structure_list: list[Structure], ravel: bool
