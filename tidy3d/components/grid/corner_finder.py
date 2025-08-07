@@ -13,7 +13,7 @@ from tidy3d.components.geometry.utils import merging_geometries_on_plane
 from tidy3d.components.medium import PEC, LossyMetalMedium
 from tidy3d.components.structure import Structure
 from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
-from tidy3d.constants import inf
+from tidy3d.constants import fp_eps, inf
 
 CORNER_ANGLE_THRESOLD = 0.1 * np.pi
 
@@ -40,7 +40,7 @@ class CornerFinderSpec(Tidy3dBaseModel):
     )
 
     distance_threshold: Optional[pd.PositiveFloat] = pd.Field(
-        None,
+        fp_eps,
         title="Distance Threshold In Corner Identification",
         description="If not ``None`` and the distance of the vertex to its neighboring vertices "
         "is below the threshold value based on Douglas-Peucker algorithm, the vertex is disqualified as a corner.",

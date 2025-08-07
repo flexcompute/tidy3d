@@ -13,12 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
+- Default `CornerFinderSpec.distance_threshold` is now `fp_eps`.
 
 ### Fixed
 - Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.
 - Improved the robustness of batch jobs. The batch state, including all `task_ids`, is now saved to `batch.hdf5` immediately after upload. This fixes an issue where an interrupted batch (e.g., due to a kernel crash or network loss) would be unrecoverable.
 - Fixed warning for running symmetric adjoint simulations by port to not trigger when there is a single port.
 - Bug in `CoaxialLumpedPort` where source injection is off when the `normal_axis` is not `z`.
+- Polygon vertices cleanup in `ClipOperation.intersections_plane`.
 
 ## [2.9.0] - 2025-08-04
 
