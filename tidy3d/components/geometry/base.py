@@ -66,6 +66,7 @@ from .bound_ops import bounds_intersection, bounds_union
 
 POLY_GRID_SIZE = 1e-12
 POLY_TOLERANCE_RATIO = 1e-12
+POLY_DISTANCE_TOLERANCE = 8e-12
 
 
 _shapely_operations = {
@@ -3397,6 +3398,9 @@ def cleanup_shapely_object(obj: Shapely, tolerance_ratio: float = POLY_TOLERANCE
         cap_style="square",
         quad_segs=3,
     )
+    # Clean vertices of very close distances created during the erosion/dilation process.
+    # The distance value is heuristic.
+    cleaned_obj = cleaned_obj.simplify(POLY_DISTANCE_TOLERANCE, preserve_topology=True)
     # Revert to the original scale and position.
     rescaled_clean_obj = shapely.affinity.affine_transform(
         cleaned_obj,

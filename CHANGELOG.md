@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in `CoaxialLumpedPort` where source injection is off when the `normal_axis` is not `z`.
 - Validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Calculation of voltage and current in the `WavePort`, when one type of path integral is supplied and the transmission line mode is lossy.
+- Polygon vertices cleanup in `ClipOperation.intersections_plane`.
 
 ## [2.9.0] - 2025-08-04
 

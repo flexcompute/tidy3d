@@ -1288,8 +1288,7 @@ def test_cleanup_shapely_object():
     # Test using a non-empty exterior polygon (big_square_5x5)
     orig_polygon = shapely.Polygon(exterior_coords, interior_coords_list)
     new_polygon = cleanup_shapely_object(orig_polygon, tolerance_ratio=1e-12)
-    # Delete any nearby or overlapping vertices (cleanup_shapely_object() does not do this).
-    new_polygon = shapely.simplify(new_polygon, tolerance=1e-10)
+    # Delete any nearby or overlapping vertices (cleanup_shapely_object() now does this).
     # Now `new_polygon` should only contain the coordinates of the square (with a duplicate at end).
     assert len(new_polygon.exterior.coords) == 5  # squares have 4 vertices but shapely adds 1
     assert len(new_polygon.interiors) == 1  # only the "triangle_empty_tails" interior hole survives
@@ -1298,5 +1297,4 @@ def test_cleanup_shapely_object():
     exterior_coords = triangle_collinear  # has zero area
     orig_polygon = shapely.Polygon(exterior_coords)
     new_polygon = cleanup_shapely_object(orig_polygon, tolerance_ratio=1e-12)
-    new_polygon = shapely.simplify(new_polygon, tolerance=1e-10)
     assert len(new_polygon.exterior.coords) == 0  # empty / collinear polygons should get deleted
