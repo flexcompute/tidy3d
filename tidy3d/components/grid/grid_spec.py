@@ -42,6 +42,9 @@ DEFAULT_REFINEMENT_FACTOR = 2
 # Tolerance for distinguishing pec/grid intersections
 GAP_MESHING_TOL = 1e-3
 
+# Tolerance for snapping vertices to discrete set of locations
+GAP_MESHING_SNAP_TOL = 1e-12
+
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
     """Abstract base class, defines 1D grid generation specifications."""
@@ -1747,17 +1750,67 @@ class LayerRefinementSpec(Box):
     ) -> tuple[list[tuple[int, int]], list[float], list[tuple[int, int]], list[float]]:
         """Detect intersection points of single polygon and grid lines."""
 
+        # snap vertices to a discrete set of points defined in the following way:
+        # first, we locate the cell that contains each vertex
+        # then we split the cell into uniformly spaced points along x and y axes based on GAP_MESHING_SNAP_TOL
+        # and then we select the closest point among these points
+        # this is done for each vertex of the polygon that is inside the grid
+        # and do not snap coordinates if they are outside of the grid
+
+        # first, find indices of vertices that are inside the grid along x axis
+        inside_x = np.logical_and(
+            poly_vertices[:, 0] >= grid_x_coords[0], poly_vertices[:, 0] <= grid_x_coords[-1]
+        )
+        # and along y axis
+        inside_y = np.logical_and(
+            poly_vertices[:, 1] >= grid_y_coords[0], poly_vertices[:, 1] <= grid_y_coords[-1]
+        )
+
+        # for each vertex that is inside the grid along x axis, find the index of the first grid line on the right
+        cell_i = np.argmax(grid_x_coords[:, None] >= poly_vertices[None, inside_x, 0], axis=0)
+        # for each vertex that is inside the grid along y axis, find the index of the first grid line on the top
+        cell_j = np.argmax(grid_y_coords[:, None] >= poly_vertices[None, inside_y, 1], axis=0)
+
+        # Need to handle edge case where vertex is exactly on the last grid line
+        cell_i[cell_i == 0] = 1  # Avoid negative indices
+        cell_j[cell_j == 0] = 1
+
+        # calculate relative position of each vertex within the cell
+        rel_x = (poly_vertices[inside_x, 0] - grid_x_coords[cell_i - 1]) / (
+            grid_x_coords[cell_i] - grid_x_coords[cell_i - 1]
+        )
+        rel_y = (poly_vertices[inside_y, 1] - grid_y_coords[cell_j - 1]) / (
+            grid_y_coords[cell_j] - grid_y_coords[cell_j - 1]
+        )
+
+        # Clamp relative positions to [0,1] to handle numerical errors
+        rel_x = np.clip(rel_x, 0, 1)
+        rel_y = np.clip(rel_y, 0, 1)
+
+        # round the relative position based on GAP_MESHING_SNAP_TOL
+        rel_x = np.round(rel_x / GAP_MESHING_SNAP_TOL) * GAP_MESHING_SNAP_TOL
+        rel_y = np.round(rel_y / GAP_MESHING_SNAP_TOL) * GAP_MESHING_SNAP_TOL
+
+        # calculate the snapped vertex
+        poly_vertices_snapped = poly_vertices.copy()  # Make a copy to avoid modifying original
+        poly_vertices_snapped[inside_x, 0] = grid_x_coords[cell_i - 1] + rel_x * (
+            grid_x_coords[cell_i] - grid_x_coords[cell_i - 1]
+        )
+        poly_vertices_snapped[inside_y, 1] = grid_y_coords[cell_j - 1] + rel_y * (
+            grid_y_coords[cell_j] - grid_y_coords[cell_j - 1]
+        )
+
         # find cells that contain intersections of vertical grid lines
         # and relative locations of those intersections (along y axis)
         v_cells_ij, v_cells_dy = self._find_vertical_intersections(
-            grid_x_coords, grid_y_coords, poly_vertices, boundaries[1]
+            grid_x_coords, grid_y_coords, poly_vertices_snapped, boundaries[1]
         )
 
         # find cells that contain intersections of horizontal grid lines
         # and relative locations of those intersections (along x axis)
         # reuse the same command but flip dimensions
         h_cells_ij, h_cells_dx = self._find_vertical_intersections(
-            grid_y_coords, grid_x_coords, np.flip(poly_vertices, axis=1), boundaries[0]
+            grid_y_coords, grid_x_coords, np.flip(poly_vertices_snapped, axis=1), boundaries[0]
         )
         if len(h_cells_ij) > 0:
             # flip dimensions back
