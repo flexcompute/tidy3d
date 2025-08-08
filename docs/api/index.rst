@@ -23,6 +23,7 @@ API |:computer:|
     output_data
     scene
     logging
+    utilities
     submit_simulations
     mesh/index
     heat/index
@@ -37,6 +38,7 @@ API |:computer:|
     viz
 
 .. include:: /api/simulation.rst
+.. include:: /api/utilities.rst
 .. include:: /api/boundary_conditions.rst
 .. include:: /api/geometry.rst
 .. include:: /api/mediums.rst

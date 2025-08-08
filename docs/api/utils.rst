@@ -1,10 +1,12 @@
 .. currentmodule:: tidy3d
 
-Simulation
-==========
+Utilities
+=========
 
 .. autosummary::
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.Simulation
+   tidy3d.RunTimeSpec
+   tidy3d.FreqRange
+   tidy3d.FreqUtils
