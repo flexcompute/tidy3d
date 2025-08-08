@@ -801,3 +801,72 @@ def test_gap_meshing():
     # sim.plot(x=0, ax=ax)
     # sim.plot_grid(x=0, ax=ax)
     # plt.show()
+
+
+def test_gap_meshing_skip_small_gap():
+    """When the gap is very small, make sure it's skipped."""
+
+    f0 = 7e9
+
+    mm = 1000  # Conversion mm to micron
+    H = 0.8 * mm  # Substrate thickness
+    T = 0.035 * mm  # Metal thickness
+
+    # Resonator dimensions
+    MA, MB, MC, MD = (3.9 * mm, 7.1 * mm, 3.1 * mm, 2.3 * mm)
+    ME, MF, MG, MH = (0.6 * mm, 0.2 * mm, 1.2 * mm, 0.5 * mm)
+    MJ, MK, MM, MN = (4.8 * mm, 0.3 * mm, 0.1 * mm, 0.7 * mm)
+    MP, MQ, MR, MS = (0.1 * mm, 0.7 * mm, 0.4 * mm, 0.3 * mm)
+    Lsub, Wsub = (2 * MC + MH, 2 * (MH + MK + MB))
+
+    geom_patch = td.Box.from_bounds(
+        rmin=(-MA / 2, MH / 2 + MK, 0), rmax=(MA / 2, MH / 2 + MK + MB, T)
+    )
+    geom_hole1 = td.Box.from_bounds(
+        rmin=(-MH / 2 - MN - MF - ME, MH / 2 + MK + MS, 0),
+        rmax=(-MH / 2 - MN - MF, MH / 2 + MK + MS + MG, T),
+    )
+    geom_hole5 = td.Box.from_bounds(
+        rmin=(-MA / 2 + 1.5 * MF, MH / 2 + MK + MS + MG + MQ, 0),
+        rmax=(-MA / 2 + 1.5 * MF + MM, MH / 2 + MK + MB - MP, T),
+    )
+    geom_hole6 = geom_hole5.translated(-2 * geom_hole5.center[0], 0, 0)
+    geom_hole7 = td.Box.from_bounds(
+        rmin=(-MH / 2 - MN, MH / 2 + MK, 0), rmax=(MH / 2 + MN, MH / 2 + MD, T)
+    )
+    for hole in [geom_hole1, geom_hole5, geom_hole6, geom_hole7]:
+        geom_patch -= hole
+
+    x0, y0, z0 = geom_patch.bounding_box.center
+    struct_patch = td.Structure(geometry=geom_patch, medium=td.PEC)
+
+    # Add padding
+    padding = td.C_0 / f0 / 2
+    sim_LX = Lsub + padding
+    sim_LY = Wsub + padding
+    sim_LZ = H + padding
+
+    # Layer refinement on resonator
+    lr_spec = td.LayerRefinementSpec.from_structures(
+        structures=[struct_patch],
+        min_steps_along_axis=1,
+        corner_refinement=td.GridRefinement(dl=T, num_cells=2),
+        dl_min_from_gap_width=True,
+    )
+
+    # Define overall grid spec
+    grid_spec = td.GridSpec.auto(
+        wavelength=td.C_0 / f0,
+        min_steps_per_wvl=12,
+        layer_refinement_specs=[lr_spec],
+    )
+
+    # Define simulation object
+    sim = td.Simulation(
+        center=(x0, y0, z0),
+        size=(sim_LX, sim_LY, sim_LZ),
+        structures=[struct_patch],
+        grid_spec=grid_spec,
+        run_time=1e-9,
+    )
+    assert sim.grid_info["min_grid_size"] > 20
