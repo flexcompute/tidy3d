@@ -14,7 +14,7 @@ This document captures the concrete, step-by-step plan to refactor the existing 
 
 ## Step-by-step tasks
 
-1) Create new package `plugins/rf/`
+1) Create new package `plugins/rf/` [DONE]
 - Create directories: `tidy3d/plugins/rf/{component_modelers,ports,data,analysis,utils}`
 - Add `tidy3d/plugins/rf/__init__.py` exporting:
   - Modeler: `TerminalComponentModeler`
@@ -23,7 +23,7 @@ This document captures the concrete, step-by-step plan to refactor the existing 
   - Utils: `ab_to_s`, `s_to_z`, `compute_power_wave_amplitudes`, `compute_power_delivered_by_port`, `compute_port_VI`, `compute_F`, `check_port_impedance_sign`
   - Run helpers: `create_batch`, `compose_terminal_modeler_data`, `run`
 
-2) Copy RF/terminal code from `plugins/smatrix` → `plugins/rf`
+2) Copy RF/terminal code from `plugins/smatrix` → `plugins/rf` [DONE]
 - Move files (copy then later delete originals):
   - `component_modelers/terminal.py` → `rf/component_modelers/terminal.py`
   - `ports/{base_terminal.py,base_lumped.py,rectangular_lumped.py,coaxial_lumped.py,wave.py,types.py}` → `rf/ports/`
@@ -35,7 +35,7 @@ This document captures the concrete, step-by-step plan to refactor the existing 
 - Add `rf/run.py` with terminal-only batch composition and run helpers.
 - Create `rf/data/modal.py` with `PortSimulationData` to avoid rf→smatrix dependency.
 
-3) Purify `plugins/smatrix` (modal-only)
+3) Purify `plugins/smatrix` (modal-only) [IN PROGRESS]
 - `__init__.py`: remove RF exports. Optionally re-export RF items from `plugins.rf` with deprecation warnings for one minor release.
 - `run.py`: remove terminal-related code; keep modal-only `create_batch`, `compose_component_modeler_data`, `run`.
 - `component_modelers/types.py`: change to `ComponentModelerType = ComponentModeler`.
@@ -43,7 +43,7 @@ This document captures the concrete, step-by-step plan to refactor the existing 
 - `component_modelers/base.py`: remove RF license validator and any terminal/wave types from annotations; keep modal helpers only.
 - Delete `utils.py` or split into `utils_generic.py` with purely algebraic helpers if still needed by modal analysis.
 
-4) Wire up RF package APIs
+4) Wire up RF package APIs [DONE]
 - Ensure rf imports are consistent:
   - `rf/data/terminal.py` imports `rf.utils`, `rf.data.data_array`, `rf.analysis.*`, `rf.ports.types`, and `rf.component_modelers.terminal`.
   - `rf/component_modelers/terminal.py` imports `smatrix.component_modelers.base.AbstractComponentModeler` and `rf.ports.*`.
@@ -53,13 +53,13 @@ This document captures the concrete, step-by-step plan to refactor the existing 
 5) Optional facade (ergonomics; no cross-coupling)
 - Add `tidy3d/plugins/__init__.py:run_smatrix(modeler, path_dir=".")` that dispatches to either modal or RF run depending on the modeler type. Resolve imports inside the function.
 
-6) Backward compatibility and deprecation
+6) Backward compatibility and deprecation [PENDING]
 - For one minor release:
   - In `plugins/smatrix/__init__.py`, re-export RF items from `plugins.rf` and warn on access.
   - If `plugins.smatrix.run.run()` receives a terminal modeler, forward to `plugins.rf.run.run()` with a warning or raise a `TypeError` with a migration message.
 - Update notebooks/examples with new RF imports; keep modal examples unchanged.
 
-7) Testing
+7) Testing [IN PROGRESS]
 - Add/adjust unit tests for:
   - RF run path: batch composition, impedance, power-wave amplitudes, S↔Z conversion, antenna analysis.
   - Modal run path: existing tests remain valid.
