@@ -208,7 +208,7 @@ from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EM
 from .components.field_projection import FieldProjector
 
 # frequency conversion utilities
-from .components.frequencies import FreqRange, frequencies, wavelengths
+from .components.frequencies import FreqRange, FrequencyUtils, frequencies, wavelengths
 
 # geometry
 from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
@@ -544,6 +544,7 @@ __all__ = [
     "FluxTimeMonitor",
     "FossumCarrierLifetime",
     "FreqRange",
+    "FrequencyUtils",
     "FullyAnisotropicMedium",
     "GaussianBeam",
     "GaussianBeamProfile",
