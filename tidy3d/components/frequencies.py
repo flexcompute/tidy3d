@@ -20,7 +20,7 @@ U_BAND = (1.625, 1.675)
 
 
 class FrequencyUtils(Tidy3dBaseModel):
-    """Class for general frequency/wavelength utilities."""
+    """Utilities for classifying frequencies/wavelengths and generating samples for standard optical bands."""
 
     use_wavelength: bool = pd.Field(
         False,
@@ -234,6 +234,16 @@ class FrequencyUtils(Tidy3dBaseModel):
 
 frequencies = FrequencyUtils(use_wavelength=False)
 wavelengths = FrequencyUtils(use_wavelength=True)
+
+frequencies.__doc__ = (
+    "Frequency utilities configured to interpret and return values in hertz (Hz). "
+    "Use for RF, microwave, optical, and other band classifications in frequency units."
+)
+
+wavelengths.__doc__ = (
+    "Frequency utilities configured to interpret and return values in micrometers (μm). "
+    "Use for optical and photonic calculations where wavelength units are preferred."
+)
 
 
 class FreqRange(Tidy3dBaseModel):
