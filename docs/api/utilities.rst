@@ -9,6 +9,6 @@ Utilities
 
    tidy3d.RunTimeSpec
    tidy3d.FreqRange
-   tidy3d.FreqUtils
+   tidy3d.FrequencyUtils
    tidy3d.frequencies
    tidy3d.wavelengths
