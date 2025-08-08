@@ -7,7 +7,7 @@ import pytest
 import xarray as xr
 
 import tidy3d as td
-import tidy3d.plugins.rf.utils as rf_utils
+import tidy3d.plugins.rf.utils
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import (
@@ -20,17 +20,18 @@ from tidy3d.plugins.rf import (
     LumpedPort,
     TerminalComponentModeler,
     TerminalComponentModelerData,
-    WavePort,
 )
 from tidy3d.plugins.rf.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.rf.data.modal import PortSimulationData
 from tidy3d.plugins.rf.ports.base_lumped import AbstractLumpedPort
-from tidy3d.plugins.smatrix import (
-    AbstractComponentModeler,
-)
+from tidy3d.plugins.rf.ports.wave import WavePort
+from tidy3d.plugins.smatrix import AbstractComponentModeler
 
-from ...utils import run_emulated
-from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
+from ..utils import run_emulated
+from .smatrix.terminal_component_modeler_def import (
+    make_coaxial_component_modeler,
+    make_component_modeler,
+)
 
 mm = 1e3
 
@@ -41,18 +42,18 @@ def run_component_modeler(
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     port_data = PortSimulationData(
-        ports=list(batch_data.keys()),
-        data=list(batch_data.values()),
+        ports=tuple(batch_data.keys()),
+        data=tuple(batch_data.values()),
     )
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=port_data)
     monkeypatch.setattr(AbstractComponentModeler, "inv", lambda matrix: np.eye(len(modeler.ports)))
     monkeypatch.setattr(
-        rf_utils,
+        td.plugins.rf.utils,
         "compute_F",
         lambda matrix: 1.0 / (2.0 * np.sqrt(np.abs(matrix) + 1e-4)),
     )
     monkeypatch.setattr(
-        rf_utils,
+        td.plugins.rf.utils,
         "check_port_impedance_sign",
         lambda Z_numpy: np.ndarray([]),
     )
@@ -68,12 +69,8 @@ def get_terminal_port_data_array(
 
 
 def check_lumped_port_components_snapped_correctly(modeler: TerminalComponentModeler):
-    """Given an instance of a ``TerminalComponentModeler``, check that all simulation components
-    have been snapped exactly to the position of the load resistor.
-    """
     sim_dict = modeler.sim_dict
     num_ports = len(modeler.ports)
-    # Check to make sure all components are exactly aligned along the normal axis
     for src_port, src_idx, src_sim in zip(modeler.ports, range(num_ports), sim_dict.values()):
         assert isinstance(src_port, AbstractLumpedPort)
         monitor_dict = {monitor.name: monitor for monitor in src_sim.monitors}
@@ -161,14 +158,11 @@ def test_run_component_modeler(monkeypatch, tmp_path):
             coords_in = {"port_in": port_in.name}
             coords_out = {"port_out": port_out.name}
 
-            assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
-                "monitor index not present in S matrix"
-            )
+            assert np.all(s_matrix.sel(**coords_in) != 0)
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0)
 
 
 def test_s_to_z_component_modeler():
-    # Test case is 2 port T network with reference impedance of 50 Ohm
     A = 20 + 30j
     B = 50 - 15j
     C = 60
@@ -179,7 +173,6 @@ def test_s_to_z_component_modeler():
     Z22 = B + C
 
     Z0 = 50.0
-    # Manual creation of S parameters Pozar Table 4.2
     deltaZ = (Z11 + Z0) * (Z22 + Z0) - Z12 * Z21
     S11 = ((Z11 - Z0) * (Z22 + Z0) - Z12 * Z21) / deltaZ
     S12 = (2 * Z12 * Z0) / deltaZ
@@ -193,7 +186,6 @@ def test_s_to_z_component_modeler():
         3 * [[[S11, S12], [S21, S22]]],
         dtype=complex,
     )
-    # Put coords in opposite order to check reordering
     coords = {
         "f": np.array(freqs),
         "port_out": port_names,
@@ -208,7 +200,6 @@ def test_s_to_z_component_modeler():
     assert np.isclose(z_matrix_at_f[1, 0], Z21)
     assert np.isclose(z_matrix_at_f[1, 1], Z22)
 
-    # test version with different port reference impedances
     values = np.full((len(freqs), len(port_names)), Z0)
     coords = {
         "f": np.array(freqs),
@@ -229,9 +220,6 @@ def test_ab_to_s_component_modeler():
         "port_out": ["lumped_port_1", "lumped_port_2"],
         "port_in": ["lumped_port_1", "lumped_port_2"],
     }
-    # Common case is reference impedance matched to loads, which means ideally
-    # the a matrix would be an identity matrix, and as a result the s matrix will be
-    # given directly by the b_matrix
     a_values = np.eye(2, 2)
     a_values = np.reshape(a_values, (1, 2, 2))
     b_values = (1 + 1j) * np.random.random((1, 2, 2))
@@ -242,9 +230,6 @@ def test_ab_to_s_component_modeler():
 
 
 def test_port_snapping(tmp_path):
-    """Make sure that the snapping behavior of the load resistor is mirrored
-    by all other components in the modeler simulations with rectangular ports.
-    """
     y_z_grid = td.UniformGrid(dl=0.1 * 1e3)
     x_grid = td.UniformGrid(dl=11 * 1e3)
     grid_spec = td.GridSpec(grid_x=x_grid, grid_y=y_z_grid, grid_z=y_z_grid)
@@ -254,7 +239,6 @@ def test_port_snapping(tmp_path):
 
 def test_coarse_grid_at_port(monkeypatch, tmp_path):
     modeler = make_component_modeler(planar_pec=True, port_refinement=False, port_snapping=False)
-    # Without port refinement the grid is much too coarse for these port sizes
     with pytest.raises(SetupError):
         _ = run_component_modeler(monkeypatch, modeler)
 
@@ -266,7 +250,6 @@ def test_validate_port_voltage_axis():
 
 @pytest.mark.parametrize("snap_center", [None, 0.1])
 def test_converting_port_to_simulation_objects(snap_center):
-    """Test that the LumpedPort can be converted into monitors and source without the grid present."""
     port = LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=2, impedance=50, name="Port1")
     freqs = np.linspace(1e9, 10e9, 11)
     source_time = td.GaussianPulse(freq0=5e9, fwidth=9e9)
@@ -291,10 +274,8 @@ def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
             coords_in = {"port_in": port_in.name}
             coords_out = {"port_out": port_out.name}
 
-            assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
-                "monitor index not present in S matrix"
-            )
+            assert np.all(s_matrix.sel(**coords_in) != 0)
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0)
 
 
 @pytest.mark.parametrize(
@@ -314,9 +295,7 @@ def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
     ],
 )
 def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path, grid_spec):
-    """Ensure that the grid is fine enough at the coaxial ports along the transverse dimensions."""
     modeler = make_coaxial_component_modeler(port_refinement=False, grid_spec=grid_spec)
-    # Without port refinement the grid is much too coarse for these port sizes
     with pytest.raises(SetupError):
         _ = run_component_modeler(monkeypatch, modeler)
 
@@ -351,11 +330,6 @@ def test_validate_coaxial_port_diameters():
 
 @pytest.mark.parametrize("direction", ["+", "-"])
 def test_current_integral_positioning_coaxial_port(direction):
-    """Make sure the positioning of the current integral used by the CoaxialLumpedPort is correct,
-    when the coordinates and port position do not exactly match. This requires that the port is
-    snapped correctly to cell boundaries.
-    """
-    # Test coordinates from a failing case
     normal_coords = np.array(
         [
             -14069.999999999978,
@@ -364,13 +338,10 @@ def test_current_integral_positioning_coaxial_port(direction):
             -14009.999999999978,
         ]
     )
-    # The port center should be snapped to cell boundaries which is the midpoint of
-    # adjacent transverse magnetic field locations
     normal_port_position = (normal_coords[2] + normal_coords[3]) / 2
     path_pos = CoaxialLumpedPort._determine_current_integral_pos(
         normal_port_position, normal_coords, direction
     )
-
     if direction == "+":
         assert path_pos == normal_coords[3]
     else:
@@ -378,9 +349,6 @@ def test_current_integral_positioning_coaxial_port(direction):
 
 
 def test_coaxial_port_snapping(tmp_path):
-    """Make sure that the snapping behavior of the load resistor is mirrored
-    by all other components in the modeler simulations with coaxial ports.
-    """
     x_y_grid = td.UniformGrid(dl=0.1 * 1e3)
     z_grid = td.UniformGrid(dl=11 * 1e3)
     grid_spec = td.GridSpec(grid_x=x_y_grid, grid_y=x_y_grid, grid_z=z_grid)
@@ -389,17 +357,12 @@ def test_coaxial_port_snapping(tmp_path):
 
 
 def test_power_delivered_helper(monkeypatch, tmp_path):
-    """Test computations involving power waves are correct by manually setting voltage and current
-    at ports using monkeypatch.
-    """
     modeler = make_coaxial_component_modeler()
     port1 = modeler.ports[0]
     port_impedance = port1.impedance
     freqs = np.linspace(1e9, 10e9, 11)
-    # Emulate perfect power transmission
     voltage_amplitude = 1.0
     current_amplitude = voltage_amplitude / port_impedance
-    # Average power assuming no reflections
     avg_power = 0.5 * voltage_amplitude * np.conj(current_amplitude)
 
     voltage = np.ones_like(freqs) * voltage_amplitude
@@ -414,17 +377,13 @@ def test_power_delivered_helper(monkeypatch, tmp_path):
     monkeypatch.setattr(CoaxialLumpedPort, "compute_voltage", compute_voltage_patch)
     monkeypatch.setattr(CoaxialLumpedPort, "compute_current", compute_current_patch)
 
-    # First test should give complete power transfer into the network
     power = TerminalComponentModelerData.compute_power_delivered_by_port(sim_data=None, port=port1)
     assert np.allclose(power.values, avg_power)
 
-    # Second test is complete reflecton
     current = np.ones_like(freqs) * 0
     power = TerminalComponentModelerData.compute_power_delivered_by_port(sim_data=None, port=port1)
     assert np.allclose(power.values, 0)
 
-    # Third test is a custom test using equation 4.60 and 4.61 from
-    # Microwave engineering/David M. Pozar.—4th ed.
     power_a = 2.0
     power_b = 1.0
     Zr = port_impedance
@@ -438,7 +397,6 @@ def test_power_delivered_helper(monkeypatch, tmp_path):
 
 
 def test_make_coaxial_component_modeler_with_wave_ports(tmp_path):
-    """Checks that the terminal component modeler is created successfully with wave ports."""
     z_grid = td.UniformGrid(dl=1 * 1e3)
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
@@ -453,7 +411,6 @@ def test_make_coaxial_component_modeler_with_wave_ports(tmp_path):
 def test_run_coaxial_component_modeler_with_wave_ports(
     monkeypatch, tmp_path, voltage_enabled, current_enabled
 ):
-    """Checks that the terminal component modeler runs with wave ports."""
     z_grid = td.UniformGrid(dl=1 * 1e3)
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
@@ -482,16 +439,13 @@ def test_run_coaxial_component_modeler_with_wave_ports(
             coords_in = {"port_in": port_in.name}
             coords_out = {"port_out": port_out.name}
 
-            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
-                "source index not present in S matrix"
-            )
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port)
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
-            ), "monitor index not present in S matrix"
+            )
 
 
 def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
-    """Checks the terminal component modeler will allow mixed ports."""
     z_grid = td.UniformGrid(dl=1 * 1e3)
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
@@ -507,16 +461,13 @@ def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
             coords_in = {"port_in": port_in.name}
             coords_out = {"port_out": port_out.name}
 
-            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
-                "source index not present in S matrix"
-            )
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port)
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
-            ), "monitor index not present in S matrix"
+            )
 
 
 def test_wave_port_path_integral_validation():
-    """Checks that wave port will ensure path integrals are within the bounds of the port."""
     size_port = [2, 2, 0]
     center_port = [0, 0, -10]
 
@@ -591,7 +542,6 @@ def test_wave_port_path_integral_validation():
             current_integral=custom_current_path,
         )
 
-    # Test integral path only slightly larger than port bounds
     wave_port = WavePort(
         center=(0, 10000, 115.00000022351743),
         size=(500, 0, 160.00000000000003),
@@ -603,12 +553,10 @@ def test_wave_port_path_integral_validation():
         ),
         current_integral=None,
     )
-    # Make sure validation would have failed if a strict comparison was used
     assert wave_port.bounds[0][2] > wave_port.voltage_integral.bounds[0][2]
 
 
 def test_wave_port_grid_validation(tmp_path):
-    """Ensure that 'num_grid_cells' is validated and works to ensure that the grid is refined around wave ports."""
     size_port = [2, 2, 0]
     center_port = [0, 0, -10]
 
@@ -669,15 +617,11 @@ def test_wave_port_grid_validation(tmp_path):
 
 
 def test_wave_port_to_mode_solver(tmp_path):
-    """Checks that wave port can be converted to a mode solver."""
     modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
     _ = modeler.ports[0].to_mode_solver(modeler.simulation, freqs=[1e9, 2e9, 3e9])
 
 
 def test_port_source_snapped_to_PML(tmp_path):
-    """Raise meaningful error message when source is snapped into PML because the port is too close
-    to the boundary.
-    """
     modeler = make_component_modeler(planar_pec=True)
     port_pos = 5e4
     voltage_path = VoltageIntegralAxisAligned(
@@ -696,16 +640,12 @@ def test_port_source_snapped_to_PML(tmp_path):
     )
     modeler = modeler.updated_copy(ports=[port])
 
-    # Error because port is snapped to PML layers; but the error message might not
-    # be very informative, e.g. "simulation.sources[0]' is outside of the simulation domain".
-    # So we also check where error should be raised immediately
     with pytest.raises(SetupError):
         modeler.sim_dict
 
     with pytest.raises(SetupError):
         modeler._shift_value_signed(port)
 
-    # also validate the negative side
     voltage_path = voltage_path.updated_copy(center=(-port_pos, 0, 0))
     port = port.updated_copy(direction="+", center=(-port_pos, 0, 0), voltage_integral=voltage_path)
     modeler = modeler.updated_copy(ports=[port])
@@ -717,27 +657,21 @@ def test_port_source_snapped_to_PML(tmp_path):
 
 
 def test_wave_port_validate_current_integral(tmp_path):
-    """Checks that the current integral direction validator runs correctly."""
     modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
     with pytest.raises(pd.ValidationError):
         _ = modeler.updated_copy(direction="-", path="ports/0/")
 
 
 def test_port_impedance_check():
-    """ "Tests the impedance consistency check."""
     Z_numpy = np.ones((50, 3))
     Z_numpy[:, 1] = -1.0
-    # All ok if same sign for every frequency
     TerminalComponentModelerData.check_port_impedance_sign(Z_numpy)
     Z_numpy[25, 1] = 1.0
-    # Change of sign is unexpected
     with pytest.raises(Tidy3dError):
         TerminalComponentModelerData.check_port_impedance_sign(Z_numpy)
 
 
 def test_antenna_helpers(monkeypatch, tmp_path):
-    """Test monitor data normalization and combination helpers for antenna parameters."""
-    # Setup basic modeler with radiation monitor
     modeler = make_component_modeler(False)
     sim = modeler.simulation
     theta = np.linspace(0, np.pi, 40)
@@ -754,18 +688,15 @@ def test_antenna_helpers(monkeypatch, tmp_path):
     )
     modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
 
-    # Run simulation to get data
     modeler_data = run_component_modeler(monkeypatch, modeler)
     sim_data = modeler_data.data[modeler_data.modeler.get_task_name(modeler.ports[0])]
     rad_mon_data = sim_data[radiation_monitor.name]
 
-    # Test monitor helper
     found_mon = modeler.get_radiation_monitor_by_name(radiation_monitor.name)
     assert found_mon == radiation_monitor
     with pytest.raises(Tidy3dKeyError):
         modeler.get_radiation_monitor_by_name("invalid")
 
-    # Test monitor data normalization with different amplitude types
     a_array = FreqDataArray(np.ones(len(modeler.freqs)), {"f": modeler.freqs})
     normalized_data_array = modeler_data._monitor_data_at_port_amplitude(
         modeler.ports[0], sim_data, rad_mon_data, a_array
@@ -776,11 +707,9 @@ def test_antenna_helpers(monkeypatch, tmp_path):
     assert isinstance(normalized_data_array, td.DirectivityData)
     assert isinstance(normalized_data_const, td.DirectivityData)
 
-    # Test combining monitor data
     combined_data = normalized_data_array + normalized_data_const
     assert isinstance(combined_data, td.DirectivityData)
 
-    # Test power wave amplitude computation
     a, b = modeler_data.compute_power_wave_amplitudes_at_each_port(
         modeler_data.port_reference_impedances, sim_data
     )
@@ -789,15 +718,11 @@ def test_antenna_helpers(monkeypatch, tmp_path):
 
 
 def test_antenna_parameters(monkeypatch, tmp_path):
-    """Test basic antenna parameters computation and validation."""
-    # Setup modeler with radiation monitor
     modeler = make_component_modeler(False)
     sim = modeler.simulation
     theta = np.linspace(0, np.pi, 101)
     phi = np.linspace(0, 2 * np.pi, 201)
     proj_distance = max(sim.size) * 100
-    # First test validation of the radiation monitors
-    # The frequencies should be a subset of the freqs set in the TerminalComponentModeler
     freqs = [3.14e13]
     radiation_monitor = td.DirectivityMonitor(
         size=sim.size,
@@ -815,33 +740,27 @@ def test_antenna_parameters(monkeypatch, tmp_path):
     radiation_monitor = radiation_monitor.updated_copy(freqs=modeler.freqs)
     modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
 
-    # Run simulation and get antenna parameters
     modeler_data = run_component_modeler(monkeypatch, modeler)
     antenna_params = modeler_data.get_antenna_metrics_data()
 
-    # Test that all essential parameters exist and are correct type
     assert isinstance(antenna_params.radiation_efficiency, FreqDataArray)
     assert isinstance(antenna_params.reflection_efficiency, FreqDataArray)
     assert isinstance(antenna_params.gain, xr.DataArray)
     assert isinstance(antenna_params.realized_gain, xr.DataArray)
 
-    # Test partial gain computations in linear basis
     partial_gain_linear = antenna_params.partial_gain(pol_basis="linear")
     assert isinstance(partial_gain_linear, xr.Dataset)
     assert "Gtheta" in partial_gain_linear
     assert "Gphi" in partial_gain_linear
 
-    # Test partial gain computations in circular basis
     partial_gain_circular = antenna_params.partial_gain(pol_basis="circular")
     assert isinstance(partial_gain_circular, xr.Dataset)
     assert "Gright" in partial_gain_circular
     assert "Gleft" in partial_gain_circular
 
-    # Test partial realized gain computations in both bases
     assert isinstance(antenna_params.partial_realized_gain("linear"), xr.Dataset)
     assert isinstance(antenna_params.partial_realized_gain("circular"), xr.Dataset)
 
-    # Test validation of pol_basis parameter
     with pytest.raises(ValueError):
         antenna_params.partial_gain("invalid")
     with pytest.raises(ValueError):
@@ -849,7 +768,6 @@ def test_antenna_parameters(monkeypatch, tmp_path):
 
 
 def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
-    """Test the computation of combined antenna parameters from multiple ports."""
     modeler = make_component_modeler(False)
     sim = modeler.simulation
     theta = np.linspace(0, np.pi, 101)
@@ -868,15 +786,12 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
     modeler = modeler.updated_copy(radiation_monitors=[radiation_monitor])
     modeler_data = run_component_modeler(monkeypatch=monkeypatch, modeler=modeler)
 
-    # Define port amplitudes
     port_amplitudes = {modeler.ports[0].name: 1.0, modeler.ports[1].name: 1j}
 
-    # Get combined antenna parameters
     antenna_params = modeler_data.get_antenna_metrics_data(
         port_amplitudes, monitor_name="antenna_monitor"
     )
 
-    # Check that essential properties exist and are correct type
     assert isinstance(antenna_params.radiation_efficiency, FreqDataArray)
     assert isinstance(antenna_params.reflection_efficiency, FreqDataArray)
     assert isinstance(antenna_params.partial_gain(), xr.Dataset)
@@ -884,10 +799,7 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
     assert isinstance(antenna_params.partial_realized_gain(), xr.Dataset)
     assert isinstance(antenna_params.realized_gain, xr.DataArray)
 
-    # Test with single port for comparison
     single_port_params = modeler_data.get_antenna_metrics_data()
-
-    # Values should be different when combining ports vs single port
     assert not np.allclose(antenna_params.gain, single_port_params.gain)
     assert not np.allclose(
         antenna_params.radiation_efficiency, single_port_params.radiation_efficiency

@@ -26,11 +26,13 @@ from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.plugins.mode.mode_solver import ModeSolver
+from tidy3d.plugins.rf import (
+    TerminalComponentModeler,
+    TerminalComponentModelerData,
+)
 from tidy3d.plugins.smatrix import (
     ComponentModeler,
     ComponentModelerData,
-    TerminalComponentModeler,
-    TerminalComponentModelerData,
 )
 from tidy3d.web.core.file_util import (
     read_simulation_from_hdf5,

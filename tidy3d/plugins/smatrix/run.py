@@ -3,20 +3,14 @@ from __future__ import annotations
 import os
 
 from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
-from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
-from tidy3d.plugins.smatrix.component_modelers.types import (
-    ComponentModelerType,
-)
 from tidy3d.plugins.smatrix.data.modal import ComponentModelerData, PortSimulationData
-from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
 
 DEFAULT_DATA_DIR = "."
 
 
 def create_batch(
-    modeler: ComponentModelerType,
+    modeler: ComponentModeler,
     path_dir: str = DEFAULT_DATA_DIR,
     file_name: str = "batch.hdf5",
     **kwargs,
@@ -36,29 +30,6 @@ def create_batch(
     batch = Batch(simulations=modeler.sim_dict, **kwargs)
     batch.to_file(filepath)
     return batch
-
-
-def compose_terminal_modeler_data(
-    modeler: TerminalComponentModeler,
-    batch_data: BatchData,
-) -> TerminalComponentModelerData:
-    """Assembles `TerminalComponentModelerData` from simulation results.
-
-    This function maps the simulation data from a completed batch run back to the
-    ports of the terminal component modeler.
-
-    Args:
-        modeler: The `TerminalComponentModeler` used to generate the simulations.
-        batch_data: The results obtained from running the simulation `Batch`.
-
-    Returns:
-        A `TerminalComponentModelerData` object containing the results mapped to
-        their respective ports.
-    """
-    ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
-    data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = PortSimulationData(ports=ports, data=data)
-    return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
 def compose_component_modeler_data(
@@ -85,9 +56,9 @@ def compose_component_modeler_data(
 
 
 def compose_modeler_data(
-    modeler: ComponentModelerType,
+    modeler: ComponentModeler,
     batch_data: BatchData,
-) -> ComponentModelerDataType:
+) -> ComponentModelerData:
     """Selects the correct composer based on the modeler type and creates the data object.
 
     This method acts as a dispatcher, inspecting the type of `modeler` to determine
@@ -105,20 +76,15 @@ def compose_modeler_data(
     Raises:
         TypeError: If the provided `modeler` is not a recognized type.
     """
-    if isinstance(modeler, ComponentModeler):
-        modeler_data = compose_component_modeler_data(modeler=modeler, batch_data=batch_data)
-    elif isinstance(modeler, TerminalComponentModeler):
-        modeler_data = compose_terminal_modeler_data(modeler=modeler, batch_data=batch_data)
-    else:
-        raise TypeError(f"Unsupported modeler type: {type(modeler).__name__}")
+    modeler_data = compose_component_modeler_data(modeler=modeler, batch_data=batch_data)
 
     return modeler_data
 
 
 def run(
-    modeler: ComponentModelerType,
+    modeler: ComponentModeler,
     path_dir: str = DEFAULT_DATA_DIR,
-) -> ComponentModelerDataType:
+) -> ComponentModelerData:
     """Executes the full simulation workflow for a given component modeler.
 
     This function orchestrates the end-to-end process:
@@ -131,7 +97,7 @@ def run(
         path_dir: The directory where the batch file will be saved.
 
     Returns:
-        A `ComponentModelerDataType` object containing the processed simulation data,
+        A `ComponentModelerData` object containing the processed simulation data,
         ready for S-parameter extraction and analysis.
     """
     batch = create_batch(modeler=modeler, path_dir=path_dir)

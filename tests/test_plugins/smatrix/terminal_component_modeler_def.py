@@ -6,7 +6,7 @@ import numpy as np
 
 import tidy3d as td
 import tidy3d.plugins.microwave as microwave
-from tidy3d.plugins.smatrix import (
+from tidy3d.plugins.rf import (
     CoaxialLumpedPort,
     LumpedPort,
     TerminalComponentModeler,
