@@ -1630,6 +1630,14 @@ class LayerRefinementSpec(Box):
             if ind_end == ind_beg:
                 continue
 
+            # intersects one grid line but almost parallel to it
+            if np.abs(ind_end - ind_beg) == 1 and np.abs(
+                v_beg[0] - v_end[0]
+            ) < 2 * GAP_MESHING_TOL * np.abs(
+                grid_x_coords[ind_beg - 1] - grid_x_coords[ind_end - 1]
+            ):
+                continue
+
             # sort vertices in ascending order to make treatmeant unifrom
             reverse = False
             if ind_beg > ind_end:
