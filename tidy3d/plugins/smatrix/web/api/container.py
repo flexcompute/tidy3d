@@ -783,7 +783,6 @@ class Batch(WebContainer):
             "aborting",
         ]
         end_statuses = (
-            "preprocess_success",
             "postprocess_success",
             "success",
             "error",
