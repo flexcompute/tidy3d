@@ -989,22 +989,25 @@ def _compute_eps_array(medium, frequencies):
     return DataArray(data=np.array(eps_data), dims=("f",), coords={"f": frequencies})
 
 
-def _slice_field_data(field_data: dict, freq_slice: slice) -> dict:
+def _slice_field_data(
+    field_data: dict,
+    freqs: np.ndarray,
+) -> dict:
     """Slice field data dictionary along frequency dimension.
 
     Parameters
     ----------
     field_data : dict
         Dictionary of field components.
-    freq_slice : slice
-        Frequency slice to apply.
+    freqs : np.ndarray
+        Frequencies to select.
 
     Returns
     -------
     dict
         Sliced field data dictionary.
     """
-    return {k: v.isel(f=freq_slice) for k, v in field_data.items()}
+    return {k: v.sel(f=freqs) for k, v in field_data.items()}
 
 
 def postprocess_adj(
@@ -1119,26 +1122,32 @@ def postprocess_adj(
             chunk_end = min(chunk_start + freq_chunk_size, n_freqs)
             freq_slice = slice(chunk_start, chunk_end)
 
+            select_adjoint_freqs = adjoint_frequencies[freq_slice]
+
             # slice field data for current chunk
-            E_der_map_chunk = _slice_field_data(E_der_map.field_components, freq_slice)
-            D_der_map_chunk = _slice_field_data(D_der_map.field_components, freq_slice)
-            E_fwd_chunk = _slice_field_data(E_fwd.field_components, freq_slice)
-            E_adj_chunk = _slice_field_data(E_adj.field_components, freq_slice)
-            D_fwd_chunk = _slice_field_data(D_fwd.field_components, freq_slice)
-            D_adj_chunk = _slice_field_data(D_adj.field_components, freq_slice)
-            eps_data_chunk = _slice_field_data(eps_fwd.field_components, freq_slice)
+            E_der_map_chunk = _slice_field_data(E_der_map.field_components, select_adjoint_freqs)
+            D_der_map_chunk = _slice_field_data(D_der_map.field_components, select_adjoint_freqs)
+            E_fwd_chunk = _slice_field_data(E_fwd.field_components, select_adjoint_freqs)
+            E_adj_chunk = _slice_field_data(E_adj.field_components, select_adjoint_freqs)
+            D_fwd_chunk = _slice_field_data(D_fwd.field_components, select_adjoint_freqs)
+            D_adj_chunk = _slice_field_data(D_adj.field_components, select_adjoint_freqs)
+            eps_data_chunk = _slice_field_data(eps_fwd.field_components, select_adjoint_freqs)
 
             # slice epsilon arrays
-            eps_in_chunk = eps_in.isel(f=freq_slice)
-            eps_out_chunk = eps_out.isel(f=freq_slice)
+            eps_in_chunk = eps_in.sel(f=select_adjoint_freqs)
+            eps_out_chunk = eps_out.sel(f=select_adjoint_freqs)
             eps_background_chunk = (
-                eps_background.isel(f=freq_slice) if eps_background is not None else None
+                eps_background.sel(f=select_adjoint_freqs) if eps_background is not None else None
             )
             eps_no_structure_chunk = (
-                eps_no_structure.isel(f=freq_slice) if eps_no_structure is not None else None
+                eps_no_structure.sel(f=select_adjoint_freqs)
+                if eps_no_structure is not None
+                else None
             )
             eps_inf_structure_chunk = (
-                eps_inf_structure.isel(f=freq_slice) if eps_inf_structure is not None else None
+                eps_inf_structure.sel(f=select_adjoint_freqs)
+                if eps_inf_structure is not None
+                else None
             )
 
             # create derivative info with sliced data

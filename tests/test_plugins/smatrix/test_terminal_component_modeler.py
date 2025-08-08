@@ -386,6 +386,22 @@ def test_coaxial_port_snapping(tmp_path):
     check_lumped_port_components_snapped_correctly(modeler=modeler)
 
 
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_coaxial_port_source_size(axis):
+    """Make sure source size is correct."""
+    port = CoaxialLumpedPort(
+        center=(0, 0, 0),
+        inner_diameter=1,
+        outer_diameter=2,
+        normal_axis=axis,
+        direction="+",
+        name="port",
+        impedance=50,
+    )
+    source = port.to_source(td.GaussianPulse(freq0=1e10, fwidth=1e9))
+    assert np.isclose(source.size[axis], 0)
+
+
 def test_power_delivered_helper(monkeypatch, tmp_path):
     """Test computations involving power waves are correct by manually setting voltage and current
     at ports using monkeypatch.
@@ -900,3 +916,44 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
     assert not np.allclose(
         antenna_params.radiation_efficiency, single_port_params.radiation_efficiency
     )
+
+
+def test_run_only_and_element_mappings(monkeypatch, tmp_path):
+    """Checks the terminal component modeler works when running with a subset of excitations."""
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_types=(CoaxialLumpedPort, WavePort), grid_spec=grid_spec
+    )
+    port0_idx = modeler.network_index(modeler.ports[0])
+    port1_idx = modeler.network_index(modeler.ports[1])
+    modeler_run1 = modeler.updated_copy(run_only=(port0_idx,))
+
+    # Make sure the smatrix and impedance calculations work for reduced simulations
+    s_matrix = run_component_modeler(monkeypatch, modeler_run1)
+    with pytest.raises(ValueError):
+        TerminalComponentModeler._validate_square_matrix(s_matrix, "test_method")
+    _ = modeler_run1.port_reference_impedances
+
+    assert len(modeler_run1.sim_dict) == 1
+    S11 = (port0_idx, port0_idx)
+    S21 = (port1_idx, port0_idx)
+    S12 = (port0_idx, port1_idx)
+    S22 = (port1_idx, port1_idx)
+    element_mappings = ((S11, S22, 1),)
+    modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+    assert len(modeler_with_mappings.sim_dict) == 2
+
+    # Column 1 is mapped to column 2, resulting in one simulation
+    element_mappings = ((S11, S22, 1), (S21, S12, 1))
+    modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+    s_matrix = run_component_modeler(monkeypatch, modeler_with_mappings)
+    assert np.all(s_matrix.values[:, 0, 0] == s_matrix.values[:, 1, 1])
+    assert np.all(s_matrix.values[:, 0, 1] == s_matrix.values[:, 1, 0])
+    assert len(modeler_with_mappings.sim_dict) == 1
+
+    # Mapping is incomplete, so two simulations are run
+    element_mappings = ((S11, S22, 1), (S12, S21, 1))
+    modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+    assert len(modeler_with_mappings.sim_dict) == 2

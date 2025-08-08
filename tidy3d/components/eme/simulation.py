@@ -706,6 +706,12 @@ class EMESimulation(AbstractYeeGridSimulation):
                         "must equal the number of EME cells in the simulation, which is "
                         f"'{self.eme_grid.num_cells}'."
                     )
+            for i, monitor in enumerate(self.monitors):
+                if isinstance(monitor, EMEFieldMonitor):
+                    raise SetupError(
+                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
+                        "which is not compatible with 'EMELengthSweep'."
+                    )
         elif isinstance(self.sweep_spec, EMEFreqSweep):
             for i, scale_factor in enumerate(self.sweep_spec.freq_scale_factors):
                 scaled_freqs = np.array(self.freqs) * scale_factor
@@ -719,12 +725,12 @@ class EMESimulation(AbstractYeeGridSimulation):
             for i, monitor in enumerate(self.monitors):
                 if isinstance(monitor, EMEFieldMonitor):
                     raise SetupError(
-                        f"Monitor at 'monitors[{i}]' is an 'EMEFieldMonitor', "
+                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
                         "which is not compatible with 'EMEPeriodicitySweep'."
                     )
                 if isinstance(monitor, EMECoefficientMonitor):
                     raise SetupError(
-                        f"Monitor at 'monitors[{i}]' is an 'EMECoefficientMonitor', "
+                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMECoefficientMonitor', "
                         "which is not compatible with 'EMEPeriodicitySweep'."
                     )
 
@@ -785,7 +791,7 @@ class EMESimulation(AbstractYeeGridSimulation):
                     self.eme_grid_spec.virtual_cell_indices, self.eme_grid_spec.real_cell_indices
                 ):
                     raise SetupError(
-                        f"Monitor at 'monitors[{i}]' is an 'EMEFieldMonitor', "
+                        f"Monitor '{monitor.name}' at 'monitors[{i}]' is an 'EMEFieldMonitor', "
                         "which is not compatible with periodic repetition "
                         "('num_reps != 1' in any 'EMEGridSpec'.)"
                     )

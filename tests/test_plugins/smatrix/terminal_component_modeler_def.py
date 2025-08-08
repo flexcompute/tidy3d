@@ -276,7 +276,7 @@ def make_coaxial_component_modeler(
                 inner_diameter=2 * Rinner,
                 normal_axis=2,
                 direction=direction,
-                name=name,
+                name="coax" + name,
                 num_grid_cells=port_cells,
                 impedance=reference_impedance,
             )
@@ -311,7 +311,7 @@ def make_coaxial_component_modeler(
                 center=center,
                 size=[2 * Router, 2 * Router, 0],
                 direction=direction,
-                name=name,
+                name="wave" + name,
                 mode_spec=td.ModeSpec(num_modes=1),
                 mode_index=0,
                 voltage_integral=voltage_integral,
@@ -321,9 +321,9 @@ def make_coaxial_component_modeler(
         return port
 
     center_src1 = [0, 0, -length / 2]
-    port_1 = make_port(center_src1, direction="+", type=port_types[0], name="coax_port_1")
+    port_1 = make_port(center_src1, direction="+", type=port_types[0], name="_1")
     center_src2 = [0, 0, length / 2]
-    port_2 = make_port(center_src2, direction="-", type=port_types[1], name="coax_port_2")
+    port_2 = make_port(center_src2, direction="-", type=port_types[1], name="_2")
     ports = [port_1, port_2]
     freqs = np.linspace(freq_start, freq_stop, 100)
 

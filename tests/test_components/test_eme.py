@@ -492,7 +492,14 @@ def test_eme_simulation():
     assert sim_tmp._monitor_num_freqs(monitor=sim_tmp.monitors[0]) == 1
 
     # test sweep
-    sweep_sim = sim.updated_copy(
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(
+            sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 10)))
+        )
+    sim_no_field = sim.updated_copy(
+        monitors=[mnt for mnt in sim.monitors if not isinstance(mnt, td.EMEFieldMonitor)]
+    )
+    sweep_sim = sim_no_field.updated_copy(
         sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 10)))
     )
     assert sweep_sim._sweep_cells
@@ -500,15 +507,15 @@ def test_eme_simulation():
     assert sweep_sim._num_sweep_cells == 10
     assert sweep_sim._num_sweep_interfaces == 1
     assert sweep_sim._num_sweep_modes == 1
-    _ = sim.updated_copy(
+    _ = sim_no_field.updated_copy(
         sweep_spec=td.EMELengthSweep(
             scale_factors=np.stack((np.linspace(1, 2, 7), np.linspace(1, 2, 7)))
-        )
+        ),
     )
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
+        _ = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(
+        _ = sim_no_field.updated_copy(
             sweep_spec=td.EMELengthSweep(
                 scale_factors=np.stack(
                     (
@@ -520,12 +527,14 @@ def test_eme_simulation():
         )
     # second shape of length sweep must equal number of cells
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=np.array([[1, 2], [3, 4]])))
+        _ = sim_no_field.updated_copy(
+            sweep_spec=td.EMELengthSweep(scale_factors=np.array([[1, 2], [3, 4]]))
+        )
     _ = sim.updated_copy(sweep_spec=td.EMEModeSweep(num_modes=list(np.arange(1, 5))))
     # test sweep size limit
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
-    sim_bad = sim.updated_copy(
+        _ = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
+    sim_bad = sim_no_field.updated_copy(
         sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 200)))
     )
     with pytest.raises(SetupError):
@@ -562,7 +571,7 @@ def test_eme_simulation():
     sim = sim.updated_copy(sweep_spec=None)
     assert sim._num_sweep == 1
     assert not sim._sweep_modes
-    sim = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[1, 2]))
+    sim = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[1, 2]))
     assert not sim._sweep_modes
     assert sim._num_sweep == 2
     sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=[1, 2]))
@@ -1090,9 +1099,11 @@ def test_eme_sim_data():
 
     # test smatrix in basis with sweep
     smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=10)
-    sim = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=np.linspace(1, 2, 10)))
+    sim_sweep = sim.updated_copy(
+        sweep_spec=td.EMELengthSweep(scale_factors=np.linspace(1, 2, 10)), monitors=[]
+    )
     sim_data = td.EMESimulationData(
-        simulation=sim, data=data, smatrix=smatrix, port_modes_raw=port_modes
+        simulation=sim_sweep, data=[], smatrix=smatrix, port_modes_raw=port_modes
     )
 
     # test smatrix_in_basis

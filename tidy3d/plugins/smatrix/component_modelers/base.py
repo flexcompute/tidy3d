@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Optional, Union, get_args
+from typing import Generic, Optional, TypeVar, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
@@ -13,7 +13,8 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.types import FreqArray
+from tidy3d.components.types import Complex, FreqArray
+from tidy3d.components.validators import assert_unique_names
 from tidy3d.config import config
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
@@ -31,8 +32,12 @@ DEFAULT_DATA_DIR = "."
 LumpedPortType = Union[LumpedPort, CoaxialLumpedPort]
 TerminalPortType = Union[LumpedPortType, WavePort]
 
+# Generic type variables for matrix indices and elements
+IndexType = TypeVar("IndexType")
+ElementType = TypeVar("ElementType")
 
-class AbstractComponentModeler(ABC, Tidy3dBaseModel):
+
+class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseModel):
     """Tool for modeling devices and computing port parameters."""
 
     simulation: Simulation = pd.Field(
@@ -108,6 +113,32 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "fields that were not used to create the task will cause errors.",
     )
 
+    run_only: Optional[tuple[IndexType, ...]] = pd.Field(
+        None,
+        title="Run Only",
+        description="Set of matrix indices that define the simulations to run. "
+        "If ``None``, simulations will be run for all indices in the scattering matrix. "
+        "If a tuple is given, simulations will be run only for the given matrix indices.",
+    )
+
+    element_mappings: tuple[tuple[ElementType, ElementType, Complex], ...] = pd.Field(
+        (),
+        title="Element Mappings",
+        description="Tuple of S matrix element mappings, each described by a tuple of "
+        "(input_element, output_element, coefficient), where the coefficient is the "
+        "element_mapping coefficient describing the relationship between the input and output "
+        "matrix element. If all elements of a given column of the scattering matrix are defined "
+        "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
+    )
+
+    @pd.root_validator(pre=False)
+    def _warn_deprecation_2_10(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ Backwards compatibility will be broken for all the ComponentModeler classes in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
+            log_once=True,
+        )
+        return values
+
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
@@ -130,6 +161,30 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
                 log_once=True,
             )
         return val
+
+    @pd.validator("element_mappings", always=True)
+    def _validate_element_mappings(cls, element_mappings, values):
+        """
+        Validate that each source index referenced in element_mappings is included in run_only.
+        """
+        run_only = values.get("run_only")
+        if run_only is None:
+            return element_mappings
+
+        valid_set = set(run_only)
+        invalid_indices = set()
+        for mapping in element_mappings:
+            input_element = mapping[0]
+            output_element = mapping[1]
+            for source_index in [input_element[1], output_element[1]]:
+                if source_index not in valid_set:
+                    invalid_indices.add(source_index)
+        if invalid_indices:
+            raise SetupError(
+                f"'element_mappings' references source index(es) {invalid_indices} "
+                f"that are not present in run_only: {run_only}."
+            )
+        return element_mappings
 
     @staticmethod
     def _task_name(port: Port, mode_index: Optional[int] = None) -> str:
@@ -230,6 +285,44 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             raise Tidy3dKeyError(f'Port "{port_name}" not found.')
         return ports[0]
 
+    @property
+    @abstractmethod
+    def matrix_indices_monitor(self) -> tuple[IndexType, ...]:
+        """Abstract property for all matrix indices that will be used to collect data."""
+
+    @cached_property
+    def matrix_indices_source(self) -> tuple[IndexType, ...]:
+        """Tuple of all the source matrix indices, which may be less than the total number of ports."""
+        if self.run_only is not None:
+            return self.run_only
+        return self.matrix_indices_monitor
+
+    @cached_property
+    def matrix_indices_run_sim(self) -> tuple[IndexType, ...]:
+        """Tuple of all the matrix indices that will be used to run simulations."""
+
+        if not self.element_mappings:
+            return self.matrix_indices_source
+
+        # all the (i, j) pairs in `S_ij` that are tagged as covered by `element_mappings`
+        elements_determined_by_map = [element_out for (_, element_out, _) in self.element_mappings]
+
+        # loop through rows of the full s matrix and record rows that still need running.
+        source_indices_needed = []
+        for col_index in self.matrix_indices_source:
+            # loop through columns and keep track of whether each element is covered by mapping.
+            matrix_elements_covered = []
+            for row_index in self.matrix_indices_monitor:
+                element = (row_index, col_index)
+                element_covered_by_map = element in elements_determined_by_map
+                matrix_elements_covered.append(element_covered_by_map)
+
+            # if any matrix elements in row still not covered by map, a source is needed for row.
+            if not all(matrix_elements_covered):
+                source_indices_needed.append(col_index)
+
+        return source_indices_needed
+
     @abstractmethod
     def _construct_smatrix(self, batch_data: BatchData) -> DataArray:
         """Post process :class:`.BatchData` to generate scattering matrix."""
@@ -308,3 +401,5 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         sim_data = self.batch_data[task_name]
         config.logging_level = log_level_cache
         return sim_data
+
+    _unique_port_names = assert_unique_names("ports")

@@ -359,14 +359,34 @@ def test_finite_difference_mode_data_polyslab(
     # due to a multifrequency objective function.
     monitor_top_weights = rng.random(NUM_MODE_MONITOR_FREQUENCIES)
     monitor_bottom_weights = rng.random(NUM_MODE_MONITOR_FREQUENCIES)
+    frequency_selection_mask = np.arange(0, NUM_MODE_MONITOR_FREQUENCIES)
+
+    # sometimes, test what happens when we only use one of the frequencies from the mode monitors
+    # to catch handling of different frequencies being present in the forward and adjoint monitors
+    if rng.random() > 0.5:
+        frequency_selection_mask = rng.integers(1, NUM_MODE_MONITOR_FREQUENCIES)
+        monitor_top_weights = monitor_top_weights[frequency_selection_mask]
+        monitor_bottom_weights = monitor_bottom_weights[frequency_selection_mask]
 
     def eval_fn(sim_data):
         return np.sum(
             monitor_top_weights
-            * np.abs(sim_data["monitor_mode_top"].amps.sel(direction="+").values) ** 2
+            * np.abs(
+                sim_data["monitor_mode_top"]
+                .amps.sel(direction="+")
+                .isel(f=frequency_selection_mask)
+                .data
+            )
+            ** 2
         ) + np.sum(
             monitor_bottom_weights
-            * np.abs(sim_data["monitor_mode_bottom"].amps.sel(direction="+").values) ** 2
+            * np.abs(
+                sim_data["monitor_mode_bottom"]
+                .amps.sel(direction="+")
+                .isel(f=frequency_selection_mask)
+                .data
+            )
+            ** 2
         )
 
     polyslab_height_um = POLYSLAB_HEIGHT_WVL * adj_wvl_um
@@ -437,7 +457,7 @@ def test_finite_difference_mode_data_polyslab(
     fd_mag = np.linalg.norm(fd_grad)
     adj_mag = np.linalg.norm(pattern_dot_adj_gradient)
     percentage_error = 100.0 * np.mean(
-        (fd_grad - pattern_dot_adj_gradient) / (fd_grad + np.finfo(np.float64).eps)
+        np.abs(fd_grad - pattern_dot_adj_gradient) / (np.abs(fd_grad) + np.finfo(np.float64).eps)
     )
 
     print("\n" * 3)
