@@ -8,6 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property, skip_if_fields_missing
+from tidy3d.components.boundary import InternalAbsorber, ModeABCBoundary
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.monitor_data import ModeData
 from tidy3d.components.data.sim_data import SimulationData
@@ -17,6 +18,7 @@ from tidy3d.components.grid.grid import Grid
 from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource, ModeSpec
+from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import MeshOverrideStructure
 from tidy3d.components.types import Axis, Direction, FreqArray
@@ -29,6 +31,7 @@ from .base_terminal import AbstractTerminalPort
 
 DEFAULT_WAVE_PORT_NUM_CELLS = 5
 MIN_WAVE_PORT_NUM_CELLS = 3
+DEFAULT_WAVE_PORT_FRAME = PECFrame()
 
 
 class WavePort(AbstractTerminalPort, Box):
@@ -82,10 +85,24 @@ class WavePort(AbstractTerminalPort, Box):
         description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
+    frame: Optional[PECFrame] = pd.Field(
+        DEFAULT_WAVE_PORT_FRAME,
+        title="Source Frame.",
+        description="Add a thin frame around the source during FDTD run for an improved injection.",
+    )
+
+    absorber: bool = pd.Field(
+        True,
+        title="Absorber.",
+        description="Place a mode absorber in the port.",
+    )
+
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port voltage.
         """
+        flux_sign = 1 if self.direction == "+" else -1
+
         mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.voltage_integral is None:
             flux_sign = 1 if mode_data.monitor.store_fields_direction == "+" else -1
@@ -99,6 +116,7 @@ class WavePort(AbstractTerminalPort, Box):
         """Calculates scaling coefficients to convert mode amplitudes
         to the total port current.
         """
+        flux_sign = 1 if self.direction == "+" else -1
         mode_data = mode_data._isel(mode_index=[self.mode_index])
         if self.current_integral is None:
             flux_sign = 1 if mode_data.monitor.store_fields_direction == "+" else -1
@@ -139,6 +157,7 @@ class WavePort(AbstractTerminalPort, Box):
             mode_index=self.mode_index,
             direction=self.direction,
             name=self.name,
+            frame=self.frame,
         )
 
     def to_monitors(
@@ -172,6 +191,28 @@ class WavePort(AbstractTerminalPort, Box):
             colocate=False,
         )
         return mode_solver
+
+    def to_absorber(
+        self, snap_center: Optional[float] = None, frequency: Optional[pd.NonNegativeFloat] = None
+    ) -> InternalAbsorber:
+        """Create an internal absorber from the wave port."""
+        center = list(self.center)
+        if snap_center:
+            center[self.injection_axis] = snap_center
+        return InternalAbsorber(
+            center=center,
+            size=self.size,
+            boundary_spec=ModeABCBoundary(
+                mode_spec=self.mode_spec,
+                mode_index=self.mode_index,
+                plane=self.bounding_box,
+                frequency=frequency,
+            ),
+            direction="-"
+            if self.direction == "+"
+            else "+",  # absorb in the opposite direction of source
+            grid_shift=1,  # absorb in the next pixel
+        )
 
     def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute voltage across the port."""

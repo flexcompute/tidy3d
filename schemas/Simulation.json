@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Custom implementation of Maxwell\u2019s equations which represents the physical model to be solved using the FDTD\nmethod.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\ncenter : Union[tuple[Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box]], Box] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Union[tuple[Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box]], Box]\n    [units = um].  Size in x, y, and z directions.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PMCMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium, PerturbationMedium, PerturbationPoleResidue, LossyMetalMedium] = Medium(attrs={}, name=None, frequency_range=None, allow_gain=False, nonlinear_spec=None, modulation_spec=None, viz_spec=None, heat_spec=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nsources : Tuple[Annotated[Union[tidy3d.components.source.current.UniformCurrentSource, tidy3d.components.source.current.PointDipole, tidy3d.components.source.field.GaussianBeam, tidy3d.components.source.field.AstigmaticGaussianBeam, tidy3d.components.source.field.ModeSource, tidy3d.components.source.field.PlaneWave, tidy3d.components.source.field.CustomFieldSource, tidy3d.components.source.current.CustomCurrentSource, tidy3d.components.source.field.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(attrs={}, x=Boundary(attrs={},, plus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(attrs={},, plus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(attrs={},, plus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, PML boundary conditions are applied on all sides.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.AuxFieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor, tidy3d.components.monitor.DirectivityMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(attrs={}, grid_x=AutoGrid(attrs={},, type='AutoGrid',, max_scale=1.4,, mesher=GradedMesher(attrs={},, type='GradedMesher'),, dl_min=None,, min_steps_per_wvl=10.0,, min_steps_per_sim_size=10.0), grid_y=AutoGrid(attrs={},, type='AutoGrid',, max_scale=1.4,, mesher=GradedMesher(attrs={},, type='GradedMesher'),, dl_min=None,, min_steps_per_wvl=10.0,, min_steps_per_sim_size=10.0), grid_z=AutoGrid(attrs={},, type='AutoGrid',, max_scale=1.4,, mesher=GradedMesher(attrs={},, type='GradedMesher'),, dl_min=None,, min_steps_per_wvl=10.0,, min_steps_per_sim_size=10.0), wavelength=None, override_structures=(), snapping_points=(), layer_refinement_specs=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nversion : str = 2.10.0rc1\n    String specifying the front end version number.\nplot_length_units : Optional[Literal['nm', '\u03bcm', 'um', 'mm', 'cm', 'm', 'mil', 'in']] = \u03bcm\n    When set to a supported ``LengthUnit``, plots will be produced with proper scaling of axes and include the desired unit specifier in labels.\nstructure_priority_mode : Literal['equal', 'conductor'] = equal\n    This field only affects structures of `priority=None`. If `equal`, the priority of those structures is set to 0; if `conductor`, the priority of structures made of `LossyMetalMedium` is set to 90, `PECMedium` to 100, and others to 0.\nlumped_elements : Tuple[Annotated[Union[tidy3d.components.lumped_element.LumpedResistor, tidy3d.components.lumped_element.CoaxialLumpedResistor, tidy3d.components.lumped_element.LinearLumpedElement], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of lumped elements in the simulation. \nsubpixel : Union[bool, SubpixelSpec] = SubpixelSpec(attrs={}, dielectric=PolarizedAveraging(attrs={},, type='PolarizedAveraging'), metal=Staircasing(attrs={},, type='Staircasing'), pec=PECConformal(attrs={},, type='PECConformal',, timestep_reduction=0.3,, edge_singularity_correction=False), pmc=Staircasing(attrs={},, type='Staircasing'), lossy_metal=SurfaceImpedance(attrs={},, type='SurfaceImpedance',, timestep_reduction=0.0,, edge_singularity_correction=False), type='SubpixelSpec')\n    Apply subpixel averaging methods of the permittivity on structure interfaces to result in much higher accuracy for a given grid size. Supply a :class:`SubpixelSpec` to this field to select subpixel averaging methods separately on dielectric, metal, and PEC material interfaces. Alternatively, user may supply a boolean value: ``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` , or ``False`` to apply staircasing.\nsimulation_type : Optional[Literal['autograd_fwd', 'autograd_bwd', 'tidy3d', None]] = tidy3d\n    Tag used internally to distinguish types of simulations for ``autograd`` gradient processing.\npost_norm : Union[float, FreqDataArray] = 1.0\n    Factor to multiply the fields by after running, given the adjoint source pipeline used. Note: this is used internally only.\ncourant : ConstrainedFloatValue = 0.99\n    Normalized Courant stability factor that is no larger than 1 when CFL stability condition is met. It controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times.\nprecision : Literal['hybrid', 'double'] = hybrid\n    Floating point precision to use in the computations.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nrun_time : Union[PositiveFloat, RunTimeSpec]\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. Alternatively, user may supply a :class:`RunTimeSpec` to this field, which will auto-compute the ``run_time`` based on the contents of the spec. If this option is used, the evaluated ``run_time`` value is available in the ``Simulation._run_time`` property.\n\nNotes\n-----\n\n    A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model\n    to be solved using `the Finite-Difference Time-Domain (FDTD) method\n    <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations\n    run very quickly in the cloud through GPU parallelization.\n\n    .. image:: ../../_static/img/field_update_fdtd.png\n        :width: 50%\n        :align: left\n\n    FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is\n    the most widely used method in photonics design. The Maxwell's\n    equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.\n\n    The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`\n    which describe the device and :attr:`sources` of electromagnetic excitation. This information is used to\n    computate the time dynamics of the electric and magnetic fields in this system. From these time-domain\n    results, frequency-domain information of the simulation can also be extracted, and used for device design and\n    optimization.\n\n    If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series\n    <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_\n\n    **Dimensions Selection**\n\n    By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation\n    :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size (eg.\n    ``tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in that direction.\n\n    .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/\n\n    See further parameter explanations below.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> from tidy3d import Medium\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )\n\nSee Also\n--------\n\n**Notebooks:**\n    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.\n    * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_\n    * See nearly all notebooks for :class:`Simulation` applications.\n\n**Lectures:**\n    * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_\n\n**GUI:**\n    * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_",
+  "description": "Custom implementation of Maxwell\u2019s equations which represents the physical model to be solved using the FDTD\nmethod.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\ncenter : Union[tuple[Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box]], Box] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Union[tuple[Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box]], Box]\n    [units = um].  Size in x, y, and z directions.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PMCMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium, PerturbationMedium, PerturbationPoleResidue, LossyMetalMedium] = Medium(attrs={}, name=None, frequency_range=None, allow_gain=False, nonlinear_spec=None, modulation_spec=None, viz_spec=None, heat_spec=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nsources : Tuple[Annotated[Union[tidy3d.components.source.current.UniformCurrentSource, tidy3d.components.source.current.PointDipole, tidy3d.components.source.field.GaussianBeam, tidy3d.components.source.field.AstigmaticGaussianBeam, tidy3d.components.source.field.ModeSource, tidy3d.components.source.field.PlaneWave, tidy3d.components.source.field.CustomFieldSource, tidy3d.components.source.current.CustomCurrentSource, tidy3d.components.source.field.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(attrs={}, x=Boundary(attrs={},, plus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(attrs={},, plus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(attrs={},, plus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(attrs={},, name=None,, type='PML',, num_layers=12,, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, PML boundary conditions are applied on all sides.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.AuxFieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor, tidy3d.components.monitor.DirectivityMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(attrs={}, grid_x=AutoGrid(attrs={},, type='AutoGrid',, max_scale=1.4,, mesher=GradedMesher(attrs={},, type='GradedMesher'),, dl_min=None,, min_steps_per_wvl=10.0,, min_steps_per_sim_size=10.0), grid_y=AutoGrid(attrs={},, type='AutoGrid',, max_scale=1.4,, mesher=GradedMesher(attrs={},, type='GradedMesher'),, dl_min=None,, min_steps_per_wvl=10.0,, min_steps_per_sim_size=10.0), grid_z=AutoGrid(attrs={},, type='AutoGrid',, max_scale=1.4,, mesher=GradedMesher(attrs={},, type='GradedMesher'),, dl_min=None,, min_steps_per_wvl=10.0,, min_steps_per_sim_size=10.0), wavelength=None, override_structures=(), snapping_points=(), layer_refinement_specs=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nversion : str = 2.10.0rc1\n    String specifying the front end version number.\nplot_length_units : Optional[Literal['nm', '\u03bcm', 'um', 'mm', 'cm', 'm', 'mil', 'in']] = \u03bcm\n    When set to a supported ``LengthUnit``, plots will be produced with proper scaling of axes and include the desired unit specifier in labels.\nstructure_priority_mode : Literal['equal', 'conductor'] = equal\n    This field only affects structures of `priority=None`. If `equal`, the priority of those structures is set to 0; if `conductor`, the priority of structures made of `LossyMetalMedium` is set to 90, `PECMedium` to 100, and others to 0.\nlumped_elements : Tuple[Annotated[Union[tidy3d.components.lumped_element.LumpedResistor, tidy3d.components.lumped_element.CoaxialLumpedResistor, tidy3d.components.lumped_element.LinearLumpedElement], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of lumped elements in the simulation. \nsubpixel : Union[bool, SubpixelSpec] = SubpixelSpec(attrs={}, dielectric=PolarizedAveraging(attrs={},, type='PolarizedAveraging'), metal=Staircasing(attrs={},, type='Staircasing'), pec=PECConformal(attrs={},, type='PECConformal',, timestep_reduction=0.3,, edge_singularity_correction=False), pmc=Staircasing(attrs={},, type='Staircasing'), lossy_metal=SurfaceImpedance(attrs={},, type='SurfaceImpedance',, timestep_reduction=0.0,, edge_singularity_correction=False), type='SubpixelSpec')\n    Apply subpixel averaging methods of the permittivity on structure interfaces to result in much higher accuracy for a given grid size. Supply a :class:`SubpixelSpec` to this field to select subpixel averaging methods separately on dielectric, metal, and PEC material interfaces. Alternatively, user may supply a boolean value: ``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` , or ``False`` to apply staircasing.\nsimulation_type : Optional[Literal['autograd_fwd', 'autograd_bwd', 'tidy3d', None]] = tidy3d\n    Tag used internally to distinguish types of simulations for ``autograd`` gradient processing.\npost_norm : Union[float, FreqDataArray] = 1.0\n    Factor to multiply the fields by after running, given the adjoint source pipeline used. Note: this is used internally only.\ninternal_absorbers : Tuple[InternalAbsorber, ...] = ()\n    Planes with the first order absorbing boundary conditions placed inside the computational domain. Note that internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.\ncourant : ConstrainedFloatValue = 0.99\n    Normalized Courant stability factor that is no larger than 1 when CFL stability condition is met. It controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times.\nprecision : Literal['hybrid', 'double'] = hybrid\n    Floating point precision to use in the computations.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nrun_time : Union[PositiveFloat, RunTimeSpec]\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. Alternatively, user may supply a :class:`RunTimeSpec` to this field, which will auto-compute the ``run_time`` based on the contents of the spec. If this option is used, the evaluated ``run_time`` value is available in the ``Simulation._run_time`` property.\n\nNotes\n-----\n\n    A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model\n    to be solved using `the Finite-Difference Time-Domain (FDTD) method\n    <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations\n    run very quickly in the cloud through GPU parallelization.\n\n    .. image:: ../../_static/img/field_update_fdtd.png\n        :width: 50%\n        :align: left\n\n    FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is\n    the most widely used method in photonics design. The Maxwell's\n    equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.\n\n    The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`\n    which describe the device and :attr:`sources` of electromagnetic excitation. This information is used to\n    computate the time dynamics of the electric and magnetic fields in this system. From these time-domain\n    results, frequency-domain information of the simulation can also be extracted, and used for device design and\n    optimization.\n\n    If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series\n    <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_\n\n    **Dimensions Selection**\n\n    By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation\n    :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size (eg.\n    ``tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in that direction.\n\n    .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/\n\n    See further parameter explanations below.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> from tidy3d import Medium\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )\n\nSee Also\n--------\n\n**Notebooks:**\n    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.\n    * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_\n    * See nearly all notebooks for :class:`Simulation` applications.\n\n**Lectures:**\n    * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_\n\n**GUI:**\n    * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_",
   "type": "object",
   "properties": {
     "attrs": {
@@ -720,6 +720,15 @@
           ]
         }
       ]
+    },
+    "internal_absorbers": {
+      "title": "Internal Absorbers",
+      "description": "Planes with the first order absorbing boundary conditions placed inside the computational domain. Note that internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/InternalAbsorber"
+      }
     },
     "courant": {
       "title": "Normalized Courant Factor",
@@ -10402,9 +10411,38 @@
       },
       "additionalProperties": false
     },
+    "PECFrame": {
+      "title": "PECFrame",
+      "description": "PEC source frame.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nlength : ConstrainedIntValue = 2\n    The length of the frame, specified as the number of cells along the source injection direction.",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "length": {
+          "title": "Length",
+          "description": "The length of the frame, specified as the number of cells along the source injection direction.",
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "title": "Type",
+          "default": "PECFrame",
+          "enum": [
+            "PECFrame"
+          ],
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "ModeSource": {
       "title": "ModeSource",
-      "description": "Injects current source to excite modal profile on finite extent plane.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Union[tuple[Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box]], Box] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Union[tuple[Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box]], Box]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of the injected field. A Chebyshev interpolation is used, thus, only a small number of points is typically sufficient to obtain converged results. Note that larger values of 'num_freqs' could spread out the source time signal and introduce numerical noise, or prevent timely  field decay.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nmode_spec : ModeSpec = ModeSpec(attrs={}, num_modes=1, target_neff=None, num_pml=(0,, 0), filter_pol=None, angle_theta=0.0, angle_phi=0.0, precision='double', bend_radius=None, bend_axis=None, angle_rotation=False, track_freq='central', group_index_step=False, type='ModeSpec')\n    Parameters to feed to mode solver which determine modes measured by monitor.\nmode_index : NonNegativeInt = 0\n    Index into the collection of modes returned by mode solver.  Specifies which mode to inject using this source. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.\n\nNotes\n-----\n\n    Using this mode source, it is possible selectively excite one of the guided modes of a waveguide. This can be\n    computed in our eigenmode solver :class:`tidy3d.plugins.mode.ModeSolver` and implement the mode simulation in\n    FDTD.\n\n    Mode sources are normalized to inject exactly 1W of power at the central frequency.\n\n    The modal source allows you to do directional excitation. Illustrated\n    by the image below, the field is perfectly launched to the right of the source and there's zero field to the\n    left of the source. Now you can contrast the behavior of the modal source with that of a dipole source. If\n    you just put a dipole into the waveguide, well, you see quite a bit different in the field distribution.\n    First of all, the dipole source is not directional launching. It launches waves in both directions. The\n    second is that the polarization of the dipole is set to selectively excite a TE mode. But it takes some\n    propagation distance before the mode settles into a perfect TE mode profile. During this process,\n    there is radiation into the substrate.\n\n    .. image:: ../../_static/img/mode_vs_dipole_source.png\n\n    .. TODO improve links to other APIs functionality here.\n\nExample\n-------\n>>> from tidy3d import GaussianPulse\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> mode_spec = ModeSpec(target_neff=2.)\n>>> mode_source = ModeSource(\n...     size=(10,10,0),\n...     source_time=pulse,\n...     mode_spec=mode_spec,\n...     mode_index=1,\n...     direction='-')\n\nSee Also\n--------\n\n:class:`tidy3d.plugins.mode.ModeSolver`:\n    Interface for solving electromagnetic eigenmodes in a 2D plane with translational invariance in the third dimension.\n\n**Notebooks:**\n    * `Waveguide Y junction <../../notebooks/YJunction.html>`_\n    * `90 degree optical hybrid <../../notebooks/90OpticalHybrid.html>`_\n\n**Lectures:**\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_",
+      "description": "Injects current source to excite modal profile on finite extent plane.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Union[tuple[Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box]], Box] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Union[tuple[Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box]], Box]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of the injected field. A Chebyshev interpolation is used, thus, only a small number of points is typically sufficient to obtain converged results. Note that larger values of 'num_freqs' could spread out the source time signal and introduce numerical noise, or prevent timely  field decay.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nmode_spec : ModeSpec = ModeSpec(attrs={}, num_modes=1, target_neff=None, num_pml=(0,, 0), filter_pol=None, angle_theta=0.0, angle_phi=0.0, precision='double', bend_radius=None, bend_axis=None, angle_rotation=False, track_freq='central', group_index_step=False, type='ModeSpec')\n    Parameters to feed to mode solver which determine modes measured by monitor.\nmode_index : NonNegativeInt = 0\n    Index into the collection of modes returned by mode solver.  Specifies which mode to inject using this source. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.\nframe : Optional[PECFrame] = None\n    Add a thin frame around the source during the FDTD run to improve the injection quality. The frame is positioned along the primal grid lines so that it aligns with the boundaries of the mode solver used to obtain the source profile.\n\nNotes\n-----\n\n    Using this mode source, it is possible selectively excite one of the guided modes of a waveguide. This can be\n    computed in our eigenmode solver :class:`tidy3d.plugins.mode.ModeSolver` and implement the mode simulation in\n    FDTD.\n\n    Mode sources are normalized to inject exactly 1W of power at the central frequency.\n\n    The modal source allows you to do directional excitation. Illustrated\n    by the image below, the field is perfectly launched to the right of the source and there's zero field to the\n    left of the source. Now you can contrast the behavior of the modal source with that of a dipole source. If\n    you just put a dipole into the waveguide, well, you see quite a bit different in the field distribution.\n    First of all, the dipole source is not directional launching. It launches waves in both directions. The\n    second is that the polarization of the dipole is set to selectively excite a TE mode. But it takes some\n    propagation distance before the mode settles into a perfect TE mode profile. During this process,\n    there is radiation into the substrate.\n\n    .. image:: ../../_static/img/mode_vs_dipole_source.png\n\n    .. TODO improve links to other APIs functionality here.\n\nExample\n-------\n>>> from tidy3d import GaussianPulse\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> mode_spec = ModeSpec(target_neff=2.)\n>>> mode_source = ModeSource(\n...     size=(10,10,0),\n...     source_time=pulse,\n...     mode_spec=mode_spec,\n...     mode_index=1,\n...     direction='-')\n\nSee Also\n--------\n\n:class:`tidy3d.plugins.mode.ModeSolver`:\n    Interface for solving electromagnetic eigenmodes in a 2D plane with translational invariance in the third dimension.\n\n**Notebooks:**\n    * `Waveguide Y junction <../../notebooks/YJunction.html>`_\n    * `90 degree optical hybrid <../../notebooks/90OpticalHybrid.html>`_\n\n**Lectures:**\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_",
       "type": "object",
       "properties": {
         "attrs": {
@@ -10610,6 +10648,15 @@
           "default": 0,
           "minimum": 0,
           "type": "integer"
+        },
+        "frame": {
+          "title": "Source Frame",
+          "description": "Add a thin frame around the source during the FDTD run to improve the injection quality. The frame is positioned along the primal grid lines so that it aligns with the boundaries of the mode solver used to obtain the source profile.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PECFrame"
+            }
+          ]
         }
       },
       "required": [
@@ -11979,9 +12026,129 @@
       ],
       "additionalProperties": false
     },
+    "ABCBoundary": {
+      "title": "ABCBoundary",
+      "description": "One-way wave equation absorbing boundary conditions.\nSee, for example, John B. Schneider, Understanding the Finite-Difference Time-Domain Method, Chapter 6.\n\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for boundary.\npermittivity : Optional[ConstrainedFloatValue] = None\n    Effective permittivity for determining propagation constant. If ``None``, this value will be automatically inferred from the medium at the domain boundary and the central frequency of the source.\nconductivity : Optional[NonNegativeFloat] = None\n    [units = S/um].  Effective conductivity for determining propagation constant. If ``None``, this value will be automatically inferred from the medium at the domain boundary and the central frequency of the source.",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for boundary.",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "default": "ABCBoundary",
+          "enum": [
+            "ABCBoundary"
+          ],
+          "type": "string"
+        },
+        "permittivity": {
+          "title": "Effective Permittivity",
+          "description": "Effective permittivity for determining propagation constant. If ``None``, this value will be automatically inferred from the medium at the domain boundary and the central frequency of the source.",
+          "minimum": 1.0,
+          "type": "number"
+        },
+        "conductivity": {
+          "title": "Effective Conductivity",
+          "description": "Effective conductivity for determining propagation constant. If ``None``, this value will be automatically inferred from the medium at the domain boundary and the central frequency of the source.",
+          "units": "S/um",
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModeABCBoundary": {
+      "title": "ModeABCBoundary",
+      "description": "One-way wave equation absorbing boundary conditions for absorbing a waveguide mode.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for boundary.\nmode_spec : ModeSpec = ModeSpec(attrs={}, num_modes=1, target_neff=None, num_pml=(0,, 0), filter_pol=None, angle_theta=0.0, angle_phi=0.0, precision='double', bend_radius=None, bend_axis=None, angle_rotation=False, track_freq='central', group_index_step=False, type='ModeSpec')\n    Parameters that determine the modes computed by the mode solver.\nmode_index : NonNegativeInt = 0\n    Index into the collection of modes returned by mode solver. The absorbing boundary conditions are configured to absorb the specified mode. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.\nfrequency : Optional[PositiveFloat] = None\n    Frequency at which the absorbed mode is evaluated. If ``None``, then the central frequency of the source is used.\nplane : Box\n    Cross-sectional plane in which the absorbed mode will be computed.",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for boundary.",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "default": "ModeABCBoundary",
+          "enum": [
+            "ModeABCBoundary"
+          ],
+          "type": "string"
+        },
+        "mode_spec": {
+          "title": "Mode Specification",
+          "description": "Parameters that determine the modes computed by the mode solver.",
+          "default": {
+            "attrs": {},
+            "num_modes": 1,
+            "target_neff": null,
+            "num_pml": [
+              0,
+              0
+            ],
+            "filter_pol": null,
+            "angle_theta": 0.0,
+            "angle_phi": 0.0,
+            "precision": "double",
+            "bend_radius": null,
+            "bend_axis": null,
+            "angle_rotation": false,
+            "track_freq": "central",
+            "group_index_step": false,
+            "type": "ModeSpec"
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/ModeSpec"
+            }
+          ]
+        },
+        "mode_index": {
+          "title": "Mode Index",
+          "description": "Index into the collection of modes returned by mode solver. The absorbing boundary conditions are configured to absorb the specified mode. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.",
+          "default": 0,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "frequency": {
+          "title": "Frequency",
+          "description": "Frequency at which the absorbed mode is evaluated. If ``None``, then the central frequency of the source is used.",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "plane": {
+          "title": "Plane",
+          "description": "Cross-sectional plane in which the absorbed mode will be computed.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Box"
+            }
+          ]
+        }
+      },
+      "required": [
+        "plane"
+      ],
+      "additionalProperties": false
+    },
     "Boundary": {
       "title": "Boundary",
-      "description": "Boundary conditions at the minus and plus extents along a dimension.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nplus : Union[Periodic, PECBoundary, PMCBoundary, PML, StablePML, Absorber, BlochBoundary] = PML(attrs={}, name=None, type='PML', num_layers=12, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0))\n    Boundary condition on the plus side along a dimension.\nminus : Union[Periodic, PECBoundary, PMCBoundary, PML, StablePML, Absorber, BlochBoundary] = PML(attrs={}, name=None, type='PML', num_layers=12, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0))\n    Boundary condition on the minus side along a dimension.\n\nNotes\n-----\n\n     To specify individual boundary conditions along different dimensions, instead of :class:`BoundarySpec`,\n     this class is used, which defines the ``plus`` and ``minus`` boundaries along a single\n     dimension.\n\nExample\n-------\n>>> boundary = Boundary(plus = PML(), minus = PECBoundary())\n\nSee Also\n--------\n\n:class:`BoundarySpec`\n    Specifies boundary conditions on each side of the domain and along each dimension.\n\n:class:`PML`\n    A standard PML along a single dimension.\n\n**Notebooks**\n    * `Setting up boundary conditions <../../notebooks/BoundaryConditions.html>`_\n    * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_",
+      "description": "Boundary conditions at the minus and plus extents along a dimension.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nplus : Union[Periodic, PECBoundary, PMCBoundary, PML, StablePML, Absorber, BlochBoundary, ABCBoundary, ModeABCBoundary] = PML(attrs={}, name=None, type='PML', num_layers=12, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0))\n    Boundary condition on the plus side along a dimension.\nminus : Union[Periodic, PECBoundary, PMCBoundary, PML, StablePML, Absorber, BlochBoundary, ABCBoundary, ModeABCBoundary] = PML(attrs={}, name=None, type='PML', num_layers=12, parameters=PMLParams(attrs={},, sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0))\n    Boundary condition on the minus side along a dimension.\n\nNotes\n-----\n\n     To specify individual boundary conditions along different dimensions, instead of :class:`BoundarySpec`,\n     this class is used, which defines the ``plus`` and ``minus`` boundaries along a single\n     dimension.\n\nExample\n-------\n>>> boundary = Boundary(plus = PML(), minus = PECBoundary())\n\nSee Also\n--------\n\n:class:`BoundarySpec`\n    Specifies boundary conditions on each side of the domain and along each dimension.\n\n:class:`PML`\n    A standard PML along a single dimension.\n\n**Notebooks**\n    * `Setting up boundary conditions <../../notebooks/BoundaryConditions.html>`_\n    * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_",
       "type": "object",
       "properties": {
         "attrs": {
@@ -12021,7 +12188,9 @@
               "PML": "#/definitions/PML",
               "StablePML": "#/definitions/StablePML",
               "Absorber": "#/definitions/Absorber",
-              "BlochBoundary": "#/definitions/BlochBoundary"
+              "BlochBoundary": "#/definitions/BlochBoundary",
+              "ABCBoundary": "#/definitions/ABCBoundary",
+              "ModeABCBoundary": "#/definitions/ModeABCBoundary"
             }
           },
           "oneOf": [
@@ -12045,6 +12214,12 @@
             },
             {
               "$ref": "#/definitions/BlochBoundary"
+            },
+            {
+              "$ref": "#/definitions/ABCBoundary"
+            },
+            {
+              "$ref": "#/definitions/ModeABCBoundary"
             }
           ]
         },
@@ -12079,7 +12254,9 @@
               "PML": "#/definitions/PML",
               "StablePML": "#/definitions/StablePML",
               "Absorber": "#/definitions/Absorber",
-              "BlochBoundary": "#/definitions/BlochBoundary"
+              "BlochBoundary": "#/definitions/BlochBoundary",
+              "ABCBoundary": "#/definitions/ABCBoundary",
+              "ModeABCBoundary": "#/definitions/ModeABCBoundary"
             }
           },
           "oneOf": [
@@ -12103,6 +12280,12 @@
             },
             {
               "$ref": "#/definitions/BlochBoundary"
+            },
+            {
+              "$ref": "#/definitions/ABCBoundary"
+            },
+            {
+              "$ref": "#/definitions/ModeABCBoundary"
             }
           ]
         },
@@ -17991,6 +18174,177 @@
           "type": "string"
         }
       },
+      "additionalProperties": false
+    },
+    "InternalAbsorber": {
+      "title": "InternalAbsorber",
+      "description": "Internally placed plane with one-way wave equation boundary conditions for absorption of electromagnetic waves.\nNote that internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.\n\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\ncenter : Union[tuple[Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box], Union[float, autograd.tracer.Box]], Box] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Union[tuple[Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box], Union[pydantic.v1.types.NonNegativeFloat, autograd.tracer.Box]], Box]\n    [units = um].  Size in x, y, and z directions.\ndirection : Literal['+', '-']\n    Indicates which direction of traveling waves are absorbed.\ngrid_shift : int = 0\n    Displacement of absorber in the normal positive direction in number of cells. This could be used to conveniently place an absorber right behind a source: one can use the same `size` and `center` as for the source and simply set `shift` to 1.\nboundary_spec : Union[ModeABCBoundary, ABCBoundary]\n    Boundary specification for defining effective propagation index in the one-way wave equation.",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "type": {
+          "title": "Type",
+          "default": "InternalAbsorber",
+          "enum": [
+            "InternalAbsorber"
+          ],
+          "type": "string"
+        },
+        "center": {
+          "title": "Center",
+          "description": "Center of object in x, y, and z.",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "units": "um",
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "title": "AutogradBox",
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "title": "AutogradBox",
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "title": "AutogradBox",
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "AutogradBox",
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "description": "Size in x, y, and z directions.",
+          "units": "um",
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "title": "AutogradBox",
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "title": "AutogradBox",
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                },
+                {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "title": "AutogradBox",
+                      "type": "autograd.tracer.Box"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "title": "AutogradBox",
+              "type": "autograd.tracer.Box"
+            }
+          ]
+        },
+        "direction": {
+          "title": "Absorption Direction",
+          "description": "Indicates which direction of traveling waves are absorbed.",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
+        },
+        "grid_shift": {
+          "title": "Absorber Shift",
+          "description": "Displacement of absorber in the normal positive direction in number of cells. This could be used to conveniently place an absorber right behind a source: one can use the same `size` and `center` as for the source and simply set `shift` to 1.",
+          "default": 0,
+          "type": "integer"
+        },
+        "boundary_spec": {
+          "title": "Boundary Specification",
+          "description": "Boundary specification for defining effective propagation index in the one-way wave equation.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "ModeABCBoundary": "#/definitions/ModeABCBoundary",
+              "ABCBoundary": "#/definitions/ABCBoundary"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/ModeABCBoundary"
+            },
+            {
+              "$ref": "#/definitions/ABCBoundary"
+            }
+          ]
+        }
+      },
+      "required": [
+        "size",
+        "direction",
+        "boundary_spec"
+      ],
       "additionalProperties": false
     },
     "RunTimeSpec": {

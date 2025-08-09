@@ -12,6 +12,7 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fie
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
 from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
 from tidy3d.components.validators import (
     assert_plane,
@@ -401,6 +402,14 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         " Specifies which mode to inject using this source. "
         "If larger than ``mode_spec.num_modes``, "
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
+    )
+
+    frame: Optional[PECFrame] = pydantic.Field(
+        None,
+        title="Source Frame",
+        description="Add a thin frame around the source during the FDTD run to improve "
+        "the injection quality. The frame is positioned along the primal grid lines "
+        "so that it aligns with the boundaries of the mode solver used to obtain the source profile.",
     )
 
     @cached_property
