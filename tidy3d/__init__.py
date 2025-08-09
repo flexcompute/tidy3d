@@ -103,6 +103,7 @@ from .components.beam import (
 # boundary
 from .components.boundary import (
     PML,
+    ABCBoundary,
     Absorber,
     AbsorberParams,
     BlochBoundary,
@@ -113,6 +114,8 @@ from .components.boundary import (
     DefaultAbsorberParameters,
     DefaultPMLParameters,
     DefaultStablePMLParameters,
+    InternalAbsorber,
+    ModeABCBoundary,
     PECBoundary,
     Periodic,
     PMCBoundary,
@@ -339,6 +342,9 @@ from .components.source.field import (
     ModeSource,
     PlaneWave,
 )
+from .components.source.frame import (
+    PECFrame,
+)
 
 # sources
 from .components.source.time import (
@@ -419,6 +425,7 @@ __all__ = [
     "PMC",
     "PML",
     "TFSF",
+    "ABCBoundary",
     "Absorber",
     "AbsorberParams",
     "AbstractFieldProjectionData",
@@ -577,6 +584,7 @@ __all__ = [
     "IndexedTimeDataArray",
     "IndexedVoltageDataArray",
     "InsulatingBC",
+    "InternalAbsorber",
     "IsothermalSteadyChargeDCAnalysis",
     "KerrNonlinearity",
     "LayerRefinementSpec",
@@ -591,6 +599,7 @@ __all__ = [
     "Medium2D",
     "MediumMediumInterface",
     "MeshOverrideStructure",
+    "ModeABCBoundary",
     "ModeAmpsDataArray",
     "ModeData",
     "ModeIndexDataArray",
@@ -611,6 +620,7 @@ __all__ = [
     "NonlinearSusceptibility",
     "PECBoundary",
     "PECConformal",
+    "PECFrame",
     "PECMedium",
     "PMCBoundary",
     "PMCMedium",

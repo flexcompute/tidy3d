@@ -209,6 +209,13 @@ class EMESimulation(AbstractYeeGridSimulation):
         "use 'smatrix_in_basis' to use another set of modes or input field.",
     )
 
+    internal_absorbers: tuple[()] = pd.Field(
+        (),
+        title="Internal Absorbers",
+        description="Planes with the first order absorbing boundary conditions placed inside the computational domain. "
+        "Note: absorbers are not supported in EME simulations.",
+    )
+
     grid_spec: GridSpec = pd.Field(
         GridSpec(),
         title="Grid Specification",

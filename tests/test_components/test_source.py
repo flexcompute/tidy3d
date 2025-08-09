@@ -597,3 +597,17 @@ def test_broadband_angled_gaussian_warning():
             sources=[s],
             normalize_index=None,
         )
+
+
+def test_source_frame():
+    _ = td.PECFrame()
+    _ = td.PECFrame(length=4)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PECFrame(length=0)
+
+    _ = td.ModeSource(
+        source_time=td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0),
+        direction="+",
+        size=(1, 1, 0),
+        frame=td.PECFrame(),
+    )

@@ -67,11 +67,15 @@ class PlotParams(AbstractPlotParams):
 plot_params_geometry = PlotParams()
 plot_params_structure = PlotParams()
 plot_params_source = PlotParams(alpha=0.4, facecolor="limegreen", edgecolor="limegreen", lw=3)
+plot_params_absorber = PlotParams(
+    alpha=0.4, facecolor="lightskyblue", edgecolor="lightskyblue", lw=3
+)
 plot_params_monitor = PlotParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
 plot_params_pml = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x", zorder=inf)
 plot_params_pec = PlotParams(alpha=1.0, facecolor="gold", edgecolor="black", zorder=inf)
 plot_params_pmc = PlotParams(alpha=1.0, facecolor="lightsteelblue", edgecolor="black", zorder=inf)
 plot_params_bloch = PlotParams(alpha=1.0, facecolor="orchid", edgecolor="black", zorder=inf)
+plot_params_abc = PlotParams(alpha=1.0, facecolor="lightskyblue", edgecolor="black", zorder=inf)
 plot_params_symmetry = PlotParams(edgecolor="gray", facecolor="gray", alpha=0.6, zorder=inf)
 plot_params_override_structures = PlotParams(
     linewidth=0.4, edgecolor="black", fill=False, zorder=inf

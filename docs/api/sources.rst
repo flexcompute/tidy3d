@@ -44,3 +44,13 @@ Angled Plane Wave Specifications
 
    tidy3d.FixedInPlaneK
    tidy3d.FixedAngle
+
+
+Source Frames
+-------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.PECFrame

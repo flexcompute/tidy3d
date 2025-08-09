@@ -29,11 +29,14 @@ from .base import cached_property, skip_if_fields_missing
 from .base_sim.simulation import AbstractSimulation
 from .boundary import (
     PML,
+    ABCBoundary,
     Absorber,
     AbsorberSpec,
     BlochBoundary,
     Boundary,
     BoundarySpec,
+    InternalAbsorber,
+    ModeABCBoundary,
     PECBoundary,
     Periodic,
     PMCBoundary,
@@ -47,9 +50,9 @@ from .data.dataset import Dataset
 from .data.unstructured.tetrahedral import TetrahedralGridDataset
 from .data.unstructured.triangular import TriangularGridDataset
 from .data.utils import CustomSpatialDataType
-from .geometry.base import Box, Geometry
+from .geometry.base import Box, Geometry, GeometryGroup
 from .geometry.mesh import TriangleMesh
-from .geometry.utils import flatten_groups, traverse_geometries
+from .geometry.utils import _shift_object, flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
 from .grid.grid import Coords, Coords1D, Grid
 from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
@@ -65,6 +68,7 @@ from .medium import (
     Medium2D,
     MediumType,
     MediumType3D,
+    PECMedium,
 )
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -99,6 +103,7 @@ from .source.field import (
     ModeSource,
     PlaneWave,
 )
+from .source.frame import PECFrame
 from .source.time import ContinuousWave, CustomSourceTime
 from .source.utils import SourceType
 from .structure import MeshOverrideStructure, Structure
@@ -124,6 +129,7 @@ from .viz import (
     PlotParams,
     add_ax_if_none,
     equal_aspect,
+    plot_params_abc,
     plot_params_bloch,
     plot_params_override_structures,
     plot_params_pec,
@@ -189,7 +195,10 @@ def validate_boundaries_for_zero_dims(warn_on_change: bool = True):
         for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
             if size_dim == 0:
                 axis = axis_names[dim]
-                num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+                num_absorbing_bdries = sum(
+                    isinstance(bnd, (AbsorberSpec, ABCBoundary, ModeABCBoundary))
+                    for bnd in boundary
+                )
                 num_bloch_bdries = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
 
                 if num_absorbing_bdries > 0:
@@ -296,23 +305,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         "``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` "
         ", or ``False`` to apply staircasing.",
     )
-
-    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = (
-        pydantic.Field(
-            "tidy3d",
-            title="Simulation Type",
-            description="Tag used internally to distinguish types of simulations for "
-            "``autograd`` gradient processing.",
-        )
-    )
-
-    post_norm: Union[float, FreqDataArray] = pydantic.Field(
-        1.0,
-        title="Post Normalization Values",
-        description="Factor to multiply the fields by after running, "
-        "given the adjoint source pipeline used. Note: this is used internally only.",
-    )
-
     """
     Supply :class:`SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
     PEC material interfaces. Alternatively, supply ``True`` to use default subpixel averaging methods,
@@ -356,6 +348,29 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
         *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
     """
+
+    simulation_type: Optional[Literal["autograd_fwd", "autograd_bwd", "tidy3d", None]] = (
+        pydantic.Field(
+            "tidy3d",
+            title="Simulation Type",
+            description="Tag used internally to distinguish types of simulations for "
+            "``autograd`` gradient processing.",
+        )
+    )
+
+    post_norm: Union[float, FreqDataArray] = pydantic.Field(
+        1.0,
+        title="Post Normalization Values",
+        description="Factor to multiply the fields by after running, "
+        "given the adjoint source pipeline used. Note: this is used internally only.",
+    )
+
+    internal_absorbers: tuple[InternalAbsorber, ...] = pydantic.Field(
+        (),
+        title="Internal Absorbers",
+        description="Planes with the first order absorbing boundary conditions placed inside the computational domain. "
+        "Note that internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.",
+    )
 
     @pydantic.validator("simulation_type", always=True)
     def _validate_simulation_type_tidy3d(cls, val):
@@ -450,6 +465,71 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # 2) if it's false, apply staircasing on all material boundaries
         return SubpixelSpec.staircasing()
 
+    @cached_property
+    def _shifted_internal_absorbers(self) -> list[InternalAbsorber]:
+        """List of absorber shifted to their actual locations based on their grid_shift's."""
+
+        return [
+            _shift_object(
+                obj=absorber,
+                grid=self.grid,
+                bounds=self.bounds,
+                direction=absorber.direction,
+                shift=absorber.grid_shift,
+            )
+            for absorber in self.internal_absorbers
+        ]
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_absorbers(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        alpha: Optional[float] = None,
+        ax: Ax = None,
+        shifted: bool = False,
+    ) -> Ax:
+        """Plot each of simulation's port absorbers on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the absorbers, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        absorbers_to_plot = self._shifted_internal_absorbers if shifted else self.internal_absorbers
+        for absorber in absorbers_to_plot:
+            ax = absorber.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        # Add the default axis labels, tick labels, and title
+        ax = Box.add_ax_labels_and_title(
+            ax=ax, x=x, y=y, z=z, plot_length_units=self.plot_length_units
+        )
+        return ax
+
     @equal_aspect
     @add_ax_if_none
     def plot(
@@ -461,6 +541,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
         lumped_element_alpha: Optional[float] = None,
+        absorber_alpha: Optional[float] = None,
+        absorber_actual_placement: bool = False,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         fill_structures: bool = True,
@@ -484,6 +566,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         lumped_element_alpha : float = None
             Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        absorber_alpha : float = None
+            Opacity of the port absorbers. If ``None``, uses Tidy3d default.
+        absorber_actual_placement : bool = False
+            Use the exact placement of port absorbers which take into account their ``shift`` values.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -518,6 +604,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         )
 
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_absorbers(
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            alpha=absorber_alpha,
+            shifted=absorber_actual_placement,
+        )
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_lumped_elements(
             ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
@@ -543,6 +639,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         source_alpha: Optional[float] = None,
         monitor_alpha: Optional[float] = None,
         lumped_element_alpha: Optional[float] = None,
+        absorber_alpha: Optional[float] = None,
+        absorber_actual_placement: bool = False,
         hlim: Optional[tuple[float, float]] = None,
         vlim: Optional[tuple[float, float]] = None,
         ax: Ax = None,
@@ -574,6 +672,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         lumped_element_alpha : float = None
             Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        absorber_alpha : float = None
+            Opacity of the port absorbers. If ``None``, uses Tidy3d default.
+        absorber_actual_placement : bool = False
+            Use the exact placement of port absorbers which take into account their ``shift`` values.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -626,6 +728,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             eps_lim=eps_lim,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_absorbers(
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            alpha=absorber_alpha,
+            shifted=absorber_actual_placement,
+        )
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_lumped_elements(
             ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
@@ -844,7 +956,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[Tuple[float, float]]
+        list[Tuple[float, float]]
             List containing the absorber thickness (micron) in - and + boundaries.
         """
         num_layers = self.num_pml_layers
@@ -862,7 +974,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[MeshOverrideSructure]
+        list[MeshOverrideSructure]
             List of override structures.
         """
         wavelength = self.grid_spec.get_wavelength(self.sources)
@@ -879,7 +991,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[CoordinateOptional]
+        list[CoordinateOptional]
             List of snapping points coordinates.
         """
         return self.grid_spec.internal_snapping_points(
@@ -1121,6 +1233,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 plot_params = plot_params_pmc.copy(deep=True)
             elif isinstance(boundary_edge, BlochBoundary):
                 plot_params = plot_params_bloch.copy(deep=True)
+            elif isinstance(boundary_edge, (ABCBoundary, ModeABCBoundary)):
+                plot_params = plot_params_abc.copy(deep=True)
             else:
                 plot_params = PlotParams(alpha=0)
 
@@ -1218,7 +1332,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        Tuple[:class:`.Grid`, List[CoordinateOptional]]
+        Tuple[:class:`.Grid`, list[CoordinateOptional]]
             :class:`.Grid` storing the spatial locations relevant to the simulation
             the list of snapping points generated during iterative gap meshing.
         """
@@ -1276,7 +1390,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[CoordinateOptional]
+        list[CoordinateOptional]
             List of snapping lines resolving thin gaps and strips.
         """
 
@@ -1340,7 +1454,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         Returns
         -------
-        List[Tuple[float, float]]
+        list[Tuple[float, float]]
             List containing the number of absorber layers in - and + boundaries.
         """
         num_layers = [[0, 0], [0, 0], [0, 0]]
@@ -1587,14 +1701,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             coords = grid[coord_key]
         return make_eps_data(coords)
 
+    @cached_property
+    def _contains_converted_volumetric_structures(self) -> bool:
+        """Check whether any structures or lumped elements need to be converted into 3D volumetric equivalents."""
+        return (
+            any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
+            or self.lumped_elements
+        )
+
     def _volumetric_structures_grid(self, grid: Grid) -> tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
 
-        if (
-            not any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
-            and not self.lumped_elements
-        ):
+        if not self._contains_converted_volumetric_structures:
             return self.scene.sorted_structures
 
         def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> list[float]:
@@ -1717,6 +1836,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         include_pml_cells: bool = False,
         validate_geometries: bool = True,
         deep_copy: bool = True,
+        internal_absorbers: Optional[tuple[InternalAbsorber, ...]] = None,
         **kwargs,
     ) -> AbstractYeeGridSimulation:
         """Generate a simulation instance containing only the ``region``.
@@ -1758,6 +1878,9 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             Used internally.
         deep_copy: bool = True
             Recursively copy all nested objects in the generated simulation object.
+        internal_absorbers : Tuple[InternalAbsorber, ...] = None
+            New list of internal absorbers. If ``None``, then the absorbers intersecting the new simulation
+            domain are inherited from the original simulation.
         **kwargs
             Other arguments passed to new simulation instance.
         """
@@ -1850,6 +1973,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         if sources is None:
             sources = [src for src in self.sources if new_box.intersects(src)]
+
+        if internal_absorbers is None:
+            internal_absorbers = [
+                abc for abc in self._shifted_internal_absorbers if new_box.intersects(abc)
+            ]
 
         # some nonlinear materials depend on the central frequency
         # we update them with hardcoded freq0
@@ -1967,6 +2095,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             symmetry=symmetry,
             structures=aux_new_structures,
             lumped_elements=new_lumped_elements,
+            internal_absorbers=internal_absorbers,
             **kwargs,
         )
 
@@ -2919,7 +3048,9 @@ class Simulation(AbstractYeeGridSimulation):
         ]
 
     @pydantic.root_validator()
-    @skip_if_fields_missing(["sources", "structures", "medium", "monitors"], root=True)
+    @skip_if_fields_missing(
+        ["sources", "structures", "medium", "monitors", "internal_absorbers"], root=True
+    )
     def check_fixed_angle_components(cls, values):
         """Error if a fixed-angle plane wave is combined with other sources
         or fully anisotropic mediums or gain mediums."""
@@ -2960,7 +3091,71 @@ class Simulation(AbstractYeeGridSimulation):
             if any(isinstance(mnt, TimeMonitor) for mnt in values["monitors"]):
                 raise SetupError("Time monitors cannot be used in fixed-angle simulations.")
 
+            if len(values.get("internal_absorbers")) > 0:
+                raise SetupError(
+                    "Fixed-angle plane wave sources cannot be used in the presence of internal absorbers."
+                )
+
         return values
+
+    @pydantic.root_validator()
+    @skip_if_fields_missing(["sources", "boundary_spec", "internal_absorbers"], root=True)
+    def _validate_frequency_mode_abc(cls, values):
+        """Warn if ModeABCBoundary expects a frequency from a source, but there are multiple sources with different central frequencies."""
+
+        def boundary_needs_freq(boundary):
+            return (isinstance(boundary, ModeABCBoundary) and boundary.frequency is None) or (
+                isinstance(boundary, ABCBoundary)
+                and (
+                    (boundary.conductivity is not None and boundary.conductivity != 0)
+                    or (boundary.permittivity is None and boundary.conductivity is None)
+                )
+            )
+
+        # check domain boundaries
+        boundaries = values["boundary_spec"].to_list
+        need_wavelength = any(boundary_needs_freq(edge) for edge in np.ravel(boundaries))
+
+        # check dinternal absorbers
+        need_wavelength = need_wavelength or any(
+            boundary_needs_freq(abc.boundary_spec) for abc in values["internal_absorbers"]
+        )
+
+        if need_wavelength:
+            sources = values.get("sources")
+
+            if len(sources) == 0:
+                raise SetupError(
+                    "At least one 'ModeABCBoundary'/'ABCBoundary' needs specification of frequency at which the absorbed mode must be evaluated. "
+                    "Add at least one source or use parameter 'frequency' for 'ModeABCBoundary'.",
+                )
+
+            freq0s = [source.source_time.freq0 for source in sources]
+            if not all(math.isclose(freq0, freq0s[0]) for freq0 in freq0s):
+                log.warning(
+                    "At least one 'ModeABCBoundary' does not specify frequency at which the absorbed mode must be evaluated. "
+                    "The central frequency of the first source will be used.",
+                    capture=False,
+                )
+
+        return values
+
+    @pydantic.validator("internal_absorbers", always=True)
+    @skip_if_fields_missing(["size"])
+    def _validate_absorber_in_zero_dims(cls, val, values):
+        """Error if internal absorber is oriented along zero size dim."""
+
+        if val is None:
+            return val
+
+        sim_size = values["size"]
+        for abc in val:
+            if sim_size[abc._normal_axis] == 0:
+                raise SetupError(
+                    "Port absorbers are not allowed to be oriented along simulation zero size dimensions."
+                )
+
+        return val
 
     @pydantic.validator("sources", always=True)
     def _validate_num_sources(cls, val):
@@ -3250,6 +3445,94 @@ class Simulation(AbstractYeeGridSimulation):
                             f"Nonuniform custom medium detected on plane intersecting a {monitor.type}. "
                             "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
                             custom_loc=["monitors", monitor_ind],
+                        )
+
+        return val
+
+    @classmethod
+    def _get_mediums_on_abc(
+        cls,
+        boundary_spec: BoundarySpec,
+        sim_structure: Structure,
+        structures: tuple[Structure, ...],
+    ) -> tuple[
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
+        list[MediumType3D],
+    ]:
+        """For each ABC boundary that needs an automatic medium detection (permittivity=None)
+        determine mediums it crosses.
+        """
+
+        # list of structures including background as a Box()
+        surface_box = sim_structure.geometry
+        # expand zero dimensions to make sure surface are extracted correctly and treatment is uniform
+        surface_box = surface_box.updated_copy(
+            size=[1e-6 if s == 0 else s for s in surface_box.size]
+        )
+        surfaces = Box.surfaces(center=surface_box.center, size=surface_box.size)
+
+        total_structures = [sim_structure, *list(structures)]
+
+        mediums = []
+        for boundary, surface in zip(np.ravel(boundary_spec.to_list), surfaces):
+            if isinstance(boundary, ABCBoundary) and boundary.permittivity is None:
+                mediums.append(Scene.intersecting_media(surface, total_structures))
+            else:
+                mediums.append(None)
+
+        return mediums
+
+    @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures"])
+    def _abc_boundaries_homogeneous(cls, val, values):
+        """Error if abc boundaries intersect multiple mediums or anisotropic mediums."""
+
+        if val is None:
+            return val
+
+        sim_structure = Structure(
+            geometry=Box(size=values.get("size"), center=values.get("center")),
+            medium=values.get("medium"),
+        )
+
+        mediums_all_sides = cls._get_mediums_on_abc(
+            boundary_spec=val,
+            sim_structure=sim_structure,
+            structures=values.get("structures") or [],
+        )
+
+        with log as consolidated_logger:
+            for mediums in mediums_all_sides:
+                if mediums is not None:
+                    # make sure there is no more than one medium in the returned list
+                    if len(mediums) > 1:
+                        raise SetupError(
+                            f"{len(mediums)} different mediums detected on an 'ABCBoundary'. Boundary must be homogeneous."
+                            "Alternatively, effective permeability and conductivity can be directly provided as "
+                            "parameters for an 'ABCBoundary', in which case this medium check is skipped."
+                        )
+                    # 0 medium, something is wrong
+                    if len(mediums) < 1:
+                        raise SetupError(
+                            "No medium detected on plane containing 'ABCBoundary', "
+                            "indicating an unexpected error. Please create a github issue so "
+                            "that the problem can be investigated."
+                        )
+                    # 1 medium, check if the medium is spatially uniform
+                    if not list(mediums)[0].is_spatially_uniform:
+                        consolidated_logger.warning(
+                            "Nonuniform custom medium detected on an 'ABCBoundary'. "
+                            "Boundary must be homogeneous. Make sure custom medium is uniform on the boundary.",
+                        )
+
+                    if isinstance(list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)):
+                        raise SetupError(
+                            "An anisotropic medium is detected on an 'ABCBoundary'. "
+                            "Boundary medium must be homogeneous and isotropic."
                         )
 
         return val
@@ -3753,6 +4036,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_custom_source_time()
         self._validate_mode_objects()
         self._warn_rf_license()
+        self._validate_internal_abc_no_fully_anisotropic()
 
     def _warn_rf_license(self):
         """
@@ -4010,6 +4294,17 @@ class Simulation(AbstractYeeGridSimulation):
                 fields += medium.nonlinear_spec.aux_fields
         return fields
 
+    def _validate_internal_abc_no_fully_anisotropic(self):
+        """Error if internal absorber intersect fully anisotropic mediums."""
+
+        total_structures = [self.scene.background_structure, *list(self.structures)]
+
+        for abc in self._shifted_internal_absorbers:
+            mediums = Scene.intersecting_media(abc, total_structures)
+
+            if any(isinstance(med, FullyAnisotropicMedium) for med in mediums):
+                raise SetupError("A 'InternalAbsorber' cannot cross a 'FullyAnisotropicMedium'.")
+
     """ Pre submit validation (before web.upload()) """
 
     def validate_pre_upload(self, source_required: bool = True) -> None:
@@ -4030,7 +4325,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._warn_time_monitors_outside_run_time()
         self._validate_time_monitors_num_steps()
         self._validate_freq_monitors_freq_range()
-        _ = self.volumetric_structures
+        self._validate_finalized()
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
@@ -4426,7 +4721,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         Returns
         -------
-        List[:class:`.AbstractMedium`]
+        set[:class:`.AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
         log.warning(
@@ -4488,12 +4783,12 @@ class Simulation(AbstractYeeGridSimulation):
         -------
         test_object : :class:`.Box`
             Object for which intersecting media are to be detected.
-        structures : List[:class:`.AbstractMedium`]
+        structures : tuple[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
 
         Returns
         -------
-        List[:class:`.AbstractMedium`]
+        tuple[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
 
@@ -4515,12 +4810,12 @@ class Simulation(AbstractYeeGridSimulation):
         -------
         test_object : :class:`.Box`
             Object for which intersecting media are to be detected.
-        structures : List[:class:`.AbstractMedium`]
+        structures : tuple[:class:`.AbstractMedium`]
             List of structures whose media will be tested.
 
         Returns
         -------
-        List[:class:`.Structure`]
+        tuple[:class:`.Structure`]
             Set of distinct structures that intersect with the given surface, or with the surfaces
             of the given volume.
         """
@@ -4843,7 +5138,11 @@ class Simulation(AbstractYeeGridSimulation):
         """When conformal mesh is applied, courant number is scaled down depending on `conformal_mesh_spec`."""
 
         mediums = self.scene.mediums
-        contain_pec_structures = any(medium.is_pec for medium in mediums)
+        contain_pec_structures = (
+            any(medium.is_pec for medium in mediums)
+            or any(isinstance(src, ModeSource) and src.frame is not None for src in self.sources)
+            or len(self.internal_absorbers) > 0
+        )
         contain_sibc_structures = any(isinstance(medium, LossyMetalMedium) for medium in mediums)
         return self.courant * self._subpixel.courant_ratio(
             contain_pec_structures=contain_pec_structures,
@@ -5333,3 +5632,94 @@ class Simulation(AbstractYeeGridSimulation):
         )
 
     _boundaries_for_zero_dims = validate_boundaries_for_zero_dims()
+
+    def _make_pec_frame(self, obj: Union[ModeSource, InternalAbsorber]) -> Structure:
+        """Make a pec frame around a mode source or an internal absorber. For mode sources,
+        the frame is added around the injection plane. For internal absorbers, a backing pec
+        plate is also added on the non-absorbing side.
+        """
+        span_inds = np.array(self.grid.discretize_inds(obj))
+
+        coords = self.grid.boundaries.to_list
+        direction = obj.direction
+        if isinstance(obj, ModeSource):
+            axis = obj.injection_axis
+            length = obj.frame.length
+        else:
+            axis = obj.size.index(0.0)
+            length = 1
+
+        if direction == "+":
+            span_inds[axis][1] += length - 1
+            span_inds[axis][0] -= 1
+        else:
+            span_inds[axis][1] += 1
+            span_inds[axis][0] -= length - 1
+
+        box_bounds = [
+            [
+                c[beg],
+                c[end],
+            ]
+            for c, (beg, end) in zip(coords, span_inds)
+        ]
+
+        box = Box.from_bounds(*np.transpose(box_bounds))
+
+        surfaces = Box.surfaces(box.size, box.center)
+        if isinstance(obj, ModeSource):
+            del surfaces[2 * axis : 2 * axis + 2]
+        else:
+            if direction == "-":
+                del surfaces[2 * axis + 1]
+            else:
+                del surfaces[2 * axis]
+
+        structure = Structure(
+            geometry=GeometryGroup(
+                geometries=surfaces,
+            ),
+            medium=PECMedium(),
+        )
+
+        return structure
+
+    @cached_property
+    def _modal_plane_frames(self) -> list[Structure]:
+        """Return frames to add around mode sources and internal absorbers."""
+
+        pec_frames = [
+            self._make_pec_frame(src)
+            for src in self.sources
+            if isinstance(src, ModeSource) and isinstance(src.frame, PECFrame)
+        ]
+
+        pec_frames = pec_frames + [
+            self._make_pec_frame(abc) for abc in self._shifted_internal_absorbers
+        ]
+
+        return pec_frames
+
+    @cached_property
+    def _finalized(self) -> Simulation:
+        """Return the finalized version of the simulation setup. That is, including automatic frames around mode sources and internal absorbers, and 2d strutures converted into volumetric analogues."""
+
+        modal_frames = self._modal_plane_frames
+
+        if len(modal_frames) == 0 and not self._contains_converted_volumetric_structures:
+            return self
+
+        structures = list(self.volumetric_structures) + modal_frames
+
+        return self.updated_copy(grid_spec=GridSpec.from_grid(self.grid), structures=structures)
+
+    def _validate_finalized(self):
+        """Validate that after adding pec frames simulation setup is still valid."""
+
+        try:
+            _ = self._finalized
+        except Exception:
+            log.error(
+                "Simulation fails after requested mode source PEC frames are added. "
+                "Please inspect '._finalized'."
+            )

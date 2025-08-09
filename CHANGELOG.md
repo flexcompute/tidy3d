@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added KLayout plugin, with DRC functionality for running design rule checks in `plugins.klayout.drc`. Supports running DRC on GDS files as well as `Geometry`, `Structure`, and `Simulation` objects.
 - Added "mil" and "in" (inch) units to `plot_length_units`.
 - Objective functions that involve running `tidy3d.plugins.smatrix.ComponentModeler` can be differentiated with autograd.
+- Access field decay values in `SimulationData` via `sim_data.field_decay` as `TimeDataArray`.
+- Added ability to set first-order absorbing boundary conditions on simulation domain boundaries using either `ABCBoundary` or `ModeABCBoundary` classes.
+- Added `frame` field to `ModeSource` (default: `None`) and `WavePort` (default: `PECFrame()`). Setting this to `PECFrame(length=...)` automatically places a thin PEC frame of specified length around the source/port. The automatically created frames can be inspected using `Simulation._finalized` property.
+- Added `InternalAbsorber` class for placing first-order absorbing boundary conditions on planes inside the simulation domain. Internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.
+- Added `absorber` field (default: `True`) to `WavePort` for automatically placing an absorber behind the port.
+- Added `conjugated_dot_product` field in `ModeMonitor` (default: `True`) and `WavePort` (default: `False`) to allow selecting the conjugated or non-conjugated dot product for mode decomposition.
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
