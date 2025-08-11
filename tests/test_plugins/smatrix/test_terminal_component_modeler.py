@@ -235,18 +235,16 @@ def test_validate_no_sources(tmp_path):
 
 
 def test_validate_freqs():
-    """Ensure the 'freqs' array is strictly increasing and length of at least 2."""
+    """Ensure the 'freqs' array does not contain negative values nor duplicate entries."""
     modeler = make_component_modeler(planar_pec=False)
-    freqs = np.array([1.0])
+    # It should be possible to provide a single frequency point
+    freqs = np.array([1.0e6])
+    modeler = modeler.updated_copy(freqs=freqs)
+    _ = modeler._source_time
+    # Negative frequencies are not allowed
+    freqs = np.array([-1.0, 5]) * 1e9
     with pytest.raises(pd.ValidationError):
         _ = modeler.updated_copy(freqs=freqs)
-    freqs = np.array([-1.0, 5])
-    with pytest.raises(pd.ValidationError):
-        _ = modeler.updated_copy(freqs=freqs)
-    freqs = np.array([1, 2, 1.9])
-    with pytest.raises(pd.ValidationError):
-        _ = modeler.updated_copy(freqs=freqs)
-
     # Test case with non-unique value
     f_min, f_max = (0.5e9, 1.5e9)
     f0 = (f_min + f_max) / 2

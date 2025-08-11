@@ -14,7 +14,12 @@ from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import Complex, FreqArray
-from tidy3d.components.validators import assert_unique_names
+from tidy3d.components.validators import (
+    assert_unique_names,
+    validate_freqs_min,
+    validate_freqs_not_empty,
+    validate_freqs_unique,
+)
 from tidy3d.config import config
 from tidy3d.constants import HERTZ
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
@@ -150,24 +155,9 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
             raise SetupError(f"'{cls.__name__}.simulation' must not have any sources.")
         return val
 
-    @pd.validator("freqs", always=True)
-    def _validate_freqs(cls, val):
-        """The array of frequencies must be sorted, unique and non-negative."""
-        if len(val) < 2:
-            raise SetupError(f"You must supply at least 2 entries for '{cls.__name__}.freqs'.")
-        np_val = np.array(val)
-        if not np.all(np_val >= 0):
-            raise SetupError(f"'{cls.__name__}.freqs' must be an array of non-negative numbers.")
-        # Ensure freqs is sorted
-        diff = np.diff(np_val)
-        if not np.all(diff > 0):
-            violations = np.where(diff <= 0)[0] + 1
-            raise SetupError(
-                f"'{cls.__name__}.freqs' must be strictly increasing (unique values sorted "
-                "in ascending order). "
-                f"The entries at the following indices violated this requirement: {violations}."
-            )
-        return val
+    _freqs_not_empty = validate_freqs_not_empty()
+    _freqs_lower_bound = validate_freqs_min()
+    _freqs_unique = validate_freqs_unique()
 
     @pd.validator("ports", always=True)
     def _warn_rf_license(cls, val):

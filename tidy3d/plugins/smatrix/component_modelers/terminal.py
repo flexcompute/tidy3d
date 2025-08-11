@@ -28,7 +28,7 @@ from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 from tidy3d.web.api.container import BatchData
 
-from .base import AbstractComponentModeler, TerminalPortType
+from .base import FWIDTH_FRAC, AbstractComponentModeler, TerminalPortType
 
 NetworkIndex = str  # the 'i' in S_ij
 NetworkElement = tuple[NetworkIndex, NetworkIndex]  # the 'ij' in S_ij
@@ -272,6 +272,9 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
     @cached_property
     def _source_time(self):
         """Helper to create a time domain pulse for the frequency range of interest."""
+        if len(self.freqs) == 1:
+            freq0 = self.freqs[0]
+            return GaussianPulse(freq0=self.freqs[0], fwidth=freq0 * FWIDTH_FRAC)
         return GaussianPulse.from_frequency_range(
             fmin=min(self.freqs), fmax=max(self.freqs), remove_dc_component=self.remove_dc_component
         )
