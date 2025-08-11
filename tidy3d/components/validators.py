@@ -465,6 +465,19 @@ def validate_freqs_not_empty():
     return freqs_not_empty
 
 
+def validate_freqs_unique():
+    """Validate that the array of frequencies does not have duplicate entries."""
+
+    @pydantic.validator("freqs", always=True, allow_reuse=True)
+    def freqs_unique(cls, val):
+        """Raise validation error if ``freqs`` has duplicate entries."""
+        if len(set(val)) != len(val):
+            raise ValidationError(f"'{cls.__name__}.freqs' must not contain duplicate entries.")
+        return val
+
+    return freqs_unique
+
+
 def _warn_unsupported_traced_argument(name: str):
     @pydantic.validator(name, always=True, allow_reuse=True)
     def _warn_traced_arg(cls, val, values):
