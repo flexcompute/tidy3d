@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed sources from `sim_inf_structure` simulation object in `postprocess_adj` to avoid source and background medium validation errors.
 - Revert overly restrictive validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Fixed `ElectromagneticFieldData.to_zbf()` to support single frequency monitors and apply the correct flattening order.
+- Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
 
 ## [2.9.0] - 2025-08-04
 
