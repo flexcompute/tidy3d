@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Calculation of voltage and current in the `WavePort`, when one type of path integral is supplied and the transmission line mode is lossy.
 - Polygon vertices cleanup in `ClipOperation.intersections_plane`.
+- Removed sources from `sim_inf_structure` simulation object in `postprocess_adj` to avoid source and background medium validation errors.
 
 ## [2.9.0] - 2025-08-04
 
