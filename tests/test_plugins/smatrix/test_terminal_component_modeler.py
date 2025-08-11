@@ -1141,6 +1141,15 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
         antenna_params.radiation_efficiency, single_port_params.radiation_efficiency
     )
 
+    # Define port amplitudes
+    port_amplitudes = {modeler.ports[0].name: 1.0, modeler.ports[1].name: 0.0}
+    port2_zero_params = modeler.get_antenna_metrics_data(port_amplitudes)
+    # Should give idential results to only exciting one port
+    assert np.allclose(port2_zero_params.gain, single_port_params.gain)
+    assert np.allclose(
+        port2_zero_params.radiation_efficiency, single_port_params.radiation_efficiency
+    )
+
 
 def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     """Checks the terminal component modeler works when running with a subset of excitations."""

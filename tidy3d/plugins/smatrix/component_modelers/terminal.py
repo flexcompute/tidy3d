@@ -808,9 +808,10 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         Parameters
         ----------
         port_amplitudes : dict[str, complex] = None
-            Dictionary mapping port names to their desired excitation amplitudes. For each port,
+            Dictionary mapping port names to their desired excitation amplitudes, ``a``. For each port,
             :math:`\\frac{1}{2}|a|^2` represents the incident power from that port into the system.
-            If None, uses only the first port without any scaling of the raw simulation data.
+            If ``None``, uses only the first port without any scaling of the raw simulation data.
+            When ``None`` is passed as a port amplitude, the raw simulation data is used for that port.
             Note that in this method ``a`` represents the incident wave amplitude
             using the power wave definition in [2].
         monitor_name : str = None
@@ -849,6 +850,8 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
         # Retrieve associated simulation data
         combined_directivity_data = None
         for port, amplitude in port_dict.items():
+            if amplitude == 0.0:
+                continue
             sim_data_port = self.batch_data[self._task_name(port=port)]
             radiation_data = sim_data_port[rad_mon.name]
 
