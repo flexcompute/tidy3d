@@ -22,6 +22,7 @@ from tidy3d.components.autograd.constants import (
 )
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
@@ -1070,10 +1071,14 @@ def postprocess_adj(
             sim_orig = sim_data_orig.simulation
             plane_eps = eps_fwd.monitor.geometry
 
+            sim_orig_grid_spec = GridSpec.from_grid(sim_orig.grid)
+
             # permittivity without this structure
             structs_no_struct = list(sim_orig.structures)
             structs_no_struct.pop(structure_index)
-            sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
+            sim_no_structure = sim_orig.updated_copy(
+                structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
+            )
 
             eps_no_structure_data = [
                 sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
@@ -1086,6 +1091,8 @@ def postprocess_adj(
                 structures=structs_inf_struct,
                 medium=structure.medium,
                 monitors=[],
+                sources=[],
+                grid_spec=sim_orig_grid_spec,
             )
 
             eps_inf_structure_data = [
