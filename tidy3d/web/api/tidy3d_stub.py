@@ -3,58 +3,59 @@
 from __future__ import annotations
 
 import json
-from typing import Callable, Optional, Union
+import os as _os
+import tempfile as _tempfile
+from typing import Any, Callable
 
-import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
 
 from tidy3d import log
 from tidy3d.components.base import _get_valid_extension
-from tidy3d.components.data.monitor_data import ModeSolverData
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.eme.data.sim_data import EMESimulationData
-from tidy3d.components.eme.simulation import EMESimulation
-from tidy3d.components.mode.data.sim_data import ModeSimulationData
-from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.components.simulation import Simulation
-from tidy3d.components.tcad.data.sim_data import (
-    HeatChargeSimulationData,
-    HeatSimulationData,
-    VolumeMesherData,
-)
-from tidy3d.components.tcad.mesher import VolumeMesher
-from tidy3d.components.tcad.simulation.heat import HeatSimulation
-from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.plugins.mode.mode_solver import ModeSolver
 from tidy3d.web.core.file_util import (
     read_simulation_from_hdf5,
     read_simulation_from_hdf5_gz,
     read_simulation_from_json,
 )
 from tidy3d.web.core.stub import TaskStub, TaskStubData
-from tidy3d.web.core.types import TaskType
 
-SimulationType = Union[
-    Simulation,
-    HeatChargeSimulation,
-    HeatSimulation,
-    EMESimulation,
-    ModeSolver,
-    ModeSimulation,
-    VolumeMesher,
-]
-SimulationDataType = Union[
-    SimulationData,
-    HeatChargeSimulationData,
-    HeatSimulationData,
-    EMESimulationData,
-    ModeSolverData,
-    ModeSimulationData,
-]
+from . import builtin_registry  # noqa: F401  # ensure builtin types are registered on import
+from .registry import (
+    get_registered_data_loader,
+    get_registered_sim_loader,
+    get_task_type_for_instance,
+)
+
+SimulationType = Any
+SimulationDataType = Any
 
 
 class Tidy3dStub(BaseModel, TaskStub):
-    simulation: SimulationType = pd.Field(discriminator="type")
+    simulation: SimulationType
+
+    def _ensure_instance(self) -> Any:
+        """Ensure ``self.simulation`` is a proper instance, not a raw dict from JSON.
+
+        If it's a dict with a ``type`` key, reconstruct the instance using the registered loader
+        by writing the JSON to a temporary file and delegating to ``from_file``.
+        """
+        sim = self.simulation
+        if isinstance(sim, dict) and sim.get("type"):
+            type_ = sim["type"]
+            loader = get_registered_sim_loader(type_)
+            if loader is not None and hasattr(loader, "from_dict"):
+                # Prefer direct construction without IO if supported by the loader
+                self.simulation = loader.from_dict(sim)  # type: ignore[attr-defined]
+            else:
+                # Fallback: serialize to a temporary JSON file and delegate to from_file
+                tmp = _tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+                try:
+                    tmp.write(json.dumps(sim).encode("utf-8"))
+                    tmp.flush()
+                    tmp.close()
+                    self.simulation = Tidy3dStub.from_file(tmp.name)
+                finally:
+                    _os.unlink(tmp.name)
+        return self.simulation
 
     @classmethod
     def from_file(cls, file_path: str) -> SimulationType:
@@ -86,22 +87,15 @@ class Tidy3dStub(BaseModel, TaskStub):
 
         data = json.loads(json_str)
         type_ = data["type"]
-        if type_ == "Simulation":
-            sim = Simulation.from_file(file_path)
-        elif type_ == "ModeSolver":
-            sim = ModeSolver.from_file(file_path)
-        elif type_ == "HeatSimulation":
-            sim = HeatSimulation.from_file(file_path)
-        elif type_ == "HeatChargeSimulation":
-            sim = HeatChargeSimulation.from_file(file_path)
-        elif type_ == "EMESimulation":
-            sim = EMESimulation.from_file(file_path)
-        elif type_ == "ModeSimulation":
-            sim = ModeSimulation.from_file(file_path)
-        elif type_ == "VolumeMesher":
-            sim = VolumeMesher.from_file(file_path)
 
-        return sim
+        # Load using a registered loader
+        loader = get_registered_sim_loader(type_)
+        if loader is None:
+            raise ValueError(
+                f"No registered loader for simulation type '{type_}'. "
+                "Ensure the type is registered via tidy3d.web.api.registry."
+            )
+        return loader(file_path)
 
     def to_file(
         self,
@@ -121,7 +115,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         """
         self.simulation.to_file(file_path)
 
-    def to_hdf5_gz(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
+    def to_hdf5_gz(self, fname: str, custom_encoders: list[Callable] | None = None) -> None:
         """Exports Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] instance to .hdf5.gz file.
 
         Parameters
@@ -137,8 +131,8 @@ class Tidy3dStub(BaseModel, TaskStub):
         -------
         >>> simulation.to_hdf5_gz(fname='folder/sim.hdf5.gz') # doctest: +SKIP
         """
-
-        self.simulation.to_hdf5_gz(fname)
+        sim = self._ensure_instance()
+        sim.to_hdf5_gz(fname)
 
     def get_type(self) -> str:
         """Get simulation instance type.
@@ -148,27 +142,26 @@ class Tidy3dStub(BaseModel, TaskStub):
         :class:`TaskType`
             An instance Type of the component class calling ``load``.
         """
-        if isinstance(self.simulation, Simulation):
-            return TaskType.FDTD.name
-        if isinstance(self.simulation, ModeSolver):
-            return TaskType.MODE_SOLVER.name
-        if isinstance(self.simulation, HeatSimulation):
-            return TaskType.HEAT.name
-        if isinstance(self.simulation, HeatChargeSimulation):
-            return TaskType.HEAT_CHARGE.name
-        if isinstance(self.simulation, EMESimulation):
-            return TaskType.EME.name
-        if isinstance(self.simulation, ModeSimulation):
-            return TaskType.MODE.name
-        elif isinstance(self.simulation, VolumeMesher):
-            return TaskType.VOLUME_MESH.name
+        # Determine type via registry mapping only
+        sim = self._ensure_instance()
+        task_type = get_task_type_for_instance(sim)
+        if task_type is not None:
+            return task_type
+        raise ValueError(
+            "Unrecognized simulation instance type. Register the class via "
+            "tidy3d.web.api.registry.register_simulation_type before upload."
+        )
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
-        if isinstance(self.simulation, Simulation):
-            self.simulation.validate_pre_upload(source_required)
-        elif isinstance(self.simulation, EMESimulation):
-            self.simulation.validate_pre_upload()
+        sim = self._ensure_instance()
+        validate = getattr(sim, "validate_pre_upload", None)
+        if callable(validate):
+            try:
+                validate(source_required)
+            except TypeError:
+                # Some types have parameterless validation
+                validate()
 
 
 class Tidy3dStubData(BaseModel, TaskStubData):
@@ -202,22 +195,15 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
         data = json.loads(json_str)
         type_ = data["type"]
-        if type_ == "SimulationData":
-            sim_data = SimulationData.from_file(file_path)
-        elif type_ == "ModeSolverData":
-            sim_data = ModeSolverData.from_file(file_path)
-        elif type_ == "HeatSimulationData":
-            sim_data = HeatSimulationData.from_file(file_path)
-        elif type_ == "HeatChargeSimulationData":
-            sim_data = HeatChargeSimulationData.from_file(file_path)
-        elif type_ == "EMESimulationData":
-            sim_data = EMESimulationData.from_file(file_path)
-        elif type_ == "ModeSimulationData":
-            sim_data = ModeSimulationData.from_file(file_path)
-        elif type_ == "VolumeMesherData":
-            sim_data = VolumeMesherData.from_file(file_path)
 
-        return sim_data
+        # Load using a registered data loader
+        loader = get_registered_data_loader(type_)
+        if loader is None:
+            raise ValueError(
+                f"No registered loader for data type '{type_}'. "
+                "Ensure the type is registered via tidy3d.web.api.registry."
+            )
+        return loader(file_path)
 
     def to_file(self, file_path: str):
         """Exports Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance
@@ -257,22 +243,33 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         check_log_msg += "'web.download_log(task_id)'."
         warned_about_warnings = False
 
-        if isinstance(stub_data, SimulationData):
-            final_decay_value = stub_data.final_decay_value
-            shutoff_value = stub_data.simulation.shutoff
-            if stub_data.diverged:
-                log.warning("The simulation has diverged! " + check_log_msg)
-                warned_about_warnings = True
-            elif (shutoff_value != 0) and (final_decay_value > shutoff_value):
-                log.warning(
-                    f"Simulation final field decay value of {final_decay_value} is greater than "
-                    f"the simulation shutoff threshold of {shutoff_value}. Consider running the "
-                    "simulation again with a larger 'run_time' duration for more accurate results."
-                )
+        # Use duck typing to avoid hard dependencies on component data classes
+        final_decay_value = getattr(stub_data, "final_decay_value", None)
+        sim = getattr(stub_data, "simulation", None)
+        shutoff_value = getattr(sim, "shutoff", None) if sim is not None else None
+        diverged = getattr(stub_data, "diverged", False)
 
+        if diverged:
+            log.warning("The simulation has diverged! " + check_log_msg)
+            warned_about_warnings = True
+        elif (
+            shutoff_value is not None
+            and shutoff_value != 0
+            and final_decay_value is not None
+            and final_decay_value > shutoff_value
+        ):
+            log.warning(
+                f"Simulation final field decay value of {final_decay_value} is greater than "
+                f"the simulation shutoff threshold of {shutoff_value}. Consider running the "
+                "simulation again with a larger 'run_time' duration for more accurate results."
+            )
+
+        cls_name = type(stub_data).__name__
+        log_text = getattr(stub_data, "log", "") or ""
         if (
-            not isinstance(stub_data, (ModeSolverData, ModeSimulationData))
-            and "WARNING" in stub_data.log
+            cls_name not in ("ModeSolverData", "ModeSimulationData")
+            and isinstance(log_text, str)
+            and "WARNING" in log_text
             and not warned_about_warnings
         ):
             log.warning("Warning messages were found in the solver log. " + check_log_msg)

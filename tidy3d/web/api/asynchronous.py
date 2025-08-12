@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+import tempfile
+from typing import Literal, Union
 
 from tidy3d.log import log
 from tidy3d.web.core.types import PayType
@@ -15,11 +16,11 @@ def run_async(
     simulations: dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: Optional[str] = None,
-    num_workers: Optional[int] = None,
+    callback_url: str | None = None,
+    num_workers: int | None = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: Optional[dict[str, list[str]]] = None,
+    parent_tasks: dict[str, list[str]] | None = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
@@ -72,6 +73,10 @@ def run_async(
             "The 'num_workers' kwarg does not have an effect anymore as all "
             "simulations will now be uploaded in a single batch."
         )
+
+    # Avoid shared working directory collisions in parallel runs
+    if path_dir == DEFAULT_DATA_DIR:
+        path_dir = tempfile.mkdtemp(prefix="tidy3d_batch_")
 
     batch = Batch(
         simulations=simulations,

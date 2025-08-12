@@ -5,17 +5,16 @@ from __future__ import annotations
 import concurrent
 import os
 import time
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
-from typing import Literal, Optional
+from typing import Any, Literal
 
 import pydantic.v1 as pd
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.components.types import annotate_type
 from tidy3d.exceptions import DataError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.api import webapi as web
@@ -24,7 +23,7 @@ from tidy3d.web.core.task_core import Folder
 from tidy3d.web.core.task_info import RunInfo, TaskInfo
 from tidy3d.web.core.types import PayType
 
-from .tidy3d_stub import SimulationDataType, SimulationType
+from .tidy3d_stub import SimulationDataType
 
 # Max # of workers for parallel upload / download: above 10, performance is same but with warnings
 DEFAULT_NUM_WORKERS = 10
@@ -35,8 +34,6 @@ BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
 
 class WebContainer(Tidy3dBaseModel, ABC):
     """Base class for :class:`Job` and :class:`Batch`, technically not used"""
-
-    from abc import abstractmethod
 
     @staticmethod
     @abstractmethod
@@ -126,11 +123,10 @@ class Job(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulation: SimulationType = pd.Field(
+    simulation: Any = pd.Field(
         ...,
         title="simulation",
         description="Simulation to run as a 'task'.",
-        discriminator="type",
     )
 
     task_name: TaskName = pd.Field(..., title="Task Name", description="Unique name of the task.")
@@ -496,7 +492,7 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: dict[TaskName, annotate_type(SimulationType)] = pd.Field(
+    simulations: dict[TaskName, Any] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
@@ -539,7 +535,7 @@ class Batch(WebContainer):
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    num_workers: Optional[pd.PositiveInt] = pd.Field(
+    num_workers: pd.PositiveInt | None = pd.Field(
         DEFAULT_NUM_WORKERS,
         title="Number of Workers",
         description="Number of workers for multi-threading upload and download of batch. "
