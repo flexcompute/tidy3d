@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Revert overly restrictive validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Fixed `ElectromagneticFieldData.to_zbf()` to support single frequency monitors and apply the correct flattening order.
 - Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
+- Added missing `solver_version` keyword argument to `run_async`.
 
 ## [2.9.0] - 2025-08-04
 
