@@ -247,6 +247,7 @@ def run_async(
     num_workers: typing.Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
+    solver_version: typing.Optional[str] = None,
     parent_tasks: typing.Optional[dict[str, list[str]]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
@@ -273,6 +274,10 @@ def run_async(
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
+    solver_version: Optional[str] = None
+        Target solver version.
     local_gradient: bool = False
         Whether to perform gradient calculations locally, requiring more downloads but potentially
         more stable with experimental features.
@@ -307,6 +312,7 @@ def run_async(
             num_workers=num_workers,
             verbose=verbose,
             simulation_type="tidy3d_autograd_async",
+            solver_version=solver_version,
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
@@ -321,6 +327,7 @@ def run_async(
         num_workers=num_workers,
         verbose=verbose,
         simulation_type=simulation_type,
+        solver_version=solver_version,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,

@@ -19,6 +19,7 @@ def run_async(
     num_workers: Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
+    solver_version: Optional[str] = None,
     parent_tasks: Optional[dict[str, list[str]]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
@@ -43,6 +44,10 @@ def run_async(
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
+    solver_version: Optional[str] = None
+        Target solver version.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: Union[PayType, str] = PayType.AUTO
@@ -79,6 +84,7 @@ def run_async(
         callback_url=callback_url,
         verbose=verbose,
         simulation_type=simulation_type,
+        solver_version=solver_version,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,

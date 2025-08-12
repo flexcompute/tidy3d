@@ -273,7 +273,6 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
                 "type",
                 "path_dir",
                 "attrs",
-                "solver_version",
                 "jobs_cached",
                 "num_workers",
                 "simulations",
