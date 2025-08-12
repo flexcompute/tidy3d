@@ -98,6 +98,7 @@ def interpn(
     xi: tuple[NDArray[np.float64], ...],
     *,
     method: InterpolationType = "linear",
+    **kwargs,
 ) -> NDArray[np.float64]:
     """Interpolate over a rectilinear grid in arbitrary dimensions.
 
@@ -137,7 +138,12 @@ def interpn(
     else:
         raise ValueError(f"Unsupported interpolation method: {method}")
 
-    itrp = RegularGridInterpolator(points, values, method=method)
+    if kwargs.get("fill_value") == "extrapolate":
+        itrp = RegularGridInterpolator(
+            points, values, method=method, fill_value=None, bounds_error=False
+        )
+    else:
+        itrp = RegularGridInterpolator(points, values, method=method)
 
     # Prepare the grid for interpolation
     # This step reshapes the grid, checks for NaNs and out-of-bounds values

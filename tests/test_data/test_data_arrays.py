@@ -6,6 +6,7 @@ from typing import Optional
 
 import autograd as ag
 import autograd.numpy as np
+import numpy
 import pytest
 import xarray.testing as xrt
 from autograd.test_util import check_grads
@@ -516,3 +517,66 @@ def test_with_updated_data_shape():
 
     with pytest.raises(ValueError):
         arr2 = arr._with_updated_data(data=data, coords=coords)
+
+
+@pytest.mark.parametrize("method", ["nearest", "linear"])
+def test_interpn_with_extrapolation(rng, method):
+    """Checks that the extrapolation in `interpn` works as expected and that
+    it is autograd compatible."""
+    arr = td.SpatialDataArray(
+        rng.random((1, 3, 4, 5), dtype=np.float64),
+        coords={"x": [1], "y": [1, 2, 3], "z": [2, 3, 4, 5], "f": [0, 1, 2, 3, 4]},
+    )
+
+    for coord in arr.dims:
+        endpoints = [
+            arr.coords[coord].values[0] - 1.0,
+            arr.coords[coord].values[-1] + 1.0,
+        ]
+
+        method_coord = method if (len(arr.coords[coord]) > 1) else "nearest"
+
+        offset_interp_coords = arr.coords[coord].values + 0.5
+        coords_interp = {coord: [endpoints[0], *offset_interp_coords, endpoints[1]]}
+
+        extrapolate = arr._ag_interp(
+            coords_interp, method=method_coord, kwargs={"fill_value": "extrapolate"}
+        )
+
+        compare = arr.interp(
+            coords_interp, method=method_coord, kwargs={"fill_value": "extrapolate"}
+        )
+
+        numpy.testing.assert_allclose(
+            extrapolate.data, compare.data, err_msg="Expected data to be close!"
+        )
+
+    def f(params):
+        arr = td.SpatialDataArray(
+            params.reshape((1, 3, 4, 5)),
+            coords={"x": [1], "y": [1, 2, 3], "z": [2, 3, 4, 5], "f": [0, 1, 2, 3, 4]},
+        )
+
+        result = 0.0
+
+        for coord in arr.dims:
+            endpoints = [
+                arr.coords[coord].values[0] - 1.0,
+                arr.coords[coord].values[-1] + 1.0,
+            ]
+
+            method_coord = method if (len(arr.coords[coord]) > 1) else "nearest"
+
+            offset_interp_coords = arr.coords[coord].values + 0.5
+            coords_interp = {coord: [endpoints[0], *offset_interp_coords, endpoints[1]]}
+
+            interp_data = arr.interp(
+                coords_interp, method=method_coord, kwargs={"fill_value": "extrapolate"}
+            )
+
+            result += np.sum(interp_data.data)
+
+        return result
+
+    data = rng.random((1, 3, 4, 5), dtype=np.float64)
+    check_grads(f, order=1, modes=["rev"])(data)

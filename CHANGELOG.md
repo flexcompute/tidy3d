@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `ElectromagneticFieldData.to_zbf()` to support single frequency monitors and apply the correct flattening order.
 - Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
 - Added missing `solver_version` keyword argument to `run_async`.
+- Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates. 
 
 ## [2.9.0] - 2025-08-04
 

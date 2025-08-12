@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Union
 
-import numpy as np
+import autograd.numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
