@@ -467,12 +467,7 @@ class DataArray(xr.DataArray):
             data = anp.transpose(var.data, combined_permutation)
             xi = anp.stack([anp.ravel(new_xi.data) for new_xi in new_x], axis=-1)
 
-            result = interpn(
-                [xn.data for xn in x],
-                data,
-                xi,
-                method=method,
-            )
+            result = interpn([xn.data for xn in x], data, xi, method=method, **kwargs)
 
             result = anp.moveaxis(result, 0, -1)
             result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
