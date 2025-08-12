@@ -25,8 +25,10 @@ from tidy3d.web.core.types import TaskType
 
 from .registry import (
     register_data_loader,
+    register_data_loader_from_dict,
     register_remote_files,
     register_sim_loader,
+    register_sim_loader_from_dict,
     register_simulation_type,
 )
 
@@ -47,6 +49,13 @@ register_sim_loader("HeatSimulation", HeatSimulation.from_file)
 register_sim_loader("HeatChargeSimulation", HeatChargeSimulation.from_file)
 register_sim_loader("EMESimulation", EMESimulation.from_file)
 register_sim_loader("VolumeMesher", VolumeMesher.from_file)
+register_sim_loader_from_dict("Simulation", Simulation.parse_obj)
+register_sim_loader_from_dict("ModeSolver", ModeSolver.parse_obj)
+register_sim_loader_from_dict("ModeSimulation", ModeSimulation.parse_obj)
+register_sim_loader_from_dict("HeatSimulation", HeatSimulation.parse_obj)
+register_sim_loader_from_dict("HeatChargeSimulation", HeatChargeSimulation.parse_obj)
+register_sim_loader_from_dict("EMESimulation", EMESimulation.parse_obj)
+register_sim_loader_from_dict("VolumeMesher", VolumeMesher.parse_obj)
 
 # JSON type → loaders for data
 register_data_loader("SimulationData", SimulationData.from_file)
@@ -56,6 +65,13 @@ register_data_loader("HeatSimulationData", HeatSimulationData.from_file)
 register_data_loader("HeatChargeSimulationData", HeatChargeSimulationData.from_file)
 register_data_loader("EMESimulationData", EMESimulationData.from_file)
 register_data_loader("VolumeMesherData", VolumeMesherData.from_file)
+register_data_loader_from_dict("SimulationData", SimulationData.parse_obj)
+register_data_loader_from_dict("ModeSolverData", ModeSolverData.parse_obj)
+register_data_loader_from_dict("ModeSimulationData", ModeSimulationData.parse_obj)
+register_data_loader_from_dict("HeatSimulationData", HeatSimulationData.parse_obj)
+register_data_loader_from_dict("HeatChargeSimulationData", HeatChargeSimulationData.parse_obj)
+register_data_loader_from_dict("EMESimulationData", EMESimulationData.parse_obj)
+register_data_loader_from_dict("VolumeMesherData", VolumeMesherData.parse_obj)
 
 # TaskType → custom remote files (only MODE_SOLVER deviates from default)
 register_remote_files(TaskType.MODE_SOLVER.name, MODE_FILE_HDF5_GZ, MODE_DATA_HDF5_GZ)
