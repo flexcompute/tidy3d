@@ -21,6 +21,9 @@ class _Registry:
     class_to_task_type: dict[type[Any], str] = {}
     json_type_to_sim_loader: dict[str, Callable[[str], Any]] = {}
     json_type_to_data_loader: dict[str, Callable[[str], Any]] = {}
+    # Optional loaders that construct directly from in-memory dicts/json strings
+    json_type_to_sim_loader_from_dict: dict[str, Callable[[dict], Any]] = {}
+    json_type_to_data_loader_from_dict: dict[str, Callable[[dict], Any]] = {}
     task_type_to_remote_files: dict[str, tuple[str, str]] = {}
 
 
@@ -39,6 +42,12 @@ def register_sim_loader(json_type: str, loader: Callable[[str], Any]) -> None:
     _Registry.json_type_to_sim_loader[json_type] = loader
 
 
+def register_sim_loader_from_dict(json_type: str, loader: Callable[[dict], Any]) -> None:
+    """Register a JSON ``type`` string to a simulation loader from dict."""
+
+    _Registry.json_type_to_sim_loader_from_dict[json_type] = loader
+
+
 def register_data_loader(json_type: str, loader: Callable[[str], Any]) -> None:
     """Register a JSON ``type`` string to a data loader callable.
 
@@ -46,6 +55,12 @@ def register_data_loader(json_type: str, loader: Callable[[str], Any]) -> None:
     """
 
     _Registry.json_type_to_data_loader[json_type] = loader
+
+
+def register_data_loader_from_dict(json_type: str, loader: Callable[[dict], Any]) -> None:
+    """Register a JSON ``type`` string to a data loader from dict."""
+
+    _Registry.json_type_to_data_loader_from_dict[json_type] = loader
 
 
 def register_remote_files(task_type: str, sim_file: str, data_file: str) -> None:
@@ -69,6 +84,14 @@ def get_registered_sim_loader(json_type: str) -> Callable[[str], Any] | None:
 
 def get_registered_data_loader(json_type: str) -> Callable[[str], Any] | None:
     return _Registry.json_type_to_data_loader.get(json_type)
+
+
+def get_registered_sim_loader_from_dict(json_type: str) -> Callable[[dict], Any] | None:
+    return _Registry.json_type_to_sim_loader_from_dict.get(json_type)
+
+
+def get_registered_data_loader_from_dict(json_type: str) -> Callable[[dict], Any] | None:
+    return _Registry.json_type_to_data_loader_from_dict.get(json_type)
 
 
 def get_remote_files_for_task_type(task_type: str) -> tuple[str, str] | None:

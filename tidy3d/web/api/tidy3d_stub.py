@@ -18,10 +18,10 @@ from tidy3d.web.core.file_util import (
 )
 from tidy3d.web.core.stub import TaskStub, TaskStubData
 
-from . import builtin_registry  # noqa: F401  # ensure builtin types are registered on import
 from .registry import (
     get_registered_data_loader,
     get_registered_sim_loader,
+    get_registered_sim_loader_from_dict,
     get_task_type_for_instance,
 )
 
@@ -41,10 +41,9 @@ class Tidy3dStub(BaseModel, TaskStub):
         sim = self.simulation
         if isinstance(sim, dict) and sim.get("type"):
             type_ = sim["type"]
-            loader = get_registered_sim_loader(type_)
-            if loader is not None and hasattr(loader, "from_dict"):
-                # Prefer direct construction without IO if supported by the loader
-                self.simulation = loader.from_dict(sim)  # type: ignore[attr-defined]
+            from_dict_loader = get_registered_sim_loader_from_dict(type_)
+            if from_dict_loader is not None:
+                self.simulation = from_dict_loader(sim)
             else:
                 # Fallback: serialize to a temporary JSON file and delegate to from_file
                 tmp = _tempfile.NamedTemporaryFile(suffix=".json", delete=False)
