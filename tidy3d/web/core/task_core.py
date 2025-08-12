@@ -12,7 +12,6 @@ import pydantic.v1 as pd
 from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
 
-import tidy3d as td
 from tidy3d.exceptions import ValidationError
 
 from . import http_util
@@ -275,7 +274,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         try:
             resp = http.get(f"tidy3d/tasks/{task_id}/detail")
         except WebNotFoundError as e:
-            td.log.error(f"The requested task ID '{task_id}' does not exist.")
+            console = get_logger_console()
+            console.log(f"The requested task ID '{task_id}' does not exist.")
             raise e
 
         task = SimulationTask(**resp) if resp else None

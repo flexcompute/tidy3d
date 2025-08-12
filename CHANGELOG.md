@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved the robustness of batch jobs. The batch state, including all `task_ids`, is now saved to `batch.hdf5` immediately after upload. This fixes an issue where an interrupted batch (e.g., due to a kernel crash or network loss) would be unrecoverable.
 - Fixed warning for running symmetric adjoint simulations by port to not trigger when there is a single port.
 - Bug in `CoaxialLumpedPort` where source injection is off when the `normal_axis` is not `z`.
+- `tidy3d/web/core` no longer depends on `tidy3d/components`.
 
 ## [2.9.0] - 2025-08-04
 
