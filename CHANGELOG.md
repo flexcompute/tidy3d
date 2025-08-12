@@ -22,12 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for gradients with respect to the `conductivity` of a `CustomMedium`.
 - Added `VerticalNaturalConvectionCoeffModel`, a model for heat transfer due to natural convection from a vertical plate. It can be used in `ConvectionBC` to compute the heat transfer coefficient from fluid properties, using standard Nusselt number correlations for both laminar and turbulent flow.
 - Added `BroadbandModeABCSpec` class for setting broadband absorbing boundary conditions that can absorb waveguide modes over a specified frequency range using a pole-residue pair model.
+- `Scene.plot_3d()` method to make 3D rendering of scene.
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
 - Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
 - The `TerminalComponentModeler` defaults to the pseudo wave definition of scattering parameters. The new field `s_param_def` can be used to switch between either pseudo or power wave definitions.
-- Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
 
 ### Fixed
 - Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.
