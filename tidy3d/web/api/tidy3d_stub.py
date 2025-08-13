@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import os as _os
 import tempfile as _tempfile
+from pathlib import Path
 from typing import Any, Callable
 
 from pydantic.v1 import BaseModel
 
 from tidy3d import log
-from tidy3d.components.base import _get_valid_extension
 from tidy3d.web.core.file_util import (
     read_simulation_from_hdf5,
     read_simulation_from_hdf5_gz,
@@ -76,7 +76,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         -------
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
-        extension = _get_valid_extension(file_path)
+        extension = _get_valid_extension_web(file_path)
         if extension == ".json":
             json_str = read_simulation_from_json(file_path)
         elif extension == ".hdf5":
@@ -184,7 +184,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             An instance of the component class calling ``load``.
         """
-        extension = _get_valid_extension(file_path)
+        extension = _get_valid_extension_web(file_path)
         if extension == ".json":
             json_str = read_simulation_from_json(file_path)
         elif extension == ".hdf5":
@@ -203,6 +203,26 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                 "Ensure the type is registered via tidy3d.web.api.registry."
             )
         return loader(file_path)
+
+
+def _get_valid_extension_web(file_path: str) -> str:
+    """Return a supported extension for web loading without importing components.
+
+    Supported: .json, .hdf5, .h5, .hdf5.gz
+    """
+    suffixes = [s.lower() for s in Path(file_path).suffixes[-2:]]
+    if not suffixes:
+        raise ValueError(f"File '{file_path}' missing extension.")
+    single = suffixes[-1]
+    double = "".join(suffixes)
+    if single in {".json", ".hdf5", ".h5"}:
+        return single
+    if double in {".hdf5.gz"}:
+        return double
+    raise ValueError(
+        "File extension must be one of .json, .hdf5, .h5, .hdf5.gz; "
+        f"file '{file_path}' does not match any of those."
+    )
 
     def to_file(self, file_path: str):
         """Exports Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] instance

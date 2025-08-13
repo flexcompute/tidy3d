@@ -7,21 +7,18 @@ import pathlib
 import tempfile
 import time
 from datetime import datetime
-from typing import Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 import pydantic.v1 as pydantic
 from botocore.exceptions import ClientError
 from joblib import Parallel, delayed
 from rich.progress import Progress
 
-from tidy3d.components.data.monitor_data import ModeSolverData
-from tidy3d.components.eme.simulation import EMESimulation
-from tidy3d.components.medium import AbstractCustomMedium
-from tidy3d.components.simulation import Simulation
 from tidy3d.exceptions import SetupError, WebError
 from tidy3d.log import get_logging_console, log
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
 from tidy3d.version import __version__
+from tidy3d.web.api.tidy3d_stub import Tidy3dStubData
 from tidy3d.web.core.core_config import get_logger_console
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.http_util import http
@@ -56,7 +53,7 @@ def run(
     progress_callback_download: Optional[Callable[[float], None]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
-) -> ModeSolverData:
+) -> Any:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
 
@@ -94,7 +91,7 @@ def run(
 
     if reduce_simulation == "auto":
         sim_mediums = mode_solver.simulation.scene.mediums
-        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
+        contains_custom = any(getattr(med, "is_custom", False) for med in sim_mediums)
         reduce_simulation = contains_custom
 
         if reduce_simulation:
@@ -156,7 +153,7 @@ def run_batch(
     retry_delay: float = DEFAULT_RETRY_DELAY,
     progress_callback_upload: Optional[Callable[[float], None]] = None,
     progress_callback_download: Optional[Callable[[float], None]] = None,
-) -> list[ModeSolverData]:
+) -> list[Any]:
     """
     Submits a batch of ModeSolver to the server concurrently, manages progress, and retrieves results.
 
@@ -186,8 +183,8 @@ def run_batch(
 
     Returns
     -------
-    List[ModeSolverData]
-        A list of ModeSolverData objects containing the results from each simulation in the batch. ``None`` is placed in the list for simulations that fail after all retries.
+    List[Any]
+        A list of mode-solver data objects containing the results from each simulation in the batch. ``None`` is placed in the list for simulations that fail after all retries.
     """
     console = get_logging_console()
 
@@ -325,9 +322,16 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         folder = Folder.get(folder_name, create=True)
 
         mode_solver.validate_pre_upload()
-        if isinstance(mode_solver.simulation, Simulation):
-            mode_solver.simulation.validate_pre_upload(source_required=False)
-        elif isinstance(mode_solver.simulation, EMESimulation):
+        # Prefer duck-typing to avoid importing component classes
+        sim_obj = mode_solver.simulation
+        validate = getattr(sim_obj, "validate_pre_upload", None)
+        if callable(validate):
+            try:
+                validate(source_required=False)
+            except TypeError:
+                validate()
+        # Block EMESimulation explicitly by name to avoid hard import
+        if type(sim_obj).__name__ == "EMESimulation":
             # TODO: replace this with native web api support
             raise SetupError(
                 "'EMESimulation' is not yet supported in the "
@@ -337,8 +341,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
                 "Alternatively, you can add a 'ModeSolverMonitor' to the 'EMESimulation' "
                 "and use the EME solver web api."
             )
-            # mode_solver.simulation.validate_pre_upload()
-        else:
+        # Otherwise rely on the presence of required attributes; raise if missing
+        if not hasattr(sim_obj, "scene"):
             raise SetupError("Simulation type not supported in the remote mode solver web api.")
 
         response_body = {
@@ -572,7 +576,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-            mode_solver_dict["simulation"] = Simulation.from_json(sim_file)
+            # Load simulation generically without importing components
+            mode_solver_dict["simulation"] = Tidy3dStubData.from_file(sim_file).simulation
             mode_solver = ModeSolver.parse_obj(mode_solver_dict)
 
         # Store requested mode solver file
@@ -585,7 +590,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         to_file: str = "mode_solver_data.hdf5",
         verbose: bool = True,
         progress_callback: Optional[Callable[[float], None]] = None,
-    ) -> ModeSolverData:
+    ) -> Any:
         """Get mode solver results for this task from the server.
 
         Parameters
@@ -632,10 +637,13 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
                     "Please confirm that the task was successfully run."
                 ) from e
 
-        data = ModeSolverData.from_hdf5(to_file)
-        data = data.copy(
-            update={"monitor": self.mode_solver.to_mode_solver_monitor(name=MODE_MONITOR_NAME)}
-        )
+        # Load using registry-backed loader to avoid importing ModeSolverData
+        data = Tidy3dStubData.from_file(to_file)
+        copier = getattr(data, "copy", None)
+        if callable(copier):
+            data = copier(
+                update={"monitor": self.mode_solver.to_mode_solver_monitor(name=MODE_MONITOR_NAME)}
+            )
 
         self.mode_solver._cached_properties["data_raw"] = data
 

@@ -11,15 +11,11 @@ from typing import Callable, Literal, Optional, Union
 from requests import HTTPError
 from rich.progress import Progress
 
-from tidy3d.components.medium import AbstractCustomMedium
-from tidy3d.components.mode.mode_solver import ModeSolver
-from tidy3d.components.mode.simulation import ModeSimulation
 from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
+from tidy3d.web.api.registry import get_remote_files_for_task_type
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
-    MODE_DATA_HDF5_GZ,
-    MODE_FILE_HDF5_GZ,
     SIM_FILE_HDF5,
     SIM_FILE_HDF5_GZ,
     SIMULATION_DATA_HDF5_GZ,
@@ -40,7 +36,8 @@ RUN_REFRESH_TIME = 1.0
 SIM_FILE_JSON = "simulation.json"
 
 # not all solvers are supported yet in GUI
-GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
+# include MODE as supported alongside MODE_SOLVER
+GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "MODE", "HEAT"]
 
 # if a solver is in beta stage, cost is subject to change
 BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE", "VOLUME_MESH"]
@@ -187,8 +184,9 @@ def run(
     data = load(
         task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
     )
-    if isinstance(simulation, ModeSolver):
-        simulation._patch_data(data=data)
+    patcher = getattr(simulation, "_patch_data", None)
+    if callable(patcher):
+        patcher(data=data)
     return data
 
 
@@ -254,8 +252,7 @@ def upload(
 
     """
 
-    if isinstance(simulation, (ModeSolver, ModeSimulation)):
-        simulation = get_reduced_simulation(simulation, reduce_simulation)
+    simulation = get_reduced_simulation(simulation, reduce_simulation)
 
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)
@@ -283,9 +280,11 @@ def upload(
             console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
             console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
 
+    # Select remote file names via registry (fallback to defaults)
     remote_sim_file = SIM_FILE_HDF5_GZ
-    if task_type == "MODE_SOLVER":
-        remote_sim_file = MODE_FILE_HDF5_GZ
+    custom_files = get_remote_files_for_task_type(task_type)
+    if custom_files:
+        remote_sim_file = custom_files[0]
 
     task.upload_simulation(
         stub=stub,
@@ -304,8 +303,10 @@ def upload(
 
 def get_reduced_simulation(simulation, reduce_simulation):
     """
-    Adjust the given simulation object based on the reduce_simulation parameter. Currently only
-    implemented for the mode solver.
+    Adjust the given simulation object based on the reduce_simulation parameter.
+    Uses duck-typing to support different simulation classes. If the simulation
+    exposes a ``reduced_simulation_copy`` attribute, this function may return it
+    based on the reduction policy.
 
     Parameters
     ----------
@@ -322,22 +323,35 @@ def get_reduced_simulation(simulation, reduce_simulation):
     """
 
     """
-    TODO: This only works for the mode solver, which is also why `simulation.simulation.scene` is
-    used below. After refactor to use the new ModeSimulation, it should be possible to put the call
-    to this function outside of the MODE_SOLVER check in the upload function. We could implement
-    dummy `reduced_simulation_copy` methods for the other solvers or also implement reductions
-    there. Note that if we do the latter we may want to also modify the warning below to only
-    happen if there are custom media *and* they extend beyond the simulation domain.
+    Note: Reduction is currently only implemented by some solvers. If a simulation
+    does not support reduction (no ``reduced_simulation_copy``), the input is returned.
     """
-    if reduce_simulation == "auto":
-        if isinstance(simulation, ModeSimulation):
-            sim_mediums = simulation.scene.mediums
-        else:
-            sim_mediums = simulation.simulation.scene.mediums
-        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
-        reduce_simulation = contains_custom
+    wants_reduce = bool(reduce_simulation)
+    contains_custom = False
 
-        if reduce_simulation:
+    if reduce_simulation == "auto":
+        wants_reduce = False
+        # Try common access patterns to locate mediums via duck-typing
+        sim_mediums = None
+        try:
+            sim_mediums = getattr(getattr(simulation, "scene", None), "mediums", None)
+        except Exception:
+            sim_mediums = None
+        if sim_mediums is None:
+            try:
+                sim_mediums = getattr(
+                    getattr(getattr(simulation, "simulation", None), "scene", None), "mediums", None
+                )
+            except Exception:
+                sim_mediums = None
+        if sim_mediums is not None:
+            contains_custom = any(getattr(med, "is_custom", False) for med in sim_mediums)
+            wants_reduce = contains_custom
+
+    # Only reduce if the simulation actually supports it
+    has_reduction = hasattr(simulation, "reduced_simulation_copy")
+    if wants_reduce and has_reduction:
+        if reduce_simulation == "auto" and contains_custom:
             log.warning(
                 f"The {type(simulation)} object contains custom mediums. It will be "
                 "automatically restricted to the solver domain to reduce data for uploading. "
@@ -345,7 +359,6 @@ def get_reduced_simulation(simulation, reduce_simulation):
                 " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
                 " silence this warning."
             )
-    if reduce_simulation:
         return simulation.reduced_simulation_copy
     return simulation
 
@@ -656,9 +669,11 @@ def download(
     task_info = get_info(task_id)
     task_type = task_info.taskType
 
+    # Select remote file names via registry (fallback to defaults)
     remote_data_file = SIMULATION_DATA_HDF5_GZ
-    if task_type == "MODE_SOLVER":
-        remote_data_file = MODE_DATA_HDF5_GZ
+    custom_files = get_remote_files_for_task_type(task_type)
+    if custom_files:
+        remote_data_file = custom_files[1]
 
     task = SimulationTask(taskId=task_id)
     task.get_sim_data_hdf5(
@@ -712,9 +727,11 @@ def download_hdf5(
     task_info = get_info(task_id)
     task_type = task_info.taskType
 
+    # Select remote file names via registry (fallback to defaults)
     remote_sim_file = SIM_FILE_HDF5_GZ
-    if task_type == "MODE_SOLVER":
-        remote_sim_file = MODE_FILE_HDF5_GZ
+    custom_files = get_remote_files_for_task_type(task_type)
+    if custom_files:
+        remote_sim_file = custom_files[0]
 
     task = SimulationTask(taskId=task_id)
     task.get_simulation_hdf5(
