@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
 ### Changed
 
 ### Fixed
 
 
-## [v2.9.1] - 2025-08-11
+## [v2.9.1] - 2025-08-13
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.

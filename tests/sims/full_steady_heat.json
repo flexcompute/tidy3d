@@ -273,7 +273,7 @@
         "min_edges_per_side": 2.0,
         "non_refined_structures": []
     },
-    "version": "2.9.0",
+    "version": "2.9.1",
     "plot_length_units": "\u03bcm",
     "structure_priority_mode": "equal",
     "analysis_spec": null
