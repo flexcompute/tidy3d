@@ -1717,6 +1717,98 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return mode_data_sorted
 
+    def mode_index_sort(
+        self,
+        track_freq: TrackFreq,
+    ) -> ModeData:
+        """Starting from the base frequency defined by parameter ``track_freq``, sort modes at each
+        frequency according to their overlap values with the modes at the previous frequency.
+        That is, it attempts to rearrange modes in such a way that a given ``mode_index``
+        corresponds to physically the same mode at all frequencies. Modes with overlap values over
+        ``overlap_tresh`` are considered matching and not rearranged.
+
+        Parameters
+        ----------
+        track_freq : Literal["central", "lowest", "highest"]
+            Parameter that specifies which frequency will serve as a starting point in
+            the reordering process.
+        overlap_thresh : float = 0.9
+            Modal overlap threshold above which two modes are considered to be the same and are not
+            rearranged. If after the sorting procedure the overlap value between two corresponding
+            modes is less than this threshold, a warning about a possible discontinuity is
+            displayed.
+        """
+        from scipy.optimize import linear_sum_assignment
+
+        if len(self.field_components) == 0:
+            return self.copy()
+        num_freqs = len(self.monitor.freqs)
+        num_modes = self.monitor.mode_spec.num_modes
+
+        if track_freq == "lowest":
+            f0_ind = 0
+        elif track_freq == "highest":
+            raise AssertionError
+        elif track_freq == "central":
+            raise AssertionError
+
+        # Compute sorting order based on trajectory tracking
+        sorting = -np.ones((num_freqs, num_modes), dtype=int)
+        phase = np.zeros((num_freqs, num_modes))
+        sorting[f0_ind, :] = np.arange(num_modes)  # base frequency won't change
+        freqs = self.n_complex.f.values
+        diff_f = np.diff(freqs)
+        d_mode_index = np.zeros(num_modes)
+        # Sort in two directions from the base frequency
+        for last_ind, this_ind in zip(range(num_freqs - 1), range(1, num_freqs)):
+            last_mode_inds = self.n_complex.values[last_ind, :]
+            this_mode_inds = self.n_complex.values[this_ind, :]
+            df = diff_f[last_ind]
+            predicted_mode_index = last_mode_inds + df * d_mode_index
+            # Cost matrix is the distance between every mode index at the previous frequency index
+            # and the current frequency index
+            cost_matrix = np.abs(this_mode_inds[:, None] - predicted_mode_index[None, :])
+            # Solve assignment problem
+            _, col_ind = linear_sum_assignment(cost_matrix)
+            sorting[this_ind, :] = col_ind[sorting[last_ind, :]]
+            d_mode_index = (this_mode_inds[col_ind] - last_mode_inds) / df
+
+        # Rearrange modes using computed sorting values
+        mode_data_sorted = self._reorder_modes(
+            sorting=sorting,
+            phase=phase,
+            track_freq=track_freq,
+        )
+
+        return mode_data_sorted
+
+    def _identify_degenerate_modes(
+        self,
+        tol=1e-5,
+    ) -> list[tuple[int]]:
+        """ "Inspects mode indices to find groups of degenerate modes."""
+        mode_inds = self.n_complex.values
+        num_modes = mode_inds.shape[1]
+        ungrouped = set(range(num_modes))
+        degenerate_groups = []
+
+        while ungrouped:
+            # Start a new group with an ungrouped column
+            seed = ungrouped.pop()
+            current_group = [seed]
+            # Find all columns similar to the seed of the current group
+            for col in list(ungrouped):
+                if np.allclose(mode_inds[:, col], mode_inds[:, seed], rtol=tol, atol=tol):
+                    current_group.append(col)
+                    ungrouped.remove(col)
+                    break
+
+            # Only keep groups with more than one mode
+            if len(current_group) >= 2:
+                degenerate_groups.append(sorted(current_group))
+
+        return degenerate_groups
+
     def _isel(self, **isel_kwargs):
         """Wraps ``xarray.DataArray.isel`` for all data fields that are defined over frequency and
         mode index. Used in ``overlap_sort`` but not officially supported since for example
