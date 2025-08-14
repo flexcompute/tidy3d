@@ -1639,7 +1639,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         frequency according to their overlap values with the modes at the previous frequency.
         That is, it attempts to rearrange modes in such a way that a given ``mode_index``
         corresponds to physically the same mode at all frequencies. Modes with overlap values over
-        ``overlap_tresh`` are considered matching and not rearranged.
+        ``overlap_thresh`` are considered matching and not rearranged.
 
         Parameters
         ----------
@@ -1664,12 +1664,20 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         elif track_freq == "central":
             f0_ind = num_freqs // 2
 
+        # Normalizing the flux to 1, does not guarantee self terms of overlap integrals
+        # are also normalized to 1 when the non-conjugated product is used.
+        if self.monitor.conjugated_dot_product:
+            self_overlap = np.ones((num_freqs, num_modes))
+        else:
+            self_overlap = np.abs(self.dot(self, self.monitor.conjugated_dot_product).values)
+            threshold_array = overlap_thresh * self_overlap
+
         # Compute sorting order and overlaps with neighboring frequencies
         sorting = -np.ones((num_freqs, num_modes), dtype=int)
         overlap = np.zeros((num_freqs, num_modes))
         phase = np.zeros((num_freqs, num_modes))
         sorting[f0_ind, :] = np.arange(num_modes)  # base frequency won't change
-        overlap[f0_ind, :] = np.ones(num_modes)
+        overlap[f0_ind, :] = self_overlap[f0_ind, :]
 
         # Sort in two directions from the base frequency
         for step, last_ind in zip([-1, 1], [-1, num_freqs]):
@@ -1678,6 +1686,9 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
             # March to lower/higher frequencies
             for freq_id in range(f0_ind + step, last_ind, step):
+                # Calculate threshold array for this frequency
+                if not self.monitor.conjugated_dot_product:
+                    overlap_thresh = threshold_array[freq_id, :]
                 # Get next frequency to sort
                 data_to_sort = self._isel(f=[freq_id])
                 # Assign to the base frequency so that outer_dot will compare them
@@ -1746,15 +1757,14 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
     def _find_ordering_one_freq(
         self,
         data_to_sort: ModeData,
-        overlap_thresh: float,
+        overlap_thresh: Union[float, np.array],
     ) -> tuple[Numpy, Numpy]:
         """Find new ordering of modes in data_to_sort based on their similarity to own modes."""
-
         num_modes = self.n_complex.sizes["mode_index"]
 
         # Current pairs and their overlaps
         pairs = np.arange(num_modes)
-        complex_amps = self.dot(data_to_sort).data.ravel()
+        complex_amps = self.dot(data_to_sort, self.monitor.conjugated_dot_product).data.ravel()
         if self.monitor.store_fields_direction == "-":
             complex_amps *= -1
 
@@ -1768,7 +1778,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         data_template_reduced = self._isel(mode_index=modes_to_sort)
 
         amps_reduced = data_template_reduced.outer_dot(
-            data_to_sort._isel(mode_index=modes_to_sort)
+            data_to_sort._isel(mode_index=modes_to_sort), self.monitor.conjugated_dot_product
         ).to_numpy()[0, :, :]
 
         if self.monitor.store_fields_direction == "-":

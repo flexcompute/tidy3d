@@ -43,6 +43,7 @@ MODE_SIM_MODE_SOLVER_SHARED_ATTRS = [
     "freqs",
     "direction",
     "colocate",
+    "conjugated_dot_product",
     "fields",
 ]
 # attributes shared between ModeSimulation class and AbstractYeeGridSimulation
@@ -134,6 +135,12 @@ class ModeSimulation(AbstractYeeGridSimulation):
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes). Default is ``True``.",
+    )
+
+    conjugated_dot_product: bool = pd.Field(
+        True,
+        title="Conjugated Dot Product",
+        description="Use conjugated or non-conjugated dot product for mode decomposition.",
     )
 
     fields: tuple[EMField, ...] = pd.Field(

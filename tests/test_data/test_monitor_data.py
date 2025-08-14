@@ -162,9 +162,11 @@ def make_mode_solver_data():
     return mode_data_norm
 
 
-def make_mode_solver_data_smooth():
+def make_mode_solver_data_smooth(conjugated_dot_product: bool = True):
     mode_data = ModeData(
-        monitor=MODE_MONITOR_WITH_FIELDS,
+        monitor=MODE_MONITOR_WITH_FIELDS.updated_copy(
+            conjugated_dot_product=conjugated_dot_product
+        ),
         Ex=make_scalar_mode_field_data_array_smooth("Ex", rot=0.13 * np.pi),
         Ey=make_scalar_mode_field_data_array_smooth("Ey", rot=0.26 * np.pi),
         Ez=make_scalar_mode_field_data_array_smooth("Ez", rot=0.39 * np.pi),
@@ -668,7 +670,8 @@ def test_diffraction_data_use_medium():
     assert np.allclose(data.eta, np.real(td.ETA_0 / 2.0))
 
 
-def test_mode_solver_data_sort():
+@pytest.mark.parametrize("conjugated_dot_product", [True, False])
+def test_mode_solver_data_sort(conjugated_dot_product):
     # test basic matching algorithm
     arr = np.array([[1, 2, 3], [6, 5, 4], [7, 9, 8]])
     pairs, values = ModeData._find_closest_pairs(arr)
@@ -677,7 +680,7 @@ def test_mode_solver_data_sort():
 
     # test sorting function
     # get smooth data
-    data = make_mode_solver_data_smooth()
+    data = make_mode_solver_data_smooth(conjugated_dot_product=conjugated_dot_product)
     # make it unsorted
     num_modes = len(data.Ex.coords["mode_index"])
     num_freqs = len(data.Ex.coords["f"])
