@@ -77,6 +77,7 @@ from .data_array import (
     ModeDispersionDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
     TimeDataArray,
 )
 from .dataset import (
@@ -2253,6 +2254,40 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         )
 
         return src_adj
+
+    def _make_linear_combination_degenerate_modes(
+        self, degenerate_mode_groups: list[tuple[int, ...]], transform_matrices: list[Numpy]
+    ) -> ModeData:
+        """Make a new :class:`.ModeData` where degenerate modes have been recombined."""
+
+        combined_field_components = {}
+        for mode_group, transform_matrix in zip(degenerate_mode_groups, transform_matrices):
+            # indexer = {"mode_index": list(mode_group)}
+            for field_name, data_array in self.field_components.items():
+                new_values = data_array.values.copy()
+                old_mode_values = data_array.values[..., mode_group]
+                new_mode_values = np.einsum("fmn,xyzfn->xyzfm", transform_matrix, old_mode_values)
+                new_values[..., mode_group] = new_mode_values
+                # new_data_array = data_array._with_updated_data(data=new_mode_values, coords=indexer)
+                combined_field_components[field_name] = ScalarModeFieldDataArray(
+                    data=new_values, coords=data_array.coords
+                )
+
+        return self.updated_copy(**combined_field_components)
+
+    def _determine_transform_to_linear_polarization_basis(
+        self, degenerate_modes: tuple[int, int]
+    ) -> Numpy:
+        """Make a new :class:`.ModeData` where degenerate modes have been recombined."""
+        # Find location of peak intensity
+        mode_subset = self._isel(mode_index=degenerate_modes)
+        # tan_fields = mode_subset._colocated_tangential_fields
+        dim1, dim2 = self._tangential_dims
+        E1 = mode_subset.field_components["E" + self._tangential_dims[0]]
+        E2 = mode_subset.field_components["E" + self._tangential_dims[1]]
+        _ = E1 * E1.conj() + E2 * E2.conj()
+
+        return np.zeros((2, 2, 2))
 
 
 class ModeSolverData(ModeData):
