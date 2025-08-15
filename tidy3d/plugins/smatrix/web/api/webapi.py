@@ -195,63 +195,73 @@ def run(
         # modeler.to_file("modeler.hdf5")
         # print(batch_task.batch_task_name_map)
         # print(batch_task.batch_task_name_map.values())
-        for port, task_id_i in batch_task.batch_task_name_map.items():
-            simulation_i = modeler.sim_dict[port]
-            task_id_i_r = upload(
-                simulation=simulation_i,
-                task_id=task_id_i,
-                task_name=port,
-                folder_name=folder_name,
-                callback_url=callback_url,
-                verbose=verbose,
-                progress_callback=progress_callback_upload,
-                simulation_type=simulation_type,
-                parent_tasks=parent_tasks,
-                solver_version=solver_version,
-                reduce_simulation=reduce_simulation,
+        old = False
+        if old:
+            for port, task_id_i in batch_task.batch_task_name_map.items():
+                simulation_i = modeler.sim_dict[port]
+                task_id_i_r = upload(
+                    simulation=simulation_i,
+                    task_id=task_id_i,
+                    task_name=port,
+                    folder_name=folder_name,
+                    callback_url=callback_url,
+                    verbose=verbose,
+                    progress_callback=progress_callback_upload,
+                    simulation_type=simulation_type,
+                    parent_tasks=parent_tasks,
+                    solver_version=solver_version,
+                    reduce_simulation=reduce_simulation,
+                )
+                print(task_id_i)
+                print(task_id_i_r)
+                start(
+                    task_id_i,
+                    solver_version=solver_version,
+                    worker_group=worker_group,
+                    pay_type=pay_type,
+                    priority=priority,
+                )
+                monitor(task_id_i, verbose=verbose)
+        else:
+            print("batch_task.batch_id")
+            print(batch_task.batch_id)
+            from ..core.http_util import http
+            resp = http.post(
+                f"tidy3d/projects/terminal-component-modeler-split",
+                {
+                    "batchType": "RF_SWEEP",
+                    "batchId": batch_task.batch_id,
+                    "fileName": "modeler.hdf5.gz",
+                    "protocolVersion": "2.10.0rc2"
+                },
             )
-            print(task_id_i)
-            print(task_id_i_r)
-            start(
-                task_id_i,
-                solver_version=solver_version,
-                worker_group=worker_group,
-                pay_type=pay_type,
-                priority=priority,
+            print(resp)
+            resp = http.post(
+                f"tidy3d/projects/{batch_task.batch_id}/batch-check",
+                {
+                    "batchType": "RF_SWEEP",
+                    "solverVersion": "dario-rf-0.0.0",
+                    "protocolVersion": "2.10.0rc2"
+                },
             )
-            monitor(task_id_i, verbose=verbose)
-
-        # print("batch_task.batch_id")
-        # print(batch_task.batch_id)
-        # from ..core.http_util import http
-        # resp = http.post(
-        #     f"tidy3d/projects/terminal-component-modeler-split",
-        #     {
-        #         "batchType": "RF_SWEEP",
-        #         "batchId": batch_task.batch_id,
-        #         "fileName": "modeler.hdf5.gz",
-        #         "protocolVersion": "2.10.0rc2"
-        #     },
-        # )
-        # print(resp)
-        # resp = http.post(
-        #     f"tidy3d/projects/{batch_task.batch_id}/batch-submit",
-        #     {
-        #         "batchType": "RF_SWEEP",
-        #         "solverVersion": "dario-rf-0.0.0",
-        #         "protocolVersion": "2.10.0rc2"
-        #     },
-        # )
-        # print(resp)
-        # resp = http.get(
-        #     f"tidy3d/tasks/{batch_task.batch_id}/batch-detail?batchType=RF_SWEEP",
-        #     {
-        #         "batchType": "RF_SWEEP",
-        #         "solverVersion": "dario-rf-0.0.0",
-        #         "protocolVersion": "2.10.0rc2",
-        #     },
-        # )
-        # print(resp)
+            resp = http.post(
+                f"tidy3d/projects/{batch_task.batch_id}/batch-submit",
+                {
+                    "batchType": "RF_SWEEP",
+                    "solverVersion": "dario-rf-0.0.0",
+                    "protocolVersion": "2.10.0rc2"
+                },
+            )
+            print(resp)
+            resp = http.get(
+                f"tidy3d/tasks/{batch_task.batch_id}/batch-detail?batchType=RF_SWEEP",
+                {
+                    "batchType": "RF_SWEEP",
+                    "solverVersion": "dario-rf-0.0.0",
+                    "protocolVersion": "2.10.0rc2",
+                },
+            )
+            print(resp)
         from ..core.http_util import http
         resp = http.post(
             f"tidy3d/projects/{batch_task.batch_id}/postprocess",
