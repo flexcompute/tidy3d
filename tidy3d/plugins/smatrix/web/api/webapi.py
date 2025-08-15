@@ -195,7 +195,7 @@ def run(
         # modeler.to_file("modeler.hdf5")
         # print(batch_task.batch_task_name_map)
         # print(batch_task.batch_task_name_map.values())
-        old = False
+        old = True
         if old:
             for port, task_id_i in batch_task.batch_task_name_map.items():
                 simulation_i = modeler.sim_dict[port]
@@ -237,7 +237,7 @@ def run(
             )
             print(resp)
             resp = http.post(
-                f"tidy3d/projects/{batch_task.batch_id}/batch-check",
+                f"tidy3d/rf-task/{batch_task.batch_id}/batch-check",
                 {
                     "batchType": "RF_SWEEP",
                     "solverVersion": "dario-rf-0.0.0",
