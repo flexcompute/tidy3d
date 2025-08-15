@@ -195,7 +195,7 @@ def run(
         # modeler.to_file("modeler.hdf5")
         # print(batch_task.batch_task_name_map)
         # print(batch_task.batch_task_name_map.values())
-        old = True
+        old = False
         if old:
             for port, task_id_i in batch_task.batch_task_name_map.items():
                 simulation_i = modeler.sim_dict[port]
@@ -236,14 +236,30 @@ def run(
                 },
             )
             print(resp)
+            # do estimate
             resp = http.post(
-                f"tidy3d/rf-task/{batch_task.batch_id}/batch-check",
+                f"tidy3d/projects/{batch_task.batch_id}/batch-check",
                 {
                     "batchType": "RF_SWEEP",
                     "solverVersion": "dario-rf-0.0.0",
                     "protocolVersion": "2.10.0rc2"
                 },
             )
+            print(resp)
+            # monitoring estimate results
+            validate_status = "Validating"
+            while validate_status not in ["Validate_Success", "Validate_Warn"]:
+                resp = http.get(f"tidy3d/tasks/{batch_task.batch_id}/batch-detail?batchType=RF_SWEEP")
+                validate_status = resp["status"]
+                if validate_status == "Validating":
+                    time.sleep(REFRESH_TIME)
+                elif validate_status in ["Validate_Success", "Validate_Warn"]:
+                    break
+                else:
+                    raise WebError(f"Batch task {batch_task.batch_id} is blocked: {resp['message']}")
+            print(resp)
+
+            # batch-submit run all simulations
             resp = http.post(
                 f"tidy3d/projects/{batch_task.batch_id}/batch-submit",
                 {
@@ -253,15 +269,17 @@ def run(
                 },
             )
             print(resp)
-            resp = http.get(
-                f"tidy3d/tasks/{batch_task.batch_id}/batch-detail?batchType=RF_SWEEP",
-                {
-                    "batchType": "RF_SWEEP",
-                    "solverVersion": "dario-rf-0.0.0",
-                    "protocolVersion": "2.10.0rc2",
-                },
-            )
-            print(resp)
+            validate_status = "Running"
+            while validate_status not in ["Run_Success"]:
+                resp = http.get(f"tidy3d/tasks/{batch_task.batch_id}/batch-detail?batchType=RF_SWEEP")
+                validate_status = resp["status"]
+                if validate_status == "Running":
+                    log.warning("Waiting for running batch task to finish...")
+                    time.sleep(REFRESH_TIME)
+                elif validate_status == "Run_Success":
+                    break
+                else:
+                    raise WebError(f"Batch task {batch_task.batch_id} is blocked: {resp['message']}")
         from ..core.http_util import http
         resp = http.post(
             f"tidy3d/projects/{batch_task.batch_id}/postprocess",
