@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tidy3d.components.data.index import IndexSimulationData
+from tidy3d.components.index import IndexSimulation
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
@@ -579,6 +581,8 @@ __all__ = [
     "HeuristicPECStaircasing",
     "HuraySurfaceRoughness",
     "IndexPerturbation",
+    "IndexSimulation",
+    "IndexSimulationData",
     "IndexedDataArray",
     "IndexedFieldVoltageDataArray",
     "IndexedTimeDataArray",

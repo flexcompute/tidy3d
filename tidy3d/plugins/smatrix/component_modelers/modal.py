@@ -17,8 +17,7 @@ from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.types import Ax
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.plugins.smatrix.ports.modal import ModalPortDataArray, Port
-from tidy3d.web.api.container import BatchData
+from tidy3d.plugins.smatrix.ports.modal import Port
 
 from .base import FWIDTH_FRAC, AbstractComponentModeler
 
@@ -61,7 +60,7 @@ class ComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
 
             new_mnts = list(self.simulation.monitors) + mode_monitors
             sim_copy = self.simulation.copy(update={"sources": [mode_source], "monitors": new_mnts})
-            task_name = self._task_name(port=port, mode_index=mode_index)
+            task_name = self.get_task_name(port=port, mode_index=mode_index)
             sim_dict[task_name] = sim_copy
         return sim_dict
 
@@ -192,82 +191,3 @@ class ComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
         max_mode_index_in = get_max_mode_indices(self.matrix_indices_source)
 
         return max_mode_index_out, max_mode_index_in
-
-    def _construct_smatrix(self) -> ModalPortDataArray:
-        """Post process :class:`.BatchData` to generate scattering matrix."""
-        return self._internal_construct_smatrix(batch_data=self.batch_data)
-
-    def _internal_construct_smatrix(self, batch_data: BatchData) -> ModalPortDataArray:
-        """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
-
-        max_mode_index_out, max_mode_index_in = self.max_mode_index
-        num_modes_out = max_mode_index_out + 1
-        num_modes_in = max_mode_index_in + 1
-        port_names_out, port_names_in = self.port_names
-
-        values = np.zeros(
-            (len(port_names_out), len(port_names_in), num_modes_out, num_modes_in, len(self.freqs)),
-            dtype=complex,
-        )
-        coords = {
-            "port_out": port_names_out,
-            "port_in": port_names_in,
-            "mode_index_out": range(num_modes_out),
-            "mode_index_in": range(num_modes_in),
-            "f": np.array(self.freqs),
-        }
-        s_matrix = ModalPortDataArray(values, coords=coords)
-
-        # loop through source ports
-        for col_index in self.matrix_indices_run_sim:
-            port_name_in, mode_index_in = col_index
-            port_in = self.get_port_by_name(port_name=port_name_in)
-
-            sim_data = batch_data[self._task_name(port=port_in, mode_index=mode_index_in)]
-
-            for row_index in self.matrix_indices_monitor:
-                port_name_out, mode_index_out = row_index
-                port_out = self.get_port_by_name(port_name=port_name_out)
-
-                # directly compute the element
-                mode_amps_data = sim_data[port_out.name].copy().amps
-                dir_out = "-" if port_out.direction == "+" else "+"
-                amp = mode_amps_data.sel(
-                    f=coords["f"], direction=dir_out, mode_index=mode_index_out
-                )
-                source_norm = self._normalization_factor(port_in, sim_data)
-                s_matrix_elements = np.array(amp.data) / np.array(source_norm)
-
-                coords_set = {
-                    "port_in": port_name_in,
-                    "mode_index_in": mode_index_in,
-                    "port_out": port_name_out,
-                    "mode_index_out": mode_index_out,
-                }
-
-                s_matrix = s_matrix._with_updated_data(data=s_matrix_elements, coords=coords_set)
-
-        # element can be determined by user-defined mapping
-        for (row_in, col_in), (row_out, col_out), mult_by in self.element_mappings:
-            port_out_from, mode_index_out_from = row_in
-            port_in_from, mode_index_in_from = col_in
-            coords_from = {
-                "port_in": port_in_from,
-                "mode_index_in": mode_index_in_from,
-                "port_out": port_out_from,
-                "mode_index_out": mode_index_out_from,
-            }
-
-            port_out_to, mode_index_out_to = row_out
-            port_in_to, mode_index_in_to = col_out
-
-            elements_from = mult_by * s_matrix.loc[coords_from].values
-            coords_to = {
-                "port_in": port_in_to,
-                "mode_index_in": mode_index_in_to,
-                "port_out": port_out_to,
-                "mode_index_out": mode_index_out_to,
-            }
-            s_matrix = s_matrix._with_updated_data(data=elements_from, coords=coords_to)
-
-        return s_matrix
