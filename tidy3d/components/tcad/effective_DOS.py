@@ -1,19 +1,16 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
 import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.constants import C_0, HBAR, K_B
+from tidy3d.constants import HBAR, K_B, M_E_EV
+from tidy3d.exceptions import DataError
 
-from ...exceptions import DataError
-
-# constants definition
-m_e_C_square = 0.51099895069e6  # (electron mass * C_0^2) in eV
-m_e_eV = m_e_C_square / C_0 / C_0  # equivalent electron mass in eV
 um_3_to_cm_3 = 1e12  # conversion factor from micron^(-3) to cm^(-3)
-
-DOS_aux_const = 2.0 * np.power((m_e_eV * K_B) / (2 * np.pi * HBAR * HBAR), 1.5) * um_3_to_cm_3
+DOS_aux_const = 2.0 * np.power((M_E_EV * K_B) / (2 * np.pi * HBAR * HBAR), 1.5) * um_3_to_cm_3
 
 
 class EffectiveDOS(Tidy3dBaseModel, ABC):
@@ -22,17 +19,15 @@ class EffectiveDOS(Tidy3dBaseModel, ABC):
     @abstractmethod
     def calc_eff_dos(self, T: float):
         """Abstract method to calculate the effective density of states."""
-        pass
 
     @abstractmethod
     def calc_eff_dos_derivative(self, T: float):
         """Abstract method to calculate the temperature derivative of the effective density of states."""
-        pass
 
     def get_effective_DOS(self, T: float):
         if T <= 0:
             raise DataError(
-                f"Incorrect temperature value ({T}) for the effectve density of states calculation."
+                f"Incorrect temperature value ({T}) for the effective density of states calculation."
             )
 
         return self.calc_eff_dos(T)

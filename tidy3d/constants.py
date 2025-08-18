@@ -53,6 +53,16 @@ K_B = 8.617333262e-5
 Boltzmann constant [eV/K]
 """
 
+M_E_C_SQUARE = 0.51099895069e6
+"""
+Electron rest mass energy (m_e * c^2) [eV]
+"""
+
+M_E_EV = M_E_C_SQUARE / C_0**2
+"""
+Electron mass [eV*s^2/um^2]
+"""
+
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps
 """

@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from tidy3d.components.tcad.bandgap import SlotboomBandGapNarrowing
+from tidy3d.components.tcad.bandgap_energy import (
+    ConstantEnergyBandGap,
+    VarshniEnergyBandGap,
+)
 from tidy3d.components.tcad.boundary.charge import CurrentBC, InsulatingBC, VoltageBC
 from tidy3d.components.tcad.boundary.heat import ConvectionBC, HeatFluxBC, TemperatureBC
 from tidy3d.components.tcad.effective_DOS import (
@@ -10,11 +14,6 @@ from tidy3d.components.tcad.effective_DOS import (
     DualValleyEffectiveDOS,
     IsotropicEffectiveDOS,
     MultiValleyEffectiveDOS,
-)
-from tidy3d.components.tcad.bandgap_energy import (
-    ConstantEnergyBandGap,
-    QuadraticEnergyBandGap,
-    VarshniEnergyBandGap,
 )
 from tidy3d.components.tcad.generation_recombination import (
     AugerRecombination,
@@ -37,7 +36,7 @@ from tidy3d.components.types import Union
 EffectiveDOSModelType = Union[
     ConstantEffectiveDOS, IsotropicEffectiveDOS, MultiValleyEffectiveDOS, DualValleyEffectiveDOS
 ]
-EnergyBandGapModelType = Union[ConstantEnergyBandGap, QuadraticEnergyBandGap, VarshniEnergyBandGap]
+EnergyBandGapModelType = Union[ConstantEnergyBandGap, VarshniEnergyBandGap]
 MobilityModelType = Union[CaugheyThomasMobility, ConstantMobilityModel]
 RecombinationModelType = Union[
     AugerRecombination, RadiativeRecombination, ShockleyReedHallRecombination
