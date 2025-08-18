@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
+from typing import Optional
 
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.types import (
@@ -15,22 +18,18 @@ from tidy3d.plugins.smatrix.web import Batch, BatchData
 DEFAULT_DATA_DIR = "."
 
 
-def compose_simulation_data_index(
-    port_task_map: dict[str, str]
-) -> IndexSimulation:
+def compose_simulation_data_index(port_task_map: dict[str, str]) -> IndexSimulationData:
     port_data_dict = {}
-    for port, task in port_task_map.items():
-        # get simulationdata for each port
-        port_data_dict[port] = sim_data_i
+    for _, _ in port_task_map.items():
+        pass
+        # FIXME: get simulationdata for each port
+        # port_data_dict[port] = sim_data_i
 
-    return IndexSimulationData(
-        index=port_data_dict.keys(),
-        data=port_data_dict.values()
-    )
+    return IndexSimulationData(index=port_data_dict.keys(), data=port_data_dict.values())
+
 
 def compose_terminal_modeler_data(
-    modeler: TerminalComponentModeler,
-    port_task_map: dict[str, str]
+    modeler: TerminalComponentModeler, port_task_map: dict[str, str]
 ) -> TerminalComponentModelerData:
     """Assembles `TerminalComponentModelerData` from simulation results.
 
@@ -47,9 +46,9 @@ def compose_terminal_modeler_data(
     port_simulation_data = compose_simulation_data_index(port_task_map)
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
+
 def compose_component_modeler_data(
-    modeler: ComponentModeler,
-    port_task_map: dict[str, str]
+    modeler: ComponentModeler, port_task_map: dict[str, str]
 ) -> ComponentModelerData:
     """Assembles `ComponentModelerData` from simulation results.
 
@@ -68,9 +67,8 @@ def compose_component_modeler_data(
     return ComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
-def compose_modeler_data(
+def compose_modeler(
     modeler_file: str,
-    port_task_map: dict[str, str]
 ) -> ComponentModelerDataType:
     """Selects the correct composer based on the modeler type and creates the data object.
 
@@ -91,14 +89,34 @@ def compose_modeler_data(
     """
     json_str = Tidy3dBaseModel._json_string_from_hdf5(modeler_file)
     model_dict = json.loads(json_str)
-    modeler = model_dict["type"]
+    modeler_type = model_dict["type"]
 
     if modeler_type == "ComponentModeler":
-        modeler = ComponentModeler.from_file(task_file)
-        modeler_data = compose_component_modeler_data(modeler=modeler, port_task_map=port_task_map)
+        modeler = ComponentModeler.from_file(modeler_file)
     elif modeler_type == "TerminalComponentModeler":
-        modeler = TerminalComponentModeler.from_file(task_file)
-        modeler_data = compose_terminal_modeler_data(modeler=modeler, port_task_map=port_task_map)
+        modeler = TerminalComponentModeler.from_file(modeler_file)
+    else:
+        raise TypeError(f"Unsupported modeler type: {type(modeler).__name__}")
+    return modeler
+
+
+def compose_modeler_data(
+    modeler: ComponentModeler | TerminalComponentModeler,
+    indexed_sim_data: IndexSimulationData,
+) -> ComponentModelerDataType:
+    """Selects the correct composer based on the modeler type and creates the data object.
+
+    Returns:
+        The appropriate `ComponentModelerDataType` object containing the simulation results.
+
+    Raises:
+        TypeError: If the provided `modeler` is not a recognized type.
+    """
+
+    if isinstance(modeler, ComponentModeler):
+        modeler_data = ComponentModelerData(modeler=modeler, data=indexed_sim_data)
+    elif isinstance(modeler, TerminalComponentModeler):
+        modeler_data = TerminalComponentModelerData(modeler=modeler, data=indexed_sim_data)
     else:
         raise TypeError(f"Unsupported modeler type: {type(modeler).__name__}")
     return modeler_data
@@ -123,7 +141,7 @@ def compose_terminal_modeler_data_from_batch_data(
     """
     ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
     data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = IndexSimulationData(ports=ports, data=data)
+    port_simulation_data = IndexSimulationData(index=ports, data=data)
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
@@ -146,7 +164,7 @@ def compose_component_modeler_data_from_batch_data(
     """
     ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
     data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = IndexSimulationData(ports=ports, data=data)
+    port_simulation_data = IndexSimulationData(index=ports, data=data)
     return ComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
@@ -172,9 +190,13 @@ def compose_modeler_data_from_batch_data(
         TypeError: If the provided `modeler` is not a recognized type.
     """
     if isinstance(modeler, ComponentModeler):
-        modeler_data = compose_component_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)
+        modeler_data = compose_component_modeler_data_from_batch_data(
+            modeler=modeler, batch_data=batch_data
+        )
     elif isinstance(modeler, TerminalComponentModeler):
-        modeler_data = compose_terminal_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)
+        modeler_data = compose_terminal_modeler_data_from_batch_data(
+            modeler=modeler, batch_data=batch_data
+        )
     else:
         raise TypeError(f"Unsupported modeler type: {type(modeler).__name__}")
 
@@ -184,8 +206,8 @@ def compose_modeler_data_from_batch_data(
 def create_batch(
     modeler: ComponentModelerType,
     path_dir: str = DEFAULT_DATA_DIR,
-    parent_batch_id: str = None,
-    group_id: str = None,
+    parent_batch_id: Optional[str] = None,
+    group_id: Optional[str] = None,
     file_name: str = "batch.hdf5",
     **kwargs,
 ) -> Batch:
@@ -203,14 +225,14 @@ def create_batch(
     filepath = os.path.join(path_dir, file_name)
 
     if parent_batch_id is not None:
-        parent_task_dict = dict()
+        parent_task_dict = {}
         for key in modeler.sim_dict.keys():
             parent_task_dict[key] = (parent_batch_id,)
     else:
         parent_task_dict = None
 
     if group_id is not None:
-        group_id_dict = dict()
+        group_id_dict = {}
         for key in modeler.sim_dict.keys():
             group_id_dict[key] = (group_id,)
     else:
@@ -224,6 +246,7 @@ def create_batch(
     )
     batch.to_file(filepath)
     return batch
+
 
 def run(
     modeler: ComponentModelerType,
