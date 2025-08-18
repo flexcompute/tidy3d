@@ -166,7 +166,7 @@ def make_component_modeler(
     freqs = np.linspace(freq_start, freq_stop, 100)
 
     modeler = TerminalComponentModeler(
-        simulation=sim, ports=ports, freqs=freqs, remove_dc_component=False, verbose=True, **kwargs
+        simulation=sim, ports=ports, freqs=freqs, remove_dc_component=False, **kwargs
     )
 
     return modeler
@@ -328,7 +328,7 @@ def make_coaxial_component_modeler(
     freqs = np.linspace(freq_start, freq_stop, 100)
 
     modeler = TerminalComponentModeler(
-        simulation=sim, ports=ports, freqs=freqs, remove_dc_component=False, verbose=True, **kwargs
+        simulation=sim, ports=ports, freqs=freqs, remove_dc_component=False, **kwargs
     )
 
     return modeler
