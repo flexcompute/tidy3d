@@ -122,7 +122,7 @@ class MultiValleyEffectiveDOS(EffectiveDOS):
 
 
 class DualValleyEffectiveDOS(EffectiveDOS):
-    """Effective density of states model that assumes combibation of light holes and heavy holes with isotropic effective masses.
+    """Effective density of states model that assumes combination of light holes and heavy holes with isotropic effective masses.
     The model assumes the standard equation for the 3D semiconductor with parabolic energy dispersion:
 
     .. math::
