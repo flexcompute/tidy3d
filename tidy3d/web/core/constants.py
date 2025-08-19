@@ -31,3 +31,7 @@ SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
 MODE_FILE_HDF5_GZ = "mode_solver.hdf5.gz"
 MODE_DATA_HDF5_GZ = "output/mode_solver_data.hdf5.gz"
 SIM_ERROR_FILE = "output/tidy3d_error.json"
+
+# Component modeler specific artifacts
+MODELER_FILE_HDF5_GZ = "modeler.hdf5.gz"
+CM_DATA_HDF5_GZ = "output/cm_data.hdf5.gz"

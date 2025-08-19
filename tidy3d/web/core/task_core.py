@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import pathlib
 import tempfile
+import time
 from datetime import datetime
 from typing import Callable, Optional, Union
 
@@ -17,14 +18,22 @@ from tidy3d.exceptions import ValidationError
 
 from . import http_util
 from .cache import FOLDER_CACHE
-from .constants import SIM_ERROR_FILE, SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5_GZ
+from .connect_util import REFRESH_TIME
+from .constants import (
+    SIM_ERROR_FILE,
+    SIM_FILE_HDF5_GZ,
+    SIM_LOG_FILE,
+    SIMULATION_DATA_HDF5_GZ,
+)
 from .core_config import get_logger_console
 from .environment import Env
 from .exceptions import WebError, WebNotFoundError
 from .file_util import read_simulation_from_hdf5
+from .http_util import get_version as _get_protocol_version
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
 from .stub import TaskStub
+from .task_info import BatchDetail
 from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 
@@ -675,6 +684,169 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             to_file=to_file,
             verbose=verbose,
         )
+
+
+class BatchTask:
+    """Generic wrapper around batch endpoints.
+
+    Note: batch_type must be provided by caller (e.g., "RF_SWEEP").
+    """
+
+    def __init__(self, batch_id: str):
+        self.batch_id = batch_id
+
+    @staticmethod
+    def is_batch(resource_id: str, batch_type: str) -> bool:
+        try:
+            resp = http.get(
+                f"tidy3d/tasks/{resource_id}/batch-detail", params={"batchType": batch_type}
+            )
+            return bool(resp and isinstance(resp, dict) and "status" in resp)
+        except Exception:
+            return False
+
+    def detail(self, batch_type: str) -> BatchDetail:
+        resp = http.get(
+            f"tidy3d/tasks/{self.batch_id}/batch-detail", params={"batchType": batch_type}
+        )
+        return BatchDetail(**(resp or {}))
+
+    def check(
+        self,
+        solver_version: Optional[str] = None,
+        protocol_version: Optional[str] = None,
+        batch_type: str = "",
+    ):
+        if protocol_version is None:
+            protocol_version = _get_protocol_version()
+        return http.post(
+            f"tidy3d/projects/{self.batch_id}/batch-check",
+            {
+                "batchType": batch_type,
+                "solverVersion": solver_version,
+                "protocolVersion": protocol_version,
+            },
+        )
+
+    def submit(
+        self,
+        solver_version: Optional[str] = None,
+        protocol_version: Optional[str] = None,
+        batch_type: str = "",
+    ):
+        if protocol_version is None:
+            protocol_version = _get_protocol_version()
+        return http.post(
+            f"tidy3d/projects/{self.batch_id}/batch-submit",
+            {
+                "batchType": batch_type,
+                "solverVersion": solver_version,
+                "protocolVersion": protocol_version,
+            },
+        )
+
+    def postprocess(
+        self,
+        solver_version: Optional[str] = None,
+        protocol_version: Optional[str] = None,
+        batch_type: str = "",
+    ):
+        if protocol_version is None:
+            protocol_version = _get_protocol_version()
+        return http.post(
+            f"tidy3d/projects/{self.batch_id}/postprocess",
+            {
+                "batchType": batch_type,
+                "solverVersion": solver_version,
+                "protocolVersion": protocol_version,
+            },
+        )
+
+    def wait_for_validate(
+        self, timeout: Optional[float] = None, batch_type: str = ""
+    ) -> BatchDetail:
+        start = datetime.now().timestamp()
+        while True:
+            d = self.detail(batch_type=batch_type)
+            status = d.status
+            if status in ("Validate_Success", "Validate_Warn", "Validate_Failed"):
+                return d
+            if status in ("Blocked", "Abort", "Aborted"):
+                return d
+            if timeout is not None and (datetime.now().timestamp() - start) > timeout:
+                return d
+            time.sleep(REFRESH_TIME)
+
+    def wait_for_run(self, timeout: Optional[float] = None, batch_type: str = "") -> BatchDetail:
+        start = datetime.now().timestamp()
+        while True:
+            d = self.detail(batch_type=batch_type)
+            status = d.status
+            if status in (
+                "Run_Success",
+                "Run_Failed",
+                "Run_Diverged",
+                "Blocked",
+                "Abort",
+                "Aborted",
+            ):
+                return d
+            if timeout is not None and (datetime.now().timestamp() - start) > timeout:
+                return d
+            time.sleep(REFRESH_TIME)
+
+    def get_data_hdf5(
+        self,
+        remote_data_file_gz: str,
+        to_file: str,
+        verbose: bool = True,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> pathlib.Path:
+        """Download batch data artifact using gz-first then non-gz fallback.
+
+        Mirrors SimulationTask.get_sim_data_hdf5 logic.
+
+        Parameters
+        ----------
+        remote_data_file_gz: str
+            Remote gz filename to download (e.g., 'output/cm_data.hdf5.gz').
+        to_file: str
+            Local path where to save the downloaded file.
+        verbose: bool
+            Whether to show progress/logs.
+        progress_callback: Optional[Callable[[float], None]]
+            Optional callback for progress updates.
+        """
+        file = None
+        try:
+            file = download_gz_file(
+                resource_id=self.batch_id,
+                remote_filename=remote_data_file_gz,
+                to_file=to_file,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+        except ClientError:
+            if verbose:
+                console = get_logger_console()
+                console.log(f"Unable to download '{remote_data_file_gz}'.")
+
+        if not file:
+            try:
+                file = download_file(
+                    resource_id=self.batch_id,
+                    remote_filename=remote_data_file_gz[:-3],
+                    to_file=to_file,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+            except Exception as e:
+                raise WebError(
+                    "Failed to download the batch data file from the server. "
+                    "Please confirm that the batch has been successfully postprocessed."
+                ) from e
+
+        return file
 
     def abort(self):
         """Abort current task from server."""

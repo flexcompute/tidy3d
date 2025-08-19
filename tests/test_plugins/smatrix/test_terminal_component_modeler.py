@@ -11,6 +11,8 @@ import tidy3d as td
 import tidy3d.plugins.smatrix.utils
 from tidy3d import IndexSimulationData
 from tidy3d.components.data.data_array import FreqDataArray
+from tidy3d.components.data.monitor_data import MonitorData
+from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import (
     CurrentIntegralAxisAligned,
@@ -1232,19 +1234,21 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
 
     port_names = [port.name for port in modeler.ports]
 
-    sim_data_list = list()
-    port_name_list = list()
+    sim_data_list = []
+    port_name_list = []
     for j, port_in in enumerate(modeler.ports):
         task_name = modeler.get_task_name(port_in)
         for i, _ in enumerate(modeler.ports):
             # Initialize with zeros - user should replace with actual values
-            port_name_list += task_name
-            sim_data_list += SimulationData(
-                simulation=modeler.simulation,
-                data=MonitorData(
-                    FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
-                    FreqDataArray(currents[:, i, j], coords={"f": freqs}),
-                ),
+            port_name_list.append(task_name)
+            sim_data_list.append(
+                SimulationData(
+                    simulation=modeler.simulation,
+                    data=MonitorData(
+                        FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
+                        FreqDataArray(currents[:, i, j], coords={"f": freqs}),
+                    ),
+                )
             )
 
     index_data = IndexSimulationData(index=port_name_list, data=sim_data_list)
