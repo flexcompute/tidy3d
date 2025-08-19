@@ -167,3 +167,75 @@ class RunInfo(TaskBase):
         """Print some info about the task's progress."""
         print(f" - {self.perc_done:.2f} (%) done")
         print(f" - {self.field_decay:.2e} field decay from max")
+
+
+# ---------------------- Batch (Modeler) detail schema ---------------------- #
+
+
+class BatchStatus(str, Enum):
+    Created = "Created"
+    Preprocess = "Preprocess"
+    Validating = "Validating"
+    Validate_Success = "Validate_Success"
+    Validate_Warn = "Validate_Warn"
+    Validate_Failed = "Validate_Failed"
+    Blocked = "Blocked"
+    Running = "Running"
+    Aborting = "Aborting"
+    Run_Success = "Run_Success"
+    Postprocess = "Postprocess"
+    Run_Failed = "Run_Failed"
+    Run_Diverged = "Run_Diverged"
+    Abort = "Abort"
+    Aborted = "Aborted"
+
+
+class BatchTaskBlockInfo(TaskBlockInfo):
+    """Extended block info for batch detail."""
+
+    accountLimit: float = None
+    taskBlockMsg: str = None
+    taskBlockType: str = None
+    blockStatus: str = None
+
+
+class BatchMember(TaskBase):
+    """Information for each member task within a batch."""
+
+    refId: str = None
+    folderId: str = None
+    sweepId: str = None
+    taskId: str = None
+    linkedTaskId: str = None
+    groupId: str = None
+    taskName: str = None
+    status: str = None
+    sweepData: str = None
+    validateInfo: str = None
+    replaceData: str = None
+    protocolVersion: str = None
+    variable: str = None
+    createdAt: Optional[datetime] = None
+    updatedAt: Optional[datetime] = None
+    denormalizeStatus: str = None
+    summary: dict = None
+
+
+class BatchDetail(TaskBase):
+    """Top-level batch detail payload for component modelers."""
+
+    refId: str = None
+    optimizationId: str = None
+    groupId: str = None
+    name: str = None
+    status: BatchStatus = None
+    totalTask: int = 0
+    preprocessSuccess: int = 0
+    validateSuccess: int = 0
+    runSuccess: int = 0
+    postprocessSuccess: int = 0
+    taskBlockInfo: BatchTaskBlockInfo = None
+    estFlexUnit: float = None
+    totalSeconds: int = None
+    totalCheckMillis: int = None
+    tasks: list[BatchMember] = []

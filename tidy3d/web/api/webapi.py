@@ -9,7 +9,7 @@ import time
 from typing import Callable, Literal, Optional, Union
 
 from requests import HTTPError
-from rich.progress import Progress
+from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
@@ -18,15 +18,19 @@ from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
+    CM_DATA_HDF5_GZ,
     MODE_DATA_HDF5_GZ,
     MODE_FILE_HDF5_GZ,
+    MODELER_FILE_HDF5_GZ,
     SIM_FILE_HDF5,
     SIM_FILE_HDF5_GZ,
     SIMULATION_DATA_HDF5_GZ,
     TaskId,
 )
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.task_core import Folder, SimulationTask
+from tidy3d.web.core.http_util import get_version as _get_protocol_version
+from tidy3d.web.core.http_util import http
+from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask
 from tidy3d.web.core.task_info import ChargeType, TaskInfo
 from tidy3d.web.core.types import PayType
 
@@ -40,7 +44,7 @@ RUN_REFRESH_TIME = 1.0
 SIM_FILE_JSON = "simulation.json"
 
 # not all solvers are supported yet in GUI
-GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
+GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT", "RF"]
 
 # if a solver is in beta stage, cost is subject to change
 BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE", "VOLUME_MESH"]
@@ -65,6 +69,20 @@ def _get_url(task_id: str) -> str:
 def _get_folder_url(folder_id: str) -> str:
     """Get the URL for a task folder on our server."""
     return f"{Env.current.website_endpoint}/folders/{folder_id}"
+
+
+def _get_url_rf(resource_id: str) -> str:
+    """Get the RF GUI URL for a modeler/batch group."""
+    return f"{Env.current.website_endpoint}/rf?taskId={resource_id}"
+
+
+def _is_modeler_batch(resource_id: str) -> bool:
+    """Detect whether the given id corresponds to a modeler batch resource."""
+    return BatchTask.is_batch(resource_id, batch_type="RF_SWEEP")
+
+
+def _batch_detail(resource_id: str):
+    return BatchTask(resource_id).detail(batch_type="RF_SWEEP")
 
 
 @wait_for_connection
@@ -262,6 +280,9 @@ def upload(
     log.debug("Creating task.")
 
     task_type = stub.get_type()
+    # Component modeler compatibility: map to RF task type
+    if task_type in ("COMPONENT_MODELER", "TERMINAL_COMPONENT_MODELER"):
+        task_type = "RF"
 
     task = SimulationTask.create(
         task_type, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
@@ -278,14 +299,30 @@ def upload(
                 f"Cost of {solver_name} simulations is subject to change in the future."
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
-            url = _get_url(task.task_id)
-            folder_url = _get_folder_url(task.folder_id)
-            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
-            console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
+            if task_type == "RF":
+                # Try to fetch group id for RF UI link; fallback to task id
+                try:
+                    detail_task = SimulationTask.get(task.task_id, verbose=False)
+                    group_id = getattr(detail_task, "groupId", None) or getattr(
+                        detail_task, "group_id", None
+                    )
+                except Exception:
+                    group_id = None
+                url = _get_url_rf(group_id or task.task_id)
+                folder_url = _get_folder_url(task.folder_id)
+                console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+                console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
+            else:
+                url = _get_url(task.task_id)
+                folder_url = _get_folder_url(task.folder_id)
+                console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+                console.log(f"Task folder: [link={folder_url}]'{task.folder_name}'[/link].")
 
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
+    elif task_type == "RF":
+        remote_sim_file = MODELER_FILE_HDF5_GZ
 
     task.upload_simulation(
         stub=stub,
@@ -293,12 +330,19 @@ def upload(
         progress_callback=progress_callback,
         remote_sim_file=remote_sim_file,
     )
-    estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
+
+    # TODO: cost estimation for RF task?
+    if task_type != "RF":
+        estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
 
     task.validate_post_upload(parent_tasks=parent_tasks)
 
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
+    if task_type == "RF":
+        # Prefer returning batch/group id for downstream batch endpoints
+        batch_id = getattr(task, "batchId", None) or getattr(task, "batch_id", None)
+        return batch_id or task.task_id
     return task.task_id
 
 
@@ -398,6 +442,27 @@ def start(
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
+    # Component modeler batch path: hide split/check/submit
+    if _is_modeler_batch(task_id):
+        # split (modeler-specific)
+        http.post(
+            "tidy3d/projects/terminal-component-modeler-split",
+            {
+                "batchType": "RF_SWEEP",
+                "batchId": task_id,
+                "fileName": "modeler.hdf5.gz",
+                "protocolVersion": _get_protocol_version(),
+            },
+        )
+        batch = BatchTask(task_id)
+        batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
+        detail = batch.wait_for_validate(batch_type="RF_SWEEP")
+        status = detail.status
+        if status not in ("Validate_Success", "Validate_Warn"):
+            raise WebError(f"Batch task {task_id} is blocked: {status}")
+        batch.submit(solver_version=solver_version, batch_type="RF_SWEEP")
+        return
+
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
     task = SimulationTask.get(task_id)
@@ -486,6 +551,11 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     ----
     To load results when finished, may call :meth:`load`.
     """
+
+    # Batch/modeler monitoring path
+    if _is_modeler_batch(task_id):
+        _monitor_modeler_batch(task_id, verbose=verbose)
+        return
 
     console = get_logging_console() if verbose else None
 
@@ -652,7 +722,41 @@ def download(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
+    # Component modeler batch download path
+    if _is_modeler_batch(task_id):
 
+        def _download_cm() -> bool:
+            try:
+                BatchTask(task_id).get_data_hdf5(
+                    remote_data_file_gz=CM_DATA_HDF5_GZ,
+                    to_file=path,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+                return True
+            except Exception:
+                return False
+
+        if not _download_cm():
+            BatchTask(task_id).postprocess(batch_type="RF_SWEEP")
+            # wait for postprocess to finish
+            while True:
+                resp = BatchTask(task_id).detail(batch_type="RF_SWEEP")
+                total = resp.totalTask or 0
+                post_succ = resp.postprocessSuccess or 0
+                status = resp.status
+                if status in {"Run_Failed", "Run_Diverged", "Blocked", "Aborted", "Abort"}:
+                    raise WebError(
+                        f"Batch task {task_id} failed during postprocess: {status}"
+                    ) from None
+                if total > 0 and post_succ >= total:
+                    break
+                time.sleep(REFRESH_TIME)
+            if not _download_cm():
+                raise WebError("Failed to download 'cm_data' after postprocess completion.")
+        return
+
+    # Regular single-task download
     task_info = get_info(task_id)
     task_type = task_info.taskType
 
@@ -827,6 +931,159 @@ def load(
 
     stub_data = Tidy3dStubData.postprocess(path)
     return stub_data
+
+
+def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks: int = 20) -> None:
+    """Monitor modeler batch progress with aggregate and per-task views."""
+    console = get_logging_console() if verbose else None
+
+    def _status_to_stage(status: str) -> tuple[str, int]:
+        if status in ("Created",):
+            return ("Created", 0)
+        if status in ("Preprocess",):
+            return ("Preprocess", 1)
+        if status in ("Validating",):
+            return ("Validating", 2)
+        if status in ("Validate_Success", "Validate_Warn"):
+            return ("Validate", 3)
+        if status in ("Running",):
+            return ("Running", 4)
+        if status in ("Postprocess",):
+            return ("Postprocess", 5)
+        if status in ("Run_Success",):
+            return ("Success", 6)
+        return (status, 6)
+
+    detail = _batch_detail(batch_id)
+    name = detail.name or "modeler_batch"
+    group_id = detail.groupId
+
+    if verbose:
+        header = f"Modeler Batch: {name}"
+        if group_id:
+            header += f" (group {group_id})"
+        console.log(header)
+
+    if verbose:
+        progress_columns = (
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=25),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+        )
+        with Progress(*progress_columns, console=console, transient=False) as progress:
+            p_validate = progress.add_task("Validate", total=1.0)
+            p_run = progress.add_task("Run", total=1.0)
+            p_post = progress.add_task("Postprocess", total=1.0)
+
+            task_bars = {}
+            total_task = detail.totalTask or 0
+            if total_task and total_task <= max_detail_tasks:
+                run_statuses = [
+                    "Created",
+                    "Preprocess",
+                    "Validating",
+                    "Validate",
+                    "Running",
+                    "Postprocess",
+                    "Success",
+                ]
+                for t in detail.tasks or []:
+                    tname = t.taskName or t.taskId
+                    status = t.status or "Created"
+                    _, idx = _status_to_stage(status)
+                    pbar = progress.add_task(
+                        f"{tname}",
+                        total=len(run_statuses) - 1,
+                        completed=min(idx, len(run_statuses) - 1),
+                    )
+                    task_bars[tname] = pbar
+
+            terminal_errors = {
+                "Validate_Failed",
+                "Run_Failed",
+                "Run_Diverged",
+                "Blocked",
+                "Abort",
+                "Aborted",
+            }
+
+            postprocess_triggered = False
+            while True:
+                detail = _batch_detail(batch_id)
+                status = detail.status
+                total = detail.totalTask or 0
+                v = detail.validateSuccess or 0
+                r = detail.runSuccess or 0
+                p = detail.postprocessSuccess or 0
+
+                progress.update(p_validate, completed=(v / total) if total else 0.0)
+                progress.update(p_run, completed=(r / total) if total else 0.0)
+                progress.update(p_post, completed=(p / total) if total else 0.0)
+
+                block = detail.taskBlockInfo
+                if block is not None:
+                    charge = (getattr(block, "chargeType", None) or "").lower()
+                    if charge == ChargeType.FREE.value:
+                        grid = getattr(block, "maxGridPoints", None)
+                        steps = getattr(block, "maxTimeSteps", None)
+                        console.log(
+                            f"FREE tier active: up to {grid} grid points / {steps} time steps"
+                        )
+
+                if task_bars:
+                    for t in detail.tasks or []:
+                        tname = t.taskName or t.taskId
+                        status = t.status or "Created"
+                        _, idx = _status_to_stage(status)
+                        pbar = task_bars.get(tname)
+                        if pbar is not None:
+                            progress.update(pbar, completed=min(idx, 6), refresh=False)
+
+                # If run succeeded but postprocess not yet complete, trigger it and keep waiting
+                if (status in ("Run_Success", "Postprocess") or r >= total) and total:
+                    if p < total and not postprocess_triggered:
+                        # Kick off postprocess once
+                        try:
+                            BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
+                        except Exception:
+                            pass
+                        postprocess_triggered = True
+                    if p >= total:
+                        break
+                if status in terminal_errors:
+                    raise WebError(f"Batch {batch_id} terminated: {status}")
+
+                progress.refresh()
+                time.sleep(REFRESH_TIME)
+    else:
+        terminal_errors = {
+            "Validate_Failed",
+            "Run_Failed",
+            "Run_Diverged",
+            "Blocked",
+            "Abort",
+            "Aborted",
+        }
+        postprocess_triggered = False
+        while True:
+            d = _batch_detail(batch_id)
+            s = d.status
+            total = d.totalTask or 0
+            p = d.postprocessSuccess or 0
+            r = d.runSuccess or 0
+            if (s in ("Run_Success", "Postprocess") or r >= total) and total:
+                if p < total and not postprocess_triggered:
+                    try:
+                        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
+                    except Exception:
+                        pass
+                    postprocess_triggered = True
+                if p >= total:
+                    break
+            if s in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {s}")
+            time.sleep(REFRESH_TIME)
 
 
 @wait_for_connection
