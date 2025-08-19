@@ -1543,6 +1543,57 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
 
 
+class AdjointSurfaceMonitor(FreqMonitor):
+    """Base class for adjoint shape-optimization surface monitors.
+
+    Records boundary field samples on geometry surfaces within the monitor bounding box.
+    Concrete subclasses define exactly which components are recorded.
+
+    Parameters
+    ----------
+    sides : tuple['inside'|'outside', ...]
+        Which sides of the surface to record. Concrete subclasses may constrain this
+        (e.g., PEC outside-only).
+    """
+
+    sides: tuple[Literal["inside", "outside"], ...] = pydantic.Field(
+        ("inside", "outside"),
+        title="Sides to record",
+        description="Which surface sides to record. Concrete monitors may constrain this.",
+    )
+
+    colocate: Literal[True] = pydantic.Field(
+        True,
+        title="Colocate Fields",
+        description="Surface sampling is colocated to boundary locations by design.",
+    )
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Conservative storage estimate: 3 complex components × freqs × sides × samples.
+
+        Notes
+        -----
+        'num_cells' is treated as the number of surface samples (post-discretization).
+        Concrete subclasses may adjust this if needed.
+        """
+        nfreq = len(self.freqs)
+        nsides = len(self.sides)
+        ncomp = 3
+        return BYTES_COMPLEX * num_cells * nfreq * ncomp * nsides
+
+
+class AdjointDielectricSurfaceMonitor(AdjointSurfaceMonitor):
+    """Convenience class for dielectric adjoint surface recording."""
+
+    sides: tuple[Literal["inside", "outside"], ...] = ("inside", "outside")
+
+
+class AdjointPECSurfaceMonitor(AdjointSurfaceMonitor):
+    """Convenience class for PEC adjoint surface recording."""
+
+    sides: tuple[Literal["outside"], ...] = ("outside",)
+
+
 # types of monitors that are accepted by simulation
 MonitorType = Union[
     FieldMonitor,
@@ -1558,4 +1609,7 @@ MonitorType = Union[
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
     DirectivityMonitor,
+    AdjointSurfaceMonitor,
+    AdjointDielectricSurfaceMonitor,
+    AdjointPECSurfaceMonitor,
 ]

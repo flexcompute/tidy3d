@@ -58,6 +58,8 @@ DIM_ATTRS = {
     "face_index": {"long_name": "face index"},
     "vertex_index": {"long_name": "vertex index"},
     "axis": {"long_name": "axis"},
+    "sample": {"long_name": "surface sample index"},
+    "side": {"long_name": "surface side"},
 }
 
 
@@ -1030,6 +1032,46 @@ class TriangleMeshDataArray(DataArray):
     __slots__ = ()
     _dims = ("face_index", "vertex_index", "axis")
     _data_attrs = {"long_name": "surface mesh triangles"}
+
+
+class SurfaceScalarDataArray(DataArray):
+    """Scalar field samples recorded on geometry surfaces.
+
+    Dims: (sample, f, side)
+
+    - ``sample``: index of a unique surface sample point.
+    - ``f``: frequency in Hz.
+    - ``side``: surface side label, typically ``['inside', 'outside']``.
+    """
+
+    __slots__ = ()
+    _dims = ("sample", "f", "side")
+    _data_attrs = {"long_name": "surface scalar samples"}
+
+
+class SurfaceVectorDataArray(DataArray):
+    """Vector-valued quantity per surface sample (e.g., coordinates or normals).
+
+    Dims: (sample, axis)
+
+    - ``sample``: index of surface sample.
+    - ``axis``: x=0, y=1, z=2.
+    """
+
+    __slots__ = ()
+    _dims = ("sample", "axis")
+    _data_attrs = {"long_name": "surface vector components"}
+
+
+class SampleWeightDataArray(DataArray):
+    """Quadrature weight or differential area associated with a surface sample.
+
+    Dims: (sample,)
+    """
+
+    __slots__ = ()
+    _dims = ("sample",)
+    _data_attrs = {"long_name": "surface sample weight"}
 
 
 class HeatDataArray(DataArray):

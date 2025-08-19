@@ -82,6 +82,8 @@ from .data_array import (
 )
 from .dataset import (
     AbstractFieldDataset,
+    AdjointDielectricSurfaceComponents,
+    AdjointPECSurfaceComponents,
     AuxFieldTimeDataset,
     Dataset,
     ElectromagneticFieldDataset,
@@ -3907,6 +3909,41 @@ class DirectivityData(FieldProjectionAngleData):
         return xr.Dataset(dict(zip(keys, data_arrays)))
 
 
+class AdjointDielectricSurfaceData(AdjointDielectricSurfaceComponents, MonitorData):
+    """
+    Data recorded by a dielectric adjoint surface monitor.
+
+    Fields
+    - samples: SurfaceSamplesDataset
+    - Et1: SurfaceScalarDataArray
+    - Et2: SurfaceScalarDataArray
+    - Dn: SurfaceScalarDataArray
+    """
+
+    monitor: MonitorType = pd.Field(
+        ...,
+        title="Monitor",
+        description="Dielectric adjoint surface monitor associated with the data.",
+    )
+
+
+class AdjointPECSurfaceData(AdjointPECSurfaceComponents, MonitorData):
+    """
+    Data recorded by a PEC adjoint surface monitor.
+
+    Fields
+    - samples: SurfaceSamplesDataset
+    - En: SurfaceScalarDataArray
+    - Ht1: SurfaceScalarDataArray
+    - Ht2: SurfaceScalarDataArray
+    """
+
+    monitor: MonitorType = pd.Field(
+        ..., title="Monitor", description="PEC adjoint surface monitor associated with the data."
+    )
+
+
+# Register all monitor data types after class definitions
 MonitorDataTypes = (
     FieldData,
     FieldTimeData,
@@ -3921,6 +3958,8 @@ MonitorDataTypes = (
     FieldProjectionAngleData,
     DiffractionData,
     DirectivityData,
+    AdjointDielectricSurfaceData,
+    AdjointPECSurfaceData,
 )
 
 MonitorDataType = Union[MonitorDataTypes]

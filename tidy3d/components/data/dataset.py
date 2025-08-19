@@ -22,10 +22,13 @@ from .data_array import (
     GroupIndexDataArray,
     ModeDispersionDataArray,
     ModeIndexDataArray,
+    SampleWeightDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldCylindricalDataArray,
     ScalarModeFieldDataArray,
+    SurfaceScalarDataArray,
+    SurfaceVectorDataArray,
     TimeDataArray,
     TriangleMeshDataArray,
 )
@@ -672,6 +675,71 @@ class TriangleMeshDataset(Dataset):
         title="Surface mesh data",
         description="Dataset containing the surface triangles and corresponding face indices "
         "for a surface mesh.",
+    )
+
+
+class SurfaceSamplesDataset(Dataset):
+    """Geometry surface samples and associated geometric metadata.
+
+    - ``points``: Cartesian coordinates of each surface sample.
+    - ``normals``: Outward-pointing unit normals at each sample.
+    - ``perp1`` and ``perp2``: Optional orthonormal tangents spanning the local tangent plane.
+      If not provided, we can construct a consistent basis from ``normals``.
+    - ``weights``: Quadrature weights (e.g., differential area per sample).
+    """
+
+    points: SurfaceVectorDataArray = pd.Field(
+        ..., title="Sample points", description="Sample coordinates (x,y,z) per surface sample."
+    )
+    normals: SurfaceVectorDataArray = pd.Field(
+        ..., title="Normals", description="Outward surface normals at each sample."
+    )
+    weights: SampleWeightDataArray = pd.Field(
+        ..., title="Weights", description="Quadrature weight or area per surface sample."
+    )
+    perp1: SurfaceVectorDataArray = pd.Field(
+        None,
+        title="Tangent 1",
+        description="Optional first tangent vector per sample; orthonormal to the normal.",
+    )
+    perp2: SurfaceVectorDataArray = pd.Field(
+        None,
+        title="Tangent 2",
+        description="Optional second tangent vector; completes an orthonormal basis.",
+    )
+
+
+class AdjointDielectricSurfaceComponents(Dataset):
+    """Projected components recorded for dielectric adjoint surface VJP."""
+
+    samples: SurfaceSamplesDataset = pd.Field(
+        ..., title="Surface samples", description="Geometry surface samples and metadata."
+    )
+    Et1: SurfaceScalarDataArray = pd.Field(
+        None, title="Et1", description="First tangential component of E at samples."
+    )
+    Et2: SurfaceScalarDataArray = pd.Field(
+        None, title="Et2", description="Second tangential component of E at samples."
+    )
+    Dn: SurfaceScalarDataArray = pd.Field(
+        None, title="Dn", description="Normal component of D at samples."
+    )
+
+
+class AdjointPECSurfaceComponents(Dataset):
+    """Projected components recorded for PEC adjoint surface VJP."""
+
+    samples: SurfaceSamplesDataset = pd.Field(
+        ..., title="Surface samples", description="Geometry surface samples and metadata."
+    )
+    En: SurfaceScalarDataArray = pd.Field(
+        None, title="En", description="Normal component of E at samples (outside PEC)."
+    )
+    Ht1: SurfaceScalarDataArray = pd.Field(
+        None, title="Ht1", description="First tangential component of H at samples (outside PEC)."
+    )
+    Ht2: SurfaceScalarDataArray = pd.Field(
+        None, title="Ht2", description="Second tangential component of H at samples (outside PEC)."
     )
 
 
