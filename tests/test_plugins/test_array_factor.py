@@ -361,7 +361,6 @@ def make_antenna_sim():
         simulation=sim,
         ports=[port],
         freqs=freqs,
-        verbose=True,
         remove_dc_component=False,  # Include DC component for more accuracy at low frequencies
     )
 

@@ -11,8 +11,6 @@ import tidy3d as td
 import tidy3d.plugins.smatrix.utils
 from tidy3d import IndexSimulationData
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.data.monitor_data import MonitorData
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import (
     CurrentIntegralAxisAligned,
@@ -1237,20 +1235,17 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
 
     sim_data_list = []
     port_name_list = []
+    task_data_dict = {}
     for j, port_in in enumerate(modeler.ports):
         task_name = modeler.get_task_name(port_in)
         for i, _ in enumerate(modeler.ports):
             # Initialize with zeros - user should replace with actual values
             port_name_list.append(task_name)
-            sim_data_list.append(
-                SimulationData(
-                    simulation=modeler.simulation,
-                    data=MonitorData(
-                        FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
-                        FreqDataArray(currents[:, i, j], coords={"f": freqs}),
-                    ),
-                )
-            )
+            sim_data_list.append(run_emulated(simulation=modeler.simulation))
+            task_data_dict[task_name] = {
+                "voltage": FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
+                "current": FreqDataArray(currents[:, i, j], coords={"f": freqs}),
+            }
 
     index_data = IndexSimulationData(index=port_name_list, data=sim_data_list)
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=index_data)
@@ -1259,8 +1254,8 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     def mock_compute_port_vi(port_out, sim_data):
         """Mock compute_port_VI to return voltage and current from dummy sim_data."""
         port_name = port_out.name
-        voltage = index_data[port_name][0]
-        current = index_data[port_name][1]
+        voltage = task_data_dict[port_name]["voltage"]
+        current = task_data_dict[port_name]["voltage"]
         return voltage, current
 
     # Mock port reference impedances to return constant Z0
@@ -1277,7 +1272,6 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     )
 
     # Test the _internal_construct_smatrix method
-    # S_computed = modeler._internal_construct_smatrix(batch_data).values
     S_computed = modeler_data.smatrix().values
 
     def check_S_matrix(S_computed, S_expected, tol=1e-12):
