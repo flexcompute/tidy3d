@@ -16,7 +16,7 @@ from tidy3d.plugins.invdes.initialization import (
 )
 
 # use single threading pipeline
-from ..test_components.test_autograd import use_emulated_run  # noqa: F401
+from ..test_components.autograd.test_autograd import use_emulated_run  # noqa: F401
 from ..utils import AssertLogLevel, run_emulated
 
 FREQ0 = 1e14
