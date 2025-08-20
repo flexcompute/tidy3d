@@ -32,7 +32,7 @@ from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.utils import FieldMap
 
-from ..utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
+from ...utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
 
 """ Test configuration """
 
@@ -67,6 +67,43 @@ PLOT_SIM = False
 
 # whether to include a call to `objective(params)` in addition to gradient
 CALL_OBJECTIVE = False
+
+
+# --- helpers for custom dispersive tests ---
+def _patch_cmp_to_const(monkeypatch, cls, dJ_const):
+    """Monkeypatch `_derivative_field_cmp` to return a constant split across xyz."""
+    monkeypatch.setattr(
+        cls,
+        "_derivative_field_cmp",
+        lambda self, E_der_map, spatial_data, dim: dJ_const / 3.0,
+    )
+
+
+def _make_di(paths, freq):
+    """Construct a minimal DerivativeInfo shared by custom dispersive tests."""
+    return DerivativeInfo(
+        paths=paths,
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        eps_in=2.0,
+        eps_out=1.0,
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.0]}
+        ),
+        eps_inf_structure=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.0]}
+        ),
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+    )
+
 
 """ simulation configuration """
 
@@ -1814,6 +1851,281 @@ def test_custom_pole_residue(monkeypatch):
         for j in range(2):
             field_path = ("poles", i, j)
             assert np.allclose(grads_computed[field_path], np.conj(grad_poles[i][j]))
+
+
+def test_custom_sellmeier(monkeypatch):
+    """Test that computed CustomSellmeier derivatives match analytic mapping."""
+
+    rng = np.random.RandomState(0)
+    shape = (2, 2, 2)
+    coords = {
+        "x": np.linspace(-0.5, 0.5, shape[0]),
+        "y": np.linspace(-0.5, 0.5, shape[1]),
+        "z": np.linspace(-0.5, 0.5, shape[2]),
+    }
+
+    # positive B, C
+    B1 = td.SpatialDataArray(0.2 + 0.5 * rng.rand(*shape), coords=coords)
+    C1 = td.SpatialDataArray(0.3 + 0.5 * rng.rand(*shape), coords=coords)
+    B2 = td.SpatialDataArray(0.2 + 0.5 * rng.rand(*shape), coords=coords)
+    C2 = td.SpatialDataArray(0.3 + 0.5 * rng.rand(*shape), coords=coords)
+    med = td.CustomSellmeier(coeffs=[(B1, C1), (B2, C2)])
+
+    freq = 2.5e14
+    lam2 = td.C_0 / freq
+    lam2 = lam2 * lam2
+
+    def eps_from(B, C):
+        return 1.0 + B * lam2 / (lam2 - C)
+
+    eps_arr = eps_from(B1.values, C1.values) + eps_from(B2.values, C2.values)
+    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+
+    _patch_cmp_to_const(monkeypatch, td.CustomSellmeier, dJ)
+
+    di = _make_di(
+        paths=[("coeffs", 0, 0), ("coeffs", 0, 1), ("coeffs", 1, 0), ("coeffs", 1, 1)],
+        freq=freq,
+    )
+    grads = med._compute_derivatives(di)
+
+    def obj(B1_, C1_, B2_, C2_):
+        eps = eps_from(B1_, C1_) + eps_from(B2_, C2_)
+        return anp.sum(anp.abs(eps))
+
+    gB1 = ag.grad(lambda x: obj(x, C1.values, B2.values, C2.values))(B1.values)
+    gC1 = ag.grad(lambda x: obj(B1.values, x, B2.values, C2.values))(C1.values)
+    gB2 = ag.grad(lambda x: obj(B1.values, C1.values, x, C2.values))(B2.values)
+    gC2 = ag.grad(lambda x: obj(B1.values, C1.values, B2.values, x))(C2.values)
+
+    np.testing.assert_allclose(grads[("coeffs", 0, 0)], gB1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 1)], gC1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 0)], gB2, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 1)], gC2, rtol=5e-6, atol=5e-7)
+
+
+def test_custom_lorentz(monkeypatch):
+    rng = np.random.RandomState(1)
+    shape = (2, 2, 2)
+    coords = {
+        "x": np.linspace(-0.5, 0.5, shape[0]),
+        "y": np.linspace(-0.5, 0.5, shape[1]),
+        "z": np.linspace(-0.5, 0.5, shape[2]),
+    }
+
+    eps_inf = td.SpatialDataArray(1.2 + 0.3 * rng.rand(*shape), coords=coords)
+    de1 = td.SpatialDataArray(0.1 + 0.4 * rng.rand(*shape), coords=coords)
+    f01 = td.SpatialDataArray(3.0e14 + 0.1e14 * rng.rand(*shape), coords=coords)
+    dl1 = td.SpatialDataArray(0.1e14 + 0.1e14 * rng.rand(*shape), coords=coords)
+    de2 = td.SpatialDataArray(0.1 + 0.4 * rng.rand(*shape), coords=coords)
+    f02 = td.SpatialDataArray(3.5e14 + 0.1e14 * rng.rand(*shape), coords=coords)
+    dl2 = td.SpatialDataArray(0.1e14 + 0.1e14 * rng.rand(*shape), coords=coords)
+    med = td.CustomLorentz(eps_inf=eps_inf, coeffs=[(de1, f01, dl1), (de2, f02, dl2)])
+
+    freq = 2.0e14
+
+    def term(de, f0, dl):
+        den = (f0**2) - 2j * (freq * dl) - (freq**2)
+        return (de * (f0**2)) / den
+
+    eps_arr = (
+        eps_inf.values
+        + term(de1.values, f01.values, dl1.values)
+        + term(de2.values, f02.values, dl2.values)
+    )
+    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+
+    _patch_cmp_to_const(monkeypatch, td.CustomLorentz, dJ)
+
+    di = _make_di(
+        paths=[
+            ("eps_inf",),
+            ("coeffs", 0, 0),
+            ("coeffs", 0, 1),
+            ("coeffs", 0, 2),
+            ("coeffs", 1, 0),
+            ("coeffs", 1, 1),
+            ("coeffs", 1, 2),
+        ],
+        freq=freq,
+    )
+    grads = med._compute_derivatives(di)
+
+    def obj(ei, de1_, f01_, dl1_, de2_, f02_, dl2_):
+        def t(de, f0, dl):
+            den = (f0**2) - 2j * (freq * dl) - (freq**2)
+            return (de * (f0**2)) / den
+
+        eps = ei + t(de1_, f01_, dl1_) + t(de2_, f02_, dl2_)
+        return anp.sum(anp.abs(eps))
+
+    g_ei = ag.grad(
+        lambda x: obj(x, de1.values, f01.values, dl1.values, de2.values, f02.values, dl2.values)
+    )(eps_inf.values)
+    g_de1 = ag.grad(
+        lambda x: obj(eps_inf.values, x, f01.values, dl1.values, de2.values, f02.values, dl2.values)
+    )(de1.values)
+    g_f01 = ag.grad(
+        lambda x: obj(eps_inf.values, de1.values, x, dl1.values, de2.values, f02.values, dl2.values)
+    )(f01.values)
+    g_dl1 = ag.grad(
+        lambda x: obj(eps_inf.values, de1.values, f01.values, x, de2.values, f02.values, dl2.values)
+    )(dl1.values)
+    g_de2 = ag.grad(
+        lambda x: obj(eps_inf.values, de1.values, f01.values, dl1.values, x, f02.values, dl2.values)
+    )(de2.values)
+    g_f02 = ag.grad(
+        lambda x: obj(eps_inf.values, de1.values, f01.values, dl1.values, de2.values, x, dl2.values)
+    )(f02.values)
+    g_dl2 = ag.grad(
+        lambda x: obj(eps_inf.values, de1.values, f01.values, dl1.values, de2.values, f02.values, x)
+    )(dl2.values)
+
+    np.testing.assert_allclose(grads[("eps_inf",)], g_ei, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 0)], g_de1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 1)], g_f01, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 2)], g_dl1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 0)], g_de2, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 1)], g_f02, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 2)], g_dl2, rtol=5e-6, atol=5e-7)
+
+
+def test_custom_drude(monkeypatch):
+    rng = np.random.RandomState(2)
+    shape = (2, 2, 2)
+    coords = {
+        "x": np.linspace(-0.5, 0.5, shape[0]),
+        "y": np.linspace(-0.5, 0.5, shape[1]),
+        "z": np.linspace(-0.5, 0.5, shape[2]),
+    }
+
+    eps_inf = td.SpatialDataArray(1.1 + 0.2 * rng.rand(*shape), coords=coords)
+    fp1 = td.SpatialDataArray(2.0e14 + 0.2e14 * rng.rand(*shape), coords=coords)
+    dl1 = td.SpatialDataArray(0.05e14 + 0.05e14 * rng.rand(*shape), coords=coords)
+    fp2 = td.SpatialDataArray(2.5e14 + 0.2e14 * rng.rand(*shape), coords=coords)
+    dl2 = td.SpatialDataArray(0.05e14 + 0.05e14 * rng.rand(*shape), coords=coords)
+    med = td.CustomDrude(eps_inf=eps_inf, coeffs=[(fp1, dl1), (fp2, dl2)])
+
+    freq = 2.2e14
+
+    def term(fp, dl):
+        den = (freq**2) + 1j * (freq * dl)
+        return -(fp**2) / den
+
+    eps_arr = eps_inf.values + term(fp1.values, dl1.values) + term(fp2.values, dl2.values)
+    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+
+    _patch_cmp_to_const(monkeypatch, td.CustomDrude, dJ)
+
+    di = _make_di(
+        paths=[
+            ("eps_inf",),
+            ("coeffs", 0, 0),
+            ("coeffs", 0, 1),
+            ("coeffs", 1, 0),
+            ("coeffs", 1, 1),
+        ],
+        freq=freq,
+    )
+    grads = med._compute_derivatives(di)
+
+    def obj(ei, fp1_, dl1_, fp2_, dl2_):
+        def t(fp, dl):
+            den = (freq**2) + 1j * (freq * dl)
+            return -(fp**2) / den
+
+        eps = ei + t(fp1_, dl1_) + t(fp2_, dl2_)
+        return anp.sum(anp.abs(eps))
+
+    g_ei = ag.grad(lambda x: obj(x, fp1.values, dl1.values, fp2.values, dl2.values))(eps_inf.values)
+    g_fp1 = ag.grad(lambda x: obj(eps_inf.values, x, dl1.values, fp2.values, dl2.values))(
+        fp1.values
+    )
+    g_dl1 = ag.grad(lambda x: obj(eps_inf.values, fp1.values, x, fp2.values, dl2.values))(
+        dl1.values
+    )
+    g_fp2 = ag.grad(lambda x: obj(eps_inf.values, fp1.values, dl1.values, x, dl2.values))(
+        fp2.values
+    )
+    g_dl2 = ag.grad(lambda x: obj(eps_inf.values, fp1.values, dl1.values, fp2.values, x))(
+        dl2.values
+    )
+
+    np.testing.assert_allclose(grads[("eps_inf",)], g_ei, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 0)], g_fp1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 1)], g_dl1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 0)], g_fp2, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 1)], g_dl2, rtol=5e-6, atol=5e-7)
+
+
+def test_custom_debye(monkeypatch):
+    rng = np.random.RandomState(3)
+    shape = (2, 2, 2)
+    coords = {
+        "x": np.linspace(-0.5, 0.5, shape[0]),
+        "y": np.linspace(-0.5, 0.5, shape[1]),
+        "z": np.linspace(-0.5, 0.5, shape[2]),
+    }
+
+    eps_inf = td.SpatialDataArray(1.05 + 0.2 * rng.rand(*shape), coords=coords)
+    de1 = td.SpatialDataArray(0.1 + 0.4 * rng.rand(*shape), coords=coords)
+    tau1 = td.SpatialDataArray(0.5e-14 + 0.5e-14 * rng.rand(*shape), coords=coords)
+    de2 = td.SpatialDataArray(0.1 + 0.4 * rng.rand(*shape), coords=coords)
+    tau2 = td.SpatialDataArray(0.5e-14 + 0.5e-14 * rng.rand(*shape), coords=coords)
+    med = td.CustomDebye(eps_inf=eps_inf, coeffs=[(de1, tau1), (de2, tau2)])
+
+    freq = 1.8e14
+
+    def term(de, tau):
+        den = 1.0 - 1j * (freq * tau)
+        return de / den
+
+    eps_arr = eps_inf.values + term(de1.values, tau1.values) + term(de2.values, tau2.values)
+    dJ = np.conj(ag.holomorphic_grad(lambda e: anp.sum(anp.abs(e)))(eps_arr))
+
+    _patch_cmp_to_const(monkeypatch, td.CustomDebye, dJ)
+
+    di = _make_di(
+        paths=[
+            ("eps_inf",),
+            ("coeffs", 0, 0),
+            ("coeffs", 0, 1),
+            ("coeffs", 1, 0),
+            ("coeffs", 1, 1),
+        ],
+        freq=freq,
+    )
+    grads = med._compute_derivatives(di)
+
+    def obj(ei, de1_, tau1_, de2_, tau2_):
+        def t(de, tau):
+            den = 1.0 - 1j * (freq * tau)
+            return de / den
+
+        eps = ei + t(de1_, tau1_) + t(de2_, tau2_)
+        return anp.sum(anp.abs(eps))
+
+    g_ei = ag.grad(lambda x: obj(x, de1.values, tau1.values, de2.values, tau2.values))(
+        eps_inf.values
+    )
+    g_de1 = ag.grad(lambda x: obj(eps_inf.values, x, tau1.values, de2.values, tau2.values))(
+        de1.values
+    )
+    g_tau1 = ag.grad(lambda x: obj(eps_inf.values, de1.values, x, de2.values, tau2.values))(
+        tau1.values
+    )
+    g_de2 = ag.grad(lambda x: obj(eps_inf.values, de1.values, tau1.values, x, tau2.values))(
+        de2.values
+    )
+    g_tau2 = ag.grad(lambda x: obj(eps_inf.values, de1.values, tau1.values, de2.values, x))(
+        tau2.values
+    )
+
+    np.testing.assert_allclose(grads[("eps_inf",)], g_ei, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 0)], g_de1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 0, 1)], g_tau1, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 0)], g_de2, rtol=5e-6, atol=5e-7)
+    np.testing.assert_allclose(grads[("coeffs", 1, 1)], g_tau2, rtol=5e-6, atol=5e-7)
 
 
 # @pytest.mark.timeout(18.0)

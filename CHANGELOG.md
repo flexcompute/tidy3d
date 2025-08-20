@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added native web and batch support to run `ModalComponentModeler` and `TerminalComponentModeler` workflows.
 - Added `SimulationMap` and `SimulationDataMap` immutable dictionary-like containers for managing collections of simulations and results.
 - Added `TerminalComponentModelerData`, `ComponentModelerData`, `MicrowaveSMatrixData`, and introduced multiple DataArrays for modeler workflow data structures.
+- Added autograd support for dispersive material models: `Sellmeier`, `Drude`, `Lorentz`, `Debye` and their custom medium variants.
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.

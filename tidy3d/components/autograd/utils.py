@@ -4,7 +4,17 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+import autograd.numpy as anp
 from autograd.tracer import getval
+
+__all__ = [
+    "asarray1d",
+    "contains",
+    "get_static",
+    "is_tidy_box",
+    "pack_complex_vec",
+    "split_list",
+]
 
 
 def get_static(x: Any) -> Any:
@@ -34,9 +44,12 @@ def contains(target: Any, seq: Iterable[Any]) -> bool:
     return False
 
 
-__all__ = [
-    "contains",
-    "get_static",
-    "is_tidy_box",
-    "split_list",
-]
+def pack_complex_vec(z):
+    """Ravel [Re(z); Im(z)] into one real vector (autograd-safe)."""
+    return anp.concatenate([anp.ravel(anp.real(z)), anp.ravel(anp.imag(z))])
+
+
+def asarray1d(x):
+    """Autograd-friendly 1D flatten: returns ndarray of shape (-1,)."""
+    x = anp.array(x)
+    return x if x.ndim == 1 else anp.ravel(x)
