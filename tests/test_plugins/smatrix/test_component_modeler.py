@@ -204,7 +204,7 @@ def run_component_modeler(monkeypatch, modeler: ComponentModeler) -> ComponentMo
 
 def get_port_data_array(monkeypatch, modeler: ComponentModeler):
     modeler_data = run_component_modeler(monkeypatch=monkeypatch, modeler=modeler)
-    return modeler_data.smatrix.data
+    return modeler_data.smatrix().data
 
 
 def test_validate_no_sources():
@@ -280,7 +280,7 @@ def test_run(monkeypatch):
 def test_run_component_modeler(monkeypatch):
     modeler = make_component_modeler()
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
-    s_matrix = modeler_data.smatrix
+    s_matrix = modeler_data.smatrix()
 
     for port_in in modeler.ports:
         for mode_index_in in range(port_in.mode_spec.num_modes):
@@ -304,7 +304,7 @@ def test_component_modeler_run_only(monkeypatch):
     run_only = [ONLY_SOURCE]
     modeler = make_component_modeler(run_only=run_only)
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
-    s_matrix = modeler_data.smatrix
+    s_matrix = modeler_data.smatrix()
 
     coords_in_run_only = {"port_in": port_run_only, "mode_index_in": mode_index_run_only}
 
@@ -350,7 +350,7 @@ def test_run_component_modeler_mappings(monkeypatch):
     )
     modeler = make_component_modeler(element_mappings=element_mappings)
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
-    s_matrix = modeler_data.smatrix
+    s_matrix = modeler_data.smatrix()
     _test_mappings(element_mappings, s_matrix)
 
 
@@ -377,7 +377,7 @@ def test_mapping_exclusion(monkeypatch):
 
     modeler = make_component_modeler(element_mappings=element_mappings)
     modeler_data = run_component_modeler(monkeypatch, modeler=modeler)
-    s_matrix = modeler_data.smatrix
+    s_matrix = modeler_data.smatrix()
 
     run_sim_indices = modeler.matrix_indices_run_sim
     assert EXCLUDE_INDEX not in run_sim_indices, "mapping didnt exclude row properly"
