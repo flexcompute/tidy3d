@@ -87,7 +87,8 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
         assume_ideal_excitation: bool = False,
         s_param_def: SParamDef = "pseudo",
     ) -> MicrowaveSMatrixData:
-        "Stores the computed S-matrix and reference impedances for the terminal ports"
+        """Stores the computed S-matrix and reference impedances
+        for the terminal ports"""
         from tidy3d.plugins.smatrix.analysis.terminal import terminal_construct_smatrix
 
         terminal_port_data = terminal_construct_smatrix(
@@ -176,7 +177,6 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
         :class:`.WavePort`, the impedance is frequency-dependent and computed from
         modal properties, while for other types like :class:`.LumpedPort`, the
         impedance is a user-defined constant value.
-
 
         Returns:
             A data array containing the complex impedance for each port at each

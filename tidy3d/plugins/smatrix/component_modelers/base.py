@@ -40,8 +40,7 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
 
     name: str = pd.Field(
         "",
-        title="Simulation",
-        description="Simulation describing the device without any sources present.",
+        title="Name",
     )
     simulation: Simulation = pd.Field(
         ...,

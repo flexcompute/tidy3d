@@ -5,7 +5,7 @@ from typing import Union
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.simulaton_types import SimulationType
+from tidy3d.components.simulation_types import SimulationType
 
 
 class IndexSimulation(Tidy3dBaseModel):

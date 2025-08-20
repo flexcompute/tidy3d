@@ -18,7 +18,7 @@ class PortDataArray(DataArray):
     >>> ports = ["port1", "port2"]
     >>> coords = dict(f=f, port=ports)
     >>> data = (1+1j) * np.random.random((3, 2))
-    >>> pd = PortDataArray(data, coords=coords)
+    >>> port_data = PortDataArray(data, coords=coords)
     """
 
     __slots__ = ()
@@ -51,7 +51,7 @@ class ModalPortDataArray(DataArray):
     ...     mode_index_out=mode_index_out,
     ...     f=f
     ... )
-    >>> fd = ModalPortDataArray((1 + 1j) * np.random.random((2, 2, 2, 2, 1)), coords=coords)
+    >>> port_data = ModalPortDataArray((1 + 1j) * np.random.random((2, 2, 2, 2, 1)), coords=coords)
     """
 
     __slots__ = ()
@@ -70,7 +70,7 @@ class TerminalPortDataArray(DataArray):
     >>> f = [2e14]
     >>> coords = dict(f=f, port_out=ports_out, port_in=ports_in)
     >>> data = (1+1j) * np.random.random((1, 2, 2))
-    >>> td = TerminalPortDataArray(data, coords=coords)
+    >>> port_data = TerminalPortDataArray(data, coords=coords)
     """
 
     __slots__ = ()
