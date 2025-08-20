@@ -15,10 +15,10 @@ from pydantic.v1 import Extra, Field, parse_obj_as
 
 import tidy3d as td
 from tidy3d.exceptions import ValidationError
+from tidy3d.web.common import REFRESH_TIME
 
 from . import http_util
 from .cache import FOLDER_CACHE
-from .connect_util import REFRESH_TIME
 from .constants import (
     SIM_ERROR_FILE,
     SIM_FILE_HDF5_GZ,

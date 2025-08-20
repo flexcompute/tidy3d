@@ -22,7 +22,8 @@ from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.wave import WavePort
-from tidy3d.plugins.smatrix.run import compose_modeler_data, create_batch, run
+
+# from tidy3d.plugins.smatrix.run import compose_modeler_data, create_batch, run
 
 # Instantiate on plugin import till we unite with toplevel
 warnings.filterwarnings(
@@ -49,7 +50,7 @@ __all__ = [
     "TerminalComponentModelerData",
     "TerminalPortDataArray",
     "WavePort",
-    "compose_modeler_data",
-    "create_batch",
-    "run",
+    # "compose_modeler_data",
+    # "create_batch",
+    # "run",
 ]
