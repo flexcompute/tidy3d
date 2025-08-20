@@ -238,4 +238,5 @@ class BatchDetail(TaskBase):
     estFlexUnit: float = None
     totalSeconds: int = None
     totalCheckMillis: int = None
+    message: str = None
     tasks: list[BatchMember] = []

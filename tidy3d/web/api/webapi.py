@@ -281,11 +281,28 @@ def upload(
 
     task_type = stub.get_type()
     # Component modeler compatibility: map to RF task type
+    port_name_list = None
     if task_type in ("COMPONENT_MODELER", "TERMINAL_COMPONENT_MODELER"):
         task_type = "RF"
+        # Collect port names for modeler tasks if available
+        try:
+            ports = getattr(simulation, "ports", None)
+            if ports is not None:
+                port_name_list = [
+                    getattr(p, "name", None) for p in ports if getattr(p, "name", None)
+                ]
+        except Exception:
+            port_name_list = None
 
     task = SimulationTask.create(
-        task_type, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
+        task_type,
+        task_name,
+        folder_name,
+        callback_url,
+        simulation_type,
+        parent_tasks,
+        "Gz",
+        port_name_list=port_name_list,
     )
     if verbose:
         console = get_logging_console()
@@ -300,14 +317,16 @@ def upload(
             )
         if task_type in GUI_SUPPORTED_TASK_TYPES:
             if task_type == "RF":
-                # Try to fetch group id for RF UI link; fallback to task id
-                try:
-                    detail_task = SimulationTask.get(task.task_id, verbose=False)
-                    group_id = getattr(detail_task, "groupId", None) or getattr(
-                        detail_task, "group_id", None
-                    )
-                except Exception:
-                    group_id = None
+                # Prefer the group id if present in the creation response; avoid extra GET.
+                group_id = getattr(task, "groupId", None) or getattr(task, "group_id", None)
+                if not group_id:
+                    try:
+                        detail_task = SimulationTask.get(task.task_id, verbose=False)
+                        group_id = getattr(detail_task, "groupId", None) or getattr(
+                            detail_task, "group_id", None
+                        )
+                    except Exception:
+                        group_id = None
                 url = _get_url_rf(group_id or task.task_id)
                 folder_url = _get_folder_url(task.folder_id)
                 console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
@@ -445,20 +464,55 @@ def start(
     # Component modeler batch path: hide split/check/submit
     if _is_modeler_batch(task_id):
         # split (modeler-specific)
-        http.post(
-            "tidy3d/projects/terminal-component-modeler-split",
-            {
-                "batchType": "RF_SWEEP",
-                "batchId": task_id,
-                "fileName": "modeler.hdf5.gz",
-                "protocolVersion": _get_protocol_version(),
-            },
-        )
+        split_path = "tidy3d/projects/terminal-component-modeler-split"
+        payload = {
+            "batchType": "RF_SWEEP",
+            "batchId": task_id,
+            "fileName": "modeler.hdf5.gz",
+        }
+        try:
+            http.post(split_path, payload)
+        except Exception:
+            # Retry with explicit protocolVersion if server requires it
+            payload["protocolVersion"] = _get_protocol_version()
+            http.post(split_path, payload)
+        # give the storage a brief moment before validation
+        time.sleep(0.5)
         batch = BatchTask(task_id)
-        batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
+        check_resp = batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
         detail = batch.wait_for_validate(batch_type="RF_SWEEP")
         status = detail.status
         if status not in ("Validate_Success", "Validate_Warn"):
+            # Surface server-provided reason if available
+            reason = None
+            try:
+                reason = getattr(detail, "message", None)
+                if not reason and getattr(detail, "taskBlockInfo", None) is not None:
+                    tbi = detail.taskBlockInfo
+                    reason = getattr(tbi, "taskBlockMsg", None) or getattr(
+                        tbi, "taskBlockType", None
+                    )
+                if not reason:
+                    # fall back to member validateInfo if present
+                    for m in getattr(detail, "tasks", []) or []:
+                        if getattr(m, "validateInfo", None):
+                            reason = m.validateInfo
+                            break
+                # last resort: extract from check response (if present)
+                if not reason and isinstance(check_resp, dict):
+                    cd = check_resp.get("checkDataList")
+                    if isinstance(cd, list):
+                        msgs = []
+                        for item in cd:
+                            v = item.get("validateData") or item.get("validateInfo")
+                            if v:
+                                msgs.append(str(v))
+                        if msgs:
+                            reason = "; ".join(msgs)
+            except Exception:
+                reason = None
+            if reason:
+                raise WebError(f"Batch task {task_id} is blocked: {status} - {reason}")
             raise WebError(f"Batch task {task_id} is blocked: {status}")
         batch.submit(solver_version=solver_version, batch_type="RF_SWEEP")
         return
@@ -702,6 +756,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
 
 @wait_for_connection
+def abort(task_id: TaskId) -> TaskInfo:
+    """Abort a running task without deleting it."""
+    task = SimulationTask(taskId=task_id)
+    task.abort()
+    return get_info(task_id)
+
+
+@wait_for_connection
 def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
@@ -793,37 +855,10 @@ def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = Tr
 
 
 @wait_for_connection
-def download_hdf5(
-    task_id: TaskId,
-    path: str = SIM_FILE_HDF5,
-    verbose: bool = True,
-    progress_callback: Optional[Callable[[float], None]] = None,
-) -> None:
-    """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
-
-    Parameters
-    ----------
-    task_id : str
-        Unique identifier of task on server.  Returned by :meth:`upload`.
-    path : str = "simulation.hdf5"
-        Download path to .hdf5 file of simulation (including filename).
-    verbose : bool = True
-        If ``True``, will print progressbars and status, otherwise, will run silently.
-    progress_callback : Callable[[float], None] = None
-        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
-
-    """
-    task_info = get_info(task_id)
-    task_type = task_info.taskType
-
-    remote_sim_file = SIM_FILE_HDF5_GZ
-    if task_type == "MODE_SOLVER":
-        remote_sim_file = MODE_FILE_HDF5_GZ
-
-    task = SimulationTask(taskId=task_id)
-    task.get_simulation_hdf5(
-        path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
-    )
+def delete_old(days_old: int, folder_name: str = "default") -> int:
+    """Remove folder contents older than ``days_old``."""
+    folder = Folder.get(folder_name, create=True)
+    return folder.delete_old(days_old)
 
 
 @wait_for_connection
@@ -1095,85 +1130,72 @@ def delete(task_id: TaskId, versions: bool = False) -> TaskInfo:
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
     versions : bool = False
-        If ``True``, delete all versions of the task in the task group. Otherwise, delete only the version associated with the task ID.
+        If ``True``, delete all versions of the task in the task group. Otherwise, delete only the version associated with the current task ID.
 
     Returns
     -------
-    TaskInfo
+    :class:`.TaskInfo`
         Object containing information about status, size, credits of task.
+
     """
-    task = SimulationTask(taskId=task_id)
-    task.delete(versions=versions)
+    if not task_id:
+        raise ValueError("Task id not found.")
+    task = SimulationTask.get(task_id, verbose=False)
+    task.delete(versions)
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 @wait_for_connection
-def delete_old(
-    days_old: int = 100,
-    folder: str = "default",
-) -> int:
-    """Delete all tasks older than a given amount of days.
-
-    Parameters
-    ----------
-    folder : str
-        Only allowed to delete in one folder at a time.
-    days_old : int = 100
-        Minimum number of days since the task creation.
-
-    Returns
-    -------
-    int
-        Total number of tasks deleted.
-    """
-
-    folder = Folder.get(folder)
-    if not folder:
-        return 0
-    return folder.delete_old(days_old)
-
-
-@wait_for_connection
-def abort(task_id: TaskId) -> TaskInfo:
-    """Abort server-side data associated with task.
+def download_simulation(
+    task_id: TaskId,
+    path: str = SIM_FILE_HDF5,
+    verbose: bool = True,
+    progress_callback: Optional[Callable[[float], None]] = None,
+) -> None:
+    """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
+    path : str = "simulation.hdf5"
+        Download path to .hdf5 file of simulation (including filename).
+    verbose : bool = True
+        If ``True``, will print progressbars and status, otherwise, will run silently.
+    progress_callback : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
-    Returns
-    -------
-    TaskInfo
-        Object containing information about status, size, credits of task.
     """
+    task_info = get_info(task_id)
+    task_type = task_info.taskType
 
-    task = SimulationTask.get(task_id)
-    if not task:
-        raise ValueError("Task not found.")
-    task.abort()
-    console = get_logging_console()
-    url = _get_url(task.task_id)
-    console.log(
-        f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+    remote_sim_file = SIM_FILE_HDF5_GZ
+    if task_type == "MODE_SOLVER":
+        remote_sim_file = MODE_FILE_HDF5_GZ
+
+    task = SimulationTask(taskId=task_id)
+    task.get_simulation_hdf5(
+        path, verbose=verbose, progress_callback=progress_callback, remote_sim_file=remote_sim_file
     )
-    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 @wait_for_connection
 def get_tasks(
-    num_tasks: Optional[int] = None, order: Literal["new", "old"] = "new", folder: str = "default"
+    folder: str = "default",
+    *,
+    order: str = "new",
+    num_tasks: Optional[int] = None,
 ) -> list[dict]:
-    """Get a list with the metadata of the last ``num_tasks`` tasks.
+    """Get list of task info from folder.
 
     Parameters
     ----------
+    folder : str = "default"
+        The folder from which to get the tasks.
+    order : str = "new"
+        If ``'new'``, sorts tasks by newest first. If ``'old'``, sorts by oldest first.
     num_tasks : int = None
-        The number of tasks to return, or, if ``None``, return all.
-    order : Literal["new", "old"] = "new"
-        Return the tasks in order of newest-first or oldest-first.
-    folder: str = "default"
-        Folder from which to get the tasks.
+        If specified, return only the last ``num_tasks`` tasks.
 
     Returns
     -------
@@ -1433,9 +1455,17 @@ def test() -> None:
         console.log("Authentication configured successfully!")
     except (WebError, HTTPError) as e:
         url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html"
-
-        raise WebError(
-            "Tidy3D not configured correctly. Please refer to our documentation for installation "
-            "instructions at "
-            f"[blue underline][link={url}]'{url}'[/link]."
-        ) from e
+        msg = (
+            str(e)
+            + "\n\n"
+            + "It looks like the Tidy3D Python interface is not configured with your "
+            "unique API key. "
+            "To get your API key, sign into 'https://tidy3d.simulation.cloud' and copy it "
+            "from your 'Account' page. Then you can configure tidy3d through command line "
+            "'tidy3d configure' (recommended). Alternatively, one can manually create the configuration "
+            "file by creating a file at your home directory '~/.tidy3d/config' (unix) or "
+            "'.tidy3d/config' (windows) with content like: \n\n"
+            "apikey = 'XXX' \n\nHere XXX is your API key copied from your account page within quotes.\n\n"
+            f"For details, check the instructions at {url}."
+        )
+        raise WebError(msg) from e

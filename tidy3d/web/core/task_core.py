@@ -224,6 +224,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         simulation_type: str = "tidy3d",
         parent_tasks: Optional[list[str]] = None,
         file_type: str = "Gz",
+        port_name_list: Optional[list[str]] = None,
         projects_endpoint: str = "tidy3d/projects",
     ) -> SimulationTask:
         """Create a new task on the server.
@@ -258,17 +259,28 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             simulation_type = "tidy3d"
 
         folder = Folder.get(folder_name, create=True)
-        resp = http.post(
-            f"{projects_endpoint}/{folder.folder_id}/tasks",
-            {
-                "taskName": task_name,
-                "taskType": task_type,
-                "callbackUrl": callback_url,
-                "simulationType": simulation_type,
-                "parentTasks": parent_tasks,
-                "fileType": file_type,
-            },
-        )
+        payload = {
+            "taskName": task_name,
+            "taskType": task_type,
+            "callbackUrl": callback_url,
+            "simulationType": simulation_type,
+            "parentTasks": parent_tasks,
+            "fileType": file_type,
+        }
+        # Component modeler: include port names if provided
+        if port_name_list:
+            # Align with backend contract: expect 'portNames' (not 'portNameList')
+            payload["portNames"] = port_name_list
+
+        resp = http.post(f"{projects_endpoint}/{folder.folder_id}/tasks", payload)
+        # RF group creation may return group-level info without 'taskId'.
+        # Use 'groupId' (or 'batchId' as fallback) as the resource id for subsequent uploads.
+        if "taskId" not in resp and task_type == "RF":
+            # Prefer using 'batchId' as the resource id for uploads (S3 STS expects a task-like id).
+            if "batchId" in resp:
+                resp["taskId"] = resp["batchId"]
+            elif "groupId" in resp:
+                resp["taskId"] = resp["groupId"]
         return SimulationTask(**resp, taskType=task_type, folder_name=folder_name)
 
     @classmethod
@@ -406,6 +418,21 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
+            # RF modeler compatibility: some backends expect the artifact under the group id as well
+            if (self.task_type == "RF") and (remote_sim_file.endswith("modeler.hdf5.gz")):
+                group_id = getattr(self, "groupId", None) or getattr(self, "group_id", None)
+                if group_id:
+                    try:
+                        upload_file(
+                            group_id,
+                            file_name,
+                            remote_sim_file,
+                            verbose=False,
+                            progress_callback=None,
+                        )
+                    except Exception:
+                        # Best-effort: ignore if group upload path not supported
+                        pass
         finally:
             os.unlink(file_name)
 
@@ -685,6 +712,44 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             verbose=verbose,
         )
 
+    def abort(self):
+        """Abort current task from server."""
+        if not self.task_id:
+            raise ValueError("Task id not found.")
+        return http.put(
+            "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
+        )
+
+    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None):
+        """Perform checks after task is uploaded and metadata is processed."""
+        if self.task_type == "HEAT_CHARGE" and parent_tasks:
+            try:
+                if len(parent_tasks) > 1:
+                    raise ValueError(
+                        "A single parent 'task_id' corresponding to the task in which the meshing "
+                        "was run must be provided."
+                    )
+                try:
+                    # get mesh task info
+                    mesh_task = SimulationTask.get(parent_tasks[0], verbose=False)
+                    assert mesh_task.task_type == "VOLUME_MESH"
+                    assert mesh_task.status == "success"
+                    # get up-to-date task info
+                    task = SimulationTask.get(self.task_id, verbose=False)
+                    if task.fileMd5 != mesh_task.childFileMd5:
+                        raise ValidationError(
+                            "Simulation stored in parent task 'VolumeMesher' does not match the "
+                            "current simulation."
+                        )
+                except Exception as e:
+                    raise ValidationError(
+                        "The parent task must be a 'VolumeMesher' task which has been successfully "
+                        "run and is associated to the same 'HeatChargeSimulation' as provided here."
+                    ) from e
+
+            except Exception as e:
+                raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
+
 
 class BatchTask:
     """Generic wrapper around batch endpoints.
@@ -709,6 +774,10 @@ class BatchTask:
         resp = http.get(
             f"tidy3d/tasks/{self.batch_id}/batch-detail", params={"batchType": batch_type}
         )
+        # Some backends may return null for collection fields; coerce to sensible defaults
+        if isinstance(resp, dict):
+            if resp.get("tasks") is None:
+                resp["tasks"] = []
         return BatchDetail(**(resp or {}))
 
     def check(
@@ -847,41 +916,3 @@ class BatchTask:
                 ) from e
 
         return file
-
-    def abort(self):
-        """Abort current task from server."""
-        if not self.task_id:
-            raise ValueError("Task id not found.")
-        return http.put(
-            "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
-        )
-
-    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None):
-        """Perform checks after task is uploaded and metadata is processed."""
-        if self.task_type == "HEAT_CHARGE" and parent_tasks:
-            try:
-                if len(parent_tasks) > 1:
-                    raise ValueError(
-                        "A single parent 'task_id' corresponding to the task in which the meshing "
-                        "was run must be provided."
-                    )
-                try:
-                    # get mesh task info
-                    mesh_task = SimulationTask.get(parent_tasks[0], verbose=False)
-                    assert mesh_task.task_type == "VOLUME_MESH"
-                    assert mesh_task.status == "success"
-                    # get up-to-date task info
-                    task = SimulationTask.get(self.task_id, verbose=False)
-                    if task.fileMd5 != mesh_task.childFileMd5:
-                        raise ValidationError(
-                            "Simulation stored in parent task 'VolumeMesher' does not match the "
-                            "current simulation."
-                        )
-                except Exception as e:
-                    raise ValidationError(
-                        "The parent task must be a 'VolumeMesher' task which has been successfully "
-                        "run and is associated to the same 'HeatChargeSimulation' as provided here."
-                    ) from e
-
-            except Exception as e:
-                raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e
