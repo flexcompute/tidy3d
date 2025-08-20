@@ -31,7 +31,15 @@ DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
 BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
 
-BatchCategoryType = Literal["tidy3d", "microwave", "tidy3d_design"]
+BatchCategoryType = Literal[
+    "tidy3d",
+    "microwave",
+    "tidy3d_design",
+    "tidy3d_autograd",
+    "tidy3d_autograd_async",
+    "autograd_fwd",
+    "autograd_bwd",
+]
 
 
 class WebContainer(Tidy3dBaseModel, ABC):

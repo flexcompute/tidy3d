@@ -23,7 +23,6 @@ from tidy3d.components.autograd.constants import (
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d.components.types.workflow import WorkflowDataType, WorkflowType
 from tidy3d.exceptions import AdjointError
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
@@ -55,9 +54,7 @@ _INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, td.inf, 0))
 
 
 def is_valid_for_autograd(simulation: td.Simulation) -> bool:
-    """Check whether a supplied simulation can use autograd run."""
-
-    # only support Simulations
+    """Check whether a supplied Simulation can use the autograd path."""
     if not isinstance(simulation, td.Simulation):
         return False
 
@@ -97,7 +94,7 @@ def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
 
 
 def run(
-    simulation: WorkflowType,
+    simulation: td.Simulation,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
@@ -114,7 +111,7 @@ def run(
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
     priority: typing.Optional[int] = None,
-) -> WorkflowDataType:
+) -> td.SimulationData:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.WorkflowDataType` object.
@@ -201,7 +198,8 @@ def run(
     """
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
-    if is_valid_for_autograd(simulation):
+
+    if isinstance(simulation, td.Simulation) and is_valid_for_autograd(simulation):
         return _run(
             simulation=simulation,
             task_name=task_name,
@@ -241,7 +239,7 @@ def run(
 
 
 def run_async(
-    simulations: dict[str, WorkflowType],
+    simulations: dict[str, td.Simulation],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: typing.Optional[str] = None,
