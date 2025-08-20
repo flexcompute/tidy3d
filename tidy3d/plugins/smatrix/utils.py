@@ -8,6 +8,7 @@ from tidy3d.components.data.data_array import DataArray, FreqDataArray
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.component_modelers.base import (
+    AbstractComponentModeler,
     TerminalPortType,
 )
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
@@ -37,7 +38,7 @@ def ab_to_s(
     a_vals = s_matrix.copy(deep=True).values
     b_vals = b_matrix.copy(deep=True).values
 
-    s_vals = np.matmul(b_vals, np.linalg.inv(a_vals))
+    s_vals = np.matmul(b_vals, AbstractComponentModeler.inv(a_vals))
 
     s_matrix.data = s_vals
     return s_matrix

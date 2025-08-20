@@ -169,16 +169,13 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
     @cached_property
     def matrix_indices_monitor(self) -> tuple[NetworkIndex, ...]:
         """Tuple of all the possible matrix indices."""
-        if self.run_only is not None:
-            return self.run_only
-        else:
-            matrix_indices = []
-            for port in self.ports:
-                if isinstance(port, WavePort):
-                    matrix_indices.append(self.network_index(port, port.mode_index))
-                else:
-                    matrix_indices.append(self.network_index(port))
-            return tuple(matrix_indices)
+        matrix_indices = []
+        for port in self.ports:
+            if isinstance(port, WavePort):
+                matrix_indices.append(self.network_index(port, port.mode_index))
+            else:
+                matrix_indices.append(self.network_index(port))
+        return tuple(matrix_indices)
 
     @cached_property
     def sim_dict(self) -> dict[str, Simulation]:

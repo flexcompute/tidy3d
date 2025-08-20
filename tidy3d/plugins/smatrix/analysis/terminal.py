@@ -124,15 +124,19 @@ def port_reference_impedances(modeler_data: TerminalComponentModelerData) -> Por
         "port": list(modeler_data.modeler.matrix_indices_monitor),
     }
     port_impedances = PortDataArray(values, coords=coords)
+    # Each simulation will store the results from the ModeMonitors,
+    # so here we just choose the first one.
+    first_sim_index = modeler_data.modeler.matrix_indices_run_sim[0]
+    port, mode_index = modeler_data.modeler.network_dict[first_sim_index]
+    sim_data = modeler_data.data[
+        modeler_data.modeler.get_task_name(port=port, mode_index=mode_index)
+    ]
     for network_index in modeler_data.modeler.matrix_indices_monitor:
         port, mode_index = modeler_data.modeler.network_dict[network_index]
         indexer = {"port": network_index}
         if isinstance(port, WavePort):
             # WavePorts have a port impedance calculated from its associated modal field distribution
             # and is frequency dependent.
-            sim_data = modeler_data.data[
-                modeler_data.modeler.get_task_name(port=port, mode_index=mode_index)
-            ]
             data = port.compute_port_impedance(sim_data).data
             port_impedances = port_impedances._with_updated_data(data=data, coords=indexer)
         else:

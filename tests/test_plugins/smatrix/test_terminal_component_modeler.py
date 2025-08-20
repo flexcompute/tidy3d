@@ -1163,8 +1163,8 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     modeler_data = run_component_modeler(monkeypatch, modeler_run1)
     s_matrix = modeler_data.smatrix()
     with pytest.raises(ValueError):
-        validate_square_matrix(s_matrix, "test_method")
-    _ = modeler_run1.port_reference_impedances
+        validate_square_matrix(s_matrix.data, "test_method")
+    _ = modeler_data.port_reference_impedances
 
     assert len(modeler_run1.sim_dict) == 1
     S11 = (port0_idx, port0_idx)
@@ -1178,7 +1178,8 @@ def test_run_only_and_element_mappings(monkeypatch, tmp_path):
     # Column 1 is mapped to column 2, resulting in one simulation
     element_mappings = ((S11, S22, 1), (S21, S12, 1))
     modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
-    s_matrix = run_component_modeler(monkeypatch, modeler_with_mappings)
+    tcm_data = run_component_modeler(monkeypatch, modeler_with_mappings)
+    s_matrix = tcm_data.smatrix().data
     assert np.all(s_matrix.values[:, 0, 0] == s_matrix.values[:, 1, 1])
     assert np.all(s_matrix.values[:, 0, 1] == s_matrix.values[:, 1, 0])
     assert len(modeler_with_mappings.sim_dict) == 1
