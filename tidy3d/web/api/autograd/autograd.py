@@ -224,8 +224,7 @@ def run(
     # Handle Component Modelers: if autograd-valid, run via batched autograd path; else fallback
     if isinstance(simulation, ComponentModelerType):
         if is_valid_for_autograd(simulation):
-            return _run_component_modeler(
-                modeler=typing.cast("ComponentModelerType", simulation),
+            return simulation.run(
                 task_name=task_name,
                 folder_name=folder_name,
                 path=path,
@@ -235,7 +234,9 @@ def run(
                 local_gradient=local_gradient,
                 max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
                 pay_type=pay_type,
+                deprecation_warning=False,
             )
+
         # Fallback to standard web.run (server-side endpoints)
         return run_webapi(
             simulation=simulation,
@@ -487,72 +488,6 @@ def postprocess_run(traced_fields_data: AutogradFieldMap, aux_data: dict) -> td.
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
     sim_data_original = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
     return sim_data_original._insert_traced_fields(traced_fields_data)
-
-
-""" Component Modeler autograd helpers """
-
-
-def _run_component_modeler(
-    modeler: ComponentModelerType,
-    task_name: str,
-    folder_name: str,
-    path: str,
-    callback_url: typing.Optional[str],
-    verbose: bool,
-    solver_version: typing.Optional[str],
-    local_gradient: bool,
-    max_num_adjoint_per_fwd: int,
-    pay_type: typing.Union[PayType, str],
-) -> SimulationDataType:
-    """Run a Component Modeler via autograd by batching its underlying simulations."""
-
-    try:
-        path_dir = dirname(path) if path else DEFAULT_DATA_DIR
-        if not path_dir:
-            path_dir = DEFAULT_DATA_DIR
-    except Exception:
-        path_dir = DEFAULT_DATA_DIR
-
-    sims = modeler.sim_dict
-
-    sim_data_map = _run_async(
-        simulations=sims,
-        folder_name=folder_name,
-        path_dir=path_dir,
-        callback_url=callback_url,
-        verbose=verbose,
-        simulation_type="tidy3d_autograd_async",
-        solver_version=solver_version,
-        parent_tasks=None,
-        local_gradient=local_gradient,
-        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
-        pay_type=pay_type,
-    )
-
-    return _compose_modeler_data_from_sim_map(modeler=modeler, sim_data_map=sim_data_map)
-
-
-def _compose_modeler_data_from_sim_map(
-    modeler: ComponentModelerType, sim_data_map: dict[str, td.SimulationData]
-) -> SimulationDataType:
-    """Create ComponentModelerDataType from a dict of SimulationData keyed by task name."""
-
-    # local imports to avoid cycles through tidy3d.web
-    from tidy3d.components.data.index import IndexSimulationData
-    from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
-    from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
-    from tidy3d.plugins.smatrix.data.modal import ComponentModelerData
-    from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-
-    # preserve mapping order
-    index = tuple(sim_data_map.keys())
-    data = tuple(sim_data_map.values())
-    indexed = IndexSimulationData(index=index, data=data)
-
-    if isinstance(modeler, ComponentModeler):
-        return ComponentModelerData(modeler=modeler, data=indexed)
-    if isinstance(modeler, TerminalComponentModeler):
-        return TerminalComponentModelerData(modeler=modeler, data=indexed)
 
 
 """ Autograd-traced Primitive for FWD pass ``run`` functions """
