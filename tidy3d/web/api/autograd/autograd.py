@@ -24,6 +24,7 @@ from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.exceptions import AdjointError
+from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
 from tidy3d.web.api.asynchronous import run_async as run_async_webapi
 from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
@@ -54,37 +55,55 @@ _INSPECT_ADJOINT_FIELDS = False
 _INSPECT_ADJOINT_PLANE = td.Box(center=(0, 0, 0), size=(td.inf, td.inf, 0))
 
 
-def is_valid_for_autograd(simulation: td.Simulation) -> bool:
-    """Check whether a supplied simulation can use autograd run."""
+def is_valid_for_autograd(simulation: SimulationType) -> bool:
+    """Check whether a supplied object can use the autograd path.
 
-    # only support Simulations
-    if not isinstance(simulation, td.Simulation):
-        return False
+    Supports either a single td.Simulation or a ComponentModelerType. For a component
+    modeler, returns True if any of the underlying simulations are valid for autograd.
+    """
 
-    # if no tracers just use regular web.run()
-    traced_fields = simulation._strip_traced_fields(
-        include_untraced_data_arrays=False, starting_path=("structures",)
-    )
-    if not traced_fields:
-        return False
-
-    # if no frequency-domain data (e.g. only field time monitors), raise an error
-    if not simulation._freqs_adjoint:
-        raise AdjointError(
-            "No frequency-domain data found in simulation, but found traced structures. "
-            "For an autograd run, you must have at least one frequency-domain monitor."
+    def _is_valid_sim(sim: td.Simulation) -> bool:
+        # if no tracers just use regular web.run()
+        traced_fields = sim._strip_traced_fields(
+            include_untraced_data_arrays=False, starting_path=("structures",)
         )
+        if not traced_fields:
+            return False
 
-    # if too many structures, raise an error
-    structure_indices = {i for key, i, *_ in traced_fields.keys() if key == "structures"}
-    num_traced_structures = len(structure_indices)
-    if num_traced_structures > MAX_NUM_TRACED_STRUCTURES:
-        raise AdjointError(
-            f"Autograd support is currently limited to {MAX_NUM_TRACED_STRUCTURES} structures with "
-            f"traced fields. Found {num_traced_structures} structures with traced fields."
-        )
+        # if no frequency-domain data (e.g. only field time monitors), raise an error
+        if not sim._freqs_adjoint:
+            raise AdjointError(
+                "No frequency-domain data found in simulation, but found traced structures. "
+                "For an autograd run, you must have at least one frequency-domain monitor."
+            )
 
-    return True
+        # if too many structures, raise an error
+        structure_indices = {i for key, i, *_ in traced_fields.keys() if key == "structures"}
+        num_traced_structures = len(structure_indices)
+        if num_traced_structures > MAX_NUM_TRACED_STRUCTURES:
+            raise AdjointError(
+                f"Autograd support is currently limited to {MAX_NUM_TRACED_STRUCTURES} structures with "
+                f"traced fields. Found {num_traced_structures} structures with traced fields."
+            )
+
+        return True
+
+    # Simulation path
+    if isinstance(simulation, td.Simulation):
+        return _is_valid_sim(simulation)
+
+    # Component modeler path
+    if isinstance(simulation, ComponentModelerType):
+        try:
+            sims = simulation.sim_dict
+        except Exception:
+            return False
+        if not isinstance(sims, dict) or len(sims) == 0:
+            return False
+        return any(_is_valid_sim(sim) for sim in sims.values())
+
+    # Not a supported type
+    return False
 
 
 def is_valid_for_autograd_async(simulations: dict[str, td.Simulation]) -> bool:
@@ -201,6 +220,41 @@ def run(
     """
     if priority is not None and (priority < 1 or priority > 10):
         raise ValueError("Priority must be between '1' and '10' if specified.")
+
+    # Handle Component Modelers: if autograd-valid, run via batched autograd path; else fallback
+    if isinstance(simulation, ComponentModelerType):
+        if is_valid_for_autograd(simulation):
+            return _run_component_modeler(
+                modeler=typing.cast("ComponentModelerType", simulation),
+                task_name=task_name,
+                folder_name=folder_name,
+                path=path,
+                callback_url=callback_url,
+                verbose=verbose,
+                solver_version=solver_version,
+                local_gradient=local_gradient,
+                max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+                pay_type=pay_type,
+            )
+        # Fallback to standard web.run (server-side endpoints)
+        return run_webapi(
+            simulation=simulation,
+            task_name=task_name,
+            folder_name=folder_name,
+            path=path,
+            callback_url=callback_url,
+            verbose=verbose,
+            progress_callback_upload=progress_callback_upload,
+            progress_callback_download=progress_callback_download,
+            solver_version=solver_version,
+            worker_group=worker_group,
+            simulation_type=simulation_type,
+            parent_tasks=parent_tasks,
+            reduce_simulation=reduce_simulation,
+            pay_type=pay_type,
+            priority=priority,
+        )
+
     if is_valid_for_autograd(simulation):
         return _run(
             simulation=simulation,
@@ -433,6 +487,72 @@ def postprocess_run(traced_fields_data: AutogradFieldMap, aux_data: dict) -> td.
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
     sim_data_original = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
     return sim_data_original._insert_traced_fields(traced_fields_data)
+
+
+""" Component Modeler autograd helpers """
+
+
+def _run_component_modeler(
+    modeler: ComponentModelerType,
+    task_name: str,
+    folder_name: str,
+    path: str,
+    callback_url: typing.Optional[str],
+    verbose: bool,
+    solver_version: typing.Optional[str],
+    local_gradient: bool,
+    max_num_adjoint_per_fwd: int,
+    pay_type: typing.Union[PayType, str],
+) -> SimulationDataType:
+    """Run a Component Modeler via autograd by batching its underlying simulations."""
+
+    try:
+        path_dir = dirname(path) if path else DEFAULT_DATA_DIR
+        if not path_dir:
+            path_dir = DEFAULT_DATA_DIR
+    except Exception:
+        path_dir = DEFAULT_DATA_DIR
+
+    sims = modeler.sim_dict
+
+    sim_data_map = _run_async(
+        simulations=sims,
+        folder_name=folder_name,
+        path_dir=path_dir,
+        callback_url=callback_url,
+        verbose=verbose,
+        simulation_type="tidy3d_autograd_async",
+        solver_version=solver_version,
+        parent_tasks=None,
+        local_gradient=local_gradient,
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        pay_type=pay_type,
+    )
+
+    return _compose_modeler_data_from_sim_map(modeler=modeler, sim_data_map=sim_data_map)
+
+
+def _compose_modeler_data_from_sim_map(
+    modeler: ComponentModelerType, sim_data_map: dict[str, td.SimulationData]
+) -> SimulationDataType:
+    """Create ComponentModelerDataType from a dict of SimulationData keyed by task name."""
+
+    # local imports to avoid cycles through tidy3d.web
+    from tidy3d.components.data.index import IndexSimulationData
+    from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
+    from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
+    from tidy3d.plugins.smatrix.data.modal import ComponentModelerData
+    from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
+
+    # preserve mapping order
+    index = tuple(sim_data_map.keys())
+    data = tuple(sim_data_map.values())
+    indexed = IndexSimulationData(index=index, data=data)
+
+    if isinstance(modeler, ComponentModeler):
+        return ComponentModelerData(modeler=modeler, data=indexed)
+    if isinstance(modeler, TerminalComponentModeler):
+        return TerminalComponentModelerData(modeler=modeler, data=indexed)
 
 
 """ Autograd-traced Primitive for FWD pass ``run`` functions """
