@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, Optional, TypeVar, Union, get_args
+from typing import TYPE_CHECKING, Generic, Optional, TypeVar, Union, get_args
 
 import pydantic.v1 as pd
 
+from tidy3d.components.autograd.constants import MAX_NUM_ADJOINT_PER_FWD
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation
@@ -23,6 +24,9 @@ from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
+
+if TYPE_CHECKING:
+    from tidy3d.web.core.types import PayType
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -206,6 +210,39 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
         )
 
     unique_port_names = assert_unique_names("ports")
+
+    def run(
+        self,
+        path_dir: str = DEFAULT_DATA_DIR,
+        *,
+        folder_name: str = "default",
+        callback_url: Optional[str] = None,
+        verbose: bool = True,
+        solver_version: Optional[str] = None,
+        pay_type: Union[PayType, str] = "AUTO",
+        priority: Optional[int] = None,
+        local_gradient: bool = False,
+        max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
+    ):
+        """Run the component modeler and return modeler data.
+
+        Delegates to `tidy3d.plugins.smatrix.run.run`, which selects between
+        an autograd-compatible path and the standard Batch path.
+        """
+        from tidy3d.plugins.smatrix.run import run
+
+        return run(
+            self,
+            path_dir=path_dir,
+            folder_name=folder_name,
+            callback_url=callback_url,
+            verbose=verbose,
+            solver_version=solver_version,
+            pay_type=pay_type,
+            priority=priority,
+            local_gradient=local_gradient,
+            max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        )
 
 
 AbstractComponentModeler.update_forward_refs()

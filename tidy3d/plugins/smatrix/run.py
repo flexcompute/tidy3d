@@ -6,9 +6,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
-from tidy3d.plugins.smatrix.component_modelers.types import (
-    ComponentModelerType,
-)
+from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
@@ -150,6 +148,23 @@ def create_batch(
     return batch
 
 
+def _is_autograd_valid(modeler: ComponentModelerType) -> bool:
+    """Return True if any underlying simulation is valid for autograd."""
+    from tidy3d.web.api.autograd import autograd as web_ag
+
+    try:
+        sims = modeler.sim_dict
+    except AttributeError:
+        return False
+    if not sims:
+        return False
+
+    for sim in sims.values():
+        if web_ag.is_valid_for_autograd(sim):
+            return True
+    return False
+
+
 def run(
     modeler: ComponentModelerType, path_dir: str = DEFAULT_DATA_DIR, **kwargs
 ) -> ComponentModelerDataType:
@@ -175,7 +190,22 @@ def run(
         An object containing the processed simulation data, ready for
         S-parameter extraction and analysis.
     """
-    batch = create_batch(modeler=modeler, **kwargs)
-    batch_data = batch.run(path_dir=path_dir)
-    modeler_data = compose_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)
-    return modeler_data
+
+    if _is_autograd_valid(modeler):
+        from tidy3d.web.api.autograd.autograd import _run_async
+
+        kwargs.setdefault("folder_name", "default")
+        kwargs.setdefault("simulation_type", "tidy3d_autograd_async")
+        kwargs.setdefault("path_dir", path_dir)
+
+        sim_data_map = _run_async(simulations=modeler.sim_dict, **kwargs)
+
+        return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=sim_data_map)
+
+    batch = create_batch(modeler=modeler)
+    priority = kwargs.get("priority")
+    if priority is None:
+        batch_data = batch.run(path_dir=path_dir)
+    else:
+        batch_data = batch.run(path_dir=path_dir, priority=priority)
+    return compose_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)

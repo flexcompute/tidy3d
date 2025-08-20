@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `TerminalComponentModelerData`, `ComponentModelerData`, `MicrowaveSMatrixData`, and introduced multiple DataArrays for modeler workflow data structures.
 - Added autograd support for dispersive material models: `Sellmeier`, `Drude`, `Lorentz`, `Debye` and their custom medium variants.
 - Added check and exception for NaN data in the adjoint pipeline to raise issue to user before adjoint source creation failure.
+- Added autograd support for `TerminalComponentModeler` and `ModalComponentModeler`.
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
