@@ -10,7 +10,7 @@ from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponent
 from tidy3d.plugins.smatrix.component_modelers.types import (
     ComponentModelerType,
 )
-from tidy3d.plugins.smatrix.data.modal import ComponentModelerData, IndexSimulationData
+from tidy3d.plugins.smatrix.data.modal import IndexSimulationData, ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
@@ -49,8 +49,8 @@ def compose_terminal_modeler_data(
 
 def compose_component_modeler_data(
     modeler: ModalComponentModeler, port_task_map: dict[str, str]
-) -> ComponentModelerData:
-    """Assembles `ComponentModelerData` from simulation results.
+) -> ModalComponentModelerData:
+    """Assembles `ModalComponentModelerData` from simulation results.
 
     This function maps the simulation data from a completed batch run back to the
     ports of the component modeler.
@@ -60,11 +60,11 @@ def compose_component_modeler_data(
         batch_data: The results obtained from running the simulation `Batch`.
 
     Returns:
-        A `ComponentModelerData` object containing the results mapped to
+        A `ModalComponentModelerData` object containing the results mapped to
         their respective ports.
     """
     port_simulation_data = compose_simulation_data_index(port_task_map)
-    return ComponentModelerData(modeler=modeler, data=port_simulation_data)
+    return ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
 def compose_modeler(
@@ -114,7 +114,7 @@ def compose_modeler_data(
     """
 
     if isinstance(modeler, ModalComponentModeler):
-        modeler_data = ComponentModelerData(modeler=modeler, data=indexed_sim_data)
+        modeler_data = ModalComponentModelerData(modeler=modeler, data=indexed_sim_data)
     elif isinstance(modeler, TerminalComponentModeler):
         modeler_data = TerminalComponentModelerData(modeler=modeler, data=indexed_sim_data)
     else:
@@ -148,8 +148,8 @@ def compose_terminal_modeler_data_from_batch_data(
 def compose_component_modeler_data_from_batch_data(
     modeler: ModalComponentModeler,
     batch_data: Optional[BatchData] = None,
-) -> ComponentModelerData:
-    """Assembles `ComponentModelerData` from simulation results.
+) -> ModalComponentModelerData:
+    """Assembles `ModalComponentModelerData` from simulation results.
 
     This function maps the simulation data from a completed batch run back to the
     ports of the component modeler.
@@ -159,13 +159,13 @@ def compose_component_modeler_data_from_batch_data(
         batch_data: The results obtained from running the simulation `Batch`.
 
     Returns:
-        A `ComponentModelerData` object containing the results mapped to
+        A `ModalComponentModelerData` object containing the results mapped to
         their respective ports.
     """
     ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
     data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
     port_simulation_data = IndexSimulationData(index=ports, data=data)
-    return ComponentModelerData(modeler=modeler, data=port_simulation_data)
+    return ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
 def compose_modeler_data_from_batch_data(

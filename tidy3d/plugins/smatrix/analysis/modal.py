@@ -7,10 +7,10 @@ from __future__ import annotations
 import numpy as np
 
 from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
-from tidy3d.plugins.smatrix.data.modal import ComponentModelerData
+from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 
 
-def modal_construct_smatrix(modeler_data: ComponentModelerData) -> ModalPortDataArray:
+def modal_construct_smatrix(modeler_data: ModalComponentModelerData) -> ModalPortDataArray:
     """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
 
     max_mode_index_out, max_mode_index_in = modeler_data.modeler.max_mode_index

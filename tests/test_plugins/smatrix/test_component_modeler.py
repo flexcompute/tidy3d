@@ -9,7 +9,7 @@ import pytest
 import tidy3d as td
 from tidy3d import IndexSimulationData
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from tidy3d.plugins.smatrix import ComponentModelerData, ModalComponentModeler, Port
+from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
 from tidy3d.web.api.container import Batch
 
 from ...utils import run_emulated
@@ -191,14 +191,14 @@ def make_component_modeler(**kwargs):
     return ModalComponentModeler(simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, **kwargs)
 
 
-def run_component_modeler(monkeypatch, modeler: ModalComponentModeler) -> ComponentModelerData:
+def run_component_modeler(monkeypatch, modeler: ModalComponentModeler) -> ModalComponentModelerData:
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     port_data = IndexSimulationData(
         index=list(batch_data.keys()),
         data=list(batch_data.values()),
     )
-    modeler_data = ComponentModelerData(modeler=modeler, data=port_data)
+    modeler_data = ModalComponentModelerData(modeler=modeler, data=port_data)
     return modeler_data
 
 

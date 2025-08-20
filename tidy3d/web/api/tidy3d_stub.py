@@ -33,7 +33,7 @@ from tidy3d.plugins.smatrix.component_modelers.terminal import (
     TerminalComponentModeler,
 )
 from tidy3d.plugins.smatrix.data.modal import (
-    ComponentModelerData,
+    ModalComponentModelerData,
 )
 from tidy3d.plugins.smatrix.data.terminal import (
     TerminalComponentModelerData,
@@ -64,7 +64,7 @@ SimulationDataType = Union[
     EMESimulationData,
     ModeSolverData,
     ModeSimulationData,
-    ComponentModelerData,
+    ModalComponentModelerData,
     TerminalComponentModelerData,
 ]
 
@@ -240,8 +240,8 @@ class Tidy3dStubData(BaseModel, TaskStubData):
             sim_data = ModeSimulationData.from_file(file_path)
         elif type_ == "VolumeMesherData":
             sim_data = VolumeMesherData.from_file(file_path)
-        elif type_ == "ComponentModelerData":
-            sim_data = ComponentModelerData.from_file(file_path)
+        elif type_ == "ModalComponentModelerData":
+            sim_data = ModalComponentModelerData.from_file(file_path)
         elif type_ == "TerminalComponentModelerData":
             sim_data = TerminalComponentModelerData.from_file(file_path)
 

@@ -10,7 +10,7 @@ from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModele
 from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
 
 
-class ComponentModelerData(Tidy3dBaseModel):
+class ModalComponentModelerData(Tidy3dBaseModel):
     modeler: ModalComponentModeler = pd.Field(
         ...,
         title="ModalComponentModeler",
