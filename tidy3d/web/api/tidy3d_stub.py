@@ -27,7 +27,7 @@ from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
 from tidy3d.plugins.mode.mode_solver import ModeSolver
 from tidy3d.plugins.smatrix.component_modelers.modal import (
-    ComponentModeler,
+    ModalComponentModeler,
 )
 from tidy3d.plugins.smatrix.component_modelers.terminal import (
     TerminalComponentModeler,
@@ -54,7 +54,7 @@ SimulationType = Union[
     ModeSolver,
     ModeSimulation,
     VolumeMesher,
-    ComponentModeler,
+    ModalComponentModeler,
     TerminalComponentModeler,
 ]
 SimulationDataType = Union[
@@ -116,8 +116,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = ModeSimulation.from_file(file_path)
         elif type_ == "VolumeMesher":
             sim = VolumeMesher.from_file(file_path)
-        elif type_ == "ComponentModeler":
-            sim = ComponentModeler.from_file(file_path)
+        elif type_ == "ModalComponentModeler":
+            sim = ModalComponentModeler.from_file(file_path)
         elif type_ == "TerminalComponentModeler":
             sim = TerminalComponentModeler.from_file(file_path)
 
@@ -182,7 +182,7 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.MODE.name
         elif isinstance(self.simulation, VolumeMesher):
             return TaskType.VOLUME_MESH.name
-        elif isinstance(self.simulation, ComponentModeler):
+        elif isinstance(self.simulation, ModalComponentModeler):
             return TaskType.COMPONENT_MODELER.name
         elif isinstance(self.simulation, TerminalComponentModeler):
             return TaskType.TERMINAL_COMPONENT_MODELER.name

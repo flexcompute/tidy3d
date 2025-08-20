@@ -1,7 +1,5 @@
 """Tool for generating an S matrix automatically from a Tidy3d simulation and modal port definitions."""
 
-# TODO: The names "ComponentModeler" and "Port" should be changed to "ModalComponentModeler" and
-# "ModalPort" to explicitly differentiate these from "TerminalComponentModeler" and "LumpedPort".
 from __future__ import annotations
 
 from typing import Optional
@@ -25,7 +23,7 @@ MatrixIndex = tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
 Element = tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
 
 
-class ComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
+class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
     """
     Tool for modeling devices and computing scattering matrix elements.
 

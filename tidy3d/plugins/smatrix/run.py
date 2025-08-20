@@ -5,7 +5,7 @@ import os
 from typing import Optional
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
+from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.types import (
     ComponentModelerType,
@@ -48,7 +48,7 @@ def compose_terminal_modeler_data(
 
 
 def compose_component_modeler_data(
-    modeler: ComponentModeler, port_task_map: dict[str, str]
+    modeler: ModalComponentModeler, port_task_map: dict[str, str]
 ) -> ComponentModelerData:
     """Assembles `ComponentModelerData` from simulation results.
 
@@ -56,7 +56,7 @@ def compose_component_modeler_data(
     ports of the component modeler.
 
     Args:
-        modeler: The `ComponentModeler` used to generate the simulations.
+        modeler: The `ModalComponentModeler` used to generate the simulations.
         batch_data: The results obtained from running the simulation `Batch`.
 
     Returns:
@@ -77,7 +77,7 @@ def compose_modeler(
     `compose_terminal_modeler_data`) to invoke.
 
     Args:
-        modeler: The component modeler, which can be either a `ComponentModeler` or
+        modeler: The component modeler, which can be either a `ModalComponentModeler` or
             a `TerminalComponentModeler`.
         batch_data: The results obtained from running the simulation `Batch`.
 
@@ -91,8 +91,8 @@ def compose_modeler(
     model_dict = json.loads(json_str)
     modeler_type = model_dict["type"]
 
-    if modeler_type == "ComponentModeler":
-        modeler = ComponentModeler.from_file(modeler_file)
+    if modeler_type == "ModalComponentModeler":
+        modeler = ModalComponentModeler.from_file(modeler_file)
     elif modeler_type == "TerminalComponentModeler":
         modeler = TerminalComponentModeler.from_file(modeler_file)
     else:
@@ -101,7 +101,7 @@ def compose_modeler(
 
 
 def compose_modeler_data(
-    modeler: ComponentModeler | TerminalComponentModeler,
+    modeler: ModalComponentModeler | TerminalComponentModeler,
     indexed_sim_data: IndexSimulationData,
 ) -> ComponentModelerDataType:
     """Selects the correct composer based on the modeler type and creates the data object.
@@ -113,7 +113,7 @@ def compose_modeler_data(
         TypeError: If the provided `modeler` is not a recognized type.
     """
 
-    if isinstance(modeler, ComponentModeler):
+    if isinstance(modeler, ModalComponentModeler):
         modeler_data = ComponentModelerData(modeler=modeler, data=indexed_sim_data)
     elif isinstance(modeler, TerminalComponentModeler):
         modeler_data = TerminalComponentModelerData(modeler=modeler, data=indexed_sim_data)
@@ -146,7 +146,7 @@ def compose_terminal_modeler_data_from_batch_data(
 
 
 def compose_component_modeler_data_from_batch_data(
-    modeler: ComponentModeler,
+    modeler: ModalComponentModeler,
     batch_data: Optional[BatchData] = None,
 ) -> ComponentModelerData:
     """Assembles `ComponentModelerData` from simulation results.
@@ -155,7 +155,7 @@ def compose_component_modeler_data_from_batch_data(
     ports of the component modeler.
 
     Args:
-        modeler: The `ComponentModeler` used to generate the simulations.
+        modeler: The `ModalComponentModeler` used to generate the simulations.
         batch_data: The results obtained from running the simulation `Batch`.
 
     Returns:
@@ -179,7 +179,7 @@ def compose_modeler_data_from_batch_data(
     `compose_terminal_modeler_data`) to invoke.
 
     Args:
-        modeler: The component modeler, which can be either a `ComponentModeler` or
+        modeler: The component modeler, which can be either a `ModalComponentModeler` or
             a `TerminalComponentModeler`.
         batch_data: The results obtained from running the simulation `Batch`.
 
@@ -189,7 +189,7 @@ def compose_modeler_data_from_batch_data(
     Raises:
         TypeError: If the provided `modeler` is not a recognized type.
     """
-    if isinstance(modeler, ComponentModeler):
+    if isinstance(modeler, ModalComponentModeler):
         modeler_data = compose_component_modeler_data_from_batch_data(
             modeler=modeler, batch_data=batch_data
         )
