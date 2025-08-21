@@ -461,6 +461,23 @@ def start(
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
+
+    def dict_to_bullet_list(data_dict: dict) -> str:
+        """
+        Converts a dictionary into a string formatted as a bullet point list.
+
+        Args:
+          data_dict: The dictionary to convert.
+
+        Returns:
+          A string with each key-value pair as a bullet point.
+        """
+        # Use a list comprehension to format each key-value pair
+        # and then join them together with newline characters.
+        return "\n".join([f"- {key}: {value}" for key, value in data_dict.items()])
+
+    console = get_logging_console()
+
     # Component modeler batch path: hide split/check/submit
     if _is_modeler_batch(task_id):
         # split (modeler-specific)
@@ -469,13 +486,12 @@ def start(
             "batchType": "RF_SWEEP",
             "batchId": task_id,
             "fileName": "modeler.hdf5.gz",
+            "protocolVersion": _get_protocol_version(),
         }
-        try:
-            http.post(split_path, payload)
-        except Exception:
-            # Retry with explicit protocolVersion if server requires it
-            payload["protocolVersion"] = _get_protocol_version()
-            http.post(split_path, payload)
+        resp = http.post(split_path, payload)
+        console.log(
+            f"Child simulation subtasks are being uploaded to \n{dict_to_bullet_list(resp)}"
+        )
         # give the storage a brief moment before validation
         time.sleep(0.5)
         batch = BatchTask(task_id)

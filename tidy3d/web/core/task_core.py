@@ -766,7 +766,8 @@ class BatchTask:
             resp = http.get(
                 f"tidy3d/tasks/{resource_id}/batch-detail", params={"batchType": batch_type}
             )
-            return bool(resp and isinstance(resp, dict) and "status" in resp)
+            status = bool(resp and isinstance(resp, dict) and "status" in resp)
+            return status
         except Exception:
             return False
 
