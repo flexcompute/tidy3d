@@ -9,6 +9,8 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d import FluidMedium, VerticalNaturalConvectionCoeffModel
+
 try:
     from matplotlib import colormaps
 except ImportError:
@@ -454,6 +456,82 @@ class HeatChargeSimulation(AbstractSimulation):
                 "Voltage arrays can be included in a source in this manner: "
                 "'VoltageBC(source=DCVoltageSource(voltage=yourArray))'"
             )
+        return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_natural_convection_bc(cls, values):
+        """Make sure that natural convection BCs are defined correctly."""
+        boundary_spec = values.get("boundary_spec")
+        if not boundary_spec:
+            return values
+
+        structures = values["structures"]
+        boundary_spec = values["boundary_spec"]
+        bg_medium = values["medium"]
+
+        # Create mappings for easy lookup of media and structures by name.
+        media = {s.medium.name: s.medium for s in structures if s.medium.name}
+        if bg_medium and bg_medium.name:
+            media[bg_medium.name] = bg_medium
+        structures_map = {s.name: s for s in structures if s.name}
+
+        def check_fluid_medium_attr(fluid_medium):
+            if (
+                (fluid_medium.thermal_conductivity is None)
+                or (fluid_medium.viscosity is None)
+                or (fluid_medium.specific_heat is None)
+                or (fluid_medium.density is None)
+                or (fluid_medium.expansivity is None)
+            ):
+                raise SetupError(
+                    f"Boundary spec at index {i}: The fluid medium at the natural convection interface "
+                    f"must have 'thermal_conductivity', 'viscosity', 'specific_heat', 'density' and 'expansivity' defined."
+                )
+
+        for i, bc in enumerate(boundary_spec):
+            if not (
+                isinstance(bc.condition, ConvectionBC)
+                and isinstance(bc.condition.transfer_coeff, VerticalNaturalConvectionCoeffModel)
+            ):
+                continue
+
+            natural_conv_model = bc.condition.transfer_coeff
+            placement = bc.placement
+
+            # Case 1: The fluid medium is inferred from the placement interface.
+            # We use direct dictionary access, assuming 'names_exist_bcs' validator has already run.
+            if natural_conv_model.medium is None:
+                if isinstance(placement, MediumMediumInterface):
+                    med1 = media[placement.mediums[0]]
+                    med2 = media[placement.mediums[1]]
+                elif isinstance(placement, StructureStructureInterface):
+                    med1 = structures_map[placement.structures[0]].medium
+                    med2 = structures_map[placement.structures[1]].medium
+                else:
+                    raise SetupError(
+                        f"Boundary spec at index {i}: 'VerticalNaturalConvectionCoeffModel' with no medium specified requires "
+                        f"the 'placement' to be of type 'MediumMediumInterface' or 'StructureStructureInterface', "
+                        f"but got '{type(placement).__name__}'."
+                    )
+                specs = [
+                    med1.heat if isinstance(med1, MultiPhysicsMedium) else med1,
+                    med2.heat if isinstance(med2, MultiPhysicsMedium) else med2,
+                ]
+
+                # Check for a single fluid in the interface.
+                is_fluid = [isinstance(s, FluidMedium) for s in specs]
+                if is_fluid.count(True) != 1:
+                    raise SetupError(
+                        f"Boundary spec at index {i}: A natural convection boundary at an interface "
+                        f"must be between exactly one solid and one fluid medium. "
+                        f"Found types '{type(specs[0]).__name__}' and '{type(specs[1]).__name__}'."
+                    )
+                fluid_medium = specs[is_fluid.index(True)]
+                check_fluid_medium_attr(fluid_medium)
+
+            # Case 2: The fluid medium IS specified directly in the convection model.
+            else:
+                check_fluid_medium_attr(natural_conv_model.medium)
         return values
 
     @pd.validator("size", always=True)

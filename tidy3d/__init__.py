@@ -24,6 +24,7 @@ from tidy3d.components.spice.analysis.dc import (
 from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource
 from tidy3d.components.spice.sources.types import VoltageSourceType
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis, UnsteadySpec
+from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
@@ -708,6 +709,7 @@ __all__ = [
     "UnsteadyHeatAnalysis",
     "UnsteadySpec",
     "Updater",
+    "VerticalNaturalConvectionCoeffModel",
     "VisualizationSpec",
     "VoltageBC",
     "VoltageSourceType",
