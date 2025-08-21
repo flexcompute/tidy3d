@@ -1235,16 +1235,22 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
 
     port_names = [port.name for port in modeler.ports]
 
+    # Build per-(excitation task, observed port) VI data and keep unique task indices
     sim_data_list = []
     port_name_list = []
-    task_data_dict = {}
+    task_data_dict: dict[str, dict[str, dict[str, FreqDataArray]]] = {}
+    sim_to_task: dict[int, str] = {}
     for j, port_in in enumerate(modeler.ports):
         task_name = modeler.get_task_name(port_in)
-        for i, _ in enumerate(modeler.ports):
-            # Initialize with zeros - user should replace with actual values
-            port_name_list.append(task_name)
-            sim_data_list.append(run_emulated(simulation=modeler.simulation))
-            task_data_dict[task_name] = {
+        # One simulation per excitation task
+        sim_data = run_emulated(simulation=modeler.simulation)
+        sim_data_list.append(sim_data)
+        port_name_list.append(task_name)
+        sim_to_task[id(sim_data)] = task_name
+        # Store VI per observed port for this excitation
+        task_data_dict[task_name] = {}
+        for i, port_out in enumerate(modeler.ports):
+            task_data_dict[task_name][port_out.name] = {
                 "voltage": FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
                 "current": FreqDataArray(currents[:, i, j], coords={"f": freqs}),
             }
@@ -1255,23 +1261,17 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     # Mock the compute_port_VI method
     def mock_compute_port_vi(port_out, sim_data):
         """Mock compute_port_VI to return voltage and current from dummy sim_data."""
-        print("Mocking compute_port_VI")
-        port_name = port_out.name
-        voltage = task_data_dict[port_name]["voltage"]
-        current = task_data_dict[port_name]["current"]
+        task_name = sim_to_task[id(sim_data)]
+        voltage = task_data_dict[task_name][port_out.name]["voltage"]
+        current = task_data_dict[task_name][port_out.name]["current"]
         return voltage, current
 
-    # Mock port reference impedances to return constant Z0
+    # Mock port reference impedances to return frequency-dependent per-port Zref
     def mock_port_impedances(modeler_data):
-        print("Mocking port reference impedances")
         coords = {"f": np.array(freqs), "port": port_names}
         return PortDataArray(Zref, coords=coords)
 
-    # Apply monkeypatches
-    # Note: if a function is imported in a module, it needs to be patched in that module. For example,
-    # simply monkeypatching tidy3d.plugins.smatrix.utils.compute_port_VI will not work when the function
-    # is imported in tidy3d.plugins.smatrix.analysis.terminal or tidy3d.plugins.smatrix.data.terminal.
-    # So we patch all of them, although here it might be only used in tidy3d.plugins.smatrix.analysis.terminal
+    # Apply monkeypatches in all import locations
     monkeypatch.setattr(
         tidy3d.plugins.smatrix.utils, "compute_port_VI", staticmethod(mock_compute_port_vi)
     )
@@ -1283,12 +1283,9 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     monkeypatch.setattr(
         tidy3d.plugins.smatrix.data.terminal, "compute_port_VI", staticmethod(mock_compute_port_vi)
     )
-    # Note: below is the correct monkeypatch for the port reference impedances.
-    # Without it, I get an assertion error about the S-matrix values.
-    # However, with the monkeypatch I get a singular matrix error when the a matrix is inverted.
-    # monkeypatch.setattr(
-    #     tidy3d.plugins.smatrix.analysis.terminal, "port_reference_impedances", mock_port_impedances
-    # )
+    monkeypatch.setattr(
+        tidy3d.plugins.smatrix.analysis.terminal, "port_reference_impedances", mock_port_impedances
+    )
 
     # Test the _internal_construct_smatrix method
     S_computed = modeler_data.smatrix().data.values
@@ -1315,6 +1312,6 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     # Check pseudo wave S matrix
     check_S_matrix(S_computed, S_pseudo)
 
-    # Check power wave S matrix
-    S_computed = modeler_data.smatrix(s_param_def="power").values
+    # Check power wave S matrix (also assume ideal excitation to avoid inversion of mocked a)
+    S_computed = modeler_data.smatrix(s_param_def="power", assume_ideal_excitation=True).data.values
     check_S_matrix(S_computed, S_power)
