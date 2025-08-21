@@ -896,6 +896,132 @@ def test_heat_charge_bcs_validation(boundary_conditions):
         td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([td.inf, 0, 1])))
 
 
+def test_vertical_natural_convection():
+    solid_box_l = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    solid_box_r = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+    fluid_box_r = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+
+    solid_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1), name="solid"
+    )
+    air = td.MultiPhysicsMedium(
+        heat=td.FluidMedium.from_si_units(
+            thermal_conductivity=0.026,
+            viscosity=1.8e-5,
+            specific_heat=1005,
+            density=1.2,
+            expansivity=1 / 300.0,
+        ),
+        name="air",
+    )
+    solid_structure_l = td.Structure(
+        geometry=solid_box_l,
+        medium=solid_medium,
+        name="solid_l",
+    )
+    solid_structure_r = td.Structure(
+        geometry=solid_box_r,
+        medium=solid_medium,
+        name="solid_r",
+    )
+    fluid_structure_r = td.Structure(
+        geometry=fluid_box_r,
+        medium=air,
+        name="fluid_r",
+    )
+
+    coeff_model = td.VerticalNaturalConvectionCoeffModel(plate_length=1)
+    sim = td.HeatChargeSimulation(
+        size=(2, 2, 2),
+        center=(0, 0, 0),
+        medium=td.MultiPhysicsMedium(heat=td.FluidMedium()),
+        structures=[solid_structure_l, fluid_structure_r],
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.MediumMediumInterface(mediums=["air", "solid"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+            )
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        monitors=[
+            td.TemperatureMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="test_monitor",
+                unstructured=True,
+            )
+        ],
+    )
+
+    # Test that the model can be placed on an interface defined by structures
+    sim.updated_copy(
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["solid_l", "fluid_r"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+            )
+        ],
+    )
+
+    # Verify that placing the model on an interface between two solid media
+    # correctly raises a validation error.
+    with pytest.raises(pd.ValidationError):
+        sim.updated_copy(
+            structures=[solid_structure_l, solid_structure_r],
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.StructureStructureInterface(structures=["solid_l", "solid_r"]),
+                    condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+                )
+            ],
+        )
+
+    # Verify that using a fluid medium with incomplete physical properties
+    # for the natural convection calculation raises a validation error.
+    incomplete_air = td.MultiPhysicsMedium(
+        heat=td.FluidMedium(expansivity=1 / 300.0), name="incomplete_air"
+    )
+    with pytest.raises(pd.ValidationError):
+        new_fluid_structure_r = fluid_structure_r.updated_copy(medium=incomplete_air)
+        sim.updated_copy(
+            structures=[solid_structure_l, new_fluid_structure_r],
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.MediumMediumInterface(mediums=["incomplete_air", "solid"]),
+                    condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+                )
+            ],
+        )
+
+    # Test the case where the convection model has its own fluid medium explicitly defined.
+    # The simulation should use the properties from the model's medium and ignore the
+    # fluid present at the interface.
+    full_coeff_model = td.VerticalNaturalConvectionCoeffModel(medium=air.heat, plate_length=1)
+    sim.updated_copy(
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["solid_l", "fluid_r"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=full_coeff_model),
+            )
+        ],
+    )
+
+    # Verify that a validation error is raised if the medium supplied directly to the
+    # coefficient model has incomplete properties for the natural convection calculation.
+    incomplete_coeff_model = coeff_model.updated_copy(medium=incomplete_air.heat)
+    with pytest.raises(pd.ValidationError):
+        sim.updated_copy(
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.MediumMediumInterface(mediums=["air", "solid"]),
+                    condition=td.ConvectionBC(
+                        ambient_temperature=300, transfer_coeff=incomplete_coeff_model
+                    ),
+                ),
+            ]
+        )
+
+
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
     temp_mnt = monitors[0]

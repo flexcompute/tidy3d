@@ -125,6 +125,25 @@ def test_heat_bcs():
     with pytest.raises(pd.ValidationError):
         _ = ConvectionBC(ambient_temperature=400, transfer_coeff=-0.2)
 
+    # Test vertical natural convection model in ConvectionBC
+    air = td.MultiPhysicsMedium(
+        heat=td.FluidMedium.from_si_units(
+            thermal_conductivity=0.026,
+            viscosity=1.8e-5,
+            specific_heat=1005,
+            density=1.2,
+            expansivity=1 / 300.0,
+        ),
+        name="air",
+    )
+
+    with pytest.raises(pd.ValidationError):
+        td.VerticalNaturalConvectionCoeffModel(medium=air.heat, plate_length=-10)
+
+    _, solid_medium = make_heat_mediums()
+    with pytest.raises(pd.ValidationError):
+        td.VerticalNaturalConvectionCoeffModel(medium=solid_medium.heat_spec, plate_length=1e5)
+
 
 def make_heat_mnts():
     temp_mnt1 = TemperatureMonitor(size=(1.6, 2, 3), name="test")

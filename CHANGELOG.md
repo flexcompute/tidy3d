@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `absorber` field (default: `True`) to `WavePort` for automatically placing an absorber behind the port.
 - Added `conjugated_dot_product` field in `ModeMonitor` (default: `True`) and `WavePort` (default: `False`) to allow selecting the conjugated or non-conjugated dot product for mode decomposition.
 - Support for gradients with respect to the `conductivity` of a `CustomMedium`.
+- Added `VerticalNaturalConvectionCoeffModel`, a model for heat transfer due to natural convection from a vertical plate. It can be used in `ConvectionBC` to compute the heat transfer coefficient from fluid properties, using standard Nusselt number correlations for both laminar and turbulent flow.
 
 ### Changed
 - Validate mode solver object for large number of grid points on the modal plane.
