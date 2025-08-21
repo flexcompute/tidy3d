@@ -8,6 +8,8 @@ import skrf
 import xarray as xr
 
 import tidy3d as td
+import tidy3d.plugins.smatrix.analysis.terminal
+import tidy3d.plugins.smatrix.data.terminal
 import tidy3d.plugins.smatrix.utils
 from tidy3d import IndexSimulationData
 from tidy3d.components.data.data_array import FreqDataArray
@@ -1253,26 +1255,43 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     # Mock the compute_port_VI method
     def mock_compute_port_vi(port_out, sim_data):
         """Mock compute_port_VI to return voltage and current from dummy sim_data."""
+        print("Mocking compute_port_VI")
         port_name = port_out.name
         voltage = task_data_dict[port_name]["voltage"]
-        current = task_data_dict[port_name]["voltage"]
+        current = task_data_dict[port_name]["current"]
         return voltage, current
 
     # Mock port reference impedances to return constant Z0
-    def mock_port_impedances(self, batch_data):
+    def mock_port_impedances(modeler_data):
+        print("Mocking port reference impedances")
         coords = {"f": np.array(freqs), "port": port_names}
         return PortDataArray(Zref, coords=coords)
 
     # Apply monkeypatches
+    # Note: if a function is imported in a module, it needs to be patched in that module. For example,
+    # simply monkeypatching tidy3d.plugins.smatrix.utils.compute_port_VI will not work when the function
+    # is imported in tidy3d.plugins.smatrix.analysis.terminal or tidy3d.plugins.smatrix.data.terminal.
+    # So we patch all of them, although here it might be only used in tidy3d.plugins.smatrix.analysis.terminal
     monkeypatch.setattr(
-        TerminalComponentModelerData, "compute_port_VI", staticmethod(mock_compute_port_vi)
+        tidy3d.plugins.smatrix.utils, "compute_port_VI", staticmethod(mock_compute_port_vi)
     )
     monkeypatch.setattr(
-        TerminalComponentModelerData, "port_reference_impedances", mock_port_impedances
+        tidy3d.plugins.smatrix.analysis.terminal,
+        "compute_port_VI",
+        staticmethod(mock_compute_port_vi),
     )
+    monkeypatch.setattr(
+        tidy3d.plugins.smatrix.data.terminal, "compute_port_VI", staticmethod(mock_compute_port_vi)
+    )
+    # Note: below is the correct monkeypatch for the port reference impedances.
+    # Without it, I get an assertion error about the S-matrix values.
+    # However, with the monkeypatch I get a singular matrix error when the a matrix is inverted.
+    # monkeypatch.setattr(
+    #     tidy3d.plugins.smatrix.analysis.terminal, "port_reference_impedances", mock_port_impedances
+    # )
 
     # Test the _internal_construct_smatrix method
-    S_computed = modeler_data.smatrix().values
+    S_computed = modeler_data.smatrix().data.values
 
     def check_S_matrix(S_computed, S_expected, tol=1e-12):
         # Check that S-matrix has correct shape
