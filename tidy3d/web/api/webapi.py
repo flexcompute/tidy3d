@@ -1093,14 +1093,18 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
 
                 # If run succeeded but postprocess not yet complete, trigger it and keep waiting
                 if (status in ("Run_Success", "Postprocess") or r >= total) and total:
-                    if p < total and not postprocess_triggered:
+                    if (p == total) and (not postprocess_triggered):
                         # Kick off postprocess once
                         try:
+                            print(p)
                             BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
+                            break
+                            # TODO FIXME
                         except Exception:
                             pass
                         postprocess_triggered = True
-                    if p >= total:
+                    if p == total:
+                        print(p)
                         break
                 if status in terminal_errors:
                     raise WebError(f"Batch {batch_id} terminated: {status}")
