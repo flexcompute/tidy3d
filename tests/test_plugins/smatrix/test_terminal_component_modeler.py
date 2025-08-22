@@ -1273,15 +1273,9 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
 
     # Apply monkeypatches in all import locations
     monkeypatch.setattr(
-        tidy3d.plugins.smatrix.utils, "compute_port_VI", staticmethod(mock_compute_port_vi)
-    )
-    monkeypatch.setattr(
         tidy3d.plugins.smatrix.analysis.terminal,
         "compute_port_VI",
         staticmethod(mock_compute_port_vi),
-    )
-    monkeypatch.setattr(
-        tidy3d.plugins.smatrix.data.terminal, "compute_port_VI", staticmethod(mock_compute_port_vi)
     )
     monkeypatch.setattr(
         tidy3d.plugins.smatrix.analysis.terminal, "port_reference_impedances", mock_port_impedances
@@ -1312,6 +1306,6 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     # Check pseudo wave S matrix
     check_S_matrix(S_computed, S_pseudo)
 
-    # Check power wave S matrix (also assume ideal excitation to avoid inversion of mocked a)
-    S_computed = modeler_data.smatrix(s_param_def="power", assume_ideal_excitation=True).data.values
+    # Check power wave S matrix
+    S_computed = modeler_data.smatrix(s_param_def="power").data.values
     check_S_matrix(S_computed, S_power)
