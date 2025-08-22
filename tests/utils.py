@@ -1419,6 +1419,36 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             projection_surfaces=monitor.projection_surfaces,
         )
 
+    def make_aux_field_time_data(monitor: td.AuxFieldTimeMonitor) -> td.AuxFieldTimeData:
+        """make a random FieldTimeData from a FieldTimeMonitor."""
+        field_cmps = {}
+        grid = simulation.discretize_monitor(monitor)
+        tmesh = simulation.tmesh
+        for field_name in monitor.fields:
+            coords = get_spatial_coords_dict(simulation, monitor, field_name)
+
+            (idx_begin, idx_end) = monitor.time_inds(tmesh)
+            tcoords = tmesh[idx_begin:idx_end]
+            coords["t"] = tcoords
+            field_cmps[field_name] = make_data(
+                coords=coords, data_array_type=td.ScalarFieldTimeDataArray, is_complex=False
+            )
+
+        return td.AuxFieldTimeData(
+            monitor=monitor,
+            symmetry=(0, 0, 0),
+            symmetry_center=simulation.center,
+            grid_expanded=grid,
+            **field_cmps,
+        )
+
+    def make_flux_time_data(monitor: td.FluxTimeMonitor) -> td.FluxTimeData:
+        """make a random ModeData from a ModeMonitor."""
+
+        coords = {"t": [0, 1, 2]}
+        flux = make_data(coords=coords, data_array_type=td.FluxTimeDataArray, is_complex=False)
+        return td.FluxTimeData(monitor=monitor, flux=flux)
+
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
         td.FieldTimeMonitor: make_field_time_data,
@@ -1431,6 +1461,8 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.FieldProjectionAngleMonitor: make_field_projection_angle_data,
         td.FieldProjectionCartesianMonitor: make_field_projection_cartesian_data,
         td.FieldProjectionKSpaceMonitor: make_field_projection_kspace_data,
+        td.AuxFieldTimeMonitor: make_aux_field_time_data,
+        td.FluxTimeMonitor: make_flux_time_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]

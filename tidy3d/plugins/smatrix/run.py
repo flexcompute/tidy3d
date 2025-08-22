@@ -10,7 +10,7 @@ from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponent
 from tidy3d.plugins.smatrix.component_modelers.types import (
     ComponentModelerType,
 )
-from tidy3d.plugins.smatrix.data.modal import IndexSimulationData, ModalComponentModelerData
+from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData, SimulationDataMap
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
@@ -18,14 +18,16 @@ from tidy3d.web import Batch, BatchData
 DEFAULT_DATA_DIR = "."
 
 
-def compose_simulation_data_index(port_task_map: dict[str, str]) -> IndexSimulationData:
+def compose_simulation_data_index(port_task_map: dict[str, str]) -> SimulationDataMap:
     port_data_dict = {}
     for _, _ in port_task_map.items():
         pass
         # FIXME: get simulationdata for each port
         # port_data_dict[port] = sim_data_i
 
-    return IndexSimulationData(index=port_data_dict.keys(), data=port_data_dict.values())
+    return SimulationDataMap(
+        keys=tuple(port_data_dict.keys()), values=tuple(port_data_dict.values())
+    )
 
 
 def compose_terminal_modeler_data(
@@ -102,7 +104,7 @@ def compose_modeler(
 
 def compose_modeler_data(
     modeler: ModalComponentModeler | TerminalComponentModeler,
-    indexed_sim_data: IndexSimulationData,
+    indexed_sim_data: SimulationDataMap,
 ) -> ComponentModelerDataType:
     """Selects the correct composer based on the modeler type and creates the data object.
 
@@ -141,7 +143,7 @@ def compose_terminal_modeler_data_from_batch_data(
     """
     ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
     data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = IndexSimulationData(index=ports, data=data)
+    port_simulation_data = SimulationDataMap(keys=tuple(ports), values=tuple(data))
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
@@ -164,7 +166,7 @@ def compose_component_modeler_data_from_batch_data(
     """
     ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
     data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = IndexSimulationData(index=ports, data=data)
+    port_simulation_data = SimulationDataMap(keys=tuple(ports), values=tuple(data))
     return ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 

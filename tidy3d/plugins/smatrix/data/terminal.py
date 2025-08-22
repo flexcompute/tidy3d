@@ -15,7 +15,7 @@ from tidy3d.components.microwave.data.monitor_data import AntennaMetricsData
 from tidy3d.log import log
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
-from tidy3d.plugins.smatrix.data.modal import IndexSimulationData
+from tidy3d.plugins.smatrix.data.modal import SimulationDataMap
 from tidy3d.plugins.smatrix.network import SParamDef
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.utils import (
@@ -70,7 +70,7 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
         "and from which this data was generated.",
     )
 
-    data: IndexSimulationData = pd.Field(
+    data: SimulationDataMap = pd.Field(
         ...,
         title="Port-Simulation Data",
         description="Stores raw simulation data from each microwave port-specific simulation.",

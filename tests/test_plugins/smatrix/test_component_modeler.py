@@ -7,7 +7,7 @@ import pydantic.v1 as pydantic
 import pytest
 
 import tidy3d as td
-from tidy3d import IndexSimulationData
+from tidy3d import SimulationDataMap
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
 from tidy3d.web.api.container import Batch
@@ -194,9 +194,9 @@ def make_component_modeler(**kwargs):
 def run_component_modeler(monkeypatch, modeler: ModalComponentModeler) -> ModalComponentModelerData:
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
-    port_data = IndexSimulationData(
-        index=list(batch_data.keys()),
-        data=list(batch_data.values()),
+    port_data = SimulationDataMap(
+        keys=tuple(batch_data.keys()),
+        values=tuple(batch_data.values()),
     )
     modeler_data = ModalComponentModelerData(modeler=modeler, data=port_data)
     return modeler_data
