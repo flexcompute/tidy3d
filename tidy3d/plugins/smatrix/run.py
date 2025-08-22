@@ -15,9 +15,8 @@ from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
+from tidy3d.web.api.autograd.autograd import DEFAULT_DATA_DIR, _run_async
 from tidy3d.web.core.types import PayType
-
-DEFAULT_DATA_DIR = "."
 
 
 def compose_simulation_data_map(sim_data_map: dict) -> SimulationDataMap:
@@ -297,9 +296,6 @@ def _run_component_modeler(
     pay_type: Union[PayType, str],
 ) -> ComponentModelerDataType:
     """Run a Component Modeler via autograd by batching its underlying simulations."""
-
-    from tidy3d.web.api.autograd.autograd import DEFAULT_DATA_DIR, _run_async
-
     path_dir = os.dirname(path) if path else DEFAULT_DATA_DIR
     if not path_dir:
         path_dir = DEFAULT_DATA_DIR
