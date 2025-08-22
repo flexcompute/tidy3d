@@ -165,6 +165,7 @@ from .components.data.dataset import (
 )
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
+    AuxFieldTimeData,
     DiffractionData,
     DirectivityData,
     FieldData,

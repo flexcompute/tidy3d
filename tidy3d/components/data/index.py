@@ -33,7 +33,7 @@ class SimulationDataMap(Tidy3dBaseModel, Mapping[str, SimulationDataType]):
 
     Example
     -------
-    >>> from tidy3d import FieldData
+    >>> from tidy3d import FieldData, FluxData
     >>> import numpy as np
     >>> # Create some dummy simulation data
     >>> field_data = FieldData(data=np.random.rand(2, 2, 2, 3, 2), f="field")
@@ -80,9 +80,9 @@ class SimulationDataMap(Tidy3dBaseModel, Mapping[str, SimulationDataType]):
         ValueError
             If the lengths of the 'keys' and 'values' tuples are not equal.
         """
-        keys, values = data.get("keys"), data.get("values")
+        keys, values = data.get("keys_tuple"), data.get("values_tuple")
         if len(keys) != len(values):
-            raise ValueError("Length of 'keys' and 'values' must be the same.")
+            raise ValueError("Length of 'keys_tuple' and 'values_tuple' must be the same.")
         return data
 
     def __getitem__(self, key: str) -> SimulationDataType:
