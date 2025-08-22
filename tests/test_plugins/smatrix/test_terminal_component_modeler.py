@@ -11,7 +11,7 @@ import tidy3d as td
 import tidy3d.plugins.smatrix.analysis.terminal
 import tidy3d.plugins.smatrix.data.terminal
 import tidy3d.plugins.smatrix.utils
-from tidy3d import IndexSimulationData
+from tidy3d import SimulationDataMap
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import (
@@ -43,7 +43,7 @@ def run_component_modeler(
 ) -> TerminalComponentModelerData:
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
-    port_data = IndexSimulationData(
+    port_data = SimulationDataMap(
         index=list(batch_data.keys()),
         data=list(batch_data.values()),
     )
@@ -1255,7 +1255,7 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
                 "current": FreqDataArray(currents[:, i, j], coords={"f": freqs}),
             }
 
-    index_data = IndexSimulationData(index=port_name_list, data=sim_data_list)
+    index_data = SimulationDataMap(index=port_name_list, data=sim_data_list)
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=index_data)
 
     # Mock the compute_port_VI method

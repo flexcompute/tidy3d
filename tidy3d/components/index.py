@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Union
 
 import pydantic.v1 as pd
@@ -8,7 +9,7 @@ from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.simulation_types import SimulationType
 
 
-class IndexSimulation(Tidy3dBaseModel):
+class SimulationMap(Tidy3dBaseModel, Mapping[str, SimulationType]):
     """Container for a set of simulations, accessible by a string index."""
 
     index: tuple[str, ...]

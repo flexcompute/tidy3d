@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.simulation_types import SimulationDataType
 
 
-class IndexSimulationData(Tidy3dBaseModel):
+class SimulationDataMap(Tidy3dBaseModel, Mapping[str, SimulationDataType]):
     """Container for a set of simulation data, accessible by a string index."""
 
     index: tuple[str, ...]
