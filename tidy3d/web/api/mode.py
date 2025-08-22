@@ -490,7 +490,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         http.delete(f"tidy3d/tasks/{self.task_id}")
 
     def abort(self):
-        """Abort the mode solver and its corresponding task from the server."""
+        """aborting the mode solver and its corresponding task from the server."""
         return http.put(
             "tidy3d/tasks/abort", json={"taskType": "MODE_SOLVER", "taskId": self.solver_id}
         )

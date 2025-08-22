@@ -498,7 +498,7 @@ def start(
         check_resp = batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
         detail = batch.wait_for_validate(batch_type="RF_SWEEP")
         status = detail.status
-        if status not in ("Validate_Success", "Validate_Warn"):
+        if status not in ("validate_success", "validate_warn"):
             # Surface server-provided reason if available
             reason = None
             try:
@@ -773,7 +773,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
 @wait_for_connection
 def abort(task_id: TaskId) -> TaskInfo:
-    """Abort a running task without deleting it."""
+    """aborting a running task without deleting it."""
     task = SimulationTask(taskId=task_id)
     task.abort()
     return get_info(task_id)
@@ -823,7 +823,7 @@ def download(
                 total = resp.totalTask or 0
                 post_succ = resp.postprocessSuccess or 0
                 status = resp.status
-                if status in {"Run_Failed", "Run_Diverged", "Blocked", "Aborted", "Abort"}:
+                if status in {"error", "diverged", "blocked", "aborted", "aborting"}:
                     raise WebError(
                         f"Batch task {task_id} failed during postprocess: {status}"
                     ) from None
@@ -989,19 +989,19 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
     console = get_logging_console() if verbose else None
 
     def _status_to_stage(status: str) -> tuple[str, int]:
-        if status in ("Created",):
-            return ("Created", 0)
-        if status in ("Preprocess",):
-            return ("Preprocess", 1)
-        if status in ("Validating",):
-            return ("Validating", 2)
-        if status in ("Validate_Success", "Validate_Warn"):
+        if status in ("draft",):
+            return ("draft", 0)
+        if status in ("preprocess",):
+            return ("preprocess", 1)
+        if status in ("validating",):
+            return ("validating", 2)
+        if status in ("validate_success", "validate_warn"):
             return ("Validate", 3)
-        if status in ("Running",):
-            return ("Running", 4)
-        if status in ("Postprocess",):
-            return ("Postprocess", 5)
-        if status in ("Run_Success",):
+        if status in ("running",):
+            return ("running", 4)
+        if status in ("postprocess",):
+            return ("postprocess", 5)
+        if status in ("run_success",):
             return ("Success", 6)
         return (status, 6)
 
@@ -1025,23 +1025,23 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
         with Progress(*progress_columns, console=console, transient=False) as progress:
             p_validate = progress.add_task("Validate", total=1.0)
             p_run = progress.add_task("Run", total=1.0)
-            p_post = progress.add_task("Postprocess", total=1.0)
+            p_post = progress.add_task("postprocess", total=1.0)
 
             task_bars = {}
             total_task = detail.totalTask or 0
             if total_task and total_task <= max_detail_tasks:
                 run_statuses = [
-                    "Created",
-                    "Preprocess",
-                    "Validating",
+                    "draft",
+                    "preprocess",
+                    "validating",
                     "Validate",
-                    "Running",
-                    "Postprocess",
+                    "running",
+                    "postprocess",
                     "Success",
                 ]
                 for t in detail.tasks or []:
                     tname = t.taskName or t.taskId
-                    status = t.status or "Created"
+                    status = t.status or "draft"
                     _, idx = _status_to_stage(status)
                     pbar = progress.add_task(
                         f"{tname}",
@@ -1051,12 +1051,12 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
                     task_bars[tname] = pbar
 
             terminal_errors = {
-                "Validate_Failed",
-                "Run_Failed",
-                "Run_Diverged",
-                "Blocked",
-                "Abort",
-                "Aborted",
+                "validate_fail",
+                "error",
+                "diverged",
+                "blocked",
+                "aborting",
+                "aborted",
             }
 
             postprocess_triggered = False
@@ -1085,14 +1085,14 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
                 if task_bars:
                     for t in detail.tasks or []:
                         tname = t.taskName or t.taskId
-                        status = t.status or "Created"
+                        status = t.status or "draft"
                         _, idx = _status_to_stage(status)
                         pbar = task_bars.get(tname)
                         if pbar is not None:
                             progress.update(pbar, completed=min(idx, 6), refresh=False)
 
                 # If run succeeded but postprocess not yet complete, trigger it and keep waiting
-                if status in ("Run_Success", "Postprocess") or r >= total:
+                if status in ("run_success", "postprocess") or r >= total:
                     if not postprocess_triggered:
                         # Kick off postprocess once
                         try:
@@ -1113,12 +1113,12 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
                 time.sleep(REFRESH_TIME)
     else:
         terminal_errors = {
-            "Validate_Failed",
-            "Run_Failed",
-            "Run_Diverged",
-            "Blocked",
-            "Abort",
-            "Aborted",
+            "validate_fail",
+            "error",
+            "diverged",
+            "blocked",
+            "aborting",
+            "aborted",
         }
         postprocess_triggered = False
         while True:
@@ -1127,7 +1127,7 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
             total = d.totalTask or 0
             p = d.postprocessSuccess or 0
             r = d.runSuccess or 0
-            if (s in ("Run_Success", "Postprocess") or r >= total) and total:
+            if (s in ("run_success", "postprocess") or r >= total) and total:
                 if p < total and not postprocess_triggered:
                     try:
                         BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
