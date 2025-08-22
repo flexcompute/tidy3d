@@ -8,11 +8,11 @@ import skrf
 import xarray as xr
 
 import tidy3d as td
+import tidy3d.plugins.smatrix.analysis.terminal
+import tidy3d.plugins.smatrix.data.terminal
 import tidy3d.plugins.smatrix.utils
-from tidy3d import IndexSimulationData
+from tidy3d import SimulationDataMap
 from tidy3d.components.data.data_array import FreqDataArray
-from tidy3d.components.data.monitor_data import MonitorData
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
 from tidy3d.plugins.microwave import (
     CurrentIntegralAxisAligned,
@@ -43,9 +43,9 @@ def run_component_modeler(
 ) -> TerminalComponentModelerData:
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
-    port_data = IndexSimulationData(
-        index=list(batch_data.keys()),
-        data=list(batch_data.values()),
+    port_data = SimulationDataMap(
+        keys=tuple(batch_data.keys()),
+        values=tuple(batch_data.values()),
     )
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=port_data)
     monkeypatch.setattr(AbstractComponentModeler, "inv", lambda matrix: np.eye(len(modeler.ports)))
@@ -1235,50 +1235,54 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
 
     port_names = [port.name for port in modeler.ports]
 
+    # Build per-(excitation task, observed port) VI data and keep unique task indices
     sim_data_list = []
     port_name_list = []
+    task_data_dict: dict[str, dict[str, dict[str, FreqDataArray]]] = {}
+    sim_to_task: dict[int, str] = {}
     for j, port_in in enumerate(modeler.ports):
         task_name = modeler.get_task_name(port_in)
-        for i, _ in enumerate(modeler.ports):
-            # Initialize with zeros - user should replace with actual values
-            port_name_list.append(task_name)
-            sim_data_list.append(
-                SimulationData(
-                    simulation=modeler.simulation,
-                    data=MonitorData(
-                        FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
-                        FreqDataArray(currents[:, i, j], coords={"f": freqs}),
-                    ),
-                )
-            )
+        # One simulation per excitation task
+        sim_data = run_emulated(simulation=modeler.simulation)
+        sim_data_list.append(sim_data)
+        port_name_list.append(task_name)
+        sim_to_task[id(sim_data)] = task_name
+        # Store VI per observed port for this excitation
+        task_data_dict[task_name] = {}
+        for i, port_out in enumerate(modeler.ports):
+            task_data_dict[task_name][port_out.name] = {
+                "voltage": FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
+                "current": FreqDataArray(currents[:, i, j], coords={"f": freqs}),
+            }
 
-    index_data = IndexSimulationData(index=port_name_list, data=sim_data_list)
+    index_data = SimulationDataMap(keys=tuple(port_name_list), values=tuple(sim_data_list))
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=index_data)
 
     # Mock the compute_port_VI method
     def mock_compute_port_vi(port_out, sim_data):
         """Mock compute_port_VI to return voltage and current from dummy sim_data."""
-        port_name = port_out.name
-        voltage = index_data[port_name][0]
-        current = index_data[port_name][1]
+        task_name = sim_to_task[id(sim_data)]
+        voltage = task_data_dict[task_name][port_out.name]["voltage"]
+        current = task_data_dict[task_name][port_out.name]["current"]
         return voltage, current
 
-    # Mock port reference impedances to return constant Z0
-    def mock_port_impedances(self, batch_data):
+    # Mock port reference impedances to return frequency-dependent per-port Zref
+    def mock_port_impedances(modeler_data):
         coords = {"f": np.array(freqs), "port": port_names}
         return PortDataArray(Zref, coords=coords)
 
-    # Apply monkeypatches
+    # Apply monkeypatches in all import locations
     monkeypatch.setattr(
-        TerminalComponentModelerData, "compute_port_VI", staticmethod(mock_compute_port_vi)
+        tidy3d.plugins.smatrix.analysis.terminal,
+        "compute_port_VI",
+        staticmethod(mock_compute_port_vi),
     )
     monkeypatch.setattr(
-        TerminalComponentModelerData, "port_reference_impedances", mock_port_impedances
+        tidy3d.plugins.smatrix.analysis.terminal, "port_reference_impedances", mock_port_impedances
     )
 
     # Test the _internal_construct_smatrix method
-    # S_computed = modeler._internal_construct_smatrix(batch_data).values
-    S_computed = modeler_data.smatrix().values
+    S_computed = modeler_data.smatrix().data.values
 
     def check_S_matrix(S_computed, S_expected, tol=1e-12):
         # Check that S-matrix has correct shape
@@ -1303,5 +1307,5 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     check_S_matrix(S_computed, S_pseudo)
 
     # Check power wave S matrix
-    S_computed = modeler_data.smatrix(s_param_def="power").values
+    S_computed = modeler_data.smatrix(s_param_def="power").data.values
     check_S_matrix(S_computed, S_power)

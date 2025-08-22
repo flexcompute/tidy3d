@@ -6,6 +6,7 @@ import numpy as np
 
 from tidy3d.components.data.data_array import DataArray, FreqDataArray
 from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.component_modelers.base import (
     AbstractComponentModeler,
@@ -69,8 +70,7 @@ def check_port_impedance_sign(Z_numpy: np.ndarray):
             )
 
 
-@staticmethod
-def compute_F(Z_numpy: np.array, s_param_def: SParamDef = "pseudo"):
+def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
     r"""Helper to convert port impedance matrix to F, which is used for
     computing scattering parameters
 
@@ -162,7 +162,7 @@ def compute_power_delivered_by_port(
     FreqDataArray
         Power in units of Watts as a frequency array.
     """
-    a, b = compute_power_wave_amplitudes(sim_data=sim_data, port=port)
+    a, b = compute_power_wave_amplitudes(port=port, sim_data=sim_data)
     # Power delivered is the incident power minus the reflected power
     return 0.5 * (np.abs(a) ** 2 - np.abs(b) ** 2)
 

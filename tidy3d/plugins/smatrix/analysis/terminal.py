@@ -21,23 +21,32 @@ def terminal_construct_smatrix(
     assume_ideal_excitation: bool = False,
     s_param_def: SParamDef = "pseudo",
 ) -> TerminalPortDataArray:
-    """
-    Constructs the scattering matrix (S-matrix) from raw simulation data stored in a :class:`TerminalComponentModelerData`
+    """Constructs the scattering matrix (S-matrix) from raw simulation data.
 
     This function iterates through each port excitation simulation. For each run,
-    it calculates the resulting incident ('a') and reflected ('b') power wave
+    it calculates the resulting incident ('a') and reflected ('b') wave
     amplitudes at all ports. These amplitudes are compiled into matrices,
-    which are then used to compute the final S-matrix using the formula
-    :math:`S = b a^{-1}`.
+    which are then used to compute the final S-matrix.
+
+    If all ports are excited and ``assume_ideal_excitation`` is ``False``, the
+    S-matrix is computed using the formula :math:`S = b a^{-1}`. Otherwise,
+    it is assumed that the incident wave matrix 'a' is diagonal, and the
+    S-matrix is computed more efficiently by scaling the 'b' matrix. This
+    is also necessary when only a subset of ports are excited.
 
     Args:
         modeler_data: Data object containing the modeler definition and the raw
             results from each port simulation run.
+        assume_ideal_excitation: If ``True``, assumes that exciting one port
+            does not produce incident waves at other ports. This simplifies the
+            S-matrix calculation and is required if not all ports are excited.
+        s_param_def: The definition of S-parameters to use, determining whether
+            "pseudo waves" or "power waves" are calculated.
 
     Returns:
         TerminalPortDataArray
-            The computed S-matrix as a data array with dimensions for frequency,
-            output port, and input port.
+            The computed S-matrix as a ``TerminalPortDataArray`` with dimensions
+            for frequency, output port, and input port.
     """
     monitor_indices = list(modeler_data.modeler.matrix_indices_monitor)
     source_indices = list(modeler_data.modeler.matrix_indices_source)
@@ -110,8 +119,8 @@ def port_reference_impedances(modeler_data: TerminalComponentModelerData) -> Por
             simulation data needed for :class:`.WavePort` impedance calculations.
 
     Returns:
-        TerminalComponentModelerData
-            A data array containing the complex impedance for each port at each
+        PortDataArray
+            A ``PortDataArray`` containing the complex impedance for each port at each
             frequency.
     """
     values = np.zeros(
@@ -155,17 +164,20 @@ def compute_wave_amplitudes_at_each_port(
     s_param_def: SParamDef = "pseudo",
 ) -> tuple[PortDataArray, PortDataArray]:
     """Compute the incident and reflected amplitudes at each port.
+
     The computed amplitudes have not been normalized.
 
     Parameters
     ----------
+    modeler : :class:`.TerminalComponentModeler`
+        The component modeler defining the ports and simulation settings.
     port_reference_impedances : :class:`.PortDataArray`
         Reference impedance at each port.
     sim_data : :class:`.SimulationData`
-        Results from the simulation.
+        Results from a single simulation run.
     s_param_def : SParamDef
-        The type of waves computed, either pseudo waves defined by Equation 53 and Equation 54 in [1],
-        or power waves defined by Equation 4.67 in [2].
+        The type of waves computed, either pseudo waves defined by Equation 53 and
+        Equation 54 in [1], or power waves defined by Equation 4.67 in [2].
 
     Returns
     -------
@@ -226,14 +238,19 @@ def compute_power_wave_amplitudes_at_each_port(
     sim_data: SimulationData,
 ) -> tuple[PortDataArray, PortDataArray]:
     """Compute the incident and reflected power wave amplitudes at each port.
+
+    This is a convenience function that calls
+    :meth:`.compute_wave_amplitudes_at_each_port` with ``s_param_def="power"``.
     The computed amplitudes have not been normalized.
 
     Parameters
     ----------
+    modeler : :class:`.TerminalComponentModeler`
+        The component modeler defining the ports and simulation settings.
     port_reference_impedances : :class:`.PortDataArray`
         Reference impedance at each port.
     sim_data : :class:`.SimulationData`
-        Results from the simulation.
+        Results from a single simulation run.
 
     Returns
     -------

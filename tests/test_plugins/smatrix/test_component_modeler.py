@@ -7,9 +7,9 @@ import pydantic.v1 as pydantic
 import pytest
 
 import tidy3d as td
-from tidy3d import IndexSimulationData
+from tidy3d import SimulationDataMap
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from tidy3d.plugins.smatrix import ComponentModeler, ComponentModelerData, Port
+from tidy3d.plugins.smatrix import ModalComponentModeler, ModalComponentModelerData, Port
 from tidy3d.web.api.container import Batch
 
 from ...utils import run_emulated
@@ -188,21 +188,21 @@ def make_component_modeler(**kwargs):
     sim = make_coupler()
     ports = make_ports()
     _ = Batch(simulations={}, folder_name="None")
-    return ComponentModeler(simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, **kwargs)
+    return ModalComponentModeler(simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, **kwargs)
 
 
-def run_component_modeler(monkeypatch, modeler: ComponentModeler) -> ComponentModelerData:
+def run_component_modeler(monkeypatch, modeler: ModalComponentModeler) -> ModalComponentModelerData:
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
-    port_data = IndexSimulationData(
-        index=list(batch_data.keys()),
-        data=list(batch_data.values()),
+    port_data = SimulationDataMap(
+        keys=tuple(batch_data.keys()),
+        values=tuple(batch_data.values()),
     )
-    modeler_data = ComponentModelerData(modeler=modeler, data=port_data)
+    modeler_data = ModalComponentModelerData(modeler=modeler, data=port_data)
     return modeler_data
 
 
-def get_port_data_array(monkeypatch, modeler: ComponentModeler):
+def get_port_data_array(monkeypatch, modeler: ModalComponentModeler):
     modeler_data = run_component_modeler(monkeypatch=monkeypatch, modeler=modeler)
     return modeler_data.smatrix().data
 
@@ -249,7 +249,7 @@ def test_ports_too_close_boundary():
 
 def test_validate_batch_supplied(tmp_path):
     sim = make_coupler()
-    _ = ComponentModeler(
+    _ = ModalComponentModeler(
         simulation=sim,
         ports=[],
         freqs=sim.monitors[0].freqs,

@@ -5,23 +5,23 @@ from __future__ import annotations
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.index import IndexSimulationData
-from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
+from tidy3d.components.data.index import SimulationDataMap
+from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.data.data_array import ModalPortDataArray
 
 
-class ComponentModelerData(Tidy3dBaseModel):
-    modeler: ComponentModeler = pd.Field(
+class ModalComponentModelerData(Tidy3dBaseModel):
+    modeler: ModalComponentModeler = pd.Field(
         ...,
-        title="ComponentModeler",
-        description="The original :class:`ComponentModeler` object that defines the simulation setup "
+        title="ModalComponentModeler",
+        description="The original :class:`ModalComponentModeler` object that defines the simulation setup "
         "and from which this data was generated.",
     )
 
-    data: IndexSimulationData = pd.Field(
+    data: SimulationDataMap = pd.Field(
         ...,
-        title="ComponentModeler",
-        description="The original :class:`ComponentModeler` object that defines the simulation setup "
+        title="ModalComponentModeler",
+        description="The original :class:`ModalComponentModeler` object that defines the simulation setup "
         "and from which this data was generated.",
     )
 

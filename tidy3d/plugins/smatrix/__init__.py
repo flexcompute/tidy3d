@@ -7,7 +7,7 @@ import warnings
 from tidy3d.plugins.smatrix.component_modelers.base import (
     AbstractComponentModeler,
 )
-from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
+from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.types import ComponentModelerType
 from tidy3d.plugins.smatrix.data.data_array import (
@@ -15,15 +15,13 @@ from tidy3d.plugins.smatrix.data.data_array import (
     PortDataArray,
     TerminalPortDataArray,
 )
-from tidy3d.plugins.smatrix.data.modal import ComponentModelerData
+from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import MicrowaveSMatrixData, TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
 from tidy3d.plugins.smatrix.ports.wave import WavePort
-
-# from tidy3d.plugins.smatrix.run import compose_modeler_data, create_batch, run
 
 # Instantiate on plugin import till we unite with toplevel
 warnings.filterwarnings(
@@ -36,13 +34,12 @@ warnings.filterwarnings(
 __all__ = [
     "AbstractComponentModeler",
     "CoaxialLumpedPort",
-    "ComponentModeler",
-    "ComponentModelerData",
-    "ComponentModelerDataLumpedPort",
     "ComponentModelerDataType",
     "ComponentModelerType",
     "LumpedPort",
     "MicrowaveSMatrixData",
+    "ModalComponentModeler",
+    "ModalComponentModelerData",
     "ModalPortDataArray",
     "Port",
     "PortDataArray",
@@ -50,7 +47,4 @@ __all__ = [
     "TerminalComponentModelerData",
     "TerminalPortDataArray",
     "WavePort",
-    # "compose_modeler_data",
-    # "create_batch",
-    # "run",
 ]
