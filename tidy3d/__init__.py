@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tidy3d.components.boundary import BroadbandModeABCFitterParam, BroadbandModeABCSpec
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import (
     ChargeConductorMedium,
@@ -449,6 +450,8 @@ __all__ = [
     "BoundaryEdgeType",
     "BoundarySpec",
     "Box",
+    "BroadbandModeABCFitterParam",
+    "BroadbandModeABCSpec",
     "CaugheyThomasMobility",
     "CellDataArray",
     "ChargeConductorMedium",

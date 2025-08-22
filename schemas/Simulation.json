@@ -12136,9 +12136,114 @@
       },
       "additionalProperties": false
     },
+    "BroadbandModeABCFitterParam": {
+      "title": "BroadbandModeABCFitterParam",
+      "description": "Parameters for fitting the mode propagation index over the frequency range using pole-residue pair model.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nmax_num_poles : ConstrainedIntValue = 5\n    Maximal number of poles in complex-conjugate pole residue model for fitting the mode propagation index.\ntolerance_rms : NonNegativeFloat = 1e-06\n    Tolerance in fitting the mode propagation index.\nfrequency_sampling_points : ConstrainedIntValue = 15\n    Number of sampling frequencies used in fitting the mode propagation index.\n\nNotes\n-----\nThe number of poles and frequency sampling points are constrained to be within the range [1, 10] and [1, 101] respectively.\n\nExample\n-------\n>>> fitter_param = BroadbandModeABCFitterParam(max_num_poles=5, tolerance_rms=1e-4, frequency_sampling_points=10)",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "max_num_poles": {
+          "title": "Maximal Number Of Poles",
+          "description": "Maximal number of poles in complex-conjugate pole residue model for fitting the mode propagation index.",
+          "default": 5,
+          "exclusiveMinimum": 0,
+          "maximum": 10,
+          "type": "integer"
+        },
+        "tolerance_rms": {
+          "title": "Fitting Tolerance",
+          "description": "Tolerance in fitting the mode propagation index.",
+          "default": 1e-06,
+          "minimum": 0,
+          "type": "number"
+        },
+        "frequency_sampling_points": {
+          "title": "Number Of Frequencies",
+          "description": "Number of sampling frequencies used in fitting the mode propagation index.",
+          "default": 15,
+          "exclusiveMinimum": 0,
+          "maximum": 101,
+          "type": "integer"
+        },
+        "type": {
+          "title": "Type",
+          "default": "BroadbandModeABCFitterParam",
+          "enum": [
+            "BroadbandModeABCFitterParam"
+          ],
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BroadbandModeABCSpec": {
+      "title": "BroadbandModeABCSpec",
+      "description": "Specifies the broadband mode absorption boundary conditions. The mode propagation index is approximated by a sum of pole-residue pairs.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nfrequency_range : Tuple[float, float]\n    [units = (Hz, Hz)].  Frequency range for the broadband mode absorption boundary conditions.\nfit_param : BroadbandModeABCFitterParam = BroadbandModeABCFitterParam(attrs={}, max_num_poles=5, tolerance_rms=1e-06, frequency_sampling_points=15, type='BroadbandModeABCFitterParam')\n    Parameters for fitting the mode propagation index over the frequency range using pole-residue pair model.\n\nExample\n-------\n>>> broadband_mode_abc_spec = BroadbandModeABCSpec(frequency_range=(100e12, 120e12), fit_param=BroadbandModeABCFitterParam())",
+      "type": "object",
+      "properties": {
+        "attrs": {
+          "title": "Attributes",
+          "description": "Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.",
+          "default": {},
+          "type": "object"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Frequency range for the broadband mode absorption boundary conditions.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "fit_param": {
+          "title": "Fitting Parameters For Broadband Mode Absorption Boundary Conditions",
+          "description": "Parameters for fitting the mode propagation index over the frequency range using pole-residue pair model.",
+          "default": {
+            "attrs": {},
+            "max_num_poles": 5,
+            "tolerance_rms": 1e-06,
+            "frequency_sampling_points": 15,
+            "type": "BroadbandModeABCFitterParam"
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/BroadbandModeABCFitterParam"
+            }
+          ]
+        },
+        "type": {
+          "title": "Type",
+          "default": "BroadbandModeABCSpec",
+          "enum": [
+            "BroadbandModeABCSpec"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "frequency_range"
+      ],
+      "additionalProperties": false
+    },
     "ModeABCBoundary": {
       "title": "ModeABCBoundary",
-      "description": "One-way wave equation absorbing boundary conditions for absorbing a waveguide mode.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for boundary.\nmode_spec : ModeSpec = ModeSpec(attrs={}, num_modes=1, target_neff=None, num_pml=(0,, 0), filter_pol=None, angle_theta=0.0, angle_phi=0.0, precision='double', bend_radius=None, bend_axis=None, angle_rotation=False, track_freq='central', group_index_step=False, type='ModeSpec')\n    Parameters that determine the modes computed by the mode solver.\nmode_index : NonNegativeInt = 0\n    Index into the collection of modes returned by mode solver. The absorbing boundary conditions are configured to absorb the specified mode. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.\nfrequency : Optional[PositiveFloat] = None\n    Frequency at which the absorbed mode is evaluated. If ``None``, then the central frequency of the source is used.\nplane : Box\n    Cross-sectional plane in which the absorbed mode will be computed.",
+      "description": "One-way wave equation absorbing boundary conditions for absorbing a waveguide mode.\n\nParameters\n----------\nattrs : dict = {}\n    Dictionary storing arbitrary metadata for a Tidy3D object. This dictionary can be freely used by the user for storing data without affecting the operation of Tidy3D as it is not used internally. Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects that can not be serialized. One can check if ``attrs`` are serializable by calling ``obj.json()``.\nname : Optional[str] = None\n    Optional unique name for boundary.\nmode_spec : ModeSpec = ModeSpec(attrs={}, num_modes=1, target_neff=None, num_pml=(0,, 0), filter_pol=None, angle_theta=0.0, angle_phi=0.0, precision='double', bend_radius=None, bend_axis=None, angle_rotation=False, track_freq='central', group_index_step=False, type='ModeSpec')\n    Parameters that determine the modes computed by the mode solver.\nmode_index : NonNegativeInt = 0\n    Index into the collection of modes returned by mode solver. The absorbing boundary conditions are configured to absorb the specified mode. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.\nfreq_spec : Union[PositiveFloat, BroadbandModeABCSpec, NoneType] = None\n    Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.\nplane : Box\n    Cross-sectional plane in which the absorbed mode will be computed.",
       "type": "object",
       "properties": {
         "attrs": {
@@ -12195,11 +12300,18 @@
           "minimum": 0,
           "type": "integer"
         },
-        "frequency": {
-          "title": "Frequency",
-          "description": "Frequency at which the absorbed mode is evaluated. If ``None``, then the central frequency of the source is used.",
-          "exclusiveMinimum": 0,
-          "type": "number"
+        "freq_spec": {
+          "title": "Absorption Frequency Specification",
+          "description": "Specifies the frequency at which field is absorbed. If ``None``, then the central frequency of the source is used. If ``BroadbandModeABCSpec``, then the field is absorbed over the specified frequency range.",
+          "anyOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "$ref": "#/definitions/BroadbandModeABCSpec"
+            }
+          ]
         },
         "plane": {
           "title": "Plane",

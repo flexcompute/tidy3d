@@ -8,6 +8,7 @@ import autograd.numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
+from tidy3d.components.boundary import BroadbandModeABCSpec
 from tidy3d.components.data.data_array import DataArray, FreqDataArray
 from tidy3d.components.data.monitor_data import MonitorData
 from tidy3d.components.data.sim_data import SimulationData
@@ -253,7 +254,10 @@ class TerminalComponentModeler(AbstractComponentModeler[NetworkIndex, NetworkEle
                     wave_port.injection_axis
                 ] + self._shift_value_signed(wave_port)
                 port_absorber = wave_port.to_absorber(
-                    snap_center=mode_src_pos, frequency=0.5 * (min(self.freqs) + max(self.freqs))
+                    snap_center=mode_src_pos,
+                    freq_spec=BroadbandModeABCSpec(
+                        frequency_range=(np.min(self.freqs), np.max(self.freqs))
+                    ),
                 )
                 new_absorbers.append(port_absorber)
 
