@@ -233,8 +233,8 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
 
         if deprecation_warning:
             log.warning(
-                "'ModalComponentModeler.run()' is deprecated. "
-                "Use 'tidy3d.web.run(ModalComponentModeler)' unless you need autograd support. "
+                "'ComponentModeler.run()' is deprecated. "
+                "Use 'tidy3d.web.run(ComponentModeler)' unless you need autograd support. "
                 "To suppress this warning, pass 'deprecation_warning=False'."
             )
 
