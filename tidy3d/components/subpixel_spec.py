@@ -5,8 +5,9 @@ from typing import Union
 
 import pydantic.v1 as pd
 
+from tidy3d.components.types.base import TYPE_TAG_STR
+
 from .base import Tidy3dBaseModel, cached_property
-from .types import TYPE_TAG_STR
 
 # Default Courant number reduction rate in PEC conformal's scheme
 DEFAULT_COURANT_REDUCTION_PEC_CONFORMAL = 0.3

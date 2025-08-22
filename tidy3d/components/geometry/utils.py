@@ -12,7 +12,7 @@ import pydantic
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Grid
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     ArrayFloat2D,
     Axis,
     Bound,

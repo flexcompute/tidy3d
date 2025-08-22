@@ -24,7 +24,7 @@ from tidy3d.components.simulation import (
     Simulation,
     validate_boundaries_for_zero_dims,
 )
-from tidy3d.components.types import Ax, Axis, FreqArray, Symmetry, annotate_type
+from tidy3d.components.types.base import Ax, Axis, FreqArray, Symmetry, annotate_type
 from tidy3d.components.validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, inf

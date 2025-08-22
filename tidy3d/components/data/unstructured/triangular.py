@@ -22,7 +22,7 @@ from tidy3d.components.data.data_array import (
     PointDataArray,
     SpatialDataArray,
 )
-from tidy3d.components.types import ArrayLike, Ax, Axis, Bound
+from tidy3d.components.types.base import ArrayLike, Ax, Axis, Bound
 from tidy3d.components.viz import add_ax_if_none, equal_aspect, plot_params_grid
 from tidy3d.constants import inf
 from tidy3d.exceptions import DataError

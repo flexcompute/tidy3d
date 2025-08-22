@@ -12,7 +12,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
 from tidy3d.components.data.dataset import TriangleMeshDataset
 from tidy3d.components.data.validators import validate_no_nans
-from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.components.types.base import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import fp_eps, inf
 from tidy3d.exceptions import DataError, ValidationError
@@ -182,7 +182,7 @@ class TriangleMesh(base.Geometry, ABC):
         """
         import trimesh
 
-        from tidy3d.components.types_extra import TrimeshType
+        from tidy3d.components.types.third_party import TrimeshType
 
         def process_single(mesh: TrimeshType) -> TriangleMesh:
             """Process a single 'trimesh.Trimesh' using scale and origin."""

@@ -9,7 +9,7 @@ import numpy as np
 import xarray as xr
 
 from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
-from tidy3d.components.types import ArrayLike, Bound, tidycomplex
+from tidy3d.components.types.base import ArrayLike, Bound, tidycomplex
 from tidy3d.constants import C_0, EPSILON_0, LARGE_NUMBER, MU_0
 from tidy3d.log import log
 

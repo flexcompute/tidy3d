@@ -18,7 +18,7 @@ from tidy3d.components.tcad.types import (
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
 )
-from tidy3d.components.types import Axis
+from tidy3d.components.types.base import Axis
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 

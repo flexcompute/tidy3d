@@ -39,7 +39,7 @@ from tidy3d.components.source.base import Source
 from tidy3d.components.source.current import CustomCurrentSource, PointDipole
 from tidy3d.components.source.field import CustomFieldSource, ModeSource, PlaneWave
 from tidy3d.components.source.time import GaussianPulse, SourceTimeType
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,

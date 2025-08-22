@@ -11,7 +11,7 @@ import xarray as xr
 
 from tidy3d.components.data.data_array import FieldProjectionAngleDataArray, FreqDataArray
 from tidy3d.components.data.monitor_data import DirectivityData
-from tidy3d.components.types import PolarizationBasis
+from tidy3d.components.types.base import PolarizationBasis
 from tidy3d.log import log
 
 

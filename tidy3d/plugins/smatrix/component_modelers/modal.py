@@ -13,7 +13,7 @@ from tidy3d.components.monitor import ModeMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types import Ax
+from tidy3d.components.types.base import Ax
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.plugins.smatrix.ports.modal import Port
 

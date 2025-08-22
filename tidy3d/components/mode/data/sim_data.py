@@ -10,7 +10,7 @@ from tidy3d.components.base import cached_property
 from tidy3d.components.data.monitor_data import ModeSolverData, PermittivityData
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.components.types import Ax, PlotScale
+from tidy3d.components.types.base import Ax, PlotScale
 
 ModeSimulationMonitorDataType = PermittivityData
 

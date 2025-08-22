@@ -8,7 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.components.types import ArrayLike
+from tidy3d.components.types.base import ArrayLike
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType

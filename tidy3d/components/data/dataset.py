@@ -10,7 +10,7 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import Axis, xyz
+from tidy3d.components.types.base import Axis, xyz
 from tidy3d.constants import C_0, PICOSECOND_PER_NANOMETER_PER_KILOMETER, UnitScaling
 from tidy3d.exceptions import DataError
 from tidy3d.log import log

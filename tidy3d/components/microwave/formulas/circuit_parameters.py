@@ -16,7 +16,7 @@ from __future__ import annotations
 import numpy as np
 
 from tidy3d.components.geometry.base import Geometry
-from tidy3d.components.types import Axis
+from tidy3d.components.types.base import Axis
 from tidy3d.constants import EPSILON_0
 
 

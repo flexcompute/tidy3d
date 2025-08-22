@@ -26,7 +26,7 @@ from typing import Literal, Optional
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayFloat1D
+from tidy3d.components.types.base import ArrayFloat1D
 from tidy3d.constants import AMP, VOLT
 from tidy3d.constants import inf as td_inf
 

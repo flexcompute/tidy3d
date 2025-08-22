@@ -25,7 +25,7 @@ from tidy3d.components.tcad.monitors.charge import (
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, annotate_type
+from tidy3d.components.types.base import TYPE_TAG_STR, Ax, annotate_type
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.exceptions import DataError
 from tidy3d.log import log

@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayLike
+from tidy3d.components.types.base import ArrayLike
 from tidy3d.exceptions import ValidationError
 
 

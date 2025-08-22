@@ -20,7 +20,7 @@ from tidy3d.components.data.data_array import (
 )
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
 from tidy3d.components.geometry.base import Box, Geometry
-from tidy3d.components.types import Ax, Axis, Coordinate2D, Direction
+from tidy3d.components.types.base import Ax, Axis, Coordinate2D, Direction
 from tidy3d.components.validators import assert_line, assert_plane
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import AMP, VOLT, fp_eps

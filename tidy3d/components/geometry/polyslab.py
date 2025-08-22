@@ -24,7 +24,7 @@ from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.types import TracedFloat
 from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     ArrayFloat1D,
     ArrayFloat2D,
     ArrayLike,

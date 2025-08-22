@@ -12,7 +12,7 @@ from tidy3d.components.tcad.types import (
     MobilityModelType,
     RecombinationModelType,
 )
-from tidy3d.components.types import Union
+from tidy3d.components.types.base import Union
 from tidy3d.constants import (
     CONDUCTIVITY,
     ELECTRON_VOLT,

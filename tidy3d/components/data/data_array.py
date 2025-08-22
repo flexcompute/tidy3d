@@ -21,7 +21,7 @@ from xarray.core.variable import as_variable
 from tidy3d.compat import alignment
 from tidy3d.components.autograd import TidyArrayBox, get_static, interpn, is_tidy_box
 from tidy3d.components.geometry.bound_ops import bounds_contains
-from tidy3d.components.types import Axis, Bound
+from tidy3d.components.types.base import Axis, Bound
 from tidy3d.constants import (
     HERTZ,
     MICROMETER,

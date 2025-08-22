@@ -13,7 +13,7 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.medium import Medium, MediumType3D
 from tidy3d.components.scene import Scene
 from tidy3d.components.structure import Structure
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     TYPE_TAG_STR,
     Ax,
     Axis,

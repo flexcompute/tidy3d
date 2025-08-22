@@ -7,10 +7,10 @@ from typing import Union
 
 import pydantic.v1 as pd
 
+from tidy3d.components.types.base import BoxSurface
 from tidy3d.exceptions import SetupError
 
 from .base import Tidy3dBaseModel
-from .types import BoxSurface
 
 
 class AbstractBCPlacement(ABC, Tidy3dBaseModel):

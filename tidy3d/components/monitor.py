@@ -8,16 +8,7 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pydantic
 
-from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
-from tidy3d.exceptions import SetupError, ValidationError
-from tidy3d.log import log
-
-from .apodization import ApodizationSpec
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .base_sim.monitor import AbstractMonitor
-from .medium import MediumType
-from .mode_spec import ModeSpec
-from .types import (
+from tidy3d.components.types.base import (
     ArrayFloat1D,
     AuxField,
     Ax,
@@ -33,6 +24,15 @@ from .types import (
     ObsGridArray,
     Size,
 )
+from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
+from .apodization import ApodizationSpec
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .base_sim.monitor import AbstractMonitor
+from .medium import MediumType
+from .mode_spec import ModeSpec
 from .validators import assert_plane, validate_freqs_min, validate_freqs_not_empty
 from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR
 

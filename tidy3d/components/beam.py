@@ -9,6 +9,7 @@ from typing import Literal, Optional, Union
 import autograd.numpy as np
 import pydantic.v1 as pd
 
+from tidy3d.components.types.base import TYPE_TAG_STR, Direction, FreqArray, Numpy
 from tidy3d.constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
 
 from .base import cached_property
@@ -19,7 +20,6 @@ from .grid.grid import Coords, Grid
 from .medium import Medium, MediumType
 from .monitor import FieldMonitor
 from .source.field import FixedAngleSpec, FixedInPlaneKSpec
-from .types import TYPE_TAG_STR, Direction, FreqArray, Numpy
 from .validators import assert_plane
 
 DEFAULT_RESOLUTION = 200

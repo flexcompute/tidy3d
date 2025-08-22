@@ -13,6 +13,15 @@ from tidy3d.components.grid.grid import Grid
 from tidy3d.components.medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.structure import MeshOverrideStructure, Structure
+from tidy3d.components.types.base import (
+    TYPE_TAG_STR,
+    Axis,
+    Axis2D,
+    Coordinate,
+    CoordinateOptional,
+    FreqArray,
+    LumpDistType,
+)
 from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
 from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
 from tidy3d.exceptions import ValidationError
@@ -34,15 +43,6 @@ from .microwave.formulas.circuit_parameters import (
     capacitance_rectangular_sheets,
     inductance_straight_rectangular_wire,
     total_inductance_colinear_rectangular_wire_segments,
-)
-from .types import (
-    TYPE_TAG_STR,
-    Axis,
-    Axis2D,
-    Coordinate,
-    CoordinateOptional,
-    FreqArray,
-    LumpDistType,
 )
 from .viz import PlotParams, plot_params_lumped_element
 

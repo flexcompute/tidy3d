@@ -13,7 +13,7 @@ from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.source.frame import PECFrame
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
+from tidy3d.components.types.base import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
 from tidy3d.components.validators import (
     assert_plane,
     assert_single_freq_in_range,

@@ -11,7 +11,7 @@ import xarray as xr
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Geometry
-from tidy3d.components.types import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
+from tidy3d.components.types.base import ArrayFloat2D, Ax, Axis, Bound, Coordinate, Direction
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import SetupError

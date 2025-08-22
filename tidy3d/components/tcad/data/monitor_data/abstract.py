@@ -17,7 +17,7 @@ from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridD
 from tidy3d.components.tcad.types import (
     HeatChargeMonitorType,
 )
-from tidy3d.components.types import Coordinate, ScalarSymmetry, annotate_type
+from tidy3d.components.types.base import Coordinate, ScalarSymmetry, annotate_type
 
 FieldDataset = Union[
     SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])

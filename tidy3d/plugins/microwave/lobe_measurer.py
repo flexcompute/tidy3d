@@ -10,7 +10,7 @@ import pydantic.v1 as pd
 from pandas import DataFrame
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from tidy3d.components.types import ArrayFloat1D, ArrayLike, Ax
+from tidy3d.components.types.base import ArrayFloat1D, ArrayLike, Ax
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import log

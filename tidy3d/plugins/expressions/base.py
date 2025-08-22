@@ -5,7 +5,7 @@ from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, Optional
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.types.base import TYPE_TAG_STR
 
 from .types import ExpressionType, NumberOrExpression, NumberType
 

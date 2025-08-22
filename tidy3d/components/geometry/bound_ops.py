@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from math import isclose
 
-from tidy3d.components.types import Bound
+from tidy3d.components.types.base import Bound
 from tidy3d.constants import fp_eps
 
 
