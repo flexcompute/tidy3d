@@ -51,6 +51,8 @@ Absorber Parameters
 
    tidy3d.AbsorberParams
    tidy3d.PMLParams
+   tidy3d.BroadbandModeABCSpec
+   tidy3d.BroadbandModeABCFitterParam
 
 
 Internal Absorbers
