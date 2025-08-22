@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Generic, Optional, TypeVar, Union, get_args
+from typing import Any, Generic, Optional, TypeVar, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
@@ -27,7 +26,6 @@ from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
-from tidy3d.web.core.types import PayType
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -36,73 +34,6 @@ DEFAULT_DATA_DIR = "."
 # Generic type variables for matrix indices and elements
 IndexType = TypeVar("IndexType")
 ElementType = TypeVar("ElementType")
-
-if TYPE_CHECKING:
-    from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
-
-    from .types import ComponentModelerType
-
-
-def _run_component_modeler(
-    modeler: ComponentModelerType,
-    task_name: str,
-    folder_name: str,
-    path: str,
-    callback_url: Optional[str],
-    verbose: bool,
-    solver_version: Optional[str],
-    local_gradient: bool,
-    max_num_adjoint_per_fwd: int,
-    pay_type: Union[PayType, str],
-) -> ComponentModelerDataType:
-    """Run a Component Modeler via autograd by batching its underlying simulations."""
-
-    from tidy3d.web.api.autograd.autograd import DEFAULT_DATA_DIR, _run_async
-
-    path_dir = os.dirname(path) if path else DEFAULT_DATA_DIR
-    if not path_dir:
-        path_dir = DEFAULT_DATA_DIR
-
-    sims = modeler.sim_dict
-
-    sim_data_map = _run_async(
-        simulations=sims,
-        folder_name=folder_name,
-        path_dir=path_dir,
-        callback_url=callback_url,
-        verbose=verbose,
-        simulation_type="tidy3d_autograd_async",
-        solver_version=solver_version,
-        parent_tasks=None,
-        local_gradient=local_gradient,
-        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
-        pay_type=pay_type,
-    )
-
-    return _compose_modeler_data_from_sim_map(modeler=modeler, sim_data_map=sim_data_map)
-
-
-def _compose_modeler_data_from_sim_map(
-    modeler: ComponentModelerType, sim_data_map: dict
-) -> ComponentModelerDataType:
-    """Create ComponentModelerDataType from a dict of SimulationData keyed by task name."""
-
-    # local imports to avoid cycles through tidy3d.web
-    from tidy3d.components.data.index import IndexSimulationData
-    from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
-    from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
-    from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
-    from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
-
-    # preserve mapping order
-    index = tuple(sim_data_map.keys())
-    data = tuple(sim_data_map.values())
-    indexed = IndexSimulationData(index=index, data=data)
-
-    if isinstance(modeler, ModalComponentModeler):
-        return ModalComponentModelerData(modeler=modeler, data=indexed)
-    if isinstance(modeler, TerminalComponentModeler):
-        return TerminalComponentModelerData(modeler=modeler, data=indexed)
 
 
 class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseModel):
@@ -294,10 +225,11 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
         solver_version: Optional[str] = None,
         local_gradient: bool = False,
         max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-        pay_type: Union[PayType, str] = PayType.AUTO,
+        pay_type: Any = Any,
         deprecation_warning: bool = True,
     ):
         """Run component modeler locally, with autograd support."""
+        from tidy3d.plugins.smatrix.run import _run_component_modeler
 
         if deprecation_warning:
             log.warning(
