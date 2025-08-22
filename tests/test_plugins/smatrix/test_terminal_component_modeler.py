@@ -44,8 +44,8 @@ def run_component_modeler(
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     port_data = SimulationDataMap(
-        index=list(batch_data.keys()),
-        data=list(batch_data.values()),
+        keys=tuple(batch_data.keys()),
+        values=tuple(batch_data.values()),
     )
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=port_data)
     monkeypatch.setattr(AbstractComponentModeler, "inv", lambda matrix: np.eye(len(modeler.ports)))
@@ -1255,7 +1255,7 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
                 "current": FreqDataArray(currents[:, i, j], coords={"f": freqs}),
             }
 
-    index_data = SimulationDataMap(index=port_name_list, data=sim_data_list)
+    index_data = SimulationDataMap(keys=tuple(port_name_list), values=tuple(sim_data_list))
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=index_data)
 
     # Mock the compute_port_VI method

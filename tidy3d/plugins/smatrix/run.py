@@ -25,7 +25,9 @@ def compose_simulation_data_index(port_task_map: dict[str, str]) -> SimulationDa
         # FIXME: get simulationdata for each port
         # port_data_dict[port] = sim_data_i
 
-    return SimulationDataMap(index=port_data_dict.keys(), data=port_data_dict.values())
+    return SimulationDataMap(
+        keys=tuple(port_data_dict.keys()), values=tuple(port_data_dict.values())
+    )
 
 
 def compose_terminal_modeler_data(
@@ -141,7 +143,7 @@ def compose_terminal_modeler_data_from_batch_data(
     """
     ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
     data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = SimulationDataMap(index=ports, data=data)
+    port_simulation_data = SimulationDataMap(keys=tuple(ports), values=tuple(data))
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
@@ -164,7 +166,7 @@ def compose_component_modeler_data_from_batch_data(
     """
     ports = [modeler.get_task_name(port=port_i) for port_i in modeler.ports]
     data = [batch_data[modeler.get_task_name(port=port_i)] for port_i in modeler.ports]
-    port_simulation_data = SimulationDataMap(index=ports, data=data)
+    port_simulation_data = SimulationDataMap(keys=tuple(ports), values=tuple(data))
     return ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 

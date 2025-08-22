@@ -195,8 +195,8 @@ def run_component_modeler(monkeypatch, modeler: ModalComponentModeler) -> ModalC
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     port_data = SimulationDataMap(
-        index=list(batch_data.keys()),
-        data=list(batch_data.values()),
+        keys=tuple(batch_data.keys()),
+        values=tuple(batch_data.values()),
     )
     modeler_data = ModalComponentModelerData(modeler=modeler, data=port_data)
     return modeler_data
