@@ -89,9 +89,9 @@ def _compose_modeler_data_from_sim_map(
 
     # local imports to avoid cycles through tidy3d.web
     from tidy3d.components.data.index import IndexSimulationData
-    from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
+    from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
     from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
-    from tidy3d.plugins.smatrix.data.modal import ComponentModelerData
+    from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
     from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 
     # preserve mapping order
@@ -99,8 +99,8 @@ def _compose_modeler_data_from_sim_map(
     data = tuple(sim_data_map.values())
     indexed = IndexSimulationData(index=index, data=data)
 
-    if isinstance(modeler, ComponentModeler):
-        return ComponentModelerData(modeler=modeler, data=indexed)
+    if isinstance(modeler, ModalComponentModeler):
+        return ModalComponentModelerData(modeler=modeler, data=indexed)
     if isinstance(modeler, TerminalComponentModeler):
         return TerminalComponentModelerData(modeler=modeler, data=indexed)
 
@@ -301,8 +301,8 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
 
         if deprecation_warning:
             log.warning(
-                "'ComponentModeler.run()' is deprecated. "
-                "Use 'tidy3d.web.run(ComponentModeler)' unless you need autograd support. "
+                "'ModalComponentModeler.run()' is deprecated. "
+                "Use 'tidy3d.web.run(ModalComponentModeler)' unless you need autograd support. "
                 "To suppress this warning, pass 'deprecation_warning=False'."
             )
 

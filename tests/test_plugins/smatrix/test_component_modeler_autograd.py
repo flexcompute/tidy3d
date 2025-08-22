@@ -8,7 +8,7 @@ import pytest
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.plugins.smatrix.analysis import terminal as terminal_analysis
-from tidy3d.plugins.smatrix.component_modelers.modal import ComponentModeler
+from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.data.data_array import TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.modal import Port as ModalPort
@@ -162,7 +162,7 @@ def _build_base_sim(scale: float) -> td.Simulation:
     )
 
 
-def build_modal_modeler(scale: float) -> ComponentModeler:
+def build_modal_modeler(scale: float) -> ModalComponentModelerData:
     sim = _build_base_sim(scale)
 
     # two modal ports on +/- z sides
@@ -183,7 +183,7 @@ def build_modal_modeler(scale: float) -> ComponentModeler:
     )
 
     freqs = [2.0e14]
-    return ComponentModeler(simulation=sim, ports=(p1, p2), freqs=freqs)
+    return ModalComponentModelerData(simulation=sim, ports=(p1, p2), freqs=freqs)
 
 
 def build_terminal_modeler(scale: float) -> TerminalComponentModeler:
