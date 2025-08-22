@@ -7,7 +7,21 @@ from pydantic.v1 import Field
 from tidy3d.components.types.base import TYPE_TAG_STR, ArrayLike, Complex
 
 if TYPE_CHECKING:
-    pass
+    from .functions import Cos, Exp, Log, Log10, Sin, Sqrt, Tan
+    from .metrics import ModeAmp, ModePower
+    from .operators import (
+        Abs,
+        Add,
+        Divide,
+        FloorDivide,
+        MatMul,
+        Modulus,
+        Multiply,
+        Negate,
+        Power,
+        Subtract,
+    )
+    from .variables import Constant, Variable
 
 NumberType = Union[int, float, Complex, ArrayLike]
 
