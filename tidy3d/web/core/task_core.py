@@ -713,7 +713,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
 
     def abort(self):
-        """aborting current task from server."""
+        """Aborting current task from server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
         return http.put(
