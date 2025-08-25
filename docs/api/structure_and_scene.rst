@@ -41,11 +41,11 @@ Once a list of structures have been defined, they can be added to the ``Simulati
 .. code-block:: python
 
    # list of previously defined structures
-   my_structures_list = [my_structure_1, my_structure_2, my_structure_3]
+   my_structure_list = [my_structure_1, my_structure_2, my_structure_3]
 
    # add to simulation
    my_sim = Simulation(
-       structure = my_structures_list,
+       structures = my_structure_list,
        ...    # additional simulation parameters
    )
 

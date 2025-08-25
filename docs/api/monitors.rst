@@ -140,7 +140,7 @@ Behind the scenes, a mode solver simulation is first performed to determine the 
 
    For more details and examples, please refer to the following learning center article:
 
-   + `Defining mode sources and monitors <../notebooks/ModalSourcesMonitors>`_
+   + `Defining mode sources and monitors <../notebooks/ModalSourcesMonitors.html>`_
 
    Example applications:
 
@@ -160,7 +160,7 @@ Diffraction
 
 The ``DiffractionMonitor`` records the diffraction coefficients of the allowed diffraction orders in a periodic simulation.
 
-.. code-block::
+.. code-block:: python
 
    # define a diffraction monitor at 20 freq points between 250 and 300 THz
    # for outgoing fields in the +z direction

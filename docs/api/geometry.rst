@@ -8,7 +8,7 @@ Overview
 
 Geometry objects are used in Tidy3D to build EM structures. A variety of built-in `primitives`_ are supported, as well as `boolean operations`_ and `spatial transformations`_. Collections of geometry objects can also be combined in `geometry groups`_.
 
-.. note:
+.. note::
 
    The default length unit in Tidy3D is the micrometer (:math:`\mu`m).
 
@@ -107,7 +107,7 @@ More complicated polyslabs with potentially self-intersecting behavior can be mo
 
 .. seealso::
 
-   For more details and examples, please see this learning center articles:
+   For more details and examples, please see the following learning center articles:
 
    + `Defining self-intersection polygons <../notebooks/SelfIntersectingPolySlab.html>`_
    + `Visualizing geometries in Tidy3D <../notebooks/VizSimulation.html>`_
@@ -256,7 +256,7 @@ Working with GDS
    tidy3d.Geometry.to_gdstk
    tidy3d.Geometry.to_gdspy
 
-The GDSII file format is commonly used in integration circuit design to specify geometric shapes, labels, and other simulation metadata. Tidy3D supports the creation, import, and export of GDSII files via the third party packages ``gdstk`` or ``gdspy``. Please find detailed usage instructions in the linked articles below. 
+The GDSII file format is commonly used in integrated circuit design to specify geometric shapes, labels, and other simulation metadata. Tidy3D supports the creation, import, and export of GDSII files via the third party packages ``gdstk`` or ``gdspy``. Please find detailed usage instructions in the linked articles below. 
 
 .. seealso::
 

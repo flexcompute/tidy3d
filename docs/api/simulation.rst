@@ -8,10 +8,6 @@ Overview
 
 This page contains information on the different simulation types available in Tidy3D.
 
-.. TODO
-   - Expand overview
-   - Expand each section
-
 ~~~~
 
 Defining a FDTD Simulation
@@ -105,7 +101,7 @@ Additional Methods
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.web.api.webapi.estimate_cost	      
+   tidy3d.web.api.webapi.estimate_cost
    tidy3d.web.api.webapi.run
    tidy3d.web.api.webapi.upload
    tidy3d.web.api.webapi.start   

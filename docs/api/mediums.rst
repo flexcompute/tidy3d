@@ -113,7 +113,7 @@ Use the convenience methods ``plot()`` and ``eps_model()`` to access the optical
 
    # plotting within applicable frequency range
    my_freqs = np.linspace(3e14, 5e14, 201)
-    _ = my_dispersive_medium.plot(freqs=my_freqs)
+   _ = my_dispersive_medium.plot(freqs=my_freqs)
    
    # evaluate complex-valued permittivity at a frequency point
    eps = my_dispersive_medium.eps_model(3e14)

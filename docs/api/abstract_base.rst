@@ -3,7 +3,7 @@
 Abstract Base Classes
 =====================
 
-Base classes that represent abstractions of the core elements of a common components. Provide inherited functionality.
+Base classes that represent abstractions of common components. Provide inherited functionality.
 
 
 .. autosummary::
