@@ -232,6 +232,7 @@ class BatchDetail(TaskBase):
     totalStatus: BatchStatus = None
     totalTask: int = 0
     preprocessSuccess: int = 0
+    postprocessStatus: TaskStatus = None
     validateSuccess: int = 0
     runSuccess: int = 0
     postprocessSuccess: int = 0

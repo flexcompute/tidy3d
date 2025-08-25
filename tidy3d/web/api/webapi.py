@@ -1025,7 +1025,7 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
         with Progress(*progress_columns, console=console, transient=False) as progress:
             p_validate = progress.add_task("Validate", total=1.0)
             p_run = progress.add_task("Run", total=1.0)
-            p_post = progress.add_task("postprocess", total=1.0)
+            p_post = progress.add_task("Postprocess", total=1.0)
 
             task_bars = {}
             total_task = detail.totalTask or 0
@@ -1067,10 +1067,11 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
                 v = detail.validateSuccess or 0
                 r = detail.runSuccess or 0
                 p = detail.postprocessSuccess or 0
+                postprocess_success = detail.postprocessStatus or None
 
                 progress.update(p_validate, completed=(v / total) if total else 0.0)
                 progress.update(p_run, completed=(r / total) if total else 0.0)
-                progress.update(p_post, completed=(p / total) if total else 0.0)
+                progress.update(p_post, completed=p if total else 0.0)
 
                 block = detail.taskBlockInfo
                 if block is not None:
@@ -1085,8 +1086,8 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
                 if task_bars:
                     for t in detail.tasks or []:
                         tname = t.taskName or t.taskId
-                        status = t.status or "draft"
-                        _, idx = _status_to_stage(status)
+                        task_status = t.status or "draft"
+                        _, idx = _status_to_stage(task_status)
                         pbar = task_bars.get(tname)
                         if pbar is not None:
                             progress.update(pbar, completed=min(idx, 6), refresh=False)
@@ -1102,9 +1103,9 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
                             pass
                         postprocess_triggered = True
 
-                if status in ("success",):
-                    console.log("Completed modeler run.")
-                    break
+                    if p:
+                        console.log("Successful component modeler run.")
+                        break
 
                 if status in terminal_errors:
                     raise WebError(f"Batch {batch_id} terminated: {status}")
@@ -1127,15 +1128,19 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
             total = d.totalTask or 0
             p = d.postprocessSuccess or 0
             r = d.runSuccess or 0
-            if (s in ("run_success", "postprocess") or r >= total) and total:
+            postprocess_success = d.postprocessStatus or None
+            if s in ("run_success", "postprocess") or r >= total:
                 if p < total and not postprocess_triggered:
                     try:
                         BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
                     except Exception:
                         pass
                     postprocess_triggered = True
-                if p >= total:
+
+                if postprocess_success == "success":
+                    console.log("Successful component modeler run.")
                     break
+
             if s in terminal_errors:
                 raise WebError(f"Batch {batch_id} terminated: {s}")
             time.sleep(REFRESH_TIME)
