@@ -12,7 +12,7 @@ from pydantic.v1 import Field, NonNegativeFloat, PositiveInt, validator
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     ArrayComplex1D,
     ArrayComplex2D,
     ArrayComplex3D,

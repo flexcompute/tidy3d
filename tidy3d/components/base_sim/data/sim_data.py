@@ -14,7 +14,7 @@ from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.base_sim.simulation import AbstractSimulation
 from tidy3d.components.data.utils import UnstructuredGridDatasetType
 from tidy3d.components.monitor import AbstractMonitor
-from tidy3d.components.types import FieldVal
+from tidy3d.components.types.base import FieldVal
 from tidy3d.exceptions import DataError, Tidy3dKeyError, ValidationError
 
 

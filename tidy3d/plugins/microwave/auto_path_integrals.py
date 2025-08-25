@@ -11,7 +11,7 @@ from tidy3d.components.geometry.utils import (
 )
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.lumped_element import LinearLumpedElement
-from tidy3d.components.types import Direction
+from tidy3d.components.types.base import Direction
 
 from .path_integrals import (
     CurrentIntegralAxisAligned,

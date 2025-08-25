@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import Optional
 
-from tidy3d.components.types import Ax, Axis, LengthUnit
+from tidy3d.components.types.base import Ax, Axis, LengthUnit
 from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import Tidy3dKeyError
 

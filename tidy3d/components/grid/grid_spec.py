@@ -14,7 +14,7 @@ from tidy3d.components.geometry.utils_2d import increment_float
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     TYPE_TAG_STR,
     ArrayFloat2D,
     Axis,

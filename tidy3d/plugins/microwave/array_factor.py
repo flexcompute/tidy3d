@@ -22,7 +22,7 @@ from tidy3d.components.monitor import AbstractFieldProjectionMonitor, MonitorTyp
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.utils import SourceType
 from tidy3d.components.structure import MeshOverrideStructure, Structure
-from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Axis, Bound, Undefined
+from tidy3d.components.types.base import TYPE_TAG_STR, ArrayLike, Axis, Bound, Undefined
 from tidy3d.constants import C_0, inf
 from tidy3d.exceptions import Tidy3dNotImplementedError
 from tidy3d.log import log

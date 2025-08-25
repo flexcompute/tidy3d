@@ -11,7 +11,7 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.data.utils import UnstructuredGridDataset, UnstructuredGridDatasetType
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, InterpMethod
+from tidy3d.components.types.base import ArrayFloat1D, Axis, Coordinate, InterpMethod
 from tidy3d.exceptions import SetupError
 
 # data type of one dimensional coordinate array.

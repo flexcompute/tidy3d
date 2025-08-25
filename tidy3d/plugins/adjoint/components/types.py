@@ -6,7 +6,7 @@ from typing import Any, Union
 
 import numpy as np
 
-from tidy3d.components.types import _add_schema
+from tidy3d.components.types.utils import _add_schema
 
 # special handling if we cant import the JVPTracer in the future (so it doesn't break tidy3d).
 try:

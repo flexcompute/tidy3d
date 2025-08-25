@@ -15,7 +15,7 @@ from tidy3d.components.autograd.constants import (
     AUTOGRAD_MONITOR_INTERVAL_SPACE_CUSTOM,
     AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, PriorityMode
+from tidy3d.components.types.base import TYPE_TAG_STR, Ax, Axis, PriorityMode
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dImportError
 from tidy3d.log import log

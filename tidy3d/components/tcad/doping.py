@@ -7,7 +7,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import Union
+from tidy3d.components.types.base import Union
 from tidy3d.constants import PERCMCUBE
 from tidy3d.exceptions import SetupError
 

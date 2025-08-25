@@ -8,7 +8,7 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pydantic
 
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     ArrayFloat1D,
     AuxField,
     Ax,

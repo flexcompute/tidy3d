@@ -10,7 +10,7 @@ import pydantic.v1 as pydantic
 from tidy3d.components.base import cached_property
 from tidy3d.components.base_sim.source import AbstractSource
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types import TYPE_TAG_STR, Ax
+from tidy3d.components.types.base import TYPE_TAG_STR, Ax
 from tidy3d.components.validators import _assert_min_freq, _warn_unsupported_traced_argument
 from tidy3d.components.viz import (
     ARROW_ALPHA,

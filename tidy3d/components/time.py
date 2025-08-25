@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pydantic.v1 as pydantic
 
-from tidy3d.components.types import ArrayFloat1D, Ax, PlotVal
+from tidy3d.components.types.base import ArrayFloat1D, Ax, PlotVal
 from tidy3d.constants import RADIAN
 from tidy3d.exceptions import SetupError
 

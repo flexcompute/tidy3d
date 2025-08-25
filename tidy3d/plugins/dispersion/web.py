@@ -12,7 +12,7 @@ from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, val
 
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
 from tidy3d.components.medium import PoleResidue
-from tidy3d.components.types import Undefined
+from tidy3d.components.types.base import Undefined
 from tidy3d.constants import HERTZ, MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dError, WebError
 from tidy3d.log import log

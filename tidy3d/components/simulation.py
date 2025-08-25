@@ -19,7 +19,7 @@ except ImportError:
 import pydantic.v1 as pydantic
 import xarray as xr
 
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     TYPE_TAG_STR,
     Ax,
     Axis,

@@ -11,7 +11,7 @@ import pydantic.v1 as pydantic
 import xarray as xr
 from rich.progress import track
 
-from tidy3d.components.types import ArrayComplex4D, Coordinate, Direction
+from tidy3d.components.types.base import ArrayComplex4D, Coordinate, Direction
 from tidy3d.constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
 from tidy3d.exceptions import SetupError
 from tidy3d.log import get_logging_console

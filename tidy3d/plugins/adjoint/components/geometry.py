@@ -24,7 +24,7 @@ from tidy3d.components.geometry.polyslab import (
     PolySlab,
 )
 from tidy3d.components.monitor import FieldMonitor, PermittivityMonitor
-from tidy3d.components.types import ArrayFloat2D, Bound, Coordinate2D  # , annotate_type
+from tidy3d.components.types.base import ArrayFloat2D, Bound, Coordinate2D  # , annotate_type
 from tidy3d.constants import MICROMETER, fp_eps
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log

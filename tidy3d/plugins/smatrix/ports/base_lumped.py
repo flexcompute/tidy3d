@@ -12,7 +12,7 @@ from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.grid.grid import Grid, YeeGrid
 from tidy3d.components.lumped_element import LumpedElementType
 from tidy3d.components.monitor import FieldMonitor
-from tidy3d.components.types import Complex, Coordinate, FreqArray
+from tidy3d.components.types.base import Complex, Coordinate, FreqArray
 from tidy3d.constants import OHM
 
 from .base_terminal import AbstractTerminalPort

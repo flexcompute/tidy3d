@@ -17,7 +17,7 @@ from tidy3d.components.autograd.constants import (
 )
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.base import cached_property, skip_if_fields_missing
-from tidy3d.components.types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.components.types.base import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from tidy3d.constants import LARGE_NUMBER, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log

@@ -9,7 +9,7 @@ import pydantic as pd
 import tidy3d as td
 from tidy3d.components.autograd.types import AutogradFieldMap, dict_ag
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types import ArrayLike, tidycomplex
+from tidy3d.components.types.base import ArrayLike, tidycomplex
 
 """ E and D field gradient map calculation helpers. """
 

@@ -20,7 +20,7 @@ from tidy3d.components.data.data_array import (
     SpatialDataArray,
 )
 from tidy3d.components.data.dataset import Dataset
-from tidy3d.components.types import ArrayLike, Axis, Bound
+from tidy3d.components.types.base import ArrayLike, Axis, Bound
 from tidy3d.constants import inf
 from tidy3d.exceptions import DataError, Tidy3dNotImplementedError, ValidationError
 from tidy3d.log import log

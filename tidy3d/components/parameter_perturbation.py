@@ -11,7 +11,7 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.data.validators import validate_no_nans
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     TYPE_TAG_STR,
     ArrayLike,
     Ax,

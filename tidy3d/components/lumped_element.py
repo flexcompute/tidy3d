@@ -13,7 +13,7 @@ from tidy3d.components.grid.grid import Grid
 from tidy3d.components.medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.structure import MeshOverrideStructure, Structure
-from tidy3d.components.types import (
+from tidy3d.components.types.base import (
     TYPE_TAG_STR,
     Axis,
     Axis2D,

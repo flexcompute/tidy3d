@@ -7,7 +7,7 @@ from typing import Union
 import numpy as np
 import xarray as xr
 
-from tidy3d.components.types import ArrayLike, annotate_type
+from tidy3d.components.types.base import ArrayLike, annotate_type
 
 from .data_array import DataArray, SpatialDataArray
 from .unstructured.base import UnstructuredGridDataset

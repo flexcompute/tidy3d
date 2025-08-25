@@ -5,7 +5,7 @@ from typing import Union
 
 import pydantic.v1 as pd
 
-from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.types.base import TYPE_TAG_STR
 
 from .base import Tidy3dBaseModel, cached_property
 

@@ -12,7 +12,7 @@ from tidy3d.components.data.data_array import TimeDataArray
 from tidy3d.components.data.dataset import TimeDataset
 from tidy3d.components.data.validators import validate_no_nans
 from tidy3d.components.time import AbstractTimeDependence
-from tidy3d.components.types import ArrayComplex1D, ArrayFloat1D, Ax, FreqBound, PlotVal
+from tidy3d.components.types.base import ArrayComplex1D, ArrayFloat1D, Ax, FreqBound, PlotVal
 from tidy3d.components.validators import warn_if_dataset_none
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import HERTZ
