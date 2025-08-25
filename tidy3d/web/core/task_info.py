@@ -173,21 +173,20 @@ class RunInfo(TaskBase):
 
 
 class BatchStatus(str, Enum):
-    Created = "Created"
-    Preprocess = "Preprocess"
-    Validating = "Validating"
-    Validate_Success = "Validate_Success"
-    Validate_Warn = "Validate_Warn"
-    Validate_Failed = "Validate_Failed"
-    Blocked = "Blocked"
-    Running = "Running"
-    Aborting = "Aborting"
-    Run_Success = "Run_Success"
-    Postprocess = "Postprocess"
-    Run_Failed = "Run_Failed"
-    Run_Diverged = "Run_Diverged"
-    Abort = "Abort"
-    Aborted = "Aborted"
+    draft = "draft"
+    preprocess = "preprocess"
+    validating = "validating"
+    validate_success = "validate_success"
+    validate_warn = "validate_warn"
+    validate_fail = "validate_fail"
+    blocked = "blocked"
+    running = "running"
+    aborting = "aborting"
+    run_success = "run_success"
+    postprocess = "postprocess"
+    run_failed = "run_failed"
+    diverged = "diverged"
+    aborted = "aborted"
 
 
 class BatchTaskBlockInfo(TaskBlockInfo):
@@ -197,6 +196,7 @@ class BatchTaskBlockInfo(TaskBlockInfo):
     taskBlockMsg: str = None
     taskBlockType: str = None
     blockStatus: str = None
+    taskStatus: str = None
 
 
 class BatchMember(TaskBase):
@@ -228,9 +228,11 @@ class BatchDetail(TaskBase):
     optimizationId: str = None
     groupId: str = None
     name: str = None
-    status: BatchStatus = None
+    status: str = None
+    totalStatus: BatchStatus = None
     totalTask: int = 0
     preprocessSuccess: int = 0
+    postprocessStatus: TaskStatus = None
     validateSuccess: int = 0
     runSuccess: int = 0
     postprocessSuccess: int = 0
