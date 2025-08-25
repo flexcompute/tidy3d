@@ -22,18 +22,6 @@ from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
-from tidy3d.components.types import (
-    TYPE_TAG_STR,
-    Ax,
-    Bound,
-    Coordinate,
-    InterpMethod,
-    LengthUnit,
-    PermittivityComponent,
-    PriorityMode,
-    Shapely,
-    Size,
-)
 from tidy3d.constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from tidy3d.exceptions import SetupError, Tidy3dError
 from tidy3d.log import log
@@ -58,6 +46,18 @@ from .medium import (
     Medium2D,
 )
 from .structure import Structure
+from .types import (
+    TYPE_TAG_STR,
+    Ax,
+    Bound,
+    Coordinate,
+    InterpMethod,
+    LengthUnit,
+    PermittivityComponent,
+    PriorityMode,
+    Shapely,
+    Size,
+)
 from .validators import assert_unique_names
 from .viz import (
     MEDIUM_CMAP,

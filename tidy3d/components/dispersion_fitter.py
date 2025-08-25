@@ -7,12 +7,12 @@ from typing import Optional
 import numpy as np
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 
-from tidy3d.components.types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import Progress, get_logging_console, log
 
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8

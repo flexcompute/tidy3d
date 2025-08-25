@@ -15,7 +15,6 @@ from tidy3d.components.autograd.constants import (
     AUTOGRAD_MONITOR_INTERVAL_SPACE_CUSTOM,
     AUTOGRAD_MONITOR_INTERVAL_SPACE_POLY,
 )
-from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, PriorityMode
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, Tidy3dImportError
 from tidy3d.log import log
@@ -32,6 +31,7 @@ from .grid.grid import Coords
 from .material.types import StructureMediumType
 from .medium import AbstractCustomMedium, CustomMedium, LossyMetalMedium, Medium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
+from .types import TYPE_TAG_STR, Ax, Axis, PriorityMode
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
 

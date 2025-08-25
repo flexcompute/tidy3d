@@ -9,7 +9,6 @@ from typing import Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types import Bound, InterpMethod
 from tidy3d.constants import HERTZ, RADIAN
 from tidy3d.exceptions import ValidationError
 
@@ -17,6 +16,7 @@ from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import SpatialDataArray
 from .data.validators import validate_no_nans
 from .time import AbstractTimeDependence
+from .types import Bound, InterpMethod
 
 
 class AbstractTimeModulation(AbstractTimeDependence, ABC):

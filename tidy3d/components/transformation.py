@@ -8,12 +8,12 @@ from typing import Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types import ArrayFloat2D, Axis, Coordinate, TensorReal
 from tidy3d.constants import RADIAN
 from tidy3d.exceptions import ValidationError
 
 from .autograd import TracedFloat
 from .base import Tidy3dBaseModel, cached_property
+from .types import ArrayFloat2D, Axis, Coordinate, TensorReal
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):

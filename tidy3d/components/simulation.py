@@ -19,17 +19,6 @@ except ImportError:
 import pydantic.v1 as pydantic
 import xarray as xr
 
-from tidy3d.components.types import (
-    TYPE_TAG_STR,
-    Ax,
-    Axis,
-    CoordinateOptional,
-    FreqBound,
-    InterpMethod,
-    PermittivityComponent,
-    Symmetry,
-    annotate_type,
-)
 from tidy3d.constants import C_0, SECOND, fp_eps, inf
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from tidy3d.log import log
@@ -119,6 +108,17 @@ from .source.time import ContinuousWave, CustomSourceTime
 from .source.utils import SourceType
 from .structure import MeshOverrideStructure, Structure
 from .subpixel_spec import SubpixelSpec
+from .types import (
+    TYPE_TAG_STR,
+    Ax,
+    Axis,
+    CoordinateOptional,
+    FreqBound,
+    InterpMethod,
+    PermittivityComponent,
+    Symmetry,
+    annotate_type,
+)
 from .validators import (
     assert_objects_contained_in_sim_bounds,
     assert_objects_in_sim_bounds,

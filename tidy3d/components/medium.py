@@ -15,21 +15,6 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.material.tcad.heat import ThermalSpecType
-from tidy3d.components.types import (
-    TYPE_TAG_STR,
-    ArrayComplex1D,
-    ArrayComplex3D,
-    ArrayFloat1D,
-    Ax,
-    Axis,
-    Bound,
-    Complex,
-    FreqBound,
-    InterpMethod,
-    PermittivityComponent,
-    PoleAndResidue,
-    TensorReal,
-)
 from tidy3d.constants import (
     C_0,
     CONDUCTIVITY,
@@ -84,6 +69,21 @@ from .parameter_perturbation import (
 )
 from .time_modulation import ModulationSpec
 from .transformation import RotationType
+from .types import (
+    TYPE_TAG_STR,
+    ArrayComplex1D,
+    ArrayComplex3D,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Bound,
+    Complex,
+    FreqBound,
+    InterpMethod,
+    PermittivityComponent,
+    PoleAndResidue,
+    TensorReal,
+)
 from .validators import _warn_potential_error, validate_name_str, validate_parameter_perturbation
 from .viz import VisualizationSpec, add_ax_if_none
 
