@@ -10,7 +10,7 @@ from collections.abc import Iterator, Mapping
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.simulation_types import SimulationDataType
+from tidy3d.components.types.simulation import SimulationDataType
 
 
 class SimulationDataMap(Tidy3dBaseModel, Mapping[str, SimulationDataType]):

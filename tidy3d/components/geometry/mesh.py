@@ -182,7 +182,7 @@ class TriangleMesh(base.Geometry, ABC):
         """
         import trimesh
 
-        from tidy3d.components.types_extra import TrimeshType
+        from tidy3d.components.types.third_party import TrimeshType
 
         def process_single(mesh: TrimeshType) -> TriangleMesh:
             """Process a single 'trimesh.Trimesh' using scale and origin."""

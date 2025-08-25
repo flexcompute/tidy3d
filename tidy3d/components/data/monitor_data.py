@@ -14,7 +14,7 @@ import xarray as xr
 from pandas import DataFrame
 from xarray.core.types import Self
 
-from tidy3d.components.base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
+from tidy3d.components.base import cached_property, skip_if_fields_missing
 from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
 from tidy3d.components.grid.grid import Coords, Grid
 from tidy3d.components.medium import Medium, MediumType
@@ -40,6 +40,7 @@ from tidy3d.components.source.current import CustomCurrentSource, PointDipole
 from tidy3d.components.source.field import CustomFieldSource, ModeSource, PlaneWave
 from tidy3d.components.source.time import GaussianPulse, SourceTimeType
 from tidy3d.components.types import (
+    TYPE_TAG_STR,
     ArrayFloat1D,
     ArrayFloat2D,
     Coordinate,
