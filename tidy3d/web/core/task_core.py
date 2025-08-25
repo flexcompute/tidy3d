@@ -713,7 +713,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
 
     def abort(self):
-        """Aborting current task from server."""
+        """Abort current task from server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
         return http.put(
@@ -839,9 +839,9 @@ class BatchTask:
         while True:
             d = self.detail(batch_type=batch_type)
             status = d.status
-            if status in ("validate_success", "validate_warn", "validate_fail"):
+            if status in ("Validate_Success", "Validate_Warn", "Validate_Failed"):
                 return d
-            if status in ("blocked", "aborting", "aborted"):
+            if status in ("Blocked", "Abort", "Aborted"):
                 return d
             if timeout is not None and (datetime.now().timestamp() - start) > timeout:
                 return d
@@ -853,12 +853,12 @@ class BatchTask:
             d = self.detail(batch_type=batch_type)
             status = d.status
             if status in (
-                "run_success",
-                "run_failed",
-                "diverged",
-                "blocked",
-                "aborting",
-                "aborted",
+                "Run_Success",
+                "Run_Failed",
+                "Run_Diverged",
+                "Blocked",
+                "Abort",
+                "Aborted",
             ):
                 return d
             if timeout is not None and (datetime.now().timestamp() - start) > timeout:
