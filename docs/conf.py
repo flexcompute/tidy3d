@@ -17,6 +17,8 @@
 # relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 #
+from __future__ import annotations
+
 import datetime
 import logging
 import os
@@ -106,6 +108,7 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
     "sphinx_copybutton",
+    "sphinx_design",
     "sphinx_favicon",
     "sphinx_sitemap",
     "sphinx_tabs.tabs",
@@ -188,6 +191,7 @@ mathjax3_config = {
 }
 myst_enable_extensions = [
     "amsmath",
+    "colon_fence",
     "dollarmath",
 ]
 nbsphinx_allow_errors = True  # Continue through Jupyter errors

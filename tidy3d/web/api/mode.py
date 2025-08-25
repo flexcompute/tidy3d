@@ -7,28 +7,27 @@ import pathlib
 import tempfile
 import time
 from datetime import datetime
-from typing import Callable, List, Optional
+from typing import Callable, Literal, Optional, Union
 
 import pydantic.v1 as pydantic
 from botocore.exceptions import ClientError
 from joblib import Parallel, delayed
 from rich.progress import Progress
 
-from ...components.data.monitor_data import ModeSolverData
-from ...components.eme.simulation import EMESimulation
-from ...components.medium import AbstractCustomMedium
-from ...components.simulation import Simulation
-from ...components.types import Literal
-from ...exceptions import SetupError, WebError
-from ...log import get_logging_console, log
-from ...plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
-from ...version import __version__
-from ..core.core_config import get_logger_console
-from ..core.environment import Env
-from ..core.http_util import http
-from ..core.s3utils import download_file, download_gz_file, upload_file
-from ..core.task_core import Folder
-from ..core.types import ResourceLifecycle, Submittable
+from tidy3d.components.data.monitor_data import ModeSolverData
+from tidy3d.components.eme.simulation import EMESimulation
+from tidy3d.components.medium import AbstractCustomMedium
+from tidy3d.components.simulation import Simulation
+from tidy3d.exceptions import SetupError, WebError
+from tidy3d.log import get_logging_console, log
+from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME, ModeSolver
+from tidy3d.version import __version__
+from tidy3d.web.core.core_config import get_logger_console
+from tidy3d.web.core.environment import Env
+from tidy3d.web.core.http_util import http
+from tidy3d.web.core.s3utils import download_file, download_gz_file, upload_file
+from tidy3d.web.core.task_core import Folder
+from tidy3d.web.core.types import PayType, ResourceLifecycle, Submittable
 
 SIMULATION_JSON = "simulation.json"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
@@ -53,9 +52,10 @@ def run(
     folder_name: str = "Mode Solver",
     results_file: str = "mode_solver.hdf5",
     verbose: bool = True,
-    progress_callback_upload: Callable[[float], None] = None,
-    progress_callback_download: Callable[[float], None] = None,
+    progress_callback_upload: Optional[Callable[[float], None]] = None,
+    progress_callback_download: Optional[Callable[[float], None]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -81,12 +81,13 @@ def run(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Restrict simulation to mode solver region. If "auto", then simulation is automatically
         restricted if it contains custom mediums.
+    pay_type: Union[PayType, str] = PayType.AUTO
+        Which method to pay the simulation.
     Returns
     -------
     :class:`.ModeSolverData`
         Mode solver data with the calculated results.
     """
-
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
         console = get_logging_console()
@@ -114,7 +115,7 @@ def run(
             f"Mode solver created with task_id='{task.task_id}', solver_id='{task.solver_id}'."
         )
     task.upload(verbose=verbose, progress_callback=progress_callback_upload)
-    task.submit()
+    task.submit(pay_type=pay_type)
 
     # Wait for task to finish
     prev_status = "draft"
@@ -145,17 +146,17 @@ def run(
 
 
 def run_batch(
-    mode_solvers: List[ModeSolver],
+    mode_solvers: list[ModeSolver],
     task_name: str = "BatchModeSolver",
     folder_name: str = "BatchModeSolvers",
-    results_files: List[str] = None,
+    results_files: Optional[list[str]] = None,
     verbose: bool = True,
     max_workers: int = DEFAULT_NUM_WORKERS,
     max_retries: int = DEFAULT_MAX_RETRIES,
     retry_delay: float = DEFAULT_RETRY_DELAY,
-    progress_callback_upload: Callable[[float], None] = None,
-    progress_callback_download: Callable[[float], None] = None,
-) -> List[ModeSolverData]:
+    progress_callback_upload: Optional[Callable[[float], None]] = None,
+    progress_callback_download: Optional[Callable[[float], None]] = None,
+) -> list[ModeSolverData]:
     """
     Submits a batch of ModeSolver to the server concurrently, manages progress, and retrieves results.
 
@@ -219,7 +220,7 @@ def run_batch(
                     progress.update(pbar, advance=1)
                 return result
             except Exception as e:
-                console.log(f"Error in mode solver {index}: {str(e)}")
+                console.log(f"Error in mode solver {index}: {e!s}")
                 if retries < max_retries:
                     time.sleep(retry_delay)
                     retries += 1
@@ -374,7 +375,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         to_file: str = "mode_solver.hdf5",
         sim_file: str = "simulation.hdf5",
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> ModeSolverTask:
         """Get mode solver task from the server by id.
 
@@ -416,7 +417,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         return ModeSolverTask(**resp, mode_solver=self.mode_solver)
 
     def upload(
-        self, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self, verbose: bool = True, progress_callback: Optional[Callable[[float], None]] = None
     ) -> None:
         """Upload this task's 'mode_solver' to the server.
 
@@ -461,15 +462,24 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         finally:
             os.unlink(file_name)
 
-    def submit(self):
+    def submit(
+        self,
+        pay_type: Union[PayType, str] = PayType.AUTO,
+    ):
         """Start the execution of this task.
 
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
         """
+        # convert right before sending to API
+        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
+
         http.post(
             f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
-            {"enableCaching": Env.current.enable_caching},
+            {
+                "enableCaching": Env.current.enable_caching,
+                "payType": pay_type.value,
+            },
         )
 
     def delete(self):
@@ -490,7 +500,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         to_file: str = "mode_solver.hdf5",
         sim_file: str = "simulation.hdf5",
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> ModeSolver:
         """Get mode solver associated with this task from the server.
 
@@ -574,7 +584,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         self,
         to_file: str = "mode_solver_data.hdf5",
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> ModeSolverData:
         """Get mode solver results for this task from the server.
 
@@ -637,7 +647,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         self,
         to_file: str = "mode_solver.log",
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> pathlib.Path:
         """Get execution log for this task from the server.
 

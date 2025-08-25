@@ -1,8 +1,16 @@
+from __future__ import annotations
+
+import io
+from unittest import mock
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import responses
+import rich
+from rich.progress import Progress
+
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.plugins.dispersion import (
@@ -285,3 +293,37 @@ def test_dispersion_loss_samples():
     ep = nAlGaN_mat.eps_model(freq_list)
     for e in ep:
         assert e.imag >= 0
+
+
+def test_dispersion_show_progress():
+    eps_real = 2.5
+    loss_tangent = 1e-2
+    frequency_range = (1e9, 6e9)
+
+    console_out = io.StringIO()
+    test_console = rich.console.Console(file=console_out, force_terminal=True)
+    original_init = Progress.__init__
+
+    def patched_init(self, *args, **kwargs):
+        kwargs["console"] = test_console
+        original_init(self, *args, **kwargs)
+
+    with mock.patch("rich.progress.Progress.__init__", patched_init):
+        mat = FastDispersionFitter.constant_loss_tangent_model(
+            eps_real, loss_tangent, frequency_range, show_progress=True
+        )
+
+        with_progress = console_out.getvalue()
+
+        console_out.truncate(0)
+        console_out.seek(0)
+
+        mat = FastDispersionFitter.constant_loss_tangent_model(
+            eps_real, loss_tangent, frequency_range, show_progress=False
+        )
+        without_progress = console_out.getvalue()
+
+    print(with_progress)
+    print(without_progress)
+
+    assert len(str(with_progress)) > len(str(without_progress))

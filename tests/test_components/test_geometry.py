@@ -1,18 +1,21 @@
 """Tests Geometry objects."""
 
+from __future__ import annotations
+
 import math
 import warnings
 
-import gdspy
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import shapely
-import tidy3d as td
 import trimesh
-from tidy3d.components.geometry.base import Planar
+
+import tidy3d as td
+from tidy3d.compat import _shapely_is_older_than
+from tidy3d.components.geometry.base import cleanup_shapely_object
 from tidy3d.components.geometry.mesh import AREA_SIZE_THRESHOLD
 from tidy3d.components.geometry.utils import (
     SnapBehavior,
@@ -93,6 +96,8 @@ def test_plot(component):
 def test_plot_with_units():
     _ = BOX.plot(z=0, ax=AX, plot_length_units="nm")
     plt.close()
+    _ = BOX.plot(z=0, ax=AX, plot_length_units="mil")
+    plt.close()
 
 
 def test_base_inside():
@@ -160,8 +165,15 @@ def test_bounds(component):
     _ = component.bounds
 
 
-def test_planar_bounds():
-    _ = Planar.bounds.fget(CYLINDER)
+@pytest.mark.parametrize(
+    "component,expected_bounds",
+    [
+        (CYLINDER, ((-1.0, -1.0, -0.5), (1.0, 1.0, 0.5))),
+        (POLYSLAB, ((0.0, 0.0, -0.5), (1.0, 1.0, 0.5))),
+    ],
+)
+def test_planar_bounds(component, expected_bounds):
+    assert all(a == b for a, b in zip(component.bounds, expected_bounds))
 
 
 @pytest.mark.parametrize("component", GEO_TYPES)
@@ -177,7 +189,7 @@ def test_zero_dims():
 
 
 def test_inside_polyslab_sidewall():
-    ps = POLYSLAB.copy(update=dict(sidewall_angle=0.1))
+    ps = POLYSLAB.copy(update={"sidewall_angle": 0.1})
     ps.inside(x=0, y=0, z=0)
 
 
@@ -212,10 +224,6 @@ def test_intersections_plane_inf():
     b = td.Cylinder(radius=2.9, center=(-0.45, 9, 0), length=td.inf)
     c = a - b
     assert len(c.intersections_plane(y=0)) == 1
-
-
-def test_bounds_base():
-    assert all(a == b for a, b in zip(Planar.bounds.fget(POLYSLAB), POLYSLAB.bounds))
 
 
 def test_center_not_inf_validate():
@@ -282,7 +290,7 @@ def test_box_from_bounds():
 
 def test_polyslab_center_axis():
     """Test the handling of center_axis in a polyslab having (-td.inf, td.inf) bounds."""
-    ps = POLYSLAB.copy(update=dict(slab_bounds=(-td.inf, td.inf)))
+    ps = POLYSLAB.copy(update={"slab_bounds": (-td.inf, td.inf)})
     assert ps.center_axis == 0
 
 
@@ -291,7 +299,7 @@ def test_polyslab_center_axis():
 )
 def test_polyslab_inf_bounds(lower_bound, upper_bound):
     """Test the handling of various operations in a polyslab having inf bounds."""
-    ps = POLYSLAB.copy(update=dict(slab_bounds=(lower_bound, upper_bound)))
+    ps = POLYSLAB.copy(update={"slab_bounds": (lower_bound, upper_bound)})
     # catch any runtime warning related to inf operations
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -305,17 +313,48 @@ def test_polyslab_bounds():
         td.PolySlab(vertices=((0, 0), (1, 0), (1, 1)), slab_bounds=(0.5, -0.5), axis=2)
 
 
+@pytest.mark.parametrize("axis", (0, 1, 2))
+def test_polyslab_inf_to_finite_bounds(axis):
+    """Test that finite_length_axis for PolySlab first clips at LARGE_NUMBER and then computes the length."""
+    axis_bound = 20
+    ps_low_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-td.inf, axis_bound],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+    ps_high_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-axis_bound, td.inf],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+    ps_inf = td.PolySlab(
+        axis=axis,
+        slab_bounds=[-td.inf, td.inf],
+        vertices=[[0, 0], [2.5, 1], [2, 3], [0.5, 4], [-1.5, 2.5]],
+    )
+
+    assert ps_low_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
+        "Unexpected finite length for polyslab axis with -inf bound"
+    )
+    assert ps_high_inf.finite_length_axis == (LARGE_NUMBER + axis_bound), (
+        "Unexpected finite length for polyslab axis with inf bound"
+    )
+    assert ps_inf.finite_length_axis == 2 * LARGE_NUMBER, (
+        "Unexpected finite length for polyslab axis with two inf bounds"
+    )
+
+
 def test_validate_polyslab_vertices_valid():
     with pytest.raises(pydantic.ValidationError):
-        POLYSLAB.copy(update=dict(vertices=(1, 2, 3)))
+        POLYSLAB.copy(update={"vertices": (1, 2, 3)})
     with pytest.raises(pydantic.ValidationError):
         crossing_verts = ((0, 0), (1, 1), (0, 1), (1, 0))
-        POLYSLAB.copy(update=dict(vertices=crossing_verts))
+        POLYSLAB.copy(update={"vertices": crossing_verts})
 
 
 def test_sidewall_failed_validation():
     with pytest.raises(pydantic.ValidationError):
-        POLYSLAB.copy(update=dict(sidewall_angle=1000))
+        POLYSLAB.copy(update={"sidewall_angle": 1000})
 
 
 def test_surfaces():
@@ -344,14 +383,6 @@ def test_gdstk_cell():
         td.PolySlab.from_gds(
             gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1, gds_dtype=0
         )
-
-
-def test_gdspy_cell():
-    gds_cell = gdspy.Cell("name")
-    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
-    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
-    with pytest.raises(Tidy3dKeyError):
-        td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
 
 
 def make_geo_group():
@@ -404,16 +435,16 @@ def test_geometryoperations():
     assert UNION + CYLINDER == td.GeometryGroup(
         geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
     )
-    assert BOX + GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
-    assert GROUP + CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+    assert BOX + GROUP == td.GeometryGroup(geometries=(BOX, *GROUP.geometries))
+    assert GROUP + CYLINDER == td.GeometryGroup(geometries=(*GROUP.geometries, CYLINDER))
 
     assert BOX | CYLINDER == td.GeometryGroup(geometries=(BOX, CYLINDER))
     assert BOX | UNION == td.GeometryGroup(geometries=(BOX, UNION.geometry_a, UNION.geometry_b))
     assert UNION | CYLINDER == td.GeometryGroup(
         geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
     )
-    assert BOX | GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
-    assert GROUP | CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+    assert BOX | GROUP == td.GeometryGroup(geometries=(BOX, *GROUP.geometries))
+    assert GROUP | CYLINDER == td.GeometryGroup(geometries=(*GROUP.geometries, CYLINDER))
 
     assert BOX * SPHERE == td.ClipOperation(
         operation="intersection", geometry_a=BOX, geometry_b=SPHERE
@@ -437,6 +468,7 @@ def test_planar_transform(axis):
     geo = (
         td.Box(size=(3 * axis, 2 * abs(axis - 1), 4 * (2 - axis)))
         .rotated(2.0, axis)
+        .reflected((axis, 2 * (axis - 1), 3 * (axis - 2)))
         .translated(-1, 2, 3)
         .scaled(1.4, -1.2, 1.3)
     )
@@ -477,6 +509,30 @@ def test_transforms():
     assert len(geo.intersections_plane(x=0)) == 1
     assert len(geo.intersections_plane(z=0)) == 3
 
+    # Test reflection of a Box across the XY plane and verify point inclusion.
+    xyz = (np.array([1, 1, 1, 3]), np.array([1, 1, 1, 3]), np.array([1, -1, -1.5, 3]))
+    geo = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+    assert (geo.inside(*xyz) == (True, False, False, False)).all()
+    geo = geo.reflected((0, 0, 1))
+    assert (geo.inside(*xyz) == (False, True, True, False)).all()
+
+    # Test Sphere multiple reflections not influencing point inclusion.
+    xyz = (np.array([1, 2, 2, 1]), np.array([2, 1, 2, 3]), np.array([2, -2, -0.5, -2]))
+    geo = td.Sphere(radius=3.5)
+    assert (geo.inside(*xyz) == (True, True, True, False)).all()
+    geo = geo.reflected((2, 3, 1)).reflected((1, 2, 3))
+    assert (geo.inside(*xyz) == (True, True, True, False)).all()
+
+    # Test PolySlab reflection across non-axis plane and verify point inclusion.
+    xyz = (np.array([0, 1.5, -1.5, -1.5]), np.array([0, 1.5, -1.5, -2.5]), np.array([0, 0, 0, 0]))
+    geo = td.PolySlab(
+        vertices=[(1, 0), (3, 2), (2, 2), (0, 0), (2, -2), (3, -2)],
+        slab_bounds=(-1, 1),
+    )
+    assert (geo.inside(*xyz) == (True, True, False, False)).all()
+    geo = geo.reflected((1, 1, 0))
+    assert (geo.inside(*xyz) == (True, False, True, True)).all()
+
 
 def test_polyslab_transforms():
     # More tests on PolySlab tranforms matching direct Transformed
@@ -499,6 +555,10 @@ def test_polyslab_transforms():
     geo = geo.rotated(0.3, (0, -0.2, 0))
     assert geo.type != geo_trans.type
     assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
+    geo_trans = td.Transformed(geometry=geo, transform=td.Transformed.reflection((1, 0, 2)))
+    geo = geo.reflected((1, 0, 2))
+    assert geo.type != geo_trans.type
+    assert np.allclose(geo.inside(*xyz), geo_trans.inside(*xyz))
 
 
 def test_general_rotation():
@@ -510,6 +570,21 @@ def test_general_rotation():
     assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(-0.1, [-2, 0, 0]))
     assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(-0.2, [0, -3, 0]))
     assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(-0.3, [0, 0, -4]))
+
+
+def test_general_reflection():
+    # Magnitude of normal direction does not affect the transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((5, 5, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((5, 0, 5)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, 5, 5)))
+    # Negative normal direction means the same transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((-1, -1, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((-1, 0, -1)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, -1, -1)))
+    # Magnitude and sign of normal direction does not affect the transformation.
+    assert np.allclose(td.Transformed.reflection((1, 1, 0)), td.Transformed.reflection((-5, -5, 0)))
+    assert np.allclose(td.Transformed.reflection((1, 0, 1)), td.Transformed.reflection((-5, 0, -5)))
+    assert np.allclose(td.Transformed.reflection((0, 1, 1)), td.Transformed.reflection((0, -5, -5)))
 
 
 def test_flattening():
@@ -972,7 +1047,7 @@ def test_custom_surface_geometry(tmp_path):
 def test_geo_group_sim():
     geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
     geos_orig = list(geo_grp.geometries)
-    geo_grp_full = geo_grp.updated_copy(geometries=geos_orig + [td.Box(size=(1, 1, 1))])
+    geo_grp_full = geo_grp.updated_copy(geometries=[*geos_orig, td.Box(size=(1, 1, 1))])
 
     sim = td.Simulation(
         size=(10, 10, 10),
@@ -1095,3 +1170,264 @@ def test_triangulation_with_collinear_vertices():
     xr = np.linspace(0, 1, 6)
     a = np.array([[x, -0.5] for x in xr] + [[x, 0.5] for x in xr[::-1]])
     assert len(td.components.geometry.triangulation.triangulate(a)) == 10
+
+
+def test_triangle_mesh_from_height():
+    """Test the TriangleMesh.from_height_function and from_height_grid constructors."""
+
+    # Test successful creation with a valid height function
+    def valid_height_func(x, y):
+        return 0.5 + 0.2 * np.sin(4 * (x + 1)) * np.cos(3 * y)
+
+    axis = 2
+    direction = "+"
+    base = 0.0
+    center = [0, 0]
+    size = [1.5, 2]
+    grid_size = [20, 15]
+
+    geometry_from_func = td.TriangleMesh.from_height_function(
+        axis=axis,
+        direction=direction,
+        base=base,
+        center=center,
+        size=size,
+        grid_size=grid_size,
+        height_func=valid_height_func,
+    )
+
+    assert isinstance(geometry_from_func, td.TriangleMesh)
+
+    # Test equivalence with from_height_grid method
+    x = np.linspace(center[0] - 0.5 * size[0], center[0] + 0.5 * size[0], grid_size[0])
+    y = np.linspace(center[1] - 0.5 * size[1], center[1] + 0.5 * size[1], grid_size[1])
+    x_mesh, y_mesh = np.meshgrid(x, y, indexing="ij")
+
+    geometry_from_grid = td.TriangleMesh.from_height_grid(
+        axis=axis,
+        direction=direction,
+        base=base,
+        grid=(x, y),
+        height=valid_height_func(x_mesh, y_mesh),
+    )
+
+    # Check if the two TriangleMesh objects are equivalent
+    assert geometry_from_func == geometry_from_grid
+
+    # Test ValueError for negative height values
+    def negative_height_func(x, y):
+        return 0.5 + 0.2 * np.sin(4 * (x + 1)) * np.cos(3 * y) - 2
+
+    with pytest.raises(
+        ValueError,
+        match="All height values must be non-negative.",
+    ):
+        td.TriangleMesh.from_height_function(
+            axis=axis,
+            direction=direction,
+            base=base,
+            center=center,
+            size=size,
+            grid_size=grid_size,
+            height_func=negative_height_func,
+        )
+
+    # Test ValueError for height_func returning ndarray with wrong shape
+    def wrong_shape_height_func(x, y):
+        return np.zeros((3, 3))  # Incorrect shape
+
+    expected_shape = (grid_size[0], grid_size[1])
+
+    # Test for the presence of key parts of the error message
+    with pytest.raises(ValueError) as excinfo:
+        td.TriangleMesh.from_height_function(
+            axis=axis,
+            direction=direction,
+            base=base,
+            center=center,
+            size=size,
+            grid_size=grid_size,
+            height_func=wrong_shape_height_func,
+        )
+    # Check that the error message contains the expected information
+    error_message = str(excinfo.value)
+    assert f"shape {expected_shape}" in error_message
+    assert "shape (3, 3)" in error_message
+
+
+def test_cleanup_shapely_object():
+    if _shapely_is_older_than("2.1"):
+        # (Old versions of shapely don't support `shapely.make_valid()` with the correct arguments.
+        # However older alternatives like `.buffer(0)` are not as robust.  `.buffer(0)` is likely
+        # to generate polygons which look correct, but have extra vertices, causing test to fail.
+        # So if `shapely.make_valid()` is not supported, the safest thing to do is skip this test.)
+        pytest.skip("This test requires `shapely` version 2.1 or later")
+
+    # Test 1: A square containing a triangular hole, and an infinitley thin hole.
+    square_with_spikes_5x5 = np.array(
+        (
+            (0, 0),
+            (5, 0),
+            (5, 0),
+            (5, 10),  # this vertex creates an outward spike and should be removed
+            (5, 5),
+            (0, 5 - 1e-13),  # this vertex should be rounded to (0, 5)
+            (3, 3),  # this vertex creates an inward spike and should be removed
+            (0, 5 + 1e-13),  # this vertex should be removed because it duplicates (0, 5 - 1e-13)
+        )
+    )
+    triangle_empty_tails = np.array(((1, 1), (3, 1), (2, 2), (2.5, 2.5), (0.5, 0.5)))
+    triangle_collinear = np.array(((4, 2), (3, 3), (2, 4), (4, 2)))  # has zero area
+    # NOTE: Test will fail for self intersecting polys like: ((0,0), (1,1), (2,-1), (3,1), (4,0))
+    # Now build a shapely polygon with the 4 small polygons enclosed by big_square_5x5
+    exterior_coords = square_with_spikes_5x5
+    interior_coords_list = [
+        triangle_empty_tails,
+        triangle_collinear,  # this triangle should be eliminated
+    ]
+    # Test using a non-empty exterior polygon (big_square_5x5)
+    orig_polygon = shapely.Polygon(exterior_coords, interior_coords_list)
+    new_polygon = cleanup_shapely_object(orig_polygon, tolerance_ratio=1e-12)
+    # Delete any nearby or overlapping vertices (cleanup_shapely_object() now does this).
+    # Now `new_polygon` should only contain the coordinates of the square (with a duplicate at end).
+    assert len(new_polygon.exterior.coords) == 5  # squares have 4 vertices but shapely adds 1
+    assert len(new_polygon.interiors) == 1  # only the "triangle_empty_tails" interior hole survives
+    assert len(new_polygon.interiors[0].coords) == 4  # triangles have 3 vertices but shapely adds 1
+    # Test 2: An infinitely thin triangle exterior with some holes (which should be deleted)
+    exterior_coords = triangle_collinear  # has zero area
+    orig_polygon = shapely.Polygon(exterior_coords)
+    new_polygon = cleanup_shapely_object(orig_polygon, tolerance_ratio=1e-12)
+    assert len(new_polygon.exterior.coords) == 0  # empty / collinear polygons should get deleted
+
+
+def test_snap_coords_outside():
+    """Test coordinate snapping for box geometries."""
+    num_coords = 101
+    coords_to_snap = np.linspace(-1, 1, num_coords)
+
+    coord_face_min = np.mean(coords_to_snap[0:2])
+    coord_face_max = np.mean(coords_to_snap[-2:])
+
+    snap_pt_min = td.Box._snap_coords_outside(
+        min_max_index=0, snap_coords_values=coords_to_snap, coord_normal_face=coord_face_min
+    )
+    snap_pt_max = td.Box._snap_coords_outside(
+        min_max_index=1, snap_coords_values=coords_to_snap, coord_normal_face=coord_face_max
+    )
+
+    assert snap_pt_min == coords_to_snap[0], "Unexpected snapping point minimum"
+    assert snap_pt_max == coords_to_snap[-1], "Unexpected snapping point maximum"
+
+    with AssertLogLevel("WARNING", contains_str="Unable to snap coordinates outside"):
+        snap_pt_min = td.Box._snap_coords_outside(
+            min_max_index=0,
+            snap_coords_values=coords_to_snap,
+            coord_normal_face=coords_to_snap[0] - 0.1,
+        )
+
+        assert snap_pt_min == coords_to_snap[0], "Unexpected snapping point minimum"
+
+    with AssertLogLevel("WARNING", contains_str="Unable to snap coordinates outside"):
+        snap_pt_min = td.Box._snap_coords_outside(
+            min_max_index=1,
+            snap_coords_values=coords_to_snap,
+            coord_normal_face=coords_to_snap[-1] + 0.1,
+        )
+
+        assert snap_pt_min == coords_to_snap[-1], "Unexpected snapping point maxium"
+
+
+def test_singularity_correction_pec():
+    """Tests singularity correction detection used for PEC gradients of `Box` geometries."""
+
+    check_3d_size = (1.0, 2.0, 3.0)
+
+    for axis in range(3):
+        is_2d, zero_dimension, do_singularity_correction = td.Box._check_singularity_correction_pec(
+            size=check_3d_size, axis_normal=axis
+        )
+        assert not is_2d, "Unexpectedly found 2D geometry"
+        assert not zero_dimension, "Unexpectedly found zero_dimension"
+        assert not do_singularity_correction, (
+            "Unexpectedly identifying need for singularity correction"
+        )
+
+    check_1d_error_size = (1.0, 0.0, 0.0)
+
+    for axis in range(3):
+        with AssertLogLevel(
+            "ERROR", contains_str="Derivative of PEC material with less than 2 dimensions"
+        ):
+            is_2d, zero_dimension, do_singularity_correction = (
+                td.Box._check_singularity_correction_pec(size=check_1d_error_size, axis_normal=axis)
+            )
+
+    check_2d_size = 1.0
+
+    for index_2d in range(3):
+        check_2d_size = tuple(0.0 if idx == index_2d else 1.0 for idx in range(3))
+
+        for axis in range(3):
+            print(f"check 2d size = {check_2d_size}")
+
+            is_2d, zero_dimension, do_singularity_correction = (
+                td.Box._check_singularity_correction_pec(size=check_2d_size, axis_normal=axis)
+            )
+
+            print(f"is 2d = {is_2d}")
+
+            assert is_2d, "Expected 2D geometry detection"
+            assert zero_dimension == "xyz"[index_2d], "Wrong zero dimension identified"
+
+            if axis == index_2d:
+                assert not do_singularity_correction, (
+                    "Unexpectedly detecting need for singularity correction"
+                )
+            else:
+                assert do_singularity_correction, (
+                    "Unexpectedly not detecting need for singularity correction"
+                )
+
+
+def test_trim_dims_and_bounds_edge():
+    """Tests the dimension and bound trimming for 2D PEC gradient integrations in `Box`."""
+
+    for zero_dimension_idx in range(3):
+        box = td.Box(
+            center=(0.0, 0.0, 0.0),
+            size=tuple(0.0 if zero_dimension_idx == idx else 1.0 * (idx + 1) for idx in range(3)),
+        )
+
+        for axis_normal in range(3):
+            if axis_normal == zero_dimension_idx:
+                continue
+
+            dim_normal, dims_perp = box.pop_axis("xyz", axis=axis_normal)
+            bounds_normal, bounds_perp = box.pop_axis(np.array(box.bounds).T, axis=axis_normal)
+            bounds_perp = np.array(bounds_perp).T
+
+            trimmed_dims, trimmed_bounds = td.Box._trim_dims_and_bounds_edge(
+                dims_perp=dims_perp,
+                bounds_perp=bounds_perp,
+                zero_dimension="xyz"[zero_dimension_idx],
+            )
+
+            expected_trimmed_idx = 0
+            for idx in range(3):
+                if (idx == axis_normal) or (idx == zero_dimension_idx):
+                    continue
+
+                expected_trimmed_idx = idx
+
+            expected_trimmed_dims = ("xyz"[expected_trimmed_idx],)
+            expected_trimmed_bounds = (
+                (-0.5 * (expected_trimmed_idx + 1),),
+                (0.5 * (expected_trimmed_idx + 1),),
+            )
+
+            assert np.all(np.array(expected_trimmed_dims) == np.array(trimmed_dims)), (
+                "Unexpected trimmed dims"
+            )
+            assert np.all(np.array(expected_trimmed_bounds) == np.array(trimmed_bounds)), (
+                "Unexpected trimmed bounds"
+            )

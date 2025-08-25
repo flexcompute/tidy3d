@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import gdstk
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import (
@@ -203,9 +206,9 @@ def test_validate_no_sources():
     source = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
-    sim_w_source = modeler.simulation.copy(update=dict(sources=(source,)))
+    sim_w_source = modeler.simulation.copy(update={"sources": (source,)})
     with pytest.raises(pydantic.ValidationError):
-        _ = modeler.copy(update=dict(simulation=sim_w_source))
+        _ = modeler.copy(update={"simulation": sim_w_source})
 
 
 def test_element_mappings_none():
@@ -232,7 +235,7 @@ def test_ports_too_close_boundary():
         port_center_at_edge = list(port_at_edge.center)
         port_center_at_edge[0] = edge_val
         port_at_edge = port_at_edge.copy(
-            update=dict(center=port_center_at_edge, direction=port_dir)
+            update={"center": port_center_at_edge, "direction": port_dir}
         )
         with pytest.raises(SetupError):
             modeler._shift_value_signed(port=port_at_edge)
@@ -275,15 +278,15 @@ def test_run_component_modeler(monkeypatch):
         for mode_index_in in range(port_in.mode_spec.num_modes):
             for port_out in modeler.ports:
                 for mode_index_out in range(port_out.mode_spec.num_modes):
-                    coords_in = dict(port_in=port_in.name, mode_index_in=mode_index_in)
-                    coords_out = dict(port_out=port_out.name, mode_index_out=mode_index_out)
+                    coords_in = {"port_in": port_in.name, "mode_index_in": mode_index_in}
+                    coords_out = {"port_out": port_out.name, "mode_index_out": mode_index_out}
 
-                    assert np.all(
-                        s_matrix.sel(**coords_in) != 0
-                    ), "source index not present in S matrix"
-                    assert np.all(
-                        s_matrix.sel(**coords_in).sel(**coords_out) != 0
-                    ), "monitor index not present in S matrix"
+                    assert np.all(s_matrix.sel(**coords_in) != 0), (
+                        "source index not present in S matrix"
+                    )
+                    assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
+                        "monitor index not present in S matrix"
+                    )
 
 
 def test_component_modeler_run_only(monkeypatch):
@@ -294,7 +297,7 @@ def test_component_modeler_run_only(monkeypatch):
     modeler = make_component_modeler(run_only=run_only)
     s_matrix = run_component_modeler(monkeypatch, modeler)
 
-    coords_in_run_only = dict(port_in=port_run_only, mode_index_in=mode_index_run_only)
+    coords_in_run_only = {"port_in": port_run_only, "mode_index_in": mode_index_run_only}
 
     # make sure the run only mappings are non-zero
     assert np.all(s_matrix.sel(**coords_in_run_only) != 0)
@@ -312,19 +315,19 @@ def _test_mappings(element_mappings, s_matrix):
         (port_out_to, mode_index_out_to) = k
         (port_in_to, mode_index_in_to) = L
 
-        coords_from = dict(
-            port_in=port_in_from,
-            port_out=port_out_from,
-            mode_index_in=mode_index_in_from,
-            mode_index_out=mode_index_out_from,
-        )
+        coords_from = {
+            "port_in": port_in_from,
+            "port_out": port_out_from,
+            "mode_index_in": mode_index_in_from,
+            "mode_index_out": mode_index_out_from,
+        }
 
-        coords_to = dict(
-            port_in=port_in_to,
-            port_out=port_out_to,
-            mode_index_in=mode_index_in_to,
-            mode_index_out=mode_index_out_to,
-        )
+        coords_to = {
+            "port_in": port_in_to,
+            "port_out": port_out_to,
+            "mode_index_in": mode_index_in_to,
+            "mode_index_out": mode_index_out_to,
+        }
 
         assert np.all(
             s_matrix.sel(**coords_to).values == mult_by * s_matrix.sel(**coords_from).values
@@ -371,6 +374,35 @@ def test_mapping_exclusion(monkeypatch):
     _test_mappings(element_mappings, s_matrix)
 
 
+def test_mapping_with_run_only():
+    """Make sure that the Modeler is correctly validated when both run_only and
+    element_mappings are provided."""
+    ports = make_ports()
+
+    EXCLUDE_INDEX = ("right_bot", 0)
+    element_mappings = []
+    run_only = []
+    # add a mapping to each element in the row of EXCLUDE_INDEX
+    for port in ports:
+        for mode_index in range(port.mode_spec.num_modes):
+            row_index = (port.name, mode_index)
+            run_only.append(row_index)
+            if row_index != EXCLUDE_INDEX:
+                mapping = ((row_index, row_index), (row_index, EXCLUDE_INDEX), +1)
+                element_mappings.append(mapping)
+
+    # add the self-self coupling element to complete row
+    mapping = ((("right_bot", 1), ("right_bot", 1)), (EXCLUDE_INDEX, EXCLUDE_INDEX), +1)
+    element_mappings.append(mapping)
+
+    # Will pass, since run_only covers all source indices in element_mapping
+    _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
+
+    run_only.remove(EXCLUDE_INDEX)
+    with pytest.raises(pydantic.ValidationError):
+        _ = make_component_modeler(element_mappings=element_mappings, run_only=run_only)
+
+
 def test_batch_filename(tmp_path):
     modeler = make_component_modeler()
     path = modeler._batch_path
@@ -396,7 +428,7 @@ def test_to_from_file_batch(tmp_path, monkeypatch):
     modeler = make_component_modeler()
     _ = run_component_modeler(monkeypatch, modeler)
 
-    batch = td.web.Batch(simulations=dict())
+    batch = td.web.Batch(simulations={})
 
     modeler._cached_properties["batch"] = batch
 

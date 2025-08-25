@@ -1,10 +1,12 @@
 # Tests webapi and things that depend on it
+from __future__ import annotations
 
 import pytest
 import responses
-import tidy3d as td
 from botocore.exceptions import ClientError
 from responses import matchers
+
+import tidy3d as td
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.web.api.asynchronous import run_async
 from tidy3d.web.api.container import Batch, Job
@@ -20,7 +22,7 @@ from tidy3d.web.api.webapi import (
     upload,
 )
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.types import TaskType
+from tidy3d.web.core.types import PayType, TaskType
 
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
@@ -102,10 +104,21 @@ def mock_upload(monkeypatch, set_api_key):
         status=200,
     )
 
+    # store the uploaded stub for verification
+    uploaded_stub = {}
+
+    def mock_upload_simulation(self, stub, **kwargs):
+        uploaded_stub["stub"] = stub
+
     def mock_upload_file(*args, **kwargs):
         pass
 
+    monkeypatch.setattr(
+        "tidy3d.web.core.task_core.SimulationTask.upload_simulation", mock_upload_simulation
+    )
     monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_upload_file)
+
+    return uploaded_stub
 
 
 @pytest.fixture
@@ -146,6 +159,8 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
                     "workerGroup": None,
                     "protocolVersion": td.version.__version__,
                     "enableCaching": Env.current.enable_caching,
+                    "payType": PayType.AUTO,
+                    "priority": None,
                 }
             )
         ],
@@ -170,9 +185,6 @@ def mock_monitor(monkeypatch):
         current_status = statuses[current_count]
         status_count[0] += 1
         return current_status
-        # return TaskInfo(
-        #     status=current_status, taskName=TASK_NAME, taskId=task_id, realFlexUnit=1.0
-        #     )
 
     run_count = [0]
     perc_dones = (1, 10, 20, 30, 100)
@@ -184,6 +196,8 @@ def mock_monitor(monkeypatch):
         return perc_done, 1
 
     monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path}.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr("tidy3d.web.api.container.web.REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
     monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)
@@ -260,6 +274,26 @@ def test_upload(monkeypatch, mock_upload, mock_get_info, mock_metadata):
     sim = make_mode_sim()
     assert sim != get_reduced_simulation(sim, reduce_simulation=True)
     assert upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=True)
+
+
+@pytest.mark.parametrize("reduce_simulation", [True, False])
+@responses.activate
+def test_upload_with_reduction_parameter(
+    monkeypatch, mock_upload, mock_get_info, mock_metadata, reduce_simulation
+):
+    """Test that simulation reduction is properly applied before upload based on reduce_simulation parameter."""
+    sim = make_mode_sim()
+
+    upload(sim, TASK_NAME, PROJECT_NAME, reduce_simulation=reduce_simulation)
+
+    if reduce_simulation:
+        expected_sim = get_reduced_simulation(sim, reduce_simulation=True)
+        assert sim != expected_sim
+    else:
+        expected_sim = sim
+
+    uploaded_sim = mock_upload["stub"].simulation
+    assert uploaded_sim == expected_sim
 
 
 @responses.activate

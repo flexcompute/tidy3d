@@ -1,10 +1,13 @@
 """Test suite for heat-charge simulation objects and data using pytest fixtures."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
 from matplotlib import pyplot as plt
+
+import tidy3d as td
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
@@ -98,6 +101,7 @@ def mediums():
         charge=td.ChargeConductorMedium(
             conductivity=1,
         ),
+        heat=td.SolidMedium(conductivity=1.1, capacity=1.2, density=2.3),
         name="solid_medium",
     )
 
@@ -130,12 +134,32 @@ def mediums():
         name="insulator_medium",
     )
 
+    semiconductor_medium = td.MultiPhysicsMedium(
+        optical=td.Medium(
+            permittivity=5,
+            conductivity=0.01,
+            heat_spec=td.SolidSpec(
+                capacity=2,
+                conductivity=3,
+            ),
+        ),
+        charge=td.SemiconductorMedium(
+            N_c=1e10,
+            N_v=1e10,
+            E_g=1,
+            mobility_n=td.ConstantMobilityModel(mu=1500),
+            mobility_p=td.ConstantMobilityModel(mu=1500),
+        ),
+        name="solid_medium",
+    )
+
     return {
         "fluid_medium": fluid_medium,
         "solid_medium": solid_medium,
         "solid_no_heat": solid_no_heat,
         "solid_no_elect": solid_no_elect,
         "insulator_medium": insulator_medium,
+        "semiconductor_medium": semiconductor_medium,
     }
 
 
@@ -174,12 +198,19 @@ def structures(mediums):
         name="insulator_structure",
     )
 
+    semiconductor_structure = td.Structure(
+        geometry=box,
+        medium=mediums["semiconductor_medium"],
+        name="semiconductor_structure",
+    )
+
     return {
         "fluid_structure": fluid_structure,
         "solid_structure": solid_structure,
         "solid_struct_no_heat": solid_struct_no_heat,
         "solid_struct_no_elect": solid_struct_no_elect,
         "insulator_structure": insulator_structure,
+        "semiconductor_structure": semiconductor_structure,
     }
 
 
@@ -220,17 +251,31 @@ def monitors():
 
     free_carrier_mnt1 = td.SteadyFreeCarrierMonitor(size=(1.6, 2, 3), name="carrier_test")
 
+    energy_band_mnt1 = td.SteadyEnergyBandMonitor(size=(1.6, 2, 3), name="bandgap_test")
+
+    mesh_mnt = td.VolumeMeshMonitor(size=(1.6, 2, 3), name="mesh_test")
+
+    electric_field_mnt = td.SteadyElectricFieldMonitor(size=(1.6, 2, 3), name="electric_field_test")
+
+    current_density_mnt = td.SteadyCurrentDensityMonitor(
+        size=(1.6, 2, 3), name="current_density_mnt"
+    )
+
     return [
-        temp_mnt1,
-        temp_mnt2,
-        temp_mnt3,
-        temp_mnt4,
-        volt_mnt1,
-        volt_mnt2,
-        volt_mnt3,
-        volt_mnt4,
-        capacitance_mnt1,
-        free_carrier_mnt1,
+        temp_mnt1,  # 0
+        temp_mnt2,  # 1
+        temp_mnt3,  # 2
+        temp_mnt4,  # 3
+        volt_mnt1,  # 4
+        volt_mnt2,  # 5
+        volt_mnt3,  # 6
+        volt_mnt4,  # 7
+        capacitance_mnt1,  # 8
+        free_carrier_mnt1,  # 9
+        energy_band_mnt1,  # 10
+        mesh_mnt,  # 11
+        electric_field_mnt,  # 12
+        current_density_mnt,  # 13
     ]
 
 
@@ -330,7 +375,12 @@ def voltage_capacitance_simulation(mediums, structures, boundary_conditions, mon
     bc_insulating = td.InsulatingBC()
     pl7 = td.HeatChargeBoundarySpec(
         condition=bc_insulating,
-        placement=td.StructureBoundary(structure="solid_structure"),
+        placement=td.StructureBoundary(structure="semiconductor_structure"),
+    )
+
+    # we need two voltage BCs for Charge simulations
+    pl8 = pl7.updated_copy(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0)),
     )
 
     # Let’s pick a couple of monitors. We'll definitely include the CapacitanceMonitor
@@ -343,10 +393,10 @@ def voltage_capacitance_simulation(mediums, structures, boundary_conditions, mon
     # Build a new HeatChargeSimulation
     voltage_cap_sim = td.HeatChargeSimulation(
         medium=mediums["insulator_medium"],
-        structures=[structures["insulator_structure"], structures["solid_structure"]],
+        structures=[structures["insulator_structure"], structures["semiconductor_structure"]],
         center=(0, 0, 0),
         size=(2, 2, 2),
-        boundary_spec=[pl6, pl7],
+        boundary_spec=[pl6, pl7, pl8],
         grid_spec=grid_specs["uniform"],
         sources=[],
         monitors=chosen_monitors,
@@ -408,7 +458,7 @@ def temperature_monitor_data(monitors):
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     temperature_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data1 = td.TemperatureData(monitor=temp_mnt1, temperature=temperature_field)
@@ -478,7 +528,10 @@ def temperature_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def voltage_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, volt_mnt1, volt_mnt2, volt_mnt3, volt_mnt4, _, _ = monitors
+    volt_mnt1 = monitors[4]
+    volt_mnt2 = monitors[5]
+    volt_mnt3 = monitors[6]
+    volt_mnt4 = monitors[7]
 
     # SpatialDataArray
     nx, ny, nz = 9, 6, 5
@@ -486,7 +539,7 @@ def voltage_monitor_data(monitors):
     y = np.linspace(0, 2, ny)
     z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(-5, 5, (nx, ny, nz))
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
     voltage_field = td.SpatialDataArray(T, coords=coords)
 
     mnt_data1 = td.SteadyPotentialData(monitor=volt_mnt1, potential=voltage_field)
@@ -551,7 +604,7 @@ def voltage_monitor_data(monitors):
 @pytest.fixture(scope="module")
 def capacitance_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, _, _, _, _, cap_mt1, _ = monitors
+    cap_mt1 = monitors[8]
 
     # SpatialDataArray
     cap_data1 = td.SteadyCapacitanceData(monitor=cap_mt1)
@@ -561,9 +614,43 @@ def capacitance_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def mesh_monitor_data(monitors):
+    """Creates different voltage monitor data."""
+    mesh_mnt = monitors[11]
+
+    # TetrahedralGridDataset
+    tet_grid_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values = td.IndexedDataArray(
+        np.zeros((tet_grid_points.shape[0],)),
+        dims=("index",),
+        name="Mesh",
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    # SpatialDataArray
+    mesh_data = td.VolumeMeshData(monitor=mesh_mnt, mesh=tet_grid)
+
+    return (mesh_data,)
+
+
+@pytest.fixture(scope="module")
 def free_carrier_monitor_data(monitors):
     """Creates different voltage monitor data."""
-    _, _, _, _, _, _, _, _, _, fc_mnt = monitors
+    fc_mnt = monitors[9]
 
     # SpatialDataArray
     fc_data1 = td.SteadyFreeCarrierData(monitor=fc_mnt)
@@ -583,6 +670,111 @@ def free_carrier_monitor_data(monitors):
 
 
 @pytest.fixture(scope="module")
+def energy_band_monitor_data(monitors):
+    """Creates different voltage monitor data."""
+    eb_mnt = monitors[10]
+
+    # SpatialDataArray
+    eb_data1 = td.SteadyEnergyBandData(monitor=eb_mnt)
+    eb_data2 = eb_data1.symmetry_expanded_copy
+    assert eb_data2 is not None
+
+    field_components = eb_data1.field_components
+
+    eb_fields = eb_data1.field_name("abs^2")
+    assert eb_fields is not None
+    eb_fields_default = eb_data1.field_name()
+    assert eb_fields_default is not None
+
+    assert field_components is not None
+
+    return (eb_data1,)
+
+
+@pytest.fixture(scope="module")
+def electric_field_monitor_data(monitors):
+    """Creates different electric field monitor data."""
+    monitor = monitors[12]
+
+    # TetrahedralGridDataset
+    tet_grid_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values = td.PointDataArray(
+        [[0.0, 1.0, 0.0], [1.0, 1.0, 1.0], [3.0, 5.0, 1.0], [4.0, 5.0, 3.0], [5.0, 2.0, 1.0]],
+        dims=(
+            "index",
+            "axis",
+        ),
+        name="T",
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    mnt_data1 = td.SteadyElectricFieldData(monitor=monitor, E=tet_grid)
+
+    # TriangularGridDataset
+    tri_grid_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tri_grid_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tri_grid_values = td.IndexedFieldVoltageDataArray(
+        [
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+            [[1.0, 1.5], [-1.0, 1.1], [5.1, 0.0]],
+        ],
+        coords={"index": np.arange(4), "axis": np.arange(3), "voltage": [-1, 1]},
+        name="T",
+    )
+
+    tri_grid = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values,
+    )
+
+    mnt_data2 = td.SteadyElectricFieldData(monitor=monitor, E=tri_grid)
+
+    mnt_data3 = td.SteadyElectricFieldData(monitor=monitor, E=None)
+
+    return (mnt_data1, mnt_data2, mnt_data3)
+
+
+@pytest.fixture(scope="module")
+def current_density_monitor_data(monitors, electric_field_monitor_data):
+    """Creates different current density monitor data."""
+    monitor = monitors[13]
+    e_data1, e_data2, e_data3 = electric_field_monitor_data
+
+    mnt_data1 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data1.E)
+    mnt_data2 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data2.E)
+    mnt_data3 = td.SteadyCurrentDensityData(monitor=monitor, J=e_data3.E)
+
+    return (mnt_data1, mnt_data2, mnt_data3)
+
+
+@pytest.fixture(scope="module")
 def simulation_data(
     heat_simulation,
     conduction_simulation,
@@ -592,6 +784,8 @@ def simulation_data(
     voltage_monitor_data,
     capacitance_monitor_data,
     free_carrier_monitor_data,
+    energy_band_monitor_data,
+    mesh_monitor_data,
 ):
     """Creates 'HeatChargeSimulationData' for both Heat and Conduction simulations."""
     heat_sim_data = td.HeatChargeSimulationData(
@@ -614,7 +808,20 @@ def simulation_data(
         data=(voltage_monitor_data[0], free_carrier_monitor_data[0]),
     )
 
-    return [heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_sim_data]
+    mesh_monitor = mesh_monitor_data[0].monitor
+    mesh_data = td.VolumeMesherData(
+        simulation=conduction_simulation,
+        data=mesh_monitor_data,
+        monitors=[mesh_monitor],
+    )
+
+    return [
+        heat_sim_data,
+        cond_sim_data,
+        voltage_capacitance_sim_data,
+        current_voltage_sim_data,
+        mesh_data,
+    ]
 
 
 # --------------------------
@@ -685,10 +892,140 @@ def test_heat_charge_bcs_validation(boundary_conditions):
     with pytest.raises(pd.ValidationError):
         td.CurrentBC(source=td.DCCurrentSource(current=td.inf))
 
+    with pytest.raises(pd.ValidationError):
+        td.VoltageBC(source=td.DCVoltageSource(voltage=np.array([td.inf, 0, 1])))
+
+
+def test_vertical_natural_convection():
+    solid_box_l = td.Box(center=(0, 0, 0), size=(2, 2, 2))
+    solid_box_r = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+    fluid_box_r = td.Box(center=(1, 1, 1), size=(2, 2, 2))
+
+    solid_medium = td.MultiPhysicsMedium(
+        heat=td.SolidMedium(conductivity=1, capacity=1), name="solid"
+    )
+    air = td.MultiPhysicsMedium(
+        heat=td.FluidMedium.from_si_units(
+            thermal_conductivity=0.026,
+            viscosity=1.8e-5,
+            specific_heat=1005,
+            density=1.2,
+            expansivity=1 / 300.0,
+        ),
+        name="air",
+    )
+    solid_structure_l = td.Structure(
+        geometry=solid_box_l,
+        medium=solid_medium,
+        name="solid_l",
+    )
+    solid_structure_r = td.Structure(
+        geometry=solid_box_r,
+        medium=solid_medium,
+        name="solid_r",
+    )
+    fluid_structure_r = td.Structure(
+        geometry=fluid_box_r,
+        medium=air,
+        name="fluid_r",
+    )
+
+    coeff_model = td.VerticalNaturalConvectionCoeffModel(plate_length=1)
+    sim = td.HeatChargeSimulation(
+        size=(2, 2, 2),
+        center=(0, 0, 0),
+        medium=td.MultiPhysicsMedium(heat=td.FluidMedium()),
+        structures=[solid_structure_l, fluid_structure_r],
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.MediumMediumInterface(mediums=["air", "solid"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+            )
+        ],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        monitors=[
+            td.TemperatureMonitor(
+                center=(0, 0, 0),
+                size=(td.inf, td.inf, td.inf),
+                name="test_monitor",
+                unstructured=True,
+            )
+        ],
+    )
+
+    # Test that the model can be placed on an interface defined by structures
+    sim.updated_copy(
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["solid_l", "fluid_r"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+            )
+        ],
+    )
+
+    # Verify that placing the model on an interface between two solid media
+    # correctly raises a validation error.
+    with pytest.raises(pd.ValidationError):
+        sim.updated_copy(
+            structures=[solid_structure_l, solid_structure_r],
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.StructureStructureInterface(structures=["solid_l", "solid_r"]),
+                    condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+                )
+            ],
+        )
+
+    # Verify that using a fluid medium with incomplete physical properties
+    # for the natural convection calculation raises a validation error.
+    incomplete_air = td.MultiPhysicsMedium(
+        heat=td.FluidMedium(expansivity=1 / 300.0), name="incomplete_air"
+    )
+    with pytest.raises(pd.ValidationError):
+        new_fluid_structure_r = fluid_structure_r.updated_copy(medium=incomplete_air)
+        sim.updated_copy(
+            structures=[solid_structure_l, new_fluid_structure_r],
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.MediumMediumInterface(mediums=["incomplete_air", "solid"]),
+                    condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=coeff_model),
+                )
+            ],
+        )
+
+    # Test the case where the convection model has its own fluid medium explicitly defined.
+    # The simulation should use the properties from the model's medium and ignore the
+    # fluid present at the interface.
+    full_coeff_model = td.VerticalNaturalConvectionCoeffModel(medium=air.heat, plate_length=1)
+    sim.updated_copy(
+        boundary_spec=[
+            td.HeatBoundarySpec(
+                placement=td.StructureStructureInterface(structures=["solid_l", "fluid_r"]),
+                condition=td.ConvectionBC(ambient_temperature=300, transfer_coeff=full_coeff_model),
+            )
+        ],
+    )
+
+    # Verify that a validation error is raised if the medium supplied directly to the
+    # coefficient model has incomplete properties for the natural convection calculation.
+    incomplete_coeff_model = coeff_model.updated_copy(medium=incomplete_air.heat)
+    with pytest.raises(pd.ValidationError):
+        sim.updated_copy(
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.MediumMediumInterface(mediums=["air", "solid"]),
+                    condition=td.ConvectionBC(
+                        ambient_temperature=300, transfer_coeff=incomplete_coeff_model
+                    ),
+                ),
+            ]
+        )
+
 
 def test_heat_charge_monitors_validation(monitors):
     """Checks for no name and negative size in monitors."""
     temp_mnt = monitors[0]
+    mesh_mnt = monitors[11]
 
     # Invalid monitor name
     with pytest.raises(pd.ValidationError):
@@ -697,6 +1034,10 @@ def test_heat_charge_monitors_validation(monitors):
     # Invalid monitor size (negative dimension)
     with pytest.raises(pd.ValidationError):
         temp_mnt.updated_copy(size=(-1, 2, 3))
+
+    # Mesh monitor 1D
+    with pytest.raises(pd.ValidationError):
+        mesh_mnt.updated_copy(size=(0, 1, 0))
 
 
 def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction_simulation):
@@ -726,13 +1067,75 @@ def test_monitor_crosses_medium(mediums, structures, heat_simulation, conduction
             medium=solid_no_heat, structures=[solid_struct_no_heat], monitors=[temp_monitor]
         )
 
+    # check error is raised in voltage monitor doesn't cross a conducting medium
+    with pytest.raises(pd.ValidationError):
+        volt_mnt = td.SteadyPotentialMonitor(center=(0, 0, 0), size=(0, td.inf, td.inf))
+        _ = conduction_simulation.updated_copy(monitors=[volt_mnt])
+
 
 def test_heat_charge_mnt_data(
-    temperature_monitor_data, voltage_monitor_data, capacitance_monitor_data
+    temperature_monitor_data,
+    voltage_monitor_data,
+    electric_field_monitor_data,
+    current_density_monitor_data,
 ):
     """Tests whether different heat-charge monitor data can be created."""
     assert len(temperature_monitor_data) == 4, "Expected 4 temperature monitor data entries."
     assert len(voltage_monitor_data) == 4, "Expected 4 voltage monitor data entries."
+    assert len(electric_field_monitor_data) == 3, "Expected 3 electric field monitor data entries."
+    assert len(current_density_monitor_data) == 3, (
+        "Expected 3 current density monitor data entries."
+    )
+
+    for var, mnt_data_lists in [
+        ("E", electric_field_monitor_data),
+        ("J", current_density_monitor_data),
+    ]:
+        for mnt_data in mnt_data_lists:
+            assert var in mnt_data.field_components.keys()
+
+            symm_data = mnt_data.symmetry_expanded_copy
+            if var == "E":
+                assert symm_data.E == mnt_data.E
+            elif var == "J":
+                assert symm_data.J == mnt_data.J
+
+            names = mnt_data.field_name("abs^2")
+            assert names == var + "²"
+            names = mnt_data.field_name()
+            assert names == var
+
+            # make sure an error is raised if we don't use a field data array
+            # TriangularGridDataset
+            tri_grid_points = td.PointDataArray(
+                [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+                dims=("index", "axis"),
+            )
+
+            tri_grid_cells = td.CellDataArray(
+                [[0, 1, 2], [1, 2, 3]],
+                dims=("cell_index", "vertex_index"),
+            )
+
+            tri_grid_values = td.IndexedDataArray(
+                [1.0, 2.0, 3.0, 4.0],
+                dims=("index",),
+                name="T",
+            )
+
+            tri_grid = td.TriangularGridDataset(
+                normal_axis=1,
+                normal_pos=0,
+                points=tri_grid_points,
+                cells=tri_grid_cells,
+                values=tri_grid_values,
+            )
+
+            with pytest.raises(pd.ValidationError):
+                if var == "E":
+                    _ = mnt_data.updated_copy(E=tri_grid)
+                elif var == "J":
+                    _ = mnt_data.updated_copy(J=tri_grid)
 
 
 def test_grid_spec_validation(grid_specs):
@@ -764,6 +1167,7 @@ def test_device_characteristics():
         steady_dc_hole_capacitance=capacitance,
         steady_dc_electron_capacitance=capacitance,
         steady_dc_current_voltage=current_voltage,
+        steady_dc_resistance_voltage=current_voltage,
     )
 
 
@@ -784,9 +1188,13 @@ def test_heat_charge_sources(structures):
 
 def test_heat_charge_simulation(simulation_data):
     """Tests 'HeatChargeSimulation' and 'ConductionSimulation' objects."""
-    heat_sim_data, cond_sim_data, voltage_capacitance_sim_data, current_voltage_simulation_data = (
-        simulation_data
-    )
+    (
+        heat_sim_data,
+        cond_sim_data,
+        voltage_capacitance_sim_data,
+        current_voltage_simulation_data,
+        mesh_data,
+    ) = simulation_data
 
     # Test Heat Simulation
     heat_sim = heat_sim_data.simulation
@@ -797,19 +1205,22 @@ def test_heat_charge_simulation(simulation_data):
     assert cond_sim is not None, "Conduction simulation should be created successfully."
 
     voltage_capacitance_sim = voltage_capacitance_sim_data.simulation
-    assert (
-        voltage_capacitance_sim is not None
-    ), "Voltage-Capacitance simulation should be created successfully."
+    assert voltage_capacitance_sim is not None, (
+        "Voltage-Capacitance simulation should be created successfully."
+    )
 
     current_voltage_sim = current_voltage_simulation_data.simulation
-    assert (
-        current_voltage_sim is not None
-    ), "Current-Voltage simulation should be created successfully."
+    assert current_voltage_sim is not None, (
+        "Current-Voltage simulation should be created successfully."
+    )
+
+    mesher = mesh_data.mesher
+    assert mesher is not None, "VolumeMesher should be created successfully."
 
 
 def test_sim_data_plotting(simulation_data):
     """Tests whether simulation data can be plotted and appropriate errors are raised."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Plotting temperature data
     heat_sim_data.plot_field("test", z=0)
@@ -826,7 +1237,7 @@ def test_sim_data_plotting(simulation_data):
     with pytest.raises(DataError):
         heat_sim_data.plot_field("empty")
 
-    # Test plotting with invalid data
+    # Test plotting with 3D data
     with pytest.raises(DataError):
         heat_sim_data.plot_field("test")
 
@@ -846,6 +1257,64 @@ def test_sim_data_plotting(simulation_data):
 
     with pytest.raises(pd.ValidationError):
         heat_sim_data.updated_copy(simulation=sim)
+
+
+def test_mesh_plotting(simulation_data):
+    """Tests whether mesh can be plotted and appropriate errors are raised."""
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
+
+    # Plotting mesh from unstructured temperature data
+    heat_sim_data.plot_mesh("tri")
+    heat_sim_data.plot_mesh("tet", y=0.5)
+
+    # Plotting mesh from unstructured voltage data
+    cond_sim_data.plot_mesh("v_tri", structures_fill=False)
+    cond_sim_data.plot_mesh("v_tet", y=0.5)
+
+    # Plotting mesh from mesh data
+    mesh_data.plot_mesh("mesh_test", z=0)
+
+    plt.close()
+
+    # Test plotting from structured data
+    with pytest.raises(DataError):
+        heat_sim_data.plot_mesh("test")
+
+    # Test plotting with no data
+    with pytest.raises(DataError):
+        heat_sim_data.plot_mesh("empty")
+
+    # Test plotting with 3D data
+    with pytest.raises(DataError):
+        heat_sim_data.plot_mesh("tet")
+
+    # Test plotting with invalid key
+    with pytest.raises(KeyError):
+        heat_sim_data.plot_mesh("test3", x=0)
+
+    # Test plotting with invalid field_name
+    with pytest.raises(DataError):
+        mesh_data.plot_mesh("mesh_test", z=0, field_name="wrong")
+
+
+def test_conduction_simulation_has_conductors(conduction_simulation, structures):
+    """Test whether error is raised if conduction simulation has no conductors."""
+
+    with pytest.raises(pd.ValidationError):
+        _ = conduction_simulation.updated_copy(
+            monitors=[],
+            structures=[structures["insulator_structure"]],
+        )
+
+
+def test_coupling_source(conduction_simulation, heat_simulation):
+    """Test whether the coupling source can be applied."""
+
+    with pytest.raises(pd.ValidationError):
+        _ = conduction_simulation.updated_copy(sources=[td.HeatFromElectricSource()])
+
+    with pytest.raises(pd.ValidationError):
+        _ = heat_simulation.updated_copy(sources=[td.HeatFromElectricSource()])
 
 
 # --------------------------
@@ -1021,11 +1490,17 @@ class TestCharge:
             )
             _ = sim.updated_copy(boundary_spec=[bc_p, new_bc_n])
 
+        # test error is raised when more than one voltage array is provided
+        with pytest.raises(pd.ValidationError):
+            new_bc_p = bc_p.updated_copy(
+                condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1, 2]))
+            )
+            _ = sim.updated_copy(boundary_spec=[new_bc_p, bc_n])
+
     def test_doping_distributions(self):
         """Test doping distributions."""
         # Implementation needed
         # This test was empty in the original code.
-        pass
 
 
 # --------------------------
@@ -1049,7 +1524,7 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
             structures=[
                 td.Structure(
                     geometry=td.Box(size=(1, 1, 1), center=shifted_center),
-                    medium=td.Medium(),
+                    medium=td.MultiPhysicsMedium(charge=td.ChargeConductorMedium(conductivity=1)),
                 )
             ],
             boundary_spec=[
@@ -1059,6 +1534,13 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
                 )
             ],
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[
+                td.SteadyPotentialMonitor(
+                    center=[0, 0, 0],
+                    size=(td.inf, td.inf, td.inf),
+                    name="test_monitor",
+                )
+            ],
         )
 
     # Create all permutations of squares being shifted 1, -1, or zero in all three directions
@@ -1087,7 +1569,10 @@ def test_heat_charge_sim_bounds(shift_amount, log_level):
 )
 def test_sim_structure_extent(box_size, log_level):
     """Ensure we warn if structure extends exactly to simulation edges."""
-    box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
+    box = td.Structure(
+        geometry=td.Box(size=box_size),
+        medium=td.MultiPhysicsMedium(charge=td.ChargeConductorMedium(conductivity=1)),
+    )
 
     with AssertLogLevel(log_level):
         _ = td.HeatChargeSimulation(
@@ -1101,6 +1586,11 @@ def test_sim_structure_extent(box_size, log_level):
                 )
             ],
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[
+                td.SteadyPotentialMonitor(
+                    center=(0, 0, 0), size=(td.inf, td.inf, td.inf), name="test_monitor"
+                )
+            ],
         )
 
 
@@ -1150,16 +1640,16 @@ def test_gaussian_doping_get_contrib():
 
     coords = {"x": [0], "y": [0], "z": [0]}
     contrib = box._get_contrib(coords)
-    assert np.isclose(float(contrib), max_N, rtol=1e-6)
+    assert np.isclose(contrib.item(), max_N, rtol=1e-6)
 
     coords = {"x": [0.5], "y": [0], "z": [0]}
     contrib = box._get_contrib(coords)
-    assert np.isclose(float(contrib), min_N, rtol=1e-6)
+    assert np.isclose(contrib.item(), min_N, rtol=1e-6)
 
     coords = {"x": [0.5 - width / 2], "y": [0], "z": [0]}
     contrib = box._get_contrib(coords)
     expected_value = max_N * np.exp(-width * width / 4 / box.sigma / box.sigma / 2)
-    assert np.isclose(float(contrib), expected_value, rtol=1e-6)
+    assert np.isclose(contrib.item(), expected_value, rtol=1e-6)
 
 
 def test_gaussian_doping_get_contrib_2d_coords():
@@ -1299,7 +1789,7 @@ def test_dynamic_simulation_updates(heat_simulation):
     # Add a new monitor
     new_monitor = td.TemperatureMonitor(size=(1, 1, 1), name="new_temp_mnt")
     updated_sim = heat_simulation.updated_copy(
-        monitors=tuple(list(heat_simulation.monitors) + [new_monitor])
+        monitors=(*list(heat_simulation.monitors), new_monitor)
     )
     assert len(updated_sim.monitors) == len(heat_simulation.monitors) + 1
     assert updated_sim.monitors[-1].name == "new_temp_mnt"
@@ -1307,7 +1797,7 @@ def test_dynamic_simulation_updates(heat_simulation):
 
 def test_plotting_functions(simulation_data):
     """Test plotting functions with various data."""
-    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data = simulation_data
+    heat_sim_data, cond_sim_data, cap_sim_data, fc_sim_data, mesh_data = simulation_data
 
     # Valid plotting
     try:
@@ -1323,6 +1813,181 @@ def test_plotting_functions(simulation_data):
     # Invalid plotting parameters
     with pytest.raises(KeyError):
         heat_sim_data.plot_field("test", invalid_param=0)
+
+
+def test_bandgap_monitor():
+    """Test energy bandgap monitor ploting function."""
+    # create a triangle grid
+    tri_grid_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tri_grid_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tri_grid_values_single_voltage = td.IndexedVoltageDataArray(
+        [[0.0], [0], [3], [3]],
+        coords={"index": np.arange(4), "voltage": [1]},
+        name="test",
+    )
+
+    tri_grid_values_multi_voltage = td.IndexedVoltageDataArray(
+        [[0.0, 0.0], [0, 0], [3, -3], [3, -3]],
+        coords={"index": np.arange(4), "voltage": [-1, 1]},
+        name="test",
+    )
+
+    tri_grid_single_voltage = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values_single_voltage,
+    )
+
+    tri_grid_multi_voltage = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values_multi_voltage,
+    )
+
+    # create a tet mesh
+    tet_grid_points = td.PointDataArray(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 3, 7], [0, 2, 7, 3], [0, 2, 6, 7], [0, 4, 7, 6], [0, 4, 5, 7], [0, 1, 7, 5]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values_single_voltage = td.IndexedVoltageDataArray(
+        [[0.0], [0.0], [0.0], [0.0], [3.0], [3.0], [3.0], [3.0]],
+        coords={"index": np.arange(8), "voltage": [1]},
+        name="test_tet",
+    )
+
+    tet_grid_values_multi_voltage = td.IndexedVoltageDataArray(
+        [
+            [0.0, 0.5],
+            [0.0, 0.5],
+            [0.0, 0.5],
+            [0.0, 0.5],
+            [3.0, 3.5],
+            [3.0, 3.5],
+            [3.0, 3.5],
+            [3.0, 3.5],
+        ],
+        coords={"index": np.arange(8), "voltage": [-1, 1]},
+        name="test_tet",
+    )
+
+    tet_grid_single_voltage = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values_single_voltage,
+    )
+
+    tet_grid_multi_voltage = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values_multi_voltage,
+    )
+
+    aux_monitor_2D = td.SteadyEnergyBandMonitor(
+        center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="bands_2D", unstructured=True
+    )
+
+    aux_monitor_3D = td.SteadyEnergyBandMonitor(
+        center=(0, 0.14, 0.0), size=(0.6, 0.3, 0.5), name="bands_3D", unstructured=True
+    )
+
+    tri_single_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_2D,
+        Ec=tri_grid_single_voltage,
+        Ev=tri_grid_single_voltage,
+        Ei=tri_grid_single_voltage,
+        Efn=tri_grid_single_voltage,
+        Efp=tri_grid_single_voltage,
+    )
+
+    tri_multi_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_2D,
+        Ec=tri_grid_multi_voltage,
+        Ev=tri_grid_multi_voltage,
+        Ei=tri_grid_multi_voltage,
+        Efn=tri_grid_multi_voltage,
+        Efp=tri_grid_multi_voltage,
+    )
+
+    tet_single_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_3D,
+        Ec=tet_grid_single_voltage,
+        Ev=tet_grid_single_voltage,
+        Ei=tet_grid_single_voltage,
+        Efn=tet_grid_single_voltage,
+        Efp=tet_grid_single_voltage,
+    )
+
+    tet_multi_voltage_data = td.SteadyEnergyBandData(
+        monitor=aux_monitor_3D,
+        Ec=tet_grid_multi_voltage,
+        Ev=tet_grid_multi_voltage,
+        Ei=tet_grid_multi_voltage,
+        Efn=tet_grid_multi_voltage,
+        Efp=tet_grid_multi_voltage,
+    )
+
+    # test check for the voltage value in the list of arguments
+
+    tri_single_voltage_data.plot(x=0.0)
+    tri_multi_voltage_data.plot(x=0.0, voltage=1.0)
+
+    with pytest.raises(DataError):
+        tri_multi_voltage_data.plot(x=0.0)
+
+    tet_single_voltage_data.plot(x=0.0, y=0.0)
+    tet_multi_voltage_data.plot(x=0.0, y=0.0, voltage=1.0)
+
+    with pytest.raises(DataError):
+        tri_multi_voltage_data.plot(x=0.0, y=0.0)
+
+    # test check for the number of coordinates in the list of arguments
+
+    with pytest.raises(DataError):
+        tri_single_voltage_data.plot()
+
+    with pytest.raises(DataError):
+        tri_single_voltage_data.plot(x=0.0, y=0.0)
+
+    with pytest.raises(DataError):
+        tet_single_voltage_data.plot()
+
+    with pytest.raises(DataError):
+        tet_single_voltage_data.plot(x=0.0)
+
+    with pytest.raises(DataError):
+        tet_single_voltage_data.plot(x=0.0, y=0.0, z=0.0)
+
+    # test check for the incorrect cross-section plane
+
+    with pytest.raises(DataError):
+        tri_single_voltage_data.plot(y=0.0)
 
 
 def test_additional_edge_cases():
@@ -1358,3 +2023,195 @@ def test_fossum():
     """Check that fossum model can be defined."""
 
     _ = td.FossumCarrierLifetime(tau_300=3.3e-6, alpha_T=-0.5, N0=7.1e15, A=1, B=0, C=1, alpha=1)
+
+
+@pytest.mark.parametrize("symmetry", [(0, 0, 0), (0, 1, 0), (1, 0, 0), (1, 1, 0)])
+def test_symmetry_capacitance(symmetry):
+    """Check that symmetry_expanded_copy works as expected"""
+
+    data = [1, 2, 3]
+    voltages = [0, 1, 2]
+
+    hole_capacitance = td.SteadyVoltageDataArray(
+        data=data,
+        coords={"v": voltages},
+    )
+
+    electron_capacitance = td.SteadyVoltageDataArray(
+        data=data,
+        coords={"v": voltages},
+    )
+
+    monitor = td.SteadyCapacitanceMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 1),
+        name="test_monitor",
+    )
+
+    mnt_data = td.SteadyCapacitanceData(
+        monitor=monitor,
+        hole_capacitance=hole_capacitance,
+        electron_capacitance=electron_capacitance,
+        symmetry=symmetry,
+    )
+
+    num_symmetries = np.sum(np.array([1 if d > 0 else 0 for d in symmetry]))
+    scaling_factor = np.power(2, num_symmetries)
+
+    for n in range(len(data)):
+        assert mnt_data.symmetry_expanded_copy.hole_capacitance.data[n] == data[n] * scaling_factor
+        assert (
+            mnt_data.symmetry_expanded_copy.electron_capacitance.data[n] == data[n] * scaling_factor
+        )
+
+
+def test_unsteady_parameters():
+    """Test that unsteady parameters are set correctly."""
+
+    _ = td.UnsteadyHeatAnalysis(
+        initial_temperature=300,
+        unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+    )
+
+    # test non-positive initial temperature raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=0,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+        )
+
+    # test negative time step raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=10,
+            unsteady_spec=td.UnsteadySpec(time_step=-0.1, total_time_steps=1),
+        )
+
+    # test negative total time steps raises error
+    with pytest.raises(pd.ValidationError):
+        _ = td.UnsteadyHeatAnalysis(
+            initial_temperature=10,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=-1),
+        )
+
+
+def test_unsteady_heat_analysis(heat_simulation):
+    """Test that the validators for unsteady heat analysis are working."""
+
+    unsteady_analysis_spec = td.UnsteadyHeatAnalysis(
+        initial_temperature=300,
+        unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=1),
+    )
+
+    temp_mnt = td.TemperatureMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, td.inf),
+        name="temperature",
+        unstructured=True,
+        interval=2,
+    )
+
+    # this should work since the monitor is unstructured
+    unsteady_sim = heat_simulation.updated_copy(
+        analysis_spec=unsteady_analysis_spec, monitors=[temp_mnt]
+    )
+
+    with pytest.raises(pd.ValidationError):
+        temp_mnt = temp_mnt.updated_copy(unstructured=False)
+        _ = unsteady_sim.updated_copy(monitors=[temp_mnt])
+
+    with pytest.raises(pd.ValidationError):
+        temp_mnt = temp_mnt.updated_copy(unstructured=True, interval=0)
+        _ = unsteady_sim.updated_copy(monitors=[temp_mnt])
+
+    # try simulation with excessive time steps
+    with pytest.raises(pd.ValidationError):
+        mew_spex = td.UnsteadyHeatAnalysis(
+            initial_temperature=300,
+            unsteady_spec=td.UnsteadySpec(time_step=0.1, total_time_steps=100000),
+        )
+        _ = unsteady_sim.updated_copy(analysis_spec=mew_spex)
+
+
+def test_heat_conduction_simulations():
+    """Test that heat-conduction simulations have necessary components."""
+
+    # let's create some mediums
+    solid_medium = td.MultiPhysicsMedium(
+        heat=td.SolidSpec(conductivity=1),
+        charge=td.ChargeConductorMedium(conductivity=1),
+        name="solid_medium",
+    )
+    air = td.MultiPhysicsMedium(heat=td.FluidSpec(), charge=td.ChargeInsulatorMedium(), name="air")
+
+    struct1 = td.Structure(
+        geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+        medium=solid_medium,
+        name="struct1",
+    )
+
+    # thermal BC
+    thermal_bc = td.HeatChargeBoundarySpec(
+        condition=td.TemperatureBC(temperature=300),
+        placement=td.StructureBoundary(structure="struct1"),
+    )
+
+    # electric BCs
+    electric_bc = td.HeatChargeBoundarySpec(
+        condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1])),
+        placement=td.StructureBoundary(structure="struct1"),
+    )
+
+    # thermal monitors
+    temp_monitor = td.TemperatureMonitor(
+        center=(0, 0, 0), size=(1, 1, 1), name="temp_monitor", unstructured=True
+    )
+    # electric monitors
+    voltage_monitor = td.SteadyPotentialMonitor(
+        center=(0, 0, 0), size=(1, 1, 1), name="voltage_monitor", unstructured=True
+    )
+
+    sim = td.HeatChargeSimulation(
+        medium=air,
+        structures=[struct1],
+        center=(0, 0, 0),
+        size=(3, 3, 3),
+        boundary_spec=[thermal_bc, electric_bc],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        sources=[],
+        monitors=[temp_monitor, voltage_monitor],
+    )
+
+    with pytest.raises(pd.ValidationError):
+        # no thermal monitors
+        _ = sim.updated_copy(monitors=[voltage_monitor])
+
+    with pytest.raises(pd.ValidationError):
+        # voltage array in electric BC
+        _ = sim.updated_copy(
+            boundary_spec=[
+                thermal_bc,
+                electric_bc.updated_copy(
+                    condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[1, 2]))
+                ),
+            ]
+        )
+
+    # this doesn't raise error
+    coupling_sim = sim.updated_copy(sources=[td.HeatFromElectricSource()])
+
+    with pytest.raises(pd.ValidationError):
+        # This should error since the conduction simulation doesn't have a monitor
+        _ = sim.updated_copy(monitors=[temp_monitor])
+
+    # test error if structures defined with Medium instead of MultiPhysicsMedium
+    with pytest.raises(pd.ValidationError):
+        struct_error = struct1.updated_copy(medium=td.Medium(conductivity=1))
+        _ = sim.updated_copy(structures=[struct_error])
+
+    # test error if structures aren't conducting
+    with pytest.raises(pd.ValidationError):
+        struct_error = struct1.updated_copy(
+            medium=struct1.medium.updated_copy(charge=td.ChargeInsulatorMedium)
+        )
+        _ = sim.updated_copy(structures=[struct_error])

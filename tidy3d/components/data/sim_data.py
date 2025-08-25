@@ -4,36 +4,34 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 from abc import ABC
 from collections import defaultdict
-from typing import Callable, Tuple, Union
+from typing import Callable, Optional, Union
 
 import h5py
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from ...constants import C_0, inf
-from ...exceptions import DataError, FileError, Tidy3dKeyError
-from ...log import log
-from ..autograd.utils import split_list
-from ..base import JSON_TAG, Tidy3dBaseModel
-from ..base_sim.data.sim_data import AbstractSimulationData
-from ..file_util import replace_values
-from ..monitor import Monitor
-from ..simulation import Simulation
-from ..source.time import GaussianPulse
-from ..source.utils import SourceType
-from ..structure import Structure
-from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
-from ..viz import add_ax_if_none, equal_aspect
-from .data_array import FreqDataArray
-from .monitor_data import (
-    AbstractFieldData,
-    FieldTimeData,
-    MonitorDataType,
-    MonitorDataTypes,
-)
+from tidy3d.components.autograd.utils import split_list
+from tidy3d.components.base import JSON_TAG, Tidy3dBaseModel, cached_property
+from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
+from tidy3d.components.file_util import replace_values
+from tidy3d.components.monitor import Monitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source.current import CustomCurrentSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.source.utils import SourceType
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.constants import C_0, inf
+from tidy3d.exceptions import DataError, FileError, Tidy3dKeyError
+from tidy3d.log import log
+
+from .data_array import FreqDataArray, TimeDataArray
+from .monitor_data import AbstractFieldData, FieldTimeData, MonitorDataType, MonitorDataTypes
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
@@ -43,11 +41,17 @@ DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in M
 # residuals below this are considered good fits for broadband adjoint source creation
 RESIDUAL_CUTOFF_ADJOINT = 1e-6
 
+# for adjoint source, the minimum number of FWIDTH between the center frequency and zero
+NUM_ADJOINT_FWIDTH_TO_ZERO = 3
+# for broadband adjoint source, the minimum number of FWIDTH to reach the lowest frequency
+# that is covered by the broadband pulse
+NUM_ADJOINT_FWIDTH_TO_FMIN = 0.5
+
 
 class AdjointSourceInfo(Tidy3dBaseModel):
     """Stores information about the adjoint sources to pass to autograd pipeline."""
 
-    sources: Tuple[annotate_type(SourceType), ...] = pd.Field(
+    sources: tuple[annotate_type(SourceType), ...] = pd.Field(
         ...,
         title="Adjoint Sources",
         description="Set of processed sources to include in the adjoint simulation.",
@@ -445,8 +449,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
         **sel_kwargs,
@@ -560,7 +564,7 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             if field_data.coords[axis].size <= 1:
                 field_data = field_data.sel(**{axis: pos}, method="nearest")
             else:
-                field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
+                field_data = field_data.interp(**{axis: pos}, kwargs={"bounds_error": True})
 
         # warn about new API changes and replace the values
         if "freq" in sel_kwargs:
@@ -580,6 +584,9 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
 
         # select the extra coordinates out of the data from user-specified kwargs
         for coord_name, coord_val in sel_kwargs.items():
+            interp_val = np.array(coord_val)
+            if interp_val.size == 1:
+                interp_val = interp_val.item()
             if (
                 field_data.coords[coord_name].size <= 1
                 or coord_name == "eme_port_index"
@@ -587,10 +594,10 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
                 or coord_name == "sweep_index"
                 or coord_name == "mode_index"
             ):
-                field_data = field_data.sel(**{coord_name: coord_val}, method=None)
+                field_data = field_data.sel(**{coord_name: interp_val}, method=None)
             else:
                 field_data = field_data.interp(
-                    **{coord_name: coord_val}, kwargs=dict(bounds_error=True)
+                    **{coord_name: interp_val}, kwargs={"bounds_error": True}
                 )
 
         # before dropping coordinates, check if a frequency can be derived from the data that can
@@ -656,8 +663,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         eps_alpha: float = 0.2,
         phase: float = 0.0,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
         shading: str = "flat",
         **sel_kwargs,
@@ -734,11 +741,11 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         field_data: xr.DataArray,
         axis: Axis,
         position: float,
-        freq: float = None,
+        freq: Optional[float] = None,
         eps_alpha: float = 0.2,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
         **kwargs,
@@ -912,7 +919,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         description="Original :class:`.Simulation` associated with the data.",
     )
 
-    data: Tuple[annotate_type(MonitorDataType), ...] = pd.Field(
+    data: tuple[annotate_type(MonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
@@ -925,21 +932,29 @@ class SimulationData(AbstractYeeGridSimulationData):
         description="A boolean flag denoting whether the simulation run diverged.",
     )
 
-    @property
-    def final_decay_value(self) -> float:
-        """Returns value of the field decay at the final time step."""
+    @cached_property
+    def field_decay(self) -> TimeDataArray:
+        """Returns a TimeDataArray of field decay values over time steps."""
         log_str = self.log
         if log_str is None:
             raise DataError(
-                "No log string in the SimulationData object, can't find final decay value."
+                "No log string in the SimulationData object, can't extract field decay."
             )
-        lines = log_str.split("\n")
-        decay_lines = [line for line in lines if "field decay" in line]
-        final_decay = 1.0
-        if len(decay_lines) > 0:
-            final_decay_line = decay_lines[-1]
-            final_decay = float(final_decay_line.split("field decay: ")[-1])
-        return final_decay
+
+        matches = re.findall(r"- Time step\s+(\d+)\s+/.*?field decay:\s*([0-9.eE+-]+)", log_str)
+
+        steps = [int(m[0]) for m in matches]
+        decays = [float(m[1]) for m in matches]
+        return TimeDataArray(decays, coords={"t": steps})
+
+    @property
+    def final_decay_value(self) -> float:
+        """Returns value of the field decay at the final time step."""
+        field_decay = self.field_decay
+        if len(field_decay) == 0:
+            log.warning("No field decay values found, using 1.0 as final decay value.")
+            return 1.0
+        return float(field_decay.values[-1])
 
     def source_spectrum(self, source_index: int) -> Callable:
         """Get a spectrum normalization function for a given source index."""
@@ -990,11 +1005,11 @@ class SimulationData(AbstractYeeGridSimulationData):
         # Make a new monitor_data dictionary with renormalized data
         data_normalized = [mnt_data.normalize(source_spectrum_fn) for mnt_data in self.data]
 
-        simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
+        simulation = self.simulation.copy(update={"normalize_index": normalize_index})
 
-        return self.copy(update=dict(simulation=simulation, data=data_normalized))
+        return self.copy(update={"simulation": simulation, "data": data_normalized})
 
-    def split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
+    def _split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
         """Split data list into original, adjoint field, and adjoint permittivity."""
 
         data_all = list(self.data)
@@ -1008,11 +1023,11 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return data_original, data_adjoint
 
-    def split_original_fwd(self, num_mnts_original: int) -> Tuple[SimulationData, SimulationData]:
+    def _split_original_fwd(self, num_mnts_original: int) -> tuple[SimulationData, SimulationData]:
         """Split this simulation data into original and fwd data from number of original mnts."""
 
         # split the data and monitors into the original ones & adjoint gradient ones (for 'fwd')
-        data_original, data_fwd = self.split_adjoint_data(num_mnts_original=num_mnts_original)
+        data_original, data_fwd = self._split_adjoint_data(num_mnts_original=num_mnts_original)
         monitors_orig, monitors_fwd = split_list(self.simulation.monitors, index=num_mnts_original)
 
         # reconstruct the simulation data for the user, using original sim, and data for original mnts
@@ -1033,7 +1048,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return sim_data_original, sim_data_fwd
 
-    def make_adjoint_sims(
+    def _make_adjoint_sims(
         self,
         data_vjp_paths: set[tuple],
         adjoint_monitors: list[Monitor],
@@ -1046,7 +1061,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         sim_original = self.simulation
 
         # generate the adjoint sources {mnt_name : list[Source]}
-        sources_adj_dict = self.make_adjoint_sources(data_vjp_paths=data_vjp_paths)
+        sources_adj_dict = self._make_adjoint_sources(data_vjp_paths=data_vjp_paths)
         if not sources_adj_dict:
             return []
 
@@ -1054,7 +1069,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         for src_list in sources_adj_dict.values():
             adj_srcs += list(src_list)
 
-        adjoint_source_infos = self.process_adjoint_sources(adj_srcs=adj_srcs)
+        adjoint_source_infos = self._process_adjoint_sources(adj_srcs=adj_srcs)
 
         if not adjoint_source_infos:
             return []
@@ -1076,12 +1091,12 @@ class SimulationData(AbstractYeeGridSimulationData):
             ]
 
             # fields to update the 'fwd' simulation with to make it 'adj'
-            sim_adj_update_dict = dict(
-                sources=adjoint_source_info.sources,
-                boundary_spec=bc_adj,
-                monitors=monitors,
-                post_norm=adjoint_source_info.post_norm,
-            )
+            sim_adj_update_dict = {
+                "sources": adjoint_source_info.sources,
+                "boundary_spec": bc_adj,
+                "monitors": monitors,
+                "post_norm": adjoint_source_info.post_norm,
+            }
 
             if not adjoint_source_info.normalize_sim:
                 sim_adj_update_dict["normalize_index"] = None
@@ -1095,7 +1110,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return adj_sims
 
-    def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, SourceType]:
+    def _make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, SourceType]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
 
         # map of index into 'self.data' to the list of datasets we need adjoint sources for
@@ -1107,8 +1122,8 @@ class SimulationData(AbstractYeeGridSimulationData):
         sources_adj_all = defaultdict(list)
         for data_index, dataset_names in adj_src_map.items():
             mnt_data = self.data[data_index]
-            sources_adj = mnt_data.make_adjoint_sources(
-                dataset_names=dataset_names, fwidth=self.fwidth_adj
+            sources_adj = mnt_data._make_adjoint_sources(
+                dataset_names=dataset_names, fwidth=self._fwidth_adj
             )
             sources_adj_all[mnt_data.monitor.name] = sources_adj
             log.info(
@@ -1118,19 +1133,37 @@ class SimulationData(AbstractYeeGridSimulationData):
         return sources_adj_all
 
     @property
-    def fwidth_adj(self) -> float:
+    def _fwidth_adj(self) -> float:
         # fwidth of forward pass, try as default for adjoint
         normalize_index_fwd = self.simulation.normalize_index or 0
         return self.simulation.sources[normalize_index_fwd].source_time.fwidth
 
-    def process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
+    @staticmethod
+    def _adjoint_src_width_single(adj_srcs: list[SourceType]) -> list[SourceType]:
+        """Ensure the adjoint source sufficiently decays before zero frequency."""
+        adj_srcs_process_fwidth = []
+        for adj_src in adj_srcs:
+            source_time = adj_src.source_time
+            freq0 = source_time.freq0
+
+            fwidth = np.minimum(freq0 / NUM_ADJOINT_FWIDTH_TO_ZERO, source_time.fwidth)
+
+            adj_srcs_process_fwidth.append(
+                adj_src.updated_copy(source_time=source_time.updated_copy(fwidth=fwidth))
+            )
+
+        return adj_srcs_process_fwidth
+
+    def _process_adjoint_sources(self, adj_srcs: list[SourceType]) -> list[AdjointSourceInfo]:
         """Compute list of final sources along with a post run normalization for adj fields."""
         # dictionary mapping hash of sources with same freq dependence to list of time-dependencies
         hashes_to_sources = defaultdict(None)
         hashes_to_src_times = defaultdict(list)
 
+        adj_srcs_process_fwidth = self._adjoint_src_width_single(adj_srcs)
+
         tmp_src_time = GaussianPulse(freq0=C_0, fwidth=inf)
-        for src in adj_srcs:
+        for src in adj_srcs_process_fwidth:
             tmp_src = src.updated_copy(source_time=tmp_src_time)
             tmp_src_hash = tmp_src._hash_self()
             hashes_to_sources[tmp_src_hash] = src
@@ -1138,26 +1171,39 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         # Group sources by frequency or port, whichever gives fewer groups
         num_ports = len(hashes_to_src_times)
-        num_unique_freqs = len({src.source_time.freq0 for src in adj_srcs})
+        num_unique_freqs = len({src.source_time.freq0 for src in adj_srcs_process_fwidth})
 
         log.info(f"Found {num_ports} spatial ports and {num_unique_freqs} unique frequencies.")
 
         adjoint_infos = []
         if num_unique_freqs <= num_ports:
             log.info("Grouping adjoint sources by frequency.")
-            unique_freqs = {src.source_time.freq0 for src in adj_srcs}
+            unique_freqs = {src.source_time.freq0 for src in adj_srcs_process_fwidth}
             for freq0 in unique_freqs:
-                group = [src for src in adj_srcs if src.source_time.freq0 == freq0]
+                group = [src for src in adj_srcs_process_fwidth if src.source_time.freq0 == freq0]
                 post_norm = xr.DataArray(data=np.array([1 + 0j]), coords={"f": [freq0]})
                 adjoint_infos.append(
                     AdjointSourceInfo(sources=group, post_norm=post_norm, normalize_sim=True)
                 )
         else:
             log.info("Grouping adjoint sources by port.")
+
+            #
+            # warn if the forward simulation had symmetry and we are grouping by port, which
+            # which means the individual adjoint simulations may not respect the original symmetry
+            #
+            if np.any(np.abs(self.simulation.symmetry) > 0) and (num_ports > 1):
+                log.warning(
+                    "The adjoint simulations for this problem are being broken into "
+                    "multiple simulations that may not individually respect the symmetry of the "
+                    "initial simulation. Gradients may be unreliable and it is recommended to "
+                    "optimize this problem without utilizing symmetry."
+                )
+
             for src_hash, src_times in hashes_to_src_times.items():
                 base_src = hashes_to_sources[src_hash]
                 group = [base_src.updated_copy(source_time=src_time) for src_time in src_times]
-                processed_srcs, post_norm = self.process_adjoint_sources_broadband(group)
+                processed_srcs, post_norm = self._process_adjoint_sources_broadband(group)
                 adjoint_infos.append(
                     AdjointSourceInfo(
                         sources=processed_srcs, post_norm=post_norm, normalize_sim=True
@@ -1167,7 +1213,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         log.info(f"Created {len(adjoint_infos)} adjoint source groups.")
         return adjoint_infos
 
-    def process_adjoint_sources_broadband(
+    def _process_adjoint_sources_broadband(
         self, adj_srcs: list[SourceType]
     ) -> tuple[list[SourceType], xr.DataArray]:
         """Process adjoint sources for the case of several sources at the same freq."""
@@ -1184,12 +1230,46 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return [src_broadband], post_norm_amps
 
+    @staticmethod
+    def _adjoint_src_width_broadband(adj_srcs: list[SourceType]) -> float:
+        """Find the adjoint source fwidth that sufficiently covers all adjoint frequencies."""
+
+        adj_srcs_f0 = [adj_src.source_time.freq0 for adj_src in adj_srcs]
+        middle_f0 = 0.5 * (np.max(adj_srcs_f0) + np.min(adj_srcs_f0))
+        min_f0 = np.min(adj_srcs_f0)
+
+        # width of source to sufficiently decay by zero frequency
+        decay_by_f0_fwidth = middle_f0 / NUM_ADJOINT_FWIDTH_TO_ZERO
+        # width of source to sufficiently cover all adjoint frequencies
+        fwidth_to_min_f0 = (middle_f0 - min_f0) / NUM_ADJOINT_FWIDTH_TO_FMIN
+
+        # log warning if the adjoint pulse width is not sufficiently decayed by zero frequency
+        # which may cause some issues in the adjoint accuracy when using field sources
+        if (fwidth_to_min_f0 > decay_by_f0_fwidth) and isinstance(adj_srcs[0], CustomCurrentSource):
+            log.warning(
+                "Adjoint source generated with a frequency spectrum that extends to or overlaps with 0 Hz. "
+                "This can introduce errors into the gradient computation."
+            )
+
+        # Choose a wider pulse width in frequency especially when the min/max frequencies
+        # for the broadband pulse might be very close together
+        adj_src_fwidth = np.maximum(decay_by_f0_fwidth, fwidth_to_min_f0)
+
+        return middle_f0, adj_src_fwidth
+
     def _make_broadband_source(self, adj_srcs: list[SourceType]) -> SourceType:
         """Make a broadband source for a set of adjoint sources."""
 
+        adj_src_f0, adj_src_fwidth = self._adjoint_src_width_broadband(adj_srcs)
+
         source_index = self.simulation.normalize_index or 0
-        src_time_base = self.simulation.sources[source_index].source_time.copy()
-        src_broadband = adj_srcs[0].updated_copy(source_time=src_time_base)
+
+        src_time_base = self.simulation.sources[source_index].source_time.updated_copy(
+            amplitude=1.0, phase=0.0
+        )
+        src_broadband = adj_srcs[0].updated_copy(
+            source_time=src_time_base.updated_copy(freq0=adj_src_f0, fwidth=adj_src_fwidth)
+        )
 
         return src_broadband
 
@@ -1205,14 +1285,14 @@ class SimulationData(AbstractYeeGridSimulationData):
             amp_complex = src_time.amplitude * np.exp(1j * src_time.phase)
             amps_complex.append(amp_complex)
 
-        coords = dict(f=freqs)
+        coords = {"f": freqs}
         amps_complex = np.array(amps_complex)
         return xr.DataArray(amps_complex, coords=coords)
 
-    def get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
+    def _get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
         """Grab the field or permittivity data for a given structure index."""
 
-        monitor_name = Structure.get_monitor_name(index=structure_index, data_type=data_type)
+        monitor_name = Structure._get_monitor_name(index=structure_index, data_type=data_type)
         return self[monitor_name]
 
     def to_mat_file(self, fname: str, **kwargs):

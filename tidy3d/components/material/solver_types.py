@@ -2,6 +2,8 @@
 Note in the future we might want to implement interpolation models here.
 """
 
+from __future__ import annotations
+
 from typing import Union
 
 from tidy3d.components.material.tcad.charge import (

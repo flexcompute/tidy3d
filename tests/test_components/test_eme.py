@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
 from matplotlib import pyplot as plt
+
+import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
 from ..utils import AssertLogLevel
@@ -166,7 +169,7 @@ def test_eme_grid():
                     assert mode_plane.size[dim] == 0
                 else:
                     assert mode_plane.center[dim] == sim_geom.center[dim]
-                    assert mode_plane.size[dim] == sim_geom.size[dim]
+                    assert mode_plane.size[dim] == td.inf
 
     # test that boundary planes span sim and lie at cell boundaries
     for grid in grids:
@@ -296,22 +299,6 @@ def test_eme_simulation():
     _ = sim2.plot(y=0, ax=AX)
     _ = sim2.plot(z=0, ax=AX)
 
-    # must be 3D
-    with pytest.raises(pd.ValidationError):
-        _ = td.EMESimulation(
-            size=(0, 2, 2),
-            freqs=[td.C_0],
-            axis=2,
-            eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec()),
-        )
-    with pytest.raises(pd.ValidationError):
-        _ = td.EMESimulation(
-            size=(2, 2, 0),
-            freqs=[td.C_0],
-            axis=2,
-            eme_grid_spec=td.EMEUniformGrid(num_cells=2, mode_spec=td.EMEModeSpec()),
-        )
-
     # need at least one freq
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(freqs=[])
@@ -324,19 +311,16 @@ def test_eme_simulation():
 
     # test warning for not providing wavelength in autogrid
     grid_spec = td.GridSpec.auto(min_steps_per_wvl=20)
-    with AssertLogLevel("INFO"):
+    with AssertLogLevel("INFO", contains_str="wavelength"):
         sim = sim.updated_copy(grid_spec=grid_spec)
     # multiple freqs are ok, but not for autogrid
-    _ = sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[1e10] + list(sim.freqs))
-    with pytest.raises(SetupError):
-        _ = td.EMESimulation(
-            size=sim.size,
-            freqs=list(sim.freqs) + [1e10],
-            monitors=sim.monitors,
-            structures=sim.structures,
+    _ = sim.updated_copy(
+        grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[10000000000.0, *list(sim.freqs)]
+    )
+    with AssertLogLevel("INFO", contains_str="wavelength"):
+        _ = sim.updated_copy(
+            freqs=[*list(sim.freqs), 10000000000.0],
             grid_spec=grid_spec,
-            axis=sim.axis,
-            eme_grid_spec=sim.eme_grid_spec,
         )
 
     # test port offsets
@@ -385,7 +369,7 @@ def test_eme_simulation():
         )
     # warn for nonlinear
     nonlinear = td.Medium(
-        permittivity=2, nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)])
+        permittivity=2, nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1)])
     )
     struct = sim.structures[0].updated_copy(medium=nonlinear)
     with AssertLogLevel("WARNING"):
@@ -427,10 +411,6 @@ def test_eme_simulation():
     with pytest.raises(pd.ValidationError):
         _ = sim.updated_copy(monitors=[monitor])
 
-    # test boundary and source validation
-    with pytest.raises(SetupError):
-        _ = sim.updated_copy(boundary_spec=td.BoundarySpec.all_sides(td.Periodic()))
-
     # test max sim size and freqs
     sim_bad = sim.updated_copy(size=(1000, 1000, 1000))
     with pytest.raises(SetupError):
@@ -450,6 +430,11 @@ def test_eme_simulation():
         grid_spec=sim.grid_spec.updated_copy(wavelength=1),
     )
     with pytest.raises(SetupError):
+        sim_bad.validate_pre_upload()
+    sim_bad = sim.updated_copy(
+        freqs=list(sim.freqs) + list(1e14 * np.linspace(1, 2, 100)),
+    )
+    with AssertLogLevel("WARNING", contains_str="expensive"):
         sim_bad.validate_pre_upload()
     large_monitor = sim.monitors[2].updated_copy(size=(td.inf, td.inf, td.inf))
     _ = sim.updated_copy(
@@ -507,7 +492,14 @@ def test_eme_simulation():
     assert sim_tmp._monitor_num_freqs(monitor=sim_tmp.monitors[0]) == 1
 
     # test sweep
-    sweep_sim = sim.updated_copy(
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(
+            sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 10)))
+        )
+    sim_no_field = sim.updated_copy(
+        monitors=[mnt for mnt in sim.monitors if not isinstance(mnt, td.EMEFieldMonitor)]
+    )
+    sweep_sim = sim_no_field.updated_copy(
         sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 10)))
     )
     assert sweep_sim._sweep_cells
@@ -515,15 +507,15 @@ def test_eme_simulation():
     assert sweep_sim._num_sweep_cells == 10
     assert sweep_sim._num_sweep_interfaces == 1
     assert sweep_sim._num_sweep_modes == 1
-    _ = sim.updated_copy(
+    _ = sim_no_field.updated_copy(
         sweep_spec=td.EMELengthSweep(
             scale_factors=np.stack((np.linspace(1, 2, 7), np.linspace(1, 2, 7)))
-        )
+        ),
     )
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
+        _ = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(
+        _ = sim_no_field.updated_copy(
             sweep_spec=td.EMELengthSweep(
                 scale_factors=np.stack(
                     (
@@ -535,12 +527,14 @@ def test_eme_simulation():
         )
     # second shape of length sweep must equal number of cells
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=np.array([[1, 2], [3, 4]])))
+        _ = sim_no_field.updated_copy(
+            sweep_spec=td.EMELengthSweep(scale_factors=np.array([[1, 2], [3, 4]]))
+        )
     _ = sim.updated_copy(sweep_spec=td.EMEModeSweep(num_modes=list(np.arange(1, 5))))
     # test sweep size limit
     with pytest.raises(SetupError):
-        _ = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
-    sim_bad = sim.updated_copy(
+        _ = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[]))
+    sim_bad = sim_no_field.updated_copy(
         sweep_spec=td.EMELengthSweep(scale_factors=list(np.linspace(1, 2, 200)))
     )
     with pytest.raises(SetupError):
@@ -577,7 +571,7 @@ def test_eme_simulation():
     sim = sim.updated_copy(sweep_spec=None)
     assert sim._num_sweep == 1
     assert not sim._sweep_modes
-    sim = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[1, 2]))
+    sim = sim_no_field.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=[1, 2]))
     assert not sim._sweep_modes
     assert sim._num_sweep == 2
     sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=[1, 2]))
@@ -630,15 +624,15 @@ def _get_eme_scalar_mode_field_data_array(num_sweep=0):
         sweep_index = np.arange(num_sweep)
     else:
         sweep_index = [0]
-    coords = dict(
-        x=x,
-        y=y,
-        z=z,
-        f=f,
-        sweep_index=sweep_index,
-        eme_cell_index=eme_cell_index,
-        mode_index=mode_index,
-    )
+    coords = {
+        "x": x,
+        "y": y,
+        "z": z,
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_cell_index": eme_cell_index,
+        "mode_index": mode_index,
+    }
     data = td.EMEScalarModeFieldDataArray(
         (1 + 1j)
         * np.random.random(
@@ -667,15 +661,15 @@ def _get_eme_scalar_field_data_array(num_sweep=0):
         sweep_index = np.arange(num_sweep)
     else:
         sweep_index = [0]
-    coords = dict(
-        x=x,
-        y=y,
-        z=z,
-        f=f,
-        sweep_index=sweep_index,
-        eme_port_index=eme_port_index,
-        mode_index=mode_index,
-    )
+    coords = {
+        "x": x,
+        "y": y,
+        "z": z,
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_port_index": eme_port_index,
+        "mode_index": mode_index,
+    }
     data = td.EMEScalarFieldDataArray(
         (1 + 1j) * np.random.random((len(x), len(y), len(z), 2, len(sweep_index), 2, 5)),
         coords=coords,
@@ -709,9 +703,12 @@ def _get_eme_smatrix_data_array(num_modes_in=2, num_modes_out=3, num_freqs=2, nu
     data = (1 + 1j) * np.random.random(
         (len(f), len(mode_index_out), len(mode_index_in), len(sweep_index))
     )
-    coords = dict(
-        f=f, mode_index_out=mode_index_out, mode_index_in=mode_index_in, sweep_index=sweep_index
-    )
+    coords = {
+        "f": f,
+        "mode_index_out": mode_index_out,
+        "mode_index_in": mode_index_in,
+        "sweep_index": sweep_index,
+    }
     smatrix_entry = td.EMESMatrixDataArray(data, coords=coords)
 
     if num_modes_in == 0:
@@ -750,14 +747,14 @@ def _get_eme_coeff_data_array(num_sweep=0):
         sweep_index = np.arange(num_sweep)
     else:
         sweep_index = [0]
-    coords = dict(
-        f=f,
-        sweep_index=sweep_index,
-        eme_port_index=eme_port_index,
-        eme_cell_index=eme_cell_index,
-        mode_index_out=mode_index_out,
-        mode_index_in=mode_index_in,
-    )
+    coords = {
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_port_index": eme_port_index,
+        "eme_cell_index": eme_cell_index,
+        "mode_index_out": mode_index_out,
+        "mode_index_in": mode_index_in,
+    }
     data = td.EMECoefficientDataArray(
         (1 + 1j)
         * np.random.random(
@@ -796,9 +793,12 @@ def _get_eme_mode_index_data_array(num_sweep=0):
         sweep_index = np.arange(num_sweep)
     else:
         sweep_index = [0]
-    coords = dict(
-        f=f, sweep_index=sweep_index, eme_cell_index=eme_cell_index, mode_index=mode_index
-    )
+    coords = {
+        "f": f,
+        "sweep_index": sweep_index,
+        "eme_cell_index": eme_cell_index,
+        "mode_index": mode_index,
+    }
     data = td.EMEModeIndexDataArray(
         (1 + 1j)
         * np.random.random((len(f), len(sweep_index), len(eme_cell_index), len(mode_index))),
@@ -820,14 +820,14 @@ def test_eme_smatrix_data_array():
 def _get_eme_mode_solver_dataset(num_sweep=0):
     n_complex = _get_eme_mode_index_data_array(num_sweep=num_sweep)
     field = _get_eme_scalar_mode_field_data_array(num_sweep=num_sweep)
-    fields = {key: field for key in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
+    fields = dict.fromkeys(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"], field)
 
     return td.EMEModeSolverDataset(n_complex=n_complex, **fields)
 
 
 def _get_eme_field_dataset(num_sweep=0):
     field = _get_eme_scalar_field_data_array(num_sweep=num_sweep)
-    fields = {key: field for key in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
+    fields = dict.fromkeys(["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"], field)
     return td.EMEFieldDataset(**fields)
 
 
@@ -871,12 +871,12 @@ def _get_eme_mode_solver_data(num_sweep=0):
         )
     )
     grid_dual_correction_data = grid_primal_correction_data
-    grid_correction_coords = dict(
-        f=n_complex.f,
-        sweep_index=sweep_index,
-        eme_cell_index=n_complex.eme_cell_index,
-        mode_index=n_complex.mode_index,
-    )
+    grid_correction_coords = {
+        "f": n_complex.f,
+        "sweep_index": sweep_index,
+        "eme_cell_index": n_complex.eme_cell_index,
+        "mode_index": n_complex.mode_index,
+    }
     grid_primal_correction = td.components.data.data_array.EMEFreqModeDataArray(
         grid_primal_correction_data, coords=grid_correction_coords
     )
@@ -976,14 +976,14 @@ def test_eme_sim_data():
     port_modes = _get_eme_port_modes()
     smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5)
 
-    sim_data = td.EMESimulationData(simulation=sim, data=data, smatrix=smatrix, port_modes=None)
+    sim_data = td.EMESimulationData(simulation=sim, data=data, smatrix=smatrix, port_modes_raw=None)
     with pytest.raises(SetupError):
         _ = sim_data.port_modes_tuple
     with pytest.raises(SetupError):
         _ = sim_data.port_modes_list_sweep
 
     sim_data = td.EMESimulationData(
-        simulation=sim, data=data, smatrix=smatrix, port_modes=port_modes
+        simulation=sim, data=data, smatrix=smatrix, port_modes_raw=port_modes
     )
     _ = sim_data.port_modes_tuple
     _ = sim_data.port_modes_list_sweep
@@ -1037,11 +1037,11 @@ def test_eme_sim_data():
     assert len(smatrix_in_basis.S22.coords) == 1
 
     with pytest.raises(SetupError):
-        _ = sim_data.updated_copy(port_modes=None).smatrix_in_basis(
+        _ = sim_data.updated_copy(port_modes_raw=None).smatrix_in_basis(
             modes1=modes_in_data, modes2=modes_out_data
         )
     with pytest.raises(SetupError):
-        _ = sim_data.updated_copy(port_modes=None).field_in_basis(
+        _ = sim_data.updated_copy(port_modes_raw=None).field_in_basis(
             field=sim_data["field"], modes=modes_in_data, port_index=0
         )
 
@@ -1099,9 +1099,11 @@ def test_eme_sim_data():
 
     # test smatrix in basis with sweep
     smatrix = _get_eme_smatrix_dataset(num_modes_1=5, num_modes_2=5, num_sweep=10)
-    sim = sim.updated_copy(sweep_spec=td.EMELengthSweep(scale_factors=np.linspace(1, 2, 10)))
+    sim_sweep = sim.updated_copy(
+        sweep_spec=td.EMELengthSweep(scale_factors=np.linspace(1, 2, 10)), monitors=[]
+    )
     sim_data = td.EMESimulationData(
-        simulation=sim, data=data, smatrix=smatrix, port_modes=port_modes
+        simulation=sim_sweep, data=[], smatrix=smatrix, port_modes_raw=port_modes
     )
 
     # test smatrix_in_basis
@@ -1169,11 +1171,19 @@ def test_eme_sim_data():
     _ = sim_data.port_modes_tuple
     assert len(sim_data.port_modes_list_sweep) == 1
 
+    with AssertLogLevel("WARNING", contains_str="flux"):
+        _ = sim_data._extract_mode_solver_data(
+            data=sim_data.port_modes.updated_copy(
+                monitor=sim.port_modes_monitor.updated_copy(size=(0, td.inf, td.inf))
+            ),
+            eme_cell_index=0,
+        )
+
     # test freq sweep smatrix_in_basis
     sim = sim.updated_copy(sweep_spec=td.EMEFreqSweep(freq_scale_factors=np.linspace(1, 2, 10)))
     port_modes = _get_eme_port_modes(num_sweep=10)
     sim_data = td.EMESimulationData(
-        simulation=sim, data=data, smatrix=smatrix, port_modes=port_modes
+        simulation=sim, data=data, smatrix=smatrix, port_modes_raw=port_modes
     )
     with pytest.raises(SetupError):
         _ = sim_data.port_modes_tuple
@@ -1244,7 +1254,139 @@ def test_eme_sim_subsection():
     subsection = eme_sim.subsection(region=region, eme_grid_spec="identical")
     assert subsection.size[2] == 1
 
-    # 2d subsection errors
+    # 2d subsection
     region = td.Box(size=(2, 2, 0))
+    subsection = eme_sim.subsection(region=region)
+    assert subsection.size[2] == 0
+
+
+def test_eme_periodicity():
+    # give the middle subgrid a name
+    sim = make_eme_sim()
+    sim = sim.updated_copy(name="a", path="eme_grid_spec/subgrids/1")
+
+    # directly give it num_reps
+    # can't have field monitor
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
+
+    # EMEPeriodicitySweep validation
     with pytest.raises(pd.ValidationError):
-        subsection = eme_sim.subsection(region=region)
+        _ = td.EMEPeriodicitySweep(num_reps=[{"a": n} for n in range(150000, 150003)])
+    sweep_spec = td.EMEPeriodicitySweep(num_reps=[{"a": n} for n in range(1, 4)])
+    # still can't have field monitor
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(sweep_spec=sweep_spec)
+
+    # remove the field monitor, now it passes
+    desired_cell_index_pairs = set([(i, i + 1) for i in range(6)] + [(5, 1)])
+    with AssertLogLevel(None):
+        sim = sim.updated_copy(
+            monitors=[m for m in sim.monitors if not isinstance(m, td.EMEFieldMonitor)]
+        )
+        sim2 = sim.updated_copy(num_reps=2, path="eme_grid_spec/subgrids/1")
+        assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
+    # sweep can't have coeff monitor
+    with pytest.raises(SetupError):
+        _ = sim.updated_copy(sweep_spec=sweep_spec)
+    # remove coeff monitor too, now it passes
+    with AssertLogLevel(None):
+        sim = sim.updated_copy(
+            monitors=[m for m in sim.monitors if not isinstance(m, td.EMECoefficientMonitor)]
+        )
+        sim2 = sim.updated_copy(sweep_spec=sweep_spec)
+        assert set(sim2._cell_index_pairs) == desired_cell_index_pairs
+
+
+def test_eme_grid_from_structures():
+    sim = make_eme_sim()
+    eme_grid_spec = td.EMEExplicitGrid.from_structures(
+        structures=sim.structures, axis=2, mode_spec=td.EMEModeSpec(num_modes=1)
+    )
+    sim = sim.updated_copy(eme_grid_spec=eme_grid_spec)
+    eme_grid_spec = td.EMECompositeGrid.from_structure_groups(
+        structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+        axis=2,
+        mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+        names=[None, "wg", None],
+        num_reps=[1, 2, 1],
+    )
+    sim = sim.updated_copy(eme_grid_spec=eme_grid_spec, monitors=[])
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[],
+            axis=2,
+            mode_specs=[],
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 2,
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg"],
+            num_reps=[1, 2, 1],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [td.Box(center=(0, 0, 0), size=(1, 1, 1))], []],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg", None],
+            num_reps=[1, 2],
+        )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[
+                [],
+                [td.Box(center=(0, 0, 0), size=(1, 1, 1))],
+                [td.Box(center=(0, 0, 3), size=(1, 1, 1))],
+            ],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )
+    _ = td.EMECompositeGrid.from_structure_groups(
+        structure_groups=[
+            [],
+            [td.Box(center=(0, 0, 0), size=(1, 1, 1))],
+            [td.Box(center=(0, 0, 1), size=(1, 1, 1))],
+        ],
+        axis=2,
+        mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+        names=[None, "wg", None],
+        num_reps=[1, 2, 1],
+    )
+    with pytest.raises(ValidationError):
+        _ = td.EMECompositeGrid.from_structure_groups(
+            structure_groups=[[], [], [td.Box(center=(0, 0, 3), size=(1, 1, 1))]],
+            axis=2,
+            mode_specs=[td.EMEModeSpec(num_modes=1)] * 3,
+            names=[None, "wg", None],
+            num_reps=[1, 2, 1],
+        )
+
+
+def test_eme_sim_2d():
+    freq0 = td.C_0 / 1.55
+    sim_size = (3, 0, 3)
+    eme_grid_spec = td.EMEUniformGrid(num_cells=5, mode_spec=td.EMEModeSpec())
+    monitor = td.EMEFieldMonitor(size=(td.inf, td.inf, td.inf), name="field")
+    eme_sim = td.EMESimulation(
+        size=sim_size,
+        axis=2,
+        freqs=[freq0],
+        eme_grid_spec=eme_grid_spec,
+        monitors=[monitor],
+        port_offsets=(0.5, 0),
+    )

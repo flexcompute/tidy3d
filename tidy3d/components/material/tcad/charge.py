@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 import pydantic.v1 as pd
 
 from tidy3d.components.data.data_array import SpatialDataArray
@@ -142,7 +140,7 @@ class SemiconductorMedium(AbstractChargeMedium):
             \\mathbf{F_{n,p}} = \\nabla \\psi
         \\end{equation}
 
-    i.e., we are not considering the effect of band-gab narrowing and degeneracy on the effective
+    i.e., we are not considering the effect of band-gap narrowing and degeneracy on the effective
     electric field :math:`\\mathbf{F_{n,p}}`. This is a good approximation for non-degenerate semiconductors.
 
     Let's explore how material properties are defined as class parameters or other classes.
@@ -289,7 +287,7 @@ class SemiconductorMedium(AbstractChargeMedium):
         description="Mobility model for holes",
     )
 
-    R: Tuple[RecombinationModelType, ...] = pd.Field(
+    R: tuple[RecombinationModelType, ...] = pd.Field(
         [],
         title="Generation-Recombination models",
         description="Array containing the R models to be applied to the material.",
@@ -301,14 +299,14 @@ class SemiconductorMedium(AbstractChargeMedium):
         description="Bandgap narrowing model.",
     )
 
-    N_a: Union[pd.NonNegativeFloat, SpatialDataArray, Tuple[DopingBoxType, ...]] = pd.Field(
+    N_a: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Acceptor concentration",
         description="Units of 1/cm^3",
         units="1/cm^3",
     )
 
-    N_d: Union[pd.NonNegativeFloat, SpatialDataArray, Tuple[DopingBoxType, ...]] = pd.Field(
+    N_d: Union[pd.NonNegativeFloat, SpatialDataArray, tuple[DopingBoxType, ...]] = pd.Field(
         0,
         title="Doping: Donor concentration",
         description="Units of 1/cm^3",

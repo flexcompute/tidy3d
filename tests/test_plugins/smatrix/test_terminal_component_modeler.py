@@ -1,12 +1,20 @@
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
+import skrf
 import xarray as xr
+
+import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dError, Tidy3dKeyError
-from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
+from tidy3d.plugins.microwave import (
+    CurrentIntegralAxisAligned,
+    CustomCurrentIntegral2D,
+    VoltageIntegralAxisAligned,
+)
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
     CoaxialLumpedPort,
@@ -21,6 +29,8 @@ from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 from ...utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
 
+mm = 1e3
+
 
 def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
     sim_dict = modeler.sim_dict
@@ -31,7 +41,7 @@ def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
     monkeypatch.setattr(
         TerminalComponentModeler,
         "_compute_F",
-        lambda matrix: 1.0 / (2.0 * np.sqrt(np.abs(matrix) + 1e-4)),
+        lambda Z_numpy, s_param_def: 1.0 / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
     )
     monkeypatch.setattr(
         TerminalComponentModeler,
@@ -68,14 +78,180 @@ def check_lumped_port_components_snapped_correctly(modeler: TerminalComponentMod
             assert center_load == center_current_monitor
 
 
+def make_t_network_impedance_matrix(
+    series_a: complex, series_b: complex, shunt_c: complex
+) -> np.ndarray:
+    """Create impedance matrix for T-network with series elements A, B and shunt element C.
+
+    Network topology:
+        Port1 ----[A]----+----[B]---- Port2
+                         |
+                        [C]
+                         |
+                        GND
+    """
+    z11 = series_a + shunt_c
+    z21 = shunt_c
+    z12 = shunt_c
+    z22 = series_b + shunt_c
+    return np.array([[z11, z12], [z21, z22]])
+
+
+def calc_transmission_line_S_matrix_pseudo(Z0, Zref1, Zref2, gamma, length):
+    """
+    Calculate complete 2x2 S-parameter matrix for a transmission line
+    using pseudo wave definition
+
+    [1] S. Amakawa, "Scattered reflections on scattering parameters—Demystifying complex-referenced
+        S parameters—," IEICE Trans. Electron., vol. E99-C, no. 10, pp. 1100-1112, Oct. 2016.
+
+    Parameters:
+    -----------
+    Z0 : complex or array-like
+        Characteristic impedance (can be frequency-dependent)
+    Zref1 : complex or array-like
+        Reference impedance at port 1 (can be frequency-dependent)
+    Zref2 : complex or array-like
+        Reference impedance at port 2 (can be frequency-dependent)
+    gamma : complex or array-like
+        Propagation constant (can be frequency-dependent)
+    length : float
+        Length (scalar only)
+
+    Returns:
+    --------
+    np.ndarray :
+        S-parameter matrix of shape (nfreq, 2, 2)
+    """
+
+    # Calculate hyperbolic functions
+    tanh_gamma_ell = np.tanh(gamma * length)
+    cosh_gamma_ell = np.cosh(gamma * length)
+
+    # Common denominator for all S-parameters
+    denom = (Z0**2 + Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref1 + Zref2)
+
+    # Calculate S11
+    numerator_S11 = (Z0**2 - Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref2 - Zref1)
+    S11 = numerator_S11 / denom
+
+    # Calculate S22
+    numerator_S22 = (Z0**2 - Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref1 - Zref2)
+    S22 = numerator_S22 / denom
+
+    # Calculate S21 (transmission from port 1 to port 2)
+    numerator_S21 = (
+        np.sqrt(np.real(Zref1) / np.real(Zref2)) * (np.abs(Zref2) / np.abs(Zref1)) * 2 * Z0 * Zref1
+    )
+    S21 = numerator_S21 / (denom * cosh_gamma_ell)
+
+    # Calculate S12 (transmission from port 2 to port 1)
+    numerator_S12 = (
+        np.sqrt(np.real(Zref2) / np.real(Zref1)) * (np.abs(Zref1) / np.abs(Zref2)) * 2 * Z0 * Zref2
+    )
+    S12 = numerator_S12 / (denom * cosh_gamma_ell)
+
+    # Construct the S-parameter matrix (nfreq, 2, 2)
+    nfreq = len(np.atleast_1d(S11))
+    S_matrix = np.zeros((nfreq, 2, 2), dtype=complex)
+    S_matrix[:, 0, 0] = S11
+    S_matrix[:, 0, 1] = S12
+    S_matrix[:, 1, 0] = S21
+    S_matrix[:, 1, 1] = S22
+
+    return S_matrix
+
+
+def calc_transmission_line_S_matrix_power(Z0, Zref1, Zref2, gamma, length):
+    """
+    Calculate complete 2x2 S-parameter matrix for a transmission line
+    using power wave definition
+
+    [1] S. Amakawa, "Scattered reflections on scattering parameters—Demystifying complex-referenced
+        S parameters—," IEICE Trans. Electron., vol. E99-C, no. 10, pp. 1100-1112, Oct. 2016.
+
+    Parameters:
+    -----------
+    Z0 : complex or array-like
+        Characteristic impedance (can be frequency-dependent)
+    Zref1 : complex or array-like
+        Reference impedance at port 1 (can be frequency-dependent)
+    Zref2 : complex or array-like
+        Reference impedance at port 2 (can be frequency-dependent)
+    gamma : complex or array-like
+        Propagation constant (can be frequency-dependent)
+    length : float
+        Length (scalar only)
+
+    Returns:
+    --------
+    np.ndarray :
+        S-parameter matrix of shape (nfreq, 2, 2)
+    """
+
+    # Calculate hyperbolic functions
+    tanh_gamma_ell = np.tanh(gamma * length)
+    cosh_gamma_ell = np.cosh(gamma * length)
+
+    # Complex conjugates
+    Zref1_conj = np.conj(Zref1)
+    Zref2_conj = np.conj(Zref2)
+
+    # Common denominator
+    denom = (Z0**2 + Zref1 * Zref2) * tanh_gamma_ell + Z0 * (Zref1 + Zref2)
+
+    # S11 with conjugate terms
+    numerator_S11 = (Z0**2 - Zref1_conj * Zref2) * tanh_gamma_ell + Z0 * (Zref2 - Zref1_conj)
+    S11 = numerator_S11 / denom
+
+    # S22 with conjugate terms
+    numerator_S22 = (Z0**2 - Zref1 * Zref2_conj) * tanh_gamma_ell + Z0 * (Zref1 - Zref2_conj)
+    S22 = numerator_S22 / denom
+
+    # S21 and S12 (transmission parameters)
+    numerator_trans = 2 * Z0 * np.sqrt(np.real(Zref1) * np.real(Zref2))
+    S21 = numerator_trans / (denom * cosh_gamma_ell)
+    S12 = S21  # For reciprocal network
+
+    # Construct the S-parameter matrix (nfreq, 2, 2)
+    nfreq = len(np.atleast_1d(S11))
+    S_matrix = np.zeros((nfreq, 2, 2), dtype=complex)
+    S_matrix[:, 0, 0] = S11
+    S_matrix[:, 0, 1] = S12
+    S_matrix[:, 1, 0] = S21
+    S_matrix[:, 1, 1] = S22
+
+    return S_matrix
+
+
 def test_validate_no_sources(tmp_path):
     modeler = make_component_modeler(planar_pec=True, path_dir=str(tmp_path))
     source = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
-    sim_w_source = modeler.simulation.copy(update=dict(sources=(source,)))
+    sim_w_source = modeler.simulation.copy(update={"sources": (source,)})
     with pytest.raises(pd.ValidationError):
-        _ = modeler.copy(update=dict(simulation=sim_w_source))
+        _ = modeler.copy(update={"simulation": sim_w_source})
+
+
+def test_validate_freqs():
+    """Ensure the 'freqs' array does not contain negative values nor duplicate entries."""
+    modeler = make_component_modeler(planar_pec=False)
+    # It should be possible to provide a single frequency point
+    freqs = np.array([1.0e6])
+    modeler = modeler.updated_copy(freqs=freqs)
+    _ = modeler._source_time
+    # Negative frequencies are not allowed
+    freqs = np.array([-1.0, 5]) * 1e9
+    with pytest.raises(pd.ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
+    # Test case with non-unique value
+    f_min, f_max = (0.5e9, 1.5e9)
+    f0 = (f_min + f_max) / 2
+    f_target = 1.35e9
+    freqs = np.sort(np.append(np.linspace(f_min, f_max, 21), f_target))
+    with pytest.raises(pd.ValidationError):
+        _ = modeler.updated_copy(freqs=freqs)
 
 
 def test_validate_3D_sim(tmp_path):
@@ -137,25 +313,35 @@ def test_run_component_modeler(monkeypatch, tmp_path):
 
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
             assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(
-                s_matrix.sel(**coords_in).sel(**coords_out) != 0
-            ), "monitor index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
+                "monitor index not present in S matrix"
+            )
 
 
 def test_s_to_z_component_modeler():
-    # Test case is 2 port T network with reference impedance of 50 Ohm
+    """Test conversion of S parameters to impedance matrix,
+    for a simple test case of 2 port T network with reference impedance of 50 Ohm
+
+    Network topology:
+          Port1 ----[A]----+----[B]---- Port2
+                           |
+                          [C]
+                           |
+                          GND
+    """
     A = 20 + 30j
     B = 50 - 15j
     C = 60
 
-    Z11 = A + C
-    Z21 = C
-    Z12 = C
-    Z22 = B + C
+    Z = make_t_network_impedance_matrix(A, B, C)
+    Z11 = Z[0, 0]
+    Z21 = Z[1, 0]
+    Z12 = Z[0, 1]
+    Z22 = Z[1, 1]
 
     Z0 = 50.0
     # Manual creation of S parameters Pozar Table 4.2
@@ -173,11 +359,11 @@ def test_s_to_z_component_modeler():
         dtype=complex,
     )
     # Put coords in opposite order to check reordering
-    coords = dict(
-        f=np.array(freqs),
-        port_out=port_names,
-        port_in=port_names,
-    )
+    coords = {
+        "f": np.array(freqs),
+        "port_out": port_names,
+        "port_in": port_names,
+    }
 
     s_matrix = TerminalPortDataArray(data=values, coords=coords)
     z_matrix = TerminalComponentModeler.s_to_z(s_matrix, reference=Z0)
@@ -189,10 +375,10 @@ def test_s_to_z_component_modeler():
 
     # test version with different port reference impedances
     values = np.full((len(freqs), len(port_names)), Z0)
-    coords = dict(
-        f=np.array(freqs),
-        port=port_names,
-    )
+    coords = {
+        "f": np.array(freqs),
+        "port": port_names,
+    }
     z_port_matrix = PortDataArray(data=values, coords=coords)
     z_matrix = TerminalComponentModeler.s_to_z(s_matrix, reference=z_port_matrix)
     z_matrix_at_f = z_matrix.sel(f=1e8)
@@ -202,12 +388,59 @@ def test_s_to_z_component_modeler():
     assert np.isclose(z_matrix_at_f[1, 1], Z22)
 
 
-def test_ab_to_s_component_modeler():
-    coords = dict(
-        f=np.array([1e8]),
-        port_out=["lumped_port_1", "lumped_port_2"],
-        port_in=["lumped_port_1", "lumped_port_2"],
+def test_complex_reference_s_to_z_component_modeler():
+    """Test conversion of S parameters to impedance matrix,
+    for a test case of 2 port T network with complex reference impedances, which requires
+    identifying the precise definition used for S parameters
+
+    Network topology:
+          Port1 ----[A]----+----[B]---- Port2
+                           |
+                          [C]
+                           |
+                          GND
+    """
+    A = np.array([0, 21 + 31j, 60])
+    B = np.array([0, 51 - 16j, 40])
+    C = np.array([50, 61, 0])
+
+    freqs = np.array([1e9, 2e9, 3e9])
+    # Build Z for each frequency with different A, B, C
+    Z = np.stack([make_t_network_impedance_matrix(a, b, c) for a, b, c in zip(A, B, C)], axis=0)
+    # Choose some port reference impedances
+    z0 = np.stack(3 * [np.array([50 + 5j, 60 - 2j])], axis=0)
+
+    skrf_S_50ohm = skrf.Network.from_z(z=Z, f=freqs)
+    skrf_S_power = skrf.Network.from_z(z=Z, f=freqs, s_def="power", z0=z0)
+    skrf_S_pseudo = skrf.Network.from_z(z=Z, f=freqs, s_def="pseudo", z0=z0)
+
+    ports = ["port1", "port2"]
+    smatrix = TerminalPortDataArray(
+        skrf_S_50ohm.s, coords={"f": freqs, "port_out": ports, "port_in": ports}
     )
+    # Test real reference impedance calculations
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=50, s_param_def="power")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=50, s_param_def="pseudo")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+
+    # Test complex reference impedance calculations
+    z0_tidy3d = PortDataArray(data=z0, coords={"f": freqs, "port": ports})
+    smatrix.values = skrf_S_power.s
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=z0_tidy3d, s_param_def="power")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+
+    smatrix.values = skrf_S_pseudo.s
+    z_tidy3d = TerminalComponentModeler.s_to_z(smatrix, reference=z0_tidy3d, s_param_def="pseudo")
+    assert np.all(np.isclose(z_tidy3d.values, Z))
+
+
+def test_ab_to_s_component_modeler():
+    coords = {
+        "f": np.array([1e8]),
+        "port_out": ["lumped_port_1", "lumped_port_2"],
+        "port_in": ["lumped_port_1", "lumped_port_2"],
+    }
     # Common case is reference impedance matched to loads, which means ideally
     # the a matrix would be an identity matrix, and as a result the s matrix will be
     # given directly by the b_matrix
@@ -253,7 +486,7 @@ def test_converting_port_to_simulation_objects(snap_center):
     port = LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=2, impedance=50, name="Port1")
     freqs = np.linspace(1e9, 10e9, 11)
     source_time = td.GaussianPulse(freq0=5e9, fwidth=9e9)
-    _ = port.to_field_monitors(freqs=freqs, snap_center=snap_center)
+    _ = port.to_monitors(freqs=freqs, snap_center=snap_center)
     _ = port.to_source(source_time=source_time, snap_center=snap_center)
 
 
@@ -273,17 +506,36 @@ def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
 
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
             assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
-            assert np.all(
-                s_matrix.sel(**coords_in).sel(**coords_out) != 0
-            ), "monitor index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).sel(**coords_out) != 0), (
+                "monitor index not present in S matrix"
+            )
 
 
-def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path):
-    modeler = make_coaxial_component_modeler(path_dir=str(tmp_path), port_refinement=False)
+@pytest.mark.parametrize(
+    "grid_spec",
+    [
+        None,
+        td.GridSpec(
+            grid_x=td.UniformGrid(dl=0.1 * mm),
+            grid_y=td.UniformGrid(dl=10 * mm),
+            grid_z=td.UniformGrid(dl=0.1 * mm),
+        ),
+        td.GridSpec(
+            grid_x=td.UniformGrid(dl=10 * mm),
+            grid_y=td.UniformGrid(dl=0.1 * mm),
+            grid_z=td.UniformGrid(dl=0.1 * mm),
+        ),
+    ],
+)
+def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path, grid_spec):
+    """Ensure that the grid is fine enough at the coaxial ports along the transverse dimensions."""
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_refinement=False, grid_spec=grid_spec
+    )
     # Without port refinement the grid is much too coarse for these port sizes
     with pytest.raises(SetupError):
         _ = run_component_modeler(monkeypatch, modeler)
@@ -358,6 +610,22 @@ def test_coaxial_port_snapping(tmp_path):
     check_lumped_port_components_snapped_correctly(modeler=modeler)
 
 
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_coaxial_port_source_size(axis):
+    """Make sure source size is correct."""
+    port = CoaxialLumpedPort(
+        center=(0, 0, 0),
+        inner_diameter=1,
+        outer_diameter=2,
+        normal_axis=axis,
+        direction="+",
+        name="port",
+        impedance=50,
+    )
+    source = port.to_source(td.GaussianPulse(freq0=1e10, fwidth=1e9))
+    assert np.isclose(source.size[axis], 0)
+
+
 def test_power_delivered_helper(monkeypatch, tmp_path):
     """Test computations involving power waves are correct by manually setting voltage and current
     at ports using monkeypatch.
@@ -376,10 +644,10 @@ def test_power_delivered_helper(monkeypatch, tmp_path):
     current = np.ones_like(freqs) * current_amplitude
 
     def compute_voltage_patch(self, sim_data):
-        return FreqDataArray(voltage, coords=dict(f=freqs))
+        return FreqDataArray(voltage, coords={"f": freqs})
 
     def compute_current_patch(self, sim_data):
-        return FreqDataArray(current, coords=dict(f=freqs))
+        return FreqDataArray(current, coords={"f": freqs})
 
     monkeypatch.setattr(CoaxialLumpedPort, "compute_voltage", compute_voltage_patch)
     monkeypatch.setattr(CoaxialLumpedPort, "compute_current", compute_current_patch)
@@ -413,17 +681,38 @@ def test_make_coaxial_component_modeler_with_wave_ports(tmp_path):
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
     _ = make_coaxial_component_modeler(
-        path_dir=str(tmp_path), port_types=(WavePort, WavePort), grid_spec=grid_spec
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+        grid_spec=grid_spec,
     )
 
 
-def test_run_coaxial_component_modeler_with_wave_ports(monkeypatch, tmp_path):
+@pytest.mark.parametrize("voltage_enabled", [False, True])
+@pytest.mark.parametrize("current_enabled", [False, True])
+def test_run_coaxial_component_modeler_with_wave_ports(
+    monkeypatch, tmp_path, voltage_enabled, current_enabled
+):
     """Checks that the terminal component modeler runs with wave ports."""
     z_grid = td.UniformGrid(dl=1 * 1e3)
     xy_grid = td.UniformGrid(dl=0.1 * 1e3)
     grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    if not (voltage_enabled or current_enabled):
+        with pytest.raises(pd.ValidationError):
+            modeler = make_coaxial_component_modeler(
+                path_dir=str(tmp_path),
+                port_types=(WavePort, WavePort),
+                grid_spec=grid_spec,
+                use_voltage=voltage_enabled,
+                use_current=current_enabled,
+            )
+        return
+
     modeler = make_coaxial_component_modeler(
-        path_dir=str(tmp_path), port_types=(WavePort, WavePort), grid_spec=grid_spec
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+        grid_spec=grid_spec,
+        use_voltage=voltage_enabled,
+        use_current=current_enabled,
     )
     s_matrix = run_component_modeler(monkeypatch, modeler)
 
@@ -431,12 +720,12 @@ def test_run_coaxial_component_modeler_with_wave_ports(monkeypatch, tmp_path):
     shape_both_ports = (len(modeler.freqs),)
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
-            assert np.all(
-                s_matrix.sel(**coords_in).values.shape == shape_one_port
-            ), "source index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
+                "source index not present in S matrix"
+            )
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
             ), "monitor index not present in S matrix"
@@ -456,12 +745,12 @@ def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
     shape_both_ports = (len(modeler.freqs),)
     for port_in in modeler.ports:
         for port_out in modeler.ports:
-            coords_in = dict(port_in=port_in.name)
-            coords_out = dict(port_out=port_out.name)
+            coords_in = {"port_in": port_in.name}
+            coords_out = {"port_out": port_out.name}
 
-            assert np.all(
-                s_matrix.sel(**coords_in).values.shape == shape_one_port
-            ), "source index not present in S matrix"
+            assert np.all(s_matrix.sel(**coords_in).values.shape == shape_one_port), (
+                "source index not present in S matrix"
+            )
             assert np.all(
                 s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
             ), "monitor index not present in S matrix"
@@ -542,6 +831,84 @@ def test_wave_port_path_integral_validation():
             voltage_integral=None,
             current_integral=custom_current_path,
         )
+
+    # Test integral path only slightly larger than port bounds
+    wave_port = WavePort(
+        center=(0, 10000, 115.00000022351743),
+        size=(500, 0, 160.00000000000003),
+        name="wave_port_1",
+        mode_spec=mode_spec,
+        direction="+",
+        voltage_integral=voltage_path.updated_copy(
+            size=(0, 0, 70.000000298023424), center=(0, 10000, 70.000000298023424)
+        ),
+        current_integral=None,
+    )
+    # Make sure validation would have failed if a strict comparison was used
+    assert wave_port.bounds[0][2] > wave_port.voltage_integral.bounds[0][2]
+
+
+def test_wave_port_grid_validation(tmp_path):
+    """Ensure that 'num_grid_cells' is validated and works to ensure that the grid is refined around wave ports."""
+    size_port = [2, 2, 0]
+    center_port = [0, 0, -10]
+
+    voltage_path = VoltageIntegralAxisAligned(
+        center=(0.5, 0, -10),
+        size=(1.0, 0, 0),
+        extrapolate_to_endpoints=True,
+        snap_path_to_grid=True,
+        sign="+",
+    )
+
+    current_path = CurrentIntegralAxisAligned(
+        center=(0.5, 0, -10),
+        size=(0.25, 0.5, 0),
+        snap_contour_to_grid=True,
+        sign="+",
+    )
+
+    mode_spec = td.ModeSpec(num_modes=1, target_neff=1.8)
+
+    _ = WavePort(
+        center=center_port,
+        size=size_port,
+        name="wave_port_1",
+        mode_spec=mode_spec,
+        direction="+",
+        voltage_integral=voltage_path,
+        current_integral=current_path,
+        num_grid_cells=None,
+    )
+
+    with pytest.raises(pd.ValidationError):
+        _ = WavePort(
+            center=center_port,
+            size=size_port,
+            name="wave_port_1",
+            mode_spec=mode_spec,
+            direction="+",
+            voltage_integral=voltage_path,
+            current_integral=current_path,
+            num_grid_cells=2,
+        )
+
+    modeler = make_coaxial_component_modeler(
+        grid_spec=td.GridSpec.auto(wavelength=10e3),
+        port_refinement=True,
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+    )
+    _ = modeler.sim_dict
+
+    modeler = make_coaxial_component_modeler(
+        grid_spec=td.GridSpec.auto(wavelength=10e3),
+        port_refinement=False,
+        path_dir=str(tmp_path),
+        port_types=(WavePort, WavePort),
+    )
+    with pytest.raises(SetupError):
+        _ = modeler.sim_dict
 
 
 def test_wave_port_to_mode_solver(tmp_path):
@@ -647,7 +1014,7 @@ def test_antenna_helpers(monkeypatch, tmp_path):
         modeler.get_radiation_monitor_by_name("invalid")
 
     # Test monitor data normalization with different amplitude types
-    a_array = FreqDataArray(np.ones(len(modeler.freqs)), dict(f=modeler.freqs))
+    a_array = FreqDataArray(np.ones(len(modeler.freqs)), {"f": modeler.freqs})
     normalized_data_array = modeler._monitor_data_at_port_amplitude(
         modeler.ports[0], sim_data, rad_mon_data, a_array
     )
@@ -773,3 +1140,159 @@ def test_get_combined_antenna_parameters_data(monkeypatch, tmp_path):
     assert not np.allclose(
         antenna_params.radiation_efficiency, single_port_params.radiation_efficiency
     )
+
+    # Define port amplitudes
+    port_amplitudes = {modeler.ports[0].name: 1.0, modeler.ports[1].name: 0.0}
+    port2_zero_params = modeler.get_antenna_metrics_data(port_amplitudes)
+    # Should give idential results to only exciting one port
+    assert np.allclose(port2_zero_params.gain, single_port_params.gain)
+    assert np.allclose(
+        port2_zero_params.radiation_efficiency, single_port_params.radiation_efficiency
+    )
+
+
+def test_run_only_and_element_mappings(monkeypatch, tmp_path):
+    """Checks the terminal component modeler works when running with a subset of excitations."""
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_types=(CoaxialLumpedPort, WavePort), grid_spec=grid_spec
+    )
+    port0_idx = modeler.network_index(modeler.ports[0])
+    port1_idx = modeler.network_index(modeler.ports[1])
+    modeler_run1 = modeler.updated_copy(run_only=(port0_idx,))
+
+    # Make sure the smatrix and impedance calculations work for reduced simulations
+    s_matrix = run_component_modeler(monkeypatch, modeler_run1)
+    with pytest.raises(ValueError):
+        TerminalComponentModeler._validate_square_matrix(s_matrix, "test_method")
+    _ = modeler_run1.port_reference_impedances
+
+    assert len(modeler_run1.sim_dict) == 1
+    S11 = (port0_idx, port0_idx)
+    S21 = (port1_idx, port0_idx)
+    S12 = (port0_idx, port1_idx)
+    S22 = (port1_idx, port1_idx)
+    element_mappings = ((S11, S22, 1),)
+    modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+    assert len(modeler_with_mappings.sim_dict) == 2
+
+    # Column 1 is mapped to column 2, resulting in one simulation
+    element_mappings = ((S11, S22, 1), (S21, S12, 1))
+    modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+    s_matrix = run_component_modeler(monkeypatch, modeler_with_mappings)
+    assert np.all(s_matrix.values[:, 0, 0] == s_matrix.values[:, 1, 1])
+    assert np.all(s_matrix.values[:, 0, 1] == s_matrix.values[:, 1, 0])
+    assert len(modeler_with_mappings.sim_dict) == 1
+
+    # Mapping is incomplete, so two simulations are run
+    element_mappings = ((S11, S22, 1), (S12, S21, 1))
+    modeler_with_mappings = modeler.updated_copy(element_mappings=element_mappings)
+    assert len(modeler_with_mappings.sim_dict) == 2
+
+
+def test_internal_construct_smatrix_with_port_vi(monkeypatch):
+    """Test _internal_construct_smatrix method by monkeypatching compute_port_VI
+    with precomputed voltage and current values and comparing the final S-matrix to expected results.
+    """
+    # Create a simple 2-port modeler for testing
+    modeler = make_component_modeler(planar_pec=False)
+    freqs = np.array([1e9, 5e9, 10e9])
+    modeler = modeler.updated_copy(freqs=freqs)
+
+    # Some test data from a 20 mm lossy microstrip
+    # Data is given using engineering convention exp(jwt)
+    length = 0.02
+    gamma = np.array(
+        [
+            35.845260386378 + 52.964956959149j,
+            48.283102945750 + 208.91753284900j,
+            50.594134809653 + 397.12168963974j,
+        ]
+    )
+    Z0 = np.array(
+        [
+            18.725191534567 + 12.672421364213j,
+            34.038884625562 + 7.8654410284980j,
+            35.725175635077 + 4.5490999181327j,
+        ]
+    )
+    # Break the reference impedance symmetry
+    Zref = np.column_stack((0.5 * Z0, 2 * Z0))
+    # Calculate analytical S matrices for power and pseudo wave formulations
+    S_pseudo = calc_transmission_line_S_matrix_pseudo(Z0, Zref[:, 0], Zref[:, 1], gamma, length)
+    S_power = calc_transmission_line_S_matrix_power(Z0, Zref[:, 0], Zref[:, 1], gamma, length)
+
+    # Calculate A and B matrices where A is diagonal and B = S @ A
+    A = np.tile(np.eye(2), (len(freqs), 1, 1))  # Identity matrix for each frequency
+    B = S_pseudo @ A
+    # Now get Voltages and Currents at each port due to excitations from each port
+    Vscale = np.abs(Zref[:, :, np.newaxis]) / np.sqrt(np.real(Zref[:, :, np.newaxis]))
+    Iscale = Vscale / Zref[:, :, np.newaxis]
+    voltages = Vscale * (A + B)  # (f x port_out x port_in)
+    currents = Iscale * (A - B)  # (f x port_out x port_in)
+
+    port_names = [port.name for port in modeler.ports]
+
+    # Create mock batch data
+    batch_data = {}
+    for j, port_in in enumerate(modeler.ports):
+        task_name = modeler._task_name(port_in)
+        batch_data[task_name] = {}
+        for i, port_out in enumerate(modeler.ports):
+            # Initialize with zeros - user should replace with actual values
+            batch_data[task_name][port_out.name] = {
+                "voltage": FreqDataArray(voltages[:, i, j], coords={"f": freqs}),
+                "current": FreqDataArray(currents[:, i, j], coords={"f": freqs}),
+            }
+
+    # Mock the compute_port_VI method
+    def mock_compute_port_vi(port_out, sim_data):
+        """Mock compute_port_VI to return voltage and current from dummy sim_data."""
+        port_name = port_out.name
+        voltage = sim_data[port_name]["voltage"]
+        current = sim_data[port_name]["current"]
+        return voltage, current
+
+    # Mock port reference impedances to return constant Z0
+    def mock_port_impedances(self, batch_data):
+        coords = {"f": np.array(freqs), "port": port_names}
+        return PortDataArray(Zref, coords=coords)
+
+    # Apply monkeypatches
+    monkeypatch.setattr(
+        TerminalComponentModeler, "compute_port_VI", staticmethod(mock_compute_port_vi)
+    )
+    monkeypatch.setattr(
+        TerminalComponentModeler, "_port_reference_impedances", mock_port_impedances
+    )
+
+    # Test the _internal_construct_smatrix method
+    S_computed = modeler._internal_construct_smatrix(batch_data).values
+
+    def check_S_matrix(S_computed, S_expected, tol=1e-12):
+        # Check that S-matrix has correct shape
+        assert S_computed.shape == (len(freqs), len(port_names), len(port_names))
+
+        # Compare computed S-matrix with analytical values at each frequency
+        for freq_idx in range(len(freqs)):
+            S_computed_at_freq = S_computed[freq_idx, :, :]
+            S_expected_at_freq = S_expected[freq_idx, :, :]
+            max_rel_err = np.max(
+                np.abs((S_computed_at_freq - S_expected_at_freq) / (S_expected_at_freq + 1e-14))
+            )
+            assert np.allclose(S_computed_at_freq, S_expected_at_freq, rtol=tol, atol=tol), (
+                f"S-matrix mismatch at frequency index {freq_idx}\n"
+                f"Expected:\n{S_expected_at_freq}\n"
+                f"Computed:\n{S_computed_at_freq}\n"
+                f"Difference:\n{S_computed_at_freq - S_expected_at_freq}\n"
+                f"Max relative error: {max_rel_err:.2e}"
+            )
+
+    # Check pseudo wave S matrix
+    check_S_matrix(S_computed, S_pseudo)
+
+    # Check power wave S matrix
+    S_computed = modeler._internal_construct_smatrix(batch_data, s_param_def="power").values
+    check_S_matrix(S_computed, S_power)

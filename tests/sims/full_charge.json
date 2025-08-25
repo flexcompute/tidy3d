@@ -1,0 +1,398 @@
+{
+    "attrs": {},
+    "type": "HeatChargeSimulation",
+    "center": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "size": [
+        3.0,
+        3.0,
+        0.0
+    ],
+    "medium": {
+        "attrs": {},
+        "name": "air",
+        "optical": null,
+        "heat": {
+            "attrs": {},
+            "name": null,
+            "type": "FluidMedium"
+        },
+        "charge": {
+            "attrs": {},
+            "name": null,
+            "frequency_range": null,
+            "allow_gain": false,
+            "nonlinear_spec": null,
+            "modulation_spec": null,
+            "viz_spec": null,
+            "heat_spec": null,
+            "type": "ChargeInsulatorMedium",
+            "permittivity": 1.0
+        },
+        "type": "MultiPhysicsMedium"
+    },
+    "structures": [
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.999,
+                    2.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "oxide",
+                "optical": null,
+                "heat": {
+                    "attrs": {},
+                    "name": null,
+                    "type": "SolidMedium",
+                    "capacity": 1.0,
+                    "conductivity": 1.0,
+                    "density": 1.0
+                },
+                "charge": null,
+                "type": "MultiPhysicsMedium"
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -0.5,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "p_side",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "viz_spec": null,
+                "heat_spec": null,
+                "type": "SemiconductorMedium",
+                "permittivity": 11.0,
+                "N_c": 2e+19,
+                "N_v": 2e+19,
+                "E_g": 1.0,
+                "mobility_n": {
+                    "attrs": {},
+                    "mu": 1500.0,
+                    "type": "ConstantMobilityModel"
+                },
+                "mobility_p": {
+                    "attrs": {},
+                    "mu_min": 44.9,
+                    "mu": 470.5,
+                    "exp_2": -2.33,
+                    "exp_N": 0.719,
+                    "ref_N": 2.23e+17,
+                    "exp_1": -0.57,
+                    "exp_3": 2.4,
+                    "exp_4": -0.146,
+                    "type": "CaugheyThomasMobility"
+                },
+                "R": [
+                    {
+                        "attrs": {},
+                        "tau_n": 3.3e-06,
+                        "tau_p": 4e-06,
+                        "type": "ShockleyReedHallRecombination"
+                    },
+                    {
+                        "attrs": {},
+                        "r_const": 1.6e-14,
+                        "type": "RadiativeRecombination"
+                    },
+                    {
+                        "attrs": {},
+                        "c_n": 2.8e-31,
+                        "c_p": 9.9e-32,
+                        "type": "AugerRecombination"
+                    }
+                ],
+                "delta_E_g": {
+                    "attrs": {},
+                    "v1": 0.00692,
+                    "n2": 1.3e+17,
+                    "c2": 0.5,
+                    "min_N": 1000000000000000.0,
+                    "type": "SlotboomBandGapNarrowing"
+                },
+                "N_a": 1e+18,
+                "N_d": 0.0
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    0.5,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "background_permittivity": null,
+            "background_medium": null,
+            "priority": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "n_side",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "viz_spec": null,
+                "heat_spec": null,
+                "type": "SemiconductorMedium",
+                "permittivity": 11.0,
+                "N_c": 2e+19,
+                "N_v": 2e+19,
+                "E_g": 1.0,
+                "mobility_n": {
+                    "attrs": {},
+                    "mu": 1500.0,
+                    "type": "ConstantMobilityModel"
+                },
+                "mobility_p": {
+                    "attrs": {},
+                    "mu_min": 44.9,
+                    "mu": 470.5,
+                    "exp_2": -2.33,
+                    "exp_N": 0.719,
+                    "ref_N": 2.23e+17,
+                    "exp_1": -0.57,
+                    "exp_3": 2.4,
+                    "exp_4": -0.146,
+                    "type": "CaugheyThomasMobility"
+                },
+                "R": [
+                    {
+                        "attrs": {},
+                        "tau_n": 3.3e-06,
+                        "tau_p": 4e-06,
+                        "type": "ShockleyReedHallRecombination"
+                    },
+                    {
+                        "attrs": {},
+                        "r_const": 1.6e-14,
+                        "type": "RadiativeRecombination"
+                    },
+                    {
+                        "attrs": {},
+                        "c_n": 2.8e-31,
+                        "c_p": 9.9e-32,
+                        "type": "AugerRecombination"
+                    }
+                ],
+                "delta_E_g": {
+                    "attrs": {},
+                    "v1": 0.00692,
+                    "n2": 1.3e+17,
+                    "c2": 0.5,
+                    "min_N": 1000000000000000.0,
+                    "type": "SlotboomBandGapNarrowing"
+                },
+                "N_a": 0.0,
+                "N_d": 1e+18
+            }
+        }
+    ],
+    "symmetry": [
+        0,
+        0,
+        0
+    ],
+    "sources": [],
+    "boundary_spec": [
+        {
+            "attrs": {},
+            "placement": {
+                "attrs": {},
+                "type": "MediumMediumInterface",
+                "mediums": [
+                    "p_side",
+                    "air"
+                ]
+            },
+            "condition": {
+                "attrs": {},
+                "type": "VoltageBC",
+                "source": {
+                    "attrs": {},
+                    "name": null,
+                    "voltage": [
+                        -0.5,
+                        0.0,
+                        1.0
+                    ],
+                    "units": "V",
+                    "type": "DCVoltageSource"
+                }
+            },
+            "type": "HeatChargeBoundarySpec"
+        },
+        {
+            "attrs": {},
+            "placement": {
+                "attrs": {},
+                "type": "MediumMediumInterface",
+                "mediums": [
+                    "n_side",
+                    "air"
+                ]
+            },
+            "condition": {
+                "attrs": {},
+                "type": "VoltageBC",
+                "source": {
+                    "attrs": {},
+                    "name": null,
+                    "voltage": [
+                        0.0
+                    ],
+                    "units": "V",
+                    "type": "DCVoltageSource"
+                }
+            },
+            "type": "HeatChargeBoundarySpec"
+        },
+        {
+            "attrs": {},
+            "placement": {
+                "attrs": {},
+                "type": "MediumMediumInterface",
+                "mediums": [
+                    "oxide",
+                    "air"
+                ]
+            },
+            "condition": {
+                "attrs": {},
+                "type": "InsulatingBC"
+            },
+            "type": "HeatChargeBoundarySpec"
+        }
+    ],
+    "monitors": [
+        {
+            "attrs": {},
+            "type": "SteadyFreeCarrierMonitor",
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "name": "free_carrier_monitor",
+            "unstructured": true,
+            "conformal": false
+        },
+        {
+            "attrs": {},
+            "type": "SteadyPotentialMonitor",
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "name": "potential_monitor",
+            "unstructured": true,
+            "conformal": false
+        },
+        {
+            "attrs": {},
+            "type": "SteadyCapacitanceMonitor",
+            "center": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "name": "capacitance_monitor",
+            "unstructured": true,
+            "conformal": false
+        }
+    ],
+    "grid_spec": {
+        "attrs": {},
+        "relative_min_dl": 0.0,
+        "type": "UniformUnstructuredGrid",
+        "dl": 0.05,
+        "min_edges_per_circumference": 15.0,
+        "min_edges_per_side": 2.0,
+        "non_refined_structures": []
+    },
+    "version": "2.9.0",
+    "plot_length_units": "\u03bcm",
+    "structure_priority_mode": "equal",
+    "analysis_spec": {
+        "attrs": {},
+        "temperature": 300.0,
+        "tolerance_settings": {
+            "attrs": {},
+            "abs_tol": 1000000.0,
+            "rel_tol": 0.0001,
+            "max_iters": 400,
+            "ramp_up_iters": 1,
+            "type": "ChargeToleranceSpec"
+        },
+        "convergence_dv": 0.1,
+        "fermi_dirac": false,
+        "type": "IsothermalSteadyChargeDCAnalysis"
+    }
+}

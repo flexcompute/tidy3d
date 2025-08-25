@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import dataclasses
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-import tidy3d as td
 import trimesh
 import xarray as xr
 from autograd.core import VJPNode
 from autograd.tracer import new_box
+
+import tidy3d as td
 from tidy3d import ModeIndexDataArray
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.log import _get_level_int
@@ -54,7 +57,7 @@ def cartesian_to_unstructured(
     array: td.SpatialDataArray,
     pert: float = 0.1,
     method: str = "linear",
-    seed: int = None,
+    seed: Optional[int] = None,
     same_bounds: bool = True,
 ) -> Union[td.TriangularGridDataset, td.TetrahedralGridDataset]:
     """Convert a SpatialDataArray into TriangularGridDataset/TetrahedralGridDataset with
@@ -262,18 +265,18 @@ def make_spatial_data(
     data = lims[0] + (lims[1] - lims[0]) * rng.random(size)
     arr = td.SpatialDataArray(
         data,
-        coords=dict(
-            x=np.linspace(bounds[0][0], bounds[1][0], size[0]),
-            y=np.linspace(bounds[0][1], bounds[1][1], size[1]),
-            z=np.linspace(bounds[0][2], bounds[1][2], size[2]),
-        ),
+        coords={
+            "x": np.linspace(bounds[0][0], bounds[1][0], size[0]),
+            "y": np.linspace(bounds[0][1], bounds[1][1], size[1]),
+            "z": np.linspace(bounds[0][2], bounds[1][2], size[2]),
+        },
     )
     if unstructured:
         return cartesian_to_unstructured(arr, pert=perturbation, method=method, seed=seed_grid)
     return arr
 
 
-COORDS = dict(x=[-1.5, -0.5], y=[0, 1], z=[0, 1])
+COORDS = {"x": [-1.5, -0.5], "y": [0, 1], "z": [0, 1]}
 CUSTOM_SIZE = (2, 2, 2)
 CUSTOM_BOUNDS = [[-1.5, 0, 0], [-0.5, 1, 1]]
 CUSTOM_GRID_SEED = 12345
@@ -398,6 +401,7 @@ start_node = VJPNode.new_root()
 tracer = new_box(1.0, 0, start_node)
 tracer_arr = new_box(np.array([[[1.0]]]), 0, start_node)
 
+
 SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),
     run_time=1e-12,
@@ -419,7 +423,7 @@ SIM_FULL = td.Simulation(
                 slab_bounds=(-0.1, 0.1),
             ),
             medium=td.CustomMedium(
-                permittivity=td.SpatialDataArray(tracer_arr, coords=dict(x=[-1], y=[0], z=[0]))
+                permittivity=td.SpatialDataArray(tracer_arr, coords={"x": [-1], "y": [0], "z": [0]})
             ),
             name="traced custom polyslab",
         ),
@@ -471,9 +475,23 @@ SIM_FULL = td.Simulation(
             medium=td.AnisotropicMedium(xx=td.PEC, yy=td.Medium(), zz=td.Medium()),
         ),
         td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.AnisotropicMedium(xx=td.PMC, yy=td.Medium(), zz=td.Medium()),
+        ),
+        # Test a fully anistropic medium
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.FullyAnisotropicMedium(permittivity=[[6, 2, 3], [2, 7, 4], [3, 4, 9]]),
+            name="fully_anisotropic_box",
+        ),
+        td.Structure(
             geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),
             medium=td.PEC,
             name="pec_group",
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.PMC,
         ),
         td.Structure(
             geometry=td.Cylinder(radius=1.0, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
@@ -657,6 +675,14 @@ SIM_FULL = td.Simulation(
             medium=td.Medium(permittivity=1.5),
             name="transformed_box",
         ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)),
+            medium=td.MultiPhysicsMedium(
+                optical=td.Medium(permittivity=4.0),
+                charge=td.ChargeInsulatorMedium(permittivity=2),
+                name="SiO2",
+            ),
+        ),
     ],
     sources=[
         td.UniformCurrentSource(
@@ -726,12 +752,12 @@ SIM_FULL = td.Simulation(
             field_dataset=td.FieldDataset(
                 Ex=td.ScalarFieldDataArray(
                     np.ones((101, 101, 1, 1)),
-                    coords=dict(
-                        x=np.linspace(-1, 1, 101),
-                        y=np.linspace(-1, 1, 101),
-                        z=np.array([0]),
-                        f=[2e14],
-                    ),
+                    coords={
+                        "x": np.linspace(-1, 1, 101),
+                        "y": np.linspace(-1, 1, 101),
+                        "z": np.array([0]),
+                        "f": [2e14],
+                    },
                 )
             ),
         ),
@@ -745,12 +771,12 @@ SIM_FULL = td.Simulation(
             current_dataset=td.FieldDataset(
                 Ex=td.ScalarFieldDataArray(
                     np.ones((101, 101, 1, 1)),
-                    coords=dict(
-                        x=np.linspace(-1, 1, 101),
-                        y=np.linspace(-1, 1, 101),
-                        z=np.array([0]),
-                        f=[2e14],
-                    ),
+                    coords={
+                        "x": np.linspace(-1, 1, 101),
+                        "y": np.linspace(-1, 1, 101),
+                        "z": np.array([0]),
+                        "f": [2e14],
+                    },
                 )
             ),
         ),
@@ -780,6 +806,9 @@ SIM_FULL = td.Simulation(
             size=(0, 0, 0), center=(0, 0, 0), fields=["Ex"], freqs=[1.5e14, 2e14], name="field"
         ),
         td.FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
+        td.AuxFieldTimeMonitor(
+            size=(0, 0, 0), center=(0, 0, 0), fields=("Nfx",), name="aux_field_time", interval=100
+        ),
         td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
         td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
         td.PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),
@@ -889,6 +918,208 @@ SIM_FULL = td.Simulation(
 )
 
 
+FULL_STEADY_HEAT = td.HeatChargeSimulation(
+    center=(0, 0, 0),
+    size=(2, 2, 2),
+    medium=td.MultiPhysicsMedium(
+        heat=td.FluidMedium(), charge=td.ChargeInsulatorMedium(), name="air"
+    ),
+    structures=[
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(0, 1, 0)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.FluidMedium(), charge=td.ChargeInsulatorMedium(), name="temperature0_box"
+            ),
+            name="temperature0_box",
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(0, -1, 0)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.FluidMedium(), charge=td.ChargeInsulatorMedium(), name="temperature1_box"
+            ),
+            name="temperature1_box",
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.SolidMedium.from_si_units(conductivity=1.0, capacity=1.0, density=1.0),
+                charge=td.ChargeConductorMedium(conductivity=1.0),
+                name="solid_box",
+            ),
+            name="solid_box",
+        ),
+    ],
+    boundary_spec=[
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature0_box", "solid_box"]),
+            condition=td.TemperatureBC(temperature=300.0),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature1_box", "solid_box"]),
+            condition=td.TemperatureBC(temperature=320.0),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["air", "solid_box"]),
+            condition=td.HeatFluxBC(flux=0.0),
+        ),
+    ],
+    monitors=[
+        td.TemperatureMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            unstructured=True,
+            name="temperature_monitor",
+        )
+    ],
+    sources=[td.HeatSource(rate=1.0, structures=["solid_box"])],
+    grid_spec=td.UniformUnstructuredGrid(dl=0.05),
+    symmetry=(1, 0, 0),
+)
+
+FULL_UNSTEADY_HEAT = FULL_STEADY_HEAT.updated_copy(
+    analysis_spec=td.UnsteadyHeatAnalysis(
+        initial_temperature=300.0,
+        unsteady_spec=td.UnsteadySpec(time_step=1e-3, total_time_steps=1000),
+    )
+)
+
+
+FULL_CONDUCTION = FULL_STEADY_HEAT.updated_copy(
+    monitors=[
+        td.SteadyPotentialMonitor(
+            center=(0, 0, 0), size=(1, 1, 1), name="potential_monitor", unstructured=True
+        ),
+    ],
+    boundary_spec=[
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature0_box", "solid_box"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=5.0)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["temperature1_box", "solid_box"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.0)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["air", "solid_box"]),
+            condition=td.InsulatingBC(),
+        ),
+    ],
+    sources=[],
+)
+
+
+FULL_SEMICONDUCTOR = td.SemiconductorMedium(
+    permittivity=11,
+    N_d=0,
+    N_a=0,
+    N_c=2e19,
+    N_v=2e19,
+    E_g=1.0,
+    mobility_n=td.ConstantMobilityModel(mu=1500),
+    mobility_p=td.CaugheyThomasMobility(
+        mu_min=44.9,
+        mu=470.5,
+        ref_N=2.23e17,
+        exp_N=0.719,
+        exp_1=-0.57,
+        exp_2=-2.33,
+        exp_3=2.4,
+        exp_4=-0.146,
+    ),
+    R=[
+        td.ShockleyReedHallRecombination(tau_n=3.3e-6, tau_p=4e-6),
+        td.RadiativeRecombination(r_const=1.6e-14),
+        td.AugerRecombination(c_n=2.8e-31, c_p=9.9e-32),
+    ],
+    delta_E_g=td.SlotboomBandGapNarrowing(
+        v1=6.92e-3,
+        n2=1.3e17,
+        c2=0.5,
+        min_N=1e15,
+    ),
+)
+
+FULL_CHARGE = td.HeatChargeSimulation(
+    center=(0, 0, 0),
+    size=(3, 3, 0),
+    medium=td.MultiPhysicsMedium(
+        charge=td.ChargeInsulatorMedium(), heat=td.FluidMedium(), name="air"
+    ),
+    structures=[
+        # oxide
+        td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(1.999, 2, 1)),
+            medium=td.MultiPhysicsMedium(
+                heat=td.SolidMedium(conductivity=1.0, capacity=1.0, density=1.0), name="oxide"
+            ),
+        ),
+        # p-side
+        td.Structure(
+            geometry=td.Box(center=(-0.5, 0, 0), size=(1, 1, 1)),
+            medium=FULL_SEMICONDUCTOR.updated_copy(N_a=1e18, name="p_side"),
+        ),
+        # n-side
+        td.Structure(
+            geometry=td.Box(center=(0.5, 0, 0), size=(1, 1, 1)),
+            medium=FULL_SEMICONDUCTOR.updated_copy(N_d=1e18, name="n_side"),
+        ),
+    ],
+    boundary_spec=[
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["p_side", "air"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=[-0.5, 0.0, 1])),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["n_side", "air"]),
+            condition=td.VoltageBC(source=td.DCVoltageSource(voltage=0.0)),
+        ),
+        td.HeatChargeBoundarySpec(
+            placement=td.MediumMediumInterface(mediums=["oxide", "air"]),
+            condition=td.InsulatingBC(),
+        ),
+    ],
+    monitors=[
+        td.SteadyFreeCarrierMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            name="free_carrier_monitor",
+            unstructured=True,
+        ),
+        td.SteadyPotentialMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            name="potential_monitor",
+            unstructured=True,
+        ),
+        td.SteadyCapacitanceMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 1),
+            name="capacitance_monitor",
+            unstructured=True,
+        ),
+    ],
+    analysis_spec=td.IsothermalSteadyChargeDCAnalysis(
+        temperature=300.0,
+        convergence_dv=0.1,
+        fermi_dirac=False,
+        tolerance_settings=td.ChargeToleranceSpec(
+            rel_tol=1e-4,
+            abs_tol=1e6,
+            max_iters=400,
+        ),
+    ),
+    grid_spec=td.UniformUnstructuredGrid(dl=0.05, relative_min_dl=0),
+)
+
+SAMPLE_SIMULATIONS = {
+    "full_fdtd": SIM_FULL,
+    "full_steady_heat": FULL_STEADY_HEAT,
+    "full_unsteady_heat": FULL_UNSTEADY_HEAT,
+    "full_conduction": FULL_CONDUCTION,
+    "full_charge": FULL_CHARGE,
+}
+
+
 def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, field_name: str):
     """Returns MonitorData coordinates associated with a Monitor object"""
     grid = simulation.discretize_monitor(monitor)
@@ -909,7 +1140,7 @@ def get_spatial_coords_dict(simulation: td.Simulation, monitor: td.Monitor, fiel
 
 def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
     """Emulates a simulation run."""
-    from scipy.ndimage.filters import gaussian_filter
+    from scipy.ndimage import gaussian_filter
 
     x = kwargs.get("x0", 1.0)
 
@@ -1015,10 +1246,10 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         f = list(monitor.freqs)
         orders_x = np.linspace(-1, 1, 3)
         orders_y = np.linspace(-2, 2, 5)
-        coords = dict(orders_x=orders_x, orders_y=orders_y, f=f)
+        coords = {"orders_x": orders_x, "orders_y": orders_y, "f": f}
         values = DATA_GEN_FN((len(orders_x), len(orders_y), len(f)))
         data = td.DiffractionDataArray(values, coords=coords)
-        field_data = {field: data for field in ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")}
+        field_data = dict.fromkeys(("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi"), data)
         return td.DiffractionData(monitor=monitor, sim_size=(1, 1), bloch_vecs=(0, 0), **field_data)
 
     def make_mode_data(monitor: td.ModeMonitor) -> td.ModeData:
@@ -1030,7 +1261,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         n_complex = make_data(
             coords=index_coords, data_array_type=td.ModeIndexDataArray, is_complex=True
         )
-        coords_amps = dict(direction=["+", "-"])
+        coords_amps = {"direction": ["+", "-"]}
         coords_amps.update(index_coords)
         amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
         field_cmps = {}
@@ -1053,7 +1284,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     def make_flux_data(monitor: td.FluxMonitor) -> td.FluxData:
         """make a random ModeData from a ModeMonitor."""
 
-        coords = dict(f=list(monitor.freqs))
+        coords = {"f": list(monitor.freqs)}
         flux = make_data(coords=coords, data_array_type=td.FluxDataArray, is_complex=False)
         return td.FluxData(monitor=monitor, flux=flux)
 
@@ -1064,15 +1295,121 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         r = np.atleast_1d(monitor.proj_distance)
         theta = list(monitor.theta)
         phi = list(monitor.phi)
-        fluxcoords = dict(f=f)
+        fluxcoords = {"f": f}
         fluxdata = make_data(coords=fluxcoords, data_array_type=td.FluxDataArray, is_complex=False)
-        coords = dict(r=r, theta=theta, phi=phi, f=f)
+        coords = {"r": r, "theta": theta, "phi": phi, "f": f}
         scalar_field = make_data(
             coords=coords, data_array_type=td.FieldProjectionAngleDataArray, is_complex=True
         )
         return td.DirectivityData(
             monitor=monitor,
             flux=fluxdata,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
+    def make_field_projection_angle_data(
+        monitor: td.FieldProjectionAngleMonitor,
+    ) -> td.FieldProjectionAngleData:
+        """Random FieldProjectionAngleData from a FieldProjectionAngleMonitor."""
+        f = list(monitor.freqs)
+        r = np.atleast_1d(getattr(monitor, "proj_distance", 1.0))
+        theta = list(monitor.theta)
+        phi = list(monitor.phi)
+
+        coords = {"r": r, "theta": theta, "phi": phi, "f": f}
+        scalar_field = make_data(
+            coords=coords,
+            data_array_type=td.FieldProjectionAngleDataArray,
+            is_complex=True,
+        )
+
+        return td.FieldProjectionAngleData(
+            monitor=monitor,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
+    def make_field_projection_cartesian_data(
+        monitor: td.FieldProjectionCartesianMonitor,
+    ) -> td.FieldProjectionCartesianData:
+        """Random FieldProjectionCartesianData from a FieldProjectionCartesianMonitor."""
+
+        f = list(monitor.freqs)
+        proj_distance = getattr(monitor, "proj_distance", 1.0)
+
+        # in-plane grids always come from monitor.x and monitor.y
+        x_plane = list(monitor.x)
+        y_plane = list(monitor.y)
+
+        # map the two planes to global (x, y, z) depending on the normal axis
+        if monitor.proj_axis == 0:  # (y, z)
+            coords = {
+                "x": np.atleast_1d(proj_distance),
+                "y": x_plane,
+                "z": y_plane,
+                "f": f,
+            }
+        elif monitor.proj_axis == 1:  # (x, z)
+            coords = {
+                "x": x_plane,
+                "y": np.atleast_1d(proj_distance),
+                "z": y_plane,
+                "f": f,
+            }
+        else:  # (x, y)
+            coords = {
+                "x": x_plane,
+                "y": y_plane,
+                "z": np.atleast_1d(proj_distance),
+                "f": f,
+            }
+
+        scalar_field = make_data(
+            coords=coords,
+            data_array_type=td.FieldProjectionCartesianDataArray,
+            is_complex=True,
+        )
+
+        return td.FieldProjectionCartesianData(
+            monitor=monitor,
+            Er=scalar_field,
+            Etheta=scalar_field,
+            Ephi=scalar_field,
+            Hr=scalar_field,
+            Htheta=scalar_field,
+            Hphi=scalar_field,
+            projection_surfaces=monitor.projection_surfaces,
+        )
+
+    def make_field_projection_kspace_data(
+        monitor: td.FieldProjectionKSpaceMonitor,
+    ) -> td.FieldProjectionKSpaceData:
+        """Random FieldProjectionKSpaceData from a FieldProjectionKSpaceMonitor."""
+        f = list(monitor.freqs)
+        r = np.atleast_1d(getattr(monitor, "proj_distance", 1.0))
+        ux = list(monitor.ux)
+        uy = list(monitor.uy)
+
+        coords = {"ux": ux, "uy": uy, "r": r, "f": f}
+        scalar_field = make_data(
+            coords=coords,
+            data_array_type=td.FieldProjectionKSpaceDataArray,
+            is_complex=True,
+        )
+
+        return td.FieldProjectionKSpaceData(
+            monitor=monitor,
             Er=scalar_field,
             Etheta=scalar_field,
             Ephi=scalar_field,
@@ -1091,6 +1428,9 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         td.DiffractionMonitor: make_diff_data,
         td.FluxMonitor: make_flux_data,
         td.DirectivityMonitor: make_directivity_data,
+        td.FieldProjectionAngleMonitor: make_field_projection_angle_data,
+        td.FieldProjectionCartesianMonitor: make_field_projection_cartesian_data,
+        td.FieldProjectionKSpaceMonitor: make_field_projection_kspace_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
@@ -1105,17 +1445,17 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 class BatchDataTest(Tidy3dBaseModel):
     """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
 
-    task_paths: Dict[str, str] = pd.Field(
+    task_paths: dict[str, str] = pd.Field(
         ...,
         title="Data Paths",
         description="Mapping of task_name to path to corresponding data for each task in batch.",
     )
 
-    task_ids: Dict[str, str] = pd.Field(
+    task_ids: dict[str, str] = pd.Field(
         ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
     )
 
-    sim_data: Dict[str, td.SimulationData]
+    sim_data: dict[str, td.SimulationData]
 
     def load_sim_data(self, task_name: str) -> td.SimulationData:
         """Load a :class:`.SimulationData` from file by task name."""
@@ -1123,7 +1463,7 @@ class BatchDataTest(Tidy3dBaseModel):
         _ = self.task_ids[task_name]
         return self.sim_data[task_name]
 
-    def items(self) -> Tuple[str, td.SimulationData]:
+    def items(self) -> tuple[str, td.SimulationData]:
         """Iterate through the :class:`.SimulationData` for each task_name."""
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
@@ -1133,17 +1473,17 @@ class BatchDataTest(Tidy3dBaseModel):
         return self.load_sim_data(task_name)
 
 
-def run_async_emulated(simulations: Dict[str, td.Simulation], **kwargs) -> BatchData:
+def run_async_emulated(simulations: dict[str, td.Simulation], **kwargs) -> BatchData:
     """Emulate an async run function."""
     task_ids = {task_name: f"task_id={i}" for i, task_name in enumerate(simulations.keys())}
-    task_paths = {task_name: "NONE" for task_name in simulations.keys()}
+    task_paths = dict.fromkeys(simulations.keys(), "NONE")
     sim_data = {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
 
     return BatchDataTest(task_paths=task_paths, task_ids=task_ids, sim_data=sim_data)
 
 
 def assert_log_level(
-    records: List[Tuple[int, str]], log_level_expected: str, contains_str: str = None
+    records: list[tuple[int, str]], log_level_expected: str, contains_str: Optional[str] = None
 ) -> None:
     """Testing tool: Raises error if a log was not recorded as expected.
 

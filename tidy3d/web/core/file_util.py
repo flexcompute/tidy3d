@@ -1,5 +1,7 @@
 """File compression utilities"""
 
+from __future__ import annotations
+
 import gzip
 import os
 import shutil
@@ -7,7 +9,7 @@ import tempfile
 
 import h5py
 
-from ..core.constants import JSON_TAG
+from tidy3d.web.core.constants import JSON_TAG
 
 
 def compress_file_to_gzip(input_file, output_gz_file):

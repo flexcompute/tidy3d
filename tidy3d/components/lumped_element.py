@@ -9,21 +9,15 @@ from typing import Annotated, Literal, Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ..components.grid.grid import Grid
-from ..components.medium import (
-    PEC2D,
-    Debye,
-    Drude,
-    Lorentz,
-    Medium,
-    Medium2D,
-    PoleResidue,
-)
-from ..components.monitor import FieldMonitor
-from ..components.structure import MeshOverrideStructure, Structure
-from ..components.validators import assert_line_or_plane, assert_plane, validate_name_str
-from ..constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
-from ..exceptions import ValidationError
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.medium import PEC2D, Debye, Drude, Lorentz, Medium, Medium2D, PoleResidue
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.structure import MeshOverrideStructure, Structure
+from tidy3d.components.validators import assert_line_or_plane, assert_plane, validate_name_str
+from tidy3d.constants import EPSILON_0, FARAD, HENRY, MICROMETER, OHM, fp_eps
+from tidy3d.exceptions import ValidationError
+from tidy3d.log import log
+
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .geometry.base import Box, ClipOperation, Geometry, GeometryGroup
 from .geometry.primitives import Cylinder
@@ -110,6 +104,14 @@ class LumpedElement(Tidy3dBaseModel, ABC):
         which are ready to be added to the :class:`.Simulation`"""
         return [self.to_structure(grid)]
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
+
 
 class RectangularLumpedElement(LumpedElement, Box):
     """Class representing a rectangular element with zero thickness. A :class:`RectangularLumpedElement`
@@ -150,8 +152,7 @@ class RectangularLumpedElement(LumpedElement, Box):
         """Returns the voltage axis using the in-plane dimensions used by :class:`.Medium2D`."""
         if self.normal_axis > self.voltage_axis:
             return self.voltage_axis
-        else:
-            return self.voltage_axis - 1
+        return self.voltage_axis - 1
 
     @cached_property
     def _snapping_spec(self) -> SnappingSpec:
@@ -193,6 +194,7 @@ class RectangularLumpedElement(LumpedElement, Box):
                 geometry=Box(center=self.center, size=override_size),
                 dl=(dl, dl, dl),
                 shadow=False,
+                priority=-1,
             )
         ]
 
@@ -398,6 +400,7 @@ class CoaxialLumpedResistor(LumpedElement):
                 geometry=Box(center=self.center, size=override_size),
                 dl=override_dl,
                 shadow=False,
+                priority=-1,
             )
         ]
 
@@ -543,6 +546,14 @@ class NetworkConversions(Tidy3dBaseModel):
         sigma = NetworkConversions.complex_conductivity(a, b, freqs)
         return 1j * sigma / (2 * np.pi * freqs * EPSILON_0)
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
+
 
 class RLCNetwork(Tidy3dBaseModel):
     """Class for representing a simple network consisting of a resistor, capacitor, and inductor.
@@ -564,7 +575,7 @@ class RLCNetwork(Tidy3dBaseModel):
     >>> RL_series = RLCNetwork(resistance=75,
     ...                        inductance=1e-9,
     ...                        network_topology="series"
-    ...             )
+    ...                       ) # doctest: +SKIP
 
     """
 
@@ -730,19 +741,18 @@ class RLCNetwork(Tidy3dBaseModel):
             tau = 2 * np.pi * R * C
             med = Debye(eps_inf=1.0, coeffs=[(delta_eps, tau)])
             return med.pole_residue
-        elif R and L:
+        if R and L:
             # RL series
             fi = np.sqrt(admittance_scaling_factor / (EPSILON_0 * (2 * np.pi) ** 2 * L))
             di = R / (2 * np.pi * L)
             med = Drude(eps_inf=1.0, coeffs=[(fi, di)])
             return med.pole_residue
-        else:
-            # LC series
-            delta_eps = admittance_scaling_factor * C / EPSILON_0
-            di = 0
-            fi = np.sqrt(1 / ((2 * np.pi) ** 2 * L * C))
-            med = Lorentz(eps_inf=1.0, coeffs=[(delta_eps, fi, di)])
-            return med
+        # LC series
+        delta_eps = admittance_scaling_factor * C / EPSILON_0
+        di = 0
+        fi = np.sqrt(1 / ((2 * np.pi) ** 2 * L * C))
+        med = Lorentz(eps_inf=1.0, coeffs=[(delta_eps, fi, di)])
+        return med
 
     @staticmethod
     def _parallel_network_to_equivalent_medium(
@@ -794,6 +804,14 @@ class RLCNetwork(Tidy3dBaseModel):
             raise ValueError("At least one element must be defined in the 'RLCNetwork'.")
         return val
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
+
 
 class AdmittanceNetwork(Tidy3dBaseModel):
     """Class for representing a network consisting of an arbitrary number of resistors,
@@ -839,7 +857,7 @@ class AdmittanceNetwork(Tidy3dBaseModel):
     >>> b = (R, 0)
     >>> RC_parallel = AdmittanceNetwork(a=a,
     ...                                 b=b
-    ...               )
+    ...               ) # doctest: +SKIP
 
     """
 
@@ -871,6 +889,14 @@ class AdmittanceNetwork(Tidy3dBaseModel):
         """
         return (self.a, self.b)
 
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
+
 
 class LinearLumpedElement(RectangularLumpedElement):
     """Lumped element representing a network consisting of resistors, capacitors, and inductors.
@@ -893,14 +919,15 @@ class LinearLumpedElement(RectangularLumpedElement):
     >>> RL_series = RLCNetwork(resistance=75,
     ...                        inductance=1e-9,
     ...                        network_topology="series"
-    ...             )
+    ...             ) # doctest: +SKIP
     >>> linear_element = LinearLumpedElement(
     ...                         center=[0, 0, 0],
     ...                         size=[2, 0, 3],
     ...                         voltage_axis=0,
     ...                         network=RL_series,
     ...                         name="LumpedRL"
-    ...                   )
+    ...                   ) # doctest: +SKIP
+
 
     See Also
     --------
@@ -1130,7 +1157,7 @@ class LinearLumpedElement(RectangularLumpedElement):
             else:
                 C = capacitance_rectangular_sheets(width_eff, l_eff, d_sep)
             return (L, C)
-        elif connections[0] or connections[1]:
+        if connections[0] or connections[1]:
             # Possible to only have a single connection, where the capacitance will be 0
             # but there will be a contribution to inductance from the single connection
             L = inductance_straight_rectangular_wire(common_size, v_axis)

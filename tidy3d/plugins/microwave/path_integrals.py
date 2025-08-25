@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-import shapely as shapely
 import xarray as xr
 
-from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.data.data_array import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import (
     FreqDataArray,
     FreqModeDataArray,
     ScalarFieldDataArray,
@@ -19,13 +18,15 @@ from ...components.data.data_array import (
     ScalarModeFieldDataArray,
     TimeDataArray,
 )
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
-from ...components.geometry.base import Box, Geometry
-from ...components.types import Ax, Axis, Coordinate2D, Direction
-from ...components.validators import assert_line, assert_plane
-from ...components.viz import add_ax_if_none
-from ...constants import AMP, VOLT, fp_eps
-from ...exceptions import DataError, Tidy3dError
+from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
+from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.types import Ax, Axis, Coordinate2D, Direction
+from tidy3d.components.validators import assert_line, assert_plane
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import AMP, VOLT, fp_eps
+from tidy3d.exceptions import DataError, Tidy3dError
+from tidy3d.log import log
+
 from .viz import (
     ARROW_CURRENT,
     plot_params_current_path,
@@ -56,8 +57,7 @@ class AbstractAxesRH(Tidy3dBaseModel, ABC):
         axes.pop(self.main_axis)
         if self.main_axis == 1:
             return (axes[1], axes[0])
-        else:
-            return (axes[0], axes[1])
+        return (axes[0], axes[1])
 
     @cached_property
     def remaining_dims(self) -> tuple[str, str]:
@@ -71,6 +71,14 @@ class AbstractAxesRH(Tidy3dBaseModel, ABC):
         """Get in-plane dimensions with in-plane dims first, followed by the `main_axis` dimension."""
         dim3 = "xyz"[self.main_axis]
         return self.remaining_dims + tuple(dim3)
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
 
 
 class AxisAlignedPathIntegral(AbstractAxesRH, Box):
@@ -96,7 +104,7 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
     def compute_integral(self, scalar_field: EMScalarFieldType) -> IntegralResultTypes:
         """Computes the defined integral given the input ``scalar_field``."""
 
-        if not scalar_field.does_cover(self.bounds):
+        if not scalar_field.does_cover(self.bounds, fp_eps, np.finfo(np.float32).smallest_normal):
             raise DataError("Scalar field does not cover the integration domain.")
         coord = "xyz"[self.main_axis]
 
@@ -202,10 +210,9 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
         """Helper for creating the proper result type."""
         if "t" in result.coords:
             return TimeDataArray(data=result.data, coords=result.coords)
-        elif "f" in result.coords and "mode_index" in result.coords:
+        if "f" in result.coords and "mode_index" in result.coords:
             return FreqModeDataArray(data=result.data, coords=result.coords)
-        else:
-            return FreqDataArray(data=result.data, coords=result.coords)
+        return FreqDataArray(data=result.data, coords=result.coords)
 
 
 class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
@@ -245,9 +252,9 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
     def from_terminal_positions(
         plus_terminal: float,
         minus_terminal: float,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         extrapolate_to_endpoints: bool = True,
         snap_path_to_grid: bool = True,
     ) -> VoltageIntegralAxisAligned:
@@ -301,9 +308,9 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
     @add_ax_if_none
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         **path_kwargs,
     ) -> Ax:
@@ -500,9 +507,9 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
     @add_ax_if_none
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         **path_kwargs,
     ) -> Ax:

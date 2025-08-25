@@ -120,6 +120,14 @@ class PECConformal(AbstractSubpixelAveragingMethod):
         ge=0,
     )
 
+    edge_singularity_correction: bool = pd.Field(
+        False,
+        title="Apply Singularity Model At Metal Edges",
+        description="Apply field correction model at metallic edges where field singularity occurs. "
+        "The edges should be straight, and aligned with the primal grids; and the wedge angle is either "
+        "0 or 90 degree.",
+    )
+
     @cached_property
     def courant_ratio(self) -> float:
         """The scaling ratio applied to Courant number so that the courant number
@@ -129,6 +137,7 @@ class PECConformal(AbstractSubpixelAveragingMethod):
 
 
 PECSubpixelType = Union[Staircasing, HeuristicPECStaircasing, PECConformal]
+PMCSubpixelType = Union[Staircasing, HeuristicPECStaircasing]
 
 
 class SurfaceImpedance(PECConformal):
@@ -176,6 +185,13 @@ class SubpixelSpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    pmc: PMCSubpixelType = pd.Field(
+        Staircasing(),
+        title="Subpixel Averaging Method For PMC Interfaces",
+        description="Subpixel averaging method applied to PMC structure interfaces.",
+        discriminator=TYPE_TAG_STR,
+    )
+
     lossy_metal: LossyMetalSubpixelType = pd.Field(
         SurfaceImpedance(),
         title="Subpixel Averaging Method for Lossy Metal Interfaces",
@@ -190,6 +206,7 @@ class SubpixelSpec(Tidy3dBaseModel):
             dielectric=Staircasing(),
             metal=Staircasing(),
             pec=Staircasing(),
+            pmc=Staircasing(),
             lossy_metal=Staircasing(),
         )
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 
@@ -36,13 +38,18 @@ for _, path in enumerate(notebook_filenames_all):
 run_only = [
     "Autograd0Quickstart",
     "Autograd10YBranchLevelSet",
-    "Autograd12LightExtractor",
+    "BoundaryConditions",
+    "BroadbandPlaneWaveWithConstantObliqueIncidentAngle",
+    "ChargeSolver",
+    "EMESolver",
+    "FieldProjections",
     "HeatSolver",
+    "ModeSolver",
     "ThermallyTunedRingResonator",
     "ThermoOpticDopedModulator",
     "VortexMetasurface",
-    "ChargeSolver",
     "MetalHeaterPhaseShifter",
+    "TFSF",
 ]
 
 skip = [
@@ -61,7 +68,7 @@ skip = [
 ]
 
 # if any run only supplied, only add those
-if len(run_only):
+if run_only:
     notebook_filenames_all = [NOTEBOOK_DIR + base + ".ipynb" for base in run_only]
 
 # filter out the skip notebooks

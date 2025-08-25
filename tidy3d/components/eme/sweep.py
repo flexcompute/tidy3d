@@ -7,8 +7,11 @@ from typing import Union
 
 import pydantic.v1 as pd
 
-from ..base import Tidy3dBaseModel
-from ..types import ArrayFloat1D, ArrayInt1D, ArrayLike
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import ArrayFloat1D, ArrayInt1D, ArrayLike
+from tidy3d.exceptions import SetupError
+
+from .grid import MAX_NUM_REPS
 
 
 class EMESweepSpec(Tidy3dBaseModel, ABC):
@@ -81,4 +84,46 @@ class EMEFreqSweep(EMESweepSpec):
         return len(self.freq_scale_factors)
 
 
-EMESweepSpecType = Union[EMELengthSweep, EMEModeSweep, EMEFreqSweep]
+class EMEPeriodicitySweep(EMESweepSpec):
+    """Spec for sweeping number of repetitions of EME subgrids.
+    Useful for simulating long periodic structures like Bragg gratings,
+    as it allows the EME solver to reuse the modes and cell interface
+    scattering matrices.
+
+    Compared to setting ``num_reps`` directly in the ``eme_grid_spec``,
+    this sweep spec allows varying the number of repetitions,
+    effectively simulating multiple structures in a single EME simulation.
+
+    Example
+    -------
+    >>> n_list = [1, 50, 100]
+    >>> sweep_spec = EMEPeriodicitySweep(num_reps=[{"unit_cell": n} for n in n_list])
+    """
+
+    num_reps: list[dict[str, pd.PositiveInt]] = pd.Field(
+        ...,
+        title="Number of Repetitions",
+        description="Number of periodic repetitions of named subgrids in this EME grid. "
+        "At each sweep index, contains a dict mapping the name of a subgrid to the "
+        "number of repetitions of that subgrid at that sweep index.",
+    )
+
+    @pd.validator("num_reps", always=True)
+    def _validate_num_reps(cls, val):
+        """Check num_reps is not too large."""
+        for num_reps_dict in val:
+            for value in num_reps_dict.values():
+                if value > MAX_NUM_REPS:
+                    raise SetupError(
+                        f"'EMEGridSpec' has 'num_reps={value:.2e}'; "
+                        f"the largest value allowed is '{MAX_NUM_REPS}'."
+                    )
+        return val
+
+    @property
+    def num_sweep(self) -> pd.PositiveInt:
+        """Number of sweep indices."""
+        return len(self.num_reps)
+
+
+EMESweepSpecType = Union[EMELengthSweep, EMEModeSweep, EMEFreqSweep, EMEPeriodicitySweep]

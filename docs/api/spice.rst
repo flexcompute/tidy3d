@@ -11,6 +11,7 @@ Sources
    :template: module.rst
 
    tidy3d.DCVoltageSource
+   tidy3d.DCCurrentSource
 
 
 Analysis

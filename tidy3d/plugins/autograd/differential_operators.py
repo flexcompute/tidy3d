@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Callable
 
 from autograd.builtins import tuple as atuple
@@ -9,8 +11,8 @@ from numpy.typing import ArrayLike
 from .utilities import scalar_objective
 
 __all__ = [
-    "value_and_grad",
     "grad",
+    "value_and_grad",
 ]
 
 

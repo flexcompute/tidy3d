@@ -1,22 +1,28 @@
 """Interface to run several jobs in batch using simplified syntax."""
 
-from typing import Dict, List, Literal
+from __future__ import annotations
 
-from ...log import log
+from typing import Literal, Optional, Union
+
+from tidy3d.log import log
+from tidy3d.web.core.types import PayType
+
 from .container import DEFAULT_DATA_DIR, Batch, BatchData
 from .tidy3d_stub import SimulationType
 
 
 def run_async(
-    simulations: Dict[str, SimulationType],
+    simulations: dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: str = None,
-    num_workers: int = None,
+    callback_url: Optional[str] = None,
+    num_workers: Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: Dict[str, List[str]] = None,
+    solver_version: Optional[str] = None,
+    parent_tasks: Optional[dict[str, list[str]]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -38,8 +44,14 @@ def run_async(
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
+    solver_version: Optional[str] = None
+        Target solver version.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    pay_type: Union[PayType, str] = PayType.AUTO
+        Specify the payment method.
 
     Returns
     ------
@@ -56,7 +68,6 @@ def run_async(
     :class:`Batch`
         Interface for submitting several :class:`Simulation` objects to sever.
     """
-
     if simulation_type is None:
         simulation_type = "tidy3d"
 
@@ -73,8 +84,10 @@ def run_async(
         callback_url=callback_url,
         verbose=verbose,
         simulation_type=simulation_type,
+        solver_version=solver_version,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
     )
 
     batch_data = batch.run(path_dir=path_dir)

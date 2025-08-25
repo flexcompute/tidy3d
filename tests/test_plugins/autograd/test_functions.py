@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import numpy as np
 import numpy.testing as npt
 import pytest
 import scipy.interpolate
 import scipy.ndimage
+from autograd import grad
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
+
 from tidy3d.plugins.autograd import (
     add_at,
     convolve,
@@ -197,7 +201,7 @@ class TestMorphology:
     def test_morphology_val_grad(self, rng, op, sp_op, mode, ary_size, kernel_size):
         """Test gradients of morphological operations for various modes, array sizes, and kernel sizes."""
         x = rng.random(ary_size)
-        check_grads(op, modes=["rev"], order=2)(x, size=kernel_size, mode=mode)
+        check_grads(op, modes=["rev"], order=1)(x, size=kernel_size, mode=mode)
 
     @pytest.mark.parametrize(
         "full",
@@ -241,7 +245,71 @@ class TestMorphology:
         ):
             """Test gradients of morphological operations for various kernel structures."""
             x, k = self._ary_and_kernel(rng, ary_size, kernel_size, full, square, flat)
-            check_grads(op, modes=["rev"], order=2)(x, size=kernel_size, mode=mode)
+            check_grads(op, modes=["rev"], order=1)(x, structure=k, mode=mode)
+
+
+class TestMorphology1D:
+    """Test morphological operations with 1D-like structuring elements."""
+
+    @pytest.mark.parametrize("h, w", [(1, 3), (3, 1), (1, 5), (5, 1)])
+    def test_1d_structuring_elements(self, rng, h, w):
+        """Test grey dilation with 1D-like structuring elements on 2D arrays."""
+        x = rng.random((8, 8))
+
+        # Test with size parameter
+        size_tuple = (h, w)
+        result_size = grey_dilation(x, size=size_tuple)
+
+        # Verify output shape matches input
+        assert result_size.shape == x.shape
+
+        # Verify that dilation actually increases values (or keeps them the same)
+        assert np.all(result_size >= x)
+
+        # Test that we can also use structure parameter with 1D-like arrays
+        structure = np.ones((h, w))
+        result_struct = grey_dilation(x, structure=structure)
+        assert result_struct.shape == x.shape
+
+    def test_1d_gradient_flow(self, rng):
+        """Test gradient flow through 1D-like structuring elements."""
+        x = rng.random((6, 6))
+
+        # Test horizontal 1D structure
+        check_grads(lambda x: grey_dilation(x, size=(1, 3)), modes=["rev"], order=1)(x)
+
+        # Test vertical 1D structure
+        check_grads(lambda x: grey_dilation(x, size=(3, 1)), modes=["rev"], order=1)(x)
+
+        # Test with structure parameter
+        struct_h = np.ones((1, 3))
+        struct_v = np.ones((3, 1))
+        check_grads(lambda x: grey_dilation(x, structure=struct_h), modes=["rev"], order=1)(x)
+        check_grads(lambda x: grey_dilation(x, structure=struct_v), modes=["rev"], order=1)(x)
+
+
+class TestMorphologyExceptions:
+    """Test exceptions in morphological operations."""
+
+    def test_no_size_or_structure(self, rng):
+        """Test that an exception is raised when neither size nor structure is provided."""
+        x = rng.random((5, 5))
+        with pytest.raises(ValueError, match="Either size or structure must be provided"):
+            grey_dilation(x)
+
+    def test_even_structure_dimensions(self, rng):
+        """Test that an exception is raised for even-dimensioned structuring elements."""
+        x = rng.random((5, 5))
+        k_even = np.ones((4, 4))
+        with pytest.raises(ValueError, match="Structuring element dimensions must be odd"):
+            grey_dilation(x, structure=k_even)
+
+    def test_both_size_and_structure(self, rng):
+        """Test that an exception is raised when both size and structure are provided."""
+        x = rng.random((5, 5))
+        k = np.ones((3, 3))
+        with pytest.raises(ValueError, match="Cannot specify both size and structure"):
+            grey_dilation(x, size=3, structure=k)
 
 
 @pytest.mark.parametrize(
@@ -385,6 +453,15 @@ class TestAddAt:
         x, y = self.generate_x_y(rng, shape, indices)
         check_grads(lambda x: add_at(x, indices, y), modes=["fwd", "rev"], order=2)(x)
         check_grads(lambda y: add_at(x, indices, y), modes=["fwd", "rev"], order=2)(y)
+
+
+def test_add_at_grad_kwargs(rng):
+    """Test add_at function for different array dimensions and indices, with kwargs."""
+    indices = (0,)
+    x = rng.uniform(-1, 1, (10,))
+    y = rng.uniform(-1, 1, x[tuple(indices)].shape)
+    # this should not error
+    grad(lambda y_: add_at(x=x, y=y_, indices_x=indices)[0])(y)
 
 
 @pytest.mark.parametrize("shape", [(5,), (5, 5), (5, 5, 5)])

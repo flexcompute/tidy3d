@@ -7,6 +7,8 @@ References
         Transactions on Microwave Theory and Techniques, 32(1), 83-90.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 from . import microstrip

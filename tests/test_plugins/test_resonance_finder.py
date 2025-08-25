@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import numpy as np
 import pytest
 from numpy.random import default_rng
+
 from tidy3d import FieldTimeData, FieldTimeMonitor, ScalarFieldTimeDataArray
 from tidy3d.plugins.resonance import ResonanceFinder
 
@@ -95,7 +98,7 @@ def test_scalar_field_time():
 
     t = np.arange(NTIME) / time_step
     signal = generate_signal(freqs, decays, amplitudes, phases, time_step)
-    coords = dict(x=[0], y=[0], z=[0], t=t)
+    coords = {"x": [0], "y": [0], "z": [0], "t": t}
     fd = ScalarFieldTimeDataArray(np.reshape(signal, (1, 1, 1, len(signal))), coords=coords)
     resonance_finder = ResonanceFinder(freq_window=(0.2, 0.5), init_num_freqs=100)
     resonances = resonance_finder.run_scalar_field_time(fd)
@@ -112,7 +115,7 @@ def test_field_time_single():
 
     t = np.arange(NTIME) / time_step
     signal = generate_signal(freqs, decays, amplitudes, phases, time_step)
-    coords = dict(x=[0], y=[0], z=[0], t=t)
+    coords = {"x": [0], "y": [0], "z": [0], "t": t}
     fd = ScalarFieldTimeDataArray(np.reshape(signal, (1, 1, 1, len(signal))), coords=coords)
     fd2 = ScalarFieldTimeDataArray(np.reshape(signal * 2, (1, 1, 1, len(signal))), coords=coords)
     monitor = FieldTimeMonitor(size=(0, 0, 0), interval=1, name="field", fields=["Hx", "Hy"])
@@ -133,7 +136,7 @@ def test_field_time_mult():
 
     t = np.arange(NTIME) / time_step
     signal = generate_signal(freqs, decays, amplitudes, phases, time_step)
-    coords = dict(x=[0], y=[0], z=[0], t=t)
+    coords = {"x": [0], "y": [0], "z": [0], "t": t}
     fd = ScalarFieldTimeDataArray(np.reshape(signal, (1, 1, 1, len(signal))), coords=coords)
     fd2 = ScalarFieldTimeDataArray(np.reshape(signal * 2, (1, 1, 1, len(signal))), coords=coords)
     monitor = FieldTimeMonitor(size=(0, 0, 0), interval=1, name="field", fields=["Hx", "Hy"])
@@ -155,7 +158,7 @@ def test_field_time_e_and_m():
 
     t = np.arange(NTIME) / time_step
     signal = generate_signal(freqs, decays, amplitudes, phases, time_step)
-    coords = dict(x=[0], y=[0], z=[0], t=t)
+    coords = {"x": [0], "y": [0], "z": [0], "t": t}
     fd = ScalarFieldTimeDataArray(np.reshape(signal, (1, 1, 1, len(signal))), coords=coords)
     fd2 = ScalarFieldTimeDataArray(np.reshape(signal * 2, (1, 1, 1, len(signal))), coords=coords)
     monitor = FieldTimeMonitor(size=(0, 0, 0), interval=1, name="field", fields=["Ex", "Hy"])
@@ -177,7 +180,7 @@ def test_field_time_use_e_only():
 
     t = np.arange(NTIME) / time_step
     signal = generate_signal(freqs, decays, amplitudes, phases, time_step)
-    coords = dict(x=[0], y=[0], z=[0], t=t)
+    coords = {"x": [0], "y": [0], "z": [0], "t": t}
     fd = ScalarFieldTimeDataArray(np.reshape(signal, (1, 1, 1, len(signal))), coords=coords)
     fd2 = ScalarFieldTimeDataArray(np.reshape(signal * 2, (1, 1, 1, len(signal))), coords=coords)
     monitor = FieldTimeMonitor(size=(0, 0, 0), interval=1, name="field", fields=["Hy"])

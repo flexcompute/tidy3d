@@ -1,8 +1,11 @@
-"""Logging for Tidy3d."""
+"""Logging Configuration for Tidy3d."""
+
+from __future__ import annotations
 
 import inspect
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Callable, List, Tuple, Union
+from typing import Callable, Optional, Union
 
 from rich.console import Console
 from rich.text import Text
@@ -42,7 +45,7 @@ DEFAULT_LOG_STYLES = {
 CONSOLE_WIDTH = 80
 
 
-def _default_log_level_format(level: str, message: str) -> Tuple[str, str]:
+def _default_log_level_format(level: str, message: str) -> tuple[str, str]:
     """By default just return unformatted prefix and message."""
     return level, message
 
@@ -214,7 +217,7 @@ class Logger:
                     new_loc = current_loc + list(field)
                 else:
                     # single field
-                    new_loc = current_loc + [field]
+                    new_loc = [*current_loc, field]
 
                 # process current level warnings
                 for level, msg, custom_loc in stack_item["messages"]:
@@ -242,7 +245,7 @@ class Logger:
         message: str,
         *args,
         log_once: bool = False,
-        custom_loc: List = None,
+        custom_loc: Optional[list] = None,
         capture: bool = True,
     ) -> None:
         """Distribute log messages to all handlers"""
@@ -311,7 +314,7 @@ class Logger:
         message: str,
         *args,
         log_once: bool = False,
-        custom_loc: List = None,
+        custom_loc: Optional[list] = None,
         capture: bool = True,
     ) -> None:
         """Log (message) % (args) at warning level"""
@@ -442,3 +445,33 @@ def get_logging_console() -> Console:
     if "console" not in log.handlers:
         set_logging_console()
     return log.handlers["console"].console
+
+
+class NoOpProgress:
+    """Dummy progress manager that doesn't show any output."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args, **kwargs):
+        pass
+
+    def add_task(self, *args, **kwargs):
+        pass
+
+    def update(self, *args, **kwargs):
+        pass
+
+
+@contextmanager
+def Progress(console, show_progress):
+    """Progress manager that wraps ``rich.Progress`` if ``show_progress`` is ``True``,
+    and ``NoOpProgress`` otherwise."""
+    if show_progress:
+        from rich.progress import Progress
+
+        with Progress(console=console) as progress:
+            yield progress
+    else:
+        with NoOpProgress() as progress:
+            yield progress

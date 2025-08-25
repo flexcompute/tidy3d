@@ -3,23 +3,19 @@
 from __future__ import annotations
 
 import functools
-import warnings
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Optional, Union
 
-import autograd as ag
 import autograd.numpy as np
 
 # TODO: it's hard to figure out which functions need this, for now all get it
 import numpy as npo
 import pydantic.v1 as pd
 import xarray as xr
-from scipy import signal
 
 from tidy3d.components.material.tcad.heat import ThermalSpecType
-
-from ..constants import (
+from tidy3d.constants import (
     C_0,
     CONDUCTIVITY,
     EPSILON_0,
@@ -36,8 +32,9 @@ from ..constants import (
     fp_eps,
     pec_val,
 )
-from ..exceptions import SetupError, ValidationError
-from ..log import log
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from .autograd.types import AutogradFieldMap, TracedFloat, TracedPoleAndResidue, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
@@ -84,6 +81,7 @@ from .types import (
     FreqBound,
     InterpMethod,
     Literal,
+    PermittivityComponent,
     PoleAndResidue,
     TensorReal,
 )
@@ -130,7 +128,19 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         # don't warn for evaluating infinite frequency
         if is_inf_scalar:
             return eps_model(self, frequency)
-        if np.any(frequency < fmin * (1 - fp_eps)) or np.any(frequency > fmax * (1 + fp_eps)):
+
+        outside_lower = np.zeros_like(frequency, dtype=bool)
+        outside_upper = np.zeros_like(frequency, dtype=bool)
+
+        if fmin > 0:
+            outside_lower = frequency / fmin < 1 - fp_eps
+        elif fmin == 0:
+            outside_lower = frequency < 0
+
+        if fmax > 0:
+            outside_upper = frequency / fmax > 1 + fp_eps
+
+        if np.any(outside_lower | outside_upper):
             log.warning(
                 "frequency passed to 'Medium.eps_model()'"
                 f"is outside of 'Medium.frequency_range' = {self.frequency_range}",
@@ -168,19 +178,17 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
 
     def _validate_medium(self, medium: AbstractMedium):
         """Any additional validation that depends on the medium"""
-        pass
 
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
+    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]) -> None:
         """Any additional validation that depends on the central frequencies of the sources."""
-        pass
 
     def _hardcode_medium_freqs(
-        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+        self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]
     ) -> NonlinearSpec:
         """Update the nonlinear model to hardcode information on medium and freqs."""
         return self
 
-    def _get_freq0(self, freq0, freqs: List[pd.PositiveFloat]) -> float:
+    def _get_freq0(self, freq0, freqs: list[pd.PositiveFloat]) -> float:
         """Get a single value for freq0."""
 
         # freq0 is not specified; need to calculate it
@@ -217,7 +225,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
         self,
         n0: complex,
         medium: AbstractMedium,
-        freqs: List[pd.PositiveFloat],
+        freqs: list[pd.PositiveFloat],
     ) -> complex:
         """Get a single value for n0."""
         if freqs is None:
@@ -261,6 +269,11 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
         return False
+
+    @property
+    def aux_fields(self) -> list[str]:
+        """List of available aux fields in this model."""
+        return []
 
 
 class NonlinearSusceptibility(NonlinearModel):
@@ -461,7 +474,7 @@ class TwoPhotonAbsorption(NonlinearModel):
             )
         return val
 
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
+    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]) -> None:
         """Any validation that depends on knowing the central frequencies of the sources.
         This includes passivity checking, if necessary."""
         n0 = self._get_n0(self.n0, medium, freqs)
@@ -480,7 +493,7 @@ class TwoPhotonAbsorption(NonlinearModel):
                 )
 
     def _hardcode_medium_freqs(
-        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+        self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]
     ) -> TwoPhotonAbsorption:
         """Update the nonlinear model to hardcode information on medium and freqs."""
         n0 = self._get_n0(n0=self.n0, medium=medium, freqs=freqs)
@@ -497,6 +510,13 @@ class TwoPhotonAbsorption(NonlinearModel):
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
         return self.use_complex_fields
+
+    @property
+    def aux_fields(self) -> list[str]:
+        """List of available aux fields in this model."""
+        if self.tau == 0:
+            return []
+        return ["Nfx", "Nfy", "Nfz"]
 
 
 class KerrNonlinearity(NonlinearModel):
@@ -588,7 +608,7 @@ class KerrNonlinearity(NonlinearModel):
             )
         return val
 
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
+    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]) -> None:
         """Any validation that depends on knowing the central frequencies of the sources.
         This includes passivity checking, if necessary."""
         n0 = self._get_n0(self.n0, medium, freqs)
@@ -613,7 +633,7 @@ class KerrNonlinearity(NonlinearModel):
             self._validate_medium_freqs(medium, [])
 
     def _hardcode_medium_freqs(
-        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+        self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]
     ) -> KerrNonlinearity:
         """Update the nonlinear model to hardcode information on medium and freqs."""
         n0 = self._get_n0(n0=self.n0, medium=medium, freqs=freqs)
@@ -643,7 +663,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     >>> medium = Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
     """
 
-    models: Tuple[NonlinearModelType, ...] = pd.Field(
+    models: tuple[NonlinearModelType, ...] = pd.Field(
         (),
         title="Nonlinear models",
         description="The nonlinear models present in this nonlinear spec. "
@@ -706,7 +726,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
         return val
 
     def _hardcode_medium_freqs(
-        self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]
+        self, medium: AbstractMedium, freqs: list[pd.PositiveFloat]
     ) -> NonlinearSpec:
         """Update the nonlinear spec to hardcode information on medium and freqs."""
         new_models = []
@@ -714,6 +734,14 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
             new_model = model._hardcode_medium_freqs(medium=medium, freqs=freqs)
             new_models.append(new_model)
         return self.updated_copy(models=new_models)
+
+    @property
+    def aux_fields(self) -> list[str]:
+        """List of available aux fields in all present models."""
+        fields = []
+        for model in self.models:
+            fields += model.aux_fields
+        return fields
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
@@ -757,7 +785,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     )
 
     @cached_property
-    def _nonlinear_models(self) -> List:
+    def _nonlinear_models(self) -> list:
         """The nonlinear models in the nonlinear_spec."""
         if self.nonlinear_spec is None:
             return []
@@ -796,7 +824,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             comp.nonlinear_spec is not None for comp in [self.ss, self.tt]
         ):
             raise ValidationError(
-                "Nonlinearities are not currently supported for the components " "of a 2D medium."
+                "Nonlinearities are not currently supported for the components of a 2D medium."
             )
 
         if self.nonlinear_spec is None:
@@ -827,7 +855,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             comp.modulation_spec is not None for comp in [self.ss, self.tt]
         ):
             raise ValidationError(
-                "Time modulation is not currently supported for the components " "of a 2D medium."
+                "Time modulation is not currently supported for the components of a 2D medium."
             )
 
     heat_spec: Optional[ThermalSpecType] = pd.Field(
@@ -846,24 +874,19 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     @property
     def charge(self):
-        return ValueError(f"A `charge` medium does not exist in this Medium definition: {self}")
+        return None
 
     @property
     def electrical(self):
-        return ValueError(
-            f"An `electrical` medium does not exist in this Medium definition: {self}"
-        )
+        return None
 
     @property
     def heat(self):
-        if self.heat_spec:
-            return self.heat_spec
-        else:
-            return ValueError(f"A `heat` medium does not exist in this Medium definition: {self}")
+        return self.heat_spec
 
     @property
     def optical(self):
-        return ValueError(f"An `optical` medium does not exist in this Medium definition: {self}")
+        return None
 
     @pd.validator("modulation_spec", always=True)
     @skip_if_fields_missing(["nonlinear_spec"])
@@ -872,7 +895,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         nonlinear_spec = values.get("nonlinear_spec")
         if val is not None and nonlinear_spec is not None:
             raise ValidationError(
-                f"For medium class {cls}, 'modulation_spec' of class {type(val)} and "
+                f"For medium class {cls.__name__}, 'modulation_spec' of class {type(val)} and "
                 f"'nonlinear_spec' of class {type(nonlinear_spec)} are "
                 "not simultaneously supported."
             )
@@ -906,7 +929,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return isinstance(self, FullyAnisotropicMedium)
 
     @cached_property
-    def _incompatible_material_types(self) -> List[str]:
+    def _incompatible_material_types(self) -> list[str]:
         """A list of material properties present which may lead to incompatibilities."""
         properties = [
             self.is_time_modulated,
@@ -957,7 +980,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             Complex-valued relative permittivity evaluated at ``frequency``.
         """
 
-    def nk_model(self, frequency: float) -> Tuple[float, float]:
+    def nk_model(self, frequency: float) -> tuple[float, float]:
         """Real and imaginary parts of the refactive index as a function of frequency.
 
         Parameters
@@ -973,7 +996,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         eps_complex = self.eps_model(frequency=frequency)
         return self.eps_complex_to_nk(eps_complex)
 
-    def loss_tangent_model(self, frequency: float) -> Tuple[float, float]:
+    def loss_tangent_model(self, frequency: float) -> tuple[float, float]:
         """Permittivity and loss tangent as a function of frequency.
 
         Parameters
@@ -990,7 +1013,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return self.eps_complex_to_eps_loss_tangent(eps_complex)
 
     @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
 
         Parameters
@@ -1008,7 +1031,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         eps = self.eps_model(frequency)
         return (eps, eps, eps)
 
-    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal_numerical(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor for numerical considerations
         such as meshing and runtime estimation.
 
@@ -1052,6 +1075,30 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         if row == col:
             return self.eps_model(frequency)
         return 0j
+
+    def _eps_plot(
+        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+    ) -> float:
+        """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
+        be selected for anisotropic medium.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at.
+        eps_component : PermittivityComponent
+            Component of the permittivity tensor to plot
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
+
+        Returns
+        -------
+        float
+            Element ``eps_component`` of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        # Assumes the material is isotropic
+        # Will need to be overridden for anisotropic materials
+        return self.eps_model(frequency).real
 
     @cached_property
     @abstractmethod
@@ -1122,7 +1169,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return eps_real + 1j * eps_imag
 
     @staticmethod
-    def eps_complex_to_nk(eps_c: complex) -> Tuple[float, float]:
+    def eps_complex_to_nk(eps_c: complex) -> tuple[float, float]:
         """Convert complex permittivity to n, k values.
 
         Parameters
@@ -1140,7 +1187,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return np.real(ref_index), np.imag(ref_index)
 
     @staticmethod
-    def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
+    def nk_to_eps_sigma(n: float, k: float, freq: float) -> tuple[float, float]:
         """Convert ``n``, ``k`` at frequency ``freq`` to permittivity and conductivity values.
 
         Parameters
@@ -1189,7 +1236,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return eps_real + 1j * sigma / omega / EPSILON_0
 
     @staticmethod
-    def eps_complex_to_eps_sigma(eps_complex: complex, freq: float) -> Tuple[float, float]:
+    def eps_complex_to_eps_sigma(eps_complex: complex, freq: float) -> tuple[float, float]:
         """Convert complex permittivity at frequency ``freq``
         to permittivity and conductivity values.
 
@@ -1211,7 +1258,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return eps_real, sigma
 
     @staticmethod
-    def eps_complex_to_eps_loss_tangent(eps_complex: complex) -> Tuple[float, float]:
+    def eps_complex_to_eps_loss_tangent(eps_complex: complex) -> tuple[float, float]:
         """Convert complex permittivity to permittivity and loss tangent.
 
         Parameters
@@ -1314,6 +1361,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """Whether the medium is a PEC."""
         return False
 
+    @cached_property
+    def is_pmc(self):
+        """Whether the medium is a PMC."""
+        return False
+
     def sel_inside(self, bounds: Bound) -> AbstractMedium:
         """Return a new medium that contains the minimal amount data necessary to cover
         a spatial region defined by ``bounds``.
@@ -1338,35 +1390,36 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     """ Autograd code """
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
 
-    def derivative_eps_sigma_volume(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        bounds: Bound,
+    def _derivative_eps_sigma_volume(
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
 
-        freqs = vjp_eps_complex.coords["f"].values
         values = vjp_eps_complex.values
 
-        eps_vjp, sigma_vjp = self.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
+        # compute directly with frequency dimension
+        freqs = vjp_eps_complex.coords["f"].values
+        omegas = 2 * np.pi * freqs
+        eps_vjp = np.real(values)
+        sigma_vjp = -np.imag(values) / omegas / EPSILON_0
 
         eps_vjp = np.sum(eps_vjp)
         sigma_vjp = np.sum(sigma_vjp)
 
-        return dict(permittivity=eps_vjp, conductivity=sigma_vjp)
+        return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
 
-    def derivative_eps_complex_volume(
+    def _derivative_eps_complex_volume(
         self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> xr.DataArray:
         """Get the derivative w.r.t complex-valued permittivity in the volume."""
 
-        vjp_value = 0.0
+        vjp_value = None
         for field_name in ("Ex", "Ey", "Ez"):
             fld = E_der_map[field_name]
             vjp_value_fld = integrate_within_bounds(
@@ -1374,9 +1427,18 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 dims=("x", "y", "z"),
                 bounds=bounds,
             )
-            vjp_value += vjp_value_fld
+            if vjp_value is None:
+                vjp_value = vjp_value_fld
+            else:
+                vjp_value += vjp_value_fld
 
-        return vjp_value.sum("f")
+        return vjp_value
+
+    def __repr__(self):
+        """If the medium has a name, use it as the representation. Otherwise, use the default representation."""
+        if self.name:
+            return self.name
+        return super().__repr__()
 
 
 class AbstractCustomMedium(AbstractMedium, ABC):
@@ -1413,7 +1475,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     @abstractmethod
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1447,7 +1509,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         self,
         frequency: float,
         coords: Coords,
-    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
+    ) -> tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
         """Spatial profile of main diagonal of the complex-valued permittivity
         at ``frequency`` interpolated at the supplied coordinates.
 
@@ -1517,7 +1579,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         )
 
     @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor
         at ``frequency``. Spatially, we take max{||eps||}, so that autoMesh generation
         works appropriately.
@@ -1530,6 +1592,38 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         eps_spatial_array = (_get_numpy_array(eps_comp).ravel() for eps_comp in eps_spatial)
         return tuple(eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_spatial_array)
 
+    def _get_real_vals(self, x: np.ndarray) -> np.ndarray:
+        """Grab the real part of the values in array.
+        Used for _eps_bounds()
+        """
+        return _get_numpy_array(np.real(x)).ravel()
+
+    def _eps_bounds(
+        self,
+        frequency: Optional[float] = None,
+        eps_component: Optional[PermittivityComponent] = None,
+    ) -> tuple[float, float]:
+        """Returns permittivity bounds for setting the color bounds when plotting.
+
+        Parameters
+        ----------
+        frequency : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
+
+        Returns
+        -------
+        Tuple[float, float]
+            The min and max values of the permittivity for the selected component and evaluated at ``frequency``.
+        """
+        eps_dataarray = self.eps_dataarray_freq(frequency)
+        all_eps = np.concatenate(self._get_real_vals(eps_comp) for eps_comp in eps_dataarray)
+        return (np.min(all_eps), np.max(all_eps))
+
     @staticmethod
     def _validate_isreal_dataarray(dataarray: CustomSpatialDataType) -> bool:
         """Validate that the dataarray is real"""
@@ -1537,7 +1631,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
     @staticmethod
     def _validate_isreal_dataarray_tuple(
-        dataarray_tuple: Tuple[CustomSpatialDataType, ...],
+        dataarray_tuple: tuple[CustomSpatialDataType, ...],
     ) -> bool:
         """Validate that the dataarray is real"""
         return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
@@ -1573,7 +1667,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         if isinstance(field, str) and field in DATA_ARRAY_MAP:
             return True
         # attempting to construct an UnstructuredGridDataset from a dict
-        elif isinstance(field, dict) and field.get("type") in (
+        if isinstance(field, dict) and field.get("type") in (
             "TriangularGridDataset",
             "TetrahedralGridDataset",
         ):
@@ -1582,17 +1676,21 @@ class AbstractCustomMedium(AbstractMedium, ABC):
                 for subfield in [field["points"], field["cells"], field["values"]]
             )
         # attempting to pass an UnstructuredGridDataset with zero points
-        elif isinstance(field, UnstructuredGridDataset):
+        if isinstance(field, UnstructuredGridDataset):
             return any(len(subfield) == 0 for subfield in [field.points, field.cells, field.values])
 
     def _derivative_field_cmp(
         self,
         E_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
+        spatial_data: PermittivityDataset,
         dim: str,
     ) -> np.ndarray:
-        coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
-        dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
+        coords_interp = {key: val for key, val in spatial_data.coords.items() if len(val) > 1}
+        dims_sum = {dim for dim in spatial_data.coords.keys() if dim not in coords_interp}
+
+        eps_coordinate_shape = [
+            len(spatial_data.coords[dim]) for dim in spatial_data.dims if dim in "xyz"
+        ]
 
         # compute sizes along each of the interpolation dimensions
         sizes_list = []
@@ -1625,7 +1723,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             E_der_dim.interp(**coords_interp, assume_sorted=True).fillna(0.0).sum(dims_sum).sum("f")
         )
         vjp_array = np.array(E_der_dim_interp.values).astype(complex)
-        vjp_array = vjp_array.reshape(eps_data.shape)
+        vjp_array = vjp_array.reshape(eps_coordinate_shape)
 
         # multiply by volume elements (if possible, being defensive here..)
         try:
@@ -1664,7 +1762,7 @@ class PECMedium(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
+                f"currently supported for medium class {cls.__name__}."
             )
         return val
 
@@ -1689,6 +1787,52 @@ class PECMedium(AbstractMedium):
 
 # PEC builtin instance
 PEC = PECMedium(name="PEC")
+
+
+# PMC keyword
+class PMCMedium(AbstractMedium):
+    """Perfect magnetic conductor class.
+
+    Note
+    ----
+
+        To avoid confusion from duplicate PMCs, must import ``tidy3d.PMC`` instance directly.
+
+
+
+    """
+
+    @pd.validator("modulation_spec", always=True)
+    def _validate_modulation_spec(cls, val):
+        """Check compatibility with modulation_spec."""
+        if val is not None:
+            raise ValidationError(
+                f"A 'modulation_spec' of class {type(val)} is not "
+                f"currently supported for medium class {cls.__name__}."
+            )
+        return val
+
+    @ensure_freq_in_range
+    def eps_model(self, frequency: float) -> complex:
+        # permittivity of a PMC.
+        return 1.0 + 0j
+
+    @cached_property
+    def n_cfl(self):
+        """This property computes the index of refraction related to CFL condition, so that
+        the FDTD with this medium is stable when the time step size that doesn't take
+        material factor into account is multiplied by ``n_cfl``.
+        """
+        return 1.0
+
+    @cached_property
+    def is_pmc(self):
+        """Whether the medium is a PMC."""
+        return True
+
+
+# PEC builtin instance
+PMC = PMCMedium(name="PMC")
 
 
 class Medium(AbstractMedium):
@@ -1837,11 +1981,11 @@ class Medium(AbstractMedium):
             )
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # get vjps w.r.t. permittivity and conductivity of the bulk
-        vjps_volume = self.derivative_eps_sigma_volume(
+        vjps_volume = self._derivative_eps_sigma_volume(
             E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
         )
 
@@ -1854,34 +1998,31 @@ class Medium(AbstractMedium):
 
         return derivative_map
 
-    def derivative_eps_sigma_volume(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        bounds: Bound,
+    def _derivative_eps_sigma_volume(
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> dict[str, xr.DataArray]:
         """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
-        vjp_eps_complex = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+        vjp_eps_complex = self._derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
 
-        freqs = vjp_eps_complex.coords["f"].values
         values = vjp_eps_complex.values
 
         # vjp of eps_complex_to_eps_sigma
-        omegas = 2 * np.pi * freqs
+        omegas = 2 * np.pi * vjp_eps_complex.coords["f"].values
         eps_vjp = np.real(values)
         sigma_vjp = -np.imag(values) / omegas / EPSILON_0
 
         eps_vjp = np.sum(eps_vjp)
         sigma_vjp = np.sum(sigma_vjp)
 
-        return dict(permittivity=eps_vjp, conductivity=sigma_vjp)
+        return {"permittivity": eps_vjp, "conductivity": sigma_vjp}
 
-    def derivative_eps_complex_volume(
+    def _derivative_eps_complex_volume(
         self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> xr.DataArray:
         """Get the derivative w.r.t complex-valued permittivity in the volume."""
 
-        vjp_value = 0.0
+        vjp_value = None
         for field_name in ("Ex", "Ey", "Ez"):
             fld = E_der_map[field_name]
             vjp_value_fld = integrate_within_bounds(
@@ -1889,7 +2030,10 @@ class Medium(AbstractMedium):
                 dims=("x", "y", "z"),
                 bounds=bounds,
             )
-            vjp_value += vjp_value_fld
+            if vjp_value is None:
+                vjp_value = vjp_value_fld
+            else:
+                vjp_value += vjp_value_fld
 
         return vjp_value
 
@@ -1998,7 +2142,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -2135,8 +2279,8 @@ class CustomMedium(AbstractCustomMedium):
                 )
                 fail_load = True
         if fail_load:
-            eps_real = SpatialDataArray(np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
-            return dict(permittivity=eps_real)
+            eps_real = SpatialDataArray(np.ones((1, 1, 1)), coords={"x": [0], "y": [0], "z": [0]})
+            return {"permittivity": eps_real}
         return values
 
     @pd.root_validator(pre=True)
@@ -2426,7 +2570,7 @@ class CustomMedium(AbstractCustomMedium):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``. ()
 
         Parameters
@@ -2461,7 +2605,7 @@ class CustomMedium(AbstractCustomMedium):
         self,
         frequency: float,
         coords: Coords,
-    ) -> Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
+    ) -> tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]:
         """Spatial profile of main diagonal of the complex-valued permittivity
         at ``frequency`` interpolated at the supplied coordinates.
 
@@ -2481,7 +2625,7 @@ class CustomMedium(AbstractCustomMedium):
         return self._medium.eps_diagonal_on_grid(frequency, coords)
 
     @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor
         at ``frequency``. Spatially, we take max{|eps|}, so that autoMesh generation
         works appropriately.
@@ -2499,7 +2643,7 @@ class CustomMedium(AbstractCustomMedium):
     def from_eps_raw(
         cls,
         eps: Union[ScalarFieldDataArray, CustomSpatialDataType],
-        freq: float = None,
+        freq: Optional[float] = None,
         interp_method: InterpMethod = "nearest",
         **kwargs,
     ) -> CustomMedium:
@@ -2569,7 +2713,7 @@ class CustomMedium(AbstractCustomMedium):
         cls,
         n: Union[ScalarFieldDataArray, CustomSpatialDataType],
         k: Optional[Union[ScalarFieldDataArray, CustomSpatialDataType]] = None,
-        freq: float = None,
+        freq: Optional[float] = None,
         interp_method: InterpMethod = "nearest",
         **kwargs,
     ) -> CustomMedium:
@@ -2652,7 +2796,7 @@ class CustomMedium(AbstractCustomMedium):
         sigma = SpatialDataArray(sigma.squeeze(dim="f", drop=True))
         return cls(permittivity=eps_real, conductivity=sigma, interp_method=interp_method, **kwargs)
 
-    def grids(self, bounds: Bound) -> Dict[str, Grid]:
+    def grids(self, bounds: Bound) -> dict[str, Grid]:
         """Make a :class:`.Grid` corresponding to the data in each ``eps_ii`` component.
         The min and max coordinates along each dimension are bounded by ``bounds``."""
 
@@ -2663,7 +2807,7 @@ class CustomMedium(AbstractCustomMedium):
         def make_grid(scalar_field: Union[ScalarFieldDataArray, SpatialDataArray]) -> Grid:
             """Make a grid for a single dataset."""
 
-            def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> List[float]:
+            def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> list[float]:
                 """Convert user supplied coords into boundary coords to use in :class:`.Grid`."""
 
                 # get coordinates of the bondaries halfway between user-supplied data
@@ -2674,7 +2818,7 @@ class CustomMedium(AbstractCustomMedium):
                 coord_bounds[coord_bounds >= pt_max] = pt_max
 
                 # add the geometry bounds in explicitly
-                return [pt_min] + coord_bounds.tolist() + [pt_max]
+                return [pt_min, *coord_bounds.tolist(), pt_max]
 
             # grab user supplied data long this dimension
             coords = {key: np.array(val) for key, val in scalar_field.coords.items()}
@@ -2750,17 +2894,33 @@ class CustomMedium(AbstractCustomMedium):
             eps_dataset=eps_reduced,
         )
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         vjps = {}
 
         for field_path in derivative_info.paths:
-            if field_path == ("permittivity",):
+            if field_path[0] == "permittivity":
                 vjp_array = 0.0
                 for dim in "xyz":
                     vjp_array += self._derivative_field_cmp(
-                        E_der_map=derivative_info.E_der_map, eps_data=self.permittivity, dim=dim
+                        E_der_map=derivative_info.E_der_map,
+                        spatial_data=self.permittivity,
+                        dim=dim,
+                        freqs=derivative_info.frequencies,
+                        component="real",
+                    )
+                vjps[field_path] = vjp_array
+
+            elif field_path[0] == "conductivity":
+                vjp_array = 0.0
+                for dim in "xyz":
+                    vjp_array += self._derivative_field_cmp(
+                        E_der_map=derivative_info.E_der_map,
+                        spatial_data=self.conductivity,
+                        dim=dim,
+                        freqs=derivative_info.frequencies,
+                        component="sigma",
                     )
                 vjps[field_path] = vjp_array
 
@@ -2769,10 +2929,11 @@ class CustomMedium(AbstractCustomMedium):
                 dim = key[-1]
                 vjps[field_path] = self._derivative_field_cmp(
                     E_der_map=derivative_info.E_der_map,
-                    eps_data=self.eps_dataset.field_components[key],
+                    spatial_data=self.eps_dataset.field_components[key],
                     dim=dim,
+                    freqs=derivative_info.frequencies,
+                    component="complex",
                 )
-
             else:
                 raise NotImplementedError(
                     f"No derivative defined for 'CustomMedium' field: {field_path}."
@@ -2783,13 +2944,18 @@ class CustomMedium(AbstractCustomMedium):
     def _derivative_field_cmp(
         self,
         E_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
+        spatial_data: CustomSpatialDataTypeAnnotated,
         dim: str,
+        freqs: np.ndarray,
+        component: str = "real",
     ) -> np.ndarray:
-        """Compute derivative with respect to the ``dim`` components within the custom medium."""
-
-        coords_interp = {key: eps_data.coords[key] for key in "xyz"}
+        """Compute the derivative with respect to a material property component."""
+        coords_interp = {key: spatial_data.coords[key] for key in "xyz"}
         coords_interp = {key: val for key, val in coords_interp.items() if len(val) > 1}
+
+        eps_coordinate_shape = [
+            len(spatial_data.coords[dim]) for dim in spatial_data.dims if dim in "xyz"
+        ]
 
         E_der_dim_interp = E_der_map[f"E{dim}"]
 
@@ -2827,10 +2993,28 @@ class CustomMedium(AbstractCustomMedium):
             # if sizes_list is empty, then reduce() fails
             d_vol = np.array(1.0)
 
-        # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        E_der_dim_interp = (
-            E_der_dim_interp.interp(**coords_interp, assume_sorted=True).fillna(0.0).real.sum("f")
-        )
+        E_der_dim_interp_complex = E_der_dim_interp.interp(
+            **coords_interp, assume_sorted=True
+        ).fillna(0.0)
+
+        if component == "sigma":
+            # compute conductivity gradient from imaginary-permittivity gradient
+            # apply per-frequency scaling before summing over frequencies
+            # d eps_imag / d sigma = 1 / (2 * pi * f * EPSILON_0)
+            E_der_dim_interp = E_der_dim_interp_complex.imag
+            freqs_da = E_der_dim_interp_complex.coords["f"]
+            scale = -1.0 / (2.0 * np.pi * freqs_da * EPSILON_0)
+            E_der_dim_interp *= scale
+        elif component == "complex":
+            # for complex permittivity in eps_dataset, return the full complex derivative
+            E_der_dim_interp = E_der_dim_interp_complex
+        elif component == "imag":
+            # pure imaginary component (no conductivity conversion)
+            E_der_dim_interp = E_der_dim_interp_complex.imag
+        else:
+            E_der_dim_interp = E_der_dim_interp_complex.real
+
+        E_der_dim_interp = E_der_dim_interp.sum("f")
 
         try:
             E_der_dim_interp = E_der_dim_interp * d_vol.reshape(E_der_dim_interp.shape)
@@ -2844,7 +3028,7 @@ class CustomMedium(AbstractCustomMedium):
                 "message and some information about your simulation setup and we will investigate. "
             )
         vjp_array = E_der_dim_interp.values
-        vjp_array = vjp_array.reshape(eps_data.shape)
+        vjp_array = vjp_array.reshape(eps_coordinate_shape)
 
         return vjp_array
 
@@ -2937,7 +3121,7 @@ class DispersiveMedium(AbstractMedium, ABC):
         return _validate_conductivity_modulation
 
     @abstractmethod
-    def _pole_residue_dict(self) -> Dict:
+    def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model."""
 
     @cached_property
@@ -2961,14 +3145,14 @@ class DispersiveMedium(AbstractMedium, ABC):
         return n
 
     @staticmethod
-    def tuple_to_complex(value: Tuple[float, float]) -> complex:
+    def tuple_to_complex(value: tuple[float, float]) -> complex:
         """Convert a tuple of real and imaginary parts to complex number."""
 
         val_r, val_i = value
         return val_r + 1j * val_i
 
     @staticmethod
-    def complex_to_tuple(value: complex) -> Tuple[float, float]:
+    def complex_to_tuple(value: complex) -> tuple[float, float]:
         """Convert a complex number to a tuple of real and imaginary parts."""
 
         return (value.real, value.imag)
@@ -3038,7 +3222,9 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
             if fail_load and eps_inf is None:
                 return {nested_tuple_field: ()}
             if fail_load:
-                eps_inf = SpatialDataArray(np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
+                eps_inf = SpatialDataArray(
+                    np.ones((1, 1, 1)), coords={"x": [0], "y": [0], "z": [0]}
+                )
                 return {"eps_inf": eps_inf, nested_tuple_field: ()}
             return values
 
@@ -3084,7 +3270,7 @@ class PoleResidue(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    poles: Tuple[TracedPoleAndResidue, ...] = pd.Field(
+    poles: tuple[TracedPoleAndResidue, ...] = pd.Field(
         (),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
@@ -3104,7 +3290,7 @@ class PoleResidue(DispersiveMedium):
 
     @staticmethod
     def _eps_model(
-        eps_inf: pd.PositiveFloat, poles: Tuple[PoleAndResidue, ...], frequency: float
+        eps_inf: pd.PositiveFloat, poles: tuple[PoleAndResidue, ...], frequency: float
     ) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
@@ -3122,15 +3308,15 @@ class PoleResidue(DispersiveMedium):
         """Complex-valued permittivity as a function of frequency."""
         return self._eps_model(eps_inf=self.eps_inf, poles=self.poles, frequency=frequency)
 
-    def _pole_residue_dict(self) -> Dict:
+    def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model."""
 
-        return dict(
-            eps_inf=self.eps_inf,
-            poles=self.poles,
-            frequency_range=self.frequency_range,
-            name=self.name,
-        )
+        return {
+            "eps_inf": self.eps_inf,
+            "poles": self.poles,
+            "frequency_range": self.frequency_range,
+            "name": self.name,
+        }
 
     def __str__(self):
         """string representation"""
@@ -3184,7 +3370,7 @@ class PoleResidue(DispersiveMedium):
 
     @staticmethod
     def lo_to_eps_model(
-        poles: Tuple[Tuple[float, float, float, float], ...],
+        poles: tuple[tuple[float, float, float, float], ...],
         eps_inf: pd.PositiveFloat,
         frequency: float,
     ) -> complex:
@@ -3216,7 +3402,7 @@ class PoleResidue(DispersiveMedium):
 
     @classmethod
     def from_lo_to(
-        cls, poles: Tuple[Tuple[float, float, float, float], ...], eps_inf: pd.PositiveFloat = 1
+        cls, poles: tuple[tuple[float, float, float, float], ...], eps_inf: pd.PositiveFloat = 1
     ) -> PoleResidue:
         """Construct a pole residue model from the LO-TO form
         (longitudinal and transverse optical modes).
@@ -3288,7 +3474,7 @@ class PoleResidue(DispersiveMedium):
         return PoleResidue(eps_inf=eps_inf, poles=list(zip(a_coeffs, c_coeffs)))
 
     @staticmethod
-    def imag_ep_extrema(poles: Tuple[PoleAndResidue, ...]) -> ArrayFloat1D:
+    def imag_ep_extrema(poles: tuple[PoleAndResidue, ...]) -> ArrayFloat1D:
         """Extrema of Im[eps] in the same unit as poles.
 
         Parameters
@@ -3338,48 +3524,63 @@ class PoleResidue(DispersiveMedium):
         ep = ep[~np.isnan(ep)]
         return max(ep.imag)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+    @staticmethod
+    def _get_vjps_from_params(
+        dJ_deps_complex: Union[complex, np.ndarray],
+        poles_vals: list[tuple[Union[complex, np.ndarray], Union[complex, np.ndarray]]],
+        omega: float,
+        requested_paths: list[tuple],
+    ) -> AutogradFieldMap:
+        """
+        Static helper to compute VJPs from parameters using the analytical chain rule.
+        """
+        jw = 1j * omega
+        vjps = {}
 
-        # compute all derivatives beforehand
-        dJ_deps = self.derivative_eps_complex_volume(
-            E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
+        if ("eps_inf",) in requested_paths:
+            vjps[("eps_inf",)] = np.real(dJ_deps_complex)
+
+        for i, (a_val, c_val) in enumerate(poles_vals):
+            if any(path[1] == i for path in requested_paths if path[0] == "poles"):
+                if ("poles", i, 0) in requested_paths:
+                    deps_da = c_val / (jw + a_val) ** 2
+                    dJ_da = dJ_deps_complex * deps_da
+                    vjps[("poles", i, 0)] = dJ_da
+                if ("poles", i, 1) in requested_paths:
+                    deps_dc = -1 / (jw + a_val)
+                    dJ_dc = dJ_deps_complex * deps_dc
+                    vjps[("poles", i, 1)] = dJ_dc
+
+        return vjps
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute adjoint derivatives by preparing scalar data and calling the static helper."""
+
+        dJ_deps_complex = self._derivative_eps_complex_volume(
+            E_der_map=derivative_info.E_der_map,
+            bounds=derivative_info.bounds,
         )
 
-        dJ_deps = complex(dJ_deps)
+        poles_vals = [(complex(a), complex(c)) for a, c in self.poles]
 
-        # TODO: fix for multi-frequency
-        frequency = derivative_info.frequency
-        poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
-        poles_complex = np.stack(poles_complex, axis=0)
+        freqs = dJ_deps_complex.coords["f"].values
+        vjps_total = {}
 
-        # compute gradients of eps_model with respect to eps_inf and poles
-        grad_eps_model = ag.holomorphic_grad(self._eps_model, argnum=(0, 1))
-        with warnings.catch_warnings():
-            # ignore warnings about holmorphic grad being passed a non-complex input (poles)
-            warnings.simplefilter("ignore")
-            deps_deps_inf, deps_dpoles = grad_eps_model(
-                complex(self.eps_inf), poles_complex, complex(frequency)
+        for freq in freqs:
+            dJ_deps_complex_f = dJ_deps_complex.sel(f=freq)
+            vjps_f = self._get_vjps_from_params(
+                dJ_deps_complex=complex(dJ_deps_complex_f),
+                poles_vals=poles_vals,
+                omega=2 * np.pi * freq,
+                requested_paths=derivative_info.paths,
             )
+            for path, vjp in vjps_f.items():
+                if path not in vjps_total:
+                    vjps_total[path] = vjp
+                else:
+                    vjps_total[path] += vjp
 
-        # multiply with partial dJ/deps to give full gradients
-
-        dJ_deps_inf = dJ_deps * deps_deps_inf
-        dJ_dpoles = [(dJ_deps * a, dJ_deps * c) for a, c in deps_dpoles]
-
-        # get vjps w.r.t. permittivity and conductivity of the bulk
-        derivative_map = {}
-        for field_path in derivative_info.paths:
-            field_name, *rest = field_path
-
-            if field_name == "eps_inf":
-                derivative_map[field_path] = float(np.real(dJ_deps_inf))
-
-            elif field_name == "poles":
-                pole_index, a_or_c = rest
-                derivative_map[field_path] = complex(dJ_dpoles[pole_index][a_or_c])
-
-        return derivative_map
+        return vjps_total
 
     @classmethod
     def _real_partial_fraction_decomposition(
@@ -3406,6 +3607,7 @@ class PoleResidue(DispersiveMedium):
             ``tuple`` is an array of coefficients representing any direct polynomial term.
 
         """
+        from scipy import signal
 
         if a.ndim != 1 or np.any(np.iscomplex(a)):
             raise ValidationError(
@@ -3548,9 +3750,8 @@ class PoleResidue(DispersiveMedium):
                     "Transfer function is invalid. Direct polynomial term must be real and positive for "
                     "conversion to an equivalent 'PoleResidue' medium."
                 )
-            else:
-                # A pure capacitance will translate to an increased permittivity at infinite frequency.
-                eps_inf = eps_inf + k[0]
+            # A pure capacitance will translate to an increased permittivity at infinite frequency.
+            eps_inf = eps_inf + k[0]
 
         pole_residue_from_transfer = PoleResidue(eps_inf=eps_inf, poles=poles_and_residues)
 
@@ -3635,7 +3836,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         units=PERMITTIVITY,
     )
 
-    poles: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+    poles: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
         pd.Field(
             (),
             title="Poles",
@@ -3685,7 +3886,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -3717,7 +3918,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         eps = PoleResidue.eps_model(self, frequency)
         return (eps, eps, eps)
 
-    def poles_on_grid(self, coords: Coords) -> Tuple[Tuple[ArrayComplex3D, ArrayComplex3D], ...]:
+    def poles_on_grid(self, coords: Coords) -> tuple[tuple[ArrayComplex3D, ArrayComplex3D], ...]:
         """Spatial profile of poles interpolated at the supplied coordinates.
 
         Parameters
@@ -3813,71 +4014,60 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
-        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+    def _derivative_field_cmp(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        spatial_data: CustomSpatialDataTypeAnnotated,
+        dim: str,
+        freqs=None,
+        component: str = "complex",
+    ) -> np.ndarray:
+        """Compatibility wrapper for derivative computation.
 
-        dJ_deps = 0.0
+        Accepts the extended signature used by other custom media (
+        e.g., `CustomMedium._derivative_field_cmp`) while delegating the actual
+        computation to the base implementation that only depends on
+        `E_der_map`, `spatial_data`, and `dim`.
+
+        Parameters `freqs` and `component` are ignored for this model since the
+        derivative is taken with respect to the complex permittivity directly.
+        """
+        return super()._derivative_field_cmp(
+            E_der_map=E_der_map, spatial_data=spatial_data, dim=dim
+        )
+
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute adjoint derivatives by preparing array data and calling the static helper."""
+
+        dJ_deps_complex = 0.0
         for dim in "xyz":
-            dJ_deps += self._derivative_field_cmp(
-                E_der_map=derivative_info.E_der_map, eps_data=self.eps_inf, dim=dim
+            dJ_deps_complex += self._derivative_field_cmp(
+                E_der_map=derivative_info.E_der_map,
+                spatial_data=self.eps_inf,
+                dim=dim,
+                freqs=derivative_info.frequencies,
+                component="complex",
             )
 
-        # TODO: fix for multi-frequency
-        frequency = derivative_info.frequency
-
-        poles_complex = [
+        poles_vals = [
             (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
             for a, c in self.poles
         ]
-        poles_complex = np.stack(poles_complex, axis=0)
 
-        def eps_model_r(
-            eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
-        ) -> float:
-            """Real part of ``eps_model`` evaluated on ``self`` fields."""
-            return np.real(self._eps_model(eps_inf, poles, frequency))
-
-        def eps_model_i(
-            eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
-        ) -> float:
-            """Real part of ``eps_model`` evaluated on ``self`` fields."""
-            return np.imag(self._eps_model(eps_inf, poles, frequency))
-
-        # compute the gradients w.r.t. each real and imaginary parts for eps_inf and poles
-        grad_eps_model_r = ag.elementwise_grad(eps_model_r, argnum=(0, 1))
-        grad_eps_model_i = ag.elementwise_grad(eps_model_i, argnum=(0, 1))
-        deps_deps_inf_r, deps_dpoles_r = grad_eps_model_r(
-            self.eps_inf.values, poles_complex, frequency
-        )
-        deps_deps_inf_i, deps_dpoles_i = grad_eps_model_i(
-            self.eps_inf.values, poles_complex, frequency
-        )
-
-        # multiply with dJ_deps partial derivative to give full gradients
-
-        deps_deps_inf = deps_deps_inf_r + 1j * deps_deps_inf_i
-        dJ_deps_inf = dJ_deps * deps_deps_inf / 3.0  # mysterious 3
-
-        dJ_dpoles = []
-        for (da_r, dc_r), (da_i, dc_i) in zip(deps_dpoles_r, deps_dpoles_i):
-            da = da_r + 1j * da_i
-            dc = dc_r + 1j * dc_i
-            dJ_da = dJ_deps * da / 2.0  # mysterious 2
-            dJ_dc = dJ_deps * dc / 2.0  # mysterious 2
-            dJ_dpoles.append((dJ_da, dJ_dc))
-
-        derivative_map = {}
-        for field_path in derivative_info.paths:
-            field_name, *rest = field_path
-
-            if field_name == "eps_inf":
-                derivative_map[field_path] = np.real(dJ_deps_inf)
-
-            elif field_name == "poles":
-                pole_index, a_or_c = rest
-                derivative_map[field_path] = dJ_dpoles[pole_index][a_or_c]
-
-        return derivative_map
+        vjps_total = {}
+        for freq in derivative_info.frequencies:
+            vjps_f = PoleResidue._get_vjps_from_params(
+                dJ_deps_complex=dJ_deps_complex,
+                poles_vals=poles_vals,
+                omega=2 * np.pi * freq,
+                requested_paths=derivative_info.paths,
+            )
+            for path, vjp in vjps_f.items():
+                if path not in vjps_total:
+                    vjps_total[path] = vjp
+                else:
+                    vjps_total[path] += vjp
+        return vjps_total
 
 
 class Sellmeier(DispersiveMedium):
@@ -3918,7 +4108,7 @@ class Sellmeier(DispersiveMedium):
     * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: tuple[tuple[float, pd.PositiveFloat], ...] = pd.Field(
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         units=(None, MICROMETER + "^2"),
@@ -3973,7 +4163,7 @@ class Sellmeier(DispersiveMedium):
         n = self._n_model(frequency)
         return AbstractMedium.nk_to_eps_complex(n)
 
-    def _pole_residue_dict(self) -> Dict:
+    def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model"""
         poles = []
         for B, C in self.coeffs:
@@ -3982,7 +4172,12 @@ class Sellmeier(DispersiveMedium):
             a = 1j * beta
             c = 1j * alpha
             poles.append((a, c))
-        return dict(eps_inf=1, poles=poles, frequency_range=self.frequency_range, name=self.name)
+        return {
+            "eps_inf": 1,
+            "poles": poles,
+            "frequency_range": self.frequency_range,
+            "name": self.name,
+        }
 
     @staticmethod
     def _from_dispersion_to_coeffs(n: float, freq: float, dn_dwvl: float):
@@ -4057,7 +4252,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+    coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
         pd.Field(
             ...,
             title="Coefficients",
@@ -4111,7 +4306,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                     return False
         return True
 
-    def _pole_residue_dict(self) -> Dict:
+    def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model."""
         poles_dict = Sellmeier._pole_residue_dict(self)
         if len(self.coeffs) > 0:
@@ -4120,7 +4315,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -4153,7 +4348,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         # if `eps` is simply a float, convert it to a SpatialDataArray ; this is possible when
         # `coeffs` is empty.
         if isinstance(eps, (int, float, complex)):
-            eps = SpatialDataArray(eps * np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
+            eps = SpatialDataArray(eps * np.ones((1, 1, 1)), coords={"x": [0], "y": [0], "z": [0]})
         return (eps, eps, eps)
 
     @classmethod
@@ -4274,7 +4469,7 @@ class Lorentz(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[float, float, pd.NonNegativeFloat], ...] = pd.Field(
+    coeffs: tuple[tuple[float, float, pd.NonNegativeFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
@@ -4317,7 +4512,7 @@ class Lorentz(DispersiveMedium):
             eps = eps + (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
         return eps
 
-    def _pole_residue_dict(self) -> Dict:
+    def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model."""
 
         poles = []
@@ -4338,12 +4533,12 @@ class Lorentz(DispersiveMedium):
                 c = 1j * de * w**2 / 2 / r
                 poles.append((a, c))
 
-        return dict(
-            eps_inf=self.eps_inf,
-            poles=poles,
-            frequency_range=self.frequency_range,
-            name=self.name,
-        )
+        return {
+            "eps_inf": self.eps_inf,
+            "poles": poles,
+            "frequency_range": self.frequency_range,
+            "name": self.name,
+        }
 
     @staticmethod
     def _all_larger(coeff_a, coeff_b) -> bool:
@@ -4455,8 +4650,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[
-        Tuple[
+    coeffs: tuple[
+        tuple[
             CustomSpatialDataTypeAnnotated,
             CustomSpatialDataTypeAnnotated,
             CustomSpatialDataTypeAnnotated,
@@ -4552,7 +4747,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -4664,7 +4859,7 @@ class Drude(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: tuple[tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model.",
@@ -4683,7 +4878,7 @@ class Drude(DispersiveMedium):
             eps = eps - (f**2) / (frequency**2 + 1j * frequency * delta)
         return eps
 
-    def _pole_residue_dict(self) -> Dict:
+    def _pole_residue_dict(self) -> dict:
         """Dict representation of Medium as a pole-residue model."""
 
         poles = []
@@ -4703,12 +4898,12 @@ class Drude(DispersiveMedium):
 
             poles.extend(((a0, c0), (a1, c1)))
 
-        return dict(
-            eps_inf=self.eps_inf,
-            poles=poles,
-            frequency_range=self.frequency_range,
-            name=self.name,
-        )
+        return {
+            "eps_inf": self.eps_inf,
+            "poles": poles,
+            "frequency_range": self.frequency_range,
+            "name": self.name,
+        }
 
 
 class CustomDrude(CustomDispersiveMedium, Drude):
@@ -4757,7 +4952,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+    coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
         pd.Field(
             ...,
             title="Coefficients",
@@ -4811,7 +5006,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -4916,7 +5111,7 @@ class Debye(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: tuple[tuple[float, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
@@ -4961,12 +5156,12 @@ class Debye(DispersiveMedium):
 
             poles.append((a, c))
 
-        return dict(
-            eps_inf=self.eps_inf,
-            poles=poles,
-            frequency_range=self.frequency_range,
-            name=self.name,
-        )
+        return {
+            "eps_inf": self.eps_inf,
+            "poles": poles,
+            "frequency_range": self.frequency_range,
+            "name": self.name,
+        }
 
 
 class CustomDebye(CustomDispersiveMedium, Debye):
@@ -5014,7 +5209,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+    coeffs: tuple[tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
         pd.Field(
             ...,
             title="Coefficients",
@@ -5083,7 +5278,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -5314,7 +5509,7 @@ class HuraySurfaceRoughness(AbstractSurfaceRoughness):
         description="Relative area of the matte base compared to a flat surface",
     )
 
-    coeffs: Tuple[Tuple[pd.PositiveFloat, pd.PositiveFloat], ...] = pd.Field(
+    coeffs: tuple[tuple[pd.PositiveFloat, pd.PositiveFloat], ...] = pd.Field(
         ...,
         title="Coefficients for surface ratio and sphere radius",
         description="List of (:math:`f_i, r_i`) values for model, where :math:`f_i` is "
@@ -5420,6 +5615,14 @@ class LossyMetalMedium(Medium):
         discriminator=TYPE_TAG_STR,
     )
 
+    thickness: pd.PositiveFloat = pd.Field(
+        None,
+        title="Conductor Thickness",
+        description="When the thickness of the conductor is not much greater than skin depth, "
+        "1D transmission line model is applied to compute the surface impedance of the thin conductor.",
+        units=MICROMETER,
+    )
+
     frequency_range: FreqBound = pd.Field(
         ...,
         title="Frequency Range",
@@ -5452,7 +5655,7 @@ class LossyMetalMedium(Medium):
         return val
 
     @cached_property
-    def _fitting_result(self) -> Tuple[PoleResidue, float]:
+    def _fitting_result(self) -> tuple[PoleResidue, float]:
         """Fitted scaled surface impedance and residue."""
 
         omega_data = self.Hz_to_angular_freq(self.sampling_frequencies)
@@ -5506,6 +5709,10 @@ class LossyMetalMedium(Medium):
             skin_depths = 1 / np.sqrt(np.pi * frequencies * MU_0 * self.conductivity)
             correction = self.roughness.roughness_correction_factor(frequencies, skin_depths)
 
+        if self.thickness is not None:
+            k_wave = self.Hz_to_angular_freq(frequencies) / C_0 * (n + 1j * k)
+            correction /= -np.tanh(1j * k_wave * self.thickness)
+
         return correction * ETA_0 / (n + 1j * k)
 
     @cached_property
@@ -5526,7 +5733,7 @@ class LossyMetalMedium(Medium):
             self.fit_param.frequency_sampling_points,
         )
 
-    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal_numerical(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor for numerical considerations
         such as meshing and runtime estimation.
 
@@ -5579,9 +5786,10 @@ class LossyMetalMedium(Medium):
         return ax
 
 
-IsotropicUniformMediumType = Union[
+IsotropicUniformMediumFor2DType = Union[
     Medium, LossyMetalMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium
 ]
+IsotropicUniformMediumType = Union[IsotropicUniformMediumFor2DType, PMCMedium]
 IsotropicCustomMediumType = Union[
     CustomPoleResidue,
     CustomSellmeier,
@@ -5655,7 +5863,7 @@ class AnisotropicMedium(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}. "
+                f"currently supported for medium class {cls.__name__}. "
                 "Please add modulation to each component."
             )
         return val
@@ -5670,9 +5878,9 @@ class AnisotropicMedium(AbstractMedium):
         return values
 
     @cached_property
-    def components(self) -> Dict[str, Medium]:
+    def components(self) -> dict[str, Medium]:
         """Dictionary of diagonal medium components."""
-        return dict(xx=self.xx, yy=self.yy, zz=self.zz)
+        return {"xx": self.xx, "yy": self.yy, "zz": self.zz}
 
     @cached_property
     def is_time_modulated(self) -> bool:
@@ -5696,7 +5904,7 @@ class AnisotropicMedium(AbstractMedium):
         return np.mean(self.eps_diagonal(frequency), axis=0)
 
     @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
 
         eps_xx = self.xx.eps_model(frequency)
@@ -5728,6 +5936,37 @@ class AnisotropicMedium(AbstractMedium):
         field_name = cmp + cmp
         return self.components[field_name].eps_model(frequency)
 
+    def _eps_plot(
+        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+    ) -> float:
+        """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
+        be selected for anisotropic medium.
+
+        Parameters
+        ----------
+        frequency : float
+        eps_component : PermittivityComponent
+
+        Returns
+        -------
+        float
+            Element ``eps_component`` of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        if eps_component is None:
+            # return the average of the diag
+            return self.eps_model(frequency).real
+        if eps_component in ["xx", "yy", "zz"]:
+            # return the requested diagonal component
+            comp2indx = {"x": 0, "y": 1, "z": 2}
+            return self.eps_comp(
+                row=comp2indx[eps_component[0]],
+                col=comp2indx[eps_component[1]],
+                frequency=frequency,
+            ).real
+        raise ValueError(
+            f"Plotting component '{eps_component}' of a diagonally-anisotropic permittivity tensor is not supported."
+        )
+
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
         """Plot n, k of a :class:`.Medium` as a function of frequency."""
@@ -5748,18 +5987,27 @@ class AnisotropicMedium(AbstractMedium):
         return ax
 
     @property
-    def elements(self) -> Dict[str, IsotropicUniformMediumType]:
+    def elements(self) -> dict[str, IsotropicUniformMediumType]:
         """The diagonal elements of the medium as a dictionary."""
-        return dict(xx=self.xx, yy=self.yy, zz=self.zz)
+        return {"xx": self.xx, "yy": self.yy, "zz": self.zz}
 
     @cached_property
     def is_pec(self):
         """Whether the medium is a PEC."""
         return any(self.is_comp_pec(i) for i in range(3))
 
+    @cached_property
+    def is_pmc(self):
+        """Whether the medium is a PMC."""
+        return any(self.is_comp_pmc(i) for i in range(3))
+
     def is_comp_pec(self, comp: Axis):
         """Whether the medium is a PEC."""
         return isinstance(self.components[["xx", "yy", "zz"][comp]], PECMedium)
+
+    def is_comp_pmc(self, comp: Axis):
+        """Whether the medium is a PMC."""
+        return isinstance(self.components[["xx", "yy", "zz"][comp]], PMCMedium)
 
     def sel_inside(self, bounds: Bound):
         """Return a new medium that contains the minimal amount data necessary to cover
@@ -5850,7 +6098,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
+                f"currently supported for medium class {cls.__name__}."
             )
         return val
 
@@ -5965,7 +6213,7 @@ class FullyAnisotropicMedium(AbstractMedium):
     @cached_property
     def eps_sigma_diag(
         self,
-    ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float], TensorReal]:
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float], TensorReal]:
         """Main components of permittivity and conductivity tensors and their directions."""
 
         perm_diag, vecs = np.linalg.eig(self.permittivity)
@@ -5985,7 +6233,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         return np.mean(eps_diag)
 
     @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
 
         perm_diag, cond_diag, _ = self.eps_sigma_diag
@@ -6016,6 +6264,32 @@ class FullyAnisotropicMedium(AbstractMedium):
         eps = self.permittivity[row][col]
         sig = self.conductivity[row][col]
         return AbstractMedium.eps_sigma_to_eps_complex(eps, sig, frequency)
+
+    def _eps_plot(
+        self, frequency: float, eps_component: Optional[PermittivityComponent] = None
+    ) -> float:
+        """Returns real part of epsilon for plotting. A specific component of the epsilon tensor can
+        be selected for anisotropic medium.
+
+        Parameters
+        ----------
+        frequency : float
+        eps_component : PermittivityComponent
+
+        Returns
+        -------
+        float
+            Element ``eps_component`` of the relative permittivity tensor evaluated at ``frequency``.
+        """
+        if eps_component is None:
+            # return the average of the diag
+            return self.eps_model(frequency).real
+
+        # return the requested component
+        comp2indx = {"x": 0, "y": 1, "z": 2}
+        return self.eps_comp(
+            row=comp2indx[eps_component[0]], col=comp2indx[eps_component[1]], frequency=frequency
+        ).real
 
     @cached_property
     def n_cfl(self):
@@ -6193,7 +6467,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
+    ) -> tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -6225,6 +6499,41 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         return tuple(
             mat_component.eps_dataarray_freq(frequency)[ind]
             for ind, mat_component in enumerate(self.components.values())
+        )
+
+    def _eps_bounds(
+        self,
+        frequency: Optional[float] = None,
+        eps_component: Optional[PermittivityComponent] = None,
+    ) -> tuple[float, float]:
+        """Returns permittivity bounds for setting the color bounds when plotting.
+
+        Parameters
+        ----------
+        frequency : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        eps_component : Optional[PermittivityComponent] = None
+            Component of the permittivity tensor to plot for anisotropic materials,
+            e.g. ``"xx"``, ``"yy"``, ``"zz"``, ``"xy"``, ``"yz"``, ...
+            Defaults to ``None``, which returns the average of the diagonal values.
+
+        Returns
+        -------
+        Tuple[float, float]
+            The min and max values of the permittivity for the selected component and evaluated at ``frequency``.
+        """
+        comps = ["xx", "yy", "zz"]
+        if eps_component in comps:
+            # Return the bounds of a specific component
+            eps_dataarray = self.eps_dataarray_freq(frequency)
+            eps = self._get_real_vals(eps_dataarray[comps.index(eps_component)])
+            return (np.min(eps), np.max(eps))
+        if eps_component is None:
+            # Returns the bounds across all components
+            return super()._eps_bounds(frequency=frequency)
+        raise ValueError(
+            f"Plotting component '{eps_component}' of a diagonally-anisotropic permittivity tensor is not supported."
         )
 
     def _sel_custom_data_inside(self, bounds: Bound):
@@ -6633,7 +6942,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     )
 
     poles_perturbation: Optional[
-        Tuple[Tuple[Optional[ParameterPerturbation], Optional[ParameterPerturbation]], ...]
+        tuple[tuple[Optional[ParameterPerturbation], Optional[ParameterPerturbation]], ...]
     ] = pd.Field(
         None,
         title="Perturbations of Poles",
@@ -6777,7 +7086,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
                 eps_inf_field = eps_inf_field + delta_eps
 
             if delta_sigma is not None:
-                poles_field = poles_field + [[zeros, 0.5 * delta_sigma / EPSILON_0]]
+                poles_field = [*poles_field, [zeros, 0.5 * delta_sigma / EPSILON_0]]
         else:
             # sample eps_inf
             if self.eps_inf_perturbation is not None:
@@ -6814,6 +7123,7 @@ MediumType3D = Union[
     Medium,
     AnisotropicMedium,
     PECMedium,
+    PMCMedium,
     PoleResidue,
     Sellmeier,
     Lorentz,
@@ -6848,7 +7158,7 @@ class Medium2D(AbstractMedium):
 
     """
 
-    ss: IsotropicUniformMediumType = pd.Field(
+    ss: IsotropicUniformMediumFor2DType = pd.Field(
         ...,
         title="SS Component",
         description="Medium describing the ss-component of the diagonal permittivity tensor. "
@@ -6859,7 +7169,7 @@ class Medium2D(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    tt: IsotropicUniformMediumType = pd.Field(
+    tt: IsotropicUniformMediumFor2DType = pd.Field(
         ...,
         title="TT Component",
         description="Medium describing the tt-component of the diagonal permittivity tensor. "
@@ -6876,12 +7186,12 @@ class Medium2D(AbstractMedium):
         if val is not None:
             raise ValidationError(
                 f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
+                f"currently supported for medium class {cls.__name__}."
             )
         return val
 
-    @skip_if_fields_missing(["ss"])
     @pd.validator("tt", always=True)
+    @skip_if_fields_missing(["ss"])
     def _validate_inplane_pec(cls, val, values):
         """ss/tt components must be both PEC or non-PEC."""
         if isinstance(val, PECMedium) != isinstance(values["ss"], PECMedium):
@@ -6893,7 +7203,7 @@ class Medium2D(AbstractMedium):
 
     @classmethod
     def _weighted_avg(
-        cls, meds: List[IsotropicUniformMediumType], weights: List[float]
+        cls, meds: list[IsotropicUniformMediumFor2DType], weights: list[float]
     ) -> Union[PoleResidue, PECMedium]:
         """Average ``meds`` with weights ``weights``."""
         eps_inf = 1
@@ -6916,8 +7226,8 @@ class Medium2D(AbstractMedium):
     def volumetric_equivalent(
         self,
         axis: Axis,
-        adjacent_media: Tuple[MediumType3D, MediumType3D],
-        adjacent_dls: Tuple[float, float],
+        adjacent_media: tuple[MediumType3D, MediumType3D],
+        adjacent_dls: tuple[float, float],
     ) -> AnisotropicMedium:
         """Produces a 3D volumetric equivalent medium. The new medium has thickness equal to
         the average of the ``dls`` in the ``axis`` direction.
@@ -6947,7 +7257,7 @@ class Medium2D(AbstractMedium):
             The 3D material corresponding to this 2D material.
         """
 
-        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumType:
+        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumFor2DType:
             """Extract the ``comp`` component of ``med``."""
             if isinstance(med, AnisotropicMedium):
                 dim = "xyz"[comp]
@@ -7082,7 +7392,7 @@ class Medium2D(AbstractMedium):
             The 2D equivalent of the given 3D medium.
         """
         med = cls._weighted_avg([medium], [thickness])
-        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range)
+        return Medium2D(ss=med, tt=med, frequency_range=medium.frequency_range, name=medium.name)
 
     @classmethod
     def from_anisotropic_medium(
@@ -7121,7 +7431,7 @@ class Medium2D(AbstractMedium):
         return np.mean(self.eps_diagonal(frequency=frequency), axis=0)
 
     @ensure_freq_in_range
-    def eps_diagonal(self, frequency: float) -> Tuple[complex, complex]:
+    def eps_diagonal(self, frequency: float) -> tuple[complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
         log.warning(
             "The permittivity of a 'Medium2D' is unphysical. "
@@ -7133,7 +7443,7 @@ class Medium2D(AbstractMedium):
         eps_tt = self.tt.eps_model(frequency)
         return (eps_ss, eps_tt)
 
-    def eps_diagonal_numerical(self, frequency: float) -> Tuple[complex, complex, complex]:
+    def eps_diagonal_numerical(self, frequency: float) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor for numerical considerations
         such as meshing and runtime estimation.
 
@@ -7209,9 +7519,9 @@ class Medium2D(AbstractMedium):
         return np.mean([self.ss.sigma_model(freq), self.tt.sigma_model(freq)], axis=0)
 
     @property
-    def elements(self) -> Dict[str, IsotropicUniformMediumType]:
+    def elements(self) -> dict[str, IsotropicUniformMediumFor2DType]:
         """The diagonal elements of the 2D medium as a dictionary."""
-        return dict(ss=self.ss, tt=self.tt)
+        return {"ss": self.ss, "tt": self.tt}
 
     @cached_property
     def n_cfl(self):

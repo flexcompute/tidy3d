@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Union
 
 import pydantic.v1 as pd
 
-from ..base_sim.monitor import AbstractMonitor
-from ..monitor import AbstractFieldMonitor, ModeSolverMonitor
-from ..types import FreqArray
+from tidy3d.components.base_sim.monitor import AbstractMonitor
+from tidy3d.components.monitor import AbstractFieldMonitor, ModeSolverMonitor, PermittivityMonitor
+from tidy3d.components.types import FreqArray
 
 BYTES_COMPLEX = 8
 
@@ -42,7 +42,7 @@ class EMEMonitor(AbstractMonitor, ABC):
         "will be omitted. A value of 'None' will record all sweep indices.",
     )
 
-    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -124,7 +124,7 @@ class EMEModeSolverMonitor(EMEMonitor):
     ... )
     """
 
-    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Note: not yet supported. Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -198,10 +198,10 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
     ... )
     """
 
-    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[pd.PositiveInt, pd.PositiveInt, pd.PositiveInt] = pd.Field(
         (1, 1, 1),
         title="Spatial Interval",
-        description="Note: not yet supported. Number of grid step intervals between monitor recordings. If equal to 1, "
+        description="Number of grid step intervals between monitor recordings. If equal to 1, "
         "there will be no downsampling. If greater than 1, the step will be applied, but the "
         "first and last point of the monitor grid are always included.",
     )
@@ -262,7 +262,7 @@ class EMECoefficientMonitor(EMEMonitor):
     ... )
     """
 
-    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -298,5 +298,9 @@ class EMECoefficientMonitor(EMEMonitor):
 
 
 EMEMonitorType = Union[
-    EMEModeSolverMonitor, EMEFieldMonitor, EMECoefficientMonitor, ModeSolverMonitor
+    EMEModeSolverMonitor,
+    EMEFieldMonitor,
+    EMECoefficientMonitor,
+    ModeSolverMonitor,
+    PermittivityMonitor,
 ]

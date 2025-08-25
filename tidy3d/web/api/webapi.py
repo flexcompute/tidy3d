@@ -1,24 +1,23 @@
 """Provides lowest level, user-facing interface to server."""
 
+from __future__ import annotations
+
 import json
 import os
 import tempfile
 import time
-from datetime import datetime, timedelta
-from typing import Callable, Dict, List
+from typing import Callable, Literal, Optional, Union
 
-import pytz
 from requests import HTTPError
 from rich.progress import Progress
 
-from ...components.medium import AbstractCustomMedium
-from ...components.mode.mode_solver import ModeSolver
-from ...components.mode.simulation import ModeSimulation
-from ...components.types import Literal
-from ...exceptions import WebError
-from ...log import get_logging_console, log
-from ..core.account import Account
-from ..core.constants import (
+from tidy3d.components.medium import AbstractCustomMedium
+from tidy3d.components.mode.mode_solver import ModeSolver
+from tidy3d.components.mode.simulation import ModeSimulation
+from tidy3d.exceptions import WebError
+from tidy3d.log import get_logging_console, log
+from tidy3d.web.core.account import Account
+from tidy3d.web.core.constants import (
     MODE_DATA_HDF5_GZ,
     MODE_FILE_HDF5_GZ,
     SIM_FILE_HDF5,
@@ -26,15 +25,12 @@ from ..core.constants import (
     SIMULATION_DATA_HDF5_GZ,
     TaskId,
 )
-from ..core.environment import Env
-from ..core.task_core import Folder, SimulationTask
-from ..core.task_info import ChargeType, TaskInfo
-from .connect_util import (
-    REFRESH_TIME,
-    get_grid_points_str,
-    get_time_steps_str,
-    wait_for_connection,
-)
+from tidy3d.web.core.environment import Env
+from tidy3d.web.core.task_core import Folder, SimulationTask
+from tidy3d.web.core.task_info import ChargeType, TaskInfo
+from tidy3d.web.core.types import PayType
+
+from .connect_util import REFRESH_TIME, get_grid_points_str, get_time_steps_str, wait_for_connection
 from .tidy3d_stub import SimulationDataType, SimulationType, Tidy3dStub, Tidy3dStubData
 
 # time between checking run status
@@ -47,7 +43,7 @@ SIM_FILE_JSON = "simulation.json"
 GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
 
 # if a solver is in beta stage, cost is subject to change
-BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE"]
+BETA_TASK_TYPES = ["HEAT", "EME", "HEAT_CHARGE", "VOLUME_MESH"]
 
 # map task_type to solver name for display
 SOLVER_NAME = {
@@ -57,6 +53,7 @@ SOLVER_NAME = {
     "EME": "EME",
     "HEAT": "Heat",
     "HEAT_CHARGE": "HeatCharge",
+    "VOLUME_MESH": "VolumeMesher",
 }
 
 
@@ -76,15 +73,17 @@ def run(
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: str = None,
+    callback_url: Optional[str] = None,
     verbose: bool = True,
-    progress_callback_upload: Callable[[float], None] = None,
-    progress_callback_download: Callable[[float], None] = None,
-    solver_version: str = None,
-    worker_group: str = None,
+    progress_callback_upload: Optional[Callable[[float], None]] = None,
+    progress_callback_download: Optional[Callable[[float], None]] = None,
+    solver_version: Optional[str] = None,
+    worker_group: Optional[str] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: list[str] = None,
+    parent_tasks: Optional[list[str]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
+    pay_type: Union[PayType, str] = PayType.AUTO,
+    priority: Optional[int] = None,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -117,7 +116,10 @@ def run(
         worker group
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-
+    pay_type: Union[PayType, str] = PayType.AUTO
+       Which method to pay the simulation.
+    priority: int = None
+        Task priority for vGPU queue (1=lowest, 10=highest).
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -178,6 +180,8 @@ def run(
         task_id,
         solver_version=solver_version,
         worker_group=worker_group,
+        pay_type=pay_type,
+        priority=priority,
     )
     monitor(task_id, verbose=verbose)
     data = load(
@@ -193,13 +197,13 @@ def upload(
     simulation: SimulationType,
     task_name: str,
     folder_name: str = "default",
-    callback_url: str = None,
+    callback_url: Optional[str] = None,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: List[str] = None,
+    parent_tasks: Optional[list[str]] = None,
     source_required: bool = True,
-    solver_version: str = None,
+    solver_version: Optional[str] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> TaskId:
     """
@@ -250,6 +254,9 @@ def upload(
 
     """
 
+    if isinstance(simulation, (ModeSolver, ModeSimulation)):
+        simulation = get_reduced_simulation(simulation, reduce_simulation)
+
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
@@ -279,8 +286,6 @@ def upload(
     remote_sim_file = SIM_FILE_HDF5_GZ
     if task_type == "MODE_SOLVER":
         remote_sim_file = MODE_FILE_HDF5_GZ
-    if task_type == "MODE_SOLVER" or task_type == "MODE":
-        simulation = get_reduced_simulation(simulation, reduce_simulation)
 
     task.upload_simulation(
         stub=stub,
@@ -289,6 +294,8 @@ def upload(
         remote_sim_file=remote_sim_file,
     )
     estimate_cost(task_id=task.task_id, solver_version=solver_version, verbose=verbose)
+
+    task.validate_post_upload(parent_tasks=parent_tasks)
 
     # log the url for the task in the web UI
     log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
@@ -322,7 +329,6 @@ def get_reduced_simulation(simulation, reduce_simulation):
     there. Note that if we do the latter we may want to also modify the warning below to only
     happen if there are custom media *and* they extend beyond the simulation domain.
     """
-
     if reduce_simulation == "auto":
         if isinstance(simulation, ModeSimulation):
             sim_mediums = simulation.scene.mediums
@@ -339,7 +345,6 @@ def get_reduced_simulation(simulation, reduce_simulation):
                 " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
                 " silence this warning."
             )
-
     if reduce_simulation:
         return simulation.reduced_simulation_copy
     return simulation
@@ -369,8 +374,10 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
 @wait_for_connection
 def start(
     task_id: TaskId,
-    solver_version: str = None,
-    worker_group: str = None,
+    solver_version: Optional[str] = None,
+    worker_group: Optional[str] = None,
+    pay_type: Union[PayType, str] = PayType.AUTO,
+    priority: Optional[int] = None,
 ) -> None:
     """Start running the simulation associated with task.
 
@@ -383,21 +390,29 @@ def start(
         target solver version.
     worker_group: str = None
         worker group
+    pay_type: Union[PayType, str] = PayType.AUTO
+        Which method to pay the simulation
+    priority: int = None
+        Task priority for vGPU queue (1=lowest, 10=highest).
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
     """
+    if priority is not None and (priority < 1 or priority > 10):
+        raise ValueError("Priority must be between '1' and '10' if specified.")
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
     task.submit(
         solver_version=solver_version,
         worker_group=worker_group,
+        pay_type=pay_type,
+        priority=priority,
     )
 
 
 @wait_for_connection
-def get_run_info(task_id: TaskId):
+def get_run_info(task_id: TaskId) -> tuple[Optional[float], Optional[float]]:
     """Gets the % done and field_decay for a running task.
 
     Parameters
@@ -585,14 +600,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
         else:
             while get_status(task_id) == "running":
                 perc_done, _ = get_run_info(task_id)
-                time.sleep(1.0)
+                time.sleep(RUN_REFRESH_TIME)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
             perc_done, field_decay = get_run_info(task_id)
-            time.sleep(1.0)
+            time.sleep(RUN_REFRESH_TIME)
 
     # post processing
     if verbose:
@@ -621,7 +636,7 @@ def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
     """Download results of task to file.
 
@@ -678,7 +693,7 @@ def download_hdf5(
     task_id: TaskId,
     path: str = SIM_FILE_HDF5,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
     """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
 
@@ -738,7 +753,7 @@ def download_log(
     task_id: TaskId,
     path: str = "tidy3d.log",
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> None:
     """Download the tidy3d log file associated with a task.
 
@@ -767,7 +782,7 @@ def load(
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> SimulationDataType:
     """
     Download and Load simulation results into :class:`.SimulationData` object.
@@ -791,7 +806,7 @@ def load(
         Unique identifier of task on server.  Returned by :meth:`upload`.
     path : str
         Download path to .hdf5 data file (including filename).
-    replace_existing: bool = True
+    replace_existing : bool = True
         Downloads the data even if path exists (overwriting the existing).
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
@@ -858,19 +873,11 @@ def delete_old(
     folder = Folder.get(folder)
     if not folder:
         return 0
-    tasks = folder.list_tasks()
-    if not tasks:
-        return 0
-    tasks = list(
-        filter(lambda t: t.created_at < datetime.now(pytz.utc) - timedelta(days=days_old), tasks)
-    )
-    for task in tasks:
-        task.delete()
-    return len(tasks)
+    return folder.delete_old(days_old)
 
 
 @wait_for_connection
-def abort(task_id: TaskId):
+def abort(task_id: TaskId) -> TaskInfo:
     """Abort server-side data associated with task.
 
     Parameters
@@ -887,20 +894,19 @@ def abort(task_id: TaskId):
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    else:
-        task.abort()
-        console = get_logging_console()
-        url = _get_url(task.task_id)
-        console.log(
-            f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
-        )
-        return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    task.abort()
+    console = get_logging_console()
+    url = _get_url(task.task_id)
+    console.log(
+        f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+    )
+    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 @wait_for_connection
 def get_tasks(
-    num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
-) -> List[Dict]:
+    num_tasks: Optional[int] = None, order: Literal["new", "old"] = "new", folder: str = "default"
+) -> list[dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
     Parameters
@@ -931,7 +937,9 @@ def get_tasks(
 
 
 @wait_for_connection
-def estimate_cost(task_id: str, verbose: bool = True, solver_version: str = None) -> float:
+def estimate_cost(
+    task_id: str, verbose: bool = True, solver_version: Optional[str] = None
+) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
@@ -1081,6 +1089,31 @@ def real_cost(task_id: str, verbose=True) -> float:
 
 @wait_for_connection
 def account(verbose=True) -> Account:
+    """Get account information including FlexCredit balance and usage limits.
+
+    Parameters
+    ----------
+    verbose : bool = True
+        If ``True``, prints account information including credit balance, expiration,
+        and free simulation counts.
+
+    Returns
+    -------
+    Account
+        Object containing account information such as credit balance, expiration dates,
+        and daily free simulation counts.
+
+    Examples
+    --------
+    Get account information:
+
+    .. code-block:: python
+
+        account_info = web.account()
+        # Displays:
+        # Current FlexCredit balance: 10.00 and expiration date: 2024-12-31 23:59:59.
+        # Remaining daily free simulations: 3.
+    """
     account_info = Account.get()
     if verbose and account_info:
         console = get_logging_console()
@@ -1113,8 +1146,28 @@ def account(verbose=True) -> Account:
 
 @wait_for_connection
 def test() -> None:
-    """
-    Confirm whether Tidy3D authentication is configured. Raises exception if not.
+    """Confirm whether Tidy3D authentication is configured.
+
+    Raises
+    ------
+    WebError
+        If Tidy3D authentication is not configured correctly.
+
+    Notes
+    -----
+    This method tests the authentication configuration by attempting to retrieve
+    the task list. If authentication is not properly set up, it will raise an
+    exception with instructions on how to configure authentication.
+
+    Examples
+    --------
+    Test authentication:
+
+    .. code-block:: python
+
+        web.test()
+        # If successful, displays:
+        # Authentication configured successfully!
     """
     try:
         # note, this is a little slow, but the only call that doesn't require providing a task id.

@@ -19,12 +19,16 @@ Examples:
 
 """
 
-from typing import Optional, Union
+from __future__ import annotations
+
+from typing import Literal, Optional
 
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.constants import AMP, VOLT
+from tidy3d.constants import inf as td_inf
 
 
 class DCVoltageSource(Tidy3dBaseModel):
@@ -45,11 +49,23 @@ class DCVoltageSource(Tidy3dBaseModel):
     """
 
     name: Optional[str]
-    voltage: Union[pd.FiniteFloat, list[pd.FiniteFloat]] = pd.Field(
+    voltage: ArrayFloat1D = pd.Field(
+        ...,
         title="Voltage",
         description="DC voltage usually used as source in 'VoltageBC' boundary conditions.",
+        units=VOLT,
     )
-    units: str = VOLT
+
+    # TODO: This should have always been in the field above but was introduced wrongly as a
+    # standalone field. Keeping for compatibility, remove in 3.0.
+    units: Literal[VOLT] = VOLT
+
+    @pd.validator("voltage")
+    def check_voltage(cls, val):
+        for v in val:
+            if v == td_inf:
+                raise ValueError(f"Voltages must be finite. Currently  voltage={val}.")
+        return val
 
 
 class DCCurrentSource(Tidy3dBaseModel):
@@ -66,5 +82,9 @@ class DCCurrentSource(Tidy3dBaseModel):
     current: pd.FiniteFloat = pd.Field(
         title="Current",
         description="DC current usually used as source in 'CurrentBC' boundary conditions.",
+        units=AMP,
     )
-    units: str = AMP
+
+    # TODO: This should have always been in the field above but was introduced wrongly as a
+    # standalone field. Keeping for compatibility, remove in 3.0.
+    units: Literal[AMP] = AMP

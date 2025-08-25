@@ -1,15 +1,17 @@
 """Abstract bases for classes that define how data is recorded from simulation."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Tuple
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ..base import cached_property
-from ..geometry.base import Box
-from ..types import ArrayFloat1D, Axis, Numpy
-from ..viz import PlotParams, plot_params_monitor
+from tidy3d.components.base import cached_property
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.types import ArrayFloat1D, Axis, Numpy
+from tidy3d.components.validators import _warn_unsupported_traced_argument
+from tidy3d.components.viz import PlotParams, plot_params_monitor
 
 
 class AbstractMonitor(Box, ABC):
@@ -21,6 +23,9 @@ class AbstractMonitor(Box, ABC):
         description="Unique name for monitor.",
         min_length=1,
     )
+
+    _warn_traced_center = _warn_unsupported_traced_argument("center")
+    _warn_traced_size = _warn_unsupported_traced_argument("size")
 
     @cached_property
     def plot_params(self) -> PlotParams:
@@ -84,7 +89,7 @@ class AbstractMonitor(Box, ABC):
             inds = np.append(inds, size - 1)
         return arr[inds]
 
-    def downsampled_num_cells(self, num_cells: Tuple[int, int, int]) -> Tuple[int, int, int]:
+    def downsampled_num_cells(self, num_cells: tuple[int, int, int]) -> tuple[int, int, int]:
         """Given a tuple of the number of cells spanned by the monitor along each dimension,
         return the number of cells one would have after downsampling based on ``interval_space``.
         """

@@ -1,11 +1,8 @@
 """Defines 'types' that various fields can be"""
 
-from typing import (
-    Literal,  # We support py3.9+, so direct typing import is fine.
-    Optional,
-    Tuple,
-    Union,
-)
+from __future__ import annotations
+
+from typing import Literal, Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
@@ -14,10 +11,11 @@ try:
     from matplotlib.axes import Axes
 except ImportError:
     Axes = None
-from shapely.geometry.base import BaseGeometry
-from typing_extensions import Annotated
+from typing import Annotated
 
-from ..exceptions import ValidationError
+from shapely.geometry.base import BaseGeometry
+
+from tidy3d.exceptions import ValidationError
 
 # type tag default name
 TYPE_TAG_STR = "type"
@@ -99,14 +97,16 @@ class ArrayLike:
     def __modify_schema__(cls, field_schema):
         """Sets the schema of DataArray object."""
 
-        schema = dict(
-            type="ArrayLike",
-        )
+        schema = {
+            "type": "ArrayLike",
+        }
         field_schema.update(schema)
 
 
 def constrained_array(
-    dtype: type = None, ndim: int = None, shape: Tuple[pydantic.NonNegativeInt, ...] = None
+    dtype: Optional[type] = None,
+    ndim: Optional[int] = None,
+    shape: Optional[tuple[pydantic.NonNegativeInt, ...]] = None,
 ) -> type:
     """Generate an ArrayLike sub-type with constraints built in."""
 
@@ -122,7 +122,7 @@ def constrained_array(
         meta_args.append(f"shape={shape}")
     type_name += "[" + ", ".join(meta_args) + "]"
 
-    return type(type_name, (ArrayLike,), dict(dtype=dtype, ndim=ndim, shape=shape))
+    return type(type_name, (ArrayLike,), {"dtype": dtype, "ndim": ndim, "shape": shape})
 
 
 # pre-define a set of commonly used array like instances for import and use in type hints
@@ -187,19 +187,20 @@ ScalarSymmetry = Literal[0, 1]
 """ geometric """
 
 Size1D = pydantic.NonNegativeFloat
-Size = Tuple[Size1D, Size1D, Size1D]
-Coordinate = Tuple[float, float, float]
-CoordinateOptional = Tuple[Optional[float], Optional[float], Optional[float]]
-Coordinate2D = Tuple[float, float]
-Bound = Tuple[Coordinate, Coordinate]
-GridSize = Union[pydantic.PositiveFloat, Tuple[pydantic.PositiveFloat, ...]]
+Size = tuple[Size1D, Size1D, Size1D]
+Coordinate = tuple[float, float, float]
+CoordinateOptional = tuple[Optional[float], Optional[float], Optional[float]]
+Coordinate2D = tuple[float, float]
+Bound = tuple[Coordinate, Coordinate]
+GridSize = Union[pydantic.PositiveFloat, tuple[pydantic.PositiveFloat, ...]]
 Axis = Literal[0, 1, 2]
 Axis2D = Literal[0, 1]
 Shapely = BaseGeometry
 PlanePosition = Literal["bottom", "middle", "top"]
 ClipOperationType = Literal["union", "intersection", "difference", "symmetric_difference"]
 BoxSurface = Literal["x-", "x+", "y-", "y+", "z-", "z+"]
-LengthUnit = Literal["nm", "μm", "um", "mm", "cm", "m"]
+LengthUnit = Literal["nm", "μm", "um", "mm", "cm", "m", "mil", "in"]
+PriorityMode = Literal["equal", "conductor"]
 
 """ medium """
 
@@ -208,12 +209,14 @@ InterpMethod = Literal["nearest", "linear"]
 
 # Complex = Union[complex, ComplexNumber]
 Complex = Union[tidycomplex, ComplexNumber]
-PoleAndResidue = Tuple[Complex, Complex]
+PoleAndResidue = tuple[Complex, Complex]
 
 # PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
 FreqBoundMax = float
 FreqBoundMin = float
-FreqBound = Tuple[FreqBoundMin, FreqBoundMax]
+FreqBound = tuple[FreqBoundMin, FreqBoundMax]
+
+PermittivityComponent = Literal["xx", "xy", "xz", "yx", "yy", "yz", "zx", "zy", "zz"]
 
 """ sources """
 
@@ -224,9 +227,10 @@ Direction = Literal["+", "-"]
 
 EMField = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
 FieldType = Literal["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-FreqArray = Union[Tuple[float, ...], ArrayFloat1D]
-ObsGridArray = Union[Tuple[float, ...], ArrayFloat1D]
+FreqArray = Union[tuple[float, ...], ArrayFloat1D]
+ObsGridArray = Union[tuple[float, ...], ArrayFloat1D]
 PolarizationBasis = Literal["linear", "circular"]
+AuxField = Literal["Nfx", "Nfy", "Nfz"]
 
 """ plotting """
 
@@ -249,3 +253,11 @@ TrackFreq = Literal["central", "lowest", "highest"]
 """ lumped elements"""
 
 LumpDistType = Literal["off", "laterally_only", "on"]
+
+""" dataset """
+
+xyz = Literal["x", "y", "z"]
+UnitsZBF = Literal["mm", "cm", "in", "m"]
+
+""" sentinel """
+Undefined = object()

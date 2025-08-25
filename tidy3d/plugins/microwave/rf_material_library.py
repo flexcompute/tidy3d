@@ -1,8 +1,11 @@
 """Holds dispersive models for several commonly used RF materials."""
 
 # from ...components.base import Tidy3dBaseModel
-from ...components.medium import PoleResidue
-from ...material_library.material_library import MaterialItem, VariantItem
+from __future__ import annotations
+
+from tidy3d.components.medium import PoleResidue
+from tidy3d.material_library.material_library import MaterialItem, VariantItem
+
 from .rf_material_reference import rf_material_refs
 
 Rogers3003_design = VariantItem(
@@ -201,53 +204,53 @@ FR4_lowloss = VariantItem(
     reference=[rf_material_refs["FR4_lowloss"]],
 )
 
-rf_material_library = dict(
-    RO3003=MaterialItem(
+rf_material_library = {
+    "RO3003": MaterialItem(
         name="Rogers3003",
-        variants=dict(
-            design=Rogers3003_design,
-            process=Rogers3003_process,
-        ),
+        variants={
+            "design": Rogers3003_design,
+            "process": Rogers3003_process,
+        },
         default="design",
     ),
-    RO3010=MaterialItem(
+    "RO3010": MaterialItem(
         name="Rogers3010",
-        variants=dict(
-            design=Rogers3010_design,
-            process=Rogers3010_process,
-        ),
+        variants={
+            "design": Rogers3010_design,
+            "process": Rogers3010_process,
+        },
         default="design",
     ),
-    RO4003C=MaterialItem(
+    "RO4003C": MaterialItem(
         name="Rogers4003C",
-        variants=dict(
-            design=Rogers4003C_design,
-            process=Rogers4003C_process,
-        ),
+        variants={
+            "design": Rogers4003C_design,
+            "process": Rogers4003C_process,
+        },
         default="design",
     ),
-    RO4350B=MaterialItem(
+    "RO4350B": MaterialItem(
         name="Rogers4350B",
-        variants=dict(
-            design=Rogers4350B_design,
-            process=Rogers4350B_process,
-        ),
+        variants={
+            "design": Rogers4350B_design,
+            "process": Rogers4350B_process,
+        },
         default="design",
     ),
-    AD255C=MaterialItem(
+    "AD255C": MaterialItem(
         name="ArlonAD255C",
-        variants=dict(
-            design=ArlonAD255C_design,
-            process=ArlonAD255C_process,
-        ),
+        variants={
+            "design": ArlonAD255C_design,
+            "process": ArlonAD255C_process,
+        },
         default="design",
     ),
-    FR4=MaterialItem(
+    "FR4": MaterialItem(
         name="FR4",
-        variants=dict(
-            standard=FR4_standard,
-            lowloss=FR4_lowloss,
-        ),
+        variants={
+            "standard": FR4_standard,
+            "lowloss": FR4_lowloss,
+        },
         default="standard",
     ),
-)
+}

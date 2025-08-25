@@ -1,5 +1,7 @@
 """Tests generation of pythons script from simulation file."""
 
+from __future__ import annotations
+
 import tidy3d as td
 from scripts.make_script import main
 
@@ -29,4 +31,4 @@ def test_make_script(tmp_path):
 
     # make sure that file was created and is not empty
     assert out_path.is_file(), f"out file {out_path} wasn't created."
-    assert len(out_path.read_text()) > 0, f"out file {out_path} is empty."
+    assert len(out_path.read_text(encoding="utf-8")) > 0, f"out file {out_path} is empty."

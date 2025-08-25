@@ -1,6 +1,7 @@
 """Functional utilities that help define postprocessing functions more simply in ``invdes``."""
 
 # TODO: improve these?
+from __future__ import annotations
 
 import typing
 

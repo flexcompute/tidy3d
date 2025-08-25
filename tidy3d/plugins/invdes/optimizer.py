@@ -1,4 +1,5 @@
 # specification for running the optimizer
+from __future__ import annotations
 
 import abc
 import typing
@@ -139,7 +140,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def continue_run(
         self,
         result: InverseDesignResult,
-        num_steps: int = None,
+        num_steps: typing.Optional[int] = None,
         post_process_fn: typing.Optional[typing.Callable] = None,
         callback: typing.Optional[typing.Callable] = None,
     ) -> InverseDesignResult:
@@ -229,7 +230,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def continue_run_from_file(
         self,
         fname: str,
-        num_steps: int = None,
+        num_steps: typing.Optional[int] = None,
         post_process_fn: typing.Optional[typing.Callable] = None,
         callback: typing.Optional[typing.Callable] = None,
     ) -> InverseDesignResult:
@@ -244,7 +245,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def continue_run_from_history(
         self,
-        num_steps: int = None,
+        num_steps: typing.Optional[int] = None,
         post_process_fn: typing.Optional[typing.Callable] = None,
         callback: typing.Optional[typing.Callable] = None,
     ) -> InverseDesignResult:
@@ -285,10 +286,10 @@ class AdamOptimizer(AbstractOptimizer):
     def initial_state(self, parameters: np.ndarray) -> dict:
         """initial state of the optimizer"""
         zeros = np.zeros_like(parameters)
-        return dict(m=zeros, v=zeros, t=0)
+        return {"m": zeros, "v": zeros, "t": 0}
 
     def update(
-        self, parameters: np.ndarray, gradient: np.ndarray, state: dict = None
+        self, parameters: np.ndarray, gradient: np.ndarray, state: typing.Optional[dict] = None
     ) -> tuple[np.ndarray, dict]:
         if state is None:
             state = self.initial_state(parameters)
@@ -311,5 +312,5 @@ class AdamOptimizer(AbstractOptimizer):
 
         # update parameters and state
         parameters -= self.learning_rate * m_ / (np.sqrt(v_) + self.eps)
-        state = dict(m=m, v=v, t=t)
+        state = {"m": m, "v": v, "t": t}
         return parameters, state

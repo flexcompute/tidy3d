@@ -1,4 +1,5 @@
 # autograd wrapper for web functions
+from __future__ import annotations
 
 import os
 import tempfile
@@ -8,21 +9,29 @@ from os.path import basename, dirname, join
 from pathlib import Path
 
 import numpy as np
+import xarray as xr
 from autograd.builtins import dict as dict_ag
 from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd.constants import (
+    ADJOINT_FREQ_CHUNK_SIZE,
+    MAX_NUM_ADJOINT_PER_FWD,
+    MAX_NUM_TRACED_STRUCTURES,
+)
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.components.types import Literal
+from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.exceptions import AdjointError
+from tidy3d.web.api.asynchronous import DEFAULT_DATA_DIR
+from tidy3d.web.api.asynchronous import run_async as run_async_webapi
+from tidy3d.web.api.container import DEFAULT_DATA_PATH, Batch, BatchData, Job
+from tidy3d.web.api.tidy3d_stub import SimulationDataType, SimulationType
+from tidy3d.web.api.webapi import run as run_webapi
+from tidy3d.web.core.s3utils import download_file, upload_file
+from tidy3d.web.core.types import PayType
 
-from ....exceptions import AdjointError
-from ...core.s3utils import download_file, upload_file
-from ..asynchronous import DEFAULT_DATA_DIR
-from ..asynchronous import run_async as run_async_webapi
-from ..container import DEFAULT_DATA_PATH, Batch, BatchData, Job
-from ..tidy3d_stub import SimulationDataType, SimulationType
-from ..webapi import run as run_webapi
 from .utils import E_to_D, FieldMap, TracerKeys, get_derivative_maps
 
 # keys for data into auxiliary dictionary
@@ -33,9 +42,6 @@ AUX_KEY_SIM_ORIGINAL = "sim_original"
 # server-side auxiliary files to upload/download
 SIM_VJP_FILE = "output/autograd_sim_vjp.hdf5"
 SIM_FIELDS_KEYS_FILE = "autograd_sim_fields_keys.hdf5"
-
-MAX_NUM_TRACED_STRUCTURES = 500
-MAX_NUM_ADJOINT_PER_FWD = 10
 
 # default value for whether to do local gradient calculation (True) or server side (False)
 LOCAL_GRADIENT = False
@@ -56,14 +62,14 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
         return False
 
     # if no tracers just use regular web.run()
-    traced_fields = simulation.strip_traced_fields(
+    traced_fields = simulation._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
     )
     if not traced_fields:
         return False
 
     # if no frequency-domain data (e.g. only field time monitors), raise an error
-    if not simulation.freqs_adjoint:
+    if not simulation._freqs_adjoint:
         raise AdjointError(
             "No frequency-domain data found in simulation, but found traced structures. "
             "For an autograd run, you must have at least one frequency-domain monitor."
@@ -95,17 +101,19 @@ def run(
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
-    callback_url: str = None,
+    callback_url: typing.Optional[str] = None,
     verbose: bool = True,
-    progress_callback_upload: typing.Callable[[float], None] = None,
-    progress_callback_download: typing.Callable[[float], None] = None,
-    solver_version: str = None,
-    worker_group: str = None,
+    progress_callback_upload: typing.Optional[typing.Callable[[float], None]] = None,
+    progress_callback_download: typing.Optional[typing.Callable[[float], None]] = None,
+    solver_version: typing.Optional[str] = None,
+    worker_group: typing.Optional[str] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: list[str] = None,
+    parent_tasks: typing.Optional[list[str]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: Literal["auto", True, False] = "auto",
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
+    pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    priority: typing.Optional[int] = None,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -143,7 +151,10 @@ def run(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
-
+    pay_type: typing.Union[PayType, str] = PayType.AUTO
+        Which method to pay for the simulation.
+    priority: int = None
+        Task priority for vGPU queue (1=lowest, 10=highest).
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -188,7 +199,8 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
-
+    if priority is not None and (priority < 1 or priority > 10):
+        raise ValueError("Priority must be between '1' and '10' if specified.")
     if is_valid_for_autograd(simulation):
         return _run(
             simulation=simulation,
@@ -205,6 +217,7 @@ def run(
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            pay_type=pay_type,
         )
 
     return run_webapi(
@@ -221,6 +234,8 @@ def run(
         simulation_type=simulation_type,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
+        priority=priority,
     )
 
 
@@ -228,14 +243,16 @@ def run_async(
     simulations: dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: str = None,
-    num_workers: int = None,
+    callback_url: typing.Optional[str] = None,
+    num_workers: typing.Optional[int] = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: dict[str, list[str]] = None,
+    solver_version: typing.Optional[str] = None,
+    parent_tasks: typing.Optional[dict[str, list[str]]] = None,
     local_gradient: bool = LOCAL_GRADIENT,
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-    reduce_simulation: Literal["auto", True, False] = "auto",
+    reduce_simulation: typing.Literal["auto", True, False] = "auto",
+    pay_type: typing.Union[PayType, str] = PayType.AUTO,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -257,6 +274,10 @@ def run_async(
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
+    solver_version: Optional[str] = None
+        Target solver version.
     local_gradient: bool = False
         Whether to perform gradient calculations locally, requiring more downloads but potentially
         more stable with experimental features.
@@ -264,6 +285,8 @@ def run_async(
         Maximum number of adjoint simulations allowed to run automatically.
     reduce_simulation: Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
+    pay_type: typing.Union[PayType, str] = PayType.AUTO
+        Specify the payment method.
 
     Returns
     ------
@@ -280,7 +303,6 @@ def run_async(
     :class:`Batch`
         Interface for submitting several :class:`Simulation` objects to sever.
     """
-
     if is_valid_for_autograd_async(simulations):
         return _run_async(
             simulations=simulations,
@@ -290,9 +312,11 @@ def run_async(
             num_workers=num_workers,
             verbose=verbose,
             simulation_type="tidy3d_autograd_async",
+            solver_version=solver_version,
             parent_tasks=parent_tasks,
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+            pay_type=pay_type,
         )
 
     return run_async_webapi(
@@ -303,8 +327,10 @@ def run_async(
         num_workers=num_workers,
         verbose=verbose,
         simulation_type=simulation_type,
+        solver_version=solver_version,
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
+        pay_type=pay_type,
     )
 
 
@@ -396,7 +422,7 @@ def setup_run(simulation: td.Simulation) -> AutogradFieldMap:
     """Process a user-supplied ``Simulation`` into inputs to ``_run_primitive``."""
 
     # get a mapping of all the traced fields in the provided simulation
-    return simulation.strip_traced_fields(
+    return simulation._strip_traced_fields(
         include_untraced_data_arrays=False, starting_path=("structures",)
     )
 
@@ -406,7 +432,7 @@ def postprocess_run(traced_fields_data: AutogradFieldMap, aux_data: dict) -> td.
 
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
     sim_data_original = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
-    return sim_data_original.insert_traced_fields(traced_fields_data)
+    return sim_data_original._insert_traced_fields(traced_fields_data)
 
 
 """ Autograd-traced Primitive for FWD pass ``run`` functions """
@@ -425,6 +451,9 @@ def _run_primitive(
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
 
     td.log.info("running primitive '_run_primitive()'")
+
+    # indicate this is a forward run. not exposed to user but used internally by pipeline.
+    run_kwargs["is_adjoint"] = False
 
     # compute the combined simulation for both local and remote, so we can validate it
     sim_combined = setup_fwd(
@@ -456,7 +485,7 @@ def _run_primitive(
         # TODO: put this in postprocess?
         aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
         aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
-        field_map = sim_data_orig.strip_traced_fields(
+        field_map = sim_data_orig._strip_traced_fields(
             include_untraced_data_arrays=True, starting_path=("data",)
         )
 
@@ -520,7 +549,7 @@ def _run_async_primitive(
             sim_data_orig = sim_data_orig_dict[task_name]
             aux_data_dict[task_name][AUX_KEY_FWD_TASK_ID] = task_id_fwd
             aux_data_dict[task_name][AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
-            field_map = sim_data_orig.strip_traced_fields(
+            field_map = sim_data_orig._strip_traced_fields(
                 include_untraced_data_arrays=True, starting_path=("data",)
             )
             field_map_fwd_dict[task_name] = field_map
@@ -533,14 +562,12 @@ def setup_fwd(
     sim_original: td.Simulation,
     local_gradient: bool = LOCAL_GRADIENT,
 ) -> td.Simulation:
-    """Set up the combined forward simulation."""
+    """Return a forward simulation with adjoint monitors attached."""
 
-    # if local gradient, make and run a sim with combined original & adjoint monitors
-    if local_gradient:
-        return sim_original.with_adjoint_monitors(sim_fields)
-
-    # if remote gradient, add them later
-    return sim_original
+    # Always try to build the variant that includes adjoint monitors so that
+    # errors in monitor placement are caught early.
+    sim_with_adj_mon = sim_original._with_adjoint_monitors(sim_fields)
+    return sim_with_adj_mon if local_gradient else sim_original
 
 
 def postprocess_fwd(
@@ -551,7 +578,7 @@ def postprocess_fwd(
     """Postprocess the combined simulation data into an Autograd field map."""
 
     num_mnts_original = len(sim_original.monitors)
-    sim_data_original, sim_data_fwd = sim_data_combined.split_original_fwd(
+    sim_data_original, sim_data_fwd = sim_data_combined._split_original_fwd(
         num_mnts_original=num_mnts_original
     )
 
@@ -559,7 +586,7 @@ def postprocess_fwd(
     aux_data[AUX_KEY_SIM_DATA_FWD] = sim_data_fwd
 
     # strip out the tracer AutogradFieldMap for the .data from the original sim
-    data_traced = sim_data_original.strip_traced_fields(
+    data_traced = sim_data_original._strip_traced_fields(
         include_untraced_data_arrays=True, starting_path=("data",)
     )
 
@@ -615,6 +642,9 @@ def _run_bwd(
     **run_kwargs,
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulations, computes grad."""
+
+    # indicate this is an adjoint run
+    run_kwargs["is_adjoint"] = True
 
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
@@ -692,7 +722,7 @@ def _run_bwd(
 
             # Build a per-task parent_tasks mapping
             parent_tasks = {}
-            for tname_adj in sims_adj_dict.keys():
+            for tname_adj in sims_adj_dict:
                 parent_tasks[tname_adj] = [task_id_fwd]
             run_kwargs["parent_tasks"] = parent_tasks
 
@@ -736,6 +766,9 @@ def _run_async_bwd(
     **run_async_kwargs,
 ) -> typing.Callable[[dict[str, AutogradFieldMap]], dict[str, AutogradFieldMap]]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
+
+    # indicate this is an adjoint run
+    run_async_kwargs["is_adjoint"] = True
 
     task_names = data_fields_original_dict.keys()
 
@@ -885,7 +918,7 @@ def setup_adj(
 
     # start with the full simulation data structure and either zero out the fields
     # that have no tracer data for them or insert the tracer data
-    full_sim_data_dict = sim_data_orig.strip_traced_fields(
+    full_sim_data_dict = sim_data_orig._strip_traced_fields(
         include_untraced_data_arrays=True, starting_path=("data",)
     )
     for path in full_sim_data_dict.keys():
@@ -895,17 +928,17 @@ def setup_adj(
             full_sim_data_dict[path] *= 0
 
     # insert the raw VJP data into the .data of the original SimulationData
-    sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=full_sim_data_dict)
+    sim_data_vjp = sim_data_orig._insert_traced_fields(field_mapping=full_sim_data_dict)
 
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())
 
     num_monitors = len(sim_data_orig.simulation.monitors)
-    adjoint_monitors = sim_data_orig.simulation.with_adjoint_monitors(sim_fields_keys).monitors[
+    adjoint_monitors = sim_data_orig.simulation._with_adjoint_monitors(sim_fields_keys).monitors[
         num_monitors:
     ]
 
-    sims_adj = sim_data_vjp.make_adjoint_sims(
+    sims_adj = sim_data_vjp._make_adjoint_sims(
         data_vjp_paths=data_vjp_paths,
         adjoint_monitors=adjoint_monitors,
     )
@@ -945,6 +978,50 @@ def setup_adj(
     return sims_adj
 
 
+def _compute_eps_array(medium, frequencies):
+    """Compute permittivity array for all frequencies.
+
+    Parameters
+    ----------
+    medium : Medium
+        Medium to compute permittivity for.
+    frequencies : ArrayLike
+        Array of frequencies at which to evaluate permittivity.
+
+    Returns
+    -------
+    DataArray
+        Permittivity values with frequency dimension.
+    """
+    eps_data = [np.mean(medium.eps_model(f)) for f in frequencies]
+    return DataArray(data=np.array(eps_data), dims=("f",), coords={"f": frequencies})
+
+
+def _slice_field_data(
+    field_data: dict, freqs: np.ndarray, component_indicator: typing.Optional[str] = None
+) -> dict:
+    """Slice field data dictionary along frequency dimension.
+
+    Parameters
+    ----------
+    field_data : dict
+        Dictionary of field components.
+    freqs : np.ndarray
+        Frequencies to select.
+    component_indicator: str
+        Component to filter field data selction on.
+
+    Returns
+    -------
+    dict
+        Sliced field data dictionary.
+    """
+    if component_indicator:
+        return {k: v.sel(f=freqs) for k, v in field_data.items() if component_indicator in k}
+    else:
+        return {k: v.sel(f=freqs) for k, v in field_data.items()}
+
+
 def postprocess_adj(
     sim_data_adj: td.SimulationData,
     sim_data_orig: td.SimulationData,
@@ -963,98 +1040,205 @@ def postprocess_adj(
     sim_fields_vjp = {}
     for structure_index, structure_paths in sim_vjp_map.items():
         # grab the forward and adjoint data
-        E_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
-        eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
-        E_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
-        eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
+        fld_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="fld")
+        eps_fwd = sim_data_fwd._get_adjoint_data(structure_index, data_type="eps")
+        fld_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="fld")
+        eps_adj = sim_data_adj._get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
-        fwd_flds_normed = {}
-        for key, val in E_adj.field_components.items():
-            fwd_flds_normed[key] = val * sim_data_adj.simulation.post_norm
+        fwd_flds_adj_normed = {}
+        for key, val in fld_adj.field_components.items():
+            fwd_flds_adj_normed[key] = val * sim_data_adj.simulation.post_norm
 
-        E_adj = E_adj.updated_copy(**fwd_flds_normed)
+        fld_adj = fld_adj.updated_copy(**fwd_flds_adj_normed)
 
         # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
         der_maps = get_derivative_maps(
-            fld_fwd=E_fwd, eps_fwd=eps_fwd, fld_adj=E_adj, eps_adj=eps_adj
+            fld_fwd=fld_fwd,
+            eps_fwd=eps_fwd,
+            fld_adj=fld_adj,
+            eps_adj=eps_adj,
         )
         E_der_map = der_maps["E"]
         D_der_map = der_maps["D"]
+        H_der_map = der_maps["H"]
 
-        D_fwd = E_to_D(E_fwd, eps_fwd)
-        D_adj = E_to_D(E_adj, eps_fwd)
+        H_info_exists = H_der_map is not None
+
+        D_fwd = E_to_D(fld_fwd, eps_fwd)
+        D_adj = E_to_D(fld_adj, eps_fwd)
 
         # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
 
-        # todo: handle multi-frequency, move to a property?
-        frequencies = {src.source_time.freq0 for src in sim_data_adj.simulation.sources}
-        frequencies = list(frequencies)
-        freq_adj = frequencies[0] or None
+        # compute epsilon arrays for all frequencies
+        adjoint_frequencies = np.array(fld_adj.monitor.freqs)
 
-        eps_in = np.mean(structure.medium.eps_model(freq_adj))
-        eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(freq_adj))
+        eps_in = _compute_eps_array(structure.medium, adjoint_frequencies)
+        eps_out = _compute_eps_array(sim_data_orig.simulation.medium, adjoint_frequencies)
+
+        # handle background medium if present
         if structure.background_medium:
-            eps_background = structure.background_medium.eps_model(freq_adj)
+            eps_background = _compute_eps_array(structure.background_medium, adjoint_frequencies)
         else:
             eps_background = None
 
-        # manually override simulation medium as the background structure
+        # auto permittivity detection for non-box geometries
         if not isinstance(structure.geometry, td.Box):
-            # auto permittivity detection
             sim_orig = sim_data_orig.simulation
             plane_eps = eps_fwd.monitor.geometry
 
-            # get permittivity without this structure
+            sim_orig_grid_spec = GridSpec.from_grid(sim_orig.grid)
+
+            # permittivity without this structure
             structs_no_struct = list(sim_orig.structures)
             structs_no_struct.pop(structure_index)
-            sim_no_structure = sim_orig.updated_copy(structures=structs_no_struct)
-            eps_no_structure = sim_no_structure.epsilon(box=plane_eps, coord_key="centers")
-
-            # get permittivity with structures on top of an infinite version of this structure
-            structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
-            sim_inf_structure = sim_orig.updated_copy(
-                structures=structs_inf_struct,
-                medium=structure.medium,
-                monitors=[],
+            sim_no_structure = sim_orig.updated_copy(
+                structures=structs_no_struct, monitors=[], sources=[], grid_spec=sim_orig_grid_spec
             )
-            eps_inf_structure = sim_inf_structure.epsilon(box=plane_eps, coord_key="centers")
 
+            eps_no_structure_data = [
+                sim_no_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+                for f in adjoint_frequencies
+            ]
+
+            eps_no_structure = xr.concat(eps_no_structure_data, dim="f").assign_coords(
+                f=adjoint_frequencies
+            )
+
+            if structure.medium.is_pec:
+                eps_inf_structure = None
+            else:
+                # permittivity with infinite structure
+                structs_inf_struct = list(sim_orig.structures)[structure_index + 1 :]
+                sim_inf_structure = sim_orig.updated_copy(
+                    structures=structs_inf_struct,
+                    medium=structure.medium,
+                    monitors=[],
+                    sources=[],
+                    grid_spec=sim_orig_grid_spec,
+                )
+
+                eps_inf_structure_data = [
+                    sim_inf_structure.epsilon(box=plane_eps, coord_key="centers", freq=f)
+                    for f in adjoint_frequencies
+                ]
+
+                eps_inf_structure = xr.concat(eps_inf_structure_data, dim="f").assign_coords(
+                    f=adjoint_frequencies
+                )
         else:
             eps_no_structure = eps_inf_structure = None
 
-        # get minimum intersection of bounds with structure and sim
+        # compute bounds intersection
         struct_bounds = rmin_struct, rmax_struct = structure.geometry.bounds
         rmin_sim, rmax_sim = sim_data_orig.simulation.bounds
         rmin_intersect = tuple([max(a, b) for a, b in zip(rmin_sim, rmin_struct)])
         rmax_intersect = tuple([min(a, b) for a, b in zip(rmax_sim, rmax_struct)])
         bounds_intersect = (rmin_intersect, rmax_intersect)
 
-        derivative_info = DerivativeInfo(
-            paths=structure_paths,
-            E_der_map=E_der_map.field_components,
-            D_der_map=D_der_map.field_components,
-            E_fwd=E_fwd.field_components,
-            E_adj=E_adj.field_components,
-            D_fwd=D_fwd.field_components,
-            D_adj=D_adj.field_components,
-            eps_data=eps_fwd.field_components,
-            eps_in=eps_in,
-            eps_out=eps_out,
-            eps_background=eps_background,
-            frequency=freq_adj,
-            eps_no_structure=eps_no_structure,
-            eps_inf_structure=eps_inf_structure,
-            bounds=struct_bounds,
-            bounds_intersect=bounds_intersect,
-        )
+        # get chunk size - if None, process all frequencies as one chunk
+        freq_chunk_size = ADJOINT_FREQ_CHUNK_SIZE
+        n_freqs = len(adjoint_frequencies)
+        if freq_chunk_size is None:
+            freq_chunk_size = n_freqs
 
-        vjp_value_map = structure.compute_derivatives(derivative_info)
+        # process in chunks
+        vjp_value_map = {}
 
-        # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
+        for chunk_start in range(0, n_freqs, freq_chunk_size):
+            chunk_end = min(chunk_start + freq_chunk_size, n_freqs)
+            freq_slice = slice(chunk_start, chunk_end)
+
+            select_adjoint_freqs = adjoint_frequencies[freq_slice]
+
+            # slice field data for current chunk
+            E_der_map_chunk = _slice_field_data(E_der_map.field_components, select_adjoint_freqs)
+            D_der_map_chunk = _slice_field_data(D_der_map.field_components, select_adjoint_freqs)
+            E_fwd_chunk = _slice_field_data(
+                fld_fwd.field_components, select_adjoint_freqs, component_indicator="E"
+            )
+            E_adj_chunk = _slice_field_data(
+                fld_adj.field_components, select_adjoint_freqs, component_indicator="E"
+            )
+            D_fwd_chunk = _slice_field_data(D_fwd.field_components, select_adjoint_freqs)
+            D_adj_chunk = _slice_field_data(D_adj.field_components, select_adjoint_freqs)
+            eps_data_chunk = _slice_field_data(eps_fwd.field_components, select_adjoint_freqs)
+
+            H_der_map_chunk = None
+            H_fwd_chunk = None
+            H_adj_chunk = None
+
+            if H_info_exists:
+                H_der_map_chunk = _slice_field_data(
+                    H_der_map.field_components, select_adjoint_freqs
+                )
+                H_fwd_chunk = _slice_field_data(
+                    fld_fwd.field_components, select_adjoint_freqs, component_indicator="H"
+                )
+                H_adj_chunk = _slice_field_data(
+                    fld_adj.field_components, select_adjoint_freqs, component_indicator="H"
+                )
+
+            # slice epsilon arrays
+            eps_in_chunk = eps_in.sel(f=select_adjoint_freqs)
+            eps_out_chunk = eps_out.sel(f=select_adjoint_freqs)
+            eps_background_chunk = (
+                eps_background.sel(f=select_adjoint_freqs) if eps_background is not None else None
+            )
+            eps_no_structure_chunk = (
+                eps_no_structure.sel(f=select_adjoint_freqs)
+                if eps_no_structure is not None
+                else None
+            )
+            eps_inf_structure_chunk = (
+                eps_inf_structure.sel(f=select_adjoint_freqs)
+                if eps_inf_structure is not None
+                else None
+            )
+
+            # create derivative info with sliced data
+            derivative_info = DerivativeInfo(
+                paths=structure_paths,
+                E_der_map=E_der_map_chunk,
+                D_der_map=D_der_map_chunk,
+                H_der_map=H_der_map_chunk,
+                E_fwd=E_fwd_chunk,
+                E_adj=E_adj_chunk,
+                D_fwd=D_fwd_chunk,
+                D_adj=D_adj_chunk,
+                H_fwd=H_fwd_chunk,
+                H_adj=H_adj_chunk,
+                eps_data=eps_data_chunk,
+                eps_in=eps_in_chunk,
+                eps_out=eps_out_chunk,
+                eps_background=eps_background_chunk,
+                frequencies=select_adjoint_freqs,  # only chunk frequencies
+                eps_no_structure=eps_no_structure_chunk,
+                eps_inf_structure=eps_inf_structure_chunk,
+                bounds=struct_bounds,
+                bounds_intersect=bounds_intersect,
+                simulation_bounds=sim_data_orig.simulation.bounds,
+                is_medium_pec=structure.medium.is_pec,
+            )
+
+            # compute derivatives for chunk
+            vjp_chunk = structure._compute_derivatives(derivative_info)
+
+            # accumulate results
+            for path, value in vjp_chunk.items():
+                if path in vjp_value_map:
+                    val = vjp_value_map[path]
+                    if isinstance(val, (list, tuple)) and isinstance(value, (list, tuple)):
+                        vjp_value_map[path] = type(val)(x + y for x, y in zip(val, value))
+                    else:
+                        vjp_value_map[path] += value
+                else:
+                    vjp_value_map[path] = value
+
+        # store vjps in output map
         for structure_path, vjp_value in vjp_value_map.items():
-            sim_path = tuple(["structures", structure_index] + list(structure_path))
+            sim_path = ("structures", structure_index, *list(structure_path))
             sim_fields_vjp[sim_path] = vjp_value
 
     return sim_fields_vjp
@@ -1071,7 +1255,7 @@ defvjp(_run_async_primitive, _run_async_bwd, argnums=[0])
 
 def parse_run_kwargs(**run_kwargs):
     """Parse the ``run_kwargs`` to extract what should be passed to the ``Job`` initialization."""
-    job_fields = list(Job._upload_fields) + ["solver_version"]
+    job_fields = [*list(Job._upload_fields), "solver_version", "pay_type"]
     job_init_kwargs = {k: v for k, v in run_kwargs.items() if k in job_fields}
     return job_init_kwargs
 
@@ -1080,6 +1264,7 @@ def _run_tidy3d(
     simulation: td.Simulation, task_name: str, **run_kwargs
 ) -> tuple[td.SimulationData, str]:
     """Run a simulation without any tracers using regular web.run()."""
+
     job_init_kwargs = parse_run_kwargs(**run_kwargs)
     job = Job(simulation=simulation, task_name=task_name, **job_init_kwargs)
     td.log.info(f"running {job.simulation_type} simulation with '_run_tidy3d()'")
@@ -1098,6 +1283,7 @@ def _run_async_tidy3d(
     simulations: dict[str, td.Simulation], **run_kwargs
 ) -> tuple[BatchData, dict[str, str]]:
     """Run a batch of simulations using regular web.run()."""
+
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     path_dir = run_kwargs.pop("path_dir", None)
     batch = Batch(simulations=simulations, **batch_init_kwargs)

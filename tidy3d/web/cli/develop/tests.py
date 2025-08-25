@@ -3,6 +3,8 @@ This module contains the CLI commands for testing the tidy3d package. This inclu
 notebooks in order to achieve reproducibility between hardwares.
 """
 
+from __future__ import annotations
+
 import click
 
 from .index import develop
@@ -10,8 +12,8 @@ from .install import install_in_poetry
 from .utils import echo_and_run_subprocess
 
 __all__ = [
-    "test_options",
     "test_in_environment_command",
+    "test_options",
 ]
 
 

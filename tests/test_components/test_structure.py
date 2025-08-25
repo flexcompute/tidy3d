@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import autograd as ag
 import autograd.numpy as anp
 import gdstk
 import numpy as np
 import pydantic.v1 as pd
 import pytest
+
 import tidy3d as td
 
 
@@ -30,7 +33,7 @@ def test_custom_medium_to_gds(tmp_path):
     f = np.array([td.C_0])
     mx, my, mz, _ = np.meshgrid(x, y, z, f, indexing="ij", sparse=True)
     data = 1 + 1 / (1 + (mx - 1) ** 2 + my**2 + mz**2)
-    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=x, y=y, z=z, f=f))
+    eps_diagonal_data = td.ScalarFieldDataArray(data, coords={"x": x, "y": y, "z": z, "f": f})
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
     eps_dataset = td.PermittivityDataset(**eps_components)
     medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
@@ -62,7 +65,7 @@ def test_lower_dimension_custom_medium_to_gds(tmp_path):
     f = np.array([td.C_0])
     mx, my, mz, _ = np.meshgrid(x, y, z, f, indexing="ij", sparse=True)
     data = 1 + 1 / (1 + (mx - 1) ** 2 + mz**2)
-    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=x, y=y, z=z, f=f))
+    eps_diagonal_data = td.ScalarFieldDataArray(data, coords={"x": x, "y": y, "z": z, "f": f})
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
     eps_dataset = td.PermittivityDataset(**eps_components)
     medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
@@ -86,7 +89,7 @@ def test_non_symmetric_custom_medium_to_gds(tmp_path):
     data = 1 + mx + 0 * my + (mz - 2) ** 2
     print(data.min(), data.max())
 
-    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=x, y=y, z=z, f=f))
+    eps_diagonal_data = td.ScalarFieldDataArray(data, coords={"x": x, "y": y, "z": z, "f": f})
     eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
     eps_dataset = td.PermittivityDataset(**eps_components)
     medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
@@ -137,6 +140,31 @@ def test_invalid_polyslab(axis):
 
     geo7 = td.GeometryGroup(geometries=[(ps - box).rotated(np.pi / 4, j)]).rotated(-np.pi / 4, j)
     _ = td.Structure(geometry=geo7, medium=medium)
+
+    # normal with zero component along the slab axis
+    n1 = (axis, 2 * (axis - 1), 3 * (axis - 2))
+    # normal with non-zero component along the slab axis
+    n2 = (2 * (axis - 1), 3 * (axis - 2), axis)
+
+    geo8 = ps.reflected(n1)
+    _ = td.Structure(geometry=geo8, medium=medium)
+
+    geo9 = ps.reflected(n2).scaled(2, 2, 2).translated(-1, 0.5, 2).reflected(n2)
+    _ = td.Structure(geometry=geo9, medium=medium)
+
+    geo10 = ps.reflected(n1)
+    _ = td.Structure(geometry=geo10, medium=medium)
+
+    geo11 = ps.reflected(n2)
+    with pytest.raises(pd.ValidationError):
+        _ = td.Structure(geometry=geo11, medium=medium)
+
+    geo12 = td.GeometryGroup(geometries=[ps]).reflected(n2)
+    with pytest.raises(pd.ValidationError):
+        _ = td.Structure(geometry=geo12, medium=medium)
+
+    geo13 = td.GeometryGroup(geometries=[(ps - box).reflected(n2)]).reflected(n2)
+    _ = td.Structure(geometry=geo13, medium=medium)
 
 
 def test_validation_of_structures_with_2d_materials():

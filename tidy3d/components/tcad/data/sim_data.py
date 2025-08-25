@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from abc import ABC
+from typing import Literal, Optional
 
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.base_sim.data.sim_data import AbstractSimulationData
 from tidy3d.components.data.data_array import (
     SpatialDataArray,
@@ -17,19 +19,20 @@ from tidy3d.components.data.utils import (
     TriangularGridDataset,
     UnstructuredGridDataset,
 )
+from tidy3d.components.tcad.data.monitor_data.mesh import VolumeMeshData
 from tidy3d.components.tcad.data.types import (
     SteadyPotentialData,
     TCADMonitorDataType,
     TemperatureData,
 )
+from tidy3d.components.tcad.mesher import VolumeMesher
+from tidy3d.components.tcad.monitors.mesh import VolumeMeshMonitor
 from tidy3d.components.tcad.simulation.heat import HeatSimulation
 from tidy3d.components.tcad.simulation.heat_charge import HeatChargeSimulation
-from tidy3d.components.types import Ax, Literal, RealFieldVal, annotate_type
+from tidy3d.components.types import Ax, RealFieldVal, annotate_type
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
-from tidy3d.exceptions import DataError
+from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.log import log
-
-from ...base import Tidy3dBaseModel
 
 
 class DeviceCharacteristics(Tidy3dBaseModel):
@@ -73,8 +76,132 @@ class DeviceCharacteristics(Tidy3dBaseModel):
         description="Device steady DC current-voltage relation for the device.",
     )
 
+    steady_dc_resistance_voltage: Optional[SteadyVoltageDataArray] = pd.Field(
+        None,
+        title="Small signal resistance",
+        description="Steady DC computation of the small signal resistance. This is computed "
+        "as the derivative of the current-voltage relation, delta(V)/delta(I) and the result "
+        "is given in Ohms. Note that in 2D the resistance is given in :math:`\\Omega \\mu`.",
+    )
 
-class HeatChargeSimulationData(AbstractSimulationData):
+
+class AbstractHeatChargeSimulationData(AbstractSimulationData, ABC):
+    """Abstract class for HeatChargeSimulation results, or VolumeMesher results."""
+
+    simulation: HeatChargeSimulation = pd.Field(
+        title="Heat-Charge Simulation",
+        description="Original :class:`.HeatChargeSimulation` associated with the data.",
+    )
+
+    @staticmethod
+    def _get_field_by_name(monitor_data: TCADMonitorDataType, field_name: Optional[str] = None):
+        """Return a field data based on a monitor dataset and a specified field name."""
+        if field_name is None:
+            if len(monitor_data.field_components) > 1:
+                raise DataError(
+                    "'field_name' must be specified for datasets that store more than one field."
+                )
+            field_name = next(iter(monitor_data.field_components))
+
+        if field_name not in monitor_data.field_components.keys():
+            raise DataError(f"field_name '{field_name}' not found in data.")
+
+        field = monitor_data.field_components[field_name]
+        if field is None:
+            raise DataError(f"Field {field_name} is empty.")
+
+        return field
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_mesh(
+        self,
+        monitor_name: str,
+        field_name: Optional[str] = None,
+        structures_fill: bool = True,
+        ax: Ax = None,
+        **sel_kwargs,
+    ) -> Ax:
+        """Plot the simulation mesh in a monitor region with structures overlaid.
+
+        Parameters
+        ----------
+        monitor_name : str
+            Name of :class:`.HeatChargeMonitor` to plot. Must be a monitor with the `unstructured=True` setting.
+        field_name : Optional[str] = "mesh"
+            Name of ``field`` component whose associated grid to plot. Not required if monitor data contains only one field.
+        structures_fill : bool = True
+            Whether to overlay the mesh on structures filled with color or only show structure outlines.
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+        sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
+            These kwargs can select over the spatial dimensions (``x``, ``y``, ``z``),
+            or time dimension (``t``) if applicable.
+            For the plotting to work appropriately, the resulting data after selection must contain
+            only two coordinates with len > 1.
+            Furthermore, these should be spatial coordinates (``x``, ``y``, or ``z``).
+
+        Note
+        ----
+            For 3D simulations, the 2D mesh shown here would be the result of slicing the underlying unstructured tetrahedral grid with the selected plane.
+            If however the monitor sets `conformal=True`, the simulation mesh has been made to conform to the monitor plane, in which case the visualized mesh is exact.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        monitor_data = self[monitor_name]
+
+        if not monitor_data.monitor.unstructured:
+            raise DataError("'plot_mesh' can only be used with unstructured-grid monitors.")
+
+        field_data = self._get_field_by_name(monitor_data=monitor_data, field_name=field_name)
+
+        # do sel on unstructured data
+        if len(sel_kwargs) > 0:
+            field_data = field_data.sel(**sel_kwargs)
+
+        if isinstance(field_data, TetrahedralGridDataset):
+            raise DataError(
+                "Must select a two-dimensional slice of unstructured dataset for plotting"
+                " on a plane."
+            )
+
+        # compute parameters for structures plot
+        axis = field_data.normal_axis
+        position = field_data.normal_pos
+
+        # compute plot bounds
+        field_data_bounds = field_data.bounds
+        min_bounds = list(field_data_bounds[0])
+        max_bounds = list(field_data_bounds[1])
+        min_bounds.pop(axis)
+        max_bounds.pop(axis)
+
+        # select the cross section data
+        interp_kwarg = {"xyz"[axis]: position}
+        # plot the simulation structures first, because we don't use alpha
+        ax = self.simulation.scene.plot_structures(
+            ax=ax,
+            fill=structures_fill,
+            hlim=(min_bounds[0], max_bounds[0]),
+            vlim=(min_bounds[1], max_bounds[1]),
+            **interp_kwarg,
+        )
+
+        # only then overlay the mesh plot
+        field_data.plot(ax=ax, cmap=False, field=False, grid=True)
+
+        # set the limits based on the xarray coordinates min and max
+        ax.set_xlim(min_bounds[0], max_bounds[0])
+        ax.set_ylim(min_bounds[1], max_bounds[1])
+
+        return ax
+
+
+class HeatChargeSimulationData(AbstractHeatChargeSimulationData):
     """Stores results of a :class:`HeatChargeSimulation`.
 
     Example
@@ -118,12 +245,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
     ... )
     """
 
-    simulation: HeatChargeSimulation = pd.Field(
-        title="Heat-Charge Simulation",
-        description="Original :class:`.HeatChargeSimulation` associated with the data.",
-    )
-
-    data: Tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
+    data: tuple[annotate_type(TCADMonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
@@ -147,17 +269,17 @@ class HeatChargeSimulationData(AbstractSimulationData):
         scale: Literal["lin", "log"] = "lin",
         structures_alpha: float = 0.2,
         robust: bool = True,
-        vmin: float = None,
-        vmax: float = None,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
-        """Plot the data for a monitor with simulation plot overlaid.
+        """Plot the data for a monitor with simulation structures overlaid.
 
         Parameters
         ----------
-        field_monitor_name : str
-            Name of :class:`.TemperatureMonitorData` to plot.
+        monitor_name : str
+            Name of :class:`.HeatChargeMonitor` to plot.
         field_name : Optional[Literal["temperature", "potential"]] = None
             Name of ``field`` component to plot (eg. `'temperature'`). Not required if monitor data contains only one field.
         val : Literal['real', 'abs', 'abs^2'] = 'real'
@@ -165,8 +287,8 @@ class HeatChargeSimulationData(AbstractSimulationData):
         scale : Literal['lin', 'log']
             Plot in linear or logarithmic scale.
         structures_alpha : float = 0.2
-            Opacity of the structure permittivity.
-            Must be between 0 and 1 (inclusive).
+            Opacity of the structure property to plot (heat conductivity or electric conductivity
+            depending on the type of monitor). Must be between 0 and 1 (inclusive).
         robust : bool = True
             If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
             to compute the color limits. This helps in visualizing the field patterns especially
@@ -195,23 +317,13 @@ class HeatChargeSimulationData(AbstractSimulationData):
         monitor_data = self[monitor_name]
         property_to_plot = None
 
-        if field_name is None:
-            if isinstance(monitor_data, TemperatureData):
-                field_name = "temperature"
-            elif isinstance(monitor_data, SteadyPotentialData):
-                field_name = "potential"
+        field = self._get_field_by_name(monitor_data=monitor_data, field_name=field_name)
 
-        if field_name not in monitor_data.field_components.keys():
-            raise DataError(f"field_name '{field_name}' not found in data.")
-
-        field = monitor_data.field_components[field_name]
-        if field is None:
-            raise DataError(f"Field {field_name} is empty and cannot be plotted.")
         # forward field name to actual data so it gets displayed
         # field.name = field_name
         field_data = self._field_component_value(field, val)
 
-        if isinstance(monitor_data, TemperatureData):
+        if isinstance(monitor_data, (TemperatureData, VolumeMeshData)):
             property_to_plot = "heat_conductivity"
         elif isinstance(monitor_data, SteadyPotentialData):
             property_to_plot = "electric_conductivity"
@@ -270,7 +382,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
                 if field_data.coords[axis].size <= 1:
                     field_data = field_data.sel(**{axis: pos}, method="nearest")
                 else:
-                    field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
+                    field_data = field_data.interp(**{axis: pos}, kwargs={"bounds_error": True})
 
             # select the extra coordinates out of the data from user-specified kwargs
             for coord_name, coord_val in sel_kwargs.items():
@@ -278,7 +390,7 @@ class HeatChargeSimulationData(AbstractSimulationData):
                     field_data = field_data.sel(**{coord_name: coord_val}, method=None)
                 else:
                     field_data = field_data.interp(
-                        **{coord_name: coord_val}, kwargs=dict(bounds_error=True)
+                        **{coord_name: coord_val}, kwargs={"bounds_error": True}
                     )
 
             field_data = field_data.squeeze(drop=True)
@@ -369,3 +481,106 @@ class HeatSimulationData(HeatChargeSimulationData):
             "'HeatChargeSimulationData' instead"
         )
         return values
+
+
+class VolumeMesherData(AbstractHeatChargeSimulationData):
+    """Stores results of a :class:`VolumeMesher`.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> import numpy as np
+    >>> mesh_mnt = td.VolumeMeshMonitor(size=(1, 2, 3), name="mesh")
+    >>> temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="sample")
+    >>> heat_sim = td.HeatChargeSimulation(
+    ...     size=(3.0, 3.0, 3.0),
+    ...     structures=[
+    ...         td.Structure(
+    ...             geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+    ...             medium=td.Medium(
+    ...                 permittivity=2.0, heat_spec=td.SolidSpec(
+    ...                     conductivity=1,
+    ...                     capacity=1,
+    ...                 )
+    ...             ),
+    ...             name="box",
+    ...         ),
+    ...     ],
+    ...     medium=td.Medium(permittivity=3.0, heat_spec=td.FluidSpec()),
+    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+    ...     sources=[td.HeatSource(rate=1, structures=["box"])],
+    ...     boundary_spec=[
+    ...         td.HeatChargeBoundarySpec(
+    ...             placement=td.StructureBoundary(structure="box"),
+    ...             condition=td.TemperatureBC(temperature=500),
+    ...         )
+    ...     ],
+    ...     monitors=[temp_mnt],
+    ... )
+    >>> tet_grid_points = td.PointDataArray(
+    ...     [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    ...     dims=("index", "axis"),
+    ... )
+    >>> tet_grid_cells = td.CellDataArray(
+    ...     [[0, 1, 2, 4], [1, 2, 3, 4]],
+    ...     dims=("cell_index", "vertex_index"),
+    ... )
+    >>> tet_grid_values = td.IndexedDataArray(
+    ...     np.zeros((tet_grid_points.shape[0],)),
+    ...     dims=("index",),
+    ...     name="Mesh",
+    ... )
+    >>> tet_grid = td.TetrahedralGridDataset(
+    ...     points=tet_grid_points,
+    ...     cells=tet_grid_cells,
+    ...     values=tet_grid_values,
+    ... )
+    >>> mesh_mnt_data = td.VolumeMeshData(monitor=mesh_mnt, mesh=tet_grid) # doctest: +SKIP
+    >>> mesh_data = td.VolumeMesherData(simulation=heat_sim, data=[mesh_mnt_data], monitors=[mesh_mnt]) # doctest: +SKIP
+    """
+
+    monitors: tuple[VolumeMeshMonitor, ...] = pd.Field(
+        ...,
+        title="Monitors",
+        description="List of monitors to be used for the mesher.",
+    )
+
+    data: tuple[VolumeMeshData, ...] = pd.Field(
+        ...,
+        title="Monitor Data",
+        description="List of :class:`.MonitorData` instances "
+        "associated with the monitors of the original :class:`.VolumeMesher`.",
+    )
+
+    @property
+    def mesher(self) -> VolumeMesher:
+        """Get the mesher associated with this mesher data."""
+        return VolumeMesher(
+            simulation=self.simulation,
+            monitors=self.monitors,
+        )
+
+    @pd.root_validator(skip_on_failure=True)
+    def data_monitors_match_sim(cls, values):
+        """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
+        ``.simulation``.
+        """
+        monitors = values.get("monitors")
+        data = values.get("data")
+        mnt_names = {mnt.name for mnt in monitors}
+
+        for mnt_data in data:
+            monitor_name = mnt_data.monitor.name
+            if monitor_name not in mnt_names:
+                raise DataError(
+                    f"Data with monitor name '{monitor_name}' supplied "
+                    f"but not found in the list of monitors."
+                )
+        return values
+
+    def get_monitor_by_name(self, name: str) -> VolumeMeshMonitor:
+        """Return monitor named 'name'."""
+        for monitor in self.monitors:
+            if monitor.name == name:
+                return monitor
+        raise Tidy3dKeyError(f"No monitor named '{name}'")

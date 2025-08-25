@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ....exceptions import SetupError
-from ...base import cached_property
-from ...data.data_array import EMEScalarFieldDataArray, EMESMatrixDataArray
-from ...data.monitor_data import FieldData, ModeData, ModeSolverData
-from ...data.sim_data import AbstractYeeGridSimulationData
-from ...types import annotate_type
-from ..simulation import EMESimulation
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import EMEScalarFieldDataArray, EMESMatrixDataArray
+from tidy3d.components.data.monitor_data import FieldData, ModeData, ModeSolverData
+from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
+from tidy3d.components.eme.simulation import EMESimulation
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.types import annotate_type
+from tidy3d.exceptions import SetupError
+from tidy3d.log import log
+
 from .dataset import EMESMatrixDataset
 from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
 
@@ -25,7 +28,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         ..., title="EME simulation", description="EME simulation associated with this data."
     )
 
-    data: Tuple[annotate_type(EMEMonitorDataType), ...] = pd.Field(
+    data: tuple[annotate_type(EMEMonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of EME monitor data "
@@ -36,15 +39,25 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         None, title="S Matrix", description="Scattering matrix of the EME simulation."
     )
 
-    port_modes: Optional[EMEModeSolverData] = pd.Field(
+    port_modes_raw: Optional[EMEModeSolverData] = pd.Field(
         None,
         title="Port Modes",
         description="Modes associated with the two ports of the EME device. "
-        "The scattering matrix is expressed in this basis.",
+        "The scattering matrix is expressed in this basis. "
+        "Note: these modes are not symmetry expanded; use 'port_modes' instead.",
     )
 
+    @cached_property
+    def port_modes(self):
+        """Modes associated with the two ports of the EME device.
+        The scattering matrix is expressed in this basis.
+        Note: these modes are symmetry expanded."""
+        if self.port_modes_raw is None:
+            return None
+        return self.port_modes_raw.symmetry_expanded_copy
+
     def _extract_mode_solver_data(
-        self, data: EMEModeSolverData, eme_cell_index: int, sweep_index: int = None
+        self, data: EMEModeSolverData, eme_cell_index: int, sweep_index: Optional[int] = None
     ) -> ModeSolverData:
         """Extract :class:`.ModeSolverData` at a given ``eme_cell_index``.
         Assumes the :class:`.EMEModeSolverMonitor` spans the entire simulation and has
@@ -71,14 +84,31 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             }
 
         monitor = self.simulation.mode_solver_monitors[eme_cell_index]
-        monitor = monitor.updated_copy(
-            colocate=data.monitor.colocate,
+        monitor = monitor.updated_copy(colocate=data.monitor.colocate)
+        box = Box.from_bounds(
+            *Box.bounds_intersection(monitor.geometry.bounds, data.monitor.geometry.bounds)
         )
+        size = box.size
+        center = box.center
+        if size.count(0.0) == 1:
+            monitor = monitor.updated_copy(size=size, center=center)
+        else:
+            log.warning(
+                "'ModeSolverData' extracted from 'EMEModeSolverData' "
+                "is not 2D, so it may not be possible to compute "
+                "certain derived quantities, like the flux."
+            )
         grid_expanded = self.simulation.discretize_monitor(monitor=monitor)
-        return ModeSolverData(**update_dict, monitor=monitor, grid_expanded=grid_expanded)
+        return ModeSolverData(
+            **update_dict,
+            monitor=monitor,
+            grid_expanded=grid_expanded,
+            symmetry=data.symmetry,
+            symmetry_center=data.symmetry_center,
+        )
 
     @cached_property
-    def port_modes_tuple(self) -> Tuple[ModeSolverData, ModeSolverData]:
+    def port_modes_tuple(self) -> tuple[ModeSolverData, ModeSolverData]:
         """Port modes as a tuple ``(port_modes_1, port_modes_2)``."""
         if self.port_modes is None:
             raise SetupError(
@@ -101,7 +131,7 @@ class EMESimulationData(AbstractYeeGridSimulationData):
         return port_modes_1, port_modes_2
 
     @cached_property
-    def port_modes_list_sweep(self) -> List[Tuple[ModeSolverData, ModeSolverData]]:
+    def port_modes_list_sweep(self) -> list[tuple[ModeSolverData, ModeSolverData]]:
         """Port modes as a list of tuples ``(port_modes_1, port_modes_2)``.
         There is one entry for every sweep index if the port modes vary with sweep index."""
         if self.port_modes is None:
@@ -287,18 +317,30 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             data21[:, sweep_index, :, :] = S21.to_numpy()
             data22[:, sweep_index, :, :] = S22.to_numpy()
 
-        coords11 = dict(
-            f=f, sweep_index=sweep_indices, mode_index_out=mode_index_1, mode_index_in=mode_index_1
-        )
-        coords12 = dict(
-            f=f, sweep_index=sweep_indices, mode_index_out=mode_index_1, mode_index_in=mode_index_2
-        )
-        coords21 = dict(
-            f=f, sweep_index=sweep_indices, mode_index_out=mode_index_2, mode_index_in=mode_index_1
-        )
-        coords22 = dict(
-            f=f, sweep_index=sweep_indices, mode_index_out=mode_index_2, mode_index_in=mode_index_2
-        )
+        coords11 = {
+            "f": f,
+            "sweep_index": sweep_indices,
+            "mode_index_out": mode_index_1,
+            "mode_index_in": mode_index_1,
+        }
+        coords12 = {
+            "f": f,
+            "sweep_index": sweep_indices,
+            "mode_index_out": mode_index_1,
+            "mode_index_in": mode_index_2,
+        }
+        coords21 = {
+            "f": f,
+            "sweep_index": sweep_indices,
+            "mode_index_out": mode_index_2,
+            "mode_index_in": mode_index_1,
+        }
+        coords22 = {
+            "f": f,
+            "sweep_index": sweep_indices,
+            "mode_index_out": mode_index_2,
+            "mode_index_in": mode_index_2,
+        }
         xrS11 = EMESMatrixDataArray(data11, coords=coords11)
         xrS12 = EMESMatrixDataArray(data12, coords=coords12)
         xrS21 = EMESMatrixDataArray(data21, coords=coords21)
@@ -389,15 +431,15 @@ class EMESimulationData(AbstractYeeGridSimulationData):
             shape[-2] = 1
             field_data[field_key] = np.empty(shape, dtype=complex)
             field_data[field_key][:] = np.nan
-            field_coords[field_key] = dict(
-                x=field_comp.x.to_numpy(),
-                y=field_comp.y.to_numpy(),
-                z=field_comp.z.to_numpy(),
-                f=field_comp.f.to_numpy(),
-                sweep_index=sweep_indices,
-                eme_port_index=[port_index],
-                mode_index=mode_index,
-            )
+            field_coords[field_key] = {
+                "x": field_comp.x.to_numpy(),
+                "y": field_comp.y.to_numpy(),
+                "z": field_comp.z.to_numpy(),
+                "f": field_comp.f.to_numpy(),
+                "sweep_index": sweep_indices,
+                "eme_port_index": [port_index],
+                "mode_index": mode_index,
+            }
 
         # populate the arrays
         for sweep_index in sweep_indices:

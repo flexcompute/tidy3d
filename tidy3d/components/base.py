@@ -11,7 +11,7 @@ import pathlib
 import tempfile
 from functools import wraps
 from math import ceil
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 import h5py
 import numpy as np
@@ -23,8 +23,9 @@ from autograd.builtins import dict as dict_ag
 from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
 
-from ..exceptions import FileError
-from ..log import log
+from tidy3d.exceptions import FileError
+from tidy3d.log import log
+
 from .autograd.types import AutogradFieldMap, Box
 from .autograd.utils import get_static
 from .data.data_array import DATA_ARRAY_MAP, DataArray
@@ -70,7 +71,7 @@ def cached_property(cached_property_getter):
 def ndarray_encoder(val):
     """How a ``np.ndarray`` gets handled before saving to json."""
     if np.any(np.iscomplex(val)):
-        return dict(real=val.real.tolist(), imag=val.imag.tolist())
+        return {"real": val.real.tolist(), "imag": val.imag.tolist()}
     return val.real.tolist()
 
 
@@ -92,7 +93,7 @@ def _get_valid_extension(fname: str) -> str:
     )
 
 
-def skip_if_fields_missing(fields: List[str], root=False):
+def skip_if_fields_missing(fields: list[str], root=False):
     """Decorate ``validator`` to check that other fields have passed validation."""
 
     def actual_decorator(validator):
@@ -110,8 +111,7 @@ def skip_if_fields_missing(fields: List[str], root=False):
                     )
                     if root:
                         return values
-                    else:
-                        return kwargs.get("val") if "val" in kwargs.keys() else args[0]
+                    return kwargs.get("val") if "val" in kwargs else args[0]
 
             return validator(cls, *args, **kwargs)
 
@@ -229,7 +229,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return new_copy
 
     def updated_copy(
-        self, path: str = None, deep: bool = True, validate: bool = True, **kwargs
+        self, path: Optional[str] = None, deep: bool = True, validate: bool = True, **kwargs
     ) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
@@ -270,7 +270,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     f"Could not grab integer index from path '{path}'. "
                     f"Please correct the sub path containing '{integer_index_path}' to be an "
                     f"integer index into '{field_name}' (containing {len(sub_component)} elements)."
-                )
+                ) from None
 
             sub_component_list = list(sub_component)
             sub_component = sub_component_list[index]
@@ -307,7 +307,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         rich.inspect(self, methods=methods)
 
     @classmethod
-    def from_file(cls, fname: str, group_path: str = None, **parse_obj_kwargs) -> Tidy3dBaseModel:
+    def from_file(
+        cls, fname: str, group_path: Optional[str] = None, **parse_obj_kwargs
+    ) -> Tidy3dBaseModel:
         """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
@@ -333,7 +335,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     @classmethod
-    def dict_from_file(cls, fname: str, group_path: str = None) -> dict:
+    def dict_from_file(cls, fname: str, group_path: Optional[str] = None) -> dict:
         """Loads a dictionary containing the model from a .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
@@ -590,7 +592,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def dict_from_hdf5(
-        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+        cls, fname: str, group_path: str = "", custom_decoders: Optional[list[Callable]] = None
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
@@ -668,7 +670,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         cls,
         fname: str,
         group_path: str = "",
-        custom_decoders: List[Callable] = None,
+        custom_decoders: Optional[list[Callable]] = None,
         **parse_obj_kwargs,
     ) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
@@ -698,7 +700,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         )
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+    def to_hdf5(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -749,7 +751,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def dict_from_hdf5_gz(
-        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+        cls, fname: str, group_path: str = "", custom_decoders: Optional[list[Callable]] = None
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5.gz file.
 
@@ -790,7 +792,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         cls,
         fname: str,
         group_path: str = "",
-        custom_decoders: List[Callable] = None,
+        custom_decoders: Optional[list[Callable]] = None,
         **parse_obj_kwargs,
     ) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
@@ -820,7 +822,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         )
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_hdf5_gz(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+    def to_hdf5_gz(self, fname: str, custom_encoders: Optional[list[Callable]] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
 
         Parameters
@@ -873,7 +875,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 return False
 
             # loop through elements in each dict
-            for key in dict1.keys():
+            for key in dict1:  # noqa: PLC0206
                 val1 = dict1[key]
                 val2 = dict2[key]
 
@@ -948,7 +950,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = make_json_compatible(json_string)
         return json_string
 
-    def strip_traced_fields(
+    def _strip_traced_fields(
         self, starting_path: tuple[str] = (), include_untraced_data_arrays: bool = False
     ) -> AutogradFieldMap:
         """Extract a dictionary mapping paths in the model to the data traced by ``autograd``.
@@ -984,12 +986,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # for sequences, add (i,) to the path and handle each value individually
             elif isinstance(x, (list, tuple)):
                 for i, val in enumerate(x):
-                    handle_value(val, path=path + (i,))
+                    handle_value(val, path=(*path, i))
 
             # for dictionaries, add the (key,) to the path and handle each value individually
             elif isinstance(x, dict):
                 for key, val in x.items():
-                    handle_value(val, path=path + (key,))
+                    handle_value(val, path=(*path, key))
 
         # recursively parse the dictionary of this object
         self_dict = self.dict()
@@ -1004,7 +1006,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)
 
-    def insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
+    def _insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
 
         self_dict = self.dict()
@@ -1037,7 +1039,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """Version of object with all autograd-traced fields removed."""
 
         # get dictionary of all traced fields
-        field_mapping = self.strip_traced_fields()
+        field_mapping = self._strip_traced_fields()
 
         # shortcut to just return self if no tracers found, for performance
         if not field_mapping:
@@ -1047,7 +1049,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         field_mapping_static = {key: get_static(val) for key, val in field_mapping.items()}
 
         # insert the static values into a copy of self
-        return self.insert_traced_fields(field_mapping_static)
+        return self._insert_traced_fields(field_mapping_static)
 
     @classmethod
     def add_type_field(cls) -> None:
@@ -1132,7 +1134,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         doc += "\n"
         cls.__doc__ = doc
 
-    def get_submodels_by_hash(self) -> Dict[int, List[Union[str, Tuple[str, int]]]]:
+    def get_submodels_by_hash(self) -> dict[int, list[Union[str, tuple[str, int]]]]:
         """Return a dictionary of this object's sub-models indexed by their hash values."""
         fields = {}
         for key in self.__fields__:
@@ -1166,7 +1168,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     @staticmethod
     def _scientific_notation(
         min_val: float, max_val: float, min_digits: int = 4
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """
         Convert numbers to scientific notation, displaying only digits up to the point of difference,
         with a minimum number of significant digits specified by `min_digits`.

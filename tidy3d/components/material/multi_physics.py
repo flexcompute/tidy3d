@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Optional
 
 import pydantic.v1 as pd
@@ -98,6 +100,86 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
         None, title="Charge properties", description="Specifies properties for Charge simulations."
     )
 
+    def __getattr__(self, name: str):
+        """
+        Delegate attribute lookup to inner media or fail fast.
+
+        Parameters
+        ----------
+        name : str
+            The attribute that could not be found on the ``MultiPhysicsMedium`` itself.
+
+        Returns
+        -------
+        Any
+            * The attribute value obtained from a delegated sub-medium when
+            ``name`` is listed in ``DELEGATED_ATTRIBUTES``.
+            * ``None`` when ``name`` is explicitly ignored (e.g. ``"__deepcopy__"``).
+
+        Raises
+        ------
+        ValueError
+            If ``name`` is neither ignored nor in the delegation map, signalling that
+            the caller may have intended to access ``optical``, ``heat``, or
+            ``charge`` directly.
+
+        Notes
+        -----
+        Only the attributes enumerated in the local ``DELEGATED_ATTRIBUTES`` dict are
+        forwarded.
+        Extend that mapping as additional cross-medium shim behaviour becomes
+        necessary.
+        """
+        # first check whether the attribute is already present
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            pass
+
+        IGNORED_ATTRIBUTES = ["__deepcopy__"]
+        if name in IGNORED_ATTRIBUTES:
+            return None
+
+        DELEGATED_ATTRIBUTES = {
+            "is_pmc": self.optical,
+            "_eps_plot": self.optical,
+            "viz_spec": self.optical,
+            "eps_diagonal_numerical": self.optical,
+            "eps_complex_to_nk": self.optical,
+            "nonlinear_spec": self.optical,
+            "is_pec": self.optical,
+            "is_time_modulated": self.optical,
+            "is_nonlinear": self.optical,
+            "is_fully_anisotropic": self.optical,
+            "is_custom": self.optical,
+            "is_isotropic": self.optical,
+            "is_spatially_uniform": self.optical,
+            "_incompatible_material_types": self.optical,
+            "frequency_range": self.optical,
+            "eps_model": self.optical,
+            "n_cfl": self.optical,
+            "allow_gain": self.optical,
+        }
+
+        if name == "_has_incompatibilities":
+            return (self.optical and self.optical._has_incompatibilities) or (
+                self.charge and self.charge._has_incompatibilities
+            )
+
+        if name in DELEGATED_ATTRIBUTES:
+            sub = DELEGATED_ATTRIBUTES[name]
+            if sub is None:
+                raise AttributeError(
+                    f"Requested attribute {name!r}, but the optical medium is 'None' "
+                    " on this 'MultiPhysicsMedium' instance."
+                )
+            return getattr(sub, name)
+
+        raise AttributeError(
+            f"MultiPhysicsMedium has no attribute called {name}. "
+            "Did you mean to access the attribute of one of the optical, heat or charge media?"
+        )
+
     @property
     def heat_spec(self):
         if self.heat is not None:
@@ -105,5 +187,4 @@ class MultiPhysicsMedium(Tidy3dBaseModel):
 
         if self.optical is not None:
             return self.optical.heat_spec
-        else:
-            return None
+        return None

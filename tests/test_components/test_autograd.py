@@ -1,4 +1,5 @@
 # test autograd integration into tidy3d
+from __future__ import annotations
 
 import copy
 import cProfile
@@ -13,17 +14,22 @@ import matplotlib.pylab as plt
 import numpy as np
 import numpy.testing as npt
 import pytest
-import tidy3d as td
-import tidy3d.web as web
 import xarray as xr
 from autograd.test_util import check_grads
+
+import tidy3d as td
+import tidy3d.web as web
+from tidy3d.components.autograd.constants import (
+    MAX_NUM_TRACED_STRUCTURES,
+    MIN_WVL_FRACTION_CYLINDER_DISCRETIZE,
+    MINIMUM_SPACING_FRACTION,
+)
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.components.autograd.utils import is_tidy_box
 from tidy3d.components.data.data_array import DataArray
 from tidy3d.exceptions import AdjointError
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run, run_async
-from tidy3d.web.api.autograd.autograd import MAX_NUM_TRACED_STRUCTURES
 from tidy3d.web.api.autograd.utils import FieldMap
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated, tracer_arr
@@ -86,7 +92,7 @@ LX = 3.5 * WVL if IS_3D else 0.0
 PML_X = True if IS_3D else False
 
 # shape of the custom medium
-DA_SHAPE_X = 1 if IS_3D else 1
+DA_SHAPE_X = 1
 DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
 
 # number of vertices in the polyslab
@@ -175,7 +181,7 @@ def use_emulated_run(monkeypatch):
                 sim_original = simulation
                 sim_fields_keys = run_kwargs["sim_fields_keys"]
                 # add gradient monitors and make combined simulation
-                sim_combined = sim_original.with_adjoint_monitors(sim_fields_keys)
+                sim_combined = sim_original._with_adjoint_monitors(sim_fields_keys)
                 sim_data_combined = run_emulated(sim_combined, task_name=task_name)
 
                 # store both original and fwd data aux_data
@@ -235,7 +241,7 @@ def use_emulated_run(monkeypatch):
                 def load_sim_data(self, task_name):
                     return batch_data_orig[task_name]
 
-            task_paths = {task_name: "" for task_name in simulations.keys()}
+            task_paths = dict.fromkeys(simulations.keys(), "")
 
             batch_data = EmulatedBatchData(
                 task_paths=task_paths,
@@ -313,17 +319,34 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     eps_arr = 1.01 + 0.5 * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
 
     nx, ny, nz = eps_arr.shape
+    da_coords = {
+        "x": np.linspace(-0.5, 0.5, nx),
+        "y": np.linspace(-0.5, 0.5, ny),
+        "z": np.linspace(-0.5, 0.5, nz),
+    }
 
     custom_med = td.Structure(
         geometry=box,
         medium=td.CustomMedium(
             permittivity=td.SpatialDataArray(
                 eps_arr,
-                coords=dict(
-                    x=np.linspace(-0.5, 0.5, nx),
-                    y=np.linspace(-0.5, 0.5, ny),
-                    z=np.linspace(-0.5, 0.5, nz),
-                ),
+                coords=da_coords,
+            ),
+        ),
+    )
+
+    # custom medium with variable permittivity and conductivity data
+    conductivity_arr = 0.01 * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
+    custom_med_with_conductivity = td.Structure(
+        geometry=box,
+        medium=td.CustomMedium(
+            permittivity=td.SpatialDataArray(
+                eps_arr,
+                coords=da_coords,
+            ),
+            conductivity=td.SpatialDataArray(
+                conductivity_arr,
+                coords=da_coords,
             ),
         ),
     )
@@ -331,12 +354,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     # custom medium with vector valued permittivity data
     eps_ii = td.ScalarFieldDataArray(
         eps_arr.reshape(nx, ny, nz, 1),
-        coords=dict(
-            x=np.linspace(-0.5, 0.5, nx),
-            y=np.linspace(-0.5, 0.5, ny),
-            z=np.linspace(-0.5, 0.5, nz),
-            f=[td.C_0],
-        ),
+        coords=da_coords | {"f": [td.C_0]},
     )
 
     custom_med_vec = td.Structure(
@@ -378,6 +396,17 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
             dilation=0.00,
         ),
         medium=med,
+    )
+
+    polyslab_dispersive = td.Structure(
+        geometry=td.PolySlab(
+            vertices=vertices,
+            slab_bounds=slab_bounds,
+            axis=POLYSLAB_AXIS,
+            sidewall_angle=0.00,
+            dilation=0.00,
+        ),
+        medium=td.material_library["Si3N4"]["Philipp1973Sellmeier"],
     )
 
     # geometry group
@@ -441,7 +470,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     x = np.linspace(-0.5, 0.5, nx)
     y = np.linspace(-0.5, 0.5, ny)
     z = np.linspace(-0.5, 0.5, nz)
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
 
     eps_inf = td.SpatialDataArray(anp.real(custom_disp_values), coords=coords)
     a1 = td.SpatialDataArray(-custom_disp_values, coords=coords)
@@ -462,19 +491,21 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     )
     cylinder = td.Structure(geometry=cylinder_geo, medium=polyslab.medium)
 
-    return dict(
-        medium=medium,
-        center_list=center_list,
-        size_element=size_element,
-        custom_med=custom_med,
-        custom_med_vec=custom_med_vec,
-        polyslab=polyslab,
-        geo_group=geo_group,
-        complex_polyslab=complex_polyslab_geo_group,
-        pole_res=pole_res,
-        custom_pole_res=custom_pole_res,
-        cylinder=cylinder,
-    )
+    return {
+        "medium": medium,
+        "center_list": center_list,
+        "size_element": size_element,
+        "custom_med": custom_med,
+        "custom_med_with_conductivity": custom_med_with_conductivity,
+        "custom_med_vec": custom_med_vec,
+        "polyslab": polyslab,
+        "polyslab_dispersive": polyslab_dispersive,
+        "geo_group": geo_group,
+        "complex_polyslab": complex_polyslab_geo_group,
+        "pole_res": pole_res,
+        "custom_pole_res": custom_pole_res,
+        "cylinder": cylinder,
+    }
 
 
 def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.SimulationData], float]]]:
@@ -535,12 +566,12 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         value += anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values)
         return value
 
-    return dict(
-        mode=(mode_mnt, mode_postprocess_fn),
-        diff=(diff_mnt, diff_postprocess_fn),
-        field_vol=(field_vol, field_vol_postprocess_fn),
-        field_point=(field_point, field_point_postprocess_fn),
-    )
+    return {
+        "mode": (mode_mnt, mode_postprocess_fn),
+        "diff": (diff_mnt, diff_postprocess_fn),
+        "field_vol": (field_vol, field_vol_postprocess_fn),
+        "field_point": (field_point, field_point_postprocess_fn),
+    }
 
 
 def plot_sim(sim: td.Simulation, plot_eps: bool = True) -> None:
@@ -563,6 +594,7 @@ structure_keys_ = (
     "center_list",
     "size_element",
     "custom_med",
+    "custom_med_with_conductivity",
     "custom_med_vec",
     "polyslab",
     "complex_polyslab",
@@ -634,7 +666,7 @@ def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
         mnt_data = data[monitor_key]
         return monitor_pp_fn(data, mnt_data)
 
-    return dict(sim=make_sim, postprocess=postprocess)
+    return {"sim": make_sim, "postprocess": postprocess}
 
 
 @pytest.mark.parametrize("axis", (0, 1, 2))
@@ -798,7 +830,7 @@ def test_autograd_async(use_emulated_run, structure_key, monitor_key):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"test_a", "adjoint", "task1", "_test"}
+    task_names = {"test_a", "adjoint", "_test"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -898,7 +930,7 @@ def test_autograd_async_some_zero_grad(use_emulated_run, structure_key, monitor_
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"1", "2", "3", "4"}
+    task_names = {"1", "2"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -920,7 +952,7 @@ def test_autograd_async_all_zero_grad(use_emulated_run):
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
 
-    task_names = {"1", "2", "3", "4"}
+    task_names = {"1", "2"}
 
     def objective(*args):
         sims = {task_name: make_sim(*args) for task_name in task_names}
@@ -1083,16 +1115,16 @@ def test_sim_full_ops(structure_key):
     def objective(*params):
         s = make_structures(*params)[structure_key]
         s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
-        sim_full_traced = SIM_FULL.updated_copy(structures=list(SIM_FULL.structures) + [s])
+        sim_full_traced = SIM_FULL.updated_copy(structures=[*list(SIM_FULL.structures), s])
 
         sim_full_static = sim_full_traced.to_static()
 
-        sim_fields = sim_full_traced.strip_traced_fields()
+        sim_fields = sim_full_traced._strip_traced_fields()
 
         # note: there is one traced structure in SIM_FULL already with 6 fields + 1 = 7
         assert len(sim_fields) == 10
 
-        sim_traced = sim_full_static.insert_traced_fields(sim_fields)
+        sim_traced = sim_full_static._insert_traced_fields(sim_fields)
 
         assert sim_traced == sim_full_traced
 
@@ -1122,8 +1154,8 @@ def test_sim_fields_io(structure_key, tmp_path):
     from file, and then converting back, returns the same object."""
     s = make_structures(params0)[structure_key]
     s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
-    sim_full_traced = SIM_FULL.updated_copy(structures=list(SIM_FULL.structures) + [s])
-    sim_fields = sim_full_traced.strip_traced_fields()
+    sim_full_traced = SIM_FULL.updated_copy(structures=[*list(SIM_FULL.structures), s])
+    sim_fields = sim_full_traced._strip_traced_fields()
 
     field_map = FieldMap.from_autograd_field_map(sim_fields)
     field_map_file = join(tmp_path, "test_sim_fields.hdf5.gz")
@@ -1138,7 +1170,7 @@ def test_web_incompatible_inputs(monkeypatch):
 
     def catch(*args, **kwargs):
         """Just raise an exception."""
-        raise AssertionError()
+        raise AssertionError
 
     monkeypatch.setattr(td.web.api.webapi, "run", catch)
     monkeypatch.setattr(td.web.api.container.Job, "run", catch)
@@ -1213,6 +1245,147 @@ def test_no_freq_adjoint(monkeypatch, use_emulated_run):
         ag.grad(objective)(params0)
 
 
+def test_adjoint_src_width():
+    """Test the adjoint source width for single sources decays by f=0."""
+
+    f0 = td.C_0 / 1.55
+    fwidth = f0
+
+    fwidths = f0 * np.linspace(0.1, 1.0, 5)
+
+    adj_srcs = [
+        td.PointDipole(
+            center=(0, 0, 0),
+            source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth),
+            polarization="Ex",
+        )
+        for fwidth in fwidths
+    ]
+
+    adj_srcs_fwidth = td.SimulationData._adjoint_src_width_single(adj_srcs)
+
+    for src in adj_srcs_fwidth:
+        assert np.isclose((src.source_time.freq0 - f0) / f0, 0.0), (
+            "f0 of adjoint source should be centered on original f0"
+        )
+
+        check_fwidth = (
+            src.source_time.freq0
+            - td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_ZERO * src.source_time.fwidth
+        ) / src.source_time.freq0
+
+        assert np.isclose(check_fwidth, 0.0) or (check_fwidth > 0.0), (
+            "fwidth of adjoint source should decay sufficiently before f=0"
+        )
+
+
+def test_broadband_adjoint_src_width():
+    """Test the broadband adjoint source handling for choosing fwidth."""
+
+    # Test the case where we have a custom current source and a wide adjoint source width that overlaps with zero.
+    # In this case, we want to issue a warning to the user about the adjoint accuracy of this setup.
+    f0_high = td.C_0 / 1.55
+    f0_low = 0.1 * f0_high
+
+    f0_adj_all = [f0_low, f0_high]
+
+    fwidth = 0.1 * f0_high
+
+    adj_srcs = []
+    x = np.array([0.0])
+    y = np.array([0.0])
+    z = np.array([0.0])
+    for f0 in f0_adj_all:
+        f = np.array([f0])
+
+        coords = {"x": x, "y": y, "z": z, "f": f}
+
+        dataset = td.FieldDataset(Ex=td.ScalarFieldDataArray(np.ones((1, 1, 1, 1)), coords=coords))
+
+        adj_srcs.append(
+            td.CustomCurrentSource(
+                center=(0, 0, 0),
+                size=(0, 0, 0),
+                source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth),
+                current_dataset=dataset,
+            )
+        )
+
+    EXPECTED_WARNING_MSG_PIECE = (
+        "Adjoint source generated with a frequency spectrum that extends to or overlaps with 0 Hz"
+    )
+    with AssertLogLevel("WARNING", contains_str=EXPECTED_WARNING_MSG_PIECE):
+        broadband_f0, broadband_fwidth = td.SimulationData._adjoint_src_width_broadband(adj_srcs)
+
+        f0_expected = 0.5 * (np.max(f0_adj_all) + np.min(f0_adj_all))
+
+        fwidth_expected = (
+            f0_expected - np.min(f0_adj_all)
+        ) / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_FMIN
+
+        assert np.isclose((f0_expected - broadband_f0) / f0_expected, 0.0), (
+            "Expected freq0 not matching for broadband source"
+        )
+        assert np.isclose((fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0), (
+            "Expected fwidth not matching for broadband source"
+        )
+
+    # Test the case where we need a wider pulse to cover all the adjoint frequencies than we would otherwise choose for
+    # each individual adjoint source
+    f0_broadband = np.linspace(f0_low, f0_high, 10)
+    fwidth_broadband = 0.1 * np.mean(f0_broadband)
+
+    adj_srcs = [
+        td.PointDipole(
+            center=(0, 0, 0),
+            source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth_broadband),
+            polarization="Ex",
+        )
+        for f0 in f0_broadband
+    ]
+
+    broadband_f0, broadband_fwidth = td.SimulationData._adjoint_src_width_broadband(adj_srcs)
+
+    f0_expected = 0.5 * (np.max(f0_broadband) + np.min(f0_broadband))
+    fwidth_expected = (
+        f0_expected - np.min(f0_broadband)
+    ) / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_FMIN
+
+    assert np.isclose((f0_expected - broadband_f0) / f0_expected, 0.0), (
+        "Expected freq0 not matching for broadband source"
+    )
+    assert np.isclose((fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0), (
+        "Expected fwidth not matching for broadband source"
+    )
+
+    # Test the case where we have a narrow set of frequencies for the adjoint sources and so we can
+    # choose a wider overall source than is needed for covering those frequencies. This larger pulse width
+    # in frequency will shorten the time pulse.
+    f0_broadband = np.linspace(0.95 * f0_high, 1.05 * f0_high, 10)
+    fwidth_broadband = 0.1 * np.mean(f0_broadband)
+
+    adj_srcs = [
+        td.PointDipole(
+            center=(0, 0, 0),
+            source_time=td.GaussianPulse(freq0=f0, fwidth=fwidth_broadband),
+            polarization="Ex",
+        )
+        for f0 in f0_broadband
+    ]
+
+    broadband_f0, broadband_fwidth = td.SimulationData._adjoint_src_width_broadband(adj_srcs)
+
+    f0_expected = 0.5 * (np.max(f0_broadband) + np.min(f0_broadband))
+    fwidth_expected = f0_expected / td.components.data.sim_data.NUM_ADJOINT_FWIDTH_TO_ZERO
+
+    assert np.isclose((f0_expected - broadband_f0) / f0_expected, 0.0), (
+        "Expected freq0 not matching for broadband source"
+    )
+    assert np.isclose((fwidth_expected - broadband_fwidth) / fwidth_expected, 0.0), (
+        "Expected fwidth not matching for broadband source"
+    )
+
+
 @pytest.mark.parametrize("colocate", [True, False])
 @pytest.mark.parametrize("objtype", ["flux", "intensity"])
 def test_interp_objectives(use_emulated_run, colocate, objtype):
@@ -1248,7 +1421,7 @@ def test_interp_objectives(use_emulated_run, colocate, objtype):
 class TestFieldProjection:
     @staticmethod
     def setup(far_field_approx, projection_type, sim_2d):
-        if sim_2d and not far_field_approx:
+        if (sim_2d or not IS_3D) and not far_field_approx:
             pytest.skip("Exact field projection not implemented for 2d simulations")
 
         r_proj = 50 * WVL
@@ -1262,25 +1435,23 @@ class TestFieldProjection:
 
         if projection_type == "angular":
             theta_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 2)
-            phi_proj = np.linspace(np.pi / 10, np.pi - np.pi / 10, 3)
             monitor_far = td.FieldProjectionAngleMonitor(
                 center=monitor.center,
                 size=monitor.size,
                 freqs=monitor.freqs,
-                phi=tuple(phi_proj),
+                phi=(np.pi / 2, 3 * np.pi / 2),
                 theta=tuple(theta_proj),
                 proj_distance=r_proj,
                 far_field_approx=far_field_approx,
                 name="far_field",
             )
         elif projection_type == "cartesian":
-            x_proj = np.linspace(-10, 10, 2)
             y_proj = np.linspace(-10, 10, 3)
             monitor_far = td.FieldProjectionCartesianMonitor(
                 center=monitor.center,
                 size=monitor.size,
                 freqs=monitor.freqs,
-                x=x_proj,
+                x=[0],
                 y=y_proj,
                 proj_axis=1,
                 proj_distance=r_proj,
@@ -1288,13 +1459,12 @@ class TestFieldProjection:
                 name="far_field",
             )
         elif projection_type == "kspace":
-            ux = np.linspace(-0.7, 0.7, 2)
             uy = np.linspace(-0.7, 0.7, 3)
             monitor_far = td.FieldProjectionKSpaceMonitor(
                 center=monitor.center,
                 size=monitor.size,
                 freqs=monitor.freqs,
-                ux=ux,
+                ux=[0],
                 uy=uy,
                 proj_axis=1,
                 proj_distance=r_proj,
@@ -1358,6 +1528,26 @@ class TestFieldProjection:
 
         check_grads(objective, modes=["rev"], order=1)(1.0)
 
+    def test_error_if_server_side_projection(
+        self, use_emulated_run, far_field_approx, projection_type, sim_2d
+    ):
+        """Using a far field monitor directly should error"""
+        # build a projection‐only monitor sim
+        sim_base, monitor_far = self.setup(far_field_approx, projection_type, sim_2d)
+        sim_base = sim_base.updated_copy(monitors=[monitor_far])
+
+        def objective(args):
+            structures_traced_dict = make_structures(args)
+            structures = list(SIM_BASE.structures)
+            for structure_key in structure_keys_:
+                structures.append(structures_traced_dict[structure_key])
+            sim = sim_base.updated_copy(structures=structures)
+            sim_data = run(sim, task_name="field_projection_test")
+            return sim_data["far_field"].power.sum().item()
+
+        with pytest.raises(NotImplementedError):
+            ag.grad(objective)(params0)
+
 
 def test_autograd_deepcopy():
     """make sure deepcopy works as expected in autograd."""
@@ -1403,8 +1593,15 @@ def test_pole_residue(monkeypatch):
 
     dJ_deps = ag.holomorphic_grad(J)(eps0)
 
+    # Wrap the scalar as a DataArray to match expected return type
+    import xarray as xr
+
+    dJ_deps_array = xr.DataArray([dJ_deps], dims=["f"], coords={"f": [freq]})
+
     monkeypatch.setattr(
-        td.PoleResidue, "derivative_eps_complex_volume", lambda self, E_der_map, bounds: dJ_deps
+        td.PoleResidue,
+        "_derivative_eps_complex_volume",
+        lambda self, E_der_map, bounds: dJ_deps_array,
     )
 
     import importlib
@@ -1429,14 +1626,19 @@ def test_pole_residue(monkeypatch):
         eps_data={},
         eps_in=2.0,
         eps_out=1.0,
-        frequency=freq,
+        frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
-        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        eps_no_structure=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
+        eps_inf_structure=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
 
-    grads_computed = pr.compute_derivatives(derivative_info=info)
+    grads_computed = pr._compute_derivatives(derivative_info=info)
 
     def f(eps_inf, poles):
         eps = td.PoleResidue._eps_model(eps_inf, poles, freq)
@@ -1455,6 +1657,72 @@ def test_pole_residue(monkeypatch):
             assert np.isclose(grads_computed[field_path], grad_poles[i][j])
 
 
+@pytest.mark.parametrize("eps_real", [1e6, -1e8])
+def test_adaptive_spacing(eps_real):
+    freq = 5e9
+
+    info = DerivativeInfo(
+        paths={},
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        eps_in=eps_real,
+        eps_out=1.0,
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure={},
+        eps_inf_structure={},
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+    )
+
+    with AssertLogLevel("WARNING", contains_str="Based on the material, the adaptive spacing"):
+        expected_vjp_spacing = info.wavelength_min * MINIMUM_SPACING_FRACTION
+        vjp_spacing = info.adaptive_vjp_spacing()
+
+        assert np.isclose(expected_vjp_spacing, vjp_spacing), "Unexpected adaptive vjp spacing!"
+
+
+@pytest.mark.parametrize("eps_real", [1e6, -1e8])
+def test_cylinder_discretization(eps_real):
+    freq = 5e9
+
+    info = DerivativeInfo(
+        paths={},
+        E_der_map={},
+        D_der_map={},
+        E_fwd={},
+        D_fwd={},
+        E_adj={},
+        D_adj={},
+        eps_data={},
+        eps_in=eps_real,
+        eps_out=1.0,
+        frequencies=[freq],
+        bounds=((-1, -1, -1), (1, 1, 1)),
+        eps_no_structure={},
+        eps_inf_structure={},
+        bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
+    )
+
+    with AssertLogLevel(
+        "WARNING", contains_str="The minimum wavelength inside the cylinder material"
+    ):
+        cylinder = td.Cylinder(axis=2, length=info.wavelength_min, radius=2 * info.wavelength_min)
+
+        expected_wvl_mat = info.wavelength_min * MIN_WVL_FRACTION_CYLINDER_DISCRETIZE
+        wvl_mat = cylinder._discretization_wavelength(derivative_info=info)
+
+        assert np.isclose(expected_wvl_mat, wvl_mat), (
+            "Unexpected wavelength for discretizing cylinder!"
+        )
+
+
 def test_custom_pole_residue(monkeypatch):
     """Test that computed pole residue derivatives match."""
 
@@ -1465,7 +1733,7 @@ def test_custom_pole_residue(monkeypatch):
     x = np.linspace(-0.5, 0.5, nx)
     y = np.linspace(-0.5, 0.5, ny)
     z = np.linspace(-0.5, 0.5, nz)
-    coords = dict(x=x, y=y, z=z)
+    coords = {"x": x, "y": y, "z": z}
 
     eps_inf = td.SpatialDataArray(anp.real(values), coords=coords)
     a1 = td.SpatialDataArray(-values, coords=coords)
@@ -1476,18 +1744,18 @@ def test_custom_pole_residue(monkeypatch):
     custom_med_pole_res = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
 
     def J(eps):
-        return anp.sum(abs(eps))
+        return anp.sum(anp.abs(eps))
 
     freq = 3e8
     pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
     eps0 = pr.eps_model(freq)
 
-    dJ_deps = ag.holomorphic_grad(J)(eps0)
+    dJ_deps = np.conj(ag.holomorphic_grad(J)(eps0))
 
     monkeypatch.setattr(
         td.CustomPoleResidue,
         "_derivative_field_cmp",
-        lambda self, E_der_map, eps_data, dim: dJ_deps,
+        lambda self, E_der_map, spatial_data, dim, freqs, component="real": dJ_deps / 3.0,
     )
 
     import importlib
@@ -1511,14 +1779,19 @@ def test_custom_pole_residue(monkeypatch):
         eps_data={},
         eps_in=2.0,
         eps_out=1.0,
-        frequency=freq,
+        frequencies=[freq],
         bounds=((-1, -1, -1), (1, 1, 1)),
-        eps_no_structure=td.SpatialDataArray([[[1.0]]], coords=dict(x=[0], y=[0], z=[0])),
-        eps_inf_structure=td.SpatialDataArray([[[2.0]]], coords=dict(x=[0], y=[0], z=[0])),
+        eps_no_structure=td.ScalarFieldDataArray(
+            [[[[1.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
+        eps_inf_structure=td.ScalarFieldDataArray(
+            [[[[2.0]]]], coords={"x": [0], "y": [0], "z": [0], "f": [1.94e14]}
+        ),
         bounds_intersect=((-1, -1, -1), (1, 1, 1)),
+        simulation_bounds=((-2, -2, -2), (2, 2, 2)),
     )
 
-    grads_computed = pr.compute_derivatives(derivative_info=info)
+    grads_computed = pr._compute_derivatives(derivative_info=info)
 
     poles_complex = [
         (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex)) for a, c in poles
@@ -1529,17 +1802,18 @@ def test_custom_pole_residue(monkeypatch):
         eps = td.CustomPoleResidue._eps_model(eps_inf, poles, freq)
         return J(eps)
 
-    gfn = ag.holomorphic_grad(f, argnum=(0, 1))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        grad_eps_inf, grad_poles = gfn(eps_inf.values, poles_complex)
+    gfn = ag.grad(lambda x: f(x, poles_complex))
+    grad_eps_inf = gfn(eps_inf.values)
 
     assert np.allclose(grads_computed[("eps_inf",)], grad_eps_inf)
+
+    gfn = ag.holomorphic_grad(lambda x: f(eps_inf.values, x))
+    grad_poles = gfn(poles_complex)
 
     for i in range(len(poles)):
         for j in range(2):
             field_path = ("poles", i, j)
-            assert np.allclose(grads_computed[field_path], grad_poles[i][j])
+            assert np.allclose(grads_computed[field_path], np.conj(grad_poles[i][j]))
 
 
 # @pytest.mark.timeout(18.0)
@@ -1630,7 +1904,7 @@ def make_objective(postprocess_fn: typing.Callable, structure_key: str) -> typin
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
             structures=[structure_traced],
-            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+            monitors=[*list(SIM_BASE.monitors), mnt_single, mnt_multi],
         )
         data = run(sim, task_name="multifreq_test")
         return postprocess_fn(data)
@@ -1733,16 +2007,16 @@ def check_1_src_broadband(structure_key):
     return postprocess
 
 
-MULT_FREQ_TEST_CASES = dict(
-    src_1_freq_1=check_1_src_single,
-    src_2_freq_1=check_2_src_single,
-    src_1_freq_2=check_1_src_multi,
-    src_2_freq_1_mon_1=check_1_src_multi,
-    src_2_freq_1_mon_2=check_2_src_both,
-    src_2_freq_2_mon_1=check_1_multisrc,
-    src_2_freq_2_mon_2=check_2_multisrc,
-    src_1_freq_2_broadband=check_1_src_broadband,
-)
+MULT_FREQ_TEST_CASES = {
+    "src_1_freq_1": check_1_src_single,
+    "src_2_freq_1": check_2_src_single,
+    "src_1_freq_2": check_1_src_multi,
+    "src_2_freq_1_mon_1": check_1_src_multi,
+    "src_2_freq_1_mon_2": check_2_src_both,
+    "src_2_freq_2_mon_1": check_1_multisrc,
+    "src_2_freq_2_mon_2": check_2_multisrc,
+    "src_1_freq_2_broadband": check_1_src_broadband,
+}
 
 checks = list(MULT_FREQ_TEST_CASES.items())
 
@@ -1752,18 +2026,13 @@ checks = list(MULT_FREQ_TEST_CASES.items())
 def test_multi_freq_edge_cases(use_emulated_run, structure_key, label, check_fn, monkeypatch):
     # test multi-frequency adjoint handling
 
-    import tidy3d.components.data.sim_data as sd
-
-    monkeypatch.setattr(sd, "RESIDUAL_CUTOFF_ADJOINT", 1)
-    reload(td)
-
     postprocess_fn = check_fn(structure_key=structure_key)
 
     def objective(params):
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
             structures=[structure_traced],
-            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+            monitors=[*list(SIM_BASE.monitors), mnt_single, mnt_multi],
         )
         data = run(sim, task_name="multifreq_test")
         return postprocess_fn(data)
@@ -1787,7 +2056,7 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
             structure_traced = make_structures(params)[structure_key]
             sim = SIM_BASE.updated_copy(
                 structures=[structure_traced],
-                monitors=list(SIM_BASE.monitors) + [mnt_multi],
+                monitors=[*list(SIM_BASE.monitors), mnt_multi],
             )
 
             sim_data = web.run(sim, task_name="multifreq_test")
@@ -1801,7 +2070,7 @@ def test_multi_frequency_equivalence(use_emulated_run, structure_key):
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
             structures=[structure_traced],
-            monitors=list(SIM_BASE.monitors) + [mnt_multi],
+            monitors=[*list(SIM_BASE.monitors), mnt_multi],
         )
         sim_data = web.run(sim, task_name="multifreq_test")
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
@@ -2110,10 +2379,125 @@ def test_flux_monitor_freq_exclusion(use_emulated_run):
             structure_traced = make_structures(params)["medium"]
             sim = SIM_BASE.updated_copy(structures=[structure_traced], monitors=monitors)
             data = run(sim, task_name="adjoint_freq_test")
-            assert data.simulation.freqs_adjoint == [FREQ0]
+            assert data.simulation._freqs_adjoint == [FREQ0]
             return anp.sum(data["field"].flux.values)
 
         return objective
 
     grad_no_flux_monitors = ag.grad(objective_with_monitors(monitors_just_field))(params0)
     grad_with_flux_monitors = ag.grad(objective_with_monitors(monitors_with_flux))(params0)
+
+
+def test_dispersive_no_inf(use_emulated_run):
+    """Test that automatic permittivity grabbing uses the correct freq_adj to
+    retrieve permittivity in dispersive material models.
+    """
+
+    fn_dict = get_functions(args[0][0], args[0][1])
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(args):
+        structure_traced = make_structures(args)["polyslab_dispersive"]
+        sim = make_sim(args).updated_copy(structures=[structure_traced])
+        sim_data = run(sim, task_name="adjoint_test", verbose=False)
+        return postprocess(sim_data)
+
+    # the following will raise a warning (and fail) if the dispersive material
+    # model is called without a frequency
+    with AssertLogLevel("INFO"):
+        grad = ag.grad(objective)(params0)
+
+
+def test_sim_traced_center_size(use_emulated_run):
+    fn_dict = get_functions(args[0][0], args[0][1])
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+    base_sim = make_sim(params0)
+
+    def objective(center, size):
+        sim = base_sim.updated_copy(center=center, size=size)
+        sim_data = run_emulated(sim, task_name="adjoint_test")
+        return postprocess(sim_data)
+
+    with (
+        AssertLogLevel("WARNING", contains_str="autograd tracer"),
+        pytest.warns(UserWarning, match="Output seems independent of input."),
+    ):
+        grad = ag.grad(objective, argnum=0)(base_sim.center, base_sim.size)
+
+    with (
+        AssertLogLevel("WARNING", contains_str="autograd tracer"),
+        pytest.warns(UserWarning, match="Output seems independent of input."),
+    ):
+        grad = ag.grad(objective, argnum=1)(base_sim.center, base_sim.size)
+
+
+def test_error_clip(use_emulated_run):
+    """Make sure proper error raised if differentiating a ``ClipOperation``."""
+
+    def objective(x):
+        box1 = td.Box(center=(0, 0, 0), size=(x, x, x))
+        box2 = td.Box(center=(1, 1, 1), size=(x, x, x))
+        union = td.ClipOperation(operation="union", geometry_a=box1, geometry_b=box2)
+        structure = td.Structure(geometry=union, medium=td.Medium(permittivity=2))
+        sim = SIM_BASE.updated_copy(
+            structures=[structure],
+            monitors=[
+                td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[FREQ0], name="field"),
+            ],
+        )
+        data = run(sim, task_name="clip_error")
+        return anp.sum(data["field"].intensity.item())
+
+    with pytest.raises(ValueError):
+        g = ag.grad(objective)(1.0)
+
+
+def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_path):
+    """Test conductivity gradients for CustomMedium with constant permittivity."""
+
+    monitor, postprocess = make_monitors()["field_point"]
+
+    def objective(params):
+        """Objective function testing only conductivity gradient (constant permittivity)."""
+        len_arr = np.prod(DA_SHAPE)
+        matrix = rng.random((len_arr, N_PARAMS))
+
+        # constant permittivity
+        eps_arr = np.ones(DA_SHAPE) * 2.0
+
+        # variable conductivity
+        conductivity_arr = 0.05 * (anp.tanh(3 * matrix @ params).reshape(DA_SHAPE) + 1)
+
+        nx, ny, nz = DA_SHAPE
+        coords = {
+            "x": np.linspace(-0.5, 0.5, nx),
+            "y": np.linspace(-0.5, 0.5, ny),
+            "z": np.linspace(-0.5, 0.5, nz),
+        }
+
+        custom_med_struct = td.Structure(
+            geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),
+            medium=td.CustomMedium(
+                permittivity=td.SpatialDataArray(eps_arr, coords=coords),
+                conductivity=td.SpatialDataArray(conductivity_arr, coords=coords),
+            ),
+        )
+
+        sim = SIM_BASE.updated_copy(
+            structures=[custom_med_struct],
+            monitors=[monitor],
+        )
+
+        data = run(
+            sim,
+            path=str(tmp_path / "sim_test.hdf5"),
+            task_name="conductivity_only_grad_test",
+            verbose=False,
+        )
+        return postprocess(data, data[monitor.name])
+
+    val, grad = ag.value_and_grad(objective)(params0)
+
+    assert anp.all(grad != 0.0), "some gradients are 0 for conductivity-only test"

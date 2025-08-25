@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 import autograd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import psutil
 import pytest
-import tidy3d as td
 from autograd.test_util import check_grads
 from autograd.wrap_util import unary_to_nary
+
+import tidy3d as td
+from tidy3d.config import config
 from tidy3d.log import DEFAULT_LEVEL, set_logging_console, set_logging_level
 
 
@@ -17,9 +23,9 @@ def rng():
     return np.random.default_rng(seed)
 
 
-@pytest.fixture(autouse=True, scope="module")
+@pytest.fixture(autouse=True)
 def close_matplotlib():
-    plt.close()
+    plt.close("all")
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -66,5 +72,47 @@ def pytest_xdist_auto_num_workers(config):
     cores = min(cores, mem_limited_cores)
 
     if os.getenv("GITHUB_ACTIONS"):
+        if os.getenv("RUNNER_ENVIRONMENT") == "self-hosted":
+            MAX_SELF_HOSTED_CORES = 8
+            return min(MAX_SELF_HOSTED_CORES, cores)
         return cores
     return max(1, cores - 1)
+
+
+@pytest.fixture
+def mpl_config_noninteractive():
+    """Configure matplotlib non-interactive backend for all tests in this module."""
+    original_backend = mpl.get_backend()
+    mpl.use("Agg")
+    yield
+    plt.close("all")
+    mpl.use(original_backend)
+
+
+@pytest.fixture
+def mpl_config_interactive():
+    """Configure matplotlib interactive backend for all tests in this module."""
+    original_backend = mpl.get_backend()
+    mpl.use("TkAgg")
+    yield
+    mpl.use(original_backend)
+
+
+@pytest.fixture(autouse=True)
+def disable_local_subpixel():
+    """Disable local subpixel for the unit tests."""
+    use_local_subpixel = config.use_local_subpixel
+    config.use_local_subpixel = False
+    yield
+    config.use_local_subpixel = use_local_subpixel
+
+
+@pytest.fixture
+def dir_name(request):
+    return request.param
+
+
+@pytest.fixture
+def create_directory(dir_name):
+    if dir_name is not None:
+        directory = Path(dir_name).mkdir(parents=True, exist_ok=True)

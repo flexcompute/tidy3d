@@ -1,12 +1,15 @@
 """handles filesystem, storage"""
 
+from __future__ import annotations
+
 import os
 import pathlib
 import tempfile
 import urllib
+from collections.abc import Mapping
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Mapping
+from typing import Callable, Optional
 
 import boto3
 from boto3.s3.transfer import TransferConfig
@@ -25,6 +28,8 @@ from .environment import Env
 from .exceptions import WebError
 from .file_util import extract_gzip_file
 from .http_util import http
+
+IN_TRANSIT_SUFFIX = ".tmp"
 
 
 class _UserCredential(BaseModel):
@@ -179,7 +184,7 @@ _s3_sts_tokens: [str, _S3STSToken] = {}
 
 
 def get_s3_sts_token(
-    resource_id: str, file_name: str, extra_arguments: Mapping[str, str] = None
+    resource_id: str, file_name: str, extra_arguments: Optional[Mapping[str, str]] = None
 ) -> _S3STSToken:
     """Get s3 sts token for the given resource id and file name.
 
@@ -213,8 +218,8 @@ def upload_file(
     path: str,
     remote_filename: str,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
-    extra_arguments: Mapping[str, str] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
+    extra_arguments: Optional[Mapping[str, str]] = None,
 ):
     """Upload a file to S3.
 
@@ -279,9 +284,9 @@ def upload_file(
 def download_file(
     resource_id: str,
     remote_filename: str,
-    to_file: str = None,
+    to_file: Optional[str] = None,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> pathlib.Path:
     """Download file from S3.
 
@@ -309,12 +314,12 @@ def download_file(
     # set to_file if None
     if not to_file:
         path = pathlib.Path(resource_id)
-        to_file = path / remote_basename
+        to_path = path / remote_basename
     else:
-        to_file = pathlib.Path(to_file)
+        to_path = pathlib.Path(to_file)
 
-    # make the leading directories in the 'to_file', if any
-    to_file.parent.mkdir(parents=True, exist_ok=True)
+    # make the leading directories in the 'to_path', if any
+    to_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _download(_callback: Callable) -> None:
         """Perform the download with a callback function.
@@ -324,14 +329,25 @@ def download_file(
         _callback : Callable[[float], None]
             Callback function for download, accepts ``bytes_in_chunk``
         """
-
-        client.download_file(
-            Bucket=token.get_bucket(),
-            Filename=str(to_file),
-            Key=token.get_s3_key(),
-            Callback=_callback,
-            Config=_s3_config,
-        )
+        # Caller can assume the existence of the file means download succeeded.
+        # So make sure this file does not exist until that assumption is true.
+        to_path.unlink(missing_ok=True)
+        # Download to a temporary file.
+        try:
+            fd, tmp_file_path_str = tempfile.mkstemp(suffix=IN_TRANSIT_SUFFIX, dir=to_path.parent)
+            os.close(fd)  # `tempfile.mkstemp()` creates and opens a randomly named file.  close it.
+            to_path_tmp = pathlib.Path(tmp_file_path_str)
+            client.download_file(
+                Bucket=token.get_bucket(),
+                Filename=tmp_file_path_str,
+                Key=token.get_s3_key(),
+                Callback=_callback,
+                Config=_s3_config,
+            )
+            to_path_tmp.rename(to_file)
+        except Exception as e:
+            to_path_tmp.unlink(missing_ok=True)  # Delete incompletely downloaded file.
+            raise e
 
     if progress_callback is not None:
         _download(progress_callback)
@@ -352,15 +368,15 @@ def download_file(
         else:
             _download(lambda bytes_in_chunk: None)
 
-    return to_file
+    return to_path
 
 
 def download_gz_file(
     resource_id: str,
     remote_filename: str,
-    to_file: str = None,
+    to_file: Optional[str] = None,
     verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
+    progress_callback: Optional[Callable[[float], None]] = None,
 ) -> pathlib.Path:
     """Download a ``.gz`` file and unzip it into ``to_file``, unless ``to_file`` itself
     ends in .gz
@@ -391,24 +407,24 @@ def download_gz_file(
 
     # Otherwise, download and unzip
     # The tempfile is set as ``hdf5.gz`` so that the mock download in the webapi tests works
-    tmp_file, tmp_file_path = tempfile.mkstemp(".hdf5.gz")
+    tmp_file, tmp_file_path_str = tempfile.mkstemp(".hdf5.gz")
     os.close(tmp_file)
 
     # make the leading directories in the 'to_file', if any
-    to_file = pathlib.Path(to_file)
-    to_file.parent.mkdir(parents=True, exist_ok=True)
+    to_path = pathlib.Path(to_file)
+    to_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         download_file(
             resource_id,
             remote_filename,
-            to_file=tmp_file_path,
+            to_file=tmp_file_path_str,
             verbose=verbose,
             progress_callback=progress_callback,
         )
-        if os.path.exists(tmp_file_path):
-            extract_gzip_file(tmp_file_path, to_file)
+        if os.path.exists(tmp_file_path_str):
+            extract_gzip_file(tmp_file_path_str, to_path)
         else:
             raise WebError(f"Failed to download and extract '{remote_filename}'.")
     finally:
-        os.unlink(tmp_file_path)
-    return to_file
+        os.unlink(tmp_file_path_str)
+    return to_path

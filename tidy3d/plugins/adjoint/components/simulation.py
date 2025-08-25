@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Tuple, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -10,24 +10,25 @@ import xarray as xr
 from jax.tree_util import register_pytree_node_class
 from joblib import Parallel, delayed
 
-from ....components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.geometry.base import Box
-from ....components.medium import AbstractMedium
-from ....components.monitor import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.data.monitor_data import FieldData, PermittivityData
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.medium import AbstractMedium
+from tidy3d.components.monitor import (
     DiffractionMonitor,
     FieldMonitor,
     ModeMonitor,
     Monitor,
     PermittivityMonitor,
 )
-from ....components.simulation import Simulation
-from ....components.structure import Structure
-from ....components.subpixel_spec import Staircasing, SubpixelSpec
-from ....components.types import Ax, annotate_type
-from ....constants import HERTZ, SECOND
-from ....exceptions import AdjointError
-from ....log import log
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.structure import Structure
+from tidy3d.components.subpixel_spec import Staircasing, SubpixelSpec
+from tidy3d.components.types import Ax, annotate_type
+from tidy3d.constants import HERTZ, SECOND
+from tidy3d.exceptions import AdjointError
+from tidy3d.log import log
+
 from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .geometry import JaxGeometryGroup, JaxPolySlab
 from .structure import (
@@ -61,7 +62,7 @@ NL_WARNING = (
 )
 
 OutputMonitorTypes = (DiffractionMonitor, FieldMonitor, ModeMonitor)
-OutputMonitorType = Tuple[annotate_type(Union[OutputMonitorTypes]), ...]
+OutputMonitorType = tuple[annotate_type(Union[OutputMonitorTypes]), ...]
 
 
 class JaxInfo(Tidy3dBaseModel):
@@ -105,7 +106,7 @@ class JaxInfo(Tidy3dBaseModel):
         units=SECOND,
     )
 
-    input_structure_types: Tuple[
+    input_structure_types: tuple[
         Literal["JaxStructure", "JaxStructureStaticMedium", "JaxStructureStaticGeometry"], ...
     ] = pd.Field(
         (),
@@ -118,7 +119,7 @@ class JaxInfo(Tidy3dBaseModel):
 class JaxSimulation(Simulation, JaxObject):
     """A :class:`.Simulation` registered with jax."""
 
-    input_structures: Tuple[annotate_type(JaxStructureType), ...] = pd.Field(
+    input_structures: tuple[annotate_type(JaxStructureType), ...] = pd.Field(
         (),
         title="Input Structures",
         description="Tuple of jax-compatible structures"
@@ -132,13 +133,13 @@ class JaxSimulation(Simulation, JaxObject):
         description="Tuple of monitors whose data the differentiable output depends on.",
     )
 
-    grad_monitors: Tuple[FieldMonitor, ...] = pd.Field(
+    grad_monitors: tuple[FieldMonitor, ...] = pd.Field(
         (),
         title="Gradient Field Monitors",
         description="Tuple of monitors used for storing fields, used internally for gradients.",
     )
 
-    grad_eps_monitors: Tuple[PermittivityMonitor, ...] = pd.Field(
+    grad_eps_monitors: tuple[PermittivityMonitor, ...] = pd.Field(
         (),
         title="Gradient Permittivity Monitors",
         description="Tuple of monitors used for storing epsilon, used internally for gradients.",
@@ -296,7 +297,7 @@ class JaxSimulation(Simulation, JaxObject):
             structure._validate_web_adjoint()
 
     @staticmethod
-    def get_freqs_adjoint(output_monitors: List[Monitor]) -> List[float]:
+    def get_freqs_adjoint(output_monitors: list[Monitor]) -> list[float]:
         """Return sorted list of unique frequencies stripped from a collection of monitors."""
 
         if len(output_monitors) == 0:
@@ -310,7 +311,7 @@ class JaxSimulation(Simulation, JaxObject):
         return np.unique(output_freqs).tolist()
 
     @cached_property
-    def freqs_adjoint(self) -> List[float]:
+    def freqs_adjoint(self) -> list[float]:
         """Return sorted list of frequencies stripped from the output monitors."""
         return self.get_freqs_adjoint(output_monitors=self.output_monitors)
 
@@ -400,7 +401,7 @@ class JaxSimulation(Simulation, JaxObject):
         """Number of time steps in the adjoint simulation."""
         return len(self.tmesh_adjoint)
 
-    def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
+    def to_simulation(self) -> tuple[Simulation, JaxInfo]:
         """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
 
         sim_dict = self.dict(
@@ -419,7 +420,9 @@ class JaxSimulation(Simulation, JaxObject):
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
-        all_structures = list(self.structures) + [js.to_structure() for js in self.input_structures]
+        all_structures = list(self.scene.sorted_structures) + [
+            js.to_structure() for js in self.input_structures
+        ]
         all_monitors = (
             list(self.monitors)
             + list(self.output_monitors)
@@ -445,19 +448,19 @@ class JaxSimulation(Simulation, JaxObject):
     def to_gds(
         self,
         cell,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pd.NonNegativeFloat = 1,
         frequency: pd.PositiveFloat = 0,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        gds_layer_dtype_map: Optional[
+            dict[AbstractMedium, tuple[pd.NonNegativeInt, pd.NonNegativeInt]]
         ] = None,
     ) -> None:
         """Append the simulation structures to a .gds cell.
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -486,15 +489,15 @@ class JaxSimulation(Simulation, JaxObject):
 
     def to_gdstk(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         permittivity_threshold: pd.NonNegativeFloat = 1,
         frequency: pd.PositiveFloat = 0,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        gds_layer_dtype_map: Optional[
+            dict[AbstractMedium, tuple[pd.NonNegativeInt, pd.NonNegativeInt]]
         ] = None,
-    ) -> List:
+    ) -> list:
         """Convert a simulation's planar slice to a .gds type polygon list.
         Parameters
         ----------
@@ -526,44 +529,16 @@ class JaxSimulation(Simulation, JaxObject):
             gds_layer_dtype_map=gds_layer_dtype_map,
         )
 
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
-        ] = None,
-    ) -> List:
-        """Convert a simulation's planar slice to a .gds type polygon list.
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-        Return
-        ------
-        List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
-        """
-        sim, _ = self.to_simulation()
-        return sim.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
-
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         **patch_kwargs,
     ) -> Ax:
         """Wrapper around regular :class:`.Simulation` structure plotting."""
@@ -582,15 +557,15 @@ class JaxSimulation(Simulation, JaxObject):
 
     def plot_eps(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
+        source_alpha: Optional[float] = None,
+        monitor_alpha: Optional[float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
         ax: Ax = None,
     ) -> Ax:
         """Wrapper around regular :class:`.Simulation` permittivity plotting."""
@@ -608,12 +583,12 @@ class JaxSimulation(Simulation, JaxObject):
 
     def plot_structures(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -649,16 +624,16 @@ class JaxSimulation(Simulation, JaxObject):
 
     def plot_structures_eps(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -712,7 +687,7 @@ class JaxSimulation(Simulation, JaxObject):
         self,
         box: Box,
         coord_key: str = "centers",
-        freq: float = None,
+        freq: Optional[float] = None,
     ) -> xr.DataArray:
         """Get array of permittivity at volume specified by box and freq.
 
@@ -753,7 +728,7 @@ class JaxSimulation(Simulation, JaxObject):
         return self.to_simulation()[0] == other.to_simulation()[0]
 
     @classmethod
-    def split_monitors(cls, monitors: List[Monitor], jax_info: JaxInfo) -> Dict[str, Monitor]:
+    def split_monitors(cls, monitors: list[Monitor], jax_info: JaxInfo) -> dict[str, Monitor]:
         """Split monitors into user and adjoint required based on jax info."""
 
         all_monitors = list(monitors)
@@ -776,17 +751,17 @@ class JaxSimulation(Simulation, JaxObject):
         grad_eps_monitors = all_monitors[num_mnts + num_output_monitors + num_grad_monitors :]
 
         # load into a dictionary
-        return dict(
-            monitors=monitors,
-            output_monitors=output_monitors,
-            grad_monitors=grad_monitors,
-            grad_eps_monitors=grad_eps_monitors,
-        )
+        return {
+            "monitors": monitors,
+            "output_monitors": output_monitors,
+            "grad_monitors": grad_monitors,
+            "grad_eps_monitors": grad_eps_monitors,
+        }
 
     @classmethod
     def split_structures(
-        cls, structures: List[Structure], jax_info: JaxInfo
-    ) -> Dict[str, Structure]:
+        cls, structures: list[Structure], jax_info: JaxInfo
+    ) -> dict[str, Structure]:
         """Split structures into regular and input based on jax info."""
 
         all_structures = list(structures)
@@ -797,11 +772,11 @@ class JaxSimulation(Simulation, JaxObject):
 
         # split the list based on these numbers
         structures = all_structures[:num_structs]
-        structure_type_map = dict(
-            JaxStructure=JaxStructure,
-            JaxStructureStaticMedium=JaxStructureStaticMedium,
-            JaxStructureStaticGeometry=JaxStructureStaticGeometry,
-        )
+        structure_type_map = {
+            "JaxStructure": JaxStructure,
+            "JaxStructureStaticMedium": JaxStructureStaticMedium,
+            "JaxStructureStaticGeometry": JaxStructureStaticGeometry,
+        }
 
         input_structures = []
         for struct_type_str, struct in zip(
@@ -812,7 +787,7 @@ class JaxSimulation(Simulation, JaxObject):
             input_structures.append(new_structure)
 
         # return a dictionary containing these split structures
-        return dict(structures=structures, input_structures=input_structures)
+        return {"structures": structures, "input_structures": input_structures}
 
     @classmethod
     def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
@@ -828,17 +803,17 @@ class JaxSimulation(Simulation, JaxObject):
         sim_dict.update(**structures)
         sim_dict.update(**monitors)
         sim_dict.update(
-            dict(
-                fwidth_adjoint=jax_info.fwidth_adjoint,
-                run_time_adjoint=jax_info.run_time_adjoint,
-            )
+            {
+                "fwidth_adjoint": jax_info.fwidth_adjoint,
+                "run_time_adjoint": jax_info.run_time_adjoint,
+            }
         )
 
         # load JaxSimulation from the dictionary
         return cls.parse_obj(sim_dict)
 
     @classmethod
-    def make_sim_fwd(cls, simulation: Simulation, jax_info: JaxInfo) -> Tuple[Simulation, JaxInfo]:
+    def make_sim_fwd(cls, simulation: Simulation, jax_info: JaxInfo) -> tuple[Simulation, JaxInfo]:
         """Make the forward :class:`.JaxSimulation` from the supplied :class:`.Simulation`."""
 
         mnt_dict = JaxSimulation.split_monitors(monitors=simulation.monitors, jax_info=jax_info)
@@ -871,7 +846,7 @@ class JaxSimulation(Simulation, JaxObject):
 
         return sim_fwd, jax_info
 
-    def to_simulation_fwd(self) -> Tuple[Simulation, JaxInfo, JaxInfo]:
+    def to_simulation_fwd(self) -> tuple[Simulation, JaxInfo, JaxInfo]:
         """Like ``to_simulation()`` but the gradient monitors are included."""
         simulation, jax_info = self.to_simulation()
         sim_fwd, jax_info_fwd = self.make_sim_fwd(simulation=simulation, jax_info=jax_info)
@@ -879,7 +854,7 @@ class JaxSimulation(Simulation, JaxObject):
 
     @staticmethod
     def get_grad_monitors(
-        input_structures: List[Structure], freqs_adjoint: List[float], include_eps_mnts: bool = True
+        input_structures: list[Structure], freqs_adjoint: list[float], include_eps_mnts: bool = True
     ) -> dict:
         """Return dictionary of gradient monitors for simulation."""
         grad_mnts = []
@@ -891,7 +866,7 @@ class JaxSimulation(Simulation, JaxObject):
             grad_mnts.append(grad_mnt)
             if include_eps_mnts:
                 grad_eps_mnts.append(grad_eps_mnt)
-        return dict(grad_monitors=grad_mnts, grad_eps_monitors=grad_eps_mnts)
+        return {"grad_monitors": grad_mnts, "grad_eps_monitors": grad_eps_mnts}
 
     def _store_vjp_structure(
         self,
@@ -916,9 +891,9 @@ class JaxSimulation(Simulation, JaxObject):
 
     def store_vjp(
         self,
-        grad_data_fwd: Tuple[FieldData],
-        grad_data_adj: Tuple[FieldData],
-        grad_eps_data: Tuple[PermittivityData],
+        grad_data_fwd: tuple[FieldData],
+        grad_data_adj: tuple[FieldData],
+        grad_eps_data: tuple[PermittivityData],
         num_proc: int = NUM_PROC_LOCAL,
     ) -> JaxSimulation:
         """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data."""
@@ -939,25 +914,27 @@ class JaxSimulation(Simulation, JaxObject):
 
     def store_vjp_sequential(
         self,
-        grad_data_fwd: Tuple[FieldData],
-        grad_data_adj: Tuple[FieldData],
-        grad_eps_data: Tuple[PermittivityData],
+        grad_data_fwd: tuple[FieldData],
+        grad_data_adj: tuple[FieldData],
+        grad_eps_data: tuple[PermittivityData],
     ) -> JaxSimulation:
         """Store the vjp w.r.t. each input_structure without multiprocessing."""
         map_args = [self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data]
         input_structures_vjp = list(map(self._store_vjp_structure, *map_args))
 
         return self.copy(
-            update=dict(
-                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
-            )
+            update={
+                "input_structures": input_structures_vjp,
+                "grad_monitors": (),
+                "grad_eps_monitors": (),
+            }
         )
 
     def store_vjp_parallel(
         self,
-        grad_data_fwd: Tuple[FieldData],
-        grad_data_adj: Tuple[FieldData],
-        grad_eps_data: Tuple[PermittivityData],
+        grad_data_fwd: tuple[FieldData],
+        grad_data_adj: tuple[FieldData],
+        grad_eps_data: tuple[PermittivityData],
         num_proc: int,
     ) -> JaxSimulation:
         """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data, and
@@ -1014,7 +991,9 @@ class JaxSimulation(Simulation, JaxObject):
             input_structures_vjp[index] = vjp
 
         return self.copy(
-            update=dict(
-                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
-            )
+            update={
+                "input_structures": input_structures_vjp,
+                "grad_monitors": (),
+                "grad_eps_monitors": (),
+            }
         )

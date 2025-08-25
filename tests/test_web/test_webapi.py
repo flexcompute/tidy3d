@@ -1,12 +1,15 @@
 # Tests webapi and things that depend on it
+from __future__ import annotations
 
+import os
 
 import numpy as np
 import pytest
 import responses
-import tidy3d as td
 from _pytest import monkeypatch
 from responses import matchers
+
+import tidy3d as td
 from tidy3d import Simulation
 from tidy3d.__main__ import main
 from tidy3d.components.data.data_array import ScalarFieldDataArray
@@ -39,7 +42,8 @@ from tidy3d.web.api.webapi import (
     upload,
 )
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.types import TaskType
+from tidy3d.web.core.exceptions import WebNotFoundError
+from tidy3d.web.core.types import PayType, TaskType
 
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
@@ -84,7 +88,7 @@ def make_sim_data(file_size_gb=FILE_SIZE_GB):
     src = PointDipole(
         center=(0, 0, 0), source_time=GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
     )
-    coords = dict(x=x, y=y, z=z, f=f)
+    coords = {"x": x, "y": y, "z": z, "f": f}
     Ex = ScalarFieldDataArray(data, coords=coords)
     monitor = FieldMonitor(size=(2, 2, 2), freqs=f, name="test", fields=["Ex"])
     field_data = FieldData(monitor=monitor, Ex=Ex)
@@ -180,28 +184,36 @@ def mock_get_info(monkeypatch, set_api_key):
 def mock_start(monkeypatch, set_api_key, mock_get_info):
     """Mocks webapi.start."""
 
-    responses.add(
-        responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
-        match=[
-            matchers.json_params_matcher(
-                {
-                    "solverVersion": None,
-                    "workerGroup": None,
-                    "protocolVersion": td.version.__version__,
-                    "enableCaching": Env.current.enable_caching,
+    def add_mock_response(priority=None):
+        expected_body = {
+            "solverVersion": None,
+            "workerGroup": None,
+            "protocolVersion": td.version.__version__,
+            "enableCaching": Env.current.enable_caching,
+            "payType": PayType.AUTO,
+            "priority": priority,
+        }
+
+        responses.add(
+            responses.POST,
+            f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+            match=[matchers.json_params_matcher(expected_body)],
+            json={
+                "data": {
+                    "taskId": TASK_ID,
+                    "taskName": TASK_NAME,
+                    "createdAt": CREATED_AT,
                 }
-            )
-        ],
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "taskName": TASK_NAME,
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
+            },
+            status=200,
+        )
+
+    # Add response for calls without priority
+    add_mock_response(None)
+
+    # Add responses for calls with specific priority values
+    for priority in [1, 5, 10]:
+        add_mock_response(priority)
 
 
 @pytest.fixture
@@ -214,9 +226,6 @@ def mock_monitor(monkeypatch):
         current_status = statuses[current_count]
         status_count[0] += 1
         return current_status
-        # return TaskInfo(
-        #     status=current_status, taskName=TASK_NAME, taskId=task_id, realFlexUnit=1.0
-        #     )
 
     run_count = [0]
     perc_dones = (1, 10, 20, 30, 100)
@@ -228,6 +237,8 @@ def mock_monitor(monkeypatch):
         return perc_done, 1
 
     monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path}.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr("tidy3d.web.api.container.web.REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
     monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)
@@ -317,6 +328,39 @@ def test_get_info(mock_get_info):
 @responses.activate
 def test_start(mock_start):
     start(TASK_ID)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [1, 5, 10, None])
+def test_start_with_valid_priority(mock_start, priority):
+    """Test start with valid priority values."""
+    start(TASK_ID, priority=priority)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [0, -1, 11, 15])
+def test_start_with_invalid_priority(mock_start, priority):
+    """Test start with invalid priority values."""
+    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+        start(TASK_ID, priority=priority)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [5, None])
+def test_run_with_valid_priority(mock_webapi, monkeypatch, priority):
+    """Test run with valid priority parameter."""
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
+    sim = make_sim()
+    run(sim, TASK_NAME, folder_name=PROJECT_NAME, priority=priority)
+
+
+@responses.activate
+@pytest.mark.parametrize("priority", [0, -1, 11, 15])
+def test_run_with_invalid_priority(mock_webapi, priority):
+    """Test run with invalid priority values."""
+    sim = make_sim()
+    with pytest.raises(ValueError, match="Priority must be between '1' and '10' if specified."):
+        run(sim, TASK_NAME, folder_name=PROJECT_NAME, priority=priority)
 
 
 @responses.activate
@@ -446,60 +490,14 @@ def test_delete_old(set_api_key):
         json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
-
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
-        json={"data": [{"taskId": TASK_ID, "createdAt": CREATED_AT}]},
-        status=200,
-    )
-
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "groupId": "group123",
-                "version": "v1",
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
-
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/group/group123/versions",
-        match=[
-            matchers.json_params_matcher(
-                {
-                    "versions": ["v1"],
-                }
-            )
-        ],
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "createdAt": CREATED_AT,
-            }
-        },
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{FOLDER_ID}/tasks",
+        json={"data": 0, "warning": "string"},
         status=200,
     )
 
-    responses.add(
-        responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "createdAt": CREATED_AT,
-            }
-        },
-        status=200,
-    )
-
-    delete_old(100)
+    delete_old(days_old=100)
 
 
 @responses.activate
@@ -660,6 +658,40 @@ def test_create_output_dirs(mock_webapi, tmp_path, monkeypatch):
     assert non_existent_dirs_batch.is_dir()
 
 
+@responses.activate
+def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_path, monkeypatch):
+    """Test that batch.run() saves batch file with task_ids immediately after upload."""
+    sims = {TASK_NAME: make_sim()}
+    batch = Batch(simulations=sims, folder_name=PROJECT_NAME)
+
+    batch_file_saved = {"saved": False, "has_task_ids": False}
+    original_to_file = Batch.to_file
+
+    def track_to_file(self, fname):
+        batch_file_saved["saved"] = True
+        batch_file_saved["has_task_ids"] = self.jobs is not None and TASK_NAME in self.jobs
+        return original_to_file(self, fname)
+
+    # mock start to interrupt run() after upload and to_file
+    def mock_start_interrupt(self):
+        # at this point, upload() and to_file() should have been called
+        assert batch_file_saved["saved"], "Batch file should be saved before start()"
+        assert batch_file_saved["has_task_ids"], "Batch file should have task_ids"
+        # verify file actually exists and can be loaded
+        batch_path = self._batch_path(path_dir=str(tmp_path))
+        assert os.path.exists(batch_path)
+        recovered = Batch.from_file(batch_path)
+        assert recovered.jobs[TASK_NAME].task_id == TASK_ID
+        raise RuntimeError("Simulated interruption after upload")
+
+    monkeypatch.setattr(Batch, "to_file", track_to_file)
+    monkeypatch.setattr(Batch, "start", mock_start_interrupt)
+
+    # run should save the batch file after upload, even if interrupted
+    with pytest.raises(RuntimeError, match="Simulated interruption"):
+        batch.run(path_dir=str(tmp_path))
+
+
 """ Async """
 
 
@@ -722,3 +754,18 @@ def test_main(mock_webapi, monkeypatch, mock_job_status, tmp_path):
                 "--inspect_sim",
             ]
         )
+
+
+@responses.activate
+def test_load_invalid_task_raises(mock_webapi):
+    """Ensure that load() raises TaskNotFoundError for a non-existent task ID."""
+    fake_id = "INVALID_TASK_ID"
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{fake_id}/detail",
+        json={"error": "Task not found"},
+        status=404,
+    )
+    with pytest.raises(WebNotFoundError, match="Resource not found"):
+        load(fake_id)

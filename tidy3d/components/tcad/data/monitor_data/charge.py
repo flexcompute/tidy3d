@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Dict, Union
+from typing import Union
 
+import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.data_array import (
     DataArray,
+    IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
+    PointDataArray,
     SpatialDataArray,
     SteadyVoltageDataArray,
 )
@@ -17,11 +19,15 @@ from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridD
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyCurrentDensityMonitor,
+    SteadyElectricFieldMonitor,
+    SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
     SteadyPotentialMonitor,
 )
-from tidy3d.components.types import TYPE_TAG_STR, annotate_type
-from tidy3d.log import log
+from tidy3d.components.types import TYPE_TAG_STR, Ax, annotate_type
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.exceptions import DataError
 
 FieldDataset = Union[
     SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
@@ -46,38 +52,9 @@ class SteadyPotentialData(HeatChargeMonitorData):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
-        return dict(potential=self.potential)
-
-    @pd.validator("potential", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def warn_no_data(cls, val, values):
-        """Warn if no data provided."""
-
-        mnt = values.get("monitor")
-
-        if val is None:
-            log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
-            )
-
-        return val
-
-    @property
-    def symmetry_expanded_copy(self) -> SteadyPotentialData:
-        """Return copy of self with symmetry applied."""
-
-        new_potential = self._symmetry_expanded_copy(property=self.potential)
-        return self.updated_copy(potential=new_potential, symmetry=(0, 0, 0))
-
-    def field_name(self, val: str) -> str:
-        """Gets the name of the fields to be plot."""
-        if val == "abs^2":
-            return "|V|²"
-        else:
-            return "V"
+        return {"potential": self.potential}
 
 
 class SteadyFreeCarrierData(HeatChargeMonitorData):
@@ -114,9 +91,9 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
     # p = holes
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
-        return dict(electrons=self.electrons, holes=self.holes)
+        return {"electrons": self.electrons, "holes": self.holes}
 
     @pd.root_validator(skip_on_failure=True)
     def check_correct_data_type(cls, values):
@@ -135,41 +112,162 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
 
         return values
 
+
+class SteadyEnergyBandData(HeatChargeMonitorData):
+    """
+    Stores energy bands in charge simulations.
+
+    Notes
+    -----
+
+        This data contains the energy bands data:
+        Ec -> Energy of the bottom of the conduction band, [eV]
+        Ev -> Energy of the top of the valence band, [eV]
+        Ei -> Intrinsic Fermi level, [eV]
+        Efn -> Quasi-Fermi level for electrons, [eV]
+        Efp -> Quasi-Fermi level for holes, [eV]
+        as defined in the  ``monitor``.
+    """
+
+    monitor: SteadyEnergyBandMonitor = pd.Field(
+        ...,
+        title="Energy band monitor",
+        description="Energy bands data associated with a Charge simulation.",
+    )
+
+    Ec: UnstructuredFieldType = pd.Field(
+        None,
+        title="Conduction band series",
+        description=r"Contains the computed energy of the bottom of the conduction band $Ec$.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    Ev: UnstructuredFieldType = pd.Field(
+        None,
+        title="Valence band series",
+        description=r"Contains the computed energy of the top of the valence band $Ec$.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    Ei: UnstructuredFieldType = pd.Field(
+        None,
+        title="Intrinsic Fermi level series",
+        description=r"Contains the computed intrinsic Fermi level for the material $Ei$.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    Efn: UnstructuredFieldType = pd.Field(
+        None,
+        title="Electron's quasi-Fermi level series",
+        description=r"Contains the computed quasi-Fermi level for electrons $Efn$.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    Efp: UnstructuredFieldType = pd.Field(
+        None,
+        title="Hole's quasi-Fermi level series",
+        description=r"Contains the computed quasi-Fermi level for holes $Efp$.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @property
+    def field_components(self) -> dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        return {"Ec": self.Ec, "Ev": self.Ev, "Ei": self.Ei, "Efn": self.Efn, "Efp": self.Efp}
+
     @pd.root_validator(skip_on_failure=True)
-    def warn_no_data(cls, values):
-        """Warn if no data provided."""
+    def check_correct_data_type(cls, values):
+        """Issue error if incorrect data type is used"""
 
         mnt = values.get("monitor")
-        electrons = values.get("electrons")
-        holes = values.get("holes")
+        field_data = {field: values.get(field) for field in ["Ec", "Ev", "Ei", "Efn", "Efp"]}
 
-        if electrons is None or holes is None:
-            log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
-            )
+        for field, data in field_data.items():
+            if isinstance(data, TetrahedralGridDataset) or isinstance(data, TriangularGridDataset):
+                if not isinstance(data.values, IndexedVoltageDataArray):
+                    raise ValueError(
+                        f"In the data associated with monitor {mnt}, the field {field} does not contain "
+                        "data associated to any voltage value."
+                    )
 
         return values
 
-    @property
-    def symmetry_expanded_copy(self) -> SteadyFreeCarrierData:
-        """Return copy of self with symmetry applied."""
+    @add_ax_if_none
+    def plot(self, ax: Ax = None, **sel_kwargs) -> Ax:
+        """Plot the 1D cross-section of the energy bandgap diagram.
 
-        new_electrons = self._symmetry_expanded_copy(property=self.electrons)
-        new_holes = self._symmetry_expanded_copy(property=self.holes)
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+        sel_kwargs : keyword arguments used to perform ``.sel()`` selection in the monitor data.
+            These kwargs can select over the spatial dimensions (``x``, ``y``, or ``z``)
+            and the bias voltage (``voltage``).
+            For the plotting to work appropriately, the resulting data after selection must contain
+            only one coordinate with len > 1.
+            Furthermore, these should be spatial coordinates (``x``, ``y``, or ``z``).
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
 
-        return self.updated_copy(
-            electrons=new_electrons,
-            holes=new_holes,
-            symmetry=(0, 0, 0),
-        )
+        selection_data = {}
 
-    def field_name(self, val: str = "") -> str:
-        """Gets the name of the fields to be plot."""
-        if val == "abs^2":
-            return "Electrons², Holes²"
-        else:
-            return "Electrons, Holes"
+        if ("voltage" not in sel_kwargs) and (self.Ec.values.coords.sizes["voltage"] > 1):
+            raise DataError(
+                "'voltage' is not selected for the plot with multiple voltage data points."
+            )
+
+        selection_data = {coord: sel_kwargs[coord] for coord in "xyz" if coord in sel_kwargs.keys()}
+        N_coords = len(selection_data.keys())
+
+        if "voltage" in sel_kwargs:
+            selection_data["voltage"] = sel_kwargs["voltage"]
+
+        if isinstance(self.Ec, TetrahedralGridDataset):
+            if N_coords != 2:
+                raise DataError(
+                    "2 spatial coordinate values have to be defined to plot the 1D cross-section figure for a 3D dataset."
+                )
+
+        elif isinstance(self.Ec, TriangularGridDataset):
+            if N_coords != 1:
+                raise DataError(
+                    "1 spatial coordinate value has to be defined to plot the 1D cross-section figure for a 2D dataset."
+                )
+
+            for index, coord_name in enumerate(["x", "y", "z"]):
+                if coord_name in selection_data:
+                    axis = index
+                    continue
+
+            if axis == self.Ec.normal_axis:
+                raise DataError(
+                    f"Triangular grid (normal: {self.Ec.normal_axis}) cannot be sliced by a parallel plane."
+                )
+
+        Ec_data = self.Ec
+        Ev_data = self.Ev
+        Ei_data = self.Ei
+        Efn_data = self.Efn
+        Efp_data = self.Efp
+
+        for coord_name, coord_val in selection_data.items():
+            Ec_data = Ec_data.sel(**{coord_name: coord_val}, method="nearest")
+            Ev_data = Ev_data.sel(**{coord_name: coord_val}, method="nearest")
+            Ei_data = Ei_data.sel(**{coord_name: coord_val}, method="nearest")
+            Efn_data = Efn_data.sel(**{coord_name: coord_val}, method="nearest")
+            Efp_data = Efp_data.sel(**{coord_name: coord_val}, method="nearest")
+
+        Ec_data.plot(ax=ax, label="Ec")
+        Ev_data.plot(ax=ax, label="Ev")
+        Ei_data.plot(ax=ax, label="Ei")
+        Efn_data.plot(ax=ax, label="Efn")
+        Efp_data.plot(ax=ax, label="Efp")
+        ax.legend()
+
+        return ax
 
 
 class SteadyCapacitanceData(HeatChargeMonitorData):
@@ -210,26 +308,123 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     )
     # C_n = electron_capacitance
 
-    @pd.validator("hole_capacitance", always=True)
-    @skip_if_fields_missing(["monitor"])
-    def warn_no_data(cls, val, values):
-        """Warn if no data provided."""
-
-        mnt = values.get("monitor")
-
-        if val is None:
-            log.warning(
-                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
-                "monitor not intersecting any solid medium."
-            )
-
-        return val
-
-    def field_name(self, val: str) -> str:
-        """Gets the name of the fields to be plot."""
-        return ""
+    @property
+    def field_components(self) -> dict[str, UnstructuredFieldType]:
+        """Maps the field components to their associated data."""
+        return {}
 
     @property
     def symmetry_expanded_copy(self) -> SteadyCapacitanceData:
         """Return copy of self with symmetry applied."""
-        return self
+        num_symmetries = np.sum(np.array([1 if d > 0 else 0 for d in self.symmetry]))
+        scaling_factor = np.power(2, num_symmetries)
+
+        if self.hole_capacitance is None:
+            new_hole_capacitance = None
+        else:
+            new_values = self.hole_capacitance.values * scaling_factor
+            new_hole_capacitance = SteadyVoltageDataArray(
+                data=new_values, coords=self.hole_capacitance.coords
+            )
+
+        if self.electron_capacitance is None:
+            new_electron_capacitance = None
+        else:
+            new_values = self.electron_capacitance.values * scaling_factor
+            new_electron_capacitance = SteadyVoltageDataArray(
+                data=new_values, coords=self.electron_capacitance.coords
+            )
+
+        return self.updated_copy(
+            hole_capacitance=new_hole_capacitance,
+            electron_capacitance=new_electron_capacitance,
+            symmetry=(0, 0, 0),
+        )
+
+
+class SteadyElectricFieldData(HeatChargeMonitorData):
+    """
+    Stores electric field :math:`\\vec{E}` from a Charge/Conduction simulation.
+
+    Notes
+    -----
+        The electric field is computed as the negative gradient of the electric potential :math:`\\vec{E} = -\\nabla \\psi`.
+        It is given in units of :math:`V/\\mu m` (Volts per micrometer).
+    """
+
+    monitor: SteadyElectricFieldMonitor = pd.Field(
+        ...,
+        title="Electric field monitor",
+        description="Electric field data associated with a Charge/Conduction simulation.",
+    )
+
+    E: UnstructuredFieldType = pd.Field(
+        None,
+        title="Electric field",
+        description=r"Contains the computed electric field in :math:`V/\\mu m`.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @property
+    def field_components(self) -> dict[str, UnstructuredFieldType]:
+        """Maps the field components to their associated data."""
+        return {"E": self.E}
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_correct_data_type(cls, values):
+        """Issue error if incorrect data type is used"""
+
+        mnt = values.get("monitor")
+        E = values.get("E")
+
+        if isinstance(E, TetrahedralGridDataset) or isinstance(E, TriangularGridDataset):
+            AcceptedTypes = (IndexedFieldVoltageDataArray, PointDataArray)
+            if not isinstance(E.values, AcceptedTypes):
+                raise ValueError(
+                    f"In the data associated with monitor {mnt}, must contain a field. This can be "
+                    "defined with IndexedFieldVoltageDataArray or PointDataArray."
+                )
+
+        return values
+
+
+class SteadyCurrentDensityData(HeatChargeMonitorData):
+    """
+    Stores current density :math:`\\vec{J}` from a Charge/Conduction simulation. It is given in
+    units of :math:`A/\\mu m^2`
+    """
+
+    monitor: SteadyCurrentDensityMonitor = pd.Field(
+        ...,
+        title="Current density monitor",
+        description="Current density data associated with a Charge/Conduction simulation.",
+    )
+
+    J: UnstructuredFieldType = pd.Field(
+        None,
+        title="Current density",
+        description=r"Contains the computed current density in :math:`A/\\mu m^2`.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    @property
+    def field_components(self) -> dict[str, UnstructuredFieldType]:
+        """Maps the field components to their associated data."""
+        return {"J": self.J}
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_correct_data_type(cls, values):
+        """Issue error if incorrect data type is used"""
+
+        mnt = values.get("monitor")
+        J = values.get("J")
+
+        if isinstance(J, TetrahedralGridDataset) or isinstance(J, TriangularGridDataset):
+            AcceptedTypes = (IndexedFieldVoltageDataArray, PointDataArray)
+            if not isinstance(J.values, AcceptedTypes):
+                raise ValueError(
+                    f"In the data associated with monitor {mnt}, must contain a field. This can be "
+                    "defined with IndexedFieldVoltageDataArray or PointDataArray."
+                )
+
+        return values

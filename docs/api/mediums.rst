@@ -180,14 +180,15 @@ The ``Medium2D`` class is used to simulate 2D materials without an out-of-plane 
 
 ~~~~
 
-Metallic 
---------
+Metallic/PEC/PMC 
+----------------
 
 .. autosummary::
    :toctree: _autosummary/
    :template: module.rst
 
    tidy3d.PECMedium
+   tidy3d.PMCMedium
    tidy3d.LossyMetalMedium
 
 At lower frequencies, the EM field typically does not penetrate very far into the metallic medium. In this regime, metallic structures are commonly modeled as boundary conditions. In Tidy3D, a metallic medium is assigned to a structure and the corresponding boundary conditions are automatically applied to its geometric boundaries.
@@ -279,6 +280,8 @@ Perturbation (Multiphysics)
 
    tidy3d.PerturbationMedium
    tidy3d.PerturbationPoleResidue
+   tidy3d.NedeljkovicSorefMashanovich
+   tidy3d.ParameterPerturbation
 
 When performing a multiphysics simulation, the temperature or carrier density field will result in a perturbation to the optical medium.
 

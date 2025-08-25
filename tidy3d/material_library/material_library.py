@@ -1,12 +1,16 @@
 """Holds dispersive models for several commonly used optical materials."""
 
+from __future__ import annotations
+
 import json
-from typing import Dict, List, Union
+from typing import Union
 
 import pydantic.v1 as pd
 
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
 from tidy3d.components.material.tcad.charge import SemiconductorMedium
+from tidy3d.components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
 from tidy3d.components.tcad.types import (
     AugerRecombination,
     CaugheyThomasMobility,
@@ -14,14 +18,21 @@ from tidy3d.components.tcad.types import (
     ShockleyReedHallRecombination,
     SlotboomBandGapNarrowing,
 )
+from tidy3d.components.types import Axis
+from tidy3d.exceptions import SetupError
+from tidy3d.log import log
 
-from ..components.base import Tidy3dBaseModel
-from ..components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
-from ..components.types import Axis
-from ..exceptions import SetupError
-from ..log import log
 from .material_reference import ReferenceData, material_refs
 from .parametric_materials import Graphene
+from .util import (
+    repr_pretty_with_rich,
+    summarize_material_item,
+    summarize_material_item_rich,
+    summarize_material_library,
+    summarize_material_library_rich,
+    summarize_variant_item,
+    summarize_variant_item_rich,
+)
 
 
 def export_matlib_to_file(fname: str = "matlib.json") -> None:
@@ -57,7 +68,7 @@ def export_matlib_to_file(fname: str = "matlib.json") -> None:
 class AbstractVariantItem(Tidy3dBaseModel):
     """Reference, and data_source for a variant of a material."""
 
-    reference: List[ReferenceData] = pd.Field(
+    reference: list[ReferenceData] = pd.Field(
         None,
         title="Reference information",
         description="A list of references related to this variant model.",
@@ -70,6 +81,19 @@ class AbstractVariantItem(Tidy3dBaseModel):
         "model is fitted.",
     )
 
+    @property
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+        return {}
+
+    def __str__(self):
+        return summarize_variant_item(self)
+
+    def __rich__(self):
+        return summarize_variant_item_rich(self)
+
+    def _repr_pretty_(self, p, cycle):
+        return repr_pretty_with_rich(self, p, cycle)
+
 
 class VariantItem(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a material."""
@@ -80,12 +104,16 @@ class VariantItem(AbstractVariantItem):
         description="A dispersive medium described by the pole-residue pair model.",
     )
 
+    @property
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+        return {"medium": self.medium}
+
 
 class MaterialItem(Tidy3dBaseModel):
     """A material that includes several variants."""
 
     name: str = pd.Field(..., title="Name", description="Unique name for the medium.")
-    variants: Dict[str, VariantItem] = pd.Field(
+    variants: dict[str, VariantItem] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -119,6 +147,15 @@ class MaterialItem(Tidy3dBaseModel):
             )
         return self.variants[self.default].medium
 
+    def __str__(self):
+        return summarize_material_item(self)
+
+    def __rich__(self):
+        return summarize_material_item_rich(self)
+
+    def _repr_pretty_(self, p, cycle):
+        return repr_pretty_with_rich(self, p, cycle)
+
 
 class VariantItem2D(AbstractVariantItem):
     """Reference, data_source, and material model for a variant of a 2D material."""
@@ -131,11 +168,15 @@ class VariantItem2D(AbstractVariantItem):
         "defined for the in-plane directions of the 2D geometry.",
     )
 
+    @property
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+        return {"medium": self.medium}
+
 
 class MaterialItem2D(MaterialItem):
     """A 2D material that includes several variants."""
 
-    variants: Dict[str, VariantItem2D] = pd.Field(
+    variants: dict[str, VariantItem2D] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -174,15 +215,19 @@ class VariantItemUniaxial(AbstractVariantItem):
         """
 
         components = ["xx", "yy", "zz"]
-        mat_dict = {comp: self.ordinary for comp in components}
+        mat_dict = dict.fromkeys(components, self.ordinary)
         mat_dict.update({components[optical_axis]: self.extraordinary})
         return AnisotropicMedium.parse_obj(mat_dict)
+
+    @property
+    def summarize_mediums(self) -> dict[str, Union[PoleResidue, Medium2D, MultiPhysicsMedium]]:
+        return {"ordinary": self.ordinary, "extraordinary": self.extraordinary}
 
 
 class MaterialItemUniaxial(MaterialItem):
     """A material that includes several variants."""
 
-    variants: Dict[str, VariantItemUniaxial] = pd.Field(
+    variants: dict[str, VariantItemUniaxial] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -198,10 +243,12 @@ LiNbO3_Zelmon1997 = VariantItemUniaxial(
     ordinary=Sellmeier(
         coeffs=((2.6734, 0.01764), (1.2290, 0.05914), (12.614, 474.60)),
         frequency_range=(59958491600000.0, 749481145000000.0),
+        name="LiNbO3_Zelmon1997",
     ).pole_residue,
     extraordinary=Sellmeier(
         coeffs=((2.9804, 0.02047), (0.5981, 0.0666), (8.9543, 416.08)),
         frequency_range=(59958491600000.0, 749481145000000.0),
+        name="LiNbO3_Zelmon1997",
     ).pole_residue,
     reference=[material_refs["Zelmon1997"]],
     data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/LiNbO3/Zelmon-e.yml",
@@ -209,6 +256,7 @@ LiNbO3_Zelmon1997 = VariantItemUniaxial(
 
 Ag_Rakic1998BB = VariantItem(
     medium=PoleResidue(
+        name="Ag_Rakic1998BB",
         eps_inf=2.080628548409516,
         poles=[
             (
@@ -233,6 +281,7 @@ Ag_Rakic1998BB = VariantItem(
 
 Ag_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Ag_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (1.085598639948276e18 + 0j)),
@@ -253,6 +302,7 @@ Ag_RakicLorentzDrude1998 = VariantItem(
 
 Ag_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
+        name="Ag_JohnsonChristy1972",
         eps_inf=1.0,
         poles=[
             (
@@ -285,6 +335,7 @@ Ag_JohnsonChristy1972 = VariantItem(
 
 Ag_Yang2015Drude = VariantItem(
     medium=PoleResidue(
+        name="Ag_Yang2015Drude",
         eps_inf=1.0,
         poles=[
             (
@@ -303,12 +354,12 @@ Ag_Yang2015Drude = VariantItem(
         frequency_range=(154771532566312.25, 1595489401708072.2),
     ),
     reference=[material_refs["Yang2015"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/"
-    "main/Ag/Yang.yml",
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Yang.yml",
 )
 
 Al_Rakic1995 = VariantItem(
     medium=PoleResidue(
+        name="Al_Rakic1995",
         eps_inf=1.0,
         poles=[
             (
@@ -337,6 +388,7 @@ Al_Rakic1995 = VariantItem(
 
 Al_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Al_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (1.896844347324609e18 + 0j)),
@@ -356,6 +408,7 @@ Al_RakicLorentzDrude1998 = VariantItem(
 
 Al2O3_Horiba = VariantItem(
     medium=PoleResidue(
+        name="Al2O3_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.856240967961668e16), (0.0 + 1j * 1.4107431356508676e16))],
         frequency_range=(145079354536315.6, 1450793545363156.0),
@@ -365,6 +418,7 @@ Al2O3_Horiba = VariantItem(
 
 AlAs_Horiba = VariantItem(
     medium=PoleResidue(
+        name="AlAs_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -379,6 +433,7 @@ AlAs_Horiba = VariantItem(
 
 AlAs_FernOnton1971 = VariantItem(
     medium=PoleResidue(
+        name="AlAs_FernOnton1971",
         eps_inf=2.0792,
         poles=[
             ((0.0 + 1j * 6674881541314847.0), (-0.0 - 1j * 2.0304989648679764e16)),
@@ -393,6 +448,7 @@ AlAs_FernOnton1971 = VariantItem(
 
 AlGaN_Horiba = VariantItem(
     medium=PoleResidue(
+        name="AlGaN_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -407,6 +463,7 @@ AlGaN_Horiba = VariantItem(
 
 AlN_Horiba = VariantItem(
     medium=PoleResidue(
+        name="AlN_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.354578856633347e16), (0.0 + 1j * 2.2391188500149228e16))],
         frequency_range=(181349193170394.5, 1148544890079165.2),
@@ -416,6 +473,7 @@ AlN_Horiba = VariantItem(
 
 AlxOy_Horiba = VariantItem(
     medium=PoleResidue(
+        name="AlxOy_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -430,6 +488,7 @@ AlxOy_Horiba = VariantItem(
 
 Aminoacid_Horiba = VariantItem(
     medium=PoleResidue(
+        name="Aminoacid_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 2.2518582114198596e16), (0.0 + 1j * 5472015453750259.0))],
         frequency_range=(362698386340789.0, 1208994621135963.5),
@@ -439,6 +498,7 @@ Aminoacid_Horiba = VariantItem(
 
 Au_Olmon2012evaporated = VariantItem(
     medium=PoleResidue(
+        name="Au_Olmon2012evaporated",
         eps_inf=5.632132676065586,
         poles=(
             (
@@ -463,6 +523,7 @@ Au_Olmon2012evaporated = VariantItem(
 
 Au_Olmon2012stripped = VariantItem(
     medium=PoleResidue(
+        name="Au_Olmon2012stripped",
         eps_inf=1.8661249761826162,
         poles=(
             (
@@ -487,6 +548,7 @@ Au_Olmon2012stripped = VariantItem(
 
 Au_Olmon2012crystal = VariantItem(
     medium=PoleResidue(
+        name="Au_Olmon2012crystal",
         eps_inf=2.6361315520011614,
         poles=[
             (
@@ -511,6 +573,7 @@ Au_Olmon2012crystal = VariantItem(
 
 Au_Olmon2012Drude = VariantItem(
     medium=PoleResidue(
+        name="Au_Olmon2012Drude",
         eps_inf=2.6361315520011614,
         poles=[
             (
@@ -535,6 +598,7 @@ Au_Olmon2012Drude = VariantItem(
 
 Au_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
+        name="Au_JohnsonChristy1972",
         eps_inf=1.0,
         poles=[
             (
@@ -567,6 +631,7 @@ Au_JohnsonChristy1972 = VariantItem(
 
 Au_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Au_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (8.882136852663547e17 + 0j)),
@@ -586,6 +651,7 @@ Au_RakicLorentzDrude1998 = VariantItem(
 
 BK7_Zemax = VariantItem(
     medium=PoleResidue(
+        name="BK7_Zemax",
         eps_inf=1,
         poles=[
             ((0.0 + 1j * 2.431642149296798e16), (-0.0 - 1j * 1.2639823249559002e16)),
@@ -600,6 +666,7 @@ BK7_Zemax = VariantItem(
 
 Be_Rakic1998BB = VariantItem(
     medium=PoleResidue(
+        name="Be_Rakic1998BB",
         eps_inf=1.0,
         poles=[
             (
@@ -628,6 +695,7 @@ Be_Rakic1998BB = VariantItem(
 
 Be_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Be_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (6.246378779510136e17 + 0j)),
@@ -648,6 +716,7 @@ Be_RakicLorentzDrude1998 = VariantItem(
 
 CaF2_Horiba = VariantItem(
     medium=PoleResidue(
+        name="CaF2_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 2.376134288665943e16), (0.0 + 1j * 1.2308375615289586e16))],
         frequency_range=(181349193170394.5, 1148544890079165.2),
@@ -657,6 +726,7 @@ CaF2_Horiba = VariantItem(
 
 Cellulose_Sultanova2009 = VariantItem(
     medium=PoleResidue(
+        name="Cellulose_Sultanova2009",
         eps_inf=1,
         poles=[((0.0 + 1j * 1.7889308287957964e16), (-0.0 - 1j * 1.0053791257832376e16))],
         frequency_range=(284973819943865.75, 686338046201801.2),
@@ -668,6 +738,7 @@ Cellulose_Sultanova2009 = VariantItem(
 
 Cr_Rakic1998BB = VariantItem(
     medium=PoleResidue(
+        name="Cr_Rakic1998BB",
         eps_inf=1.0,
         poles=[
             (
@@ -692,6 +763,7 @@ Cr_Rakic1998BB = VariantItem(
 
 Cr_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Cr_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (3.137852964800087e17 + 0j)),
@@ -712,6 +784,7 @@ Cr_RakicLorentzDrude1998 = VariantItem(
 
 Cu_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
+        name="Cu_JohnsonChristy1972",
         eps_inf=1.0,
         poles=[
             (
@@ -744,6 +817,7 @@ Cu_JohnsonChristy1972 = VariantItem(
 
 Cu_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Cu_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (1.7076849079038659e18 + 0j)),
@@ -762,6 +836,7 @@ Cu_RakicLorentzDrude1998 = VariantItem(
 
 FusedSilica_Zemax = VariantItem(
     medium=PoleResidue(
+        name="FusedSilica_Zemax",
         eps_inf=1,
         poles=[
             ((0.0 + 1j * 2.7537034527932452e16), (-0.0 - 1j * 9585177720141492.0)),
@@ -777,6 +852,7 @@ FusedSilica_Zemax = VariantItem(
 
 FusedSilica_Zemax_Visible_PMLStable = VariantItem(
     medium=PoleResidue(
+        name="FusedSilica_Zemax_Visible_PMLStable",
         eps_inf=1,
         poles=((-2.0054061849947e16j, 1.1008717135056432e16j),),
         frequency_range=(382925607524582.94, 739315556426623.9),
@@ -788,6 +864,7 @@ FusedSilica_Zemax_Visible_PMLStable = VariantItem(
 
 FusedSilica_Zemax_PMLStable = VariantItem(
     medium=PoleResidue(
+        name="FusedSilica_Zemax_PMLStable",
         eps_inf=1,
         poles=((-1.7312422399228024e16j, 9389865424501702j),),
         frequency_range=(150347270878132.4, 739315556426623.9),
@@ -799,6 +876,7 @@ FusedSilica_Zemax_PMLStable = VariantItem(
 
 GaAs_Skauli2003 = VariantItem(
     medium=PoleResidue(
+        name="GaAs_Skauli2003",
         eps_inf=5.372514,
         poles=[
             ((0.0 + 1j * 4250781024557878.5), (-0.0 - 1j * 1.1618961579876792e16)),
@@ -814,6 +892,7 @@ GaAs_Skauli2003 = VariantItem(
 
 GaAs_Palik_Lossy = VariantItem(
     medium=PoleResidue(
+        name="GaAs_Palik_Lossy",
         eps_inf=1.0,
         poles=[
             (
@@ -848,6 +927,7 @@ GaAs_Palik_Lossy = VariantItem(
 
 GaAs_Palik_Lossless = VariantItem(
     medium=PoleResidue(
+        name="GaAs_Palik_Lossless",
         eps_inf=1.2402134414081076,
         poles=[
             (
@@ -866,6 +946,7 @@ GaAs_Palik_Lossless = VariantItem(
 
 Ge_Icenogle1976 = VariantItem(
     medium=PoleResidue(
+        name="Ge_Icenogle1976",
         eps_inf=9.28156000004953,
         poles=[
             ((0.0 + 1j * 2836329349380603.5), (-0.0 - 1j * 9542546463056102.0)),
@@ -880,6 +961,7 @@ Ge_Icenogle1976 = VariantItem(
 
 Ge_Palik_Lossless = VariantItem(
     medium=PoleResidue(
+        name="Ge_Palik_Lossless",
         eps_inf=1.0,
         poles=[
             (
@@ -894,6 +976,7 @@ Ge_Palik_Lossless = VariantItem(
 
 Ge_Palik_Lossy = VariantItem(
     medium=PoleResidue(
+        name="Ge_Palik_Lossy",
         eps_inf=1.0,
         poles=[
             (
@@ -922,8 +1005,46 @@ Ge_Palik_Lossy = VariantItem(
     reference=[material_refs["Palik_Lossy"]],
 )
 
+Ge_Nunley = VariantItem(
+    medium=PoleResidue(
+        name="Ge_Nunley",
+        eps_inf=1.0,
+        poles=[
+            (
+                (-1055692444928990.6 - 1.2069979211686232e16j),
+                (1107423663161164.6 - 3093285987380348.5j),
+            ),
+            ((-3216853350289244 - 8291440266759688j), (5700802820282152 + 2.5732993737266788e16j)),
+            ((-541881030908034.7 - 8791646324216410j), (-937105384931749 + 541020934229084.2j)),
+            (
+                (-976547995477318.4 - 6543303598934721j),
+                (-1.0737211590127532e16 + 1.3992511131747758e16j),
+            ),
+            ((-284492778464386.2 - 6696785988114651j), (-2168480500787241.8 - 696493506373301.2j)),
+            ((-900354155072.7748 - 6663372533420019j), (183103725786.0085 - 141583942490.17123j)),
+            ((-7073535582440.927 - 6580195498223051j), (262790152.22284198 + 378843848585.63043j)),
+            ((-270911770733075.62 - 6447924271229311j), (1207997886295188 + 1471602437337227.5j)),
+            ((-255993466255361.62 - 5008805217676040j), (445613879952076.8 - 223801118798973.3j)),
+            ((-344512832764646.75 - 4858405095425429j), (563341672141455.9 + 1286782730502855.5j)),
+            ((-695769101918184.8 - 3620945512916543j), (5328924572609390 + 5529617018233712j)),
+            ((-252629750588162 - 3513125220372237.5j), (109779730682375.69 + 2230058891609707j)),
+            (
+                (-141325408476762.66 - 3230461058493017.5j),
+                (126429312165475.8 + 1257642646101307.8j),
+            ),
+            ((-498950664609906.4 - 1179396998903782.5j), (180816169912939.7 - 297981189005482.4j)),
+            ((-37573278339073.01 - 1213096851555221.8j), (13359584691343.223 - 3071910249946.702j)),
+            ((-99651215401004 - 1635758773069449.5j), (5479484262079.737 - 6773804202146.6045j)),
+        ],
+        frequency_range=(1.209e14, 1.595e15),
+    ),
+    reference=[material_refs["Nunley2016"]],
+    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data/main/Ge/nk/Nunley.yml",
+)
+
 GeOx_Horiba = VariantItem(
     medium=PoleResidue(
+        name="GeOx_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -938,6 +1059,7 @@ GeOx_Horiba = VariantItem(
 
 H2O_Horiba = VariantItem(
     medium=PoleResidue(
+        name="H2O_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.7289263558195928e16), (0.0 + 1j * 5938862032240302.0))],
         frequency_range=(362698386340789.0, 1450793545363156.0),
@@ -947,6 +1069,7 @@ H2O_Horiba = VariantItem(
 
 HMDS_Horiba = VariantItem(
     medium=PoleResidue(
+        name="HMDS_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -961,6 +1084,7 @@ HMDS_Horiba = VariantItem(
 
 HfO2_Horiba = VariantItem(
     medium=PoleResidue(
+        name="HfO2_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -975,6 +1099,7 @@ HfO2_Horiba = VariantItem(
 
 ITO_Horiba = VariantItem(
     medium=PoleResidue(
+        name="ITO_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -989,6 +1114,7 @@ ITO_Horiba = VariantItem(
 
 InAs_Palik = VariantItem(
     medium=PoleResidue(
+        name="InAs_Palik",
         eps_inf=6.169295480278222,
         poles=(
             (
@@ -1013,6 +1139,7 @@ InAs_Palik = VariantItem(
 
 InP_Pettit1965 = VariantItem(
     medium=PoleResidue(
+        name="InP_Pettit1965",
         eps_inf=7.255000000015208,
         poles=[
             ((0.0 + 1j * 3007586733129570.0), (-0.0 - 1j * 3482785436964042.0)),
@@ -1031,6 +1158,7 @@ InP_Pettit1965 = VariantItem(
 
 InP_Palik_Lossy = VariantItem(
     medium=PoleResidue(
+        name="InP_Palik_Lossy",
         eps_inf=1.0,
         poles=[
             (
@@ -1063,6 +1191,7 @@ InP_Palik_Lossy = VariantItem(
 
 InP_Palik_Lossless = VariantItem(
     medium=PoleResidue(
+        name="InP_Palik_Lossless",
         eps_inf=1.0,
         poles=[
             (
@@ -1079,6 +1208,7 @@ InP_Palik_Lossless = VariantItem(
 
 MgF2_Horiba = VariantItem(
     medium=PoleResidue(
+        name="MgF2_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 2.5358092974503356e16), (0.0 + 1j * 1.1398462792039258e16))],
         frequency_range=(193439139381754.16, 918835912063332.1),
@@ -1088,6 +1218,7 @@ MgF2_Horiba = VariantItem(
 
 MgO_StephensMalitson1952 = VariantItem(
     medium=PoleResidue(
+        name="MgO_StephensMalitson1952",
         eps_inf=1.4351800718235839,
         poles=[
             (
@@ -1109,6 +1240,7 @@ MgO_StephensMalitson1952 = VariantItem(
 MoS2_Li2014 = VariantItem2D(
     medium=Medium2D.from_dispersive_medium(
         PoleResidue(
+            name="MoS2_Li2014",
             eps_inf=7,
             poles=(
                 ((-359315575683882.94 - 4351037853607888j), 1.3176033127808174e16j),
@@ -1127,6 +1259,7 @@ MoS2_Li2014 = VariantItem2D(
 MoSe2_Li2014 = VariantItem2D(
     medium=Medium2D.from_dispersive_medium(
         PoleResidue(
+            name="MoSe2_Li2014",
             eps_inf=2.98,
             poles=(
                 ((-36761326958106.516 - 2346800992876732.5j), 338220688925072j),
@@ -1144,6 +1277,7 @@ MoSe2_Li2014 = VariantItem2D(
 
 Ni_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
+        name="Ni_JohnsonChristy1972",
         eps_inf=1.0,
         poles=(
             (
@@ -1176,6 +1310,7 @@ Ni_JohnsonChristy1972 = VariantItem(
 
 Ni_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Ni_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (3.850528653318057e17 + 0j)),
@@ -1196,6 +1331,7 @@ Ni_RakicLorentzDrude1998 = VariantItem(
 
 PEI_Horiba = VariantItem(
     medium=PoleResidue(
+        name="PEI_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.8231209375953524e16), (0.0 + 1j * 9936009109894670.0))],
         frequency_range=(181349193170394.5, 1148544890079165.2),
@@ -1205,6 +1341,7 @@ PEI_Horiba = VariantItem(
 
 PEN_Horiba = VariantItem(
     medium=PoleResidue(
+        name="PEN_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 6981033923542204.0), (0.0 + 1j * 5117097865956436.0))],
         frequency_range=(362698386340789.0, 773756557527016.6),
@@ -1214,6 +1351,7 @@ PEN_Horiba = VariantItem(
 
 PET_Horiba = VariantItem(
     medium=PoleResidue(
+        name="PET_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.063487213597289e16), (0.0 + 1j * 1.169835934957018e16))],
         frequency_range=(362698386340789.0, 773756557527016.6),
@@ -1223,6 +1361,7 @@ PET_Horiba = VariantItem(
 
 PMMA_Horiba = VariantItem(
     medium=PoleResidue(
+        name="PMMA_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.7360669128251744e16), (0.0 + 1j * 1.015599144002727e16))],
         frequency_range=(181349193170394.5, 1100185105233726.6),
@@ -1232,6 +1371,7 @@ PMMA_Horiba = VariantItem(
 
 PMMA_Sultanova2009 = VariantItem(
     medium=PoleResidue(
+        name="PMMA_Sultanova2009",
         eps_inf=1,
         poles=[((0.0 + 1j * 1.7709719337156064e16), (-0.0 - 1j * 1.0465558642292376e16))],
         frequency_range=(284973819943865.75, 686338046201801.2),
@@ -1243,6 +1383,7 @@ PMMA_Sultanova2009 = VariantItem(
 
 PTFE_Horiba = VariantItem(
     medium=PoleResidue(
+        name="PTFE_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 2.5039046810424176e16), (0.0 + 1j * 8763666383648461.0))],
         frequency_range=(362698386340789.0, 1571693007476752.5),
@@ -1252,6 +1393,7 @@ PTFE_Horiba = VariantItem(
 
 PVC_Horiba = VariantItem(
     medium=PoleResidue(
+        name="PVC_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.8551774807480708e16), (0.0 + 1j * 1.209575717447742e16))],
         frequency_range=(362698386340789.0, 1148544890079165.2),
@@ -1261,6 +1403,7 @@ PVC_Horiba = VariantItem(
 
 Pd_JohnsonChristy1972 = VariantItem(
     medium=PoleResidue(
+        name="Pd_JohnsonChristy1972",
         eps_inf=1.0,
         poles=[
             (
@@ -1293,6 +1436,7 @@ Pd_JohnsonChristy1972 = VariantItem(
 
 Pd_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Pd_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (2.96047037671187e18 + 0j)),
@@ -1313,6 +1457,7 @@ Pd_RakicLorentzDrude1998 = VariantItem(
 
 Polycarbonate_Horiba = VariantItem(
     medium=PoleResidue(
+        name="Polycarbonate_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.8240324980641504e16), (0.0 + 1j * 1.3716724385442412e16))],
         frequency_range=(362698386340789.0, 967195696908770.8),
@@ -1322,6 +1467,7 @@ Polycarbonate_Horiba = VariantItem(
 
 Polycarbonate_Sultanova2009 = VariantItem(
     medium=PoleResidue(
+        name="Polycarbonate_Sultanova2009",
         eps_inf=1,
         poles=[((0.0 + 1j * 1.290535618305202e16), (-0.0 - 1j * 9151188069402186.0))],
         frequency_range=(284973819943865.75, 686338046201801.2),
@@ -1333,6 +1479,7 @@ Polycarbonate_Sultanova2009 = VariantItem(
 
 Polystyrene_Sultanova2009 = VariantItem(
     medium=PoleResidue(
+        name="Polystyrene_Sultanova2009",
         eps_inf=1,
         poles=[((0.0 + 1j * 1.3248080478547494e16), (-0.0 - 1j * 9561802085391654.0))],
         frequency_range=(284973819943865.75, 686338046201801.2),
@@ -1344,6 +1491,7 @@ Polystyrene_Sultanova2009 = VariantItem(
 
 Pt_Werner2009 = VariantItem(
     medium=PoleResidue(
+        name="Pt_Werner2009",
         eps_inf=1.0,
         poles=[
             (
@@ -1368,6 +1516,7 @@ Pt_Werner2009 = VariantItem(
 
 Pt_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Pt_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (2.9080086759055955e17 + 0j)),
@@ -1386,6 +1535,7 @@ Pt_RakicLorentzDrude1998 = VariantItem(
 
 Sapphire_Horiba = VariantItem(
     medium=PoleResidue(
+        name="Sapphire_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 2.0143967092980652e16), (0.0 + 1j * 2.105044561216478e16))],
         frequency_range=(362698386340789.0, 1329894083249559.8),
@@ -1395,6 +1545,7 @@ Sapphire_Horiba = VariantItem(
 
 Si3N4_Horiba = VariantItem(
     medium=PoleResidue(
+        name="Si3N4_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -1409,6 +1560,7 @@ Si3N4_Horiba = VariantItem(
 
 Si3N4_Luke2015 = VariantItem(
     medium=PoleResidue(
+        name="Si3N4_Luke2015",
         eps_inf=1,
         poles=[
             ((0.0 + 1j * 1.391786035350109e16), (-0.0 - 1j * 2.1050067891652724e16)),
@@ -1423,6 +1575,7 @@ Si3N4_Luke2015 = VariantItem(
 
 Si3N4_Luke2015_PMLStable = VariantItem(
     medium=PoleResidue(
+        name="Si3N4_Luke2015_PMLStable",
         eps_inf=3.031225983820944,
         poles=(
             (-7534484687295489j, 3530332266482328j),
@@ -1437,6 +1590,7 @@ Si3N4_Luke2015_PMLStable = VariantItem(
 
 Si3N4_Philipp1973 = VariantItem(
     medium=PoleResidue(
+        name="Si3N4_Philipp1973",
         eps_inf=1,
         poles=[((0.0 + 1j * 1.348644355236665e16), (-0.0 - 1j * 1.9514209498096924e16))],
         frequency_range=(241768111758828.06, 1448272746767859.0),
@@ -1448,6 +1602,7 @@ Si3N4_Philipp1973 = VariantItem(
 
 SiC_Horiba = VariantItem(
     medium=PoleResidue(
+        name="SiC_Horiba",
         eps_inf=3.0,
         poles=[((-0.0 - 1j * 1.2154139583969018e16), (0.0 + 1j * 2.3092865209541132e16))],
         frequency_range=(145079354536315.6, 967195696908770.8),
@@ -1457,6 +1612,7 @@ SiC_Horiba = VariantItem(
 
 SiN_Horiba = VariantItem(
     medium=PoleResidue(
+        name="SiN_Horiba",
         eps_inf=2.32,
         poles=[
             (
@@ -1471,6 +1627,7 @@ SiN_Horiba = VariantItem(
 
 SiO2_Horiba = VariantItem(
     medium=PoleResidue(
+        name="SiO2_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -1485,6 +1642,7 @@ SiO2_Horiba = VariantItem(
 
 SiO2_Palik_Lossless = VariantItem(
     medium=PoleResidue(
+        name="SiO2_Palik_Lossless",
         eps_inf=1.5385442336875639,
         poles=[
             (
@@ -1503,6 +1661,7 @@ SiO2_Palik_Lossless = VariantItem(
 
 SiO2_Palik_Lossy = VariantItem(
     medium=PoleResidue(
+        name="SiO2_Palik_Lossy",
         eps_inf=2.1560362571240765,
         poles=[
             (
@@ -1533,6 +1692,7 @@ SiO2_Palik_Lossy = VariantItem(
 
 SiON_Horiba = VariantItem(
     medium=PoleResidue(
+        name="SiON_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.651139862482191e16), (0.0 + 1j * 1.1079148477255502e16))],
         frequency_range=(181349193170394.5, 725396772681578.0),
@@ -1542,6 +1702,7 @@ SiON_Horiba = VariantItem(
 
 Ta2O5_Horiba = VariantItem(
     medium=PoleResidue(
+        name="Ta2O5_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -1556,6 +1717,7 @@ Ta2O5_Horiba = VariantItem(
 
 Ti_Werner2009 = VariantItem(
     medium=PoleResidue(
+        name="Ti_Werner2009",
         eps_inf=1.0,
         poles=[
             (
@@ -1580,6 +1742,7 @@ Ti_Werner2009 = VariantItem(
 
 Ti_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="Ti_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (7.286301814080211e16 + 0j)),
@@ -1599,6 +1762,7 @@ Ti_RakicLorentzDrude1998 = VariantItem(
 
 TiOx_Horiba = VariantItem(
     medium=PoleResidue(
+        name="TiOx_Horiba",
         eps_inf=0.29,
         poles=[((-0.0 - 1j * 9875238411974826.0), (0.0 + 1j * 1.7429795797135566e16))],
         frequency_range=(145079354536315.6, 725396772681578.0),
@@ -1608,6 +1772,7 @@ TiOx_Horiba = VariantItem(
 
 TiOx_HoribaStable = VariantItem(
     medium=PoleResidue(
+        name="TiOx_HoribaStable",
         eps_inf=1.0,
         poles=(
             (-9092895987017908j, 1.2878308348235048e16j),
@@ -1620,6 +1785,7 @@ TiOx_HoribaStable = VariantItem(
 
 W_Werner2009 = VariantItem(
     medium=PoleResidue(
+        name="W_Werner2009",
         eps_inf=1.0,
         poles=[
             (
@@ -1648,6 +1814,7 @@ W_Werner2009 = VariantItem(
 
 W_RakicLorentzDrude1998 = VariantItem(
     medium=PoleResidue(
+        name="W_RakicLorentzDrude1998",
         eps_inf=1.0,
         poles=(
             (0j, (4.2732115514080845e17 + 0j)),
@@ -1667,6 +1834,7 @@ W_RakicLorentzDrude1998 = VariantItem(
 WS2_Li2014 = VariantItem2D(
     medium=Medium2D.from_dispersive_medium(
         PoleResidue(
+            name="WS2_Li2014",
             eps_inf=6.18,
             poles=(
                 ((-24007743182653.15 - 3052251370817458j), 716432281919880.8j),
@@ -1684,6 +1852,7 @@ WS2_Li2014 = VariantItem2D(
 WSe2_Li2014 = VariantItem2D(
     medium=Medium2D.from_dispersive_medium(
         PoleResidue(
+            name="WSe2_Li2014",
             eps_inf=6.29,
             poles=(
                 ((-32911988143375.11 - 2509059529797599.5j), 280960681034011.66j),
@@ -1701,6 +1870,7 @@ WSe2_Li2014 = VariantItem2D(
 
 Y2O3_Horiba = VariantItem(
     medium=PoleResidue(
+        name="Y2O3_Horiba",
         eps_inf=1.0,
         poles=[((-0.0 - 1j * 1.3814698904628784e16), (0.0 + 1j * 1.1846104310719182e16))],
         frequency_range=(374788332552148.7, 967195696908770.8),
@@ -1710,6 +1880,7 @@ Y2O3_Horiba = VariantItem(
 
 Y2O3_Nigara1968 = VariantItem(
     medium=PoleResidue(
+        name="Y2O3_Nigara1968",
         eps_inf=1,
         poles=[
             ((0.0 + 1j * 1.3580761146063806e16), (-0.0 - 1j * 1.7505601117276244e16)),
@@ -1724,6 +1895,7 @@ Y2O3_Nigara1968 = VariantItem(
 
 YAG_Zelmon1998 = VariantItem(
     medium=PoleResidue(
+        name="YAG_Zelmon1998",
         eps_inf=1,
         poles=[
             ((0.0 + 1j * 1.7303796419562446e16), (-0.0 - 1j * 1.974363171472075e16)),
@@ -1738,6 +1910,7 @@ YAG_Zelmon1998 = VariantItem(
 
 ZrO2_Horiba = VariantItem(
     medium=PoleResidue(
+        name="ZrO2_Horiba",
         eps_inf=1.0,
         poles=[
             (
@@ -1752,6 +1925,7 @@ ZrO2_Horiba = VariantItem(
 
 aSi_Horiba = VariantItem(
     medium=PoleResidue(
+        name="aSi_Horiba",
         eps_inf=3.109,
         poles=[
             (
@@ -1766,6 +1940,7 @@ aSi_Horiba = VariantItem(
 
 cSi_SalzbergVilla1957 = VariantItem(
     medium=PoleResidue(
+        name="cSi_SalzbergVilla1957",
         eps_inf=1.0,
         poles=[((0.0 + 1j * 6206417594288582.0), (-0.0 - 1j * 3.311074436985222e16))],
         frequency_range=(27253859870995.164, 220435631309519.7),
@@ -1777,6 +1952,7 @@ cSi_SalzbergVilla1957 = VariantItem(
 
 cSi_Li1993_293K = VariantItem(
     medium=PoleResidue(
+        name="cSi_Li1993_293K",
         eps_inf=1.0,
         poles=[((0.0 + 1j * 6241549589084091.0), (0.0 - 1j * 3.3254308736142404e16))],
         frequency_range=(21413747041496.2, 249827048817455.7),
@@ -1788,6 +1964,7 @@ cSi_Li1993_293K = VariantItem(
 
 cSi_Green2008 = VariantItem(
     medium=PoleResidue(
+        name="cSi_Green2008",
         eps_inf=1.0,
         poles=[
             (
@@ -1820,6 +1997,7 @@ cSi_Green2008 = VariantItem(
 
 cSi_Green2008Lossless = VariantItem(
     medium=PoleResidue(
+        name="cSi_Green2008Lossless",
         eps_inf=8.735527704181576,
         poles=[
             (
@@ -1836,6 +2014,7 @@ cSi_Green2008Lossless = VariantItem(
 
 cSi_PalikLossy = VariantItem(
     medium=PoleResidue(
+        name="cSi_PalikLossy",
         eps_inf=1.0,
         poles=[
             (
@@ -1866,6 +2045,7 @@ cSi_PalikLossy = VariantItem(
 
 cSi_PalikLossless = VariantItem(
     medium=PoleResidue(
+        name="cSi_PalikLossless",
         eps_inf=1.0,
         poles=[
             (
@@ -1926,450 +2106,463 @@ cSi_MultiPhysics = VariantItem(
     "main/Si/Green-2008.yml",
 )
 
-material_library = dict(
+
+class MaterialLibrary(dict):
+    def __str__(self):
+        return summarize_material_library(self)
+
+    def __rich__(self):
+        return summarize_material_library_rich(self)
+
+    def _repr_pretty_(self, p, cycle):
+        return repr_pretty_with_rich(self, p, cycle)
+
+
+material_library = MaterialLibrary(
     Ag=MaterialItem(
         name="Silver",
-        variants=dict(
-            Rakic1998BB=Ag_Rakic1998BB,
-            JohnsonChristy1972=Ag_JohnsonChristy1972,
-            RakicLorentzDrude1998=Ag_RakicLorentzDrude1998,
-            Yang2015Drude=Ag_Yang2015Drude,
-        ),
+        variants={
+            "Rakic1998BB": Ag_Rakic1998BB,
+            "JohnsonChristy1972": Ag_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Ag_RakicLorentzDrude1998,
+            "Yang2015Drude": Ag_Yang2015Drude,
+        },
         default="Rakic1998BB",
     ),
     Al=MaterialItem(
         name="Aluminum",
-        variants=dict(
-            Rakic1995=Al_Rakic1995,
-            RakicLorentzDrude1998=Al_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Rakic1995": Al_Rakic1995,
+            "RakicLorentzDrude1998": Al_RakicLorentzDrude1998,
+        },
         default="Rakic1995",
     ),
     Al2O3=MaterialItem(
         name="Alumina",
-        variants=dict(
-            Horiba=Al2O3_Horiba,
-        ),
+        variants={
+            "Horiba": Al2O3_Horiba,
+        },
         default="Horiba",
     ),
     AlAs=MaterialItem(
         name="Aluminum Arsenide",
-        variants=dict(
-            Horiba=AlAs_Horiba,
-            FernOnton1971=AlAs_FernOnton1971,
-        ),
+        variants={
+            "Horiba": AlAs_Horiba,
+            "FernOnton1971": AlAs_FernOnton1971,
+        },
         default="Horiba",
     ),
     AlGaN=MaterialItem(
         name="Aluminum Gallium Nitride",
-        variants=dict(
-            Horiba=AlGaN_Horiba,
-        ),
+        variants={
+            "Horiba": AlGaN_Horiba,
+        },
         default="Horiba",
     ),
     AlN=MaterialItem(
         name="Aluminum Nitride",
-        variants=dict(
-            Horiba=AlN_Horiba,
-        ),
+        variants={
+            "Horiba": AlN_Horiba,
+        },
         default="Horiba",
     ),
     AlxOy=MaterialItem(
         name="Aluminum Oxide",
-        variants=dict(
-            Horiba=AlxOy_Horiba,
-        ),
+        variants={
+            "Horiba": AlxOy_Horiba,
+        },
         default="Horiba",
     ),
     Aminoacid=MaterialItem(
         name="Amino Acid",
-        variants=dict(
-            Horiba=Aminoacid_Horiba,
-        ),
+        variants={
+            "Horiba": Aminoacid_Horiba,
+        },
         default="Horiba",
     ),
     Au=MaterialItem(
         name="Gold",
-        variants=dict(
-            Olmon2012crystal=Au_Olmon2012crystal,
-            Olmon2012stripped=Au_Olmon2012stripped,
-            Olmon2012evaporated=Au_Olmon2012evaporated,
-            Olmon2012Drude=Au_Olmon2012Drude,
-            JohnsonChristy1972=Au_JohnsonChristy1972,
-            RakicLorentzDrude1998=Au_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Olmon2012crystal": Au_Olmon2012crystal,
+            "Olmon2012stripped": Au_Olmon2012stripped,
+            "Olmon2012evaporated": Au_Olmon2012evaporated,
+            "Olmon2012Drude": Au_Olmon2012Drude,
+            "JohnsonChristy1972": Au_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Au_RakicLorentzDrude1998,
+        },
         default="Olmon2012evaporated",
     ),
     BK7=MaterialItem(
         name="N-BK7 Borosilicate Glass",
-        variants=dict(
-            Zemax=BK7_Zemax,
-        ),
+        variants={
+            "Zemax": BK7_Zemax,
+        },
         default="Zemax",
     ),
     Be=MaterialItem(
         name="Beryllium",
-        variants=dict(
-            Rakic1998BB=Be_Rakic1998BB,
-            RakicLorentzDrude1998=Be_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Rakic1998BB": Be_Rakic1998BB,
+            "RakicLorentzDrude1998": Be_RakicLorentzDrude1998,
+        },
         default="Rakic1998BB",
     ),
     CaF2=MaterialItem(
         name="Calcium Fluoride",
-        variants=dict(
-            Horiba=CaF2_Horiba,
-        ),
+        variants={
+            "Horiba": CaF2_Horiba,
+        },
         default="Horiba",
     ),
     Cellulose=MaterialItem(
         name="Cellulose",
-        variants=dict(
-            Sultanova2009=Cellulose_Sultanova2009,
-        ),
+        variants={
+            "Sultanova2009": Cellulose_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     Cr=MaterialItem(
         name="Chromium",
-        variants=dict(
-            Rakic1998BB=Cr_Rakic1998BB,
-            RakicLorentzDrude1998=Cr_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Rakic1998BB": Cr_Rakic1998BB,
+            "RakicLorentzDrude1998": Cr_RakicLorentzDrude1998,
+        },
         default="Rakic1998BB",
     ),
     Cu=MaterialItem(
         name="Copper",
-        variants=dict(
-            JohnsonChristy1972=Cu_JohnsonChristy1972,
-            RakicLorentzDrude1998=Cu_RakicLorentzDrude1998,
-        ),
+        variants={
+            "JohnsonChristy1972": Cu_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Cu_RakicLorentzDrude1998,
+        },
         default="JohnsonChristy1972",
     ),
     FusedSilica=MaterialItem(
         name="Fused Silica",
-        variants=dict(
-            ZemaxSellmeier=FusedSilica_Zemax,
-            ZemaxVisiblePMLStable=FusedSilica_Zemax_Visible_PMLStable,
-            ZemaxPMLStable=FusedSilica_Zemax_PMLStable,
-        ),
+        variants={
+            "ZemaxSellmeier": FusedSilica_Zemax,
+            "ZemaxVisiblePMLStable": FusedSilica_Zemax_Visible_PMLStable,
+            "ZemaxPMLStable": FusedSilica_Zemax_PMLStable,
+        },
         default="ZemaxPMLStable",
     ),
     GaAs=MaterialItem(
         name="Gallium Arsenide",
-        variants=dict(
-            Palik_Lossless=GaAs_Palik_Lossless,
-            Palik_Lossy=GaAs_Palik_Lossy,
-            Skauli2003=GaAs_Skauli2003,
-        ),
+        variants={
+            "Palik_Lossless": GaAs_Palik_Lossless,
+            "Palik_Lossy": GaAs_Palik_Lossy,
+            "Skauli2003": GaAs_Skauli2003,
+        },
         default="Skauli2003",
     ),
     Ge=MaterialItem(
         name="Germanium",
-        variants=dict(
-            Palik_Lossless=Ge_Palik_Lossless,
-            Palik_Lossy=Ge_Palik_Lossy,
-            Icenogle1976=Ge_Icenogle1976,
-        ),
+        variants={
+            "Palik_Lossless": Ge_Palik_Lossless,
+            "Palik_Lossy": Ge_Palik_Lossy,
+            "Icenogle1976": Ge_Icenogle1976,
+            "Nunley": Ge_Nunley,
+        },
         default="Icenogle1976",
     ),
     GeOx=MaterialItem(
         name="Germanium Oxide",
-        variants=dict(
-            Horiba=GeOx_Horiba,
-        ),
+        variants={
+            "Horiba": GeOx_Horiba,
+        },
         default="Horiba",
     ),
     H2O=MaterialItem(
         name="Water",
-        variants=dict(
-            Horiba=H2O_Horiba,
-        ),
+        variants={
+            "Horiba": H2O_Horiba,
+        },
         default="Horiba",
     ),
     HMDS=MaterialItem(
         name="Hexamethyldisilazane, or Bis(trimethylsilyl)amine",
-        variants=dict(
-            Horiba=HMDS_Horiba,
-        ),
+        variants={
+            "Horiba": HMDS_Horiba,
+        },
         default="Horiba",
     ),
     HfO2=MaterialItem(
         name="Hafnium Oxide",
-        variants=dict(
-            Horiba=HfO2_Horiba,
-        ),
+        variants={
+            "Horiba": HfO2_Horiba,
+        },
         default="Horiba",
     ),
     ITO=MaterialItem(
         name="Indium Tin Oxide",
-        variants=dict(
-            Horiba=ITO_Horiba,
-        ),
+        variants={
+            "Horiba": ITO_Horiba,
+        },
         default="Horiba",
     ),
     InAs=MaterialItem(
         name="Indium Arsenide",
-        variants=dict(
-            Palik=InAs_Palik,
-        ),
+        variants={
+            "Palik": InAs_Palik,
+        },
         default="Palik",
     ),
     InP=MaterialItem(
         name="Indium Phosphide",
-        variants=dict(
-            Palik_Lossless=InP_Palik_Lossless,
-            Palik_Lossy=InP_Palik_Lossy,
-            Pettit1965=InP_Pettit1965,
-        ),
+        variants={
+            "Palik_Lossless": InP_Palik_Lossless,
+            "Palik_Lossy": InP_Palik_Lossy,
+            "Pettit1965": InP_Pettit1965,
+        },
         default="Pettit1965",
     ),
     MgF2=MaterialItem(
         name="Magnesium Fluoride",
-        variants=dict(
-            Horiba=MgF2_Horiba,
-        ),
+        variants={
+            "Horiba": MgF2_Horiba,
+        },
         default="Horiba",
     ),
     MgO=MaterialItem(
         name="Magnesium Oxide",
-        variants=dict(
-            StephensMalitson1952=MgO_StephensMalitson1952,
-        ),
+        variants={
+            "StephensMalitson1952": MgO_StephensMalitson1952,
+        },
         default="StephensMalitson1952",
     ),
     MoS2=MaterialItem2D(
         name="Molybdenum Disulfide",
-        variants=dict(
-            Li2014=MoS2_Li2014,
-        ),
+        variants={
+            "Li2014": MoS2_Li2014,
+        },
         default="Li2014",
     ),
     MoSe2=MaterialItem2D(
         name="Molybdenum Diselenide",
-        variants=dict(
-            Li2014=MoSe2_Li2014,
-        ),
+        variants={
+            "Li2014": MoSe2_Li2014,
+        },
         default="Li2014",
     ),
     Ni=MaterialItem(
         name="Nickel",
-        variants=dict(
-            JohnsonChristy1972=Ni_JohnsonChristy1972,
-            RakicLorentzDrude1998=Ni_RakicLorentzDrude1998,
-        ),
+        variants={
+            "JohnsonChristy1972": Ni_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Ni_RakicLorentzDrude1998,
+        },
         default="JohnsonChristy1972",
     ),
     PEI=MaterialItem(
         name="Polyetherimide",
-        variants=dict(
-            Horiba=PEI_Horiba,
-        ),
+        variants={
+            "Horiba": PEI_Horiba,
+        },
         default="Horiba",
     ),
     PEN=MaterialItem(
         name="Polyethylene Naphthalate",
-        variants=dict(
-            Horiba=PEN_Horiba,
-        ),
+        variants={
+            "Horiba": PEN_Horiba,
+        },
         default="Horiba",
     ),
     PET=MaterialItem(
         name="Polyethylene Terephthalate",
-        variants=dict(
-            Horiba=PET_Horiba,
-        ),
+        variants={
+            "Horiba": PET_Horiba,
+        },
         default="Horiba",
     ),
     PMMA=MaterialItem(
         name="Poly(methyl Methacrylate)",
-        variants=dict(
-            Horiba=PMMA_Horiba,
-            Sultanova2009=PMMA_Sultanova2009,
-        ),
+        variants={
+            "Horiba": PMMA_Horiba,
+            "Sultanova2009": PMMA_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     PTFE=MaterialItem(
         name="Polytetrafluoroethylene, or Teflon",
-        variants=dict(
-            Horiba=PTFE_Horiba,
-        ),
+        variants={
+            "Horiba": PTFE_Horiba,
+        },
         default="Horiba",
     ),
     PVC=MaterialItem(
         name="Polyvinyl Chloride",
-        variants=dict(
-            Horiba=PVC_Horiba,
-        ),
+        variants={
+            "Horiba": PVC_Horiba,
+        },
         default="Horiba",
     ),
     Pd=MaterialItem(
         name="Palladium",
-        variants=dict(
-            JohnsonChristy1972=Pd_JohnsonChristy1972,
-            RakicLorentzDrude1998=Pd_RakicLorentzDrude1998,
-        ),
+        variants={
+            "JohnsonChristy1972": Pd_JohnsonChristy1972,
+            "RakicLorentzDrude1998": Pd_RakicLorentzDrude1998,
+        },
         default="JohnsonChristy1972",
     ),
     Polycarbonate=MaterialItem(
         name="Polycarbonate",
-        variants=dict(
-            Horiba=Polycarbonate_Horiba,
-            Sultanova2009=Polycarbonate_Sultanova2009,
-        ),
+        variants={
+            "Horiba": Polycarbonate_Horiba,
+            "Sultanova2009": Polycarbonate_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     Polystyrene=MaterialItem(
         name="Polystyrene",
-        variants=dict(
-            Sultanova2009=Polystyrene_Sultanova2009,
-        ),
+        variants={
+            "Sultanova2009": Polystyrene_Sultanova2009,
+        },
         default="Sultanova2009",
     ),
     Pt=MaterialItem(
         name="Platinum",
-        variants=dict(
-            Werner2009=Pt_Werner2009,
-            RakicLorentzDrude1998=Pt_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Werner2009": Pt_Werner2009,
+            "RakicLorentzDrude1998": Pt_RakicLorentzDrude1998,
+        },
         default="Werner2009",
     ),
     Sapphire=MaterialItem(
         name="Sapphire",
-        variants=dict(
-            Horiba=Sapphire_Horiba,
-        ),
+        variants={
+            "Horiba": Sapphire_Horiba,
+        },
         default="Horiba",
     ),
     Si3N4=MaterialItem(
         name="Silicon Nitride",
-        variants=dict(
-            Horiba=Si3N4_Horiba,
-            Luke2015Sellmeier=Si3N4_Luke2015,
-            Luke2015PMLStable=Si3N4_Luke2015_PMLStable,
-            Philipp1973Sellmeier=Si3N4_Philipp1973,
-        ),
+        variants={
+            "Horiba": Si3N4_Horiba,
+            "Luke2015Sellmeier": Si3N4_Luke2015,
+            "Luke2015PMLStable": Si3N4_Luke2015_PMLStable,
+            "Philipp1973Sellmeier": Si3N4_Philipp1973,
+        },
         default="Horiba",
     ),
     SiC=MaterialItem(
         name="Silicon Carbide",
-        variants=dict(
-            Horiba=SiC_Horiba,
-        ),
+        variants={
+            "Horiba": SiC_Horiba,
+        },
         default="Horiba",
     ),
     SiN=MaterialItem(
         name="Silicon Mononitride",
-        variants=dict(
-            Horiba=SiN_Horiba,
-        ),
+        variants={
+            "Horiba": SiN_Horiba,
+        },
         default="Horiba",
     ),
     SiO2=MaterialItem(
         name="Silicon Dioxide",
-        variants=dict(
-            Palik_Lossless=SiO2_Palik_Lossless,
-            Palik_Lossy=SiO2_Palik_Lossy,
-            Horiba=SiO2_Horiba,
-        ),
+        variants={
+            "Palik_Lossless": SiO2_Palik_Lossless,
+            "Palik_Lossy": SiO2_Palik_Lossy,
+            "Horiba": SiO2_Horiba,
+        },
         default="Palik_Lossless",
     ),
     SiON=MaterialItem(
         name="Silicon Oxynitride",
-        variants=dict(
-            Horiba=SiON_Horiba,
-        ),
+        variants={
+            "Horiba": SiON_Horiba,
+        },
         default="Horiba",
     ),
     Ta2O5=MaterialItem(
         name="Tantalum Pentoxide",
-        variants=dict(
-            Horiba=Ta2O5_Horiba,
-        ),
+        variants={
+            "Horiba": Ta2O5_Horiba,
+        },
         default="Horiba",
     ),
     Ti=MaterialItem(
         name="Titanium",
-        variants=dict(
-            Werner2009=Ti_Werner2009,
-            RakicLorentzDrude1998=Ti_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Werner2009": Ti_Werner2009,
+            "RakicLorentzDrude1998": Ti_RakicLorentzDrude1998,
+        },
         default="Werner2009",
     ),
     TiOx=MaterialItem(
         name="Titanium Oxide",
-        variants=dict(
-            Horiba=TiOx_Horiba,
-            HorbiaStable=TiOx_HoribaStable,
-        ),
+        variants={
+            "Horiba": TiOx_Horiba,
+            "HorbiaStable": TiOx_HoribaStable,
+        },
         default="Horiba",
     ),
     W=MaterialItem(
         name="Tungsten",
-        variants=dict(
-            Werner2009=W_Werner2009,
-            RakicLorentzDrude1998=W_RakicLorentzDrude1998,
-        ),
+        variants={
+            "Werner2009": W_Werner2009,
+            "RakicLorentzDrude1998": W_RakicLorentzDrude1998,
+        },
         default="Werner2009",
     ),
     WS2=MaterialItem2D(
         name="Tungsten Disulfide",
-        variants=dict(
-            Li2014=WS2_Li2014,
-        ),
+        variants={
+            "Li2014": WS2_Li2014,
+        },
         default="Li2014",
     ),
     WSe2=MaterialItem2D(
         name="Tungsten Diselenide",
-        variants=dict(
-            Li2014=WSe2_Li2014,
-        ),
+        variants={
+            "Li2014": WSe2_Li2014,
+        },
         default="Li2014",
     ),
     Y2O3=MaterialItem(
         name="Yttrium Oxide",
-        variants=dict(
-            Horiba=Y2O3_Horiba,
-            Nigara1968=Y2O3_Nigara1968,
-        ),
+        variants={
+            "Horiba": Y2O3_Horiba,
+            "Nigara1968": Y2O3_Nigara1968,
+        },
         default="Horiba",
     ),
     YAG=MaterialItem(
         name="Yttrium Aluminium Garnet",
-        variants=dict(
-            Zelmon1998=YAG_Zelmon1998,
-        ),
+        variants={
+            "Zelmon1998": YAG_Zelmon1998,
+        },
         default="Zelmon1998",
     ),
     ZrO2=MaterialItem(
         name="Zirconium Oxide",
-        variants=dict(
-            Horiba=ZrO2_Horiba,
-        ),
+        variants={
+            "Horiba": ZrO2_Horiba,
+        },
         default="Horiba",
     ),
     aSi=MaterialItem(
         name="Silicon (Amorphous)",
-        variants=dict(
-            Horiba=aSi_Horiba,
-        ),
+        variants={
+            "Horiba": aSi_Horiba,
+        },
         default="Horiba",
     ),
     cSi=MaterialItem(
         name="Silicon (Crystalline)",
-        variants=dict(
-            Palik_Lossless=cSi_PalikLossless,
-            Palik_Lossy=cSi_PalikLossy,
-            SalzbergVilla1957=cSi_SalzbergVilla1957,
-            Li1993_293K=cSi_Li1993_293K,
-            Green2008=cSi_Green2008,
-            Green2008_Lossless=cSi_Green2008Lossless,
-            Si_MultiPhysics=cSi_MultiPhysics,
-        ),
+        variants={
+            "Palik_Lossless": cSi_PalikLossless,
+            "Palik_Lossy": cSi_PalikLossy,
+            "SalzbergVilla1957": cSi_SalzbergVilla1957,
+            "Li1993_293K": cSi_Li1993_293K,
+            "Green2008": cSi_Green2008,
+            "Green2008_Lossless": cSi_Green2008Lossless,
+            "Si_MultiPhysics": cSi_MultiPhysics,
+        },
         default="Green2008",
     ),
     LiNbO3=MaterialItemUniaxial(
         name="Lithium niobate",
-        variants=dict(Zelmon1997=LiNbO3_Zelmon1997),
+        variants={"Zelmon1997": LiNbO3_Zelmon1997},
         default="Zelmon1997",
     ),
     graphene=Graphene,
