@@ -218,6 +218,7 @@ def run(
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             pay_type=pay_type,
+            priority=priority,
         )
 
     return run_webapi(
@@ -253,6 +254,7 @@ def run_async(
     max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
     reduce_simulation: typing.Literal["auto", True, False] = "auto",
     pay_type: typing.Union[PayType, str] = PayType.AUTO,
+    priority: typing.Optional[int] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -303,6 +305,10 @@ def run_async(
     :class:`Batch`
         Interface for submitting several :class:`Simulation` objects to sever.
     """
+    # validate priority if specified
+    if priority is not None and (priority < 1 or priority > 10):
+        raise ValueError("Priority must be between '1' and '10' if specified.")
+
     if is_valid_for_autograd_async(simulations):
         return _run_async(
             simulations=simulations,
@@ -317,6 +323,7 @@ def run_async(
             local_gradient=local_gradient,
             max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
             pay_type=pay_type,
+            priority=priority,
         )
 
     return run_async_webapi(
@@ -331,6 +338,7 @@ def run_async(
         parent_tasks=parent_tasks,
         reduce_simulation=reduce_simulation,
         pay_type=pay_type,
+        priority=priority,
     )
 
 
@@ -1272,10 +1280,11 @@ def _run_tidy3d(
         verbose = run_kwargs.get("verbose", False)
         upload_sim_fields_keys(run_kwargs["sim_fields_keys"], task_id=job.task_id, verbose=verbose)
     path = run_kwargs.get("path", DEFAULT_DATA_PATH)
+    priority = run_kwargs.get("priority")
     if task_name.endswith("_adjoint"):
         path_parts = basename(path).split(".")
         path = join(dirname(path), path_parts[0] + "_adjoint." + ".".join(path_parts[1:]))
-    data = job.run(path)
+    data = job.run(path, priority=priority)
     return data, job.task_id
 
 
@@ -1286,6 +1295,7 @@ def _run_async_tidy3d(
 
     batch_init_kwargs = parse_run_kwargs(**run_kwargs)
     path_dir = run_kwargs.pop("path_dir", None)
+    priority = run_kwargs.get("priority")
     batch = Batch(simulations=simulations, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d()'")
 
@@ -1305,9 +1315,9 @@ def _run_async_tidy3d(
             upload_sim_fields_keys(sim_fields_keys, task_id=task_id, verbose=verbose)
 
     if path_dir:
-        batch_data = batch.run(path_dir)
+        batch_data = batch.run(path_dir, priority=priority)
     else:
-        batch_data = batch.run()
+        batch_data = batch.run(priority=priority)
 
     task_ids = {key: job.task_id for key, job in batch.jobs.items()}
     return batch_data, task_ids
@@ -1324,7 +1334,8 @@ def _run_async_tidy3d_bwd(
     batch = Batch(simulations=simulations, **batch_init_kwargs)
     td.log.info(f"running {batch.simulation_type} batch with '_run_async_tidy3d_bwd()'")
 
-    batch.start()
+    priority = run_kwargs.get("priority")
+    batch.start(priority=priority)
     batch.monitor()
 
     vjp_traced_fields_dict = {}

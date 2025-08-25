@@ -477,7 +477,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         pay_type: Union[PayType, str] = PayType.AUTO
             Which method to pay the simulation.
         priority: int = None
-            Task priority for vGPU queue (1=lowest, 10=highest).
+            Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+            It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         """
         pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 

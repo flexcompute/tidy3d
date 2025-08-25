@@ -673,7 +673,7 @@ def test_batch_run_saves_file_after_upload(mock_webapi, mock_job_status, tmp_pat
         return original_to_file(self, fname)
 
     # mock start to interrupt run() after upload and to_file
-    def mock_start_interrupt(self):
+    def mock_start_interrupt(self, *args, **kwargs):
         # at this point, upload() and to_file() should have been called
         assert batch_file_saved["saved"], "Batch file should be saved before start()"
         assert batch_file_saved["has_task_ids"], "Batch file should have task_ids"
