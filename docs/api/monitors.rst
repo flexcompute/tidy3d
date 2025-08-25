@@ -168,7 +168,7 @@ The ``DiffractionMonitor`` records the diffraction coefficients of the allowed d
        center=(0,0,10),
        size=(td.inf, td.inf, 0),    # extend monitor to simulation edges
        freqs=np.linspace(250e12, 300e12, 20),
-       name='My diffraction monitor`,
+       name='My diffraction monitor',
        normal_dir='+',
    )
 

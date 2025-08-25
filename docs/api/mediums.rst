@@ -54,11 +54,11 @@ A simple, non-dispersive optical medium can be described by constant relative pe
 
 .. note::
    
-   To specify a constant :math:`n` and :math:`k` over a wide frequency range, it is required to use a dispersive model. Please see the section on `dispersive`_ mediums.
+   To specify a constant :math:`n` and :math:`k` over a wide frequency range, it is required to use a dispersive model. Please see the section on `Dispersive`_ mediums.
 
 .. note::
 
-   To specify a lossy dielectric using a constant loss tangent model, it is required to use a dispersive model. Please see the section on `dispersive`_ mediums. 
+   To specify a lossy dielectric using a constant loss tangent model, it is required to use a dispersive model. Please see the section on `Dispersive`_ mediums. 
 
 ~~~~
 
@@ -88,7 +88,7 @@ Alternatively, the ``FastDispersionFitter`` plugin can be used to generate a dis
 .. code-block:: python
 
    # importing from a local file
-   my_imported_medium = FastDispersionFitter.from_file("path/to/file.csv", skiprows=1, delimited=",")
+   my_imported_medium = FastDispersionFitter.from_file("path/to/file.csv", skiprows=1, delimiter=",")
 
    # importing from a URL
    my_imported_medium_fromurl = FastDispersionFitter.from_url(

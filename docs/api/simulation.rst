@@ -104,7 +104,7 @@ Additional Methods
    tidy3d.web.api.webapi.estimate_cost
    tidy3d.web.api.webapi.run
    tidy3d.web.api.webapi.upload
-   tidy3d.web.api.webapi.start   
+   tidy3d.web.api.webapi.start
    tidy3d.web.api.webapi.real_cost
    tidy3d.web.api.webapi.get_info
    tidy3d.web.api.webapi.monitor

@@ -109,7 +109,7 @@ For certain applications, the user may wish to apply additional grid refinement 
 * ``snapping_points``: The user specifies a list of points that enforce grid boundaries to pass through them
 * ``layer_refinement_specs``: The user specifies additional refinement within a layered region (e.g. a metallic trace plane)
 
-For the ``override_structures`` option, the user may provide a list consisting of  ``Structure`` instances and/or ``MeshOverrideStructure`` instances. In the former case, the provided ``Structure`` is used as a fictitious material with artifically higher refractive index to enforce higher grid resolution:
+For the ``override_structures`` option, the user may provide a list consisting of  ``Structure`` instances and/or ``MeshOverrideStructure`` instances. In the former case, the provided ``Structure`` is used as a fictitious material with artificially higher refractive index to enforce higher grid resolution:
 
 .. code-block:: python
 
