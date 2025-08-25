@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base_sim.monitor import AbstractMonitor
 from tidy3d.components.monitor import AbstractFieldMonitor, ModeSolverMonitor, PermittivityMonitor
-from tidy3d.components.types.base import FreqArray
+from tidy3d.components.types import FreqArray
 
 BYTES_COMPLEX = 8
 

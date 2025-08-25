@@ -8,7 +8,7 @@ from typing import Union
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types.base import ArrayFloat1D, ArrayInt1D, ArrayLike
+from tidy3d.components.types import ArrayFloat1D, ArrayInt1D, ArrayLike
 from tidy3d.exceptions import SetupError
 
 from .grid import MAX_NUM_REPS

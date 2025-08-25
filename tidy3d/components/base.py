@@ -23,7 +23,7 @@ from autograd.builtins import dict as dict_ag
 from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
 
-from tidy3d.components.types.base import TYPE_TAG_STR, ComplexNumber, Literal
+from tidy3d.components.types import TYPE_TAG_STR, ComplexNumber, Literal
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
 

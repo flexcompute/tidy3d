@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types.base import ArrayFloat2D
+from tidy3d.components.types import ArrayFloat2D
 from tidy3d.constants import MICROMETER
 from tidy3d.log import log
 

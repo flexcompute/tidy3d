@@ -21,7 +21,7 @@ from tidy3d.components.source.field import ModeSource, ModeSpec
 from tidy3d.components.source.frame import PECFrame
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import MeshOverrideStructure
-from tidy3d.components.types.base import Axis, Direction, FreqArray
+from tidy3d.components.types import Axis, Direction, FreqArray
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.plugins.microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes

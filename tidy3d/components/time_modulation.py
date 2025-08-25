@@ -9,7 +9,7 @@ from typing import Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types.base import Bound, InterpMethod
+from tidy3d.components.types import Bound, InterpMethod
 from tidy3d.constants import HERTZ, RADIAN
 from tidy3d.exceptions import ValidationError
 

@@ -14,7 +14,7 @@ from tidy3d.components.grid.grid import Grid
 from tidy3d.components.monitor import FieldMonitor, ModeMonitor
 from tidy3d.components.source.base import Source
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types.base import FreqArray
+from tidy3d.components.types import FreqArray
 from tidy3d.log import log
 
 

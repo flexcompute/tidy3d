@@ -12,7 +12,7 @@ from tidy3d.components.geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
 from tidy3d.components.grid.grid import Grid
 from tidy3d.components.scene import Scene
 from tidy3d.components.structure import Structure
-from tidy3d.components.types.base import Axis
+from tidy3d.components.types import Axis
 from tidy3d.constants import fp_eps, inf
 
 

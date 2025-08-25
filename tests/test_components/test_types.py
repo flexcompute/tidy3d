@@ -7,7 +7,7 @@ import pydantic.v1 as pydantic
 import pytest
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types.base import ArrayLike, Complex, constrained_array
+from tidy3d.components.types import ArrayLike, Complex, constrained_array
 
 
 def _test_validate_array_like():

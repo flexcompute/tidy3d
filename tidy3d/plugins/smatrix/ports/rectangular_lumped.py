@@ -23,7 +23,7 @@ from tidy3d.components.lumped_element import LinearLumpedElement, LumpedResistor
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import UniformCurrentSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types.base import Axis, FreqArray, LumpDistType
+from tidy3d.components.types import Axis, FreqArray, LumpDistType
 from tidy3d.components.validators import assert_line_or_plane
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.plugins.microwave import CurrentIntegralAxisAligned, VoltageIntegralAxisAligned

@@ -11,7 +11,7 @@ import pydantic.v1 as pd
 from autograd import elementwise_grad, grad
 
 import tidy3d as td
-from tidy3d.components.types.base import TYPE_TAG_STR, Coordinate, Size
+from tidy3d.components.types import TYPE_TAG_STR, Coordinate, Size
 from tidy3d.exceptions import ValidationError
 
 from .base import InvdesBaseModel

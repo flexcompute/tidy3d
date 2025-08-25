@@ -13,7 +13,7 @@ from tidy3d.components.geometry.base import Box
 from tidy3d.components.grid.grid import Coords1D
 from tidy3d.components.mode_spec import ModeSpec
 from tidy3d.components.structure import Structure
-from tidy3d.components.types.base import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
+from tidy3d.components.types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
 from tidy3d.constants import RADIAN, fp_eps, inf
 from tidy3d.exceptions import SetupError, ValidationError
 

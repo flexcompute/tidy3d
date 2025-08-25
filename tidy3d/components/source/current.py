@@ -12,7 +12,7 @@ from typing_extensions import Literal
 from tidy3d.components.base import cached_property
 from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
-from tidy3d.components.types.base import Polarization
+from tidy3d.components.types import Polarization
 from tidy3d.components.validators import assert_single_freq_in_range, warn_if_dataset_none
 from tidy3d.constants import MICROMETER
 

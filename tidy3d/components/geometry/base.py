@@ -29,7 +29,7 @@ from tidy3d.components.base import Tidy3dBaseModel, cached_property
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
 from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
-from tidy3d.components.types.base import (
+from tidy3d.components.types import (
     ArrayFloat2D,
     ArrayFloat3D,
     Ax,

@@ -14,7 +14,7 @@ from tidy3d.components.data.data_array import (
     IndexedDataArray,
     PointDataArray,
 )
-from tidy3d.components.types.base import ArrayLike, Axis, Bound, Coordinate
+from tidy3d.components.types import ArrayLike, Axis, Bound, Coordinate
 from tidy3d.exceptions import DataError
 from tidy3d.packaging import requires_vtk, vtk
 

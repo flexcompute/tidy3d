@@ -11,7 +11,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.components.types.base import TYPE_TAG_STR
+from tidy3d.components.types import TYPE_TAG_STR
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType

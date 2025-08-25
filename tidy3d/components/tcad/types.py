@@ -21,7 +21,7 @@ from tidy3d.components.tcad.monitors.charge import (
 from tidy3d.components.tcad.monitors.heat import TemperatureMonitor
 from tidy3d.components.tcad.source.coupled import HeatFromElectricSource
 from tidy3d.components.tcad.source.heat import HeatSource, UniformHeatSource
-from tidy3d.components.types.base import Union
+from tidy3d.components.types import Union
 
 MobilityModelType = Union[CaugheyThomasMobility, ConstantMobilityModel]
 RecombinationModelType = Union[

@@ -22,7 +22,7 @@ from tidy3d.components.material.tcad.heat import SolidMedium, SolidSpec
 from tidy3d.components.material.types import MultiPhysicsMediumType3D, StructureMediumType
 from tidy3d.components.tcad.doping import ConstantDoping, GaussianDoping
 from tidy3d.components.tcad.viz import HEAT_SOURCE_CMAP
-from tidy3d.components.types.base import (
+from tidy3d.components.types import (
     TYPE_TAG_STR,
     Ax,
     Bound,

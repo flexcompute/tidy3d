@@ -6,7 +6,7 @@ import numpy as np
 
 from tidy3d.components.data.data_array import DataArray, FreqDataArray
 from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.types.base import ArrayFloat1D
+from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.component_modelers.base import (
     AbstractComponentModeler,

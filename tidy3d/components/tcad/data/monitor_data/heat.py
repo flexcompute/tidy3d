@@ -17,7 +17,7 @@ from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorD
 from tidy3d.components.tcad.monitors.heat import (
     TemperatureMonitor,
 )
-from tidy3d.components.types.base import annotate_type
+from tidy3d.components.types import annotate_type
 from tidy3d.constants import KELVIN
 from tidy3d.log import log
 

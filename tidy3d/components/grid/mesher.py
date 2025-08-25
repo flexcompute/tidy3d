@@ -17,7 +17,7 @@ from shapely.strtree import STRtree
 
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.structure import MeshOverrideStructure, Structure, StructureType
-from tidy3d.components.types.base import ArrayFloat1D, Axis, Bound, CoordinateOptional
+from tidy3d.components.types import ArrayFloat1D, Axis, Bound, CoordinateOptional
 from tidy3d.constants import C_0, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log

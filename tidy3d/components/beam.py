@@ -9,7 +9,7 @@ from typing import Literal, Optional, Union
 import autograd.numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types.base import TYPE_TAG_STR, Direction, FreqArray, Numpy
+from tidy3d.components.types import TYPE_TAG_STR, Direction, FreqArray, Numpy
 from tidy3d.constants import C_0, ETA_0, HERTZ, MICROMETER, RADIAN
 
 from .base import cached_property
