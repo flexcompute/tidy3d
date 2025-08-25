@@ -299,7 +299,15 @@ class Tidy3dStubData(BaseModel, TaskStubData):
                 )
 
         if (
-            not isinstance(stub_data, (ModeSolverData, ModeSimulationData))
+            not isinstance(
+                stub_data,
+                (
+                    ModeSolverData,
+                    ModeSimulationData,
+                    TerminalComponentModelerData,
+                    ModalComponentModelerData,
+                ),
+            )
             and "WARNING" in stub_data.log
             and not warned_about_warnings
         ):

@@ -779,7 +779,6 @@ class BatchTask:
         if isinstance(resp, dict):
             if resp.get("tasks") is None:
                 resp["tasks"] = []
-        print(resp)
         return BatchDetail(**(resp or {}))
 
     def check(
