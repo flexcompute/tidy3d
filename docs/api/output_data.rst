@@ -6,6 +6,15 @@ Output Data
 Overview
 --------
 
+This page contains information on simulation and monitor data containers. 
+
+.. TODO
+   - Expand overview
+   - Working with monitor data
+     - Distinction between MonitorData and Dataset
+     - Dataset structure: attributes, coordinates and slicing
+     - Saving/reading from file
+     - Plotting and Visualization
 
 ~~~~
 
@@ -29,19 +38,6 @@ The ``BatchData`` Object
 
    tidy3d.web.api.container.BatchData
 
-
-~~~~
-
-Working with Monitor Data
--------------------------
-
-Distinction between MonitorData and Dataset
-
-Dataset structure: attributes, coordinates and slicing
-
-Saving/reading from file
-
-Plotting and Visualization
 
 ~~~~
 

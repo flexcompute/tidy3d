@@ -6,6 +6,11 @@ Simulation
 Overview
 --------
 
+This page contains information on the different simulation types available in Tidy3D.
+
+.. TODO
+   - Expand overview
+   - Expand each section
 
 ~~~~
 
@@ -17,12 +22,6 @@ Defining a FDTD Simulation
    :template: module.rst
 
    tidy3d.Simulation
-
-~~~~
-
-Plotting and Visualization
---------------------------
-
 
 ~~~~
 
@@ -85,10 +84,6 @@ Other Simulation Types
    tidy3d.plugins.smatrix.ComponentModeler
    tidy3d.plugins.smatrix.TerminalComponentModeler
 
-
-+ Design Space Exploration   
-+ Adjoint Inverse Design
-  
 ~~~~
 
 Logging
