@@ -23,7 +23,6 @@ from autograd.builtins import dict as dict_ag
 from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
 
-from tidy3d.components.types import TYPE_TAG_STR, ComplexNumber
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
 
@@ -31,6 +30,7 @@ from .autograd.types import AutogradFieldMap, Box
 from .autograd.utils import get_static
 from .data.data_array import DATA_ARRAY_MAP, DataArray
 from .file_util import compress_file_to_gzip, extract_gzip_file
+from .types import TYPE_TAG_STR, ComplexNumber
 
 INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally
