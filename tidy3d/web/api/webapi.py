@@ -773,7 +773,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
 @wait_for_connection
 def abort(task_id: TaskId) -> TaskInfo:
-    """aborting a running task without deleting it."""
+    """Abort a running task without deleting it."""
     task = SimulationTask(taskId=task_id)
     task.abort()
     return get_info(task_id)
