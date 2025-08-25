@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Optional, TypeVar, Union, get_args
+from typing import Generic, Optional, TypeVar, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
@@ -26,6 +26,9 @@ from tidy3d.log import log
 from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
+
+# DO NOT import from web if it can be avoided, to avoid circular imports
+from tidy3d.web.core.types import PayType
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -225,7 +228,7 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
         solver_version: Optional[str] = None,
         local_gradient: bool = False,
         max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-        pay_type: Any = Any,
+        pay_type: str | PayType = PayType.AUTO,
         deprecation_warning: bool = True,
     ):
         """Run component modeler locally, with autograd support."""
