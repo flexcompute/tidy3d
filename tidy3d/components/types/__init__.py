@@ -67,7 +67,6 @@ from tidy3d.components.types.base import (
     tidycomplex,
     xyz,
 )
-from tidy3d.components.types.simulation import SimulationDataType, SimulationType
 from tidy3d.components.types.third_party import TrimeshType
 from tidy3d.components.types.utils import _add_schema
 
@@ -124,8 +123,6 @@ __all__ = [
     "RealFieldVal",
     "ScalarSymmetry",
     "Shapely",
-    "SimulationDataType",
-    "SimulationType",
     "Size",
     "Size1D",
     "Symmetry",

@@ -11,7 +11,7 @@ import pathlib
 import tempfile
 from functools import wraps
 from math import ceil
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Literal, Optional, Union
 
 import h5py
 import numpy as np
@@ -23,7 +23,7 @@ from autograd.builtins import dict as dict_ag
 from autograd.tracer import isbox
 from pydantic.v1.fields import ModelField
 
-from tidy3d.components.types import TYPE_TAG_STR, ComplexNumber, Literal
+from tidy3d.components.types import TYPE_TAG_STR, ComplexNumber
 from tidy3d.exceptions import FileError
 from tidy3d.log import log
 
