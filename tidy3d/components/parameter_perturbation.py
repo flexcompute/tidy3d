@@ -11,14 +11,7 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.data.validators import validate_no_nans
-from tidy3d.components.types import (
-    TYPE_TAG_STR,
-    ArrayLike,
-    Ax,
-    Complex,
-    FieldVal,
-    InterpMethod,
-)
+from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Ax, Complex, FieldVal, InterpMethod
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import C_0, CMCUBE, EPSILON_0, HERTZ, KELVIN, PERCMCUBE, inf
 from tidy3d.exceptions import DataError
