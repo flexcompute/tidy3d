@@ -14,7 +14,7 @@ In FDTD, the simulation domain is rendered onto a finite spatial grid. Each grid
 
 To obtain good results, the minimum grid size should be small enough to resolve both categories. Note that in typical photonics applications, the physical length scale would likely dominate in importance. In contrast, for deep subwavelength problems such as those in RF/microwave regime, the geometric length scale becomes a limiting factor, especially if metallic structures are involved.
 
-Tidy3D automatically ensures that the CFL condition is satistied. This means that the simulation time step is constrained by the minimum grid size.
+Tidy3D automatically ensures that the CFL condition is satisfied. This means that the simulation time step is constrained by the minimum grid size.
 
 To learn how to provide a grid specification in a Tidy3D simulation, see the `Grid Specification`_ section below. The following sections cover more advanced topics, such as implementing additional grid `refinement`_, `subpixel averaging`_, and other `utility classes`_.
 
@@ -113,7 +113,7 @@ For the ``override_structures`` option, the user may provide a list consisting o
 
 .. code-block:: python
 
-   # fictitous structure used for grid refinement
+   # fictitious structure used for grid refinement
    my_refinement_box = Structure(
        geometry=Box(center=(0,0,0), size=(1,1,1)),
        medium=Medium(permittivity=16),

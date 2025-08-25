@@ -152,7 +152,7 @@ An anisotropic medium has different optical properties depending on the directio
    medium_zz = Medium(permittivity=3.9)
    my_anisotropic_medium = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
 
-Note that ``xx``, ``yy``, and ``zz`` can support dispersive mediums as well. To specify all 9 components of the tensor, use ``FullyAnistropicMedium``:
+Note that ``xx``, ``yy``, and ``zz`` can support dispersive mediums as well. To specify all 9 components of the tensor, use ``FullyAnisotropicMedium``:
 
 .. code-block:: python
 

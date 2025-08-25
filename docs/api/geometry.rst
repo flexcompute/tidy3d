@@ -158,7 +158,7 @@ Note that ``a`` and ``b`` must be ``Geometry`` objects.
 .. code-block:: python
 
    # using binary operator as shorthand
-   my_box = Box(center=(-2,0,0), size=(1,1,2)),
+   my_box = Box(center=(-2,0,0), size=(1,1,2))
    my_cylinder = Cylinder(center=(-2,0,0), axis=2, radius=0.25, length=2)
    my_boolean1 = my_box - my_cylinder
 
