@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Union
+from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
 
-from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.geometry.utils import GeometryType
-from ....components.medium import MediumType
-from ....components.monitor import FieldMonitor
-from ....components.structure import Structure
-from ....components.types import TYPE_TAG_STR, Bound
-from ....constants import C_0
+from tidy3d.components.data.monitor_data import FieldData, PermittivityData
+from tidy3d.components.geometry.utils import GeometryType
+from tidy3d.components.medium import MediumType
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import TYPE_TAG_STR, Bound
+from tidy3d.constants import C_0
+
 from .base import JaxObject
 from .geometry import JAX_GEOMETRY_MAP, JaxBox, JaxGeometryType
 from .medium import JAX_MEDIUM_MAP, JaxMediumType
 
-GEO_MED_MAPPINGS = dict(geometry=JAX_GEOMETRY_MAP, medium=JAX_MEDIUM_MAP)
+GEO_MED_MAPPINGS = {"geometry": JAX_GEOMETRY_MAP, "medium": JAX_MEDIUM_MAP}
 
 
 class AbstractJaxStructure(Structure, JaxObject):
@@ -48,12 +49,12 @@ class AbstractJaxStructure(Structure, JaxObject):
     @property
     def jax_fields(self):
         """The fields that are jax-traced for this class."""
-        return dict(geometry=self.geometry, medium=self.medium)
+        return {"geometry": self.geometry, "medium": self.medium}
 
     @property
     def exclude_fields(self):
         """Fields to exclude from the self dict."""
-        return set(["type"] + list(self.jax_fields.keys()))
+        return {"type", *list(self.jax_fields.keys())}
 
     def to_structure(self) -> Structure:
         """Convert :class:`.JaxStructure` instance to :class:`.Structure`"""
@@ -71,7 +72,7 @@ class AbstractJaxStructure(Structure, JaxObject):
 
         struct_dict = structure.dict(exclude={"type"})
 
-        jax_fields = dict(geometry=structure.geometry, medium=structure.medium)
+        jax_fields = {"geometry": structure.geometry, "medium": structure.medium}
 
         for key, component in jax_fields.items():
             if key in cls._differentiable_fields:
@@ -83,7 +84,7 @@ class AbstractJaxStructure(Structure, JaxObject):
 
         return cls.parse_obj(struct_dict)
 
-    def make_grad_monitors(self, freqs: List[float], name: str) -> FieldMonitor:
+    def make_grad_monitors(self, freqs: list[float], name: str) -> FieldMonitor:
         """Return gradient monitor associated with this object."""
         if "geometry" not in self._differentiable_fields:
             # make a fake JaxBox to be able to call .make_grad_monitors
@@ -96,7 +97,7 @@ class AbstractJaxStructure(Structure, JaxObject):
     def _get_medium_params(
         self,
         grad_data_eps: PermittivityData,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Compute params in the material of this structure."""
         freq_max = float(max(grad_data_eps.eps_xx.f))
         eps_in = self.medium.eps_model(frequency=freq_max)
@@ -104,7 +105,7 @@ class AbstractJaxStructure(Structure, JaxObject):
         ref_ind = max([1.0, abs(ref_ind)])
         wvl_free_space = C_0 / freq_max
         wvl_mat = wvl_free_space / ref_ind
-        return dict(wvl_mat=wvl_mat, eps_in=eps_in)
+        return {"wvl_mat": wvl_mat, "eps_in": eps_in}
 
     def geometry_vjp(
         self,

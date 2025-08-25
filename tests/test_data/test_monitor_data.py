@@ -1,16 +1,20 @@
 """Tests tidy3d/components/data/monitor_data.py"""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
-import tidy3d as td
 import xarray as xr
+
+import tidy3d as td
 from tidy3d.components.data.data_array import (
     FreqDataArray,
     FreqModeDataArray,
 )
 from tidy3d.components.data.monitor_data import (
+    AuxFieldTimeData,
     DiffractionData,
     DirectivityData,
     FieldData,
@@ -20,10 +24,13 @@ from tidy3d.components.data.monitor_data import (
     ModeData,
     PermittivityData,
 )
+from tidy3d.components.data.zbf import ZBFData
+from tidy3d.constants import UnitScaling
 from tidy3d.exceptions import DataError
 
-from ..utils import AssertLogLevel
+from ..utils import AssertLogLevel, run_emulated
 from .test_data_arrays import (
+    AUX_FIELD_TIME_MONITOR,
     DIFFRACTION_MONITOR,
     DIRECTIVITY_MONITOR,
     FIELD_MONITOR,
@@ -117,6 +124,17 @@ def make_field_time_data_2d(symmetry: bool = True):
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(FIELD_TIME_MONITOR_2D),
+    )
+
+
+def make_aux_field_time_data(symmetry: bool = True):
+    sim = SIM_SYM if symmetry else SIM
+    return AuxFieldTimeData(
+        monitor=AUX_FIELD_TIME_MONITOR,
+        Nfz=make_scalar_field_time_data_array("Ez", symmetry),
+        symmetry=sim.symmetry,
+        symmetry_center=sim.center,
+        grid_expanded=sim.discretize_monitor(AUX_FIELD_TIME_MONITOR),
     )
 
 
@@ -224,17 +242,17 @@ def make_field_dataset_using_power_density(
         phi=phi,
     )
 
-    coords = dict(r=r_proj, theta=theta, phi=phi, f=freqs)
+    coords = {"r": r_proj, "theta": theta, "phi": phi, "f": freqs}
     field = td.FieldProjectionAngleDataArray(values, coords=coords)
 
-    field_components = dict(
-        Er=field,
-        Etheta=field,
-        Ephi=field,
-        Hr=field,
-        Htheta=-1.0 * field,
-        Hphi=field,
-    )
+    field_components = {
+        "Er": field,
+        "Etheta": field,
+        "Ephi": field,
+        "Hr": field,
+        "Htheta": -1.0 * field,
+        "Hphi": field,
+    }
     field_dataset = xr.Dataset(field_components)
     return monitor, field_dataset
 
@@ -383,7 +401,7 @@ def test_directivity_data(planar_monitor):
     _ = data.flux
     f = data.flux.f.values
     # make some dummy data to represent power supplied to antenna
-    power_in = FreqDataArray(np.abs(np.random.random(size=np.shape(f))), coords=dict(f=f))
+    power_in = FreqDataArray(np.abs(np.random.random(size=np.shape(f))), coords={"f": f})
     assert isinstance(data.partial_radiation_intensity(), xr.Dataset)
     assert isinstance(data.radiation_intensity, xr.DataArray)
     assert isinstance(data.partial_directivity(), xr.Dataset)
@@ -646,7 +664,7 @@ def test_data_array_hdf5_no_warnings(tmp_path):
 
 def test_diffraction_data_use_medium():
     data = make_diffraction_data()
-    data = data.copy(update=dict(medium=td.Medium(permittivity=4)))
+    data = data.copy(update={"medium": td.Medium(permittivity=4)})
     assert np.allclose(data.eta, np.real(td.ETA_0 / 2.0))
 
 
@@ -848,7 +866,235 @@ def test_no_nans():
     eps_nan = eps_data.eps_xx.isel(f=[0])
     eps_nan[:] = np.nan
     eps_dataset_nan = td.PermittivityDataset(
-        **{key: eps_nan for key in ["eps_xx", "eps_yy", "eps_zz"]}
+        **dict.fromkeys(["eps_xx", "eps_yy", "eps_zz"], eps_nan)
     )
     with pytest.raises(pydantic.ValidationError):
         td.CustomMedium(eps_dataset=eps_dataset_nan)
+
+
+class TestZBF:
+    """Tests exporting field data to a zbf file"""
+
+    freq0 = td.C_0 / 0.75
+    freqs = (freq0, freq0 * 1.01)
+
+    def simdata(self, monitor) -> td.SimulationData:
+        """Returns emulated simulation data"""
+        source = td.PointDipole(
+            center=(-1.5, 0, 0),
+            source_time=td.GaussianPulse(freq0=self.freq0, fwidth=self.freq0 / 10.0),
+            polarization="Ey",
+        )
+        sim = td.Simulation(
+            size=(4, 3, 3),
+            grid_spec=td.GridSpec.auto(min_steps_per_wvl=10),
+            structures=[],
+            sources=[source],
+            monitors=[monitor],
+            run_time=120 / self.freq0,
+        )
+        return run_emulated(sim)
+
+    @pytest.fixture(scope="class")
+    def field_data(self) -> td.FieldData:
+        """Make random field data from an emulated simulation run."""
+        monitor = td.FieldMonitor(
+            size=(td.inf, td.inf, 0),
+            freqs=self.freqs,
+            name="fields",
+            colocate=True,
+        )
+        return self.simdata(monitor)["fields"]
+
+    @pytest.fixture(scope="class")
+    def field_data_single_frequency(self) -> td.FieldData:
+        """Make random field data with single frequency from an emulated simulation run."""
+        monitor = td.FieldMonitor(
+            size=(td.inf, td.inf, 0),
+            freqs=self.freqs[0],
+            name="fields",
+            colocate=True,
+        )
+        return self.simdata(monitor)["fields"]
+
+    @pytest.fixture(scope="class")
+    def mode_data(self) -> td.ModeData:
+        """Make random ModeData from an emulated simulation run."""
+        monitor = td.ModeMonitor(
+            size=(td.inf, td.inf, 0),
+            freqs=self.freqs,
+            name="modes",
+            colocate=True,
+            mode_spec=td.ModeSpec(num_modes=2, target_neff=4.0),
+            store_fields_direction="+",
+        )
+        return self.simdata(monitor)["modes"]
+
+    @pytest.fixture(scope="class")
+    def mode_data_single_frequency(self) -> td.ModeData:
+        """Make random ModeData from an emulated simulation run."""
+        monitor = td.ModeMonitor(
+            size=(td.inf, td.inf, 0),
+            freqs=self.freqs[0],
+            name="modes",
+            colocate=True,
+            mode_spec=td.ModeSpec(num_modes=2, target_neff=4.0),
+            store_fields_direction="+",
+        )
+        return self.simdata(monitor)["modes"]
+
+    @pytest.mark.parametrize("field_data_fixture", ["field_data", "field_data_single_frequency"])
+    @pytest.mark.parametrize("background_index", [1, 2, 3])
+    @pytest.mark.parametrize("freq", [*list(freqs), None])
+    @pytest.mark.parametrize("n_x", [2**5, 2**6])
+    @pytest.mark.parametrize("n_y", [2**5, 2**6])
+    @pytest.mark.parametrize("units", ["mm", "cm", "in", "m"])
+    def test_fielddata_tozbf_readzbf(
+        self,
+        tmp_path,
+        request,
+        field_data_fixture,
+        background_index,
+        freq,
+        n_x,
+        n_y,
+        units,
+    ):
+        """Test that FieldData.to_zbf() -> ZBFData.read_zbf() works"""
+        zbf_filename = tmp_path / "testzbf.zbf"
+
+        # write to zbf and then load it back in
+        field_data = request.getfixturevalue(field_data_fixture)
+        ex, ey = field_data.to_zbf(
+            fname=zbf_filename,
+            background_refractive_index=background_index,
+            freq=freq,
+            n_x=n_x,
+            n_y=n_y,
+            units=units,
+        )
+        zbfdata = ZBFData.read_zbf(zbf_filename)
+
+        assert zbfdata.background_refractive_index == background_index
+
+        unitscaling = UnitScaling[units]
+
+        if freq is not None:
+            assert np.isclose(zbfdata.wavelength / unitscaling, td.C_0 / freq)
+        else:
+            assert np.isclose(
+                zbfdata.wavelength / unitscaling,
+                td.C_0 / np.mean(field_data.monitor.freqs),
+            )
+
+        assert zbfdata.nx == n_x
+        assert zbfdata.ny == n_y
+
+        # check that fields are close
+        assert np.allclose(ex.values, zbfdata.Ex)
+        assert np.allclose(ey.values, zbfdata.Ey)
+
+    @pytest.mark.parametrize("mode_data_fixture", ["mode_data", "mode_data_single_frequency"])
+    @pytest.mark.parametrize("mode_index", [0, 1])
+    def test_tozbf_modedata(
+        self,
+        tmp_path,
+        request,
+        mode_data_fixture,
+        mode_index,
+    ):
+        """Tests ModeData.to_zbf()"""
+        zbf_filename = tmp_path / "testzbf_modedata.zbf"
+
+        # write to zbf and then load it back in
+        ex, ey = request.getfixturevalue(mode_data_fixture).to_zbf(
+            fname=zbf_filename,
+            background_refractive_index=1,
+            freq=self.freq0,
+            mode_index=mode_index,
+            n_x=32,
+            n_y=32,
+            units="mm",
+        )
+        zbfdata = ZBFData.read_zbf(zbf_filename)
+
+        # check that fields are close
+        assert np.allclose(ex.values, zbfdata.Ex)
+        assert np.allclose(ey.values, zbfdata.Ey)
+
+    def test_tozbf_modedata_fails(self, tmp_path, mode_data):
+        """Asserts that Modedata.to_zbf() fails if mode_index is not specified"""
+        with pytest.raises(ValueError) as e:
+            _ = mode_data.to_zbf(
+                fname=tmp_path / "testzbf_modedata_fail.zbf",
+                background_refractive_index=1,
+                freq=self.freq0,
+                mode_index=None,
+                n_x=32,
+                n_y=32,
+                units="mm",
+            )
+
+    @pytest.mark.parametrize("n_x", [16, 2**14, 33])
+    @pytest.mark.parametrize("n_y", [16, 2**14, 33])
+    def test_tozbf_nxny_fails(self, tmp_path, field_data, n_x, n_y):
+        """Asserts that to_zbf() fails when n_x and n_y are invalid values."""
+        with pytest.raises(ValueError) as e:
+            _ = field_data.to_zbf(
+                fname=tmp_path / "testzbf_nxny_fail.zbf",
+                background_refractive_index=1,
+                freq=self.freq0,
+                n_x=n_x,
+                n_y=n_y,
+                units="mm",
+            )
+
+    @pytest.mark.parametrize("units", ["mmm", "123"])
+    def test_tozbf_units_fails(self, tmp_path, field_data, units):
+        """Asserts that to_zbf() fails when units are invalid."""
+        with pytest.raises(ValueError) as e:
+            _ = field_data.to_zbf(
+                fname=tmp_path / "testzbf_nxny_fail.zbf",
+                background_refractive_index=1,
+                freq=self.freq0,
+                n_x=32,
+                n_y=32,
+                units=units,
+            )
+
+    def test_from_zbf(self, tmp_path, field_data):
+        """Tests creating a field dataset from a zbf"""
+        zbf_filename = tmp_path / "testzbf.zbf"
+        # write to zbf and then load it back in
+        ex, ey = field_data.to_zbf(
+            fname=zbf_filename,
+            background_refractive_index=1,
+            n_x=32,
+            n_y=32,
+            units="mm",
+        )
+
+        # create a field dataset from the zbf file
+        fd = td.FieldDataset.from_zbf(filename=zbf_filename, dim1="x", dim2="y")
+
+        # compare loaded field data to saved data
+        assert np.allclose(ex.values, fd.Ex.values.squeeze())
+        assert np.allclose(ey.values, fd.Ey.values.squeeze())
+
+    @pytest.mark.parametrize(
+        "dim1,dim2", [("x", "x"), ("y", "y"), ("z", "z"), ("1", "2"), ("c", "z")]
+    )
+    def test_from_zbf_dimsfail(self, tmp_path, field_data, dim1, dim2):
+        """Tests fail cases when the dimensions to populate are wrong."""
+        zbf_filename = tmp_path / "testzbf.zbf"
+        # write to zbf and then load it back in
+        _, _ = field_data.to_zbf(
+            fname=zbf_filename,
+            background_refractive_index=1,
+            n_x=32,
+            n_y=32,
+            units="mm",
+        )
+        # this should fail
+        with pytest.raises(ValueError) as e:
+            _ = td.FieldDataset.from_zbf(filename=zbf_filename, dim1=dim1, dim2=dim2)

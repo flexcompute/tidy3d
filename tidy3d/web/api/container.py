@@ -8,20 +8,22 @@ import time
 from abc import ABC
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Optional, Tuple
+from typing import Literal, Optional
 
 import pydantic.v1 as pd
 from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
-from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.mode.mode_solver import ModeSolver
-from ...components.types import Literal, annotate_type
-from ...exceptions import DataError
-from ...log import get_logging_console, log
-from ..api import webapi as web
-from ..core.constants import TaskId, TaskName
-from ..core.task_core import Folder
-from ..core.task_info import RunInfo, TaskInfo
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.mode.mode_solver import ModeSolver
+from tidy3d.components.types import annotate_type
+from tidy3d.exceptions import DataError
+from tidy3d.log import get_logging_console, log
+from tidy3d.web.api import webapi as web
+from tidy3d.web.core.constants import TaskId, TaskName
+from tidy3d.web.core.task_core import Folder
+from tidy3d.web.core.task_info import RunInfo, TaskInfo
+from tidy3d.web.core.types import PayType
+
 from .tidy3d_stub import SimulationDataType, SimulationType
 
 # Max # of workers for parallel upload / download: above 10, performance is same but with warnings
@@ -40,7 +42,6 @@ class WebContainer(Tidy3dBaseModel, ABC):
     @abstractmethod
     def _check_path_dir(path: str) -> None:
         """Make sure local output directory exists and create it if not."""
-        pass
 
     @staticmethod
     def _check_folder(folder_name: str) -> None:
@@ -163,7 +164,7 @@ class Job(WebContainer):
         description="Type of simulation, used internally only.",
     )
 
-    parent_tasks: Tuple[TaskId, ...] = pd.Field(
+    parent_tasks: tuple[TaskId, ...] = pd.Field(
         None, title="Parent Tasks", description="Tuple of parent task ids, used internally only."
     )
 
@@ -180,6 +181,12 @@ class Job(WebContainer):
         "auto",
         title="Reduce Simulation",
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
+    )
+
+    pay_type: PayType = pd.Field(
+        PayType.AUTO,
+        title="Payment Type",
+        description="Specify the payment method.",
     )
 
     _upload_fields = (
@@ -270,7 +277,7 @@ class Job(WebContainer):
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id, solver_version=self.solver_version)
+        web.start(self.task_id, solver_version=self.solver_version, pay_type=self.pay_type)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -404,13 +411,13 @@ class BatchData(Tidy3dBaseModel, Mapping):
         * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
     """
 
-    task_paths: Dict[TaskName, str] = pd.Field(
+    task_paths: dict[TaskName, str] = pd.Field(
         ...,
         title="Data Paths",
         description="Mapping of task_name to path to corresponding data for each task in batch.",
     )
 
-    task_ids: Dict[TaskName, str] = pd.Field(
+    task_ids: dict[TaskName, str] = pd.Field(
         ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
     )
 
@@ -424,12 +431,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
         task_id = self.task_ids[task_name]
         web.get_info(task_id)
 
-        return web.load(
-            task_id=task_id,
-            path=task_data_path,
-            replace_existing=False,
-            verbose=False,
-        )
+        return web.load(task_id=task_id, path=task_data_path, verbose=False)
 
     def __getitem__(self, task_name: TaskName) -> SimulationDataType:
         """Get the simulation data object for a given ``task_name``."""
@@ -444,7 +446,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
         return len(self.task_paths)
 
     @classmethod
-    def load(cls, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
+    def load(cls, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> BatchData:
         """Load :class:`Batch` from file, download results, and load them.
 
         Parameters
@@ -452,6 +454,8 @@ class BatchData(Tidy3dBaseModel, Mapping):
         path_dir : str = './'
             Base directory where data will be downloaded, by default current working directory.
             A `batch.hdf5` file must be present in the directory.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing).
 
         Returns
         ------
@@ -462,7 +466,7 @@ class BatchData(Tidy3dBaseModel, Mapping):
 
         batch_file = Batch._batch_path(path_dir=path_dir)
         batch = Batch.from_file(batch_file)
-        return batch.load(path_dir=path_dir)
+        return batch.load(path_dir=path_dir, replace_existing=replace_existing)
 
 
 class Batch(WebContainer):
@@ -492,7 +496,7 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: Dict[TaskName, annotate_type(SimulationType)] = pd.Field(
+    simulations: dict[TaskName, annotate_type(SimulationType)] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
@@ -529,7 +533,7 @@ class Batch(WebContainer):
         description="Type of each simulation in the batch, used internally only.",
     )
 
-    parent_tasks: Dict[str, Tuple[TaskId, ...]] = pd.Field(
+    parent_tasks: dict[str, tuple[TaskId, ...]] = pd.Field(
         None,
         title="Parent Tasks",
         description="Collection of parent task ids for each job in batch, used internally only.",
@@ -550,7 +554,13 @@ class Batch(WebContainer):
         description="Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.",
     )
 
-    jobs_cached: Dict[TaskName, Job] = pd.Field(
+    pay_type: PayType = pd.Field(
+        PayType.AUTO,
+        title="Payment Type",
+        description="Specify the payment method.",
+    )
+
+    jobs_cached: dict[TaskName, Job] = pd.Field(
         None,
         title="Jobs (Cached)",
         description="Optional field to specify ``jobs``. Only used as a workaround internally "
@@ -591,13 +601,13 @@ class Batch(WebContainer):
         """
         self._check_path_dir(path_dir)
         self.upload()
+        self.to_file(self._batch_path(path_dir=path_dir))
         self.start()
         self.monitor()
-        self.download(path_dir=path_dir)
         return self.load(path_dir=path_dir)
 
     @cached_property
-    def jobs(self) -> Dict[TaskName, Job]:
+    def jobs(self) -> dict[TaskName, Job]:
         """Create a series of tasks in the :class:`.Batch` and upload them to server.
 
         Note
@@ -624,6 +634,7 @@ class Batch(WebContainer):
             job_kwargs["simulation"] = simulation
             job_kwargs["verbose"] = False
             job_kwargs["solver_version"] = self.solver_version
+            job_kwargs["pay_type"] = self.pay_type
             job_kwargs["reduce_simulation"] = self.reduce_simulation
             if self.parent_tasks and task_name in self.parent_tasks:
                 job_kwargs["parent_tasks"] = self.parent_tasks[task_name]
@@ -680,7 +691,7 @@ class Batch(WebContainer):
                         completed += 1
                         progress.update(pbar, completed=completed)
 
-    def get_info(self) -> Dict[TaskName, TaskInfo]:
+    def get_info(self) -> dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
 
         Returns
@@ -709,7 +720,7 @@ class Batch(WebContainer):
             for _, job in self.jobs.items():
                 executor.submit(job.start)
 
-    def get_run_info(self) -> Dict[TaskName, RunInfo]:
+    def get_run_info(self) -> dict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.
 
         Returns
@@ -867,7 +878,7 @@ class Batch(WebContainer):
         str
             Full path to the data file.
         """
-        return os.path.join(path_dir, f"{str(task_id)}.hdf5")
+        return os.path.join(path_dir, f"{task_id!s}.hdf5")
 
     @staticmethod
     def _batch_path(path_dir: str = DEFAULT_DATA_DIR):
@@ -886,13 +897,15 @@ class Batch(WebContainer):
         """
         return os.path.join(path_dir, "batch.hdf5")
 
-    def download(self, path_dir: str = DEFAULT_DATA_DIR) -> None:
+    def download(self, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> None:
         """Download results of each task.
 
         Parameters
         ----------
         path_dir : str = './'
             Base directory where data will be downloaded, by default the current working directory.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing).
 
         Note
         ----
@@ -905,17 +918,36 @@ class Batch(WebContainer):
         self._check_path_dir(path_dir=path_dir)
         self.to_file(self._batch_path(path_dir=path_dir))
 
+        num_existing = 0
+        for _, job in self.jobs.items():
+            job_path_str = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+            if os.path.exists(job_path_str):
+                num_existing += 1
+        if num_existing > 0:
+            files_plural = "files have" if num_existing > 1 else "file has"
+            log.warning(
+                f"{num_existing} {files_plural} already been downloaded "
+                f"and will be skipped. To forcibly overwrite existing files, invoke "
+                "the load or download function with `replace_existing=True`.",
+                log_once=True,
+            )
+
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             fns = []
             for task_name, job in self.jobs.items():
-                job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-
+                job_path_str = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+                if os.path.exists(job_path_str):
+                    if replace_existing:
+                        log.info(f"File '{job_path_str}' already exists. Overwriting.")
+                    else:
+                        log.info(f"File '{job_path_str}' already exists. Skipping.")
+                        continue
                 if "error" in job.status:
                     log.warning(f"Not downloading '{task_name}' as the task errored.")
                     continue
 
-                def fn(job=job, job_path=job_path) -> None:
-                    return job.download(path=job_path)
+                def fn(job=job, job_path_str=job_path_str) -> None:
+                    return job.download(path=job_path_str)
 
                 fns.append(fn)
 
@@ -937,13 +969,15 @@ class Batch(WebContainer):
                         completed += 1
                         progress.update(pbar, completed=completed)
 
-    def load(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
+    def load(self, path_dir: str = DEFAULT_DATA_DIR, replace_existing: bool = False) -> BatchData:
         """Download results and load them into :class:`.BatchData` object.
 
         Parameters
         ----------
         path_dir : str = './'
             Base directory where data will be downloaded, by default current working directory.
+        replace_existing : bool = False
+            Downloads the data even if path exists (overwriting the existing).
 
         Returns
         ------
@@ -955,7 +989,6 @@ class Batch(WebContainer):
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
         self._check_path_dir(path_dir=path_dir)
-        self.to_file(self._batch_path(path_dir=path_dir))
 
         if self.jobs is None:
             raise DataError("Can't load batch results, hasn't been uploaded.")
@@ -976,6 +1009,8 @@ class Batch(WebContainer):
             if isinstance(job.simulation, ModeSolver):
                 job_data = data[task_name]
                 job.simulation._patch_data(data=job_data)
+
+        self.download(path_dir=path_dir, replace_existing=replace_existing)
 
         return data
 

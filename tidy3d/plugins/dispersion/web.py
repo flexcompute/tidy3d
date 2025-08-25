@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import ssl
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Literal, Optional
 
 import pydantic.v1 as pydantic
 import requests
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 
+from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.medium import PoleResidue
+from tidy3d.components.types import Undefined
+from tidy3d.constants import HERTZ, MICROMETER
+from tidy3d.exceptions import SetupError, Tidy3dError, WebError
+from tidy3d.log import log
 from tidy3d.web.core.environment import Env
 from tidy3d.web.core.http_util import get_headers
 
-from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
-from ...components.medium import PoleResidue
-from ...components.types import Literal
-from ...constants import HERTZ, MICROMETER
-from ...exceptions import SetupError, Tidy3dError, WebError
-from ...log import log
 from .fit import DispersionFitter
 
 BOUND_MAX_FACTOR = 10
@@ -102,8 +102,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         """bound_f_lower cannot be larger than bound_f."""
         if values["bound_f"] is not None and val > values["bound_f"]:
             raise SetupError(
-                "The upper bound 'bound_f' cannot be smaller "
-                "than the lower bound 'bound_f_lower'."
+                "The upper bound 'bound_f' cannot be smaller than the lower bound 'bound_f_lower'."
             )
         return val
 
@@ -111,18 +110,18 @@ class AdvancedFitterParam(Tidy3dBaseModel):
 class FitterData(AdvancedFitterParam):
     """Data class for request body of Fitter where dipsersion data is input through tuple."""
 
-    wvl_um: Tuple[float, ...] = Field(
+    wvl_um: tuple[float, ...] = Field(
         ...,
         title="Wavelengths",
         description="A set of wavelengths for dispersion data.",
         units=MICROMETER,
     )
-    n_data: Tuple[float, ...] = Field(
+    n_data: tuple[float, ...] = Field(
         ...,
         title="Index of refraction",
         description="Real part of the complex index of refraction at each wavelength.",
     )
-    k_data: Tuple[float, ...] = Field(
+    k_data: tuple[float, ...] = Field(
         None,
         title="Extinction coefficient",
         description="Imaginary part of the complex index of refraction at each wavelength.",
@@ -255,7 +254,7 @@ class FitterData(AdvancedFitterParam):
 
         return get_headers()
 
-    def run(self) -> Tuple[PoleResidue, float]:
+    def run(self) -> tuple[PoleResidue, float]:
         """Execute the data fit using the stable fitter in the server.
 
         Returns
@@ -316,8 +315,8 @@ def run(
     num_poles: PositiveInt = 1,
     num_tries: PositiveInt = 50,
     tolerance_rms: NonNegativeFloat = 1e-2,
-    advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
-) -> Tuple[PoleResidue, float]:
+    advanced_param: AdvancedFitterParam = Undefined,
+) -> tuple[PoleResidue, float]:
     """Execute the data fit using the stable fitter in the server.
 
     Parameters
@@ -338,6 +337,8 @@ def run(
     Tuple[:class:`.PoleResidue`, float]
         Best results of multiple fits: (dispersive medium, RMS error).
     """
+    if advanced_param is Undefined:
+        advanced_param = AdvancedFitterParam()
     task = FitterData.create(fitter, num_poles, num_tries, tolerance_rms, advanced_param)
     return task.run()
 
@@ -359,7 +360,9 @@ class StableDispersionFitter(DispersionFitter):
         num_tries: PositiveInt = 50,
         tolerance_rms: NonNegativeFloat = 1e-2,
         guess: PoleResidue = None,
-        advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
-    ) -> Tuple[PoleResidue, float]:
+        advanced_param: AdvancedFitterParam = Undefined,
+    ) -> tuple[PoleResidue, float]:
         """Deprecated."""
+        if advanced_param is Undefined:
+            advanced_param = AdvancedFitterParam()
         return run(self, num_poles, num_tries, tolerance_rms, advanced_param)

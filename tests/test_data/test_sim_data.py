@@ -1,9 +1,12 @@
 """Tests SimulationData"""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
@@ -15,6 +18,7 @@ from tidy3d.exceptions import DataError, Tidy3dKeyError
 from ..utils import get_nested_shape
 from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
 from .test_monitor_data import (
+    make_aux_field_time_data,
     make_diffraction_data,
     make_directivity_data,
     make_field_data,
@@ -32,6 +36,8 @@ FIELD_SYM = make_field_data()
 FIELD = make_field_data(symmetry=False)
 FIELD_TIME_SYM = make_field_time_data()
 FIELD_TIME = make_field_time_data(symmetry=False)
+AUX_FIELD_TIME_SYM = make_aux_field_time_data()
+AUX_FIELD_TIME = make_aux_field_time_data(symmetry=False)
 PERMITTIVITY_SYM = make_permittivity_data()
 PERMITTIVITY = make_permittivity_data(symmetry=False)
 MODE = make_mode_data()
@@ -45,6 +51,7 @@ DIRECTIVITY = make_directivity_data()
 MONITOR_DATA = (
     FIELD,
     FIELD_TIME,
+    AUX_FIELD_TIME,
     MODE_SOLVER,
     PERMITTIVITY,
     MODE,
@@ -56,6 +63,7 @@ MONITOR_DATA = (
 MONITOR_DATA_SYM = (
     FIELD_SYM,
     FIELD_TIME_SYM,
+    AUX_FIELD_TIME_SYM,
     MODE_SOLVER,
     PERMITTIVITY_SYM,
     MODE,
@@ -221,6 +229,38 @@ def test_final_decay():
     assert dv == 0.11
 
 
+def test_field_decay_array():
+    sim_data = make_sim_data()
+    log_extended = (
+        sim_data.log + "\n- Time step   1392 / time 1.33e-13s ( 19 % done), field decay: 6.58e-01"
+    )
+    sim_data = sim_data.copy(update={"log": log_extended})
+
+    fd = sim_data.field_decay
+    steps = fd.coords["t"].values
+    decay_values = fd.values
+
+    assert len(fd) == 2
+    assert int(steps[0]) == 827
+    assert int(steps[1]) == 1392
+    assert float(decay_values[0]) == 0.11
+    assert float(decay_values[1]) == 0.658
+
+
+def test_decay_missing_in_log():
+    sim_data = make_sim_data()
+    sim_data = sim_data.copy(update={"log": "no regex matches in this log"})
+    dv = sim_data.final_decay_value
+    assert dv == 1.0
+
+
+def test_field_decay_log_none():
+    sim_data = make_sim_data()
+    sim_data = sim_data.copy(update={"log": None})
+    with pytest.raises(DataError):
+        _ = sim_data.field_decay
+
+
 def test_to_dict():
     sim_data = make_sim_data()
     j = sim_data.dict()
@@ -383,12 +423,12 @@ def test_run_time_lt_start(tmp_path):
         normalize_index=None,
     )
 
-    coords = dict(
-        x=np.linspace(-0.6, 0.6, 10),
-        y=np.linspace(-0.6, 0.6, 10),
-        z=[0.1],
-        t=[],
-    )
+    coords = {
+        "x": np.linspace(-0.6, 0.6, 10),
+        "y": np.linspace(-0.6, 0.6, 10),
+        "z": [0.1],
+        "t": [],
+    }
 
     field_components = {
         field_name: ScalarFieldTimeDataArray(np.zeros((10, 10, 1, 0)), coords=coords)
@@ -424,9 +464,9 @@ def test_plot_field_title():
 def test_missing_monitor():
     sim_data = make_sim_data()
     new_monitors = list(sim_data.simulation.monitors)[:-1]
-    new_sim = sim_data.simulation.copy(update=dict(monitors=new_monitors))
+    new_sim = sim_data.simulation.copy(update={"monitors": new_monitors})
     with pytest.raises(pydantic.ValidationError):
-        _ = sim_data.copy(update=dict(simulation=new_sim))
+        _ = sim_data.copy(update={"simulation": new_sim})
 
 
 def test_loading_non_field_data():

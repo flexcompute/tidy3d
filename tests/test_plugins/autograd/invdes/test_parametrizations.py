@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import autograd.numpy as np
 import pytest
+
 from tidy3d.plugins.autograd.invdes.parametrizations import make_filter_and_project
 from tidy3d.plugins.autograd.types import PaddingType
 

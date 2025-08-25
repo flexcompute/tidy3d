@@ -1,6 +1,9 @@
-from typing import Union
+from __future__ import annotations
+
+from typing import Optional, Union
 
 import numpy as np
+
 import tidy3d as td
 import tidy3d.plugins.microwave as microwave
 from tidy3d.plugins.smatrix import (
@@ -33,7 +36,9 @@ Rinner = 0.2768 * mm
 Router = 1.0 * mm
 
 
-def make_simulation(planar_pec: bool, length: float = None, grid_spec: td.GridSpec = None):
+def make_simulation(
+    planar_pec: bool, length: Optional[float] = None, grid_spec: td.GridSpec = None
+):
     if length:
         strip_length = length
     else:
@@ -109,7 +114,7 @@ def make_simulation(planar_pec: bool, length: float = None, grid_spec: td.GridSp
 def make_component_modeler(
     planar_pec: bool,
     reference_impedance: complex = 50,
-    length: float = None,
+    length: Optional[float] = None,
     port_refinement: bool = True,
     port_snapping: bool = True,
     grid_spec: td.GridSpec = None,
@@ -167,7 +172,7 @@ def make_component_modeler(
     return modeler
 
 
-def make_coaxial_simulation(length: float = None, grid_spec: td.GridSpec = None):
+def make_coaxial_simulation(length: Optional[float] = None, grid_spec: td.GridSpec = None):
     if not length:
         length = default_strip_length
 
@@ -244,13 +249,15 @@ def make_coaxial_simulation(length: float = None, grid_spec: td.GridSpec = None)
 
 def make_coaxial_component_modeler(
     reference_impedance: complex = 50,
-    length: float = None,
+    length: Optional[float] = None,
     port_refinement: bool = True,
     grid_spec: td.GridSpec = None,
     port_types: tuple[Union[CoaxialLumpedPort, WavePort], Union[CoaxialLumpedPort, WavePort]] = (
         CoaxialLumpedPort,
         CoaxialLumpedPort,
     ),
+    use_current: bool = True,
+    use_voltage: bool = True,
     **kwargs,
 ):
     if not length:
@@ -269,7 +276,7 @@ def make_coaxial_component_modeler(
                 inner_diameter=2 * Rinner,
                 normal_axis=2,
                 direction=direction,
-                name=name,
+                name="coax" + name,
                 num_grid_cells=port_cells,
                 impedance=reference_impedance,
             )
@@ -279,34 +286,44 @@ def make_coaxial_component_modeler(
             voltage_center[0] += mean_radius
             voltage_size = [Router - Rinner, 0, 0]
 
-            port = WavePort(
-                center=center,
-                size=[2 * Router, 2 * Router, 0],
-                direction=direction,
-                name=name,
-                mode_spec=td.ModeSpec(num_modes=1),
-                mode_index=0,
-                voltage_integral=microwave.VoltageIntegralAxisAligned(
+            voltage_integral = None
+            if use_voltage:
+                voltage_integral = microwave.VoltageIntegralAxisAligned(
                     center=voltage_center,
                     size=voltage_size,
                     extrapolate_to_endpoints=True,
                     snap_path_to_grid=True,
                     sign="+",
-                ),
-                current_integral=microwave.CustomCurrentIntegral2D.from_circular_path(
+                )
+            current_integral = None
+            if use_current:
+                current_integral = microwave.CustomCurrentIntegral2D.from_circular_path(
                     center=center,
                     radius=mean_radius,
                     num_points=41,
                     normal_axis=2,
                     clockwise=direction != "+",
-                ),
+                )
+            port_cells = None
+            if port_refinement:
+                port_cells = 5
+            port = WavePort(
+                center=center,
+                size=[2 * Router, 2 * Router, 0],
+                direction=direction,
+                name="wave" + name,
+                mode_spec=td.ModeSpec(num_modes=1),
+                mode_index=0,
+                voltage_integral=voltage_integral,
+                current_integral=current_integral,
+                num_grid_cells=port_cells,
             )
         return port
 
     center_src1 = [0, 0, -length / 2]
-    port_1 = make_port(center_src1, direction="+", type=port_types[0], name="coax_port_1")
+    port_1 = make_port(center_src1, direction="+", type=port_types[0], name="_1")
     center_src2 = [0, 0, length / 2]
-    port_2 = make_port(center_src2, direction="-", type=port_types[1], name="coax_port_2")
+    port_2 = make_port(center_src2, direction="-", type=port_types[1], name="_2")
     ports = [port_1, port_2]
     freqs = np.linspace(freq_start, freq_stop, 100)
 

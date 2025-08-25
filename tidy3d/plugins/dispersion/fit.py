@@ -4,23 +4,21 @@ from __future__ import annotations
 
 import codecs
 import csv
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 import requests
-import scipy.optimize as opt
 from pydantic.v1 import Field, validator
 from rich.progress import Progress
 
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.medium import AbstractMedium, PoleResidue
+from tidy3d.components.types import ArrayFloat1D, Ax
+from tidy3d.components.viz import add_ax_if_none
+from tidy3d.constants import C_0, HBAR, MICROMETER
+from tidy3d.exceptions import SetupError, ValidationError, WebError
+from tidy3d.log import get_logging_console, log
 from tidy3d.web.core.environment import Env
-
-from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.medium import AbstractMedium, PoleResidue
-from ...components.types import ArrayFloat1D, Ax
-from ...components.viz import add_ax_if_none
-from ...constants import C_0, HBAR, MICROMETER
-from ...exceptions import SetupError, ValidationError, WebError
-from ...log import get_logging_console, log
 
 
 class DispersionFitter(Tidy3dBaseModel):
@@ -46,7 +44,7 @@ class DispersionFitter(Tidy3dBaseModel):
         description="Imaginary part of the complex index of refraction.",
     )
 
-    wvl_range: Tuple[Optional[float], Optional[float]] = Field(
+    wvl_range: tuple[Optional[float], Optional[float]] = Field(
         (None, None),
         title="Wavelength range [wvl_min,wvl_max] for fitting",
         description="Truncate the wavelength, n and k data to the wavelength range '[wvl_min, "
@@ -82,7 +80,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return val
 
     @cached_property
-    def data_in_range(self) -> Tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]:
+    def data_in_range(self) -> tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]:
         """Filter the wavelength-nk data to wavelength range for fitting.
 
         Returns
@@ -129,7 +127,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return AbstractMedium.nk_to_eps_complex(n=n_data, k=k_data)
 
     @property
-    def freqs(self) -> Tuple[float, ...]:
+    def freqs(self) -> tuple[float, ...]:
         """Convert filtered input wavelength data to frequency.
 
         Returns
@@ -142,7 +140,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return C_0 / wvl_um
 
     @property
-    def frequency_range(self) -> Tuple[float, float]:
+    def frequency_range(self) -> tuple[float, float]:
         """Frequency range of filtered input data
 
         Returns
@@ -262,7 +260,7 @@ class DispersionFitter(Tidy3dBaseModel):
         num_tries: int = 50,
         tolerance_rms: float = 1e-2,
         guess: PoleResidue = None,
-    ) -> Tuple[PoleResidue, float]:
+    ) -> tuple[PoleResidue, float]:
         """Fit data a number of times and returns best results.
 
         Parameters
@@ -347,7 +345,7 @@ class DispersionFitter(Tidy3dBaseModel):
         self,
         num_poles: int = 3,
         guess: PoleResidue = None,
-    ) -> Tuple[PoleResidue, float]:
+    ) -> tuple[PoleResidue, float]:
         """Perform a single fit to the data and return optimization result.
 
         Parameters
@@ -362,6 +360,7 @@ class DispersionFitter(Tidy3dBaseModel):
         Tuple[:class:`.PoleResidue`, float]
             Results of single fit: (dispersive medium, RMS error).
         """
+        import scipy.optimize as opt
 
         # NOTE: Not used
         def constraint(coeffs, _grad=None):
@@ -460,7 +459,7 @@ class DispersionFitter(Tidy3dBaseModel):
             constraints=(scipy_constraint,),
             tol=1e-7,
             callback=None,
-            options=dict(maxiter=10000),
+            options={"maxiter": 10000},
         )
 
         coeffs = res.x
@@ -557,7 +556,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return ax
 
     @staticmethod
-    def _validate_url_load(data_load: List):
+    def _validate_url_load(data_load: list):
         """Validate if the loaded data from URL is valid
             The data list should be in this format:
                 [["wl",     "n"],
@@ -753,7 +752,7 @@ class DispersionFitter(Tidy3dBaseModel):
         wvl_um: ArrayFloat1D,
         eps_real: ArrayFloat1D,
         eps_imag: ArrayFloat1D = None,
-        wvl_range: Tuple[Optional[float], Optional[float]] = (None, None),
+        wvl_range: tuple[Optional[float], Optional[float]] = (None, None),
     ) -> DispersionFitter:
         """Loads :class:`DispersionFitter` from wavelength and complex relative permittivity data
 
@@ -785,7 +784,7 @@ class DispersionFitter(Tidy3dBaseModel):
         wvl_um: ArrayFloat1D,
         eps_real: ArrayFloat1D,
         loss_tangent: ArrayFloat1D,
-        wvl_range: Tuple[Optional[float], Optional[float]] = (None, None),
+        wvl_range: tuple[Optional[float], Optional[float]] = (None, None),
     ) -> DispersionFitter:
         """Loads :class:`DispersionFitter` from wavelength and loss tangent data.
 

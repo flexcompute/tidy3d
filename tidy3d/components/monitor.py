@@ -1,14 +1,17 @@
 """Objects that define how data is recorded from simulation."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ..constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
-from ..exceptions import SetupError, ValidationError
-from ..log import log
+from tidy3d.constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .apodization import ApodizationSpec
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .base_sim.monitor import AbstractMonitor
@@ -16,6 +19,7 @@ from .medium import MediumType
 from .mode_spec import ModeSpec
 from .types import (
     ArrayFloat1D,
+    AuxField,
     Ax,
     Axis,
     Bound,
@@ -47,7 +51,7 @@ WINDOW_FACTOR = 15
 class Monitor(AbstractMonitor):
     """Abstract base class for monitors."""
 
-    interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
+    interval_space: tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
         (1, 1, 1),
         title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
@@ -190,7 +194,7 @@ class TimeMonitor(Monitor, ABC):
             raise SetupError("Monitor start time is greater than stop time.")
         return val
 
-    def time_inds(self, tmesh: ArrayFloat1D) -> Tuple[int, int]:
+    def time_inds(self, tmesh: ArrayFloat1D) -> tuple[int, int]:
         """Compute the starting and stopping index of the monitor in a given discrete time mesh."""
 
         tmesh = np.array(tmesh)
@@ -229,13 +233,13 @@ class TimeMonitor(Monitor, ABC):
 class AbstractFieldMonitor(Monitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z."""
 
-    fields: Tuple[EMField, ...] = pydantic.Field(
+    fields: tuple[EMField, ...] = pydantic.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
     )
 
-    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+    interval_space: tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
         pydantic.Field(
             (1, 1, 1),
             title="Spatial Interval",
@@ -264,6 +268,51 @@ class AbstractFieldMonitor(Monitor, ABC):
             field_components_factor += 3
         if any(comp[0] == "H" for comp in self.fields):
             field_components_factor += 3
+
+        # take out the stored field components factor and use the solver factor instead
+        solver_data_size = final_data_size / len(self.fields) * field_components_factor
+        return solver_data_size
+
+
+class AbstractAuxFieldMonitor(Monitor, ABC):
+    """:class:`.Monitor` that records auxiliary fields as a function of x,y,z.
+
+    Auxiliary fields are used in certain nonlinear material models.
+    :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
+    free-carrier density."""
+
+    fields: tuple[AuxField, ...] = pydantic.Field(
+        (),
+        title="Aux Field Components",
+        description="Collection of auxiliary field components to store in the monitor. "
+        "Auxiliary fields which are not present in the simulation will be zero.",
+    )
+
+    interval_space: tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals between monitor recordings. If equal to 1, "
+            "there will be no downsampling. If greater than 1, the step will be applied, but the "
+            "first and last point of the monitor grid are always included.",
+        )
+    )
+
+    colocate: bool = pydantic.Field(
+        True,
+        title="Colocate Fields",
+        description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
+        "primal grid nodes).",
+    )
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        final_data_size = self.storage_size(num_cells=num_cells, tmesh=tmesh)
+        if len(self.fields) == 0:
+            return 0
+
+        # internally solver stores all aux field components
+        field_components_factor = 3
 
         # take out the stored field components factor and use the solver factor instead
         solver_data_size = final_data_size / len(self.fields) * field_components_factor
@@ -303,11 +352,17 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         "primal grid nodes).",
     )
 
+    conjugated_dot_product: bool = pydantic.Field(
+        True,
+        title="Conjugated Dot Product",
+        description="Use conjugated or non-conjugated dot product for mode decomposition.",
+    )
+
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:
@@ -318,6 +373,11 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         kwargs_alpha = patch_kwargs.get("alpha")
         arrow_alpha = ARROW_ALPHA if kwargs_alpha is None else kwargs_alpha
 
+        bend_radius = self.mode_spec.bend_radius
+        # Curvature has to be reversed because of ploting coordinates
+        if (self.normal_axis, self._bend_axis) in [(1, 2), (2, 0), (2, 1)]:
+            bend_radius = -bend_radius
+
         # and then add an arrow using the direction comuputed from `_dir_arrow`.
         ax = self._plot_arrow(
             x=x,
@@ -325,7 +385,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             z=z,
             ax=ax,
             direction=self._dir_arrow,
-            bend_radius=self.mode_spec.bend_radius,
+            bend_radius=bend_radius,
             bend_axis=self._bend_axis,
             color=ARROW_COLOR_MONITOR,
             alpha=arrow_alpha,
@@ -334,7 +394,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         return ax
 
     @cached_property
-    def _dir_arrow(self) -> Tuple[float, float, float]:
+    def _dir_arrow(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         dx = np.cos(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
         dy = np.sin(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
@@ -457,6 +517,33 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
+class AuxFieldTimeMonitor(AbstractAuxFieldMonitor, TimeMonitor):
+    """:class:`.Monitor` that records auxiliary fields in the time domain.
+
+    Auxiliary fields are used in certain nonlinear material models.
+    :class:`.TwoPhotonAbsorption` uses `Nfx`, `Nfy`, and `Nfz` for the
+    free-carrier density.
+
+    Example
+    -------
+    >>> monitor = AuxFieldTimeMonitor(
+    ...     center=(1,2,3),
+    ...     size=(0,0,0),
+    ...     fields=['Nfx'],
+    ...     start=1e-13,
+    ...     stop=5e-13,
+    ...     interval=2,
+    ...     colocate=True,
+    ...     name='aux_monitor')
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # stores 1 real number per grid cell, per time step, per field
+        num_steps = self.num_steps(tmesh)
+        return BYTES_REAL * num_steps * num_cells * len(self.fields)
+
+
 class PermittivityMonitor(FreqMonitor):
     """:class:`Monitor` that records the diagonal components of the complex-valued relative
     permittivity tensor in the frequency domain. The recorded data has the same shape as a
@@ -487,7 +574,7 @@ class PermittivityMonitor(FreqMonitor):
         "physical meaning - they do not correspond to the subpixel-averaged ones.",
     )
 
-    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+    interval_space: tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
         pydantic.Field(
             (1, 1, 1),
             title="Spatial Interval",
@@ -521,7 +608,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
     )
 
-    exclude_surfaces: Tuple[BoxSurface, ...] = pydantic.Field(
+    exclude_surfaces: tuple[BoxSurface, ...] = pydantic.Field(
         None,
         title="Excluded Surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",
@@ -718,7 +805,7 @@ class ModeSolverMonitor(AbstractModeMonitor):
         "dimension.",
     )
 
-    fields: Tuple[EMField, ...] = pydantic.Field(
+    fields: tuple[EMField, ...] = pydantic.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
@@ -813,7 +900,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         "in the far field of the device.",
     )
 
-    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+    interval_space: tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
         pydantic.Field(
             (1, 1, 1),
             title="Spatial Interval",
@@ -828,7 +915,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         )
     )
 
-    window_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat] = pydantic.Field(
+    window_size: tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat] = pydantic.Field(
         (0, 0),
         title="Spatial filtering window size",
         description="Size of the transition region of the windowing function used to ensure that "
@@ -883,7 +970,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         return val
 
     @property
-    def projection_surfaces(self) -> Tuple[FieldProjectionSurface, ...]:
+    def projection_surfaces(self) -> tuple[FieldProjectionSurface, ...]:
         """Surfaces of the monitor where near fields will be recorded for subsequent projection."""
         surfaces = self.integration_surfaces
         return [
@@ -907,7 +994,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
             return self.center
         return self.custom_origin
 
-    def window_parameters(self, custom_bounds: Bound = None) -> Tuple[Size, Coordinate, Coordinate]:
+    def window_parameters(self, custom_bounds: Bound = None) -> tuple[Size, Coordinate, Coordinate]:
         """Return the physical size of the window transition region based on the monitor's size
         and optional custom bounds (useful in case the monitor has infinite dimensions). The window
         size is returned in 3D. Also returns the coordinate where the transition region beings on
@@ -1127,6 +1214,14 @@ class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(
             self.freqs
         ) * 6 + BYTES_REAL * len(self.freqs)
+
+    @pydantic.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values
 
 
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
@@ -1453,6 +1548,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 MonitorType = Union[
     FieldMonitor,
     FieldTimeMonitor,
+    AuxFieldTimeMonitor,
     PermittivityMonitor,
     FluxMonitor,
     FluxTimeMonitor,

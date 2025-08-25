@@ -1,10 +1,11 @@
 """Http connection pool and authentication management."""
 
+from __future__ import annotations
+
 import os
 from enum import Enum
 from functools import wraps
 from os.path import expanduser
-from typing import Dict
 
 import requests
 import toml
@@ -25,7 +26,7 @@ from .constants import (
 )
 from .core_config import get_logger
 from .environment import Env
-from .exceptions import WebError
+from .exceptions import WebError, WebNotFoundError
 
 REINITIALIZED = False
 
@@ -104,7 +105,7 @@ def api_key_auth(request: requests.request) -> requests.request:
     return request
 
 
-def get_headers() -> Dict[str, str]:
+def get_headers() -> dict[str, str]:
     """get headers for http request.
 
     Returns
@@ -131,7 +132,7 @@ def http_interceptor(func):
 
         if resp.status_code != ResponseCodes.OK.value:
             if resp.status_code == ResponseCodes.NOT_FOUND.value:
-                return None
+                raise WebNotFoundError("Resource not found (HTTP 404).")
             json_resp = resp.json()
             if "error" in json_resp.keys():
                 raise WebError(json_resp["error"])
@@ -167,6 +168,7 @@ class HttpSessionManager:
         ssl_version = Env.current.ssl_version
         if ssl_version:
             session.mount("https://", TLSAdapter())
+        session.verify = Env.current.ssl_verify
         self.session = session
 
     def reinit(self):
@@ -176,6 +178,7 @@ class HttpSessionManager:
         if ssl_version and not REINITIALIZED:
             self.session.mount("https://", TLSAdapter())
             REINITIALIZED = True
+        self.session.verify = Env.current.ssl_verify
 
     @http_interceptor
     def get(self, path: str, json=None, params=None):

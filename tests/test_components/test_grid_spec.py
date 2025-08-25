@@ -1,7 +1,11 @@
 """Tests GridSpec."""
 
+from __future__ import annotations
+
 import numpy as np
+import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 
@@ -40,17 +44,17 @@ def test_make_coords():
 def test_make_coords_with_snapping_points():
     """Test the behavior of snapping points"""
     gs = make_grid_spec()
-    make_coords_args = dict(
-        structures=[
+    make_coords_args = {
+        "structures": [
             td.Structure(geometry=td.Box(size=(2, 2, 1)), medium=td.Medium()),
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=4)),
         ],
-        symmetry=(0, 0, 0),
-        periodic=(False, False, False),
-        wavelength=1.0,
-        num_pml_layers=(0, 0),
-        axis=0,
-    )
+        "symmetry": (0, 0, 0),
+        "periodic": (False, False, False),
+        "wavelength": 1.0,
+        "num_pml_layers": (0, 0),
+        "axis": 0,
+    }
 
     # 1) no snapping points, 0.85 is not on any grid boundary
     coord_original = gs.grid_x.make_coords(
@@ -82,7 +86,7 @@ def test_make_coords_with_snapping_points():
     # 3) snapping takes no effect if it's too close to interval boundaries
     # forming the simulation boundary
     coord = gs.grid_x.make_coords(
-        snapping_points=((0.98, 0, 0),),
+        snapping_points=((0.98, 0, 0), (-0.98, 0, 0)),
         **make_coords_args,
     )
     assert np.allclose(coord_original, coord)
@@ -515,3 +519,38 @@ def test_domain_mismatch():
         boundary_spec=td.BoundarySpec.pml(),
     )
     z = sim.grid.boundaries.z
+
+
+@pytest.mark.parametrize(
+    ("dl", "expect_exception"),
+    [
+        (1e-8, True),  # Below 1e-7 => fail
+        (1e-7, False),  # Exactly at lower bound => pass
+        (0.0, True),  # Zero => fail
+    ],
+)
+def test_uniform_grid_dl_validation(dl, expect_exception):
+    """Test the validator that checks 'dl' is between 1e-7 and 3e8 µm."""
+    if expect_exception:
+        with pytest.raises(pydantic.ValidationError):
+            _ = td.Simulation(
+                size=(1, 1, 1),
+                grid_spec=td.GridSpec.uniform(dl=dl),
+                run_time=1e-12,
+            )
+    else:
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            grid_spec=td.GridSpec.uniform(dl=dl),
+            run_time=1e-12,
+        )
+
+
+def test_custom_grid_boundary_validation():
+    """Tests that the 'coords' is at least length 2 and sorted in ascending order."""
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.CustomGridBoundaries(coords=[10])
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.CustomGridBoundaries(coords=[9, 10, 9, 10, 11, 9, 8])

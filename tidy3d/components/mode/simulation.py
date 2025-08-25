@@ -2,32 +2,32 @@
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ...constants import C_0
-from ...exceptions import SetupError, ValidationError
-from ...log import log
-from ..base import cached_property
-from ..boundary import Boundary, BoundarySpec
-from ..geometry.base import Box
-from ..grid.grid import Grid
-from ..grid.grid_spec import GridSpec
-from ..mode_spec import ModeSpec
-from ..monitor import ModeMonitor, ModeSolverMonitor
-from ..simulation import AbstractYeeGridSimulation, Simulation
-from ..source.field import ModeSource
-from ..types import (
-    TYPE_TAG_STR,
-    Ax,
-    Direction,
-    EMField,
-    FreqArray,
+from tidy3d.components.base import cached_property
+from tidy3d.components.boundary import BoundarySpec
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
+from tidy3d.components.simulation import (
+    AbstractYeeGridSimulation,
+    Simulation,
+    validate_boundaries_for_zero_dims,
 )
-from ..validators import validate_mode_plane_radius
+from tidy3d.components.source.field import ModeSource
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
+from tidy3d.constants import C_0
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .mode_solver import ModeSolver
+
+ModeSimulationMonitorType = PermittivityMonitor
 
 # dummy run time for conversion to FDTD sim
 # should be very small -- otherwise, generating tmesh will fail or take a long time
@@ -80,16 +80,22 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     Example
     -------
-    >>> from tidy3d import C_0, ModeSpec
-    >>> lambda0 = 1
+    >>> from tidy3d import C_0, ModeSpec, BoundarySpec, Boundary
+    >>> lambda0 = 1550e-9
     >>> freq0 = C_0 / lambda0
     >>> freqs = [freq0]
     >>> sim_size = lambda0, lambda0, 0
     >>> mode_spec = ModeSpec(num_modes=4)
+    >>> boundary_spec = BoundarySpec(
+    ...     x=Boundary.pec(),
+    ...     y=Boundary.pec(),
+    ...     z=Boundary.periodic()
+    ... )
     >>> sim = ModeSimulation(
     ...     size=sim_size,
     ...     freqs=freqs,
-    ...     mode_spec=mode_spec
+    ...     mode_spec=mode_spec,
+    ...     boundary_spec=boundary_spec
     ... )
 
     See Also
@@ -130,7 +136,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "primal grid nodes). Default is ``True``.",
     )
 
-    fields: Tuple[EMField, ...] = pd.Field(
+    fields: tuple[EMField, ...] = pd.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor. Note that some "
@@ -148,18 +154,25 @@ class ModeSimulation(AbstractYeeGridSimulation):
         "apply PML layers in the mode solver.",
     )
 
-    monitors: Tuple[()] = pd.Field(
+    monitors: tuple[ModeSimulationMonitorType, ...] = pd.Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
 
-    sources: Tuple[()] = pd.Field(
+    sources: tuple[()] = pd.Field(
         (),
         title="Sources",
         description="Sources in the simulation. Note: sources are not supported in mode "
         "simulations.",
+    )
+
+    internal_absorbers: tuple[()] = pd.Field(
+        (),
+        title="Internal Absorbers",
+        description="Planes with the first order absorbing boundary conditions placed inside the computational domain. "
+        "Note: absorbers are not supported in mode simulations.",
     )
 
     grid_spec: GridSpec = pd.Field(
@@ -207,23 +220,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
             raise SetupError("'ModeSimulation.plane' must intersect 'ModeSimulation.geometry.")
         return val
 
-    @pd.validator("boundary_spec", always=True)
-    def boundaries_for_zero_dims(cls, val, values):
-        """Replace with periodic boundary along zero-size dimensions."""
-        boundaries = [val.x, val.y, val.z]
-        size = values.get("size")
-
-        for dim, size_dim in enumerate(size):
-            if size_dim == 0:
-                boundaries[dim] = Boundary.periodic()
-
-        return BoundarySpec(x=boundaries[0], y=boundaries[1], z=boundaries[2])
-
     def _post_init_validators(self) -> None:
         """Call validators taking `self` that get run after init."""
-        validate_mode_plane_radius(
-            mode_spec=self.mode_spec, plane=self.plane, msg_prefix="'ModeSimulation'"
-        )
         _ = self._mode_solver
         _ = self.grid
 
@@ -242,6 +240,9 @@ class ModeSimulation(AbstractYeeGridSimulation):
     def run_local(self):
         """Run locally."""
         from .data.sim_data import ModeSimulationData
+
+        # repeat the calculation every time, in case use_local_subpixel changed
+        self._invalidate_solver_cache()
 
         modes_raw = self._mode_solver.data_raw
         return ModeSimulationData(simulation=self, modes_raw=modes_raw)
@@ -268,7 +269,7 @@ class ModeSimulation(AbstractYeeGridSimulation):
         if grid_spec.auto_grid_used and grid_spec.wavelength is None:
             min_wvl = C_0 / np.max(self.freqs)
             log.info(
-                "Auto meshing using wavelength {min_wvl:1.4f} defined from "
+                f"Auto meshing using wavelength {min_wvl:1.4f} defined from "
                 "largest of 'ModeSimulation.freqs'."
             )
             grid_spec = grid_spec.updated_copy(wavelength=min_wvl)
@@ -367,6 +368,75 @@ class ModeSimulation(AbstractYeeGridSimulation):
         )
         return mode_sim
 
+    def plot(
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        source_alpha: Optional[float] = 0,
+        monitor_alpha: Optional[float] = 0,
+        lumped_element_alpha: Optional[float] = 0,
+        hlim: Optional[tuple[float, float]] = None,
+        vlim: Optional[tuple[float, float]] = None,
+        fill_structures: bool = True,
+        **patch_kwargs,
+    ) -> Ax:
+        """Plot the mode simulation. If any of ``x``, ``y``, or ``z`` is provided, the potentially
+        larger FDTD simulation containing the mode plane is plotted at the desired location.
+        Otherwise, the mode plane is plotted by default.
+
+        Parameters
+        ----------
+        fill_structures : bool = True
+            Whether to fill structures with color or just draw outlines.
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        source_alpha : float = 0
+            Opacity of the sources. If ``None``, uses Tidy3d default.
+        monitor_alpha : float = 0
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = 0
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        if x is not None or y is not None or z is not None:
+            return super().plot(
+                x=x,
+                y=y,
+                z=z,
+                ax=ax,
+                source_alpha=source_alpha,
+                monitor_alpha=monitor_alpha,
+                lumped_element_alpha=lumped_element_alpha,
+                hlim=hlim,
+                vlim=vlim,
+                fill_structures=fill_structures,
+                **patch_kwargs,
+            )
+        return self._mode_solver.plot(
+            ax=ax,
+            hlim=hlim,
+            vlim=vlim,
+            fill_structures=fill_structures,
+            **patch_kwargs,
+        )
+
     def plot_mode_plane(
         self,
         ax: Ax = None,
@@ -395,8 +465,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_eps_mode_plane(
         self,
-        freq: float = None,
-        alpha: float = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot the mode plane simulation's components.
@@ -428,8 +498,8 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def plot_structures_eps_mode_plane(
         self,
-        freq: float = None,
-        alpha: float = None,
+        freq: Optional[float] = None,
+        alpha: Optional[float] = None,
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
@@ -511,3 +581,5 @@ class ModeSimulation(AbstractYeeGridSimulation):
 
     def validate_pre_upload(self, source_required: bool = False):
         self._mode_solver.validate_pre_upload(source_required=source_required)
+
+    _boundaries_for_zero_dims = validate_boundaries_for_zero_dims(warn_on_change=False)

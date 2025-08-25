@@ -1,8 +1,11 @@
 """Tests adjoint plugin."""
 
+from __future__ import annotations
+
 import builtins
 import time
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Optional
 
 import gdstk
 import h5py
@@ -12,11 +15,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
-import tidy3d as td
 import trimesh
 from jax import grad
 from jax.test_util import check_grads
 from numpy.testing import assert_allclose
+from xarray import DataArray
+
+import tidy3d as td
 from tidy3d.exceptions import AdjointError, DataError, Tidy3dKeyError
 from tidy3d.plugins.adjoint.components import simulation
 from tidy3d.plugins.adjoint.components.data.data_array import (
@@ -55,16 +60,16 @@ from tidy3d.plugins.adjoint.utils.penalty import ErosionDilationPenalty, RadiusP
 from tidy3d.plugins.adjoint.web import run, run_async, run_async_local, run_local
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web.api.container import BatchData
-from xarray import DataArray
 
 from ..test_components.test_custom import CUSTOM_MEDIUM
 from ..utils import AssertLogLevel, run_async_emulated, run_emulated
 
-TMP_PATH = None
 FWD_SIM_DATA_FILE = "adjoint_grad_data_fwd.hdf5"
 SIM_VJP_FILE = "adjoint_sim_vjp_file.hdf5"
 RUN_FILE = "simulation.hdf5"
 NUM_PROC_PARALLEL = 2
+
+EMULATED_BASE_DIR = None
 
 EPS = 2.0
 SIZE = (1.0, 2.0, 3.0)
@@ -85,12 +90,10 @@ src = td.PointDipole(
 
 
 @pytest.fixture
-def use_emulated_run(monkeypatch, tmp_path_factory):
+def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
-    global TMP_PATH
     import tidy3d.plugins.adjoint.web as adjoint_web
 
-    TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
     monkeypatch.setattr(td.web, "run", run_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_fwd", run_emulated_fwd)
@@ -98,12 +101,10 @@ def use_emulated_run(monkeypatch, tmp_path_factory):
 
 
 @pytest.fixture
-def use_emulated_run_async(monkeypatch, tmp_path_factory):
+def use_emulated_run_async(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
-    global TMP_PATH
     import tidy3d.plugins.adjoint.web as adjoint_web
 
-    TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
     monkeypatch.setattr(td.web, "run_async", run_async_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_fwd", run_async_emulated_fwd)
@@ -138,9 +139,14 @@ def run_emulated_fwd(
     sim_data_orig.to_file(path)
     sim_data_orig = td.SimulationData.from_file(path)
 
+    # remember where we wrote the forward data
+    global EMULATED_BASE_DIR
+    path_dir = Path(path).parent
+    EMULATED_BASE_DIR = path_dir
+
     # gradient data stored for later use
     jax_sim_data_store = JaxSimulationData.from_sim_data(sim_data_store, jax_info)
-    jax_sim_data_store.to_file(str(TMP_PATH / FWD_SIM_DATA_FILE))
+    jax_sim_data_store.to_file(str(path_dir / FWD_SIM_DATA_FILE))
 
     task_id = "test"
     return sim_data_orig, task_id
@@ -154,15 +160,22 @@ def run_emulated_bwd(
     folder_name: str,
     callback_url: str,
     verbose: bool,
-    num_proc: int = None,
+    num_proc: Optional[int] = None,
+    path_dir: Optional[str] = None,
 ) -> JaxSimulation:
     """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
 
     if num_proc is None:
         num_proc = NUM_PROC_PARALLEL
 
+    if path_dir is None:
+        global EMULATED_BASE_DIR
+        path_dir = EMULATED_BASE_DIR
+
+    path_dir = Path(path_dir)
+
     # Forward data
-    sim_data_fwd = JaxSimulationData.from_file(str(TMP_PATH / FWD_SIM_DATA_FILE))
+    sim_data_fwd = JaxSimulationData.from_file(str(path_dir / FWD_SIM_DATA_FILE))
     grad_data_fwd = sim_data_fwd.grad_data_symmetry
     grad_eps_data_fwd = sim_data_fwd.grad_eps_data_symmetry
 
@@ -170,7 +183,7 @@ def run_emulated_bwd(
     sim_data_adj = run_emulated(
         simulation=sim_adj,
         task_name=str(task_name),
-        path=str(TMP_PATH / RUN_FILE),
+        path=str(path_dir / RUN_FILE),
     )
 
     jax_sim_data_adj = JaxSimulationData.from_sim_data(sim_data_adj, jax_info_adj)
@@ -182,21 +195,21 @@ def run_emulated_bwd(
     )
 
     # write VJP sim to and from file to emulate webapi download and loading
-    sim_vjp.to_file(str(TMP_PATH / SIM_VJP_FILE))
-    sim_vjp = JaxSimulation.from_file(str(TMP_PATH / SIM_VJP_FILE))
+    sim_vjp.to_file(str(path_dir / SIM_VJP_FILE))
+    sim_vjp = JaxSimulation.from_file(str(path_dir / SIM_VJP_FILE))
 
     return sim_vjp
 
 
 # Emulated forward and backward run functions
 def run_async_emulated_fwd(
-    simulations: Tuple[td.Simulation, ...],
-    jax_infos: Tuple[JaxInfo, ...],
+    simulations: tuple[td.Simulation, ...],
+    jax_infos: tuple[JaxInfo, ...],
     folder_name: str,
     path_dir: str,
     callback_url: str,
     verbose: bool,
-) -> Tuple[BatchData, Dict[str, str]]:
+) -> tuple[BatchData, dict[str, str]]:
     """Runs the forward simulation on our servers, stores the gradient data for later."""
 
     sim_datas_orig = {}
@@ -219,14 +232,14 @@ def run_async_emulated_fwd(
 
 
 def run_async_emulated_bwd(
-    simulations: Tuple[td.Simulation, ...],
-    jax_infos: Tuple[JaxInfo, ...],
+    simulations: tuple[td.Simulation, ...],
+    jax_infos: tuple[JaxInfo, ...],
     folder_name: str,
     path_dir: str,
     callback_url: str,
     verbose: bool,
-    parent_tasks: List[List[str]],
-) -> List[JaxSimulation]:
+    parent_tasks: list[list[str]],
+) -> list[JaxSimulation]:
     """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
 
     sim_vjps_orig = []
@@ -249,7 +262,7 @@ def run_async_emulated_bwd(
 
 def make_sim(
     permittivity: float,
-    size: Tuple[float, float, float],
+    size: tuple[float, float, float],
     vertices: tuple,
     base_eps_val: float,
     custom_medium: bool = True,
@@ -288,12 +301,12 @@ def make_sim(
     # custom medium
     Nx, Ny, Nz = 10, 1, 10
     (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box1.bounds
-    coords = dict(
-        x=np.linspace(xmin, xmax, Nx).tolist(),
-        y=np.linspace(ymin, ymax, Ny).tolist(),
-        z=np.linspace(zmin, zmax, Nz).tolist(),
-        f=(FREQ0,),
-    )
+    coords = {
+        "x": np.linspace(xmin, xmax, Nx).tolist(),
+        "y": np.linspace(ymin, ymax, Ny).tolist(),
+        "z": np.linspace(zmin, zmax, Nz).tolist(),
+        "f": (FREQ0,),
+    }
 
     jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
     values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
@@ -451,7 +464,7 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
     return ret_value
 
 
-def test_run_flux(use_emulated_run):
+def test_run_flux(use_emulated_run, tmp_path):
     td.config.logging_level = "ERROR"
 
     def make_components(eps, size, vertices, base_eps_val):
@@ -466,7 +479,7 @@ def test_run_flux(use_emulated_run):
                 )
             ]
         )
-        sim_data = run_local(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+        sim_data = run_local(sim, task_name="test", path=str(tmp_path / RUN_FILE))
         mnt_data = sim_data[MNT_NAME + "3"]
         flat_components = {}
         for key, fld in mnt_data.field_components.items():
@@ -558,27 +571,37 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
 
 
 @pytest.mark.parametrize("local", (True, False))
-def test_adjoint_pipeline_2d(local, use_emulated_run):
+def test_adjoint_pipeline_2d(local, use_emulated_run, tmp_path):
     run_fn = run_local if local else run
 
-    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    sim = make_sim(
+        permittivity=EPS,
+        size=SIZE,
+        vertices=VERTICES,
+        base_eps_val=BASE_EPS_VAL,
+        custom_medium=False,
+    )
 
     sim_size_2d = list(sim.size)
     sim_size_2d[1] = 0
     sim = sim.updated_copy(size=sim_size_2d)
 
-    _ = run_fn(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+    _ = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     def f(permittivity, size, vertices, base_eps_val):
         sim = make_sim(
-            permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
+            permittivity=permittivity,
+            size=size,
+            vertices=vertices,
+            base_eps_val=base_eps_val,
+            custom_medium=False,
         )
         sim_size_2d = list(sim.size)
         sim_size_2d[1] = 0
 
         sim = sim.updated_copy(size=sim_size_2d)
 
-        sim_data = run_fn(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+        sim_data = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -586,20 +609,20 @@ def test_adjoint_pipeline_2d(local, use_emulated_run):
     df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
 
 
-def test_adjoint_setup_fwd(use_emulated_run):
+def test_adjoint_setup_fwd(use_emulated_run, tmp_path):
     """Test that the forward pass works as expected."""
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     sim_data_orig, (task_id_fwd) = run.fwd(
         simulation=sim,
         task_name="test",
         folder_name="default",
-        path=str(TMP_PATH / RUN_FILE),
+        path=str(tmp_path / RUN_FILE),
         callback_url=None,
         verbose=False,
     )
 
 
-def _test_adjoint_setup_adj(use_emulated_run):
+def _test_adjoint_setup_adj(use_emulated_run, tmp_path):
     """Test that the adjoint pass works as expected."""
     sim_orig = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
 
@@ -608,7 +631,7 @@ def _test_adjoint_setup_adj(use_emulated_run):
         simulation=sim_orig,
         task_name="test",
         folder_name="default",
-        path=str(TMP_PATH / RUN_FILE),
+        path=str(tmp_path / RUN_FILE),
         callback_url=None,
     )
 
@@ -618,14 +641,14 @@ def _test_adjoint_setup_adj(use_emulated_run):
     for mode_data in sim_data_vjp.output_data:
         new_values = 0 * np.array(mode_data.amps.values)
         new_values[0, 0, 0] = 1 + 1j
-        amps_vjp = mode_data.amps.copy(update=dict(values=new_values.tolist()))
-        mode_data_vjp = mode_data.copy(update=dict(amps=amps_vjp))
+        amps_vjp = mode_data.amps.copy(update={"values": new_values.tolist()})
+        mode_data_vjp = mode_data.copy(update={"amps": amps_vjp})
         output_data_vjp.append(mode_data_vjp)
-    sim_data_vjp = sim_data_vjp.copy(update=dict(output_data=output_data_vjp))
+    sim_data_vjp = sim_data_vjp.copy(update={"output_data": output_data_vjp})
     (sim_vjp,) = run.bwd(
         task_name="test",
         folder_name="default",
-        path=str(TMP_PATH / RUN_FILE),
+        path=str(tmp_path / RUN_FILE),
         callback_url=None,
         res=(sim_data_fwd,),
         sim_data_vjp=sim_data_vjp,
@@ -786,7 +809,7 @@ def test_jax_data_array():
     b = [2, 3]
     c = [4]
     values = np.random.random((len(a), len(b), len(c)))
-    coords = dict(a=a, b=b, c=c)
+    coords = {"a": a, "b": b, "c": c}
 
     # validate missing coord
     # with pytest.raises(AdjointError):
@@ -840,7 +863,7 @@ def test_jax_data_array():
     with pytest.raises(Tidy3dKeyError):
         da.interp(d=3)
 
-    da1d = JaxDataArray(values=[0.0, 1.0, 2.0, 3.0], coords=dict(x=[0, 1, 2, 3]))
+    da1d = JaxDataArray(values=[0.0, 1.0, 2.0, 3.0], coords={"x": [0, 1, 2, 3]})
     assert np.isclose(da1d.interp(x=0.5), 0.5)
 
     # duplicate coordinates
@@ -854,7 +877,7 @@ def test_jax_data_array():
     c = [4, 6]
     shape = (len(a), len(b), len(c))
     values = np.random.random(shape)
-    coords = dict(a=a, b=b, c=c)
+    coords = {"a": a, "b": b, "c": c}
     da = JaxDataArray(values=values, coords=coords)
     da2 = da.sel(b=[3, 4])
     assert da2.shape == (3, 2, 2)
@@ -867,7 +890,7 @@ def test_jax_data_array():
     n = 11
     cs = list(range(n))
     vals = np.random.uniform(0, 1, (n, n, 1, 1, 2))
-    coords = dict(x=cs, y=cs, z=[0], f=[0], direction=["+", "-"])
+    coords = {"x": cs, "y": cs, "z": [0], "f": [0], "direction": ["+", "-"]}
 
     jda = JaxDataArray(values=vals, coords=coords)
     xda = DataArray(data=vals, coords=coords)
@@ -935,11 +958,11 @@ def test_jax_data_array():
     assert_allclose(xda_vals.coords["x"], jda_vals.coords["x"])
 
 
-def test_jax_sim_data(use_emulated_run):
+def test_jax_sim_data(use_emulated_run, tmp_path):
     """Test mechanics of the JaxSimulationData."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+    sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     for i in range(len(sim.output_monitors)):
         mnt_name = MNT_NAME + str(i + 1)
@@ -1061,7 +1084,7 @@ def test_strict_types():
         _ = JaxBox(size=(1, 1, [1, 2]), center=(0, 0, 0))
 
 
-def _test_polyslab_box(use_emulated_run):
+def _test_polyslab_box(use_emulated_run, tmp_path):
     """Make sure box made with polyslab gives equivalent gradients.
     Note: doesn't pass now since JaxBox samples the permittivity inside and outside the box,
     and a random permittivity data is created by the emulated run function. JaxPolySlab just
@@ -1133,7 +1156,7 @@ def _test_polyslab_box(use_emulated_run):
             ],
         )
 
-        sim_data = run(sim, task_name="test")
+        sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -1161,7 +1184,7 @@ def _test_polyslab_box(use_emulated_run):
 
 
 @pytest.mark.parametrize("sim_size_axis", [0, 10])
-def test_polyslab_2d(sim_size_axis, use_emulated_run):
+def test_polyslab_2d(sim_size_axis, use_emulated_run, tmp_path):
     """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
 
     np.random.seed(0)
@@ -1229,7 +1252,7 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
             ],
         )
 
-        sim_data = run(sim, task_name="test")
+        sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -1241,7 +1264,7 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
 
 
 @pytest.mark.parametrize("local", (True, False))
-def test_adjoint_run_async(local, use_emulated_run_async):
+def test_adjoint_run_async(local, use_emulated_run_async, tmp_path):
     """Test differnetiating thorugh async adjoint runs"""
 
     run_fn = run_async_local if local else run_async
@@ -1249,14 +1272,18 @@ def test_adjoint_run_async(local, use_emulated_run_async):
     def make_sim_simple(permittivity: float) -> JaxSimulation:
         """Make a sim as a function of a single parameter."""
         return make_sim(
-            permittivity=permittivity, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL
+            permittivity=permittivity,
+            size=SIZE,
+            vertices=VERTICES,
+            base_eps_val=BASE_EPS_VAL,
+            custom_medium=False,
         )
 
     def f(x):
         """Objective function to differentiate."""
 
         sims = [make_sim_simple(permittivity=x + 1.0)]
-        sim_data_list = run_fn(sims, path_dir=str(TMP_PATH))
+        sim_data_list = run_fn(sims, path_dir=str(tmp_path))
 
         result = 0.0
         for sim_data in sim_data_list:
@@ -1295,7 +1322,7 @@ def test_diff_data_angles(axis):
     values = (1 + 1j) * np.random.random((len(ORDERS_X), len(ORDERS_Y), len(FS)))
     sim_size = [SIZE_2D, SIZE_2D]
     bloch_vecs = [0, 0]
-    data = JaxDataArray(values=values, coords=dict(orders_x=ORDERS_X, orders_y=ORDERS_Y, f=FS))
+    data = JaxDataArray(values=values, coords={"orders_x": ORDERS_X, "orders_y": ORDERS_Y, "f": FS})
 
     diff_data = JaxDiffractionData(
         monitor=DIFFRACTION_MONITOR,
@@ -1315,21 +1342,21 @@ def test_diff_data_angles(axis):
     assert np.isclose(zeroth_order_theta, 0.0)
 
 
-def _test_error_regular_web():
+def _test_error_regular_web(tmp_path):
     """Test that a custom error is raised if running tidy3d through web.run()"""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     import tidy3d.web as web
 
     with pytest.raises(ValueError):
-        web.run(sim, task_name="test")
+        web.run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
 
 def test_value_filter():
     """Ensure value filter works as expected."""
 
     values = np.array([1, 0.5 * VALUE_FILTER_THRESHOLD, 2 * VALUE_FILTER_THRESHOLD, 0])
-    coords = dict(x=list(range(4)))
+    coords = {"x": list(range(4))}
     data = JaxDataArray(values=values, coords=coords)
 
     values_after, _ = data.nonzero_val_coords
@@ -1360,13 +1387,13 @@ def test_save_load_simdata(use_emulated_run, tmp_path):
     """Make sure a simulation data can be saved and loaded from file and retain info."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+    sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
     sim_data.to_file(str(tmp_path / "adjoint_simdata.hdf5"))
     sim_data2 = JaxSimulationData.from_file(str(tmp_path / "adjoint_simdata.hdf5"))
     assert sim_data == sim_data2
 
 
-def _test_polyslab_scale(use_emulated_run):
+def _test_polyslab_scale(use_emulated_run, tmp_path):
     """Make sure box made with polyslab gives equivalent gradients (note, doesn't pass now)."""
 
     nums = np.logspace(np.log10(3), 3, 13)
@@ -1431,7 +1458,7 @@ def _test_polyslab_scale(use_emulated_run):
                 ],
             )
 
-            sim_data = run(sim, task_name="test")
+            sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
             amp = extract_amp(sim_data)
             return objective(amp)
 
@@ -1479,12 +1506,12 @@ def _test_custom_medium_3D(use_emulated_run):
     def make_custom_medium(Nx: int, Ny: int, Nz: int) -> JaxCustomMedium:
         # custom medium
         (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
-        coords = dict(
-            x=np.linspace(xmin, xmax, Nx).tolist(),
-            y=np.linspace(ymin, ymax, Ny).tolist(),
-            z=np.linspace(zmin, zmax, Nz).tolist(),
-            f=[FREQ0],
-        )
+        coords = {
+            "x": np.linspace(xmin, xmax, Nx).tolist(),
+            "y": np.linspace(ymin, ymax, Ny).tolist(),
+            "z": np.linspace(zmin, zmax, Nz).tolist(),
+            "f": [FREQ0],
+        }
 
         values = np.random.random((Nx, Ny, Nz, 1))
         eps_ii = JaxDataArray(values=values, coords=coords)
@@ -1514,12 +1541,12 @@ def test_custom_medium_size(use_emulated_run):
 
         # custom medium
         (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
-        coords = dict(
-            x=np.linspace(xmin, xmax, Nx).tolist(),
-            y=np.linspace(ymin, ymax, Ny).tolist(),
-            z=np.linspace(zmin, zmax, Nz).tolist(),
-            f=[FREQ0],
-        )
+        coords = {
+            "x": np.linspace(xmin, xmax, Nx).tolist(),
+            "y": np.linspace(ymin, ymax, Ny).tolist(),
+            "z": np.linspace(zmin, zmax, Nz).tolist(),
+            "f": [FREQ0],
+        }
 
         values = np.random.random((Nx, Ny, Nz, 1))
         eps_ii = JaxDataArray(values=values, coords=coords)
@@ -1549,12 +1576,12 @@ def test_jax_sim_io(tmp_path):
 
         # custom medium
         (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
-        coords = dict(
-            x=np.linspace(xmin, xmax, Nx).tolist(),
-            y=np.linspace(ymin, ymax, Ny).tolist(),
-            z=np.linspace(zmin, zmax, Nz).tolist(),
-            f=[FREQ0],
-        )
+        coords = {
+            "x": np.linspace(xmin, xmax, Nx).tolist(),
+            "y": np.linspace(ymin, ymax, Ny).tolist(),
+            "z": np.linspace(zmin, zmax, Nz).tolist(),
+            "f": [FREQ0],
+        }
 
         values = np.random.random((Nx, Ny, Nz, 1)) + 1.0
         eps_ii = JaxDataArray(values=values, coords=coords)
@@ -1678,17 +1705,17 @@ def test_adjoint_filter_sizes(input_size_y, log_level_expected):
         _filter.evaluate(signal_in)
 
 
-def test_sim_data_plot_field(use_emulated_run):
+def test_sim_data_plot_field(use_emulated_run, tmp_path):
     """Test splitting of regular simulation data into user and server data."""
 
     jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    jax_sim_data = run(jax_sim, task_name="test")
+    jax_sim_data = run(jax_sim, task_name="test", path=str(tmp_path / RUN_FILE))
     ax = jax_sim_data.plot_field("field", "Ez", "real", f=1e14)
     # plt.show()
     assert len(ax.collections) == 1
 
 
-def test_pytreedef_errors(use_emulated_run):
+def test_pytreedef_errors(use_emulated_run, tmp_path):
     """Fix errors that occur when jax doesnt know how to handle array types in aux_data."""
 
     vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
@@ -1748,7 +1775,7 @@ def test_pytreedef_errors(use_emulated_run):
             boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         )
 
-        sd = run(sim, task_name="test")
+        sd = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
         return jnp.sum(jnp.abs(jnp.array(sd["test"].amps.values)))
 
@@ -1791,10 +1818,8 @@ def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time
     assert sim_adj.run_time == run_time_expected
 
 
-@pytest.mark.parametrize("has_adj_src, log_level_expected", [(True, None), (False, "WARNING")])
-def test_no_adjoint_sources(
-    monkeypatch, use_emulated_run, tmp_path, has_adj_src, log_level_expected
-):
+@pytest.mark.parametrize("has_adj_src", [True, False])
+def test_no_adjoint_sources(monkeypatch, use_emulated_run, tmp_path, has_adj_src):
     """Make sure warning (not error) if no adjoint sources."""
 
     def make_sim(eps):
@@ -1826,8 +1851,9 @@ def test_no_adjoint_sources(
     data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     # check whether we got a warning for no sources?
-    with AssertLogLevel(log_level_expected, contains_str="No adjoint sources"):
-        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
+    if not has_adj_src:
+        with AssertLogLevel("WARNING", contains_str="No adjoint sources"):
+            data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
 
     jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
 
@@ -1884,7 +1910,7 @@ def hide_jax(monkeypatch, request):
 
     def mocked_import(name, *args, **kwargs):
         if name in ["jax", "jax.interpreters.ad", "jax.interpreters.ad.JVPTracer"]:
-            raise ImportError()
+            raise ImportError
         return import_orig(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", mocked_import)
@@ -1941,11 +1967,11 @@ def test_package_flux():
     """Test handling of packaging flux data for single and multi-freq."""
 
     value = 1.0
-    da_single = JaxDataArray(values=[value], coords=dict(f=[1.0]))
+    da_single = JaxDataArray(values=[value], coords={"f": [1.0]})
     res_single = JaxFieldData.package_flux_results(None, da_single)
     assert res_single == value
 
-    da_multi = JaxDataArray(values=[1.0, 2.0], coords=dict(f=[1.0, 2.0]))
+    da_multi = JaxDataArray(values=[1.0, 2.0], coords={"f": [1.0, 2.0]})
     res_multi = JaxFieldData.package_flux_results(None, da_multi)
     assert res_multi == da_multi
 
@@ -1973,11 +1999,11 @@ def test_vertices_warning():
         jax.grad(f)(np.random.random((5, 2)).tolist())
 
 
-def test_no_poynting(use_emulated_run):
+def test_no_poynting(use_emulated_run, tmp_path):
     """Test that poynting vector fails with custom error."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+    sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     mnt_name_static = "field"
     mnt_name_differentiable = MNT_NAME + "3"
@@ -2011,20 +2037,6 @@ def test_to_gds(tmp_path):
     assert len(polys) > 4
     polys = sim.to_gdstk(z=0, permittivity_threshold=6, frequency=200e14)
     assert len(polys) > 0
-
-    # to_gdspy() does not support custom medium
-    sim = make_sim(
-        permittivity=EPS,
-        size=SIZE,
-        vertices=VERTICES,
-        base_eps_val=BASE_EPS_VAL,
-        custom_medium=False,
-    )
-    polys = sim.to_gdspy(z=0)
-    assert len(polys) > 0
-
-    polys = sim.to_gdspy(y=0)
-    assert len(polys) > 4
 
 
 @pytest.mark.parametrize(
@@ -2077,13 +2089,13 @@ class TestJaxComplexPolySlab:
         return np.deg2rad(sidewall_angle_deg)
 
     def test_matches_complexpolyslab(self, vertices, sidewall_angle, dilation):
-        kwargs = dict(
-            vertices=vertices,
-            sidewall_angle=sidewall_angle,
-            slab_bounds=self.slab_bounds,
-            dilation=dilation,
-            axis=POLYSLAB_AXIS,
-        )
+        kwargs = {
+            "vertices": vertices,
+            "sidewall_angle": sidewall_angle,
+            "slab_bounds": self.slab_bounds,
+            "dilation": dilation,
+            "axis": POLYSLAB_AXIS,
+        }
         cp = ComplexPolySlab(**kwargs)
         jcp = JaxComplexPolySlab(**kwargs)
 

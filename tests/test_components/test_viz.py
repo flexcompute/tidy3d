@@ -1,24 +1,21 @@
 """Tests visualization operations."""
 
+from __future__ import annotations
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pydantic.v1 as pd
 import pytest
+
 import tidy3d as td
 from tidy3d import Box, Medium, Simulation, Structure
-from tidy3d.components.viz import Polygon, set_default_labels_and_title
+from tidy3d.components.viz import Polygon, restore_matplotlib_rcparams, set_default_labels_and_title
 from tidy3d.constants import inf
 from tidy3d.exceptions import Tidy3dKeyError
 
+from ..utils import AssertLogLevel
 
-@pytest.fixture(scope="module", autouse=True)
-def mpl_config():
-    """Configure matplotlib non-interactive backend for all tests in this module."""
-    original_backend = mpl.get_backend()
-    mpl.use("Agg")
-    yield
-    plt.close("all")
-    mpl.use(original_backend)
+pytestmark = pytest.mark.usefixtures("mpl_config_noninteractive")
 
 
 def test_make_polygon_dict():
@@ -198,18 +195,17 @@ def plot_with_multi_viz_spec(alphas, facecolors, edgecolors, rng, use_viz_spec=T
         td.VisualizationSpec(
             facecolor=facecolors[idx], edgecolor=edgecolors[idx], alpha=alphas[idx]
         )
-        for idx in range(0, len(alphas))
+        for idx in range(len(alphas))
     ]
-    media = [td.Medium(permittivity=2.25) for idx in range(0, len(viz_specs))]
+    media = [td.Medium(permittivity=2.25) for idx in range(len(viz_specs))]
     if use_viz_spec:
         media = [
-            td.Medium(permittivity=2.25, viz_spec=viz_specs[idx])
-            for idx in range(0, len(viz_specs))
+            td.Medium(permittivity=2.25, viz_spec=viz_specs[idx]) for idx in range(len(viz_specs))
         ]
 
     structures = []
-    for idx in range(0, len(viz_specs)):
-        center = tuple(list(rng.uniform(-3, 3, 2)) + [0])
+    for idx in range(len(viz_specs)):
+        center = (*list(rng.uniform(-3, 3, 2)), 0)
         size = tuple(rng.uniform(1, 2, 3))
         box = td.Box(center=center, size=size)
 
@@ -224,6 +220,17 @@ def plot_with_multi_viz_spec(alphas, facecolors, edgecolors, rng, use_viz_spec=T
 
     sim.plot(z=0.0)
     plt.show()
+
+
+def test_no_matlab_install(monkeypatch):
+    """Test that the `VisualizationSpec` only throws a warning on validation if matplotlib is not installed."""
+    monkeypatch.setattr("tidy3d.components.viz.visualization_spec.MATPLOTLIB_IMPORTED", False)
+
+    EXPECTED_WARNING_MSG_PIECE = (
+        "matplotlib was not successfully imported, but is required to validate colors"
+    )
+    with AssertLogLevel("WARNING", contains_str=EXPECTED_WARNING_MSG_PIECE):
+        viz_spec = td.VisualizationSpec(facecolor="green")
 
 
 @pytest.mark.skip(reason="Skipping test for CI, but useful for debugging locally with graphics.")
@@ -325,3 +332,13 @@ def test_sim_plot_structures_fill():
     for patch in structure_patches[:1]:
         assert patch.get_fill(), "Should be filled when True"
         assert patch.get_facecolor() != "none", "Face color should be set"
+
+
+def test_tidy3d_matplotlib_style_application_on_import():
+    """Test restore_matplotlib_rcparams() to reset the automatically applied matplotlib.rcParams"""
+    assert mpl.rcParams.get("axes.prop_cycle").by_key()["color"][0] == "#176737"
+    restore_matplotlib_rcparams()
+    assert (
+        mpl.rcParams.get("axes.prop_cycle").by_key()["color"][0]
+        == mpl.rcParamsDefault.get("axes.prop_cycle").by_key()["color"][0]
+    )

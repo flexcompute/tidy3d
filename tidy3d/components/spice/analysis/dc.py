@@ -2,11 +2,12 @@
 This class defines standard SPICE electrical_analysis types (electrical simulations configurations).
 """
 
+from __future__ import annotations
+
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-
-from ....constants import KELVIN
+from tidy3d.constants import KELVIN
 
 
 class ChargeToleranceSpec(Tidy3dBaseModel):
@@ -40,7 +41,7 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
     )
 
     ramp_up_iters: pd.PositiveInt = pd.Field(
-        default=5,
+        default=1,
         title="Ramp-up iterations.",
         description="In order to help in start up, quantities such as doping "
         "are ramped up until they reach their specified value. This parameter "

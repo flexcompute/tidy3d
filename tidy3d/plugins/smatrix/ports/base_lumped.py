@@ -1,17 +1,20 @@
 """Class and custom data array for representing a scattering matrix port based on lumped circuit elements."""
 
+from __future__ import annotations
+
 from abc import abstractmethod
 from typing import Optional
 
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.geometry.utils_2d import snap_coordinate_to_grid
-from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import LumpedElementType
-from ....components.monitor import FieldMonitor
-from ....components.types import Complex, Coordinate, FreqArray
-from ....constants import OHM
+from tidy3d.components.base import cached_property
+from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
+from tidy3d.components.grid.grid import Grid, YeeGrid
+from tidy3d.components.lumped_element import LumpedElementType
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.types import Complex, Coordinate, FreqArray
+from tidy3d.constants import OHM
+
 from .base_terminal import AbstractTerminalPort
 
 DEFAULT_PORT_NUM_CELLS = 3
@@ -64,19 +67,23 @@ class AbstractLumpedPort(AbstractTerminalPort):
 
     @cached_property
     @abstractmethod
-    def to_load(self, snap_center: float = None) -> LumpedElementType:
+    def to_load(self, snap_center: Optional[float] = None) -> LumpedElementType:
         """Create a load from the lumped port."""
 
     @abstractmethod
-    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
+    def to_voltage_monitor(
+        self, freqs: FreqArray, snap_center: Optional[float] = None
+    ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
 
     @abstractmethod
-    def to_current_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
+    def to_current_monitor(
+        self, freqs: FreqArray, snap_center: Optional[float] = None
+    ) -> FieldMonitor:
         """Field monitor to compute port current."""
 
-    def to_field_monitors(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+    def to_monitors(
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> list[FieldMonitor]:
         """Field monitors to compute port voltage and current."""
         return [

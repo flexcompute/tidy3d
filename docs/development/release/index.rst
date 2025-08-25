@@ -16,6 +16,5 @@ This page contains all the relevant information relating to each version release
 
 
 .. include:: /development/release/flow.rst
-.. include:: /development/release/version.rst
 .. include:: /development/release/documentation.rst
 .. include:: /development/release/notebooks.rst

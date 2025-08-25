@@ -82,7 +82,7 @@ Managing Optional Dependencies On-The-Fly
 
 If you look within ``pyproject.toml``, it is possible to see that we have different packages relating to different functionalities that are optional.
 
-Some examples from these are ``[vtk, jax, trimesh, gdstk, gdspy]`` etc. What we want to do is improve the import speed of the core-package in order to minimise small core operations. As we scale into a bigger package, decoupling these type of imports from the total pacakge import is essential.
+Some examples from these are ``[vtk, jax, trimesh, gdstk]`` etc. What we want to do is improve the import speed of the core-package in order to minimise small core operations. As we scale into a bigger package, decoupling these type of imports from the total pacakge import is essential.
 
 
 Benchmarking Package Import

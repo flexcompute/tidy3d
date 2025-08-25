@@ -121,4 +121,3 @@ Additional Methods
    tidy3d.web.api.asynchronous.run_async
    tidy3d.web.core.task_info.TaskInfo
    tidy3d.web.core.task_info.TaskStatus
-

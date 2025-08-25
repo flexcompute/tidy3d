@@ -17,6 +17,8 @@ API |:computer:|
     monitors
     output_data
     analytic_beams
+    utilities
+    mesh/index
     heat/index
     charge/index
     eme/index
@@ -27,4 +29,4 @@ API |:computer:|
     constants
     abstract_base
     abstract_models
-
+    viz

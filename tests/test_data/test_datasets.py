@@ -1,4 +1,6 @@
-"""Tests tidy3d/components/data/dataset.py"""
+"""Tests tidy3d/components/tests//dataset.py"""
+
+from __future__ import annotations
 
 import numpy as np
 import pydantic.v1 as pd
@@ -10,7 +12,7 @@ from ..utils import AssertLogLevel, cartesian_to_unstructured
 np.random.seed(4)
 
 
-@pytest.mark.parametrize("dataset_type_ind", [0, 1])
+@pytest.mark.parametrize("dataset_type_ind", [0, 1, 2])
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     import tidy3d as td
@@ -25,6 +27,11 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         dataset_type = td.TriangularGridDataset
         values_type = td.IndexedVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
+
+    if dataset_type_ind == 2:
+        dataset_type = td.TriangularGridDataset
+        values_type = td.IndexedTimeDataArray
+        extra_dims = {"t": [0, 1, 2]}
 
     # basic create
     tri_grid_points = td.PointDataArray(
@@ -58,7 +65,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     with pytest.raises(pd.ValidationError):
         tri_grid_points_bad = td.PointDataArray(
             np.random.random((4, 3)),
-            coords=dict(index=np.arange(4), axis=np.arange(3)),
+            coords={"index": np.arange(4), "axis": np.arange(3)},
         )
 
         _ = dataset_type(
@@ -72,7 +79,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     # grid with degenerate cells
     tri_grid_cells_bad = td.CellDataArray(
         [[0, 1, 1], [1, 2, 3]],
-        coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
+        coords={"cell_index": np.arange(2), "vertex_index": np.arange(3)},
     )
 
     with AssertLogLevel("WARNING"):
@@ -108,7 +115,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     # invalid cell connections
     tri_grid_cells_bad = td.CellDataArray(
         [[0, 1, 2, 3]],
-        coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
+        coords={"cell_index": np.arange(1), "vertex_index": np.arange(4)},
     )
     with pytest.raises(pd.ValidationError):
         _ = dataset_type(
@@ -121,7 +128,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
 
     tri_grid_cells_bad = td.CellDataArray(
         [[0, 1, 5], [1, 2, 3]],
-        coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
+        coords={"cell_index": np.arange(2), "vertex_index": np.arange(3)},
     )
     with pytest.raises(pd.ValidationError):
         _ = dataset_type(
@@ -254,7 +261,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     _ = tri_grid_one_field.plot(vmin=-20, vmax=100)
     plt.close()
 
-    _ = tri_grid_one_field.plot(cbar_kwargs=dict(label="test"))
+    _ = tri_grid_one_field.plot(cbar_kwargs={"label": "test"})
     plt.close()
 
     _ = tri_grid_one_field.plot(cmap="RdBu")
@@ -322,7 +329,7 @@ def test_triangular_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     assert result.name == ds_name
 
 
-@pytest.mark.parametrize("dataset_type_ind", [0, 1])
+@pytest.mark.parametrize("dataset_type_ind", [0, 1, 2])
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     import tidy3d as td
@@ -337,6 +344,11 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
         dataset_type = td.TetrahedralGridDataset
         values_type = td.IndexedVoltageDataArray
         extra_dims = {"voltage": [0, 1, 2]}
+
+    if dataset_type_ind == 2:
+        dataset_type = td.TetrahedralGridDataset
+        values_type = td.IndexedTimeDataArray
+        extra_dims = {"t": [0, 1, 2]}
 
     # basic create
     tet_grid_points = td.PointDataArray(
@@ -373,7 +385,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     # wrong points dimensionality
     tet_grid_points_bad = td.PointDataArray(
         np.random.random((8, 2)),
-        coords=dict(index=np.arange(8), axis=np.arange(2)),
+        coords={"index": np.arange(8), "axis": np.arange(2)},
     )
     with pytest.raises(pd.ValidationError):
         _ = dataset_type(
@@ -385,7 +397,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     # grid with degenerate cells
     tet_grid_cells_bad = td.CellDataArray(
         [[0, 1, 1, 7], [0, 2, 3, 7], [0, 2, 2, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 5, 5, 7]],
-        coords=dict(cell_index=np.arange(6), vertex_index=np.arange(4)),
+        coords={"cell_index": np.arange(6), "vertex_index": np.arange(4)},
     )
 
     with AssertLogLevel("WARNING"):
@@ -419,7 +431,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
     # invalid cell connections
     tet_grid_cells_bad = td.CellDataArray(
         [[0, 1, 3], [0, 2, 3], [0, 2, 6], [0, 4, 6], [0, 4, 5], [0, 1, 5]],
-        coords=dict(cell_index=np.arange(6), vertex_index=np.arange(3)),
+        coords={"cell_index": np.arange(6), "vertex_index": np.arange(3)},
     )
     with pytest.raises(pd.ValidationError):
         _ = dataset_type(
@@ -430,7 +442,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, dataset_type_ind, no_vtk=False):
 
     tet_grid_cells_bad = td.CellDataArray(
         [[0, 1, 3, 17], [0, 2, 3, 7], [0, 2, 6, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 1, 5, 7]],
-        coords=dict(cell_index=np.arange(6), vertex_index=np.arange(4)),
+        coords={"cell_index": np.arange(6), "vertex_index": np.arange(4)},
     )
     with pytest.raises(pd.ValidationError):
         _ = dataset_type(
@@ -605,7 +617,7 @@ def test_cartesian_to_unstructured(nz, use_vtk, fill_value):
     z = np.linspace(-0.2, 0.15, nz)
     values = np.sin(x[:, None, None]) * np.cos(y[None, :, None]) * np.exp(z[None, None, :])
 
-    arr_c = td.SpatialDataArray(values, coords=dict(x=x, y=y, z=z))
+    arr_c = td.SpatialDataArray(values, coords={"x": x, "y": y, "z": z})
 
     arr_u_linear = cartesian_to_unstructured(arr_c, pert=0.1, method="linear", seed=123)
     arr_c_linear = arr_u_linear.interp(
@@ -686,7 +698,7 @@ def test_cell_values():
 
     tri_grid_values = td.IndexedVoltageDataArray(
         [[0.0, 0.0], [0, 0], [3, -3], [3, -3]],
-        coords=dict(index=np.arange(4), voltage=[-1, 1]),
+        coords={"index": np.arange(4), "voltage": [-1, 1]},
         name="test",
     )
 
@@ -723,7 +735,7 @@ def test_cell_values():
     )
 
     tet_grid_values = td.IndexedDataArray(
-        [0.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 3.0], coords=dict(index=np.arange(8)), name="test_tet"
+        [0.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 3.0], coords={"index": np.arange(8)}, name="test_tet"
     )
 
     tet_grid = td.TetrahedralGridDataset(
@@ -739,3 +751,19 @@ def test_cell_values():
     cell_values = tet_grid.get_cell_values()
     cell_vols = tet_grid.get_cell_volumes()
     assert np.dot(cell_values, cell_vols) == 1.5
+
+
+def test_from_vtk():
+    """Test that 2D and 3D vtk data can be loaded if `ignore_invalid_cells==True`."""
+    import tidy3d as td
+    from tidy3d.exceptions import DataError
+
+    _ = td.TetrahedralGridDataset.from_vtk("tests/data/gmsh.vtk", ignore_invalid_cells=True)
+
+    with pytest.raises(DataError):
+        _ = td.TetrahedralGridDataset.from_vtk("tests/data/gmsh.vtk")
+
+    _ = td.TriangularGridDataset.from_vtk("tests/data/gmsh_2d.vtk", ignore_invalid_cells=True)
+
+    with pytest.raises(DataError):
+        _ = td.TriangularGridDataset.from_vtk("tests/data/gmsh_2d.vtk")

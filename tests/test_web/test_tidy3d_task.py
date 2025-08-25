@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import tempfile
 
 import pytest
 import responses
-import tidy3d as td
 from responses import matchers
+
+import tidy3d as td
 from tidy3d.web.core import http_util
 from tidy3d.web.core.environment import Env, EnvironmentConfig
 from tidy3d.web.core.task_core import Folder, SimulationTask
-from tidy3d.web.core.types import TaskType
+from tidy3d.web.core.types import PayType, TaskType
 
 test_env = EnvironmentConfig(
     name="test",
@@ -214,6 +217,8 @@ def test_submit(set_api_key):
                     "solverVersion": None,
                     "workerGroup": None,
                     "enableCaching": Env.current.enable_caching,
+                    "payType": PayType.AUTO,
+                    "priority": None,
                 }
             )
         ],
@@ -253,6 +258,67 @@ def test_submit(set_api_key):
     task.submit()
     # test DE need to open the comment
     # monitor(TASK_ID, True)
+
+
+@responses.activate
+def test_pay_type_case_insensitivity(set_api_key):
+    """Test PayType enum's case-insensitive behavior with different string formats."""
+    project_id = "1234"
+    TASK_ID = "5678"
+    task_name = "test pay type"
+
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/project",
+        match=[matchers.query_param_matcher({"projectName": "test pay type folder"})],
+        json={"data": {"projectId": project_id, "projectName": "test pay type folder"}},
+        status=200,
+    )
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{project_id}/tasks",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": task_name,
+                "createdAt": "2022-01-01T00:00:00.000Z",
+            }
+        },
+        status=200,
+    )
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
+        json={
+            "data": {
+                "taskId": TASK_ID,
+                "taskName": task_name,
+                "createdAt": "2022-01-01T00:00:00.000Z",
+                "taskBlockInfo": {
+                    "chargeType": "free",
+                    "maxFreeCount": 20,
+                    "maxGridPoints": 1000,
+                    "maxTimeSteps": 1000,
+                },
+            }
+        },
+        status=200,
+    )
+
+    task = SimulationTask.create(TaskType.FDTD, task_name, "test pay type folder")
+
+    valid_pay_types = [
+        "auto",
+        "AUTO",
+        PayType.AUTO,
+        "credits",
+        "CREDITS",
+        PayType.CREDITS,
+    ]
+
+    for pay_type in valid_pay_types:
+        task.submit(pay_type=pay_type)
 
 
 @responses.activate

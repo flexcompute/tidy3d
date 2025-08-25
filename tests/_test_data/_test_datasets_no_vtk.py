@@ -1,5 +1,7 @@
 """Tests tidy3d/components/data/dataset.py"""
 
+from __future__ import annotations
+
 import builtins
 
 import pytest
@@ -14,7 +16,7 @@ def hide_vtk(monkeypatch, request):
 
     def mocked_import(name, *args, **kwargs):
         if name in ["vtk", "vtkmodules.vtkCommonCore"]:
-            raise ImportError()
+            raise ImportError
         return import_orig(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", mocked_import)

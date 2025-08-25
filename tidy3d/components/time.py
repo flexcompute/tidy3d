@@ -7,8 +7,9 @@ from abc import ABC, abstractmethod
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ..constants import RADIAN
-from ..exceptions import SetupError
+from tidy3d.constants import RADIAN
+from tidy3d.exceptions import SetupError
+
 from .base import Tidy3dBaseModel
 from .types import ArrayFloat1D, Ax, PlotVal
 from .viz import add_ax_if_none

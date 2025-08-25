@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
 import responses
+
 import tidy3d as td
 import tidy3d.plugins.mode.web as msweb
 from tidy3d import ScalarFieldDataArray
@@ -283,6 +286,26 @@ def test_mode_solver_validation():
         direction="+",
     )
 
+    # num of modes * plane grid points too large
+    # 1) number of modes too big
+    with pytest.raises(SetupError):
+        ms = ModeSolver(
+            simulation=simulation,
+            plane=PLANE,
+            mode_spec=mode_spec.updated_copy(num_modes=2**32),
+            freqs=[1e12],
+            direction="+",
+        )
+    # 2) number of grid points too big
+    with pytest.raises(SetupError):
+        ms = ModeSolver(
+            simulation=simulation.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.0001)),
+            plane=PLANE,
+            mode_spec=mode_spec,
+            freqs=[1e12],
+            direction="+",
+        )
+
     # mode data too large
     simulation = td.Simulation(
         size=SIM_SIZE,
@@ -309,6 +332,7 @@ def test_mode_solver_group_index_warning(group_index_step, log_level):
         mode_spec = td.ModeSpec(
             num_modes=1,
             group_index_step=group_index_step,
+            precision="auto",
         )
 
     _ = ModeSolver(
@@ -457,7 +481,9 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
     freq0 = td.C_0 / 1.0
     n = np.array([1.5, 5])
     n = n[:, None, None, None]
-    n_data = ScalarFieldDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom, f=[freq0]))
+    n_data = ScalarFieldDataArray(
+        n, coords={"x": x_custom, "y": y_custom, "z": z_custom, "f": [freq0]}
+    )
     mat_custom = td.CustomMedium.from_nk(n_data, interp_method="nearest")
 
     waveguide = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=mat_custom)
@@ -520,7 +546,7 @@ def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tm
     n = 2.5 + (x_custom[:, None, None] + 0.6) / 1.2 * np.sin(y_custom[None, :, None]) * np.cos(
         z_custom[None, None, :]
     )
-    n_data = td.SpatialDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom))
+    n_data = td.SpatialDataArray(n, coords={"x": x_custom, "y": y_custom, "z": z_custom})
 
     # unperturbed unstructured grid
     n_data_u = cartesian_to_unstructured(n_data, pert=0, seed=987, method="direct")
@@ -1126,13 +1152,29 @@ def test_modes_eme_sim(mock_remote_api, local):
 
 def test_mode_small_bend_radius_fail():
     """Test that small bend radius fails."""
-
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(1, 0, -1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
     with pytest.raises(ValueError):
         ms = ModeSolver(
             plane=PLANE,
             freqs=np.linspace(1e14, 2e14, 100),
             mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=0),
+            simulation=simulation,
         )
+    # should work for infinite mode plane
+    ms = ModeSolver(
+        plane=td.Box(center=(0, 0, 0), size=(td.inf, 0, td.inf)),
+        freqs=np.linspace(1e14, 2e14, 100),
+        mode_spec=td.ModeSpec(num_modes=1, bend_radius=10000, bend_axis=0),
+        simulation=simulation,
+    )
 
 
 def make_high_order_mode_solver(sign, dim=3):

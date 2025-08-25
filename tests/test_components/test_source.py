@@ -1,9 +1,12 @@
 """Tests sources."""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.components.source.field import CHEB_GRID_WIDTH, DirectionalSource
 from tidy3d.exceptions import SetupError
@@ -93,6 +96,47 @@ def test_source_times():
     assert abs(dc_comp) ** 2 > 1e-32
 
 
+def test_gaussian_from_frequency_range():
+    # error with negative fmin
+    with pytest.raises(ValueError):
+        _ = td.GaussianPulse.from_frequency_range(fmin=-1e10, fmax=1e10)
+    # error with fmin = 0
+    with pytest.raises(ValueError):
+        _ = td.GaussianPulse.from_frequency_range(fmin=0, fmax=1e10)
+    # error with fmin >= fmax
+    with pytest.raises(ValueError):
+        _ = td.GaussianPulse.from_frequency_range(fmin=1e10, fmax=0.9e10)
+
+    fmin = 1e9
+    fmax = 20e9
+    # dc component on
+    g = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax, remove_dc_component=False)
+    assert g.freq0 == 0.5 * (fmin + fmax)
+    assert g.fwidth == 0.5 * (fmax - fmin)
+
+    # dc component removed
+    g1 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax, remove_dc_component=True)
+    # default to dc removed
+    g2 = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
+    assert g2.remove_dc_component
+
+    # 1) broadband: assert enough amplitude at fmin and fmax
+    time = np.linspace(0, 5 / fmin, 10001)
+    freqs = np.linspace(fmin, fmax, 101)
+    spectrum = np.abs(g2.spectrum(time, freqs, time[1] - time[0]))
+    max_amp = np.max(spectrum)
+    assert spectrum[0] / max_amp > 0.1
+    assert spectrum[-1] / max_amp > 0.1
+
+    # 2) narrow band: close to regular Gaussian result
+    fmin = 10e9
+    bandwidth = 1e6
+    fmax = fmin + 2 * bandwidth
+    g = td.GaussianPulse.from_frequency_range(fmin=fmin, fmax=fmax)
+    assert abs(g.fwidth - bandwidth) / bandwidth < 1e-4
+    assert abs(g.freq0 - fmin) / fmin < 1e-4
+
+
 def test_dipole():
     g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     _ = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=True)
@@ -102,6 +146,67 @@ def test_dipole():
 
     with pytest.raises(pydantic.ValidationError):
         _ = td.PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
+
+
+def test_dipole_sources_from_angles():
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PointDipole.sources_from_angles(
+            size=(1, 1, 1),
+            source_time=g,
+            center=(1, 2, 3),
+            angle_theta=np.pi / 4,
+            angle_phi=np.pi / 4,
+        )
+
+    with pytest.raises(ValueError):
+        _ = td.PointDipole.sources_from_angles(
+            source_time=g,
+            angle_theta=np.pi / 4,
+            angle_phi=np.pi / 4,
+            component="invalid",
+            center=(1, 2, 3),
+        )
+
+    assert (
+        len(
+            td.PointDipole.sources_from_angles(
+                source_time=g,
+                angle_theta=np.pi / 4,
+                angle_phi=np.pi / 4,
+                component="electric",
+                center=(1, 2, 3),
+            )
+        )
+        == 3
+    )
+
+    assert (
+        len(
+            td.PointDipole.sources_from_angles(
+                source_time=g,
+                angle_theta=np.pi / 4,
+                angle_phi=np.pi / 2,
+                component="electric",
+                center=(1, 2, 3),
+            )
+        )
+        == 2
+    )
+
+    assert (
+        len(
+            td.PointDipole.sources_from_angles(
+                source_time=g,
+                angle_theta=np.pi / 2,
+                angle_phi=np.pi / 2,
+                component="electric",
+                center=(1, 2, 3),
+            )
+        )
+        == 1
+    )
 
 
 def test_FieldSource():
@@ -328,7 +433,7 @@ def test_custom_source_time():
     _ = cst.amp_time(-1)
     assert np.allclose(cst.amp_time([2]), np.exp(-1j * 2 * np.pi * 2 * freq0), rtol=0, atol=ATOL)
 
-    vals = td.components.data.data_array.TimeDataArray([1, 2], coords=dict(t=[-1, -0.5]))
+    vals = td.components.data.data_array.TimeDataArray([1, 2], coords={"t": [-1, -0.5]})
     dataset = td.components.data.dataset.TimeDataset(values=vals)
     cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
@@ -345,7 +450,7 @@ def test_custom_source_time():
 
     # test single value validation error
     with pytest.raises(pydantic.ValidationError):
-        vals = td.components.data.data_array.TimeDataArray([1], coords=dict(t=[0]))
+        vals = td.components.data.data_array.TimeDataArray([1], coords={"t": [0]})
         dataset = td.components.data.dataset.TimeDataset(values=vals)
         cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
         assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
@@ -358,7 +463,7 @@ def test_custom_field_source():
     Z = [0]
     freqs = [2e14]
     n_data = np.ones((Nx, Ny, Nz, Nf))
-    n_dataset = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    n_dataset = td.ScalarFieldDataArray(n_data, coords={"x": X, "y": Y, "z": Z, "f": freqs})
 
     def make_custom_field_source(field_ds):
         custom_source = td.CustomFieldSource(
@@ -372,9 +477,9 @@ def test_custom_field_source():
 
     with pytest.raises(pydantic.ValidationError):
         # repeat some entries so data cannot be interpolated
-        X2 = [X[0]] + list(X)
+        X2 = [X[0], *list(X)]
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
-        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
+        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords={"x": X2, "y": Y, "z": Z, "f": freqs})
         field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset2)
         make_custom_field_source(field_dataset)
 
@@ -415,3 +520,94 @@ def test_fixed_angle_source():
     )
 
     assert not plane_wave._is_fixed_angle
+
+
+def test_broadband_angled_gaussian_warning():
+    g = td.GaussianPulse(freq0=1e14, fwidth=0.8e14)
+    # Case 1: num_freqs = 3, angle_theta = np.pi / 3, should warn
+    with AssertLogLevel("WARNING", contains_str="number of frequencies"):
+        s = td.GaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=3,
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
+
+    # Case 2: Increasing to num_freqs = 10 should NOT warn
+    with AssertLogLevel(None):
+        s = td.GaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=10,
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
+
+    # Case 3: Case 2 but changed to astigmatic gaussian beam with one larger waist size should warn
+    with AssertLogLevel("WARNING", contains_str="number of frequencies"):
+        s = td.AstigmaticGaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=10,
+            waist_sizes=(1, 5),
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
+
+    # Case 4: Case 3 but with num_freqs = 1 should NOT warn (broadband treatment is off)
+    with AssertLogLevel(None):
+        s = td.AstigmaticGaussianBeam(
+            size=(0, 1, 1),
+            source_time=g,
+            pol_angle=np.pi / 2,
+            direction="+",
+            angle_theta=np.pi / 3,
+            num_freqs=1,
+            waist_sizes=(1, 5),
+        )
+        _ = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            sources=[s],
+            normalize_index=None,
+        )
+
+
+def test_source_frame():
+    _ = td.PECFrame()
+    _ = td.PECFrame(length=4)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PECFrame(length=0)
+
+    _ = td.ModeSource(
+        source_time=td.GaussianPulse(freq0=td.C_0, fwidth=0.2 * td.C_0),
+        direction="+",
+        size=(1, 1, 0),
+        frame=td.PECFrame(),
+    )

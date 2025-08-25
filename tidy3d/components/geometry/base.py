@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 import pathlib
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
@@ -17,21 +17,19 @@ try:
 except ImportError:
     pass
 
-from ...constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
-from ...exceptions import (
-    SetupError,
-    Tidy3dError,
-    Tidy3dImportError,
-    Tidy3dKeyError,
-    ValidationError,
+from tidy3d.compat import _shapely_is_older_than
+from tidy3d.components.autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
+from tidy3d.components.autograd.constants import GRADIENT_DTYPE_FLOAT
+from tidy3d.components.autograd.derivative_utils import (
+    DerivativeInfo,
+    FieldData,
+    integrate_within_bounds,
 )
-from ...log import log
-from ...packaging import check_import, verify_packages_import
-from ..autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
-from ..autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
-from ..base import Tidy3dBaseModel, cached_property
-from ..transformation import RotationAroundAxis
-from ..types import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.geometry.bound_ops import bounds_intersection, bounds_union
+from tidy3d.components.transformation import ReflectionFromPlane, RotationAroundAxis
+from tidy3d.components.types import (
     ArrayFloat2D,
     ArrayFloat3D,
     Ax,
@@ -47,7 +45,7 @@ from ..types import (
     Size,
     annotate_type,
 )
-from ..viz import (
+from tidy3d.components.viz import (
     ARROW_LENGTH,
     PLOT_BUFFER,
     PlotParams,
@@ -59,8 +57,20 @@ from ..viz import (
     polygon_patch,
     set_default_labels_and_title,
 )
+from tidy3d.constants import EPSILON_0, LARGE_NUMBER, MICROMETER, MU_0, RADIAN, fp_eps, inf
+from tidy3d.exceptions import (
+    SetupError,
+    Tidy3dError,
+    Tidy3dImportError,
+    Tidy3dKeyError,
+    ValidationError,
+)
+from tidy3d.log import log
+from tidy3d.packaging import verify_packages_import
 
 POLY_GRID_SIZE = 1e-12
+POLY_TOLERANCE_RATIO = 1e-12
+POLY_DISTANCE_TOLERANCE = 8e-12
 
 
 _shapely_operations = {
@@ -151,7 +161,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def _inds_inside_bounds(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> Tuple[slice, slice, slice]:
+    ) -> tuple[slice, slice, slice]:
         """Return slices into the sorted input arrays that are inside the geometry bounds.
 
         Parameters
@@ -213,7 +223,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @abstractmethod
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -234,8 +244,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
     def intersections_plane(
-        self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -260,10 +270,10 @@ class Geometry(Tidy3dBaseModel, ABC):
         to_2D = np.eye(4)
         if axis != 2:
             last, indices = self.pop_axis((0, 1, 2), axis)
-            to_2D = to_2D[list(indices) + [last, 3]]
+            to_2D = to_2D[[*list(indices), last, 3]]
         return self.intersections_tilted_plane(normal, origin, to_2D)
 
-    def intersections_2dbox(self, plane: Box) -> List[Shapely]:
+    def intersections_2dbox(self, plane: Box) -> list[Shapely]:
         """Returns list of shapely geometries representing the intersections of the geometry with
         a 2D box.
 
@@ -280,7 +290,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return plane.intersections_with(self)
 
     def intersects(
-        self, other, strict_inequality: Tuple[bool, bool, bool] = [False, False, False]
+        self, other, strict_inequality: tuple[bool, bool, bool] = [False, False, False]
     ) -> bool:
         """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
 
@@ -318,7 +328,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return True
 
     def contains(
-        self, other: Geometry, strict_inequality: Tuple[bool, bool, bool] = [False, False, False]
+        self, other: Geometry, strict_inequality: tuple[bool, bool, bool] = [False, False, False]
     ) -> bool:
         """Returns ``True`` if the `.bounds` of  ``other`` are contained within the
         `.bounds` of ``self``.
@@ -356,7 +366,9 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return True
 
-    def intersects_plane(self, x: float = None, y: float = None, z: float = None) -> bool:
+    def intersects_plane(
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ) -> bool:
         """Whether self intersects plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -408,20 +420,12 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def bounds_intersection(bounds1: Bound, bounds2: Bound) -> Bound:
         """Return the bounds that are the intersection of two bounds."""
-        rmin1, rmax1 = bounds1
-        rmin2, rmax2 = bounds2
-        rmin = tuple(max(v1, v2) for v1, v2 in zip(rmin1, rmin2))
-        rmax = tuple(min(v1, v2) for v1, v2 in zip(rmax1, rmax2))
-        return (rmin, rmax)
+        return bounds_intersection(bounds1, bounds2)
 
     @staticmethod
     def bounds_union(bounds1: Bound, bounds2: Bound) -> Bound:
         """Return the bounds that are the union of two bounds."""
-        rmin1, rmax1 = bounds1
-        rmin2, rmax2 = bounds2
-        rmin = tuple(min(v1, v2) for v1, v2 in zip(rmin1, rmin2))
-        rmax = tuple(max(v1, v2) for v1, v2 in zip(rmax1, rmax2))
-        return (rmin, rmax)
+        return bounds_union(bounds1, bounds2)
 
     @cached_property
     def bounding_box(self):
@@ -435,7 +439,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return Box.from_bounds(*self.bounds)
 
     @cached_property
-    def zero_dims(self) -> List[Axis]:
+    def zero_dims(self) -> list[Axis]:
         """A list of axes along which the :class:`Geometry` is zero-sized based on its bounds."""
         zero_dims = []
         for dim in range(3):
@@ -443,7 +447,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                 zero_dims.append(dim)
         return zero_dims
 
-    def _pop_bounds(self, axis: Axis) -> Tuple[Coordinate2D, Tuple[Coordinate2D, Coordinate2D]]:
+    def _pop_bounds(self, axis: Axis) -> tuple[Coordinate2D, tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
         Parameters
@@ -483,7 +487,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Get the normal to the given geometry, checking that it is a 2D geometry."""
         raise ValidationError("'Medium2D' is not compatible with this geometry class.")
 
-    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Geometry:
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> Geometry:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         raise NotImplementedError(
@@ -494,9 +498,9 @@ class Geometry(Tidy3dBaseModel, ABC):
     @add_ax_if_none
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         plot_length_units: LengthUnit = None,
         viz_spec: VisualizationSpec = None,
@@ -594,7 +598,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return False
 
     @staticmethod
-    def _get_plot_labels(axis: Axis) -> Tuple[str, str]:
+    def _get_plot_labels(axis: Axis) -> tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
 
         Parameters
@@ -612,7 +616,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def _get_plot_limits(
         self, axis: Axis, buffer: float = PLOT_BUFFER
-    ) -> Tuple[Coordinate2D, Coordinate2D]:
+    ) -> tuple[Coordinate2D, Coordinate2D]:
         """Gets planar coordinate limits for cross section plots.
 
         Parameters
@@ -659,9 +663,9 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def add_ax_labels_and_title(
         ax: Ax,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         plot_length_units: LengthUnit = None,
     ) -> Ax:
         """Sets the axis labels, tick labels, and title based on ``axis``
@@ -726,7 +730,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return shape
 
     @staticmethod
-    def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
+    def pop_axis(coord: tuple[Any, Any, Any], axis: int) -> tuple[Any, tuple[Any, Any]]:
         """Separates coordinate at ``axis`` index from coordinates on the plane tangent to ``axis``.
 
         Parameters
@@ -748,7 +752,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis_val, tuple(plane_vals)
 
     @staticmethod
-    def unpop_axis(ax_coord: Any, plane_coords: Tuple[Any, Any], axis: int) -> Tuple[Any, Any, Any]:
+    def unpop_axis(ax_coord: Any, plane_coords: tuple[Any, Any], axis: int) -> tuple[Any, Any, Any]:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
         Parameters
@@ -770,7 +774,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return tuple(coords)
 
     @staticmethod
-    def parse_xyz_kwargs(**xyz) -> Tuple[Axis, float]:
+    def parse_xyz_kwargs(**xyz) -> tuple[Axis, float]:
         """Turns x,y,z kwargs into index of the normal axis and position along that axis.
 
         Parameters
@@ -795,7 +799,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
-    def parse_two_xyz_kwargs(**xyz) -> List[Tuple[Axis, float]]:
+    def parse_two_xyz_kwargs(**xyz) -> list[tuple[Axis, float]]:
         """Turns x,y,z kwargs into indices of axes and the position along each axis.
 
         Parameters
@@ -975,10 +979,26 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return Transformed(geometry=self, transform=Transformed.rotation(angle, axis))
 
+    def reflected(self, normal: Coordinate) -> Geometry:
+        """Return a reflected copy of this geometry.
+
+        Parameters
+        ----------
+        normal : Tuple[float, float, float]
+            The 3D normal vector of the plane of reflection. The plane is assumed
+                to pass through the origin (0,0,0).
+
+        Returns
+        -------
+        :class:`Geometry`
+            Reflected copy of this geometry.
+        """
+        return Transformed(geometry=self, transform=Transformed.reflection(normal))
+
     """ Field and coordinate transformations """
 
     @staticmethod
-    def car_2_sph(x: float, y: float, z: float) -> Tuple[float, float, float]:
+    def car_2_sph(x: float, y: float, z: float) -> tuple[float, float, float]:
         """Convert Cartesian to spherical coordinates.
 
         Parameters
@@ -1001,7 +1021,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return r, theta, phi
 
     @staticmethod
-    def sph_2_car(r: float, theta: float, phi: float) -> Tuple[float, float, float]:
+    def sph_2_car(r: float, theta: float, phi: float) -> tuple[float, float, float]:
         """Convert spherical to Cartesian coordinates.
 
         Parameters
@@ -1027,7 +1047,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def sph_2_car_field(
         f_r: float, f_theta: float, f_phi: float, theta: float, phi: float
-    ) -> Tuple[complex, complex, complex]:
+    ) -> tuple[complex, complex, complex]:
         """Convert vector field components in spherical coordinates to cartesian.
 
         Parameters
@@ -1060,7 +1080,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def car_2_sph_field(
         f_x: float, f_y: float, f_z: float, theta: float, phi: float
-    ) -> Tuple[complex, complex, complex]:
+    ) -> tuple[complex, complex, complex]:
         """Convert vector field components in cartesian coordinates to spherical.
 
         Parameters
@@ -1092,7 +1112,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return f_r, f_theta, f_phi
 
     @staticmethod
-    def kspace_2_sph(ux: float, uy: float, axis: Axis) -> Tuple[float, float]:
+    def kspace_2_sph(ux: float, uy: float, axis: Axis) -> tuple[float, float]:
         """Convert normalized k-space coordinates to angles.
 
         Parameters
@@ -1129,16 +1149,19 @@ class Geometry(Tidy3dBaseModel, ABC):
         return theta, phi
 
     @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def load_gds_vertices_gdstk(
-        gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
-    ) -> List[ArrayFloat2D]:
+        gds_cell,
+        gds_layer: int,
+        gds_dtype: Optional[int] = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+    ) -> list[ArrayFloat2D]:
         """Load polygon vertices from a ``gdstk.Cell``.
 
         Parameters
         ----------
         gds_cell : gdstk.Cell
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+            ``gdstk.Cell`` containing 2D geometric data.
         gds_layer : int
             Layer index in the ``gds_cell``.
         gds_dtype : int = None
@@ -1178,67 +1201,24 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
-    def load_gds_vertices_gdspy(
-        gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
-    ) -> List[ArrayFloat2D]:
-        """Load polygon vertices from a ``gdspy.Cell``.
-
-        Parameters
-        ----------
-        gds_cell : gdspy.Cell
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
-        gds_layer : int
-            Layer index in the ``gds_cell``.
-        gds_dtype : int = None
-            Data-type index in the ``gds_cell``. If ``None``, imports all data for this layer into
-            the returned list.
-        gds_scale : float = 1.0
-            Length scale used in GDS file in units of micrometer. For example, if gds file uses
-            nanometers, set ``gds_scale=1e-3``. Must be positive.
-
-        Returns
-        -------
-        List[ArrayFloat2D]
-            List of polygon vertices
-        """
-
-        # load the polygon vertices
-        vert_dict = gds_cell.get_polygons(by_spec=True)
-        all_vertices = []
-        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
-            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
-                all_vertices.extend(iter(vertices))
-        # make sure something got loaded, otherwise error
-        if not all_vertices:
-            raise Tidy3dKeyError(
-                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
-                f"with specified gds_dtype={gds_dtype}."
-            )
-
-        # apply scaling
-        all_vertices = [vertices * gds_scale for vertices in all_vertices]
-        return all_vertices
-
-    @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def from_gds(
         gds_cell,
         axis: Axis,
-        slab_bounds: Tuple[float, float],
+        slab_bounds: tuple[float, float],
         gds_layer: int,
-        gds_dtype: int = None,
+        gds_dtype: Optional[int] = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
     ) -> Geometry:
-        """Import a ``gdstk.Cell`` or a ``gdspy.Cell`` and extrude it into a GeometryGroup.
+        """Import a ``gdstk.Cell`` and extrude it into a GeometryGroup.
 
         Parameters
         ----------
-        gds_cell : Union[gdstk.Cell, gdspy.Cell]
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
         axis : int
             Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
         slab_bounds: Tuple[float, float]
@@ -1267,32 +1247,18 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Geometry`
             Geometries created from the 2D data.
         """
-        gdstk_available = check_import("gdstk")
-        gdspy_available = check_import("gdspy")
+        import gdstk
 
-        if gdstk_available:
-            import gdstk
+        if not isinstance(gds_cell, gdstk.Cell):
+            # Check if it might be a gdstk cell but gdstk is not found (should be caught by decorator)
+            # or if it's an entirely different type.
+            if "gdstk" in gds_cell.__class__.__name__.lower():
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to import gdstk cells."
+                )
+            raise Tidy3dImportError("Argument 'gds_cell' must be an instance of 'gdstk.Cell'.")
 
-            if isinstance(gds_cell, gdstk.Cell):
-                gds_loader_fn = Geometry.load_gds_vertices_gdstk
-        elif gdspy_available:
-            import gdspy
-
-            if isinstance(gds_cell, gdspy.Cell):
-                gds_loader_fn = Geometry.load_gds_vertices_gdspy
-        elif "gdstk" in gds_cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to import gdstk cells."
-            )
-        elif "gdspy" in gds_cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to import to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
-
+        gds_loader_fn = Geometry.load_gds_vertices_gdstk
         geometries = []
         with log as consolidated_logger:
             for vertices in gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale):
@@ -1314,7 +1280,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     def from_shapely(
         shape: Shapely,
         axis: Axis,
-        slab_bounds: Tuple[float, float],
+        slab_bounds: tuple[float, float],
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
@@ -1352,12 +1318,12 @@ class Geometry(Tidy3dBaseModel, ABC):
     @verify_packages_import(["gdstk"])
     def to_gdstk(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
-    ) -> List:
+    ) -> list:
         """Convert a Geometry object's planar slice to a .gds type polygon.
 
         Parameters
@@ -1398,62 +1364,13 @@ class Geometry(Tidy3dBaseModel, ABC):
                     )
         return polygons
 
-    @verify_packages_import(["gdspy"])
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer: pydantic.NonNegativeInt = 0,
-        gds_dtype: pydantic.NonNegativeInt = 0,
-    ) -> List:
-        """Convert a Geometry object's planar slice to a .gds type polygon.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer : int = 0
-            Layer index to use for the shapes stored in the .gds file.
-        gds_dtype : int = 0
-            Data-type index to use for the shapes stored in the .gds file.
-
-        Return
-        ------
-        List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
-        """
-        import gdspy
-
-        shapes = self.intersections_plane(x=x, y=y, z=z)
-        polygons = []
-        for shape in shapes:
-            for vertices in vertices_from_shapely(shape):
-                if len(vertices) == 1:
-                    polygons.append(gdspy.Polygon(vertices[0], gds_layer, gds_dtype))
-                else:
-                    polygons.append(
-                        gdspy.boolean(
-                            vertices[:1],
-                            vertices[1:],
-                            "not",
-                            layer=gds_layer,
-                            datatype=gds_dtype,
-                        )
-                    )
-        return polygons
-
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def to_gds(
         self,
         cell,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
     ) -> None:
@@ -1461,7 +1378,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+        cell : ``gdstk.Cell``
             Cell object to which the generated polygons are added.
         x : float = None
             Position of plane in x direction, only one of x,y,z can be specified to define plane.
@@ -1474,45 +1391,26 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        gdstk_available = check_import("gdstk")
-        gdspy_available = check_import("gdspy")
+        import gdstk
 
-        if gdstk_available:
-            import gdstk
+        if not isinstance(cell, gdstk.Cell):
+            if "gdstk" in cell.__class__.__name__.lower():
+                raise Tidy3dImportError(
+                    "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+                )
+            raise Tidy3dImportError("Argument 'cell' must be an instance of 'gdstk.Cell'.")
 
-            if isinstance(cell, gdstk.Cell):
-                polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-                if len(polygons) > 0:
-                    cell.add(*polygons)
+        polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+        if polygons:
+            cell.add(*polygons)
 
-        elif gdspy_available:
-            import gdspy
-
-            if isinstance(cell, gdspy.Cell):
-                polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-                if len(polygons) > 0:
-                    cell.add(polygons)
-
-        elif "gdstk" in cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
-            )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
-
-    @verify_packages_import(["gdstk", "gdspy"], required="any")
+    @verify_packages_import(["gdstk"])
     def to_gds_file(
         self,
         fname: str,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         gds_layer: pydantic.NonNegativeInt = 0,
         gds_dtype: pydantic.NonNegativeInt = 0,
         gds_cell_name: str = "MAIN",
@@ -1536,35 +1434,25 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
         """
-
-        # Fundamental import structure for custom commands depending on which package is available.
-        gdstk_available = check_import("gdstk")
-        gdspy_available = check_import("gdspy")
-
-        if gdstk_available:
+        try:
             import gdstk
-
-            library = gdstk.Library()
-        elif gdspy_available:
-            import gdspy
-
-            library = gdspy.GdsLibrary()
-        else:
+        except ImportError as e:
             raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
-            )
+                "Python module 'gdstk' not found. To export geometries to .gds "
+                "files, please install it."
+            ) from e
 
+        library = gdstk.Library()
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
 
-    def _as_union(self) -> List[Geometry]:
+    def _as_union(self) -> list[Geometry]:
         """Return a list of geometries that, united, make up the given geometry."""
         if isinstance(self, GeometryGroup):
             return self.geometries
@@ -1664,7 +1552,7 @@ class SimplePlaneIntersection(Geometry, ABC):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
         Checks special cases before relying on the complete computation.
 
@@ -1686,8 +1574,8 @@ class SimplePlaneIntersection(Geometry, ABC):
         """
 
         # Check if normal is a special case, where the normal is aligned with an axis.
-        if normal.count(0.0) == 2:
-            axis = np.nonzero(normal)[0][0]
+        if np.sum(np.isclose(normal, 0.0)) == 2:
+            axis = np.argmax(np.abs(normal)).item()
             coord = "xyz"[axis]
             kwargs = {coord: origin[axis]}
             section = self.intersections_plane(**kwargs)
@@ -1701,13 +1589,13 @@ class SimplePlaneIntersection(Geometry, ABC):
 
             transformed_section = shapely.transform(section, transformation=transform)
             return transformed_section
-        else:  # Otherwise compute the arbitrary intersection
-            return self._do_intersections_tilted_plane(normal=normal, origin=origin, to_2D=to_2D)
+        # Otherwise compute the arbitrary intersection
+        return self._do_intersections_tilted_plane(normal=normal, origin=origin, to_2D=to_2D)
 
     @abstractmethod
     def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -1785,7 +1673,9 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         """
         return min(self.length_axis, LARGE_NUMBER)
 
-    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -1864,7 +1754,7 @@ class Planar(SimplePlaneIntersection, Geometry, ABC):
         axis_index.insert(self.axis, 2)
         return axis_index[axis]
 
-    def _order_by_axis(self, plane_val: Any, axis_val: Any, axis: int) -> Tuple[Any, Any]:
+    def _order_by_axis(self, plane_val: Any, axis_val: Any, axis: int) -> tuple[Any, Any]:
         """Orders a value in the plane and value along axis in correct (x,y) order for plotting.
            Note: sometimes if axis=1 and we compute cross section values orthogonal to axis,
            they can either be x or y in the plots.
@@ -1977,8 +1867,7 @@ class Box(SimplePlaneIntersection, Centered):
         """Axis normal to the Box. Errors if box is not planar."""
         if self.size.count(0.0) != 1:
             raise ValidationError(
-                "Tried to get 'normal_axis' of 'Box' that is not planar. "
-                f"Given 'size={self.size}.'"
+                f"Tried to get 'normal_axis' of 'Box' that is not planar. Given 'size={self.size}.'"
             )
         return self.size.index(0.0)
 
@@ -2103,7 +1992,7 @@ class Box(SimplePlaneIntersection, Centered):
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -2148,10 +2037,12 @@ class Box(SimplePlaneIntersection, Centered):
         section = mesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
             return []
-        path, _ = section.to_planar(to_2D=to_2D)
+        path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
-    def intersections_plane(self, x: float = None, y: float = None, z: float = None):
+    def intersections_plane(
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
         Parameters
@@ -2282,7 +2173,7 @@ class Box(SimplePlaneIntersection, Centered):
         return Box(center=self.center, size=self.size)
 
     @cached_property
-    def zero_dims(self) -> List[Axis]:
+    def zero_dims(self) -> list[Axis]:
         """A list of axes along which the :class:`Box` is zero-sized."""
         return [dim for dim, size in enumerate(self.size) if size == 0]
 
@@ -2295,7 +2186,7 @@ class Box(SimplePlaneIntersection, Centered):
             )
         return self.size.index(0)
 
-    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Box:
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> Box:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         new_center = list(self.center)
@@ -2306,13 +2197,13 @@ class Box(SimplePlaneIntersection, Centered):
 
     def _plot_arrow(
         self,
-        direction: Tuple[float, float, float],
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        color: str = None,
-        alpha: float = None,
-        bend_radius: float = None,
+        direction: tuple[float, float, float],
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        color: Optional[str] = None,
+        alpha: Optional[float] = None,
+        bend_radius: Optional[float] = None,
         bend_axis: Axis = None,
         both_dirs: bool = False,
         ax: Ax = None,
@@ -2409,7 +2300,9 @@ class Box(SimplePlaneIntersection, Centered):
             event.canvas.mpl_disconnect(arrow.set_shape_cb[0])
 
             transform = arrow.axes.transData.transform
-            scale = transform((1, 0))[0] - transform((0, 0))[0]
+            scale_x = transform((1, 0))[0] - transform((0, 0))[0]
+            scale_y = transform((0, 1))[1] - transform((0, 0))[1]
+            scale = max(scale_x, scale_y)  # <-- Hack: This is a somewhat arbitrary choice.
             arrow_length = ARROW_LENGTH * event.canvas.figure.get_dpi() / scale
 
             if bend_radius:
@@ -2480,14 +2373,14 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         # get gradients w.r.t. each of the 6 faces (in normal direction)
-        vjps_faces = self.derivative_faces(derivative_info=derivative_info)
+        vjps_faces = self._derivative_faces(derivative_info=derivative_info)
 
         # post-process these values to give the gradients w.r.t. center and size
-        vjps_center_size = self.derivatives_center_size(vjps_faces=vjps_faces)
+        vjps_center_size = self._derivatives_center_size(vjps_faces=vjps_faces)
 
         # store only the gradients asked for in 'field_paths'
         derivative_map = {}
@@ -2508,7 +2401,7 @@ class Box(SimplePlaneIntersection, Centered):
         return derivative_map
 
     @staticmethod
-    def derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
+    def _derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
         """Derivatives with respect to the ``center`` and ``size`` fields in the ``Box``."""
 
         vjps_faces_min, vjps_faces_max = np.array(vjps_faces)
@@ -2517,12 +2410,12 @@ class Box(SimplePlaneIntersection, Centered):
         vjp_center = vjps_faces_max - vjps_faces_min
         vjp_size = (vjps_faces_min + vjps_faces_max) / 2.0
 
-        return dict(
-            center=tuple(vjp_center.tolist()),
-            size=tuple(vjp_size.tolist()),
-        )
+        return {
+            "center": tuple(vjp_center.tolist()),
+            "size": tuple(vjp_size.tolist()),
+        }
 
-    def derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
+    def _derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
         """Derivative with respect to normal position of 6 faces of ``Box``."""
 
         # change in permittivity between inside and outside
@@ -2530,7 +2423,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         for min_max_index, _ in enumerate((0, -1)):
             for axis in range(3):
-                vjp_face = self.derivative_face(
+                vjp_face = self._derivative_face(
                     min_max_index=min_max_index,
                     axis_normal=axis,
                     derivative_info=derivative_info,
@@ -2541,7 +2434,7 @@ class Box(SimplePlaneIntersection, Centered):
 
         return vjp_faces
 
-    def derivative_face(
+    def _derivative_face(
         self,
         min_max_index: int,
         axis_normal: Axis,
@@ -2551,15 +2444,14 @@ class Box(SimplePlaneIntersection, Centered):
 
         # normal and tangential dims
         dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal)
-        fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
+        fld_E_normal, flds_E_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
 
-        # normal and tangential fields
-        D_normal = derivative_info.D_der_map[fld_normal]
-        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_perp)
-
-        # normal and tangential bounds
-        bounds_T = np.array(derivative_info.bounds).T  # put (xyz) first dimension
-        bounds_normal, bounds_perp = self.pop_axis(bounds_T, axis=axis_normal)
+        # fields and bounds
+        D_normal = derivative_info.D_der_map[fld_E_normal]
+        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_E_perp)
+        bounds_normal, bounds_perp = self.pop_axis(
+            np.array(derivative_info.bounds).T, axis=axis_normal
+        )
 
         # define the integration plane
         coord_normal_face = bounds_normal[min_max_index]
@@ -2579,7 +2471,7 @@ class Box(SimplePlaneIntersection, Centered):
             )
             return 0.0
 
-        # grab permittivity data inside and outside edge in normal direction
+        # permittivity data
         eps_xyz = [derivative_info.eps_data[f"eps_{dim}{dim}"] for dim in "xyz"]
 
         # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
@@ -2606,36 +2498,322 @@ class Box(SimplePlaneIntersection, Centered):
         eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal)
         eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal)
 
-        # compute integration pre-factors
-        delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]
-        delta_eps_inv_normal = 1.0 / eps_in_normal - 1.0 / eps_out_normal
-
-        def integrate_face(arr: xr.DataArray) -> complex:
-            """Interpolate and integrate a scalar field data over the face using bounds."""
-
-            arr_at_face = arr.interp(**{dim_normal: float(coord_normal_face)}, assume_sorted=True)
-
-            integral_result = integrate_within_bounds(
-                arr=arr_at_face,
-                dims=dims_perp,
-                bounds=bounds_perp,
+        if derivative_info.is_medium_pec:
+            return self._derivative_face_pec(
+                dim_normal=dim_normal,
+                axis_normal=axis_normal,
+                min_max_index=min_max_index,
+                coord_normal_face=coord_normal_face,
+                dims_perp=dims_perp,
+                bounds_perp=bounds_perp,
+                D_normal=D_normal,
+                H_der_map=derivative_info.H_der_map,
+                eps_out_normal=eps_out_normal,
+            )
+        else:
+            return self._derivative_face_dielectric(
+                dim_normal=dim_normal,
+                coord_normal_face=coord_normal_face,
+                dims_perp=dims_perp,
+                bounds_perp=bounds_perp,
+                D_normal=D_normal,
+                Es_perp=Es_perp,
+                eps_in_normal=eps_in_normal,
+                eps_out_normal=eps_out_normal,
+                eps_in_perps=eps_in_perps,
+                eps_out_perps=eps_out_perps,
             )
 
-            return complex(integral_result.sum(dim="f"))
+    @staticmethod
+    def _arr_at_face(arr: xr.DataArray, interp_point: float, dim_normal: str) -> xr.DataArray:
+        """Interpolate the array at the given coordinate unless it only has a single value in the normal
+        dimnsion already in which case just return the array itself."""
+        arr_at_face = (
+            arr
+            if (len(arr.coords[dim_normal]) == 1)
+            else arr.interp(**{dim_normal: float(interp_point)}, assume_sorted=True)
+        )
 
-        # put together VJP using D_normal and E_perp integration
-        vjp_value = 0.0
+        return arr_at_face
 
-        # perform D-normal integral
+    @staticmethod
+    def _integrate_face(
+        arr_at_face: xr.DataArray,
+        integration_dims: Union[tuple[str], tuple[str, str]],
+        integration_bounds: Union[tuple[Coordinate2D], tuple[Coordinate2D, Coordinate2D]],
+    ) -> complex:
+        """Perform the integration of the surface and sum over the frequency component of the gradient."""
+
+        integral_result = integrate_within_bounds(
+            arr=arr_at_face,
+            dims=integration_dims,
+            bounds=integration_bounds,
+        )
+
+        return complex(integral_result.sum("f"))
+
+    @staticmethod
+    def _snap_coords_outside(
+        min_max_index: int, snap_coords_values: np.ndarray, coord_normal_face: float
+    ) -> float:
+        """Snap interpolation coordinate for a PEC face integration to be just outside the surface boundary.
+        This ensures we don't interpolate with fields that are zero inside of the PEC."""
+
+        if min_max_index == 0:
+            min_boundary_mapping = np.where(snap_coords_values > coord_normal_face)[0]
+            index_face = (
+                0
+                if (len(min_boundary_mapping) == 0)
+                else np.maximum(0, min_boundary_mapping[0] - 1)
+            )
+
+            if snap_coords_values[index_face] > coord_normal_face:
+                log.warning("Unable to snap coordinates outside of min face.")
+        else:
+            max_boundary_mapping = np.where(snap_coords_values < coord_normal_face)[0]
+            index_face = (
+                len(snap_coords_values) - 1
+                if (len(max_boundary_mapping) == 0)
+                else np.minimum(len(snap_coords_values) - 1, max_boundary_mapping[-1] + 1)
+            )
+
+            if snap_coords_values[index_face] < coord_normal_face:
+                log.warning("Unable to snap coordinates outside of max face.")
+
+        snapped_point = snap_coords_values[index_face]
+
+        return snapped_point
+
+    @staticmethod
+    def _check_singularity_correction_pec(
+        size: TracedSize, axis_normal: Axis
+    ) -> tuple[bool, str, bool]:
+        """Checks if the box is 2D (i.e. - one of the dimensions is zero) and
+        identifies the zero dimension if any. Then, checks if we should apply singularity
+        correction if we are integrating a face with that contains the zero dimension."""
+
+        # detect whether the box is 2-dimensional
+        zero_size_map = [s == 0.0 for s in size]
+
+        dimension = 3 - np.sum(zero_size_map)
+        if dimension < 2:
+            log.error(
+                "Derivative of PEC material with less than 2 dimensions is unsupported. "
+                f"Specified PEC box is {dimension}-dimesional"
+            )
+
+        do_singularity_correction = False
+        is_2d = np.any(zero_size_map)
+        zero_dimension = None
+        if is_2d:
+            zero_dim_idx = np.where(zero_size_map)[0][0]
+            zero_dimension = "xyz"[zero_dim_idx]
+
+            # for singularity correction, need 2-dimensional box and that
+            # the face we are integrating over is the 1-dimensional (i.e. -
+            # the normal for the face is not the same as the flat dimension
+            do_singularity_correction = not (axis_normal == zero_dim_idx)
+
+        return is_2d, zero_dimension, do_singularity_correction
+
+    @staticmethod
+    def _trim_dims_and_bounds_edge(
+        dims_perp: tuple[str, str],
+        bounds_perp: tuple[Coordinate2D, Coordinate2D],
+        zero_dimension: str,
+    ) -> tuple[tuple[str], tuple[tuple[float], tuple[float]]]:
+        """Trim the dimensions and bounds for integration along the edge."""
+
+        # if we are correcting for singularity and integrating over the line, then adjust
+        # integration dimensions and bounds to exclude the flat dimension
+        integration_dims = [dim for dim in dims_perp if (not (dim == zero_dimension))]
+
+        integration_bounds = []
+        zero_dim_idx = 0
+        # find the index into the bounds that corresponds to the flat dimension
+        for dim in dims_perp:
+            if dim == zero_dimension:
+                break
+            zero_dim_idx += 1
+
+        # trim the zero dimension from the integration bounds
+        for bound in bounds_perp:
+            new_bound = [b for b_idx, b in enumerate(bound) if b_idx != zero_dim_idx]
+
+            integration_bounds.append(new_bound)
+
+        return integration_dims, integration_bounds
+
+    def _derivative_face_dielectric(
+        self,
+        dim_normal: str,
+        coord_normal_face: float,
+        dims_perp: tuple[str, str],
+        bounds_perp: tuple[Coordinate2D, Coordinate2D],
+        D_normal: ScalarFieldDataArray,
+        Es_perp: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
+        eps_in_normal: ScalarFieldDataArray,
+        eps_out_normal: ScalarFieldDataArray,
+        eps_in_perps: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
+        eps_out_perps: tuple[ScalarFieldDataArray, ScalarFieldDataArray],
+    ) -> float:
+        """Compute derivative with respect to the face using the dielectric form of the gradient.
+
+        Parameters
+        ----------
+        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
+            Data type for interpolation coordinates and values.
+
+        dim_normal : str
+            Surface normal of the face
+        coord_normal_face : float
+            The coordinate at which to interpolate the surface fields
+        dims_perp : tuple[str, str]
+            The perpendicular dimensions of the face
+        bounds_perp : tuple[Coordinate2D, Coordinate2D]
+            Bounds of integration along the face
+        D_normal : ScalarFieldDataArray
+            D-field component normal to the surface
+        Es_perp : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            E-field components tangential to the surface
+        eps_in_normal : ScalarFieldDataArray
+            Normal component of permittivity inside the surface
+        eps_out_normal : ScalarFieldDataArray
+            Normal component of permittivity outside the surface
+        eps_in_perps : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            Tangential components of permittivity inside the surface
+        eps_out_perps : tuple[ScalarFieldDataArray, ScalarFieldDataArray]
+            Tangential components of permittivity outside the surface
+
+        Returns
+        -------
+        float
+            Surface gradient vjp value
+        """
+
+        delta_eps_inv_normal = 1.0 / eps_in_normal - 1.0 / eps_out_normal
+
+        # compute integration pre-factors
+        delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]
+
         integrand_D = -delta_eps_inv_normal * D_normal
-        integral_D = integrate_face(integrand_D)
-        vjp_value += integral_D
+        integral_D = self._integrate_face(
+            self._arr_at_face(integrand_D, coord_normal_face, dim_normal),
+            integration_dims=dims_perp,
+            integration_bounds=bounds_perp,
+        )
+
+        vjp_value = integral_D
 
         # perform E-perpendicular integrals
         for E_perp, delta_eps_perp in zip(Es_perp, delta_eps_perps):
             integrand_E = E_perp * delta_eps_perp
-            integral_E = integrate_face(integrand_E)
+            integral_E = self._integrate_face(
+                self._arr_at_face(integrand_E, coord_normal_face, dim_normal),
+                integration_dims=dims_perp,
+                integration_bounds=bounds_perp,
+            )
+
             vjp_value += integral_E
+
+        return np.real(vjp_value)
+
+    def _derivative_face_pec(
+        self,
+        dim_normal: str,
+        axis_normal: Axis,
+        min_max_index: int,
+        coord_normal_face: float,
+        dims_perp: tuple[str, str],
+        bounds_perp: tuple[Coordinate2D, Coordinate2D],
+        D_normal: ScalarFieldDataArray,
+        H_der_map: FieldData,
+        eps_out_normal: ScalarFieldDataArray,
+    ) -> float:
+        """Compute derivative with respect to the face using the PEC form of the gradient.
+
+        Parameters
+        ----------
+        dtype : np.dtype = GRADIENT_DTYPE_FLOAT
+            Data type for interpolation coordinates and values.
+
+        dim_normal : str
+            Surface normal of the face
+        axis_normal : Axis
+            Axis (index) corresponding to the normal of the face
+        min_max_index : int
+            Indicator for if the face is on the minimum of the box (0) or the maximum of the Box (1)
+        coord_normal_face : float
+            The coordinate at which to interpolate the surface fields
+        dims_perp : tuple[str, str]
+            The perpendicular dimensions of the face
+        bounds_perp : tuple[Coordinate2D, Coordinate2D]
+            Bounds of integration along the face
+        D_normal : ScalarFieldDataArray
+            D-field component normal to the surface
+        H_der_map : FieldData
+            Multiplication of H-field components in the Box region
+        eps_out_normal : ScalarFieldDataArray
+            Normal component of permittivity outside the surface
+
+        Returns
+        -------
+        float
+            Surface gradient vjp value
+        """
+
+        fld_H_normal, flds_H_perp = self.pop_axis(("Hx", "Hy", "Hz"), axis=axis_normal)
+        Hs_perp = tuple(H_der_map[key] for key in flds_H_perp)
+
+        is_2d, zero_dimension, do_singularity_correction = self._check_singularity_correction_pec(
+            self.size, axis_normal
+        )
+
+        integration_dims = dims_perp
+        integration_bounds = bounds_perp
+        if do_singularity_correction:
+            integration_dims, integration_bounds = self._trim_dims_and_bounds_edge(
+                dims_perp, bounds_perp, zero_dimension
+            )
+
+        integrand_E = D_normal / np.real(eps_out_normal)
+
+        # apply singularity correction only when integrating along the line
+        def _apply_singularity_correction(interp_point: float) -> float:
+            edge_distance = np.abs(interp_point - coord_normal_face)
+            return (0.5 * np.pi * edge_distance) if do_singularity_correction else 1.0
+
+        snap_E_coord = self._snap_coords_outside(
+            min_max_index, integrand_E.coords[dim_normal].values, coord_normal_face
+        )
+
+        integral_E = self._integrate_face(
+            self._arr_at_face(integrand_E, snap_E_coord, dim_normal),
+            integration_dims=integration_dims,
+            integration_bounds=integration_bounds,
+        )
+
+        vjp_value = _apply_singularity_correction(snap_E_coord) * integral_E
+
+        for H_perp_idx, H_perp in enumerate(Hs_perp):
+            integrand_H = MU_0 * H_perp / EPSILON_0
+
+            if (is_2d and not (flds_H_perp[H_perp_idx] == f"H{zero_dimension}")) and (
+                dim_normal != zero_dimension
+            ):
+                continue
+
+            snap_H_coord = self._snap_coords_outside(
+                min_max_index, integrand_H.coords[dim_normal].values, coord_normal_face
+            )
+
+            integral_H = self._integrate_face(
+                self._arr_at_face(integrand_H, snap_H_coord, dim_normal),
+                integration_dims=integration_dims,
+                integration_bounds=integration_bounds,
+            )
+
+            vjp_value += _apply_singularity_correction(snap_H_coord) * integral_H
 
         return np.real(vjp_value)
 
@@ -2727,7 +2905,7 @@ class Transformed(Geometry):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -2873,6 +3051,25 @@ class Transformed(Geometry):
         return transform
 
     @staticmethod
+    def reflection(normal: Coordinate) -> MatrixReal4x4:
+        """Return a reflection matrix.
+
+        Parameters
+        ----------
+        normal : Tuple[float, float, float]
+            Normal of the plane of reflection.
+
+        Returns
+        -------
+        numpy.ndarray
+            Transform matrix with shape (4, 4).
+        """
+
+        transform = np.eye(4)
+        transform[:3, :3] = ReflectionFromPlane(normal=normal).matrix
+        return transform
+
+    @staticmethod
     def preserves_axis(transform: MatrixReal4x4, axis: Axis) -> bool:
         """Indicate if the transform preserves the orientation of a given axis.
 
@@ -2905,7 +3102,7 @@ class Transformed(Geometry):
 
         return normal
 
-    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Transformed:
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> Transformed:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         min_bound = np.array([0, 0, 0, 1.0])
@@ -2941,28 +3138,57 @@ class ClipOperation(Geometry):
         description="Second operand for the set operation. It can also be any geometry type.",
     )
 
+    @pydantic.validator("geometry_a", "geometry_b", always=True)
+    def _geometries_untraced(cls, val):
+        """Make sure that ``ClipOperation`` geometries do not contain tracers."""
+        traced = val._strip_traced_fields()
+        if traced:
+            raise ValidationError(
+                f"{val.type} contains traced fields {list(traced.keys())}. Note that "
+                "'ClipOperation' does not currently support automatic differentiation."
+            )
+        return val
+
     @staticmethod
-    def to_polygon_list(base_geometry: Shapely) -> List[Shapely]:
+    def to_polygon_list(base_geometry: Shapely, cleanup: bool = False) -> list[Shapely]:
         """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
-        empty polygons.
+        empty polygons, and empty triangles within polygons.
 
         Parameters
         ----------
         base_geometry : shapely.geometry.base.BaseGeometry
             Base geometry for inspection.
+        cleanup: bool = False
+            If True, removes extremely small features from each polygon's boundary.
+            This is useful for removing artifacts from 2D plots displayed to the user.
 
         Returns
         -------
         List[shapely.geometry.base.BaseGeometry]
             Valid polygons retrieved from ``base geometry``.
         """
+        unfiltered_geoms = []
         if base_geometry.geom_type == "GeometryCollection":
-            return [p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)]
+            unfiltered_geoms = [
+                p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)
+            ]
         if base_geometry.geom_type == "MultiPolygon":
-            return [p for p in base_geometry.geoms if not p.is_empty]
+            unfiltered_geoms = [p for p in base_geometry.geoms if not p.is_empty]
         if base_geometry.geom_type == "Polygon" and not base_geometry.is_empty:
-            return [base_geometry]
-        return []
+            unfiltered_geoms = [base_geometry]
+        geoms = []
+        if cleanup:
+            # Optional: "clean" each of the polygons (by removing extremely small or thin features).
+            for geom in unfiltered_geoms:
+                geom_clean = cleanup_shapely_object(geom)
+                if geom_clean.geom_type == "Polygon":
+                    geoms.append(geom_clean)
+                if geom_clean.geom_type == "MultiPolygon":
+                    geoms += [p for p in geom_clean.geoms if not p.is_empty]
+                # Ignore other types of shapely objects (points and lines)
+        else:
+            geoms = unfiltered_geoms
+        return geoms
 
     @property
     def _shapely_operation(self) -> Callable[[Shapely, Shapely], Shapely]:
@@ -2988,7 +3214,7 @@ class ClipOperation(Geometry):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -3011,11 +3237,14 @@ class ClipOperation(Geometry):
         b = self.geometry_b.intersections_tilted_plane(normal, origin, to_2D)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
-        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
+        return ClipOperation.to_polygon_list(
+            self._shapely_operation(geom_a, geom_b),
+            cleanup=True,
+        )
 
     def intersections_plane(
-        self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -3038,7 +3267,10 @@ class ClipOperation(Geometry):
         b = self.geometry_b.intersections_plane(x, y, z)
         geom_a = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in a])
         geom_b = shapely.unary_union([Geometry.evaluate_inf_shape(g) for g in b])
-        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
+        return ClipOperation.to_polygon_list(
+            self._shapely_operation(geom_a, geom_b),
+            cleanup=True,
+        )
 
     @cached_property
     def bounds(self) -> Bound:
@@ -3152,7 +3384,7 @@ class ClipOperation(Geometry):
             )
         return normal_a
 
-    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> ClipOperation:
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> ClipOperation:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         new_geom_a = self.geometry_a._update_from_bounds(bounds=bounds, axis=axis)
@@ -3163,7 +3395,7 @@ class ClipOperation(Geometry):
 class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: Tuple[annotate_type(GeometryType), ...] = pydantic.Field(
+    geometries: tuple[annotate_type(GeometryType), ...] = pydantic.Field(
         ...,
         title="Geometries",
         description="Tuple of geometries in a single grouping. "
@@ -3196,7 +3428,7 @@ class GeometryGroup(Geometry):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -3222,8 +3454,8 @@ class GeometryGroup(Geometry):
         ]
 
     def intersections_plane(
-        self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -3343,7 +3575,7 @@ class GeometryGroup(Geometry):
             )
         return normal
 
-    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> GeometryGroup:
+    def _update_from_bounds(self, bounds: tuple[float, float], axis: Axis) -> GeometryGroup:
         """Returns an updated geometry which has been transformed to fit within ``bounds``
         along the ``axis`` direction."""
         new_geometries = [
@@ -3351,26 +3583,127 @@ class GeometryGroup(Geometry):
         ]
         return self.updated_copy(geometries=new_geometries)
 
-    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+    def _compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute the adjoint derivatives for this object."""
 
         grad_vjps = {}
 
+        # create interpolators once for all geometries to avoid redundant field data conversions
+        interpolators = derivative_info.interpolators or derivative_info.create_interpolators(
+            dtype=GRADIENT_DTYPE_FLOAT
+        )
+
         for field_path in derivative_info.paths:
             _, index, *geo_path = field_path
             geo = self.geometries[index]
+            # pass pre-computed interpolators if available
             geo_info = derivative_info.updated_copy(
-                paths=[geo_path], bounds=geo.bounds, eps_approx=True, deep=False
+                paths=[tuple(geo_path)],
+                bounds=geo.bounds,
+                eps_approx=True,
+                deep=False,
+                interpolators=interpolators,
             )
-            vjp_dict_geo = geo.compute_derivatives(geo_info)
-            grad_vjp_values = list(vjp_dict_geo.values())
 
-            if len(grad_vjp_values) != 1:
+            vjp_dict_geo = geo._compute_derivatives(geo_info)
+
+            if len(vjp_dict_geo) != 1:
                 raise AssertionError("Got multiple gradients for single geometry field.")
 
-            grad_vjps[field_path] = grad_vjp_values[0]
+            grad_vjps[field_path] = vjp_dict_geo.popitem()[1]
 
         return grad_vjps
+
+
+def cleanup_shapely_object(obj: Shapely, tolerance_ratio: float = POLY_TOLERANCE_RATIO) -> Shapely:
+    """Remove small geometric features from the boundaries of a shapely object including
+    inward and outward spikes, thin holes, and thin connections between larger regions.
+
+    Parameters
+    ----------
+    obj : shapely
+        a shapely object (typically a ``Polygon`` or a ``MultiPolygon``)
+    tolerance_ratio : float = ``POLY_TOLERANCE_RATIO``
+        Features on the boundaries of polygons will be discarded if they are smaller
+        or narrower than ``tolerance_ratio`` multiplied by the size of the object.
+
+    Returns
+    -------
+    Shapely
+        A new shapely object whose small features (eg. thin spikes or holes) are removed.
+
+    Notes
+    -----
+    This function does not attempt to delete overlapping, nearby, or collinear vertices.
+    To solve that problem, use ``shapely.simplify()`` afterwards.
+    """
+    if _shapely_is_older_than("2.1"):
+        log.warning(
+            "Using old versions of the shapely library (prior to v2.1) may cause "
+            "plot errors.  This can be solved by upgrading to Python 3.10 "
+            "(or later) and reinstalling Tidy3d.",
+            log_once=True,
+        )
+        return obj
+    if obj.is_empty:
+        return obj
+    centroid = obj.centroid
+    object_size = min(obj.bounds[2] - obj.bounds[0], obj.bounds[3] - obj.bounds[1])
+    if object_size == 0.0:
+        return shapely.Polygon([])
+    # In order to prevent numerical overflow or underflow errors, we first subtract
+    # the centroid and divide by (rescale) the size of the object so it is not too big.
+    normalized_obj = shapely.affinity.affine_transform(
+        # https://shapely.readthedocs.io/en/stable/manual.html#affine-transformations
+        obj,
+        matrix=[
+            1 / object_size,
+            0.0,
+            0.0,
+            1 / object_size,
+            -centroid.x / object_size,
+            -centroid.y / object_size,
+        ],
+    )
+    # Important: Remove any self intersections beforehand using `shapely.make_valid()`.
+    valid_obj = shapely.make_valid(normalized_obj, method="structure", keep_collapsed=False)
+    # To get rid of small thin features, erode(shrink), dilate(expand), and erode again.
+    eroded_obj = shapely.buffer(  # This removes outward spikes
+        valid_obj,
+        distance=-tolerance_ratio,
+        cap_style="square",  # (optional parameter to reduce computation time)
+        quad_segs=3,  # (optional parameter to reduce computation time)
+    )
+    dilated_obj = shapely.buffer(  # This removes inward spikes and tiny holes
+        eroded_obj,
+        distance=2 * tolerance_ratio,
+        cap_style="square",
+        quad_segs=3,
+    )
+    cleaned_obj = dilated_obj
+    # Optional: Now shrink the polygon back to the original size.
+    cleaned_obj = shapely.buffer(
+        cleaned_obj,
+        distance=-tolerance_ratio,
+        cap_style="square",
+        quad_segs=3,
+    )
+    # Clean vertices of very close distances created during the erosion/dilation process.
+    # The distance value is heuristic.
+    cleaned_obj = cleaned_obj.simplify(POLY_DISTANCE_TOLERANCE, preserve_topology=True)
+    # Revert to the original scale and position.
+    rescaled_clean_obj = shapely.affinity.affine_transform(
+        cleaned_obj,
+        matrix=[
+            object_size,
+            0.0,
+            0.0,
+            object_size,
+            centroid.x,
+            centroid.y,
+        ],
+    )
+    return rescaled_clean_obj
 
 
 from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402

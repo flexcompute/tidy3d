@@ -1,5 +1,7 @@
 """File compression utilities"""
 
+from __future__ import annotations
+
 import gzip
 import shutil
 from typing import Any
@@ -58,7 +60,7 @@ def replace_values(values: Any, search_value: Any, replace_value: Any) -> Any:
         return {
             key: replace_values(val, search_value, replace_value) for key, val in values.items()
         }
-    elif isinstance(
+    if isinstance(
         values, (tuple, list)
     ):  # Parts of the nested dict structure include tuples with more dicts
         return type(values)(replace_values(val, search_value, replace_value) for val in values)

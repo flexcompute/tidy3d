@@ -3,18 +3,21 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Tuple
+from math import cos, isclose, sin
+from typing import Optional
 
 import pydantic.v1 as pydantic
 from typing_extensions import Literal
 
-from ...constants import MICROMETER
-from ..base import cached_property
-from ..data.dataset import FieldDataset
-from ..data.validators import validate_can_interpolate, validate_no_nans
-from ..types import Polarization
-from ..validators import assert_single_freq_in_range, warn_if_dataset_none
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.dataset import FieldDataset
+from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
+from tidy3d.components.types import Polarization
+from tidy3d.components.validators import assert_single_freq_in_range, warn_if_dataset_none
+from tidy3d.constants import MICROMETER
+
 from .base import Source
+from .time import SourceTimeType
 
 
 class CurrentSource(Source, ABC):
@@ -27,7 +30,7 @@ class CurrentSource(Source, ABC):
     )
 
     @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
+    def _pol_vector(self) -> tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         component = self.polarization[-1]  # 'x' 'y' or 'z'
         pol_axis = "xyz".index(component)
@@ -99,12 +102,68 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
         * `Adjoint optimization of quantum emitter light extraction to an integrated waveguide <../../notebooks/AdjointPlugin12LightExtractor.html>`_
     """
 
-    size: Tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
+    size: tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
         (0, 0, 0),
         title="Size",
         description="Size in x, y, and z directions, constrained to ``(0, 0, 0)``.",
         units=MICROMETER,
     )
+
+    @classmethod
+    def sources_from_angles(
+        cls,
+        source_time: SourceTimeType,
+        angle_theta: float,
+        angle_phi: float,
+        component: Literal["electric", "magnetic"] = "electric",
+        **kwargs,
+    ) -> list[PointDipole]:
+        """Returns a list of `PointDipole` objects used to emulate a single dipole polarized in an arbitrary direction. The direction is specificed using a polar and azimuthal angle.
+
+        Parameters
+        ----------
+        source_time: :class:`.SourceTime`
+            Specification of the source time-dependence.
+        angle_theta : float
+            Polar angle w.r.t. the z-axis.
+        angle_phi : float
+            Azimuth angle around the z-axis.
+        component : Literal["electric", "magnetic"] = "electric"
+            The type of polarization.
+        kwargs : dict
+            Keyword arguments passed to ``PointDipole()``, excluding ``source_time`` and ``polarization``
+
+        Returns
+        -------
+        list[PointDipole]
+            A list of ``PointDipole`` objects that emulate a single dipole with an arbitrary direction of polarization.
+        """
+        if not (component == "electric" or component == "magnetic"):
+            raise ValueError('Component must be "electric" or "magnetic"')
+
+        dipoles: list[PointDipole] = []
+        polarizations = ["Ex", "Ey", "Ez"] if component == "electric" else ["Hx", "Hy", "Hz"]
+
+        multipliers = [
+            sin(angle_theta) * cos(angle_phi),
+            sin(angle_theta) * sin(angle_phi),
+            cos(angle_theta),
+        ]
+
+        for polarization, mult in zip(polarizations, multipliers):
+            if not isclose(mult, 0.0, rel_tol=0.0, abs_tol=1e-9):
+                modulated_source_time = source_time.updated_copy(
+                    amplitude=source_time.amplitude * mult
+                )
+                dipoles.append(
+                    cls(
+                        source_time=modulated_source_time,
+                        polarization=polarization,
+                        **kwargs,
+                    )
+                )
+
+        return dipoles
 
 
 class CustomCurrentSource(ReverseInterpolatedSource):

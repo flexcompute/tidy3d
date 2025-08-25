@@ -1,11 +1,12 @@
 """Tests mediums."""
 
-from typing import Dict
+from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
@@ -14,12 +15,13 @@ from ..utils import AssertLogLevel
 MEDIUM = td.Medium()
 ANIS_MEDIUM = td.AnisotropicMedium(xx=MEDIUM, yy=MEDIUM, zz=MEDIUM)
 PEC = td.PECMedium()
+PMC = td.PMCMedium()
 PR = td.PoleResidue(poles=[(-1 + 1j, 2 + 2j)])
 SM = td.Sellmeier(coeffs=[(1, 2)])
 LZ = td.Lorentz(coeffs=[(1, 2, 3)])
 DR = td.Drude(coeffs=[(1, 2)])
 DB = td.Debye(coeffs=[(1, 2)])
-MEDIUMS = [MEDIUM, ANIS_MEDIUM, PEC, PR, SM, LZ, DR, DB]
+MEDIUMS = [MEDIUM, ANIS_MEDIUM, PEC, PR, SM, LZ, DR, DB, PMC]
 
 f, AX = plt.subplots()
 
@@ -141,6 +143,10 @@ def test_PEC():
     _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
 
 
+def test_PMC():
+    _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PMC)
+
+
 def test_lossy_metal():
     # frequency_range shouldn't be None
     with pytest.raises(pydantic.ValidationError):
@@ -171,6 +177,11 @@ def test_lossy_metal():
 
     # default fitting
     mat = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14))
+    model = mat.scaled_surface_impedance_model
+    num_poles = mat.num_poles
+
+    # thickness
+    mat = td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 4e14), thickness=0.1)
     model = mat.scaled_surface_impedance_model
     num_poles = mat.num_poles
 
@@ -287,7 +298,7 @@ def test_sellmeier_from_dispersion():
     assert np.allclose(-dn_df * td.C_0 / wvl**2, dn_dwvl)
 
 
-def eps_compare(medium: td.Medium, expected: Dict, tol: float = 1e-5):
+def eps_compare(medium: td.Medium, expected: dict, tol: float = 1e-5):
     for freq, val in expected.items():
         assert np.abs(medium.eps_model(freq) - val) < tol
 
@@ -400,6 +411,8 @@ def test_n_cfl():
     assert material.n_cfl == 2
     # PEC
     assert PEC.n_cfl == 1
+    # PMC
+    assert PMC.n_cfl == 1
     # anisotropic
     material = td.AnisotropicMedium(xx=MEDIUM, yy=td.Medium(permittivity=4), zz=MEDIUM)
     assert material.n_cfl == 1
@@ -797,6 +810,29 @@ def test_nonlinear_medium():
         )
         _ = sim.updated_copy(medium=med, path="structures/0")
 
+    grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=1)
+    sim = sim.updated_copy(grid_spec=grid_spec)
+    aux_fields = ("Nfz",)
+    with AssertLogLevel(None):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, tau=1)])
+        )
+        monitor = td.AuxFieldTimeMonitor(
+            interval=1, size=(0, 0, 0), name="aux_field_time", fields=aux_fields
+        )
+        sim = sim.updated_copy(medium=med, path="structures/0")
+        sim = sim.updated_copy(monitors=[monitor])
+
+    with AssertLogLevel("WARNING", contains_str="stores field"):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=1, tau=0)])
+        )
+        _ = sim.updated_copy(medium=med, path="structures/0")
+
+    with AssertLogLevel("WARNING", contains_str="stores field"):
+        med = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)]))
+        _ = sim.updated_copy(medium=med, path="structures/0")
+
 
 def test_custom_medium():
     Nx, Ny, Nz, Nf = 4, 3, 1, 1
@@ -805,7 +841,7 @@ def test_custom_medium():
     Z = [0]
     freqs = [2e14]
     n_data = np.ones((Nx, Ny, Nz, Nf))
-    n_dataset = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    n_dataset = td.ScalarFieldDataArray(n_data, coords={"x": X, "y": Y, "z": Z, "f": freqs})
 
     def create_mediums(n_dataset):
         ## Three equivalent ways of defining custom medium for the lens
@@ -814,7 +850,9 @@ def test_custom_medium():
         _ = td.CustomMedium.from_nk(n_dataset, interp_method="nearest")
 
         # define custom medium with permittivity data
-        eps_dataset = td.ScalarFieldDataArray(n_dataset**2, coords=dict(x=X, y=Y, z=Z, f=freqs))
+        eps_dataset = td.ScalarFieldDataArray(
+            n_dataset**2, coords={"x": X, "y": Y, "z": Z, "f": freqs}
+        )
         _ = td.CustomMedium.from_eps_raw(eps_dataset, interp_method="nearest")
 
         # define each component of permittivity via "PermittivityDataset"
@@ -828,9 +866,9 @@ def test_custom_medium():
 
     with pytest.raises(pydantic.ValidationError):
         # repeat some entries so data cannot be interpolated
-        X2 = [X[0]] + list(X)
+        X2 = [X[0], *list(X)]
         n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
-        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
+        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords={"x": X2, "y": Y, "z": Z, "f": freqs})
         create_mediums(n_dataset=n_dataset2)
 
 

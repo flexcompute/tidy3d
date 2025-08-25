@@ -194,6 +194,7 @@ Far-field
    tidy3d.FieldProjectionAngleMonitor
    tidy3d.FieldProjectionKSpaceMonitor
    tidy3d.DirectivityMonitor
+   tidy3d.AuxFieldTimeMonitor
 
 The far-field monitor records the near-field within the simulation domain in order to project it to some far away location. This can be a very efficient way to simulate the scattering or radiative response of devices such as lenses and antenna.
 

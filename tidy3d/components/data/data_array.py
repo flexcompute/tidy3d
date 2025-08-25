@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Dict, List, Mapping, Union
+from collections.abc import Mapping
+from typing import Any, Optional, Union
 
 import autograd.numpy as anp
 import h5py
@@ -17,8 +18,11 @@ from xarray.core.types import InterpOptions, Self
 from xarray.core.utils import OrderedSet, either_dict_or_kwargs
 from xarray.core.variable import as_variable
 
-from ...compat import alignment
-from ...constants import (
+from tidy3d.compat import alignment
+from tidy3d.components.autograd import TidyArrayBox, get_static, interpn, is_tidy_box
+from tidy3d.components.geometry.bound_ops import bounds_contains
+from tidy3d.components.types import Axis, Bound
+from tidy3d.constants import (
     HERTZ,
     MICROMETER,
     PICOSECOND_PER_NANOMETER_PER_KILOMETER,
@@ -26,9 +30,7 @@ from ...constants import (
     SECOND,
     WATT,
 )
-from ...exceptions import DataError, FileError
-from ..autograd import TidyArrayBox, get_static, interpn, is_tidy_box
-from ..types import Axis, Bound
+from tidy3d.exceptions import DataError, FileError
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -68,7 +70,7 @@ class DataArray(xr.DataArray):
     # stores an ordered tuple of strings corresponding to the data dimensions
     _dims = ()
     # stores a dictionary of attributes corresponding to the data values
-    _data_attrs: Dict[str, str] = {}
+    _data_attrs: dict[str, str] = {}
 
     def __init__(self, data, *args, **kwargs):
         # if data is a vanilla autograd box, convert to our box
@@ -117,7 +119,7 @@ class DataArray(xr.DataArray):
             val.attrs[attr_name] = attr
         return val
 
-    def _interp_validator(self, field_name: str = None) -> None:
+    def _interp_validator(self, field_name: Optional[str] = None) -> None:
         """Ensure the data can be interpolated or selected by checking for duplicate coordinates.
 
         NOTE
@@ -151,17 +153,17 @@ class DataArray(xr.DataArray):
     def __modify_schema__(cls, field_schema):
         """Sets the schema of DataArray object."""
 
-        schema = dict(
-            title="DataArray",
-            type="xr.DataArray",
-            properties=dict(
-                _dims=dict(
-                    title="_dims",
-                    type="Tuple[str, ...]",
-                ),
-            ),
-            required=["_dims"],
-        )
+        schema = {
+            "title": "DataArray",
+            "type": "xr.DataArray",
+            "properties": {
+                "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]",
+                },
+            },
+            "required": ["_dims"],
+        }
         field_schema.update(schema)
 
     @classmethod
@@ -260,7 +262,7 @@ class DataArray(xr.DataArray):
         token_str = dask.base.tokenize(self)
         return hash(token_str)
 
-    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> Self:
+    def multiply_at(self, value: complex, coord_name: str, indices: list[int]) -> Self:
         """Multiply self by value at indices."""
         if isbox(self.data) or isbox(value):
             return self._ag_multiply_at(value, coord_name, indices)
@@ -269,7 +271,7 @@ class DataArray(xr.DataArray):
         self_mult[{coord_name: indices}] *= value
         return self_mult
 
-    def _ag_multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> Self:
+    def _ag_multiply_at(self, value: complex, coord_name: str, indices: list[int]) -> Self:
         """Autograd multiply_at override when tracing."""
         key = {coord_name: indices}
         _, index_tuple, _ = self.variable._broadcast_indexes(key)
@@ -465,12 +467,7 @@ class DataArray(xr.DataArray):
             data = anp.transpose(var.data, combined_permutation)
             xi = anp.stack([anp.ravel(new_xi.data) for new_xi in new_x], axis=-1)
 
-            result = interpn(
-                [xn.data for xn in x],
-                data,
-                xi,
-                method=method,
-            )
+            result = interpn([xn.data for xn in x], data, xi, method=method, **kwargs)
 
             result = anp.moveaxis(result, 0, -1)
             result = anp.reshape(result, result.shape[:-1] + new_x[0].shape)
@@ -486,6 +483,40 @@ class DataArray(xr.DataArray):
             if len(out_dims) > 1:
                 result = result.transpose(*out_dims)
         return result
+
+    def _with_updated_data(self, data: np.ndarray, coords: dict[str, Any]) -> DataArray:
+        """Make copy of ``DataArray`` with ``data`` at specified ``coords``, autograd compatible
+
+        Constraints / Edge cases:
+            - `coords` must map to a specific value eg {x: '1'}, does not broadcast to arrays
+            - `data` will be reshaped to try to match `self.shape` except where `coords` present
+        """
+
+        # make mask
+        mask = xr.zeros_like(self, dtype=bool)
+        mask.loc[coords] = True
+
+        # reshape `data` to line up with `self.dims`, with shape of 1 along the selected axis
+        old_data = self.data
+        new_shape = list(old_data.shape)
+        for i, dim in enumerate(self.dims):
+            if dim in coords:
+                new_shape[i] = 1
+        try:
+            new_data = data.reshape(new_shape)
+        except ValueError as e:
+            raise ValueError(
+                "Couldn't reshape the supplied 'data' to update 'DataArray'. The provided data was "
+                f"of shape {data.shape} and tried to reshape to {new_shape}. If you encounter this "
+                "error please raise an issue on the tidy3d github repository with the context."
+            ) from e
+
+        # broadcast data to repeat data along the selected dimensions to match mask
+        new_data = new_data + np.zeros_like(old_data)
+
+        new_data = np.where(mask, new_data, old_data)
+
+        return self.copy(deep=True, data=new_data)
 
 
 class FreqDataArray(DataArray):
@@ -627,7 +658,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
         return sorted_self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
 
-    def does_cover(self, bounds: Bound) -> bool:
+    def does_cover(self, bounds: Bound, rtol: float = 0.0, atol: float = 0.0) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
         only one point along a given direction, then it is assumed the data is constant along that
         direction and coverage is not checked.
@@ -637,6 +668,10 @@ class AbstractSpatialDataArray(DataArray, ABC):
         ----------
         bounds : Tuple[float, float, float], Tuple[float, float float]
             Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        rtol : float = 0.0
+            Relative tolerance for comparing bounds
+        atol : float = 0.0
+            Absolute tolerance for comparing bounds
 
         Returns
         -------
@@ -647,12 +682,19 @@ class AbstractSpatialDataArray(DataArray, ABC):
             raise DataError(
                 "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
             )
-
-        coords = (self.x, self.y, self.z)
-        return all(
-            (np.min(coord) <= smin and np.max(coord) >= smax) or len(coord) == 1
-            for coord, smin, smax in zip(coords, bounds[0], bounds[1])
-        )
+        xyz = [self.x, self.y, self.z]
+        self_min = [0] * 3
+        self_max = [0] * 3
+        for dim in range(3):
+            coords = xyz[dim]
+            if len(coords) == 1:
+                self_min[dim] = bounds[0][dim]
+                self_max[dim] = bounds[1][dim]
+            else:
+                self_min[dim] = np.min(coords)
+                self_max[dim] = np.max(coords)
+        self_bounds = (tuple(self_min), tuple(self_max))
+        return bounds_contains(self_bounds, bounds, rtol=rtol, atol=atol)
 
 
 class SpatialDataArray(AbstractSpatialDataArray):
@@ -1162,9 +1204,9 @@ class SteadyVoltageDataArray(DataArray):
 
 
 class PointDataArray(DataArray):
-    """A two-dimensional array that stores coordinates of a collection of points.
+    """A two-dimensional array that stores coordinates/field components for a collection of points.
     Dimension ``index`` denotes the index of a point in the collection, and dimension ``axis``
-    denotes the point's coordinate along that axis.
+    denotes the field component (or point coordinate) in that direction.
 
     Example
     -------
@@ -1175,6 +1217,14 @@ class PointDataArray(DataArray):
     >>> point3 = point_array.sel(index=3)
     >>> # get x coordinates of all points
     >>> x_coords = point_array.sel(axis=0)
+    >>>
+    >>> field_da = PointDataArray(
+    ...     np.random.random((120, 3)), coords=dict(index=np.arange(120), axis=np.arange(3)),
+    ... )
+    >>> # get field of point number 90
+    >>> field_point90 = field_da.sel(index=90)
+    >>> # get z component of all points
+    >>> z_field = field_da.sel(axis=2)
     """
 
     __slots__ = ()
@@ -1236,6 +1286,36 @@ class IndexedVoltageDataArray(DataArray):
     _dims = ("index", "voltage")
 
 
+class IndexedTimeDataArray(DataArray):
+    """Stores a two-dimensional array with coordinates ``index`` and ``t``, where
+    ``index`` is usually associated with ``PointDataArray`` and ``t`` indicates at what
+    simulated time the data was obtained.
+
+    Example
+    -------
+    >>> indexed_array = IndexedTimeDataArray(
+    ...     (1+1j) * np.random.random((3,2)), coords=dict(index=np.arange(3), t=[0, 1])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "t")
+
+
+class IndexedFieldVoltageDataArray(DataArray):
+    """Stores indexed values of vector fields for different voltages. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated vector data.
+    Example
+    -------
+    >>> indexed_array = IndexedFieldVoltageDataArray(
+    ...     (1+1j) * np.random.random((4,3,2)), coords=dict(index=np.arange(4), axis=np.arange(3), voltage=[-1, 1])
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "axis", "voltage")
+
+
 class SpatialVoltageDataArray(AbstractSpatialDataArray):
     """Spatial distribution with voltage mapping.
 
@@ -1251,6 +1331,11 @@ class SpatialVoltageDataArray(AbstractSpatialDataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "voltage")
+
+
+class PerturbationCoefficientDataArray(DataArray):
+    __slots__ = ()
+    _dims = ("wvl", "coeff")
 
 
 DATA_ARRAY_TYPES = [
@@ -1285,8 +1370,18 @@ DATA_ARRAY_TYPES = [
     PointDataArray,
     CellDataArray,
     IndexedDataArray,
+    IndexedFieldVoltageDataArray,
     IndexedVoltageDataArray,
+    SpatialVoltageDataArray,
+    PerturbationCoefficientDataArray,
+    IndexedTimeDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 
-IndexedDataArrayTypes = Union[IndexedDataArray, IndexedVoltageDataArray]
+IndexedDataArrayTypes = Union[
+    IndexedDataArray,
+    IndexedVoltageDataArray,
+    IndexedTimeDataArray,
+    IndexedFieldVoltageDataArray,
+    PointDataArray,
+]

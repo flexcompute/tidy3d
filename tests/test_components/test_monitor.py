@@ -1,8 +1,11 @@
 """Tests monitors."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
+
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
@@ -306,7 +309,7 @@ def test_mode_bend_radius():
             size=(5, 0, 1),
             freqs=np.linspace(1e14, 2e14, 100),
             name="test",
-            mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=1),
+            mode_spec=td.ModeSpec(num_modes=1, bend_radius=1, bend_axis=2),
         )
         _ = td.Simulation(
             size=(2, 2, 2),
@@ -376,6 +379,7 @@ def test_monitor():
         name="directivity",
     )
     m10 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
+    m11 = td.AuxFieldTimeMonitor(size=size, center=center, name="aux_field_time", fields=("Nfx",))
 
     tmesh = np.linspace(0, 1, 10)
 

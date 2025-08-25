@@ -1,7 +1,10 @@
 """Environment Setup."""
 
+from __future__ import annotations
+
 import os
 import ssl
+from typing import Optional
 
 from pydantic.v1 import BaseSettings, Field
 
@@ -12,15 +15,16 @@ class EnvironmentConfig(BaseSettings):
     """Basic Configuration for definition environment."""
 
     def __hash__(self):
-        return hash((type(self),) + tuple(self.__dict__.values()))
+        return hash((type(self), *tuple(self.__dict__.values())))
 
     name: str
     web_api_endpoint: str
     website_endpoint: str
     s3_region: str
     ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
-    enable_caching: bool = None
-    ssl_version: ssl.TLSVersion = None
+    enable_caching: Optional[bool] = None
+    ssl_version: Optional[ssl.TLSVersion] = None
+    env_vars: Optional[dict[str, str]] = None
 
     def active(self) -> None:
         """Activate the environment instance."""
@@ -71,6 +75,17 @@ prod = EnvironmentConfig(
 )
 
 
+nexus = EnvironmentConfig(
+    name="nexus",
+    web_api_endpoint="http://127.0.0.1:5000",
+    ssl_verify=False,
+    enable_caching=False,
+    s3_region="us-east-1",
+    website_endpoint="http://127.0.0.1/tidy3d",
+    env_vars={"AWS_ENDPOINT_URL_S3": "http://127.0.0.1:9000"},
+)
+
+
 class Environment:
     """Environment decorator for user interactive.
 
@@ -82,15 +97,17 @@ class Environment:
     ...
     """
 
-    env_map = dict(
-        dev=dev,
-        uat=uat,
-        prod=prod,
-    )
+    env_map = {
+        "dev": dev,
+        "uat": uat,
+        "prod": prod,
+        "nexus": nexus,
+    }
 
     def __init__(self):
         log = get_logger()
         """Initialize the environment."""
+        self._previous_env_vars = {}
         env_key = os.environ.get("TIDY3D_ENV")
         env_key = env_key.lower() if env_key else env_key
         log.info(f"env_key is {env_key}")
@@ -104,6 +121,11 @@ class Environment:
                 f"Using prod as default."
             )
             self._current = prod
+
+        if self._current.env_vars:
+            for key, value in self._current.env_vars.items():
+                self._previous_env_vars[key] = os.environ.get(key)
+                os.environ[key] = value
 
     @property
     def current(self) -> EnvironmentConfig:
@@ -160,6 +182,17 @@ class Environment:
         """
         return prod
 
+    @property
+    def nexus(self) -> EnvironmentConfig:
+        """Get the nexus environment.
+
+        Returns
+        -------
+        EnvironmentConfig
+            The config for the nexus environment.
+        """
+        return nexus
+
     def set_current(self, config: EnvironmentConfig) -> None:
         """Set the current environment.
 
@@ -168,6 +201,19 @@ class Environment:
         config : EnvironmentConfig
             The environment to set to current.
         """
+        for key, value in self._previous_env_vars.items():
+            if value is None:
+                if key in os.environ:
+                    del os.environ[key]
+            else:
+                os.environ[key] = value
+        self._previous_env_vars = {}
+
+        if config.env_vars:
+            for key, value in config.env_vars.items():
+                self._previous_env_vars[key] = os.environ.get(key)
+                os.environ[key] = value
+
         self._current = config
 
     def enable_caching(self, enable_caching: bool = True) -> None:

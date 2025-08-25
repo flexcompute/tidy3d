@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.8.1"
+version = "2.10.0rc1"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -17,6 +17,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
+include = [{ path = "tidy3d/style.mplstyle", format = ["sdist", "wheel"] }]
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
@@ -50,8 +51,7 @@ joblib = "*"
 
 ### Optional dependencies ###
 # development core
-bump-my-version = { version = "*", optional = true }
-ruff = { version = "0.5.5", optional = true }
+ruff = { version = "0.11.11", optional = true }
 coverage = { version = "*", optional = true }
 dill = { version = "*", optional = true }
 ipython = { version = "*", optional = true }
@@ -65,9 +65,7 @@ pytest-xdist = "^3.6.1"
 pytest-cov = "^6.0.0"
 pytest-env = "^1.1.5"
 tox = { version = "*", optional = true }
-
-# gdspy
-gdspy = { version = "*", optional = true }
+diff-cover = { version = "*", optional = true }
 
 # gdstk
 gdstk = { version = ">=0.9.49", optional = true }
@@ -85,8 +83,8 @@ pyswarms = { version = "*", optional = true }
 
 # pytorch
 torch = [
-    { version = "^2.2.0", source = "PyPI", platform = "darwin", optional = true },
-    { version = "^2.2.0", source = "torch-cpu", platform = "!=darwin", optional = true },
+  { version = "^2.2.0", source = "PyPI", platform = "darwin", optional = true },
+  { version = "^2.2.0", source = "torch-cpu", platform = "!=darwin", optional = true },
 ]
 
 # scikit-rf
@@ -95,7 +93,7 @@ scikit-rf = { version = "*", optional = true }
 # trimesh
 networkx = { version = "^2.6.3", optional = true }
 rtree = { version = "1.2.0", optional = true }
-trimesh = { version = "^4", optional = true }
+trimesh = { version = ">=4.6", optional = true }
 
 # docs
 jupyter = { version = "*", optional = true }
@@ -109,6 +107,7 @@ pydata-sphinx-theme = { version = ">=0.13.3", optional = true }
 # divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
 tmm = { version = "*", optional = true }
 grcwa = { version = "*", optional = true }
+sphinx-design = { version = "*", optional = true }
 sphinx-favicon = { version = "*", optional = true }
 sphinx-sitemap = { version = ">=2.5.1", optional = true }
 sphinx-notfound-page = { version = "*", optional = true }
@@ -123,15 +122,14 @@ vtk = { version = ">=9.2.6", optional = true }
 sphinxemoji = { version = "*", optional = true }
 devsim = { version = "*", optional = true }
 cma = { version = "*", optional = true }
+openpyxl = { version = "*", optional = true }
 
 [tool.poetry.extras]
 dev = [
   'bayesian-optimization',
-  'bump-my-version',
   "coverage",
   'dill',
   'divparams',
-  'gdspy',
   'gdstk',
   'grcwa',
   'ipython',
@@ -165,6 +163,7 @@ dev = [
   'signac',
   'sphinx',
   'sphinx-book-theme',
+  'sphinx-design',
   'sphinx-copybutton',
   'sphinx-favicon',
   'sphinx-notfound-page',
@@ -178,6 +177,8 @@ dev = [
   'vtk',
   'devsim',
   'cma',
+  'diff-cover',
+  "openpyxl"
 ]
 docs = [
   "jupyter",
@@ -187,6 +188,7 @@ docs = [
   "nbsphinx",
   "ipython",
   "divparams",
+  'sphinx-design',
   "sphinx-copybutton",
   'sphinx-favicon',
   "sphinx-book-theme",
@@ -206,8 +208,8 @@ docs = [
   "myst-parser",
   "devsim",
   "cma",
+  "openpyxl"
 ]
-gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 scikit-rf = ["scikit-rf"]
 trimesh = ["trimesh", "networkx", "rtree"]
@@ -246,36 +248,63 @@ line-length = 100
 extend-exclude = ["docs/faq/", "docs/notebooks/"]
 
 [tool.ruff.lint]
-typing-modules = [
-  "tidy3d.components.types",
-] # without this Literal["something fails"]
-select = [
-  "I",      # isort
+extend-select = [
   "E",      # pycodestyle errors
-  "W",      # pycodestyle warnings
   "F",      # pyflakes
-  "C",      # flake8-comprehensions
-  "B",      # flake8-bugbear
-  "UP",
-  "NPY201", # numpy 2.* compatibility check
+  "B",      # bugbear
+  "I",      # isort
+  "UP",     # pyupgrade
+  "W",      # pycodestyle
+  "C4",     # flake8-comprehensions
+  "NPY",    # numpy-specific rules
+  "RUF",    # ruff builtins
+  "ISC",    # implicit string concatenation
+  "PIE",    # flake8-pie
+  "RSE",    # unnecessary parantheses on raised exceptions
+  "TID",    # no relative imports from parent modules
+  "PLE",    # pylint errors
+  "PLC",    # pylint conventions
 ]
-ignore = [
-  "E501",
-  "B008",  # do not perform function calls in argument defaults
-  "C901",  # too complex
-  "UP007", # use x | y instead of union[x,y] (does not work)
-  "B905",  # `zip()` without an explicit `strict=` parameter
-  "C408",  # C408 Unnecessary `dict` call (rewrite as a literal)
-  "B904",
-  "B028",  # stacklevel
-  "UP006", # typy annotation with Tuple[float] messes up pydantic
-  "UP038", # TODO decide what to do here
-  "UP035", # TODO decide what to do here
+extend-ignore = [
+  "RUF001", # ambiguous unicode characters
+  "RUF002", # ambiguous unicode characters
+  "RUF003", # ambiguous unicode characters
+  "RUF012", # type hints for mutable defaults
+  "RUF015", # next(iter(...)) instead of list(...)[0]
+  "E501",   # line too long
+  "B905",   # `zip()` without an explicit `strict=` parameter
+  "UP007",  # TODO: Remove once Python >= 3.10
+  "NPY002", # TODO: Revisit RNG handling
+]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = ["scipy", "matplotlib"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*" = [
+    "B015",   # useless comparison
+    "B018",   # useless expression
+    "E402",   # module-level import not at top of file
+    "E731",   # lambda assignment
+    "F841",   # unused local variable
+    "S101",   # asserts allowed in tests
+    "NPY201", # numpy 2.* compatibility check
+    "TID252", # allow relative imports in tests
+    "TID253", # allow heavy imports in tests
+]
+"tidy3d/plugins/**/*" = [
+    "TID253", # allow heavy imports in plugins (not used by MC)
 ]
 
 [tool.pytest.ini_options]
 # TODO: remove --assert=plain when https://github.com/scipy/scipy/issues/22236 is resolved
-addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain"
+addopts = "--cov=tidy3d --doctest-modules -n auto --dist worksteal --assert=plain -m 'not numerical' "
+markers = [
+  "numerical: marks numerical tests for adjoint gradients that require running simulations (deselect with '-m \"not numerical\"')",
+]
 env = ["MPLBACKEND=Agg", "OMP_NUM_THREADS=1"]
 doctest_optionflags = "NORMALIZE_WHITESPACE ELLIPSIS"
 norecursedirs = [
@@ -290,42 +319,3 @@ norecursedirs = [
 filterwarnings = "ignore::DeprecationWarning"
 testpaths = ["tidy3d", "tests", "docs"]
 python_files = "*.py"
-
-[tool.bumpversion]
-current_version = "2.8.1"
-parse = """(?x)
-    (?P<major>0|[1-9]\\d*)\\.
-    (?P<minor>0|[1-9]\\d*)\\.
-    (?P<patch>0|[1-9]\\d*)
-    (?:
-        (?P<pre_l>[a-zA-Z-]+)         # pre-release label
-        (?P<pre_n>0|[1-9]\\d*)        # pre-release version number
-    )?                                # pre-release section is optional
-"""
-serialize = ["{major}.{minor}.{patch}{pre_l}{pre_n}", "{major}.{minor}.{patch}"]
-search = "{current_version}"
-replace = "{new_version}"
-regex = false
-ignore_missing_version = true
-ignore_missing_files = false
-tag = false
-sign_tags = false
-tag_name = "v{new_version}"
-tag_message = "Bump version: {current_version} → {new_version}"
-allow_dirty = false
-commit = false
-message = "Bump version: {current_version} → {new_version}"
-commit_args = ""
-
-[tool.bumpversion.parts.pre_l]
-values = ["rc", ""]
-
-[[tool.bumpversion.files]]
-filename = "pyproject.toml"
-search = "\nversion = \"{current_version}\""
-replace = "\nversion = \"{new_version}\""
-
-[[tool.bumpversion.files]]
-filename = "tidy3d/version.py"
-search = "{current_version}"
-replace = "{new_version}"

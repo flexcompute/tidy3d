@@ -1,21 +1,25 @@
 """Test the parameter sweep plugin."""
 
+from __future__ import annotations
+
 import sys
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.plugins import design as tdd
 
 from ..utils import run_emulated
 
-SWEEP_METHODS = dict(
-    grid=tdd.MethodGrid(),
-    monte_carlo=tdd.MethodMonteCarlo(num_points=5, seed=1),
-    bay_opt=tdd.MethodBayOpt(initial_iter=5, n_iter=2, seed=1),
-    gen_alg=tdd.MethodGenAlg(
+SWEEP_METHODS = {
+    "grid": tdd.MethodGrid(),
+    "monte_carlo": tdd.MethodMonteCarlo(num_points=5, seed=1),
+    "bay_opt": tdd.MethodBayOpt(initial_iter=5, n_iter=2, seed=1),
+    "gen_alg": tdd.MethodGenAlg(
         solutions_per_pop=6,
         n_generations=2,
         n_parents_mating=4,
@@ -23,8 +27,8 @@ SWEEP_METHODS = dict(
         mutation_prob=0,
         keep_parents=0,
     ),
-    part_swarm=tdd.MethodParticleSwarm(n_particles=3, n_iter=2, seed=1),
-)
+    "part_swarm": tdd.MethodParticleSwarm(n_particles=3, n_iter=2, seed=1),
+}
 
 # Task names that should be produced for the different methods
 expected_task_names = {
@@ -36,7 +40,7 @@ expected_task_names = {
 }
 
 
-def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
+def emulated_batch_run(simulations, path_dir: Optional[str] = None, **kwargs):
     data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()}
     task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
     task_paths = {key: f"/path/to/{key}" for key in simulations.simulations.keys()}
@@ -800,7 +804,7 @@ def test_result_accessor_and_len(dims, coords, values, multi_val):
 
     result = tdd.Result(dims=dims, values=values, coords=coords)
 
-    for idx in range(0, len(values)):
+    for idx in range(len(values)):
         coord, value = result[idx]
 
         assert all(coord == coords[idx])

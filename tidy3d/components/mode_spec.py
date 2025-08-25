@@ -1,16 +1,19 @@
 """Defines specification for mode solver."""
 
+from __future__ import annotations
+
 from math import isclose
-from typing import Tuple, Union
+from typing import Literal, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ..constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
-from ..exceptions import SetupError, ValidationError
-from ..log import log
+from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
 from .base import Tidy3dBaseModel, skip_if_fields_missing
-from .types import Axis2D, Literal, TrackFreq
+from .types import Axis2D, TrackFreq
 
 GROUP_INDEX_STEP = 0.005
 
@@ -65,7 +68,7 @@ class ModeSpec(Tidy3dBaseModel):
         None, title="Target effective index", description="Guess for effective index of the mode."
     )
 
-    num_pml: Tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
+    num_pml: tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
         (0, 0),
         title="Number of PML layers",
         description="Number of standard pml layers to add in the two tangential axes.",
@@ -103,11 +106,11 @@ class ModeSpec(Tidy3dBaseModel):
     )
 
     precision: Literal["auto", "single", "double"] = pd.Field(
-        "auto",
+        "double",
         title="single, double, or automatic precision in mode solver",
         description="The solver will be faster and using less memory under "
         "single precision, but more accurate under double precision. "
-        "With the default ``'auto'``, apply double precision if the simulation contains a good "
+        "Choose ``'auto'`` to apply double precision if the simulation contains a good "
         "conductor, single precision otherwise.",
     )
 
@@ -138,7 +141,8 @@ class ModeSpec(Tidy3dBaseModel):
         "a reference plane normal to the structure's azimuthal direction. Then, the fields are rotated "
         "to align with the mode plane, using the 'n_eff' calculated at the reference plane. The second option can "
         "produce more accurate results, but more care must be taken, for example, in ensuring that the "
-        "original mode plane intersects the correct geometries in the simulation with rotated structures.",
+        "original mode plane intersects the correct geometries in the simulation with rotated structures. "
+        "Note: currently only supported when 'angle_phi' is a multiple of 'np.pi'.",
     )
 
     track_freq: Union[TrackFreq, None] = pd.Field(
@@ -221,3 +225,13 @@ class ModeSpec(Tidy3dBaseModel):
                 )
 
         return values
+
+    @pd.validator("angle_rotation")
+    def angle_rotation_with_phi(cls, val, values):
+        """Currently ``angle_rotation`` is only supported with ``angle_phi % (np.pi / 2) == 0``."""
+        if val and not isclose(values["angle_phi"] % (np.pi / 2), 0):
+            raise ValidationError(
+                "Parameter 'angle_phi' must be a multiple of 'np.pi / 2' when 'angle_rotation' is "
+                "enabled."
+            )
+        return val

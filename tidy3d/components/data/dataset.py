@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Union
+from typing import Any, Callable, Optional, Union, get_args
 
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER
-from ...exceptions import DataError
-from ...log import log
-from ..base import Tidy3dBaseModel
-from ..types import Axis
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.types import Axis, xyz
+from tidy3d.constants import C_0, PICOSECOND_PER_NANOMETER_PER_KILOMETER, UnitScaling
+from tidy3d.exceptions import DataError
+from tidy3d.log import log
+
 from .data_array import (
     DataArray,
     EMEScalarFieldDataArray,
@@ -28,6 +29,7 @@ from .data_array import (
     TimeDataArray,
     TriangleMeshDataArray,
 )
+from .zbf import ZBFData
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
@@ -43,7 +45,7 @@ class AbstractFieldDataset(Dataset, ABC):
 
     @property
     @abstractmethod
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
 
     def apply_phase(self, phase: float) -> AbstractFieldDataset:
@@ -59,15 +61,15 @@ class AbstractFieldDataset(Dataset, ABC):
 
     @property
     @abstractmethod
-    def grid_locations(self) -> Dict[str, str]:
+    def grid_locations(self) -> dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
 
     @property
     @abstractmethod
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def package_colocate_results(self, centered_fields: Dict[str, ScalarFieldDataArray]) -> Any:
+    def package_colocate_results(self, centered_fields: dict[str, ScalarFieldDataArray]) -> Any:
         """How to package the dictionary of fields computed via self.colocate()."""
         return xr.Dataset(centered_fields)
 
@@ -149,39 +151,39 @@ EMScalarFieldType = Union[
 class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
     """Stores a collection of E and H fields with x, y, z components."""
 
-    Ex: EMScalarFieldType = pd.Field(
+    Ex: Optional[EMScalarFieldType] = pd.Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
-    Ey: EMScalarFieldType = pd.Field(
+    Ey: Optional[EMScalarFieldType] = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
-    Ez: EMScalarFieldType = pd.Field(
+    Ez: Optional[EMScalarFieldType] = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
-    Hx: EMScalarFieldType = pd.Field(
+    Hx: Optional[EMScalarFieldType] = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
-    Hy: EMScalarFieldType = pd.Field(
+    Hy: Optional[EMScalarFieldType] = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
-    Hz: EMScalarFieldType = pd.Field(
+    Hz: Optional[EMScalarFieldType] = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
         fields = {
             "Ex": self.Ex,
@@ -194,22 +196,22 @@ class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
         return {field_name: field for field_name, field in fields.items() if field is not None}
 
     @property
-    def grid_locations(self) -> Dict[str, str]:
+    def grid_locations(self) -> dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
-        return dict(Ex="Ex", Ey="Ey", Ez="Ez", Hx="Hx", Hy="Hy", Hz="Hz")
+        return {"Ex": "Ex", "Ey": "Ey", "Ez": "Ez", "Hx": "Hx", "Hy": "Hy", "Hz": "Hz"}
 
     @property
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-        return dict(
-            Ex=lambda dim: -1 if (dim == 0) else +1,
-            Ey=lambda dim: -1 if (dim == 1) else +1,
-            Ez=lambda dim: -1 if (dim == 2) else +1,
-            Hx=lambda dim: +1 if (dim == 0) else -1,
-            Hy=lambda dim: +1 if (dim == 1) else -1,
-            Hz=lambda dim: +1 if (dim == 2) else -1,
-        )
+        return {
+            "Ex": lambda dim: -1 if (dim == 0) else +1,
+            "Ey": lambda dim: -1 if (dim == 1) else +1,
+            "Ez": lambda dim: -1 if (dim == 2) else +1,
+            "Hx": lambda dim: +1 if (dim == 0) else -1,
+            "Hy": lambda dim: +1 if (dim == 1) else -1,
+            "Hz": lambda dim: +1 if (dim == 2) else -1,
+        }
 
 
 class FieldDataset(ElectromagneticFieldDataset):
@@ -226,36 +228,122 @@ class FieldDataset(ElectromagneticFieldDataset):
     >>> data = FieldDataset(Ex=scalar_field, Hz=scalar_field)
     """
 
-    Ex: ScalarFieldDataArray = pd.Field(
+    Ex: Optional[ScalarFieldDataArray] = pd.Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
-    Ey: ScalarFieldDataArray = pd.Field(
+    Ey: Optional[ScalarFieldDataArray] = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
-    Ez: ScalarFieldDataArray = pd.Field(
+    Ez: Optional[ScalarFieldDataArray] = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
-    Hx: ScalarFieldDataArray = pd.Field(
+    Hx: Optional[ScalarFieldDataArray] = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
-    Hy: ScalarFieldDataArray = pd.Field(
+    Hy: Optional[ScalarFieldDataArray] = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
-    Hz: ScalarFieldDataArray = pd.Field(
+    Hz: Optional[ScalarFieldDataArray] = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
     )
+
+    def from_zbf(filename: str, dim1: xyz, dim2: xyz) -> FieldDataset:
+        """Creates a :class:`.FieldDataset` from a Zemax Beam File (``.zbf``).
+
+        Parameters
+        ----------
+        filename: str
+            The file name of the .zbf file to read.
+        dim1: xyz
+            Tangential field component to map the x-dimension of the zbf data to.
+            eg. ``dim1 = "z"`` sets ``FieldDataset.Ez`` to ``Ex`` of the zbf data.
+        dim2: xyz
+            Tangential field component to map the y-dimension of the zbf data to.
+            eg. ``dim2 = "z"`` sets ``FieldDataset.Ez`` to ``Ey`` of the zbf data.
+
+        Returns
+        -------
+        :class:`.FieldDataset`
+            A :class:`.FieldDataset` object with two tangential E field components populated
+            by zbf data.
+
+        See Also
+        --------
+        :class:`.ZBFData`:
+            A class containing data read in from a ``.zbf`` file.
+        """
+        log.warning(
+            "'FieldDataset.from_zbf()' is currently an experimental feature."
+            " If any issues are encountered, please contact Flexcompute support 'https://www.flexcompute.com/tidy3d/technical-support/'"
+        )
+
+        if dim1 not in get_args(xyz):
+            raise ValueError(f"'dim1' = '{dim1}' is not allowed, must be one of 'x', 'y', or 'z'.")
+        if dim2 not in get_args(xyz):
+            raise ValueError(f"'dim2' = '{dim2}' is not allowed, must be one of 'x', 'y', or 'z'.")
+        if dim1 == dim2:
+            raise ValueError("'dim1' and 'dim2' must be different.")
+
+        # get the third dimension
+        dim3 = list(set(get_args(xyz)) - {dim1, dim2})[0]
+        dims = {"x": 0, "y": 1, "z": 2}
+        dim2expand = dims[dim3]  # this is for expanding E field arrays
+
+        # load zbf data
+        zbfdata = ZBFData.read_zbf(filename)
+
+        # Grab E fields, dimensions, wavelength
+        edim1 = zbfdata.Ex
+        edim2 = zbfdata.Ey
+        n1 = zbfdata.nx
+        n2 = zbfdata.ny
+        d1 = zbfdata.dx / UnitScaling[zbfdata.unit]
+        d2 = zbfdata.dy / UnitScaling[zbfdata.unit]
+        wavelength = zbfdata.wavelength / UnitScaling[zbfdata.unit]
+
+        # make scalar field data arrays
+        len1 = d1 * (n1 - 1)
+        len2 = d2 * (n2 - 1)
+        coords1 = np.linspace(-len1 / 2, len1 / 2, n1)
+        coords2 = np.linspace(-len2 / 2, len2 / 2, n2)
+        f = [C_0 / wavelength]
+        Edim1 = ScalarFieldDataArray(
+            np.expand_dims(edim1, axis=(dim2expand, 3)),
+            coords={
+                dim1: coords1,
+                dim2: coords2,
+                dim3: [0],
+                "f": f,
+            },
+        )
+        Edim2 = ScalarFieldDataArray(
+            np.expand_dims(edim2, axis=(dim2expand, 3)),
+            coords={
+                dim1: coords1,
+                dim2: coords2,
+                dim3: [0],
+                "f": f,
+            },
+        )
+
+        return FieldDataset(
+            **{
+                f"E{dim1}": Edim1,
+                f"E{dim2}": Edim2,
+            }
+        )
 
 
 class FieldTimeDataset(ElectromagneticFieldDataset):
@@ -272,32 +360,32 @@ class FieldTimeDataset(ElectromagneticFieldDataset):
     >>> data = FieldTimeDataset(Ex=scalar_field, Hz=scalar_field)
     """
 
-    Ex: ScalarFieldTimeDataArray = pd.Field(
+    Ex: Optional[ScalarFieldTimeDataArray] = pd.Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
     )
-    Ey: ScalarFieldTimeDataArray = pd.Field(
+    Ey: Optional[ScalarFieldTimeDataArray] = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
     )
-    Ez: ScalarFieldTimeDataArray = pd.Field(
+    Ez: Optional[ScalarFieldTimeDataArray] = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
     )
-    Hx: ScalarFieldTimeDataArray = pd.Field(
+    Hx: Optional[ScalarFieldTimeDataArray] = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
     )
-    Hy: ScalarFieldTimeDataArray = pd.Field(
+    Hy: Optional[ScalarFieldTimeDataArray] = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
     )
-    Hz: ScalarFieldTimeDataArray = pd.Field(
+    Hz: Optional[ScalarFieldTimeDataArray] = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
@@ -310,6 +398,88 @@ class FieldTimeDataset(ElectromagneticFieldDataset):
             raise ValueError("Can't apply phase to time-domain field data, which is real-valued.")
 
         return self
+
+
+class AuxFieldDataset(AbstractFieldDataset, ABC):
+    """Stores a collection of aux fields with x, y, z components."""
+
+    Nfx: Optional[EMScalarFieldType] = pd.Field(
+        None,
+        title="Nfx",
+        description="Spatial distribution of the free carrier density for "
+        "polarization in the x-direction.",
+    )
+    Nfy: Optional[EMScalarFieldType] = pd.Field(
+        None,
+        title="Nfy",
+        description="Spatial distribution of the free carrier density for "
+        "polarization in the y-direction.",
+    )
+    Nfz: Optional[EMScalarFieldType] = pd.Field(
+        None,
+        title="Nfz",
+        description="Spatial distribution of the free carrier density for "
+        "polarization in the z-direction.",
+    )
+
+    @property
+    def field_components(self) -> dict[str, DataArray]:
+        """Maps the field components to their associated data."""
+        fields = {
+            "Nfx": self.Nfx,
+            "Nfy": self.Nfy,
+            "Nfz": self.Nfz,
+        }
+        return {field_name: field for field_name, field in fields.items() if field is not None}
+
+    @property
+    def grid_locations(self) -> dict[str, str]:
+        """Maps field components to the string key of their grid locations on the yee lattice."""
+        return {"Nfx": "Ex", "Nfy": "Ey", "Nfz": "Ez"}
+
+    @property
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
+        """Maps field components to their (positive) symmetry eigenvalues."""
+
+        return {
+            "Nfx": lambda dim: +1,
+            "Nfy": lambda dim: +1,
+            "Nfz": lambda dim: +1,
+        }
+
+
+class AuxFieldTimeDataset(AuxFieldDataset):
+    """Dataset storing a collection of the scalar components of aux fields in the time domain
+
+    Example
+    -------
+    >>> x = [-1,1]
+    >>> y = [-2,0,2]
+    >>> z = [-3,-1,1,3]
+    >>> t = [0, 1e-12, 2e-12]
+    >>> coords = dict(x=x, y=y, z=z, t=t)
+    >>> scalar_field = ScalarFieldTimeDataArray(np.random.random((2,3,4,3)), coords=coords)
+    >>> data = AuxFieldTimeDataset(Nfx=scalar_field)
+    """
+
+    Nfx: Optional[ScalarFieldTimeDataArray] = pd.Field(
+        None,
+        title="Nfx",
+        description="Spatial distribution of the free carrier density for polarization "
+        "in the x-direction.",
+    )
+    Nfy: Optional[ScalarFieldTimeDataArray] = pd.Field(
+        None,
+        title="Nfy",
+        description="Spatial distribution of the free carrier density for polarization "
+        "in the y-direction.",
+    )
+    Nfz: Optional[ScalarFieldTimeDataArray] = pd.Field(
+        None,
+        title="Nfz",
+        description="Spatial distribution of the free carrier density for polarization "
+        "in the z-direction.",
+    )
 
 
 class ModeSolverDataset(ElectromagneticFieldDataset):
@@ -338,32 +508,32 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     ... )
     """
 
-    Ex: ScalarModeFieldDataArray = pd.Field(
+    Ex: Optional[ScalarModeFieldDataArray] = pd.Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
-    Ey: ScalarModeFieldDataArray = pd.Field(
+    Ey: Optional[ScalarModeFieldDataArray] = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
-    Ez: ScalarModeFieldDataArray = pd.Field(
+    Ez: Optional[ScalarModeFieldDataArray] = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
-    Hx: ScalarModeFieldDataArray = pd.Field(
+    Hx: Optional[ScalarModeFieldDataArray] = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
-    Hy: ScalarModeFieldDataArray = pd.Field(
+    Hy: Optional[ScalarModeFieldDataArray] = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
-    Hz: ScalarModeFieldDataArray = pd.Field(
+    Hz: Optional[ScalarModeFieldDataArray] = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
@@ -375,14 +545,14 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group_raw: GroupIndexDataArray = pd.Field(
+    n_group_raw: Optional[GroupIndexDataArray] = pd.Field(
         None,
         alias="n_group",  # This is for backwards compatibility only when loading old data
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
 
-    dispersion_raw: ModeDispersionDataArray = pd.Field(
+    dispersion_raw: Optional[ModeDispersionDataArray] = pd.Field(
         None,
         title="Dispersion",
         description="Dispersion parameter for the mode.",
@@ -390,7 +560,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
         fields = {
             "Ex": self.Ex,
@@ -463,19 +633,19 @@ class PermittivityDataset(AbstractFieldDataset):
     """
 
     @property
-    def field_components(self) -> Dict[str, ScalarFieldDataArray]:
+    def field_components(self) -> dict[str, ScalarFieldDataArray]:
         """Maps the field components to their associated data."""
-        return dict(eps_xx=self.eps_xx, eps_yy=self.eps_yy, eps_zz=self.eps_zz)
+        return {"eps_xx": self.eps_xx, "eps_yy": self.eps_yy, "eps_zz": self.eps_zz}
 
     @property
-    def grid_locations(self) -> Dict[str, str]:
+    def grid_locations(self) -> dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
-        return dict(eps_xx="Ex", eps_yy="Ey", eps_zz="Ez")
+        return {"eps_xx": "Ex", "eps_yy": "Ey", "eps_zz": "Ez"}
 
     @property
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
-        return dict(eps_xx=None, eps_yy=None, eps_zz=None)
+        return {"eps_xx": None, "eps_yy": None, "eps_zz": None}
 
     eps_xx: ScalarFieldDataArray = pd.Field(
         ...,

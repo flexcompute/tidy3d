@@ -6,23 +6,26 @@ import os
 import pathlib
 import tempfile
 from datetime import datetime
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Optional, Union
 
 import pydantic.v1 as pd
 from botocore.exceptions import ClientError
 from pydantic.v1 import Extra, Field, parse_obj_as
+
+import tidy3d as td
+from tidy3d.exceptions import ValidationError
 
 from . import http_util
 from .cache import FOLDER_CACHE
 from .constants import SIM_ERROR_FILE, SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5_GZ
 from .core_config import get_logger_console
 from .environment import Env
-from .exceptions import WebError
+from .exceptions import WebError, WebNotFoundError
 from .file_util import read_simulation_from_hdf5
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
 from .stub import TaskStub
-from .types import Queryable, ResourceLifecycle, Submittable, Tidy3DResource
+from .types import PayType, Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
@@ -45,7 +48,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         resp = http.get("tidy3d/projects")
         return (
             parse_obj_as(
-                List[Folder],
+                list[Folder],
                 resp,
             )
             if resp
@@ -99,7 +102,15 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
         http.delete(f"tidy3d/projects/{self.folder_id}")
 
-    def list_tasks(self) -> List[Tidy3DResource]:
+    def delete_old(self, days_old: int) -> int:
+        """Remove folder contents older than ``days_old``."""
+
+        return http.delete(
+            f"tidy3d/tasks/{self.folder_id}/tasks",
+            params={"daysOld": days_old},
+        )
+
+    def list_tasks(self) -> list[Tidy3DResource]:
         """List all tasks in this folder.
 
         Returns
@@ -110,7 +121,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
         return (
             parse_obj_as(
-                List[SimulationTask],
+                list[SimulationTask],
                 resp,
             )
             if resp
@@ -194,9 +205,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         task_type: str,
         task_name: str,
         folder_name: str = "default",
-        callback_url: str = None,
+        callback_url: Optional[str] = None,
         simulation_type: str = "tidy3d",
-        parent_tasks: List[str] = None,
+        parent_tasks: Optional[list[str]] = None,
         file_type: str = "Gz",
     ) -> SimulationTask:
         """Create a new task on the server.
@@ -261,12 +272,17 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             :class:`.SimulationTask` object containing info about status,
              size, credits of task and others.
         """
-        resp = http.get(f"tidy3d/tasks/{task_id}/detail")
+        try:
+            resp = http.get(f"tidy3d/tasks/{task_id}/detail")
+        except WebNotFoundError as e:
+            td.log.error(f"The requested task ID '{task_id}' does not exist.")
+            raise e
+
         task = SimulationTask(**resp) if resp else None
         return task
 
     @classmethod
-    def get_running_tasks(cls) -> List[SimulationTask]:
+    def get_running_tasks(cls) -> list[SimulationTask]:
         """Get a list of running tasks from the server"
 
         Returns
@@ -278,7 +294,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         resp = http.get("tidy3d/py/tasks")
         if not resp:
             return []
-        return parse_obj_as(List[SimulationTask], resp)
+        return parse_obj_as(list[SimulationTask], resp)
 
     def delete(self, versions: bool = False):
         """Delete current task from server.
@@ -342,7 +358,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         stub: TaskStub,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
         remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
@@ -382,7 +398,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         local_file: str,
         remote_filename: str,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> None:
         """
         Upload file to platform. Using this method when the json file is too large to parse
@@ -411,8 +427,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     def submit(
         self,
-        solver_version: str = None,
-        worker_group: str = None,
+        solver_version: Optional[str] = None,
+        worker_group: Optional[str] = None,
+        pay_type: Union[PayType, str] = PayType.AUTO,
+        priority: Optional[int] = None,
     ):
         """Kick off this task.
 
@@ -426,7 +444,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             target solver version.
         worker_group: str = None
             worker group
+        pay_type: Union[PayType, str] = PayType.AUTO
+            Which method to pay the simulation.
+        priority: int = None
+            Task priority for vGPU queue (1=lowest, 10=highest).
         """
+        pay_type = PayType(pay_type) if not isinstance(pay_type, PayType) else pay_type
 
         if solver_version:
             protocol_version = None
@@ -440,6 +463,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "workerGroup": worker_group,
                 "protocolVersion": protocol_version,
                 "enableCaching": Env.current.enable_caching,
+                "payType": pay_type.value,
+                "priority": priority,
             },
         )
 
@@ -478,7 +503,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
         remote_data_file: str = SIMULATION_DATA_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation data file from Server.
@@ -535,7 +560,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         self,
         to_file: str,
         verbose: bool = True,
-        progress_callback: Callable[[float], None] = None,
+        progress_callback: Optional[Callable[[float], None]] = None,
         remote_sim_file: str = SIM_FILE_HDF5_GZ,
     ) -> pathlib.Path:
         """Get simulation.hdf5 file from Server.
@@ -565,7 +590,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             progress_callback=progress_callback,
         )
 
-    def get_running_info(self) -> Tuple[float, float]:
+    def get_running_info(self) -> tuple[float, float]:
         """Gets the % done and field_decay for a running task.
 
         Returns
@@ -586,7 +611,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return perc_done, field_decay
 
     def get_log(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self,
+        to_file: str,
+        verbose: bool = True,
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> pathlib.Path:
         """Get log file from Server.
 
@@ -648,3 +676,33 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return http.put(
             "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
         )
+
+    def validate_post_upload(self, parent_tasks: Optional[list[str]] = None):
+        """Perform checks after task is uploaded and metadata is processed."""
+        if self.task_type == "HEAT_CHARGE" and parent_tasks:
+            try:
+                if len(parent_tasks) > 1:
+                    raise ValueError(
+                        "A single parent 'task_id' corresponding to the task in which the meshing "
+                        "was run must be provided."
+                    )
+                try:
+                    # get mesh task info
+                    mesh_task = SimulationTask.get(parent_tasks[0], verbose=False)
+                    assert mesh_task.task_type == "VOLUME_MESH"
+                    assert mesh_task.status == "success"
+                    # get up-to-date task info
+                    task = SimulationTask.get(self.task_id, verbose=False)
+                    if task.fileMd5 != mesh_task.childFileMd5:
+                        raise ValidationError(
+                            "Simulation stored in parent task 'VolumeMesher' does not match the "
+                            "current simulation."
+                        )
+                except Exception as e:
+                    raise ValidationError(
+                        "The parent task must be a 'VolumeMesher' task which has been successfully "
+                        "run and is associated to the same 'HeatChargeSimulation' as provided here."
+                    ) from e
+
+            except Exception as e:
+                raise WebError(f"Provided 'parent_tasks' failed validation: {e!s}") from e

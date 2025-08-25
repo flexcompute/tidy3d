@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import autograd.numpy as np
 from numpy.typing import NDArray
 
-from ..constants import BETA_DEFAULT, ETA_DEFAULT
+from tidy3d.plugins.autograd.constants import BETA_DEFAULT, ETA_DEFAULT
 
 
 def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> NDArray:

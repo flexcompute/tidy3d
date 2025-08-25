@@ -10,6 +10,8 @@ Attributes:
     Q_e (float): funamental charge [C]
 """
 
+from __future__ import annotations
+
 from types import MappingProxyType
 
 import numpy as np
@@ -49,6 +51,11 @@ Reduced Planck constant [eV*s]
 K_B = 8.617333262e-5
 """
 Boltzmann constant [eV/K]
+"""
+
+GRAV_ACC = 9.80665 * 1e6
+"""
+Gravitational acceleration (g) [um/s^2].",
 """
 
 # floating point precisions
@@ -194,6 +201,11 @@ SPECIFIC_HEAT_CAPACITY = "J/(kg*K)"
 Joules per (kilogram Kelvin).
 """
 
+DENSITY = "kg/um^3"
+"""
+Kilograms per cubic micrometer.
+"""
+
 HEAT_FLUX = "W/um^2"
 """
 Watts per square micrometer.
@@ -212,6 +224,26 @@ Watts per (square micrometer Kelvin).
 CURRENT_DENSITY = "A/um^2"
 """
 Amperes per square micrometer
+"""
+
+DYNAMIC_VISCOSITY = "kg/(um*s)"
+"""
+Kilograms per (micrometer second)
+"""
+
+SPECIFIC_HEAT = "um^2/(s^2*K)"
+"""
+Square micrometers per (square second Kelvin).
+"""
+
+THERMAL_EXPANSIVITY = "1/K"
+"""
+Inverse Kelvin.
+"""
+
+ACCELERATION = "um/s^2"
+"""
+Acceleration unit.
 """
 
 LARGE_NUMBER = 1e10
@@ -238,6 +270,8 @@ UnitScaling = MappingProxyType(
         "mm": 1e-3,
         "cm": 1e-4,
         "m": 1e-6,
+        "mil": 1.0 / 25.4,
+        "in": 1.0 / 25400,
     }
 )
-"""Immutable dictionary for converting a unit specification to a scaling factor."""
+"""Immutable dictionary for converting microns to another spatial unit, eg. nm = um * UnitScaling["nm"]."""

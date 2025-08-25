@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import os
 import sys
 
 import numpy as np
-import tidy3d as td
 from memory_profiler import profile
+
+import tidy3d as td
 from tidy3d.components.data.data_array import ScalarFieldDataArray
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.sim_data import SimulationData
@@ -48,7 +51,7 @@ def make_sim_data_1(file_size_gb=FILE_SIZE_GB):
     src = PointDipole(
         center=(0, 0, 0), source_time=GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
     )
-    coords = dict(x=x, y=y, z=z, f=f)
+    coords = {"x": x, "y": y, "z": z, "f": f}
     Ex = ScalarFieldDataArray(data, coords=coords)
     monitor = FieldMonitor(size=(2, 2, 2), freqs=f, name="test", fields=["Ex"])
     field_data = FieldData(monitor=monitor, Ex=Ex)
@@ -70,7 +73,7 @@ SIM_DATA_1 = make_sim_data_1()
 
 @profile
 def test_memory_1_save():
-    print(f'sim_data_size = {SIM_DATA_1.monitor_data["test"].Ex.nbytes:.2e} Bytes')
+    print(f"sim_data_size = {SIM_DATA_1.monitor_data['test'].Ex.nbytes:.2e} Bytes")
     SIM_DATA_1.to_file(PATH)
     print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
 
@@ -88,7 +91,7 @@ def test_core_profile_small_1_save():
     y = np.arange(Ny)
     z = np.arange(Nz)
     t = np.arange(Nt)
-    coords = dict(x=x, y=y, z=z, t=t)
+    coords = {"x": x, "y": y, "z": z, "t": t}
     scalar_field = td.ScalarFieldTimeDataArray(np.random.random((Nx, Ny, Nz, Nt)), coords=coords)
     monitor = td.FieldTimeMonitor(size=(2, 4, 6), interval=100, name="field", fields=["Ex", "Hz"])
     data = td.FieldTimeData(monitor=monitor, Ex=scalar_field, Hz=scalar_field)
@@ -123,7 +126,7 @@ def test_speed_many_datasets():
     y = np.arange(Ny)
     z = np.arange(Nz)
     f = np.arange(Nf)
-    coords = dict(x=x, y=y, z=z, f=f)
+    coords = {"x": x, "y": y, "z": z, "f": f}
     scalar_field = td.ScalarFieldDataArray(np.random.random((Nx, Ny, Nz, Nf)), coords=coords)
 
     def make_field_data(num_index: int):
@@ -133,7 +136,7 @@ def test_speed_many_datasets():
             freqs=np.linspace(1e14, 2e14, Nf).tolist(),
             name=str(num_index),
         )
-        scalar_fields = {fld: scalar_field for fld in monitor.fields}
+        scalar_fields = dict.fromkeys(monitor.fields, scalar_field)
 
         return td.FieldData(monitor=monitor, **scalar_fields)
 

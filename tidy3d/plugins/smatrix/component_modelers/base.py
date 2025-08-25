@@ -4,34 +4,50 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Union
+from typing import Generic, Optional, TypeVar, Union, get_args
 
-import numpy as np
+import autograd.numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel, cached_property
-from ....components.data.data_array import DataArray
-from ....components.data.sim_data import SimulationData
-from ....components.simulation import Simulation
-from ....components.types import FreqArray
-from ....config import config
-from ....constants import HERTZ
-from ....exceptions import SetupError, Tidy3dKeyError
-from ....web.api.container import Batch, BatchData
-from ..ports.coaxial_lumped import CoaxialLumpedPort
-from ..ports.modal import Port
-from ..ports.rectangular_lumped import LumpedPort
-from ..ports.wave import WavePort
+from tidy3d.components.base import Tidy3dBaseModel, cached_property
+from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.utils import _shift_value_signed
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.types import Complex, FreqArray
+from tidy3d.components.validators import (
+    assert_unique_names,
+    validate_freqs_min,
+    validate_freqs_not_empty,
+    validate_freqs_unique,
+)
+from tidy3d.config import config
+from tidy3d.constants import HERTZ
+from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.log import log
+from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
+from tidy3d.plugins.smatrix.ports.modal import Port
+from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
+from tidy3d.plugins.smatrix.ports.wave import WavePort
+from tidy3d.web import run_async
+from tidy3d.web.api.container import Batch, BatchData
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
 DEFAULT_DATA_DIR = "."
 
+# whether to run gradient calculation for component modeler locally
+LOCAL_GRADIENT = False
+
 LumpedPortType = Union[LumpedPort, CoaxialLumpedPort]
 TerminalPortType = Union[LumpedPortType, WavePort]
 
+# Generic type variables for matrix indices and elements
+IndexType = TypeVar("IndexType")
+ElementType = TypeVar("ElementType")
 
-class AbstractComponentModeler(ABC, Tidy3dBaseModel):
+
+class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseModel):
     """Tool for modeling devices and computing port parameters."""
 
     simulation: Simulation = pd.Field(
@@ -40,7 +56,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: Tuple[Union[Port, TerminalPortType], ...] = pd.Field(
+    ports: tuple[Union[Port, TerminalPortType], ...] = pd.Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
@@ -107,22 +123,92 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "fields that were not used to create the task will cause errors.",
     )
 
+    run_only: Optional[tuple[IndexType, ...]] = pd.Field(
+        None,
+        title="Run Only",
+        description="Set of matrix indices that define the simulations to run. "
+        "If ``None``, simulations will be run for all indices in the scattering matrix. "
+        "If a tuple is given, simulations will be run only for the given matrix indices.",
+    )
+
+    element_mappings: tuple[tuple[ElementType, ElementType, Complex], ...] = pd.Field(
+        (),
+        title="Element Mappings",
+        description="Tuple of S matrix element mappings, each described by a tuple of "
+        "(input_element, output_element, coefficient), where the coefficient is the "
+        "element_mapping coefficient describing the relationship between the input and output "
+        "matrix element. If all elements of a given column of the scattering matrix are defined "
+        "by ``element_mappings``, the simulation corresponding to this column is skipped automatically.",
+    )
+
+    @pd.root_validator(pre=False)
+    def _warn_deprecation_2_10(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ Backwards compatibility will be broken for all the ComponentModeler classes in tidy3d version 2.10. Migration documentation will be provided, and existing functionality can be accessed in a different way.",
+            log_once=True,
+        )
+        return values
+
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
         if len(val.sources) > 0:
-            raise SetupError("'AbstractComponentModeler.simulation' must not have any sources.")
+            raise SetupError(f"'{cls.__name__}.simulation' must not have any sources.")
         return val
 
+    _freqs_not_empty = validate_freqs_not_empty()
+    _freqs_lower_bound = validate_freqs_min()
+    _freqs_unique = validate_freqs_unique()
+
+    @pd.validator("ports", always=True)
+    def _warn_rf_license(cls, val):
+        """Warn about new licensing requirements for RF ports."""
+        rf_port = False
+        TerminalPortTypeTuple = get_args(TerminalPortType)
+        for port in val:
+            if type(port) in TerminalPortTypeTuple:
+                rf_port = True
+                break
+        if rf_port:
+            log.warning(
+                "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+                log_once=True,
+            )
+        return val
+
+    @pd.validator("element_mappings", always=True)
+    def _validate_element_mappings(cls, element_mappings, values):
+        """
+        Validate that each source index referenced in element_mappings is included in run_only.
+        """
+        run_only = values.get("run_only")
+        if run_only is None:
+            return element_mappings
+
+        valid_set = set(run_only)
+        invalid_indices = set()
+        for mapping in element_mappings:
+            input_element = mapping[0]
+            output_element = mapping[1]
+            for source_index in [input_element[1], output_element[1]]:
+                if source_index not in valid_set:
+                    invalid_indices.add(source_index)
+        if invalid_indices:
+            raise SetupError(
+                f"'element_mappings' references source index(es) {invalid_indices} "
+                f"that are not present in run_only: {run_only}."
+            )
+        return element_mappings
+
     @staticmethod
-    def _task_name(port: Port, mode_index: int = None) -> str:
+    def _task_name(port: Port, mode_index: Optional[int] = None) -> str:
         """The name of a task, determined by the port of the source and mode index, if given."""
         if mode_index is not None:
             return f"smatrix_{port.name}_{mode_index}"
         return f"smatrix_{port.name}"
 
     @cached_property
-    def sim_dict(self) -> Dict[str, Simulation]:
+    def sim_dict(self) -> dict[str, Simulation]:
         """Generate all the :class:`.Simulation` objects for the S matrix calculation."""
 
     def to_file(self, fname: str) -> None:
@@ -179,7 +265,25 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     @cached_property
     def batch_data(self) -> BatchData:
         """The :class:`.BatchData` associated with the simulations run for this component modeler."""
-        return self.batch.run(path_dir=self.path_dir)
+
+        # NOTE: uses run_async because Batch is not differentiable.
+        batch = self.batch
+        run_async_kwargs = batch.dict(
+            exclude={
+                "type",
+                "path_dir",
+                "attrs",
+                "jobs_cached",
+                "num_workers",
+                "simulations",
+            }
+        )
+        return run_async(
+            batch.simulations,
+            **run_async_kwargs,
+            local_gradient=LOCAL_GRADIENT,
+            path_dir=self.path_dir,
+        )
 
     def get_path_dir(self, path_dir: str) -> None:
         """Check whether the supplied 'path_dir' matches the internal field value."""
@@ -213,6 +317,44 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
             raise Tidy3dKeyError(f'Port "{port_name}" not found.')
         return ports[0]
 
+    @property
+    @abstractmethod
+    def matrix_indices_monitor(self) -> tuple[IndexType, ...]:
+        """Abstract property for all matrix indices that will be used to collect data."""
+
+    @cached_property
+    def matrix_indices_source(self) -> tuple[IndexType, ...]:
+        """Tuple of all the source matrix indices, which may be less than the total number of ports."""
+        if self.run_only is not None:
+            return self.run_only
+        return self.matrix_indices_monitor
+
+    @cached_property
+    def matrix_indices_run_sim(self) -> tuple[IndexType, ...]:
+        """Tuple of all the matrix indices that will be used to run simulations."""
+
+        if not self.element_mappings:
+            return self.matrix_indices_source
+
+        # all the (i, j) pairs in `S_ij` that are tagged as covered by `element_mappings`
+        elements_determined_by_map = [element_out for (_, element_out, _) in self.element_mappings]
+
+        # loop through rows of the full s matrix and record rows that still need running.
+        source_indices_needed = []
+        for col_index in self.matrix_indices_source:
+            # loop through columns and keep track of whether each element is covered by mapping.
+            matrix_elements_covered = []
+            for row_index in self.matrix_indices_monitor:
+                element = (row_index, col_index)
+                element_covered_by_map = element in elements_determined_by_map
+                matrix_elements_covered.append(element_covered_by_map)
+
+            # if any matrix elements in row still not covered by map, a source is needed for row.
+            if not all(matrix_elements_covered):
+                source_indices_needed.append(col_index)
+
+        return source_indices_needed
+
     @abstractmethod
     def _construct_smatrix(self, batch_data: BatchData) -> DataArray:
         """Post process :class:`.BatchData` to generate scattering matrix."""
@@ -238,51 +380,14 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     def _shift_value_signed(self, port: Union[Port, WavePort]) -> float:
         """How far (signed) to shift the source from the monitor."""
 
-        # get the grid boundaries and sizes along port normal from the simulation
-        normal_axis = port.size.index(0.0)
-        grid = self.simulation.grid
-        grid_boundaries = grid.boundaries.to_list[normal_axis]
-        grid_centers = grid.centers.to_list[normal_axis]
-
-        # get the index of the grid cell where the port lies
-        port_position = port.center[normal_axis]
-        port_pos_gt_grid_bounds = np.argwhere(port_position > grid_boundaries)
-
-        # no port index can be determined
-        if len(port_pos_gt_grid_bounds) == 0:
-            raise SetupError(f"Port position '{port_position}' outside of simulation bounds.")
-        port_index = port_pos_gt_grid_bounds[-1]
-
-        # shift the port to the left
-        if port.direction == "+":
-            shifted_index = port_index - 2
-            if (
-                shifted_index < 0
-                or grid_centers[shifted_index] <= self.simulation.bounds[0][normal_axis]
-            ):
-                raise SetupError(
-                    f"Port {port.name} normal is less than 2 cells to the boundary "
-                    f"on -{'xyz'[normal_axis]} side. "
-                    "Please either increase the mesh resolution near the port or "
-                    "move the port away from the boundary."
-                )
-
-        # shift the port to the right
-        else:
-            shifted_index = port_index + 2
-            if (
-                shifted_index >= len(grid_centers)
-                or grid_centers[shifted_index] >= self.simulation.bounds[1][normal_axis]
-            ):
-                raise SetupError(
-                    f"Port {port.name} normal is tless than 2 cells to the boundary "
-                    f"on +{'xyz'[normal_axis]} side."
-                    "Please either increase the mesh resolution near the port or "
-                    "move the port away from the boundary."
-                )
-
-        new_pos = grid_centers[shifted_index]
-        return new_pos - port_position
+        return _shift_value_signed(
+            obj=port,
+            grid=self.simulation.grid,
+            bounds=self.simulation.bounds,
+            direction=port.direction,
+            shift=-2,
+            name=f"Port {port.name}",
+        )
 
     def sim_data_by_task_name(self, task_name: str) -> SimulationData:
         """Get the simulation data by task name, avoids emitting warnings from the ``Simulation``."""
@@ -291,3 +396,5 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         sim_data = self.batch_data[task_name]
         config.logging_level = log_level_cache
         return sim_data
+
+    _unique_port_names = assert_unique_names("ports")

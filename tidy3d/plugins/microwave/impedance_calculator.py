@@ -7,10 +7,14 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from ...components.base import Tidy3dBaseModel
-from ...components.data.monitor_data import FieldTimeData
-from ...constants import OHM
-from ...exceptions import ValidationError
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray, TimeDataArray
+from tidy3d.components.data.monitor_data import FieldTimeData
+from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
+from tidy3d.constants import OHM
+from tidy3d.exceptions import ValidationError
+from tidy3d.log import log
+
 from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegral2D
 from .path_integrals import (
     AxisAlignedPathIntegral,
@@ -58,9 +62,9 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
 
         # If both voltage and current integrals have been defined then impedance is computed directly
-        if self.voltage_integral:
+        if self.voltage_integral is not None:
             voltage = self.voltage_integral.compute_voltage(em_field)
-        if self.current_integral:
+        if self.current_integral is not None:
             current = self.current_integral.compute_current(em_field)
 
         # If only one of the integrals has been provided, then the computation falls back to using
@@ -69,20 +73,31 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         # a time signal, then it is real and flux corresponds to the instantaneous power. Otherwise
         # the input field is in frequency domain, where flux indicates the time-averaged power
         # 0.5*Re(V*conj(I)).
-        if not self.voltage_integral:
-            flux = em_field.flux
-            if isinstance(em_field, FieldTimeData):
-                voltage = flux / current
-            else:
-                voltage = 2 * flux / np.conj(current)
-        if not self.current_integral:
-            flux = em_field.flux
-            if isinstance(em_field, FieldTimeData):
-                current = flux / voltage
-            else:
-                current = np.conj(2 * flux / voltage)
+        # We explicitly take the real part, in case Bloch BCs were used in the simulation.
+        flux_sign = 1.0
+        # Determine flux sign
+        if isinstance(em_field.monitor, ModeSolverMonitor):
+            flux_sign = 1 if em_field.monitor.direction == "+" else -1
+        if isinstance(em_field.monitor, ModeMonitor):
+            flux_sign = 1 if em_field.monitor.store_fields_direction == "+" else -1
 
-        impedance = voltage / current
+        if self.voltage_integral is None:
+            flux = flux_sign * em_field.complex_flux
+            if isinstance(em_field, FieldTimeData):
+                impedance = flux / np.real(current) ** 2
+            else:
+                impedance = 2 * flux / (current * np.conj(current))
+        elif self.current_integral is None:
+            flux = flux_sign * em_field.complex_flux
+            if isinstance(em_field, FieldTimeData):
+                impedance = np.real(voltage) ** 2 / flux
+            else:
+                impedance = (voltage * np.conj(voltage)) / (2 * np.conj(flux))
+        else:
+            if isinstance(em_field, FieldTimeData):
+                impedance = np.real(voltage) / np.real(current)
+            else:
+                impedance = voltage / current
         impedance = ImpedanceCalculator._set_data_array_attributes(impedance)
         return impedance
 
@@ -99,5 +114,20 @@ class ImpedanceCalculator(Tidy3dBaseModel):
     @staticmethod
     def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
         """Helper to set additional metadata for ``IntegralResultTypes``."""
+        # Determine type based on coords present
+        if "mode_index" in data_array.coords:
+            data_array = FreqModeDataArray(data_array)
+        elif "f" in data_array.coords:
+            data_array = FreqDataArray(data_array)
+        else:
+            data_array = TimeDataArray(data_array)
         data_array.name = "Z0"
         return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")
+
+    @pd.root_validator(pre=False)
+    def _warn_rf_license(cls, values):
+        log.warning(
+            "ℹ️ ⚠️ RF simulations are subject to new license requirements in the future. You have instantiated at least one RF-specific component.",
+            log_once=True,
+        )
+        return values

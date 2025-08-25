@@ -1,18 +1,19 @@
 """Utilities for 2D geometry manipulation."""
 
+from __future__ import annotations
+
 from math import isclose
-from typing import List, Tuple
 
 import numpy as np
 import shapely
 
-from ...constants import fp_eps, inf
-from ..geometry.base import Box, ClipOperation, Geometry
-from ..geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
-from ..grid.grid import Grid
-from ..scene import Scene
-from ..structure import Structure
-from ..types import Axis
+from tidy3d.components.geometry.base import Box, ClipOperation, Geometry
+from tidy3d.components.geometry.polyslab import _MIN_POLYGON_AREA, PolySlab
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.scene import Scene
+from tidy3d.components.structure import Structure
+from tidy3d.components.types import Axis
+from tidy3d.constants import fp_eps, inf
 
 
 def increment_float(val: float, sign) -> float:
@@ -46,7 +47,7 @@ def snap_coordinate_to_grid(grid: Grid, center: float, axis: Axis) -> float:
     return new_center
 
 
-def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
+def get_bounds(geom: Geometry, axis: Axis) -> tuple[float, float]:
     """Get the bounds of a geometry in the axis direction."""
     return (geom.bounds[0][axis], geom.bounds[1][axis])
 
@@ -62,7 +63,7 @@ def get_thickened_geom(geom: Geometry, axis: Axis):
 def get_neighbors(
     geom: Geometry,
     axis: Axis,
-    structures: List[Structure],
+    structures: list[Structure],
 ):
     """Find the neighboring structures and return the tested positions above and below."""
     center = get_bounds(geom, axis)[0]
@@ -100,8 +101,8 @@ def get_neighbors(
 
 
 def subdivide(
-    geom: Geometry, structures: List[Structure]
-) -> List[Tuple[Geometry, Structure, Structure]]:
+    geom: Geometry, structures: list[Structure]
+) -> list[tuple[Geometry, Structure, Structure]]:
     """Subdivide geometry associated with a :class:`.Medium2D` into partitions
     that each have a homogeneous substrate / superstrate. Partitions are computed
     using ``shapely`` boolean operations on polygons.

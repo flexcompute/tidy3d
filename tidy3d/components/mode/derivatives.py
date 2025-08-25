@@ -1,13 +1,16 @@
 """Finite-difference derivatives and PML absorption operators expressed as sparse matrices."""
 
-import numpy as np
-import scipy.sparse as sp
+from __future__ import annotations
 
-from ...constants import EPSILON_0, ETA_0
+import numpy as np
+
+from tidy3d.constants import EPSILON_0, ETA_0
 
 
 def make_dxf(dls, shape, pmc):
     """Forward derivative in x."""
+    import scipy.sparse as sp
+
     Nx, Ny = shape
     if Nx == 1:
         return sp.csr_matrix((Ny, Ny))
@@ -21,6 +24,8 @@ def make_dxf(dls, shape, pmc):
 
 def make_dxb(dls, shape, pmc):
     """Backward derivative in x."""
+    import scipy.sparse as sp
+
     Nx, Ny = shape
     if Nx == 1:
         return sp.csr_matrix((Ny, Ny))
@@ -36,6 +41,8 @@ def make_dxb(dls, shape, pmc):
 
 def make_dyf(dls, shape, pmc):
     """Forward derivative in y."""
+    import scipy.sparse as sp
+
     Nx, Ny = shape
     if Ny == 1:
         return sp.csr_matrix((Nx, Nx))
@@ -49,6 +56,8 @@ def make_dyf(dls, shape, pmc):
 
 def make_dyb(dls, shape, pmc):
     """Backward derivative in y."""
+    import scipy.sparse as sp
+
     Nx, Ny = shape
     if Ny == 1:
         return sp.csr_matrix((Nx, Nx))
@@ -80,6 +89,7 @@ def create_s_matrices(omega, shape, npml, dls, eps_tensor, mu_tensor, dmin_pml=(
     """Makes the 'S-matrices'. When dotted with derivative matrices, they add
     PML. If dmin_pml is set to False, PML will not be applied on the "bottom"
     side of the domain."""
+    import scipy.sparse as sp
 
     # strip out some information needed
     Nx, Ny = shape

@@ -1,10 +1,13 @@
 """Tests mode objects."""
 
+from __future__ import annotations
+
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
-import tidy3d as td
 from matplotlib import pyplot as plt
+
+import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
 
 from ..test_data.test_data_arrays import (
@@ -65,13 +68,107 @@ def test_group_index_step_validation():
     assert not ms.group_index_step > 0
 
 
+def test_angle_rotation_with_phi():
+    """Test the `angle_rotation_with_phi` validator."""
+
+    td.ModeSpec(angle_phi=np.pi, angle_rotation=True)
+
+    # Case where angle_phi is not a multiple of np.pi and angle_rotation is True
+    with pytest.raises(pydantic.ValidationError):
+        td.ModeSpec(angle_phi=np.pi / 3, angle_rotation=True)
+
+
+def test_validation_from_simulation():
+    """Test that a ModeSolver created from a simulation ModeMonitor validates correctly."""
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[],
+        run_time=1e-12,
+        monitors=[],
+    )
+
+    reg_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-100, -1, -100), (100, 1, 0)),
+        medium=td.Medium(permittivity=4.0, conductivity=1e-4),
+    )
+
+    inf_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-td.inf, -1, -100), (td.inf, 1, 0)),
+        medium=td.Medium(permittivity=4.0, conductivity=1e-4),
+    )
+
+    anisotropic_geometry = td.Structure(
+        geometry=td.Box.from_bounds((-1, -1, -100), (1, 1, 0)),
+        medium=td.AnisotropicMedium(
+            xx=td.Medium(permittivity=4.0, conductivity=1e-4),
+            yy=td.Medium(permittivity=4.0, conductivity=1e-4),
+            zz=td.Medium(permittivity=3.0, conductivity=1e-4),
+        ),
+    )
+
+    rot_monitor = td.ModeMonitor(
+        size=(0, 5, 5),
+        name="mode_solver",
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+        freqs=[td.C_0],
+    )
+
+    rot_source = td.ModeSource(
+        size=(0, 5, 5),
+        mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+        source_time=td.GaussianPulse(freq0=td.C_0, fwidth=td.C_0 / 10),
+        direction="+",
+    )
+
+    # First test that a mode object can be added if there's no problem with the geometries
+    _ = sim.updated_copy(structures=[reg_geometry], monitors=[rot_monitor])
+
+    # Test that transforming a geometry with an infinite extent raises an error
+    with pytest.raises(SetupError):
+        sim.updated_copy(structures=[inf_geometry], monitors=[rot_monitor])
+
+    # Test that transforming an anisotropic medium raises an error
+    with pytest.raises(SetupError):
+        sim.updated_copy(structures=[anisotropic_geometry], monitors=[rot_monitor])
+
+    # Same thing with a ModeSource
+    with pytest.raises(SetupError):
+        sim.updated_copy(structures=[inf_geometry], sources=[rot_source])
+
+    with pytest.raises(SetupError):
+        sim.updated_copy(structures=[anisotropic_geometry], sources=[rot_source])
+
+    # Same thing with ModeSimulation
+    with pytest.raises(SetupError):
+        td.ModeSimulation(
+            structures=[inf_geometry],
+            size=(0, 5, 5),
+            mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+            freqs=[td.C_0],
+        )
+
+    with pytest.raises(SetupError):
+        td.ModeSimulation(
+            structures=[anisotropic_geometry],
+            size=(0, 5, 5),
+            mode_spec=td.ModeSpec(angle_rotation=True, angle_theta=np.pi / 4),
+            freqs=[td.C_0],
+        )
+
+
 def get_mode_sim():
     mode_spec = MODE_SPEC.updated_copy(filter_pol="tm")
+    permittivity_monitor = td.PermittivityMonitor(
+        size=(1, 1, 0), center=(0, 0, 0), name="eps", freqs=FS
+    )
     sim = td.ModeSimulation(
         size=SIZE_2D,
         freqs=FS,
         mode_spec=mode_spec,
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FS[0]),
+        monitors=[permittivity_monitor],
     )
     return sim
 
@@ -79,6 +176,8 @@ def get_mode_sim():
 def test_mode_sim():
     with AssertLogLevel(None):
         sim = get_mode_sim()
+        _ = sim.plot(ax=AX)
+        _ = sim.plot(ax=AX, fill_structures=False, hlim=(-1, 1), vlim=(-1, 1))
         _ = sim.plot(y=0, ax=AX)
         _ = sim.plot_mode_plane(ax=AX)
         _ = sim.plot_eps_mode_plane(ax=AX)
@@ -107,13 +206,18 @@ def test_mode_sim():
     with AssertLogLevel("INFO"):
         _ = sim.updated_copy(freqs=FS[0], grid_spec=grid_spec)
     # multiple freqs are ok
-    _ = sim.updated_copy(grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[1e10] + list(sim.freqs))
-    _ = td.ModeSimulation(
-        size=sim.size, freqs=list(sim.freqs) + [1e10], grid_spec=grid_spec, mode_spec=MODE_SPEC
+    _ = sim.updated_copy(
+        grid_spec=td.GridSpec.uniform(dl=0.2), freqs=[10000000000.0, *list(sim.freqs)]
+    )
+    _ = sim.updated_copy(
+        size=sim.size,
+        freqs=[*list(sim.freqs), 10000000000.0],
+        grid_spec=grid_spec,
+        mode_spec=MODE_SPEC,
     )
 
     # size limit
-    sim_too_large = sim.updated_copy(size=(2000, 2000, 0), plane=None)
+    sim_too_large = sim.updated_copy(size=(2000, 0, 2000), plane=None)
     with pytest.raises(SetupError):
         sim_too_large.validate_pre_upload()
 
@@ -143,7 +247,7 @@ def test_mode_sim():
     )
 
     assert td.ModeSimulation.from_simulation(sim) == sim
-    assert td.ModeSimulation.from_mode_solver(sim._mode_solver) == sim
+    assert td.ModeSimulation.from_mode_solver(sim._mode_solver) == sim.updated_copy(monitors=[])
     _ = td.ModeSimulation.from_simulation(
         simulation=fdtd_sim,
         plane=td.Box(size=(4, 4, 0)),
@@ -226,3 +330,54 @@ def get_mode_sim_data():
 def test_mode_sim_data():
     sim_data = get_mode_sim_data()
     _ = sim_data.plot_field("Ey", ax=AX, mode_index=0, f=FS[0])
+
+
+def test_plane_crosses_symmetry_plane_warning(monkeypatch):
+    """Test that a warning is issued if the mode plane crosses a symmetry plane but the centers do not match."""
+
+    # Simulation with symmetry in x (axis 0), center at (0, 0, 0)
+    sim_center = (0, 0, 0)
+    sim_size = (10, 5, 5)
+    sim_symmetry = (1, 0, 0)  # symmetry in x
+
+    # Plane crosses x=0 (symmetry plane), but plane center != sim center
+    plane_center = (2, 0, 0)
+    plane_size = (5, 0, 5)
+    plane = td.Box(center=plane_center, size=plane_size)
+
+    # Should warn
+    with AssertLogLevel("WARNING"):
+        _ = td.ModeSimulation(
+            center=sim_center,
+            size=sim_size,
+            symmetry=sim_symmetry,
+            plane=plane,
+            mode_spec=td.ModeSpec(),
+            freqs=[td.C_0],
+        )
+
+    # Now, plane center matches sim center: should NOT warn
+    plane_center2 = (0, 0, 0)
+    plane2 = td.Box(center=plane_center2, size=plane_size)
+    with AssertLogLevel("INFO"):
+        _ = td.ModeSimulation(
+            center=sim_center,
+            size=sim_size,
+            symmetry=sim_symmetry,
+            plane=plane2,
+            mode_spec=td.ModeSpec(),
+            freqs=[td.C_0],
+        )
+
+    # Plane does NOT cross symmetry plane: should NOT warn
+    plane_center3 = (5, 0, 0)
+    plane3 = td.Box(center=plane_center3, size=plane_size)
+    with AssertLogLevel("INFO"):
+        _ = td.ModeSimulation(
+            center=sim_center,
+            size=sim_size,
+            symmetry=sim_symmetry,
+            plane=plane3,
+            mode_spec=td.ModeSpec(),
+            freqs=[td.C_0],
+        )

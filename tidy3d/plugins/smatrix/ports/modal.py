@@ -1,11 +1,13 @@
 """Class and custom data array for representing a scattering matrix port based on waveguide modes."""
 
+from __future__ import annotations
+
 import pydantic.v1 as pd
 
-from ....components.data.data_array import DataArray
-from ....components.geometry.base import Box
-from ....components.mode_spec import ModeSpec
-from ....components.types import Direction
+from tidy3d.components.data.data_array import DataArray
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.types import Direction
 
 
 class ModalPortDataArray(DataArray):

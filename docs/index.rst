@@ -1,6 +1,6 @@
-******************************
-Tidy3D Electromagnetic Solver
-******************************
+*************************************
+Electromagnetics Platform
+*************************************
 
 .. role:: raw-html(raw)
     :format: html
@@ -166,25 +166,62 @@ This will produce the following plot, which visualizes the electromagnetic field
    :width: 1200
 
 
-You can now postprocess simulation data using the same python session, or view the results of this simulation on our web-based `graphical user interface <https://tidy3d.simulation.cloud>`_.
+You can now postprocess simulation data using the same python session, or view the results of this simulation on our web-based `graphical user interface (GUI) <https://tidy3d.simulation.cloud>`_.
 
 .. `TODO: open example in colab <https://github.com/flexcompute/tidy3d>`_
+
+
+Our Ecosystem
+=======================
+
+``tidy3d`` is part of an interoperable ecosystem of electromagnetic design tools. You can interface with the tools through the python APIs and the graphical user interfaces.
+
+.. grid:: 3
+   :gutter: 2
+
+   .. grid-item-card::
+      :img-top: _static/img/gui_overview.png
+      :link: https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/
+      :text-align: center
+      :padding: 1
+ 
+      Online Learning Center
+      +++
+      **Tidy3D GUI**
+
+   .. grid-item-card::
+      :img-top: _static/img/photonforge_overview.png
+      :link: https://docs.flexcompute.com/projects/photonforge/en/latest/
+      :text-align: center
+      :padding: 1
+      
+      Photonic Integrated Circuits Design
+      +++
+      **Photonforge**
+
+   .. grid-item-card::
+      :img-top: _static/img/simcloud_overview.png
+      :link: https://tidy3d.simulation.cloud
+      :text-align: center
+      :padding: 1
+      
+      Access your GUI & account management.
+      +++
+      **SimCloud**
 
 
 Further Information
 ====================
 
-.. toctree::
-  :maxdepth: 2
 
-  install
-  lectures/index
-  notebooks/docs/index
-  faq/docs/index
-  api/index
-  development/index
-  changelog
-  About our Solver <https://www.flexcompute.com/tidy3d/solver/>
+Join Our Team
+-------------
+
+Do you enjoy using ``tidy3d`` or ``photonforge``? Do you want to help us create the best electromagnetic design tools? We are looking for talented developers to join our team.
+
+A good way to get an interview with us is to fix an open issue within our `open-source python client. <https://github.com/flexcompute/tidy3d/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22>`_ Choose a task where you can feel you can demonstrate your skillset, and get us involved whilst you implement it for feedback and to see how it goes working together. If you don't know where to start, we recommend the issues labelled "good first issue".
+
+We look forward to your contributions!
 
 
 Github Repositories
@@ -202,8 +239,25 @@ Github Repositories
    * - FAQ Source Code
      - https://github.com/flexcompute/tidy3d-faq
 
-These repositories are the a very good way to interact with the relevant tool developers.
-We encourage you to ask questions or request features through the "Discussions" or "Issues" tabs of each repository accordingly.
+These repositories are a very good way to interact with the relevant tool developers. We encourage you to ask questions or request features through the "Discussions" or "Issues" tabs of each repository accordingly.
+
+
+Contents
+---------
+
+.. toctree::
+  :maxdepth: 2
+
+  install
+  lectures/index
+  notebooks/docs/index
+  faq/docs/index
+  api/index
+  GUI <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/>
+  Photonforge <https://docs.flexcompute.com/projects/photonforge/en/latest/>
+  development/index
+  changelog
+  About our Solver <https://www.flexcompute.com/tidy3d/solver/>
 
 
 

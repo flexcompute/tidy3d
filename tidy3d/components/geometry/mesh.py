@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import List, Optional, Tuple, Union
+from typing import Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ...constants import inf
-from ...exceptions import DataError, ValidationError
-from ...log import log
-from ...packaging import verify_packages_import
-from ..base import cached_property
-from ..data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
-from ..data.dataset import TriangleMeshDataset
-from ..data.validators import validate_no_nans
-from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
-from ..viz import add_ax_if_none, equal_aspect
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
+from tidy3d.components.data.dataset import TriangleMeshDataset
+from tidy3d.components.data.validators import validate_no_nans
+from tidy3d.components.types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
+from tidy3d.components.viz import add_ax_if_none, equal_aspect
+from tidy3d.constants import fp_eps, inf
+from tidy3d.exceptions import DataError, ValidationError
+from tidy3d.log import log
+from tidy3d.packaging import verify_packages_import
+
 from . import base
 
 AREA_SIZE_THRESHOLD = 1e-36
@@ -150,8 +151,8 @@ class TriangleMesh(base.Geometry, ABC):
         cls,
         filename: str,
         scale: float = 1.0,
-        origin: Tuple[float, float, float] = (0, 0, 0),
-        solid_index: int = None,
+        origin: tuple[float, float, float] = (0, 0, 0),
+        solid_index: Optional[int] = None,
         **kwargs,
     ) -> Union[TriangleMesh, base.GeometryGroup]:
         """Load a :class:`.TriangleMesh` directly from an STL file.
@@ -181,7 +182,7 @@ class TriangleMesh(base.Geometry, ABC):
         """
         import trimesh
 
-        from ..types_extra import TrimeshType
+        from tidy3d.components.types_extra import TrimeshType
 
         def process_single(mesh: TrimeshType) -> TriangleMesh:
             """Process a single 'trimesh.Trimesh' using scale and origin."""
@@ -253,11 +254,11 @@ class TriangleMesh(base.Geometry, ABC):
                 f"Provided 'triangles' must be an N x 3 x 3 array, given {triangles.shape}."
             )
         num_faces = len(triangles)
-        coords = dict(
-            face_index=np.arange(num_faces),
-            vertex_index=np.arange(3),
-            axis=np.arange(3),
-        )
+        coords = {
+            "face_index": np.arange(num_faces),
+            "vertex_index": np.arange(3),
+            "axis": np.arange(3),
+        }
         vertices = TriangleMeshDataArray(triangles, coords=coords)
         mesh_dataset = TriangleMeshDataset(surface_mesh=vertices)
         return TriangleMesh(mesh_dataset=mesh_dataset)
@@ -308,6 +309,185 @@ class TriangleMesh(base.Geometry, ABC):
 
         return trimesh.Trimesh(**trimesh.triangles.to_kwargs(triangles))
 
+    @classmethod
+    def from_height_grid(
+        cls,
+        axis: Ax,
+        direction: Literal["-", "+"],
+        base: float,
+        grid: tuple[np.ndarray, np.ndarray],
+        height: np.ndarray,
+    ) -> TriangleMesh:
+        """Construct a TriangleMesh object from grid based height information.
+
+        Parameters
+        ----------
+        axis : Ax
+            Axis of extrusion.
+        direction : Literal["-", "+"]
+            Direction of extrusion.
+        base : float
+            Coordinate of the base surface along the geometry's axis.
+        grid : Tuple[np.ndarray, np.ndarray]
+            Tuple of two one-dimensional arrays representing the sampling grid (XY, YZ, or ZX
+            corresponding to values of axis)
+        height : np.ndarray
+            Height values sampled on the given grid. Can be 1D (raveled) or 2D (matching grid mesh).
+
+        Returns
+        -------
+        TriangleMesh
+            The resulting TriangleMesh geometry object.
+        """
+
+        x_coords = grid[0]
+        y_coords = grid[1]
+
+        nx = len(x_coords)
+        ny = len(y_coords)
+        nt = nx * ny
+
+        x_mesh, y_mesh = np.meshgrid(x_coords, y_coords, indexing="ij")
+
+        sign = 1
+        if direction == "-":
+            sign = -1
+
+        flat_height = np.ravel(height)
+        if flat_height.shape[0] != nt:
+            raise ValueError(
+                f"Shape of flattened height array {flat_height.shape} does not match "
+                f"the number of grid points {nt}."
+            )
+
+        if np.any(flat_height < 0):
+            raise ValueError("All height values must be non-negative.")
+
+        max_h = np.max(flat_height)
+        min_h_clip = fp_eps * max_h
+        flat_height = np.clip(flat_height, min_h_clip, inf)
+
+        vertices_raw_list = [
+            [np.ravel(x_mesh), np.ravel(y_mesh), base + sign * flat_height],  # Alpha surface
+            [np.ravel(x_mesh), np.ravel(y_mesh), base * np.ones(nt)],
+        ]
+
+        if direction == "-":
+            vertices_raw_list = vertices_raw_list[::-1]
+
+        vertices = np.hstack(vertices_raw_list).T
+        vertices = np.roll(vertices, shift=axis - 2, axis=1)
+
+        q0 = (np.arange(nx - 1)[:, None] * ny + np.arange(ny - 1)[None, :]).ravel()
+        q1 = (np.arange(1, nx)[:, None] * ny + np.arange(ny - 1)[None, :]).ravel()
+        q2 = (np.arange(1, nx)[:, None] * ny + np.arange(1, ny)[None, :]).ravel()
+        q3 = (np.arange(nx - 1)[:, None] * ny + np.arange(1, ny)[None, :]).ravel()
+
+        q0_b = nt + q0
+        q1_b = nt + q1
+        q2_b = nt + q2
+        q3_b = nt + q3
+
+        top_quads = np.stack((q0, q1, q2, q3), axis=-1)
+        bottom_quads = np.stack((q0_b, q3_b, q2_b, q1_b), axis=-1)
+
+        s1_q0 = (0 * ny + np.arange(ny - 1)).ravel()
+        s1_q1 = (0 * ny + np.arange(1, ny)).ravel()
+        s1_q2 = (nt + 0 * ny + np.arange(1, ny)).ravel()
+        s1_q3 = (nt + 0 * ny + np.arange(ny - 1)).ravel()
+        side1_quads = np.stack((s1_q0, s1_q1, s1_q2, s1_q3), axis=-1)
+
+        s2_q0 = ((nx - 1) * ny + np.arange(ny - 1)).ravel()
+        s2_q1 = (nt + (nx - 1) * ny + np.arange(ny - 1)).ravel()
+        s2_q2 = (nt + (nx - 1) * ny + np.arange(1, ny)).ravel()
+        s2_q3 = ((nx - 1) * ny + np.arange(1, ny)).ravel()
+        side2_quads = np.stack((s2_q0, s2_q1, s2_q2, s2_q3), axis=-1)
+
+        s3_q0 = (np.arange(nx - 1) * ny + 0).ravel()
+        s3_q1 = (nt + np.arange(nx - 1) * ny + 0).ravel()
+        s3_q2 = (nt + np.arange(1, nx) * ny + 0).ravel()
+        s3_q3 = (np.arange(1, nx) * ny + 0).ravel()
+        side3_quads = np.stack((s3_q0, s3_q1, s3_q2, s3_q3), axis=-1)
+
+        s4_q0 = (np.arange(nx - 1) * ny + ny - 1).ravel()
+        s4_q1 = (np.arange(1, nx) * ny + ny - 1).ravel()
+        s4_q2 = (nt + np.arange(1, nx) * ny + ny - 1).ravel()
+        s4_q3 = (nt + np.arange(nx - 1) * ny + ny - 1).ravel()
+        side4_quads = np.stack((s4_q0, s4_q1, s4_q2, s4_q3), axis=-1)
+
+        all_quads = np.vstack(
+            (top_quads, bottom_quads, side1_quads, side2_quads, side3_quads, side4_quads)
+        )
+
+        triangles_list = [
+            np.stack((all_quads[:, 0], all_quads[:, 1], all_quads[:, 3]), axis=-1),
+            np.stack((all_quads[:, 3], all_quads[:, 1], all_quads[:, 2]), axis=-1),
+        ]
+        tri_faces = np.vstack(triangles_list)
+
+        return cls.from_vertices_faces(vertices=vertices, faces=tri_faces)
+
+    @classmethod
+    def from_height_function(
+        cls,
+        axis: Ax,
+        direction: Literal["-", "+"],
+        base: float,
+        center: tuple[float, float],
+        size: tuple[float, float],
+        grid_size: tuple[int, int],
+        height_func: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    ) -> TriangleMesh:
+        """Construct a TriangleMesh object from analytical expression of height function.
+        The height function should be vectorized to accept 2D meshgrid arrays.
+
+        Parameters
+        ----------
+        axis : Ax
+            Axis of extrusion.
+        direction : Literal["-", "+"]
+            Direction of extrusion.
+        base : float
+            Coordinate of the base rectangle along the geometry's axis.
+        center : Tuple[float, float]
+            Center of the base rectangle in the plane perpendicular to the extrusion axis
+            (XY, YZ, or ZX corresponding to values of axis).
+        size : Tuple[float, float]
+            Size of the base rectangle in the plane perpendicular to the extrusion axis
+            (XY, YZ, or ZX corresponding to values of axis).
+        grid_size : Tuple[int, int]
+            Number of grid points for discretization of the base rectangle
+            (XY, YZ, or ZX corresponding to values of axis).
+        height_func : Callable[[np.ndarray, np.ndarray], np.ndarray]
+            Vectorized function to compute height values from 2D meshgrid coordinate arrays.
+            It should take two ndarrays (x_mesh, y_mesh) and return an ndarray of heights.
+
+        Returns
+        -------
+        TriangleMesh
+            The resulting TriangleMesh geometry object.
+        """
+        x_lin = np.linspace(center[0] - 0.5 * size[0], center[0] + 0.5 * size[0], grid_size[0])
+        y_lin = np.linspace(center[1] - 0.5 * size[1], center[1] + 0.5 * size[1], grid_size[1])
+
+        x_mesh, y_mesh = np.meshgrid(x_lin, y_lin, indexing="ij")
+
+        height_values = height_func(x_mesh, y_mesh)
+
+        if not (isinstance(height_values, np.ndarray) and height_values.shape == x_mesh.shape):
+            raise ValueError(
+                f"The 'height_func' must return a NumPy array with shape {x_mesh.shape}, "
+                f"but got shape {getattr(height_values, 'shape', type(height_values))}."
+            )
+
+        return cls.from_height_grid(
+            axis=axis,
+            direction=direction,
+            base=base,
+            grid=(x_lin, y_lin),
+            height=height_values,
+        )
+
     @cached_property
     @verify_packages_import(["trimesh"])
     def trimesh(
@@ -348,7 +528,7 @@ class TriangleMesh(base.Geometry, ABC):
 
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
 
         Parameters
@@ -370,12 +550,12 @@ class TriangleMesh(base.Geometry, ABC):
         section = self.trimesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
             return []
-        path, _ = section.to_planar(to_2D=to_2D)
+        path, _ = section.to_2D(to_2D=to_2D)
         return path.polygons_full
 
     def intersections_plane(
-        self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+        self, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None
+    ) -> list[Shapely]:
         """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -423,7 +603,7 @@ class TriangleMesh(base.Geometry, ABC):
             permutation = self.unpop_axis(identity[2], identity[0:2], axis=axis)
             mapping[:3, :3] = np.array(permutation).T
 
-            section2d, _ = section.to_planar(to_2D=mapping)
+            section2d, _ = section.to_2D(to_2D=mapping)
             return list(section2d.polygons_full)
 
         except ValueError as e:
@@ -475,7 +655,12 @@ class TriangleMesh(base.Geometry, ABC):
     @equal_aspect
     @add_ax_if_none
     def plot(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **patch_kwargs
+        self,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
+        ax: Ax = None,
+        **patch_kwargs,
     ) -> Ax:
         """Plot geometry cross section at single (x,y,z) coordinate.
 

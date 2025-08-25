@@ -1,5 +1,7 @@
 """Special types and validators used by adjoint plugin."""
 
+from __future__ import annotations
+
 from typing import Any, Union
 
 import numpy as np
@@ -32,10 +34,10 @@ class NumpyArrayType(np.ndarray):
     def __modify_schema__(cls, field_schema):
         """Sets the schema of np.ndarray object."""
 
-        schema = dict(
-            title="npdarray",
-            type="numpy.ndarray",
-        )
+        schema = {
+            "title": "npdarray",
+            "type": "numpy.ndarray",
+        }
         field_schema.update(schema)
 
 

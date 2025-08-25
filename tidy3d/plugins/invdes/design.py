@@ -62,7 +62,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
         direction_multiplier = 1 if maximize else -1
 
-        def objective_fn(params: anp.ndarray, aux_data: dict = None) -> float:
+        def objective_fn(params: anp.ndarray, aux_data: typing.Optional[dict] = None) -> float:
             """Full objective function."""
             data = self.to_simulation_data(params=params)
 
@@ -124,7 +124,7 @@ class InverseDesign(AbstractInverseDesign):
         description="Simulation without the design regions or monitors used in the objective fn.",
     )
 
-    output_monitor_names: typing.Tuple[str, ...] = pd.Field(
+    output_monitor_names: tuple[str, ...] = pd.Field(
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
@@ -201,7 +201,7 @@ class InverseDesign(AbstractInverseDesign):
         try:
             result = expr(data)
         except Exception as e:
-            raise ValidationError(f"Failed to evaluate the metric expression: {str(e)}") from e
+            raise ValidationError(f"Failed to evaluate the metric expression: {e!s}") from e
         if len(np.ravel(result)) > 1:
             raise ValidationError(
                 f"The expression must return a scalar value or an array of length 1 (got {result})."
@@ -221,10 +221,10 @@ class InverseDesign(AbstractInverseDesign):
 
         return monitor.name in self.output_monitor_names
 
-    def separate_output_monitors(self, monitors: typing.Tuple[td.Monitor]) -> dict:
+    def separate_output_monitors(self, monitors: tuple[td.Monitor]) -> dict:
         """Separate monitors into output_monitors and regular monitors."""
 
-        monitor_fields = dict(monitors=[], output_monitors=[])
+        monitor_fields = {"monitors": [], "output_monitors": []}
 
         for monitor in monitors:
             key = "output_monitors" if self.is_output_monitor(monitor) else "monitors"
@@ -247,7 +247,7 @@ class InverseDesign(AbstractInverseDesign):
             grid_spec = grid_spec.updated_copy(override_structures=override_structures)
 
         return self.simulation.updated_copy(
-            structures=list(self.simulation.structures) + [design_region_structure],
+            structures=[*list(self.simulation.structures), design_region_structure],
             grid_spec=grid_spec,
         )
 
@@ -260,13 +260,13 @@ class InverseDesign(AbstractInverseDesign):
 class InverseDesignMulti(AbstractInverseDesign):
     """``InverseDesign`` with multiple simulations and corresponding postprocess functions."""
 
-    simulations: typing.Tuple[td.Simulation, ...] = pd.Field(
+    simulations: tuple[td.Simulation, ...] = pd.Field(
         ...,
         title="Base Simulations",
         description="Set of simulation without the design regions or monitors used in the objective fn.",
     )
 
-    output_monitor_names: typing.Tuple[typing.Union[typing.Tuple[str, ...], None], ...] = pd.Field(
+    output_monitor_names: tuple[typing.Union[tuple[str, ...], None], ...] = pd.Field(
         None,
         title="Output Monitor Names",
         description="Optional names of monitors whose data the differentiable output depends on."
@@ -301,7 +301,7 @@ class InverseDesignMulti(AbstractInverseDesign):
         return [f"{self.task_name}_{i}" for i in range(len(self.simulations))]
 
     @property
-    def designs(self) -> typing.List[InverseDesign]:
+    def designs(self) -> list[InverseDesign]:
         """List of individual ``InverseDesign`` objects corresponding to this instance."""
 
         designs_list = []

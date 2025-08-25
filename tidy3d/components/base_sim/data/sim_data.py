@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Dict, Tuple, Union
+from typing import Union
 
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from ....exceptions import DataError, Tidy3dKeyError, ValidationError
-from ...base import Tidy3dBaseModel, skip_if_fields_missing
-from ...data.utils import UnstructuredGridDatasetType
-from ...types import FieldVal
-from ..simulation import AbstractSimulation
-from .monitor_data import AbstractMonitorData
+from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
+from tidy3d.components.base_sim.simulation import AbstractSimulation
+from tidy3d.components.data.utils import UnstructuredGridDatasetType
+from tidy3d.components.monitor import AbstractMonitor
+from tidy3d.components.types import FieldVal
+from tidy3d.exceptions import DataError, Tidy3dKeyError, ValidationError
 
 
 class AbstractSimulationData(Tidy3dBaseModel, ABC):
@@ -28,7 +29,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         description="Original :class:`AbstractSimulation` associated with the data.",
     )
 
-    data: Tuple[AbstractMonitorData, ...] = pd.Field(
+    data: tuple[AbstractMonitorData, ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`AbstractMonitorData` instances "
@@ -47,19 +48,19 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         return monitor_data.symmetry_expanded_copy
 
     @property
-    def monitor_data(self) -> Dict[str, AbstractMonitorData]:
+    def monitor_data(self) -> dict[str, AbstractMonitorData]:
         """Dictionary mapping monitor name to its associated :class:`AbstractMonitorData`."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
 
-    @pd.validator("data", always=True)
-    @skip_if_fields_missing(["simulation"])
-    def data_monitors_match_sim(cls, val, values):
+    @pd.root_validator(skip_on_failure=True)
+    def data_monitors_match_sim(cls, values):
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
         sim = values.get("simulation")
+        data = values.get("data")
 
-        for mnt_data in val:
+        for mnt_data in data:
             try:
                 monitor_name = mnt_data.monitor.name
                 sim.get_monitor_by_name(monitor_name)
@@ -68,7 +69,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
                     f"Data with monitor name '{monitor_name}' supplied "
                     f"but not found in the original '{sim.type}'."
                 ) from exc
-        return val
+        return values
 
     @pd.validator("data", always=True)
     @skip_if_fields_missing(["simulation"])
@@ -127,3 +128,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
             )
 
         return field_value
+
+    def get_monitor_by_name(self, name: str) -> AbstractMonitor:
+        """Return monitor named 'name'."""
+        return self.simulation.get_monitor_by_name(name)

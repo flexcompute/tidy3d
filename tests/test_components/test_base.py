@@ -1,7 +1,10 @@
 """Tests the base model."""
 
+from __future__ import annotations
+
 import numpy as np
 import pytest
+
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
 
@@ -79,15 +82,15 @@ def test_deep_copy():
     # assert id(s.geometry) != id(s_kwargs.geometry)
 
     # behavior of modifying attributes
-    s_default = s.copy(update=dict(geometry=td.Sphere(radius=1.0)))
+    s_default = s.copy(update={"geometry": td.Sphere(radius=1.0)})
     assert id(s.geometry) != id(s_default.geometry)
 
     # s_shallow = s.copy(deep=False, update=dict(geometry=Sphere(radius=1.0)))
     # assert id(s.geometry) != id(s_shallow.geometry)
 
     # behavior of modifying attributes of attributes
-    new_geometry = s.geometry.copy(update=dict(size=(2, 2, 2)))
-    s_default = s.copy(update=dict(geometry=new_geometry))
+    new_geometry = s.geometry.copy(update={"size": (2, 2, 2)})
+    s_default = s.copy(update={"geometry": new_geometry})
     assert id(s.geometry) != id(s_default.geometry)
 
     # s_shallow = s.copy(deep=False)
@@ -111,7 +114,7 @@ def test_updated_copy():
     s2 = s.updated_copy(medium=m2, geometry=b2)
     assert s2.geometry == b2
     assert s2.medium == m2
-    s3 = s.updated_copy(**{"medium": m2, "geometry": b2})
+    s3 = s.updated_copy(medium=m2, geometry=b2)
     assert s3 == s2
 
 

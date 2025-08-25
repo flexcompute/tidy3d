@@ -1,0 +1,462 @@
+name: "public/tidy3d/python-client-tests"
+
+on:
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      remote_tests:
+        description: 'remote-tests'
+        type: boolean
+        default: true
+      local_tests:
+        description: 'local-tests'
+        type: boolean
+        default: false
+  pull_request:
+    branches:
+      - latest
+      - develop
+      - 'pre/*'
+    types: ['opened', 'reopened', 'synchronize', 'ready_for_review']
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  determine-test-scope:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.pull_request.draft == false ||
+      github.ref == 'refs/heads/develop' ||
+      github.event_name == 'workflow_dispatch'
+    outputs:
+      local_tests: ${{ steps.determine-test-type.outputs.local_tests }}
+      remote_tests: ${{ steps.determine-test-type.outputs.remote_tests }}
+      pr_approval_state: ${{ steps.approval.outputs.approved }}
+    steps:
+      - name: check-current-approval-status
+        id: approval
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo
+            const number = context.payload.pull_request.number
+            const reviews = await github.rest.pulls.listReviews({owner, repo, pull_number: number})
+
+            const latestByUser = {}
+            reviews.data.forEach(r => latestByUser[r.user.id] = r)
+
+            const approved = Object.values(latestByUser)
+                                   .some(r => r.state === 'APPROVED')
+            core.setOutput('approved', approved ? 'true' : 'false')
+      - name: determine-test-type
+        id: determine-test-type
+        env:
+          DRAFT_STATE: ${{ github.event.pull_request.draft }}
+          EVENT_NAME: ${{ github.event_name }}
+          REVIEW_STATE: ${{ github.event.review.state }}
+          REF: ${{ github.ref }}
+          INPUT_LOCAL: ${{ github.event.inputs.local_tests }}
+          INPUT_REMOTE: ${{ github.event.inputs.remote_tests }}
+          APPROVED: ${{ steps.approval.outputs.approved }}
+        run: |
+          echo "Event: $EVENT_NAME"
+          echo "Draft: $DRAFT_STATE"
+          echo "Review State: $REVIEW_STATE"
+          echo "Git REF: $REF"
+          echo "Input local: $INPUT_FAST"
+          echo "Input remote: $INPUT_FULL"
+          echo "Approved: $APPROVED"
+
+          remote_tests=false
+          local_tests=false
+          # Workflow_dispatch input override
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+
+            # Each option is self contained
+            if [[ "$INPUT_REMOTE" == "true" ]]; then
+              remote_tests=true
+            fi
+
+            if [[ "$INPUT_LOCAL" == "true" ]]; then
+              local_tests=true
+            fi
+          fi
+
+          # All PRs that have been triggered need local tests and approved ones need to re-run the remote tests
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              local_tests=true
+              [[ "$APPROVED" == "true" ]] && remote_tests=true
+          fi
+
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+              local_tests=true
+              remote_tests=true
+          fi
+          
+          # If triggered by PR review and approved
+          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            if [[ "$REVIEW_STATE" == "approved" ]]; then
+              local_tests=true
+              remote_tests=true
+            else
+              local_tests=false
+              remote_tests=false
+            fi
+          fi
+
+          # If it's a push to develop
+          if [[ "$EVENT_NAME" == "push" && "$REF" == "refs/heads/develop" ]]; then
+            local_tests=true
+            remote_tests=true
+          fi
+
+          echo "local_tests=$local_tests" >> $GITHUB_OUTPUT
+          echo "remote_tests=$remote_tests" >> $GITHUB_OUTPUT
+          echo "local_tests=$local_tests"
+          echo "remote_tests=$remote_tests"
+
+  lint:
+    needs: determine-test-scope
+    if: ( needs.determine-test-scope.outputs.local_tests == 'true' ) || ( needs.determine-test-scope.outputs.remote_tests == 'true' )
+    name: verify-linting
+    runs-on: ubuntu-latest 
+    container: ghcr.io/astral-sh/uv:debian
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: 0.11.11
+      - name: Run ruff format
+        run: ruff format --check --diff
+      - name: Run ruff check
+        run: ruff check tidy3d
+
+  verify-schema-change:
+    name: verify-schema-change
+    needs: determine-test-scope
+    if: |
+      (( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
+      ( needs.determine-test-scope.outputs.remote_tests == 'true' )) 
+    runs-on: ubuntu-latest
+    container: ghcr.io/astral-sh/uv:debian
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: checkout-branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: '0'
+      
+      - name: git-config
+        run: |
+          cd $GITHUB_WORKSPACE
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+      
+      - name: install-depedencies
+        run: |
+          uv venv $GITHUB_WORKSPACE/.venv -p 3.11
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          uv pip install -e "$GITHUB_WORKSPACE"
+      
+      - name: get-tidy3d-version
+        id: get-version
+        run: |
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          version=$(python -c "import tidy3d; print(tidy3d.__version__)")
+          echo "tidy3d version is $version"
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: verify-committed-schema
+        run: |
+          echo "Regenerating schema to check if committed files are up-to-date..."
+          source $GITHUB_WORKSPACE/.venv/bin/activate
+          python $GITHUB_WORKSPACE/scripts/regenerate_schema.py
+    
+          cd $GITHUB_WORKSPACE
+          echo "Checking for differences with HEAD commit..."
+          git status
+          git log
+          git diff HEAD --name-status --exit-code -- $GITHUB_WORKSPACE/schemas
+          echo "✅ Committed schema is up-to-date."
+     
+      - name: run-schema-diff
+        id: schema-diff
+        run: |
+          set -e
+          # Use git diff to compare the two directories and get a list of changes
+          # The command exits with 0 if no changes, 1 if changes are found.
+          # We use '|| true' to prevent the workflow from stopping here on failure.
+          cd $GITHUB_WORKSPACE
+          diff_output=$(git diff origin/develop --name-status -- $GITHUB_WORKSPACE/schemas || true)
+
+          # Check if there are any changes
+          if [ -z "$diff_output" ]; then
+            echo "✅ Schemas are up-to-date."
+            echo "changed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # If there are changes, create a Markdown table
+          echo "❌ Schema has changed compared to develop! Please regenerate and commit the changes."
+          echo "changed=true" >> $GITHUB_OUTPUT
+
+          # Write the report to the GitHub Step Summary
+          echo "### Schema Change Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | File |" >> $GITHUB_STEP_SUMMARY
+          echo "|:---:|:---|" >> $GITHUB_STEP_SUMMARY
+          
+          echo "$diff_output" | while read -r line; do
+            status_code=$(echo "$line" | cut -f1)
+            file_path=$(echo "$line" | cut -f2 | sed 's#tidy3d/schemas/##') # Clean up path
+            
+            case $status_code in
+              "A") status="Added 🟢";;
+              "M") status="Modified 🟡";;
+              "D") status="Removed 🔴";;
+              *)   status="Unknown";;
+            esac
+            
+            echo "| $status | \`$file_path\` |" >> $GITHUB_STEP_SUMMARY
+          done
+      
+      - name: verify-allowed-changes
+        if: steps.schema-diff.outputs.changed == 'true'
+        run: |
+          set -e
+          version="${{ steps.get-version.outputs.version }}"
+          if [[ "$version" == *rc* ]]; then
+            echo "✅ Passing: Schema changed on a release candidate version ($version), which is permitted."
+          else
+            echo "❌ Failing: Schema changed on a non-rc release version ($version)."
+            exit 1
+          fi
+           
+  local-tests:
+    # Run on open PRs OR when manually triggered with local_tests=true
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.local_tests == 'true'
+    name: python-${{ matrix.python-version }}-self-hosted-runner 
+    runs-on: [ slurm-runner, 4xcpu, container=ghcr.io/astral-sh/uv:debian ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }}-${{ matrix.python-version }}-local
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.13']
+    defaults:
+      run:
+        shell: bash
+    env:  # Set environment variables for the whole job
+      PIP_ONLY_BINARY: gdstk
+      MPLBACKEND: agg
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Required 0 for diff report.
+        submodules: false
+
+    - name: install-project
+      env:
+        PYTHON_VERSION: ${{ matrix.python-version }}
+      run: |
+        if [ -f /.dockerenv ]; then
+          echo "Running inside a Docker container (detected via /.dockerenv)"
+        else
+          echo "Not running inside a Docker container (/.dockerenv not found)"
+        fi
+        uv venv -p $PYTHON_VERSION ${GITHUB_WORKSPACE}/.venv
+        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        which python
+        which uv
+        python --version
+        uv pip list
+        uv pip install gdstk --only-binary gdstk
+        uv pip install -e ".[dev]"
+
+        echo "Testing vtk is correctly installed."
+        python -c "import vtk"
+
+    - name: run-tests-coverage
+      env:
+        PYTHONUNBUFFERED: "1"
+      run: |
+        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        # pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        pytest --cov=tidy3d -rF --tb=short tests
+        coverage report -m
+        coverage xml -o ${GITHUB_WORKSPACE}/coverage.xml
+        TOTAL_COVERAGE=$(coverage report --format=total)
+        echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
+        echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+    - name: diff-coverage-report
+      if: >- 
+        matrix.python-version == '3.13' &&
+        github.event_name == 'pull_request' &&
+        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage')
+      run: |
+        source ${GITHUB_WORKSPACE}/.venv/bin/activate
+        git config --global --add safe.directory ${GITHUB_WORKSPACE}
+        diff-cover ${GITHUB_WORKSPACE}/coverage.xml \
+          --compare-branch origin/${{ github.event.pull_request.base.ref }} \
+          --format markdown:diff-coverage.md
+
+    - uses: actions/github-script@v7
+      if: >- 
+        matrix.python-version == '3.13' &&
+        github.event_name == 'pull_request' &&
+        !contains(github.event.pull_request.labels.*.name, 'ignore_diff_coverage') &&
+        github.event.pull_request.head.repo.fork == false
+      with:
+        result-encoding: string
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- diff-cover-report -->';
+          const body = fs.readFileSync('diff-coverage.md','utf8');
+          const report = `${marker}\n${body}`;
+          const {data:comments}=await github.rest.issues.listComments({
+            owner:context.repo.owner,
+            repo:context.repo.repo,
+            issue_number:context.issue.number,
+          });
+          const existing = comments.find(c=>c.body.startsWith(marker));
+          if(existing) {
+            await github.rest.issues.updateComment({
+              owner:context.repo.owner,
+              repo:context.repo.repo,
+              comment_id:existing.id,
+              body:report,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner:context.repo.owner,
+              repo:context.repo.repo,
+              issue_number:context.issue.number,
+              body:report,
+            });
+          }
+      
+  remote-tests:
+    # Run tests on a push event OR a workflow dispatch with remote_tests
+    needs: determine-test-scope
+    if: needs.determine-test-scope.outputs.remote_tests == 'true'
+    name: python-${{ matrix.python-version }}-${{ matrix.platform }}
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}-${{ github.event_name }}-${{ matrix.platform }}-${{ matrix.python-version }}-remote
+      cancel-in-progress: true
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        platform: [windows-latest, ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    env:  # Set environment variables for the whole job
+      PIP_ONLY_BINARY: gdstk
+      MPLBACKEND: agg
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        submodules: false
+
+    - name: install-poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 2.1.1
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: set-python-${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: install-project
+      run: |
+        poetry --version
+        poetry env use python
+        poetry env info
+        poetry run pip install --upgrade pip wheel setuptools
+        poetry run pip install gdstk --only-binary gdstk
+        poetry install -E dev
+
+    - name: run-doctests
+      run: |
+        poetry run pytest -rF --tb=short tidy3d
+
+    - name: run-tests-coverage
+      env:
+        PYTHONUNBUFFERED: "1"
+      run: |
+        poetry run pytest --cov=tidy3d -rF --tb=short tests/_test_data/_test_datasets_no_vtk.py
+        poetry run pytest --cov=tidy3d -rF --tb=short tests
+        poetry run coverage report -m
+        TOTAL_COVERAGE=$(poetry run coverage report --format=total)
+        echo "total=$TOTAL_COVERAGE" >> "$GITHUB_ENV"
+        echo "### Total coverage: ${TOTAL_COVERAGE}%"
+
+    - name: create-badge
+      if: ${{ github.ref == 'refs/heads/develop' }}
+      # https://gist.githubusercontent.com/nedbat/8c6980f77988a327348f9b02bbaf67f5
+      uses: schneegans/dynamic-badges-action@v1.7.0
+      with:
+        auth: ${{ secrets.GH_TIDY3D_COVERAGE_GIST }}
+        gistID: 4702549574741e87deaadba436218ebd
+        filename: tidy3d_extension.json
+        label: Coverage
+        message: ${{ env.total }}%
+        minColorRange: 60
+        maxColorRange: 95
+        valColorRange: ${{ env.total }}
+        style: "for-the-badge"
+
+  pr-requirements-pass:
+    name: pr-requirements-pass
+    if: |
+      always() &&
+      ((github.event_name == 'pull_request') || (github.event_name == 'pull_request_review') || (github.event_name == 'merge_group' ))  && 
+      (( needs.determine-test-scope.outputs.pr_approval_state == 'true' ) && 
+      ( needs.determine-test-scope.outputs.local_tests == 'true' ) || 
+      ( needs.determine-test-scope.outputs.remote_tests == 'true' ))
+    needs: [local-tests, remote-tests, lint, verify-schema-change]
+    runs-on: ubuntu-latest
+    steps:
+      - name: check-passing-remote-tests
+        run: |
+          echo "Local tests result: ${{ needs.local-tests.result }}"
+          echo "Remote tests result: ${{ needs.remote-tests.result }}"
+
+          if [[ "${{ needs.lint.result }}" != 'success' ]]; then
+            echo "❌ Linting failed or was skipped."
+            exit 1
+          elif [[ "${{ needs.verify-schema-change.result }}" != 'success' ]]; then
+            echo "❌ verify-schema-change failed or was skipped."
+            exit 1
+          elif [[ "${{ needs.remote-tests.result }}" != 'success' ]]; then
+            echo "❌ remote-tests failed or were skipped."
+            exit 1 # Given remote-tests always run after a PR is approved
+          elif [[ "${{ needs.local-tests.result }}" != 'success' ]]; then
+            echo "❌ local-tests failed or were skipped."
+          elif [[ "${{ needs.determine-test-scope.outputs.pr_approval_state }}" == 'true' && github.event.pull_request ]]; then
+            echo "❌ PR requires approval."
+            exit 1
+          fi
+          echo "✅ All required test jobs passed!"

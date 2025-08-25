@@ -1,9 +1,12 @@
 """Tests the scene and its validators."""
 
+from __future__ import annotations
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
+
 import tidy3d as td
 from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
 
@@ -53,6 +56,23 @@ def test_plot_eps():
     plt.close()
 
 
+def test_plot_eps_multiphysics():
+    s = td.Scene(
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0.5, 0.5)),
+                medium=td.MultiPhysicsMedium(
+                    optical=td.Medium(permittivity=3.9),
+                    charge=td.ChargeInsulatorMedium(permittivity=3.9),
+                    name="SiO2",
+                ),
+            )
+        ]
+    )
+    assert s.structures[0].medium.name == "SiO2"
+    s.plot_eps(x=0)
+
+
 def test_plot_eps_bounds():
     _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45])
     plt.close()
@@ -96,7 +116,7 @@ def test_structure_alpha():
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SCENE_FULL.medium) for s in SCENE_FULL.structures
     ]
-    S2 = SCENE_FULL.copy(update=dict(structures=new_structs))
+    S2 = SCENE_FULL.copy(update={"structures": new_structs})
     _ = S2.plot_structures_eps(x=0, alpha=0.5)
     plt.close()
 
@@ -219,7 +239,7 @@ def test_perturbed_mediums_copy(unstructured, z):
         ),
     )
 
-    coords = dict(x=[1, 2], y=[3, 4], z=z)
+    coords = {"x": [1, 2], "y": [3, 4], "z": z}
     temperature = td.SpatialDataArray(300 * np.ones((2, 2, len(z))), coords=coords)
     electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, len(z))), coords=coords)
     hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, len(z))), coords=coords)
@@ -290,3 +310,48 @@ def test_max_geometry_validation():
     ]
     with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
         _ = td.Scene(structures=not_fine)
+
+
+def test_structure_manual_priority():
+    """make sure structure is properly orderd based on the priority settings."""
+
+    box = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+    structures = []
+    priorities = [2, 4, -1, -4, 0]
+    for priority in priorities:
+        structures.append(box.updated_copy(priority=priority))
+    scene = td.Scene(
+        structures=structures,
+    )
+
+    sorted_priorities = [s.priority for s in scene.sorted_structures]
+    assert all(np.diff(sorted_priorities) >= 0)
+
+
+def test_structure_automatic_priority():
+    """make sure metallic structure has the highest priority in `conductor` mode."""
+
+    box = td.Structure(
+        geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+        medium=td.Medium(permittivity=2.0),
+    )
+    box_pec = box.updated_copy(medium=td.PEC)
+    box_lossymetal = box.updated_copy(
+        medium=td.LossyMetalMedium(conductivity=1.0, frequency_range=(1e14, 2e14))
+    )
+    structures = [box_pec, box_lossymetal, box]
+    scene = td.Scene(
+        structures=structures,
+        structure_priority_mode="equal",
+    )
+
+    # in equal mode, the order is preserved
+    scene.sorted_structures == structures
+
+    # conductor mode
+    scene = scene.updated_copy(structure_priority_mode="conductor")
+    assert scene.sorted_structures[-1].medium == td.PEC
+    assert isinstance(scene.sorted_structures[-2].medium, td.LossyMetalMedium)

@@ -8,11 +8,200 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added rectangular and radial taper support to `RectangularAntennaArrayCalculator` for phased array amplitude weighting; refactored array factor calculation for improved clarity and performance. 
+- Selective simulation capabilities to `TerminalComponentModeler` via `run_only` and `element_mappings` fields, allowing users to run fewer simulations and extract only needed scattering matrix elements.
+- Added KLayout plugin, with DRC functionality for running design rule checks in `plugins.klayout.drc`. Supports running DRC on GDS files as well as `Geometry`, `Structure`, and `Simulation` objects.
+- Added "mil" and "in" (inch) units to `plot_length_units`.
+- Objective functions that involve running `tidy3d.plugins.smatrix.ComponentModeler` can be differentiated with autograd.
+- Access field decay values in `SimulationData` via `sim_data.field_decay` as `TimeDataArray`.
+- Added ability to set first-order absorbing boundary conditions on simulation domain boundaries using either `ABCBoundary` or `ModeABCBoundary` classes.
+- Added `frame` field to `ModeSource` (default: `None`) and `WavePort` (default: `PECFrame()`). Setting this to `PECFrame(length=...)` automatically places a thin PEC frame of specified length around the source/port. The automatically created frames can be inspected using `Simulation._finalized` property.
+- Added `InternalAbsorber` class for placing first-order absorbing boundary conditions on planes inside the simulation domain. Internal absorbers are automatically wrapped in a PEC frame with a backing PEC plate on the non-absorbing side.
+- Added `absorber` field (default: `True`) to `WavePort` for automatically placing an absorber behind the port.
+- Added `conjugated_dot_product` field in `ModeMonitor` (default: `True`) and `WavePort` (default: `False`) to allow selecting the conjugated or non-conjugated dot product for mode decomposition.
+- Support for gradients with respect to the `conductivity` of a `CustomMedium`.
+- Added `VerticalNaturalConvectionCoeffModel`, a model for heat transfer due to natural convection from a vertical plate. It can be used in `ConvectionBC` to compute the heat transfer coefficient from fluid properties, using standard Nusselt number correlations for both laminar and turbulent flow.
+
+### Changed
+- Validate mode solver object for large number of grid points on the modal plane.
+- Adaptive minimum spacing for `PolySlab` integration is now wavelength relative and a minimum discretization is set for computing gradients for cylinders.
+- The `TerminalComponentModeler` defaults to the pseudo wave definition of scattering parameters. The new field `s_param_def` can be used to switch between either pseudo or power wave definitions.
+- Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
+
+### Fixed
+- Fixed missing amplitude factor and handling of negative normal direction case when making adjoint sources from `DiffractionMonitor`.
+- Improved the robustness of batch jobs. The batch state, including all `task_ids`, is now saved to `batch.hdf5` immediately after upload. This fixes an issue where an interrupted batch (e.g., due to a kernel crash or network loss) would be unrecoverable.
+- Fixed warning for running symmetric adjoint simulations by port to not trigger when there is a single port.
+- Bug in `CoaxialLumpedPort` where source injection is off when the `normal_axis` is not `z`.
+- Validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
+- Calculation of voltage and current in the `WavePort`, when one type of path integral is supplied and the transmission line mode is lossy.
+- Polygon vertices cleanup in `ClipOperation.intersections_plane`.
+- Removed sources from `sim_inf_structure` simulation object in `postprocess_adj` to avoid source and background medium validation errors.
+- Revert overly restrictive validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
+- Fixed `ElectromagneticFieldData.to_zbf()` to support single frequency monitors and apply the correct flattening order.
+- Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
+- Added missing `solver_version` keyword argument to `run_async`.
+- Fixed `interpn` data array method to be compatible with extrapolation outside of data array coordinates. 
+
+## [2.9.0] - 2025-08-04
+
+### Added
+- Fields `convex_resolution`, `concave_resolution`, and `mixed_resolution` in `CornerFinderSpec` can be used to take into account the dimensions of autodetected convex, concave, or mixed geometric features when `dl_min` is automatically inferred during automatic grid generation.
+- `LayerRefinementSpec` now supports automatic thin gap meshing through fields `gap_meshing_iters` and `dl_min_from_gap_width`.
+- Added `eps_lim` keyword argument to `Simulation.plot_eps()` for manual control over the permittivity color limits.
+- Added `thickness` parameter to `LossyMetalMedium` for computing surface impedance of a thin conductor.
+- `priority` field in `Structure` and `MeshOverrideStructure` for setting the behavior in structure overlapping region. When its value is `None`, the priority is automatically determined based on the material property and simulation's `structure_priority_mode`.
+- Automatically apply `matplotlib` styles when importing `tidy3d` which can be reverted via the `td.restore_matplotlib_rcparams()` function.
+- Added `TriangleMesh.from_height_expression` class method to create a mesh from an analytical height function defined on a 2D grid and `TriangleMesh.from_height_grid` class method to create a mesh from height values sampled on a 2D grid.
+- Added heat sources with custom spatial dependence. It is now possible to add a `SpatialDataArray` as the `rate` in a `HeatSource`.
+- Added Transient Heat simulations. It is now possible to run transient Heat simulations. This can be done by specifying `analysis_spec` of `HeatChargeSimulation` object as `UnsteadyHeatAnalysis`. 
+- A `num_grid_cells` field to `WavePort`, which ensures that there are 5 grid cells across the port. Grid refinement can be disabled by passing `None` to `num_grid_cells`.
+- Implemented `FreqRange` utility class for frequency/wavelength handling with constructor methods `from_freq_interval()`, `from_wavelength()`, and `from_wvl_interval()`. 
+- Add support for `np.unwrap` in `tidy3d.plugins.autograd`.
+- Add Nunley variant to germanium material library based on Nunley et al. 2016 data.
+- Add `PointDipole.sources_from_angles()` that constructs a list of `PointDipole` objects needed to emulate a dipole oriented at a user-provided set of polar and azimuthal angles.
+- Added `priority` parameter to `web.run()` and related functions to allow vGPU users to set task priority (1-10) in the queue.
+- `EMEFieldMonitor` now supports `interval_space`.
+- `Simulation.precision` option allows to select `"double"` precision for very high-accuracy results. Note that this is very rarely needed, and doubles the simulation computational weight and correspondingly FlexCredit cost.
+- Added material type `PMCMedium` for perfect magnetic conductor.
+- `ModeSimulation.plot()` method that plots the mode simulation plane by default, or the containing FDTD simulation if any of ``x``, ``y``, or ``z`` is passed. 
+- Enable singularity correction at PEC and lossy metal edges.
+- New `VolumeMesher` simulation type and associated `VolumeMeshMonitor` and `VolumeMesherData`, which can be used to run the unstructured meshing for a `HeatChargeSimulation` separately before running the solver.
+- The current validator for Conduction simulations has been modified so that it checks that in a Conduction simulation there is at least one structure defined with `ChargeConductorMedium` in the `charge` field of a `MultiPhysicsMedium`. This is necessary to ensure simulations are properly set up in the back-end since it relies on the `conductivity` field of `ChargeConductorMedium` and not that of `Medium`.
+- Access field decay values in `SimulationData` via `sim_data.field_decay` as `TimeDataArray`.
+
+### Changed
+- Relaxed bounds checking of path integrals during `WavePort` validation.
+- Internal adjoint helper methods are now prefixed with an underscore to separate them from the public API.
+- Drop the dependency on `gdspy`, which has been unmaintained for over two years. Interfaces previously relying on `gdspy` now use its maintained successor, `gdstk`, with equivalent functionality.
+- Small (around 1e-4) numerical precision improvements in EME solver.
+- Adjoint source frequency width is adjusted to decay sufficiently before zero frequency when possible to improve accuracy of simulation normalization when using custom current sources.
+- Change `VisualizationSpec` validator for checking validity of user specified colors to only issue a warning if matplotlib is not installed instead of an error.
+- Improved performance of `tidy3d.web.delete_old()` for large folders.
+- `tidy3d.plugins.autograd.interpolate_spline()` and `tidy3d.plugins.autograd.add_at()` can now be called with keyword arguments during tracing.
+- Zero-size dimensions automatically receive periodic boundary conditions instead of raising an error.
+- Set `ModeSpec` precision to `double` by default for more accurate mode solver results. Does not apply to `EMEModeSpec`, where the `auto` precision is still default for speed and cost.
+- Switched to an analytical gradient calculation for spatially-varying pole-residue models (`CustomPoleResidue`).
+- Significantly improved performance of the `tidy3d.plugins.autograd.grey_dilation` morphological operation and its gradient calculation. The new implementation is orders of magnitude faster, especially for large arrays and kernel sizes.
+- Warnings are now generated (instead of errors) when instantiating `PML`, `StablePML`,
+or `Absorber` classes (or when invoking `pml()`, `stable_pml()`, or `absorber()` functions)
+with fewer layers than recommended.
+- Warnings and error messages originating from `Structure`, `Source`, or `Monitor` classes now refer to problematic objects by their user-supplied `name` attribute, alongside their index.
+- File downloads are atomic. Interruptions or failures during download will no longer result in incomplete files.
+- Warnings are now generated (instead of errors) when instantiating `PML`, `StablePML`, or `Absorber` classes (or when invoking `pml()`, `stable_pml()`, or `absorber()` functions) with fewer layers than recommended.
+- `Simulation.subsection` can no longer take `symmetry` as an argument - the symmetry is always taken from the original simulation.
+- If a mode simulation is crossing a symmetry plane of the larger simulation domain, but the mode plane is not symmetric, a warning is issued that it will be expanded symmetrically. Previously this warning only happened during the solver run.
+- Enhanced `PolySlab` and `Cylinder` gradient computation via adaptive field sampling along geometry boundaries instead of fixed-grid center sampling.
+- Shape derivatives have been sped up significantly, especially for simulations containing many structures in a `GeometryGroup`.
+- By default, batch downloads will skip files that already exist locally. To force re-downloading and replace existing files, pass the `replace_existing=True` argument to `Batch.load()`, `Batch.download()`, or `BatchData.load()`.
+- The `BatchData.load_sim_data()` function now overwrites any previously downloaded simulation files (instead of skipping them).
+- Tighter `TOL_EIGS` used for mode solver, since `scipy` sometimes failed to find modes.
+
+### Fixed
+
+- Fixed bug in broadband adjoint source creation when forward simulation had a pulse amplitude greater than 1 or a nonzero pulse phase.
+- Fixed shaping of `CustomMedium` gradients when permittivity data includes a frequency dimension with multiple entries.
+- Bug in contains check for `LumpedElement`, which should allow the case of a `LumpedElement` touching the simulation boundaries.
+- Bug when generating a grid with snapping points near the simulation boundaries.
+- Fixed field colocation in `EMEModeSolverMonitor`.
+- Internal interpolation errors with some versions of `xarray` and `numpy`.
+- If `ModeSpec.angle_rotation=True` for a mode object, validate that the structure rotation can be successfully done. Also, error if the medium cannot be rotated (e.g. anisotropic or custom medium), which would previously have just produced wrong results.
+- Characteristic impedance calculations in the `ImpedanceCalculator` using definitions that rely on flux, which were giving incorrect results for lossy transmission lines.
+- Validation for `CustomGridBoundaries`, which was previously allowing unsorted arrays and arrays with less than two entries.
+- `DiffractionMonitor` results to apply finite grid field corrections for higher precision when comparing e.g. to `FluxMonitor` computations of total power.
+- Bug when validating the grid resolution near `CoaxialLumpedPort`.
+- Arrow lengths are now scaled consistently in the X and Y directions, and their lengths no longer exceed the height of the plot window.
+- Plots of objects defined by shape intersection logic will no longer display thin line artifacts.
+- Fixed incorrect gradient computation in PyTorch plugin (`to_torch`) for functions returning multi-element arrays.
+- `MonitorData.get_amplitude()` no longers multiplies by a factor of `1j` and now directly returns the complex value of the data.
+- `EMESimulationData.port_modes_tuple` is now symmetry-expanded.
+- Fixed `Medium2D` validation error message when invalid data is passed to `ss`.
+- The phase of the amplitudes of a `DiffractionMonitor` was correctly centered such that the origin is at the monitor center.
+- Giving opposite boundaries different names no longer causes a symmetry validator failure.
+- Fixed issue with parameters in `InverseDesignResult` sometimes being outside of the valid parameter range.
+- Fixed performance regression for multi-frequency adjoint calculations.
+- Disallow `EMEFieldMonitor` in EME simulations with `EMELengthSweep`.
+- Fixed bug in adjoint postprocessing frequency batching that was causing gradients to be zero or incorrect. The error was surfacing when selecting a subset of the monitor frequencies in the objective function.
+
+
+
+## [2.8.5] - 2025-07-07
+
+### Fixed
+- Bug in `PlaneWave` defined with a negative `angle_theta` which would lead to wrong injection.
+- `GaussianBeam` and `AstigmaticGaussianBeam` default `num_freqs` reset to 1 (it was set to 3 in v2.8.0) and a warning is issued for a broadband, angled beam for which `num_freqs` may not be sufficiently large.
+- Set the maximum `num_freqs` to 20 for all broadband sources (we have been warning about the introduction of this hard limit for a while).
+- Solver error for EME simulations with bends, introduced when support for 2D EME simulations was added.
+- Fixed handling of symmetry when creating adjoint field sources and added warning when broken up adjoint simulations do not have the same symmetry as the forward simulation.
+
+## [2.8.4] - 2025-05-15
+
+### Added
+- The method `Geometry.reflected` can be used to create a reflected copy of any geometry off a plane. As for other transformations, for efficiency, `reflected` `PolySlab` directly returns an updated `PolySlab` object rather than a `Transformed` object, except when the normal of the plane of reflection has a non-zero component along the slab axis, in which case `Transformed` is still returned.
+- Validation check for unit error in grid spacing.
+- Validation that when symmetry is imposed along a given axis, the boundary conditions on each side of the axis are identical.
+
+### Changed
+- Supplying autograd-traced values to geometric fields (`center`, `size`) of simulations, monitors, and sources now logs a warning and falls back to the static value instead of erroring.
+- Attempting to differentiate server-side field projections now raises a clear error instead of silently failing.
+- Improved error message and handling when attempting to load a non-existent task ID.
+- `ClipOperation` now fails validation if traced fields are detected.
+- Warn if more than 20 frequencies are used in EME, as this may lead to slower or more expensive simulations.
+- EME now supports 2D simulations.
+- 'EMESimulation' now supports 'PermittivityMonitor'.
+
+### Fixed
+- Fixed issue with `CustomMedium` gradients where other frequencies would wrongly contribute to the gradient.
+- Fixed bug when computing `PolySlab` bounds in plotting functions.
+
+## [2.8.3] - 2025-04-24
+
+### Added
+- Ability to select payment option when submitting jobs from the Python client.
+- Periodic repetition of EME subgrids via `num_reps` or `EMEPeriodicitySweep`.
+- Methods `EMEExplicitGrid.from_structures` and `EMECompositeGrid.from_structure_groups` to place EME cell boundaries at structure bounds.
+- 'ModeSimulation' now supports 'PermittivityMonitor'.
+- Classmethod `from_frequency_range` in `GaussianPulse` for generating a pulse whose amplitude in the frequency_range [fmin, fmax] is maximized, which is particularly useful for running broadband simulations.
+- Differentiable function `td.plugins.autograd.interpolate_spline` for 1D linear, quadratic, and cubic spline interpolation, supporting differentiation with respect to the interpolated values (`y_points`) and optional endpoint derivative constraints.
+- `SteadyEnergyBandMonitor` in the Charge solver.
+- Pretty printing enabled with `rich.print` for the material library, materials, and their variants. In notebooks, this can be accessed using `rich.print` or `display`, or by evaluating the material library, a material, or a variant in a cell.
+- `FieldData` and `ModeData` support exporting E fields to a Zemax Beam File (ZBF) with `.to_zbf()` (warning: experimental feature).
+- `FieldDataset` supports reading E fields from a Zemax Beam File (ZBF) with `.from_zbf()` (warning: experimental feature).
+- Unstructured grid now supports 2D/3D box-shaped refinement regions and 1D refinement lines of arbitrary direction.
+
+### Changed
+- Performance enhancement for adjoint gradient calculations by optimizing field interpolation.
+- Auto grid in EME simulations with multiple `freqs` provided uses the largest instead of raising an error.
+- Increased maximum number of frequencies in an EME simulation from 20 to 500
+- Named mediums now display by name for brevity; materials/variants print concise summaries including references.
+
+### Fixed
+- Fixed `reverse` property of `td.Scene.plot_structures_property()` to also reverse the colorbar.
+- Fixed bug in surface gradient computation where fields, instead of gradients, were being summed in frequency.
+
+## [2.8.2] - 2025-04-09
+
+### Added
 - `fill` and `fill_structures` argument in `td.Simulation.plot_structures()` and `td.Simulation.plot()` respectively to disable fill and plot outlines of structures only.
 - New subpixel averaging option `ContourPathAveraging` applied to dielectric material boundaries.
+- A property `interior_angle` in `PolySlab` that stores angles formed inside polygon by two adjacent edges.
+- `eps_component` argument in `td.Simulation.plot_eps()` to optionally select a specific permittivity component to plot (eg. `"xx"`).
+- Monitor `AuxFieldTimeMonitor` for aux fields like the free carrier density in `TwoPhotonAbsorption`.
+- Broadband handling (`num_freqs` argument) to the TFSF source.
+- Ability to define a `WavePort` using only a voltage or current path integral, with the missing quantity inferred via power conservation.
 
 ### Fixed
 - Compatibility with `xarray>=2025.03`.
+- Inaccurate gradient when auto-grabbing permittivities for structures using `td.PolySlab` when using dispersive material models.
+- Fixed scaling for adjoint sources when differentiating with respect to `FieldData` to account for the mesh size of the monitor and thus the created source. This aligns adjoint gradient magnitudes with numerical finite difference gradients for field data.
+- Warn when mode solver pml covers a significant portion of the mode plane.
+- TFSF server errors related to the auxiliary plane wave source that would previously happen on the server are now caught upon simulation creation.
+- Opposite arrow curvature for mode sources and monitors with non-zero bendind radius when plotted in the figure's Y axis.
+
+### Changed
+- `num_freqs` in Gaussian beam type sources limited to 20, which should besufficient for all cases.
+- The `angle_phi` parameter of `ModeSpec` is only limited to multiples of `np.pi / 2` if `angle_rotation` is set to `True`, as other values would currently not work correctly.
+- The `ramp_up_iters` parameter of the `ChargeSolver` was changed back to 1 for efficiency. It can be increased in cases with e.g. high doping when convergence is more difficult.
 
 ## [2.8.1] - 2025-03-20
 
@@ -1554,7 +1743,12 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.9.0...develop
+[2.9.0]: https://github.com/flexcompute/tidy3d/compare/v2.8.5...v2.9.0
+[2.8.5]: https://github.com/flexcompute/tidy3d/compare/v2.8.4...v2.8.5
+[2.8.4]: https://github.com/flexcompute/tidy3d/compare/v2.8.3...v2.8.4
+[2.8.3]: https://github.com/flexcompute/tidy3d/compare/v2.8.2...v2.8.3
+[2.8.2]: https://github.com/flexcompute/tidy3d/compare/v2.8.1...v2.8.2
 [2.8.1]: https://github.com/flexcompute/tidy3d/compare/v2.8.0...v2.8.1
 [2.8.0]: https://github.com/flexcompute/tidy3d/compare/v2.7.9...v2.8.0
 [2.7.9]: https://github.com/flexcompute/tidy3d/compare/v2.7.8...v2.7.9

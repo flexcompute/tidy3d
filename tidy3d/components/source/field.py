@@ -3,37 +3,31 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ...constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
-from ...exceptions import SetupError
-from ...log import log
-from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ..data.dataset import FieldDataset
-from ..data.validators import validate_can_interpolate, validate_no_nans
-from ..mode_spec import ModeSpec
-from ..types import (
-    TYPE_TAG_STR,
-    Ax,
-    Axis,
-    Coordinate,
-    Direction,
-)
-from ..validators import (
+from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from tidy3d.components.data.dataset import FieldDataset
+from tidy3d.components.data.validators import validate_can_interpolate, validate_no_nans
+from tidy3d.components.mode_spec import ModeSpec
+from tidy3d.components.source.frame import PECFrame
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Coordinate, Direction
+from tidy3d.components.validators import (
     assert_plane,
     assert_single_freq_in_range,
     assert_volumetric,
     warn_if_dataset_none,
 )
+from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, inf
+from tidy3d.exceptions import SetupError
+from tidy3d.log import log
+
 from .base import Source
 
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
 CHEB_GRID_WIDTH = 1.5
-# Number of frequencies in a broadband source above which to issue a warning
-WARN_NUM_FREQS = 20
 # For broadband plane waves with constan in-plane k, the Chebyshev grid is truncated at
 # ``CRITICAL_FREQUENCY_FACTOR * f_crit``, where ``f_crit`` is the critical frequency
 # (oblique propagation).
@@ -83,7 +77,7 @@ class DirectionalSource(FieldSource, ABC):
     )
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         if self._injection_axis is None:
             return None
@@ -98,11 +92,13 @@ class BroadbandSource(Source, ABC):
     num_freqs: int = pydantic.Field(
         1,
         title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
-        "than 20, is typically sufficient to obtain converged results.",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. A Chebyshev interpolation is used, thus, only a small number of points is "
+        "typically sufficient to obtain converged results. Note that larger values of 'num_freqs' "
+        "could spread out the source time signal and introduce numerical noise, or prevent timely  "
+        "field decay.",
         ge=1,
-        le=99,
+        le=20,
     )
 
     @cached_property
@@ -118,23 +114,6 @@ class BroadbandSource(Source, ABC):
         uni_points = (2 * np.arange(self.num_freqs) + 1) / (2 * self.num_freqs)
         cheb_points = np.cos(np.pi * np.flip(uni_points))
         return freq_avg + freq_diff * cheb_points
-
-    @pydantic.validator("num_freqs", always=True, allow_reuse=True)
-    def _warn_if_large_number_of_freqs(cls, val):
-        """Warn if a large number of frequency points is requested."""
-
-        if val is None:
-            return val
-
-        if val >= WARN_NUM_FREQS:
-            log.warning(
-                f"A large number ({val}) of frequency points is used in a broadband source. "
-                "This can lead to solver slow-down and increased cost, and even introduce "
-                "numerical noise. This may become a hard limit in future Tidy3D versions.",
-                custom_loc=["num_freqs"],
-            )
-
-        return val
 
 
 """ Source current profiles determined by user-supplied data on a plane."""
@@ -320,7 +299,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         return val
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
 
         # Propagation vector assuming propagation along z
@@ -333,7 +312,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
+    def _pol_vector(self) -> tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
 
         # Polarization vector assuming propagation along z
@@ -425,6 +404,14 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         "``num_modes`` in the solver will be set to ``mode_index + 1``.",
     )
 
+    frame: Optional[PECFrame] = pydantic.Field(
+        None,
+        title="Source Frame",
+        description="Add a thin frame around the source during the FDTD run to improve "
+        "the injection quality. The frame is positioned along the primal grid lines "
+        "so that it aligns with the boundaries of the mode solver used to obtain the source profile.",
+    )
+
     @cached_property
     def angle_theta(self):
         """Polar angle of propagation."""
@@ -436,7 +423,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         return self.mode_spec.angle_phi
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         radius = 1.0 if self.direction == "+" else -1.0
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
@@ -477,6 +464,14 @@ class FixedAngleSpec(AbstractAngularSpec):
 class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
     """Uniform current distribution on an infinite extent plane. One element of size must be zero.
 
+    Notes
+    -----
+
+        For oblique incidence, there are two possible settings: fixed in-plane k-vector and fixed-angle mode.
+        The first requires Bloch periodic boundary conditions, and the incidence angle is exact only at the central wavelength.
+        The latter requires periodic boundary conditions and maintains a constant propagation angle over a broadband spectrum.
+        For more information and important notes, see this example: `Broadband PlaneWave With Constant Oblique Incident Angle <https://docs.simulation.cloud/projects/tidy3d/en/latest/notebooks/BroadbandPlaneWaveWithConstantObliqueIncidentAngle.html>`_.
+
     Example
     -------
     >>> from tidy3d import GaussianPulse
@@ -504,11 +499,11 @@ class PlaneWave(AngledFieldSource, PlanarSource, BroadbandSource):
         3,
         title="Number of Frequency Points",
         description="Number of points used to approximate the frequency dependence of the injected "
-        "field. Default is 3, which should cover even very broadband sources. For simulations "
+        "field. Default is 3, which should cover even very broadband plane waves. For simulations "
         "which are not very broadband and the source is very large (e.g. metalens simulations), "
         "decreasing the value to 1 may lead to a speed up in the preprocessing.",
         ge=1,
-        le=10,
+        le=20,
     )
 
     @cached_property
@@ -591,13 +586,15 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     )
 
     num_freqs: int = pydantic.Field(
-        3,
+        1,
         title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
-        "than 20, is typically sufficient to obtain converged results.",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
+        "in an empty simulation to ensure there are no injection artifacts when 'num_freqs' > 1. "
+        "Note that larger values of 'num_freqs' could spread out the source time signal and "
+        "introduce numerical noise, or prevent timely field decay.",
         ge=1,
-        le=99,
+        le=20,
     )
 
 
@@ -629,14 +626,14 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     waist_distances = (3.0, 4.0))
     """
 
-    waist_sizes: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
+    waist_sizes: tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         units=MICROMETER,
     )
 
-    waist_distances: Tuple[float, float] = pydantic.Field(
+    waist_distances: tuple[float, float] = pydantic.Field(
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
@@ -649,17 +646,19 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     )
 
     num_freqs: int = pydantic.Field(
-        3,
+        1,
         title="Number of Frequency Points",
-        description="Number of points used to approximate the frequency dependence of injected "
-        "field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less "
-        "than 20, is typically sufficient to obtain converged results.",
+        description="Number of points used to approximate the frequency dependence of the injected "
+        "field. For broadband, angled Gaussian beams it is advisable to check the beam propagation "
+        "in an empty simulation to ensure there are no injection artifacts when 'num_freqs' > 1. "
+        "Note that larger values of 'num_freqs' could spread out the source time signal and "
+        "introduce numerical noise, or prevent timely field decay.",
         ge=1,
-        le=99,
+        le=20,
     )
 
 
-class TFSF(AngledFieldSource, VolumeSource):
+class TFSF(AngledFieldSource, VolumeSource, BroadbandSource):
     """Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.
 
     Notes
@@ -716,9 +715,9 @@ class TFSF(AngledFieldSource, VolumeSource):
 
     def plot(
         self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        z: Optional[float] = None,
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:

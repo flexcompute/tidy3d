@@ -34,6 +34,7 @@ Source Time Dependence
 
    tidy3d.GaussianPulse
    tidy3d.ContinuousWave
+   tidy3d.SourceTime
    tidy3d.CustomSourceTime
 
 Each source requires the ``source_time`` parameter to be defined, which provides the time-dependence of the source.
@@ -112,6 +113,8 @@ Plane Wave
    :template: module.rst
 
    tidy3d.PlaneWave
+   tidy3d.FixedInPlaneK
+   tidy3d.FixedAngle
 
 The ``PlaneWave`` class represents an incident plane wave of a certain polarization and orientation. This is typically used in conjunction with periodic boundary conditions, e.g. in a unit cell simulation.
 
@@ -190,6 +193,7 @@ Mode Source
 
    tidy3d.ModeSource
    tidy3d.ModeSpec
+   tidy3d.PECFrame
 
 The ``ModeSource`` class represents a propagating mode in a given structure cross section.
 
@@ -268,4 +272,3 @@ Please see the learning center article linked below for more details.
    + `Defining spatially-varying sources <../notebooks/CustomFieldSource.html>`_
 
 ~~~~
-

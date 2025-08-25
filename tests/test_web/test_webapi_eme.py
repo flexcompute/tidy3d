@@ -1,10 +1,12 @@
 # Tests webapi and things that depend on it
+from __future__ import annotations
 
 import pytest
 import responses
-import tidy3d as td
 from botocore.exceptions import ClientError
 from responses import matchers
+
+import tidy3d as td
 from tidy3d import EMESimulation
 from tidy3d.exceptions import SetupError
 from tidy3d.web.api.asynchronous import run_async
@@ -22,7 +24,7 @@ from tidy3d.web.api.webapi import (
     upload,
 )
 from tidy3d.web.core.environment import Env
-from tidy3d.web.core.types import TaskType
+from tidy3d.web.core.types import PayType, TaskType
 
 from ..test_components.test_eme import make_eme_sim
 
@@ -128,6 +130,8 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
                     "workerGroup": None,
                     "protocolVersion": td.version.__version__,
                     "enableCaching": Env.current.enable_caching,
+                    "payType": PayType.AUTO,
+                    "priority": None,
                 }
             )
         ],
@@ -152,9 +156,6 @@ def mock_monitor(monkeypatch):
         current_status = statuses[current_count]
         status_count[0] += 1
         return current_status
-        # return TaskInfo(
-        #     status=current_status, taskName=TASK_NAME, taskId=task_id, realFlexUnit=1.0
-        #     )
 
     run_count = [0]
     perc_dones = (1, 10, 20, 30, 100)
@@ -166,6 +167,8 @@ def mock_monitor(monkeypatch):
         return perc_done, 1
 
     monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path}.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr("tidy3d.web.api.container.web.REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
     monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)

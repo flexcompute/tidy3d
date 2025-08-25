@@ -1,15 +1,18 @@
 """Test the microwave plugin."""
 
+from __future__ import annotations
+
 from math import isclose
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pd
 import pytest
-import tidy3d as td
-import tidy3d.plugins.microwave as mw
 from skrf import Frequency
 from skrf.media import MLine
+
+import tidy3d as td
+import tidy3d.plugins.microwave as mw
 from tidy3d import FieldData
 from tidy3d.constants import ETA_0
 from tidy3d.exceptions import DataError
@@ -96,7 +99,7 @@ def make_stripline_scalar_field_data_array(grid_key: str):
         values = np.where(above_and_within, -ones / ETA_0, values)
         values = np.where(below_and_within, ones / ETA_0, values)
 
-    return td.ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+    return td.ScalarFieldDataArray(values, coords={"x": XS, "y": YS, "z": ZS, "f": FS})
 
 
 def make_coaxial_field_data_array(grid_key: str):
@@ -141,7 +144,7 @@ def make_coaxial_field_data_array(grid_key: str):
         else:
             field /= ETA_0
 
-    return td.ScalarFieldDataArray(field, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+    return td.ScalarFieldDataArray(field, coords={"x": XS, "y": YS, "z": ZS, "f": FS})
 
 
 def make_field_data():
@@ -399,7 +402,7 @@ def test_microstrip_models():
     freqs = Frequency(start=1, stop=1, npoints=1, unit="ghz")
     mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
 
-    assert np.isclose(Z0, mline.Z0[0])
+    assert np.isclose(Z0, mline.z0[0])
     assert np.isclose(eps_eff, mline.ep_reff[0])
 
     # Check end effect length computation
@@ -411,7 +414,7 @@ def test_microstrip_models():
     Z0, eps_eff = mw.models.microstrip.compute_line_params(eps_r, width, height, thickness)
     mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
 
-    assert np.isclose(Z0, mline.Z0[0])
+    assert np.isclose(Z0, mline.z0[0])
     assert np.isclose(eps_eff, mline.ep_reff[0])
 
 
@@ -664,7 +667,7 @@ def test_lobe_measurer_validation():
 
     Urad = np.cos(theta) + 1j * np.sin(theta)
     # Raise error when radiation pattern is complex
-    with pytest.raises(pd.ValidationError):
+    with pytest.raises(pd.ValidationError), pytest.warns(np.exceptions.ComplexWarning):
         mw.LobeMeasurer(
             angle=theta,
             radiation_pattern=Urad,
@@ -791,4 +794,3 @@ def test_lobe_plots(min_value):
     _, ax = plt.subplots(1, 1, subplot_kw={"projection": "polar"})
     ax.plot(theta, Urad, "k")
     lobe_measurer.plot(0, ax)
-    plt.show()

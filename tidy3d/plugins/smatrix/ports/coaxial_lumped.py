@@ -1,25 +1,30 @@
 """Lumped port specialization with an annular geometry for exciting coaxial ports."""
 
+from __future__ import annotations
+
+from typing import Optional
+
 import numpy as np
 import pydantic.v1 as pd
 
-from ....components.base import cached_property
-from ....components.data.data_array import FreqDataArray, ScalarFieldDataArray
-from ....components.data.dataset import FieldDataset
-from ....components.data.sim_data import SimulationData
-from ....components.geometry.base import Box, Geometry
-from ....components.geometry.utils_2d import increment_float
-from ....components.grid.grid import Grid, YeeGrid
-from ....components.lumped_element import CoaxialLumpedResistor
-from ....components.monitor import FieldMonitor
-from ....components.source.current import CustomCurrentSource
-from ....components.source.time import GaussianPulse
-from ....components.types import Axis, Coordinate, Direction, FreqArray, Size
-from ....components.validators import skip_if_fields_missing
-from ....constants import MICROMETER
-from ....exceptions import SetupError, ValidationError
-from ...microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
-from ...microwave.path_integrals import AbstractAxesRH
+from tidy3d.components.base import cached_property
+from tidy3d.components.data.data_array import FreqDataArray, ScalarFieldDataArray
+from tidy3d.components.data.dataset import FieldDataset
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.geometry.base import Box, Geometry
+from tidy3d.components.geometry.utils_2d import increment_float
+from tidy3d.components.grid.grid import Grid, YeeGrid
+from tidy3d.components.lumped_element import CoaxialLumpedResistor
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.source.current import CustomCurrentSource
+from tidy3d.components.source.time import GaussianPulse
+from tidy3d.components.types import Axis, Coordinate, Direction, FreqArray, Size
+from tidy3d.components.validators import skip_if_fields_missing
+from tidy3d.constants import MICROMETER
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
+from tidy3d.plugins.microwave.path_integrals import AbstractAxesRH
+
 from .base_lumped import AbstractLumpedPort
 
 DEFAULT_COAX_SOURCE_NUM_POINTS = 11
@@ -37,7 +42,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     ...             direction="+",
     ...             name="coax_port_1",
     ...             impedance=50
-    ...         )
+    ...         ) # doctest: +SKIP
     """
 
     center: Coordinate = pd.Field(
@@ -106,7 +111,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         return val
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: float = None, grid: Grid = None
+        self, source_time: GaussianPulse, snap_center: Optional[float] = None, grid: Grid = None
     ) -> CustomCurrentSource:
         """Create a current source from the lumped port."""
         # Discretized source amps are manually zeroed out later if they
@@ -187,7 +192,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
         return CustomCurrentSource(
             center=center,
-            size=(self.outer_diameter, self.outer_diameter, 0),
+            size=size,
             source_time=source_time,
             name=self.name,
             interpolate=True,
@@ -195,7 +200,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             current_dataset=dataset_E,
         )
 
-    def to_load(self, snap_center: float = None) -> CoaxialLumpedResistor:
+    def to_load(self, snap_center: Optional[float] = None) -> CoaxialLumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # Snapping is done here so plots of the simulation will more accurately portray the setup.
@@ -214,7 +219,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_voltage_monitor(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         center = list(self.center)
@@ -238,7 +243,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         )
 
     def to_current_monitor(
-        self, freqs: FreqArray, snap_center: float = None, grid: Grid = None
+        self, freqs: FreqArray, snap_center: Optional[float] = None, grid: Grid = None
     ) -> FieldMonitor:
         """Field monitor to compute port current."""
         center = list(self.center)
@@ -351,8 +356,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         # We need to choose which side of the port to place the path integral,
         if direction == "+":
             return normal_coords[upper_bound]
-        else:
-            return normal_coords[lower_bound]
+        return normal_coords[lower_bound]
 
     @cached_property
     def _voltage_axis(self) -> Axis:
@@ -380,7 +384,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         """Raises :class:``SetupError`` if the grid is too coarse at port locations"""
         trans_axes = self.remaining_axes
         for axis in trans_axes:
-            e_component = "xyz"[trans_axes[0]]
+            e_component = "xyz"[axis]
             e_grid = yee_grid.grid_dict[f"E{e_component}"]
             coords = e_grid.to_dict[e_component]
             min_bound = self.center[axis] - self.outer_diameter / 2

@@ -1,15 +1,20 @@
 """Defines various validation functions that get used to ensure inputs are legit"""
 
+from __future__ import annotations
+
+from typing import Any, Optional
+
 import numpy as np
 import pydantic.v1 as pydantic
+from autograd.tracer import isbox
 
-from ..exceptions import SetupError, ValidationError
-from ..log import log
+from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.log import log
+
+from .autograd.utils import get_static
 from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .data.dataset import Dataset, FieldDataset
 from .geometry.base import Box
-from .mode_spec import ModeSpec
-from .types import Tuple
 
 """ Explanation of pydantic validators:
 
@@ -45,6 +50,14 @@ from .types import Tuple
 
 # Lowest frequency supported (Hz)
 MIN_FREQUENCY = 1e5
+
+
+def named_obj_descr(obj: Any, field_name: str, position_index: int) -> str:
+    """Generate a string describing a named object which can be used in error messages."""
+    descr = f"simulation.{field_name}[{position_index}] (no `name` was specified)"
+    if hasattr(obj, "name") and obj.name:
+        descr = f"'{obj.name}' (simulation.{field_name}[{position_index}])"
+    return descr
 
 
 def assert_line():
@@ -151,10 +164,10 @@ def validate_mode_objects_symmetry(field_name: str):
                         and bounds_min[dim] < sim_center[dim]
                         and geometric_object.center[dim] != sim_center[dim]
                     ):
+                        obj_descr = named_obj_descr(geometric_object, field_name, position_index)
                         raise SetupError(
-                            f"{obj_type} at 'simulation.{field_name}[{position_index}]' "
-                            "in presence of symmetries must be in the main quadrant, "
-                            "or centered on the symmetry axis."
+                            f"{obj_type}: {obj_descr} in presence of symmetries must be in the main "
+                            "quadrant, or centered on the symmetry axis."
                         )
 
         return val
@@ -196,12 +209,9 @@ def assert_objects_in_sim_bounds(
         with log as consolidated_logger:
             for position_index, geometric_object in enumerate(val):
                 if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
-                    message = (
-                        f"'simulation.{field_name}[{position_index}]' "
-                        "is outside of the simulation domain."
-                    )
+                    obj_descr = named_obj_descr(geometric_object, field_name, position_index)
+                    message = f"{obj_descr} is outside of the simulation domain."
                     custom_loc = [field_name, position_index]
-
                     if error:
                         raise SetupError(message)
                     consolidated_logger.warning(message, custom_loc=custom_loc)
@@ -212,7 +222,10 @@ def assert_objects_in_sim_bounds(
 
 
 def assert_objects_contained_in_sim_bounds(
-    field_name: str, error: bool = True, strict_inequality: bool = False
+    field_name: str,
+    error: bool = True,
+    strict_inequality: bool = False,
+    strict_for_zero_size_dim: bool = False,
 ):
     """Makes sure all objects in field are completely inside the simulation bounds."""
 
@@ -226,16 +239,20 @@ def assert_objects_contained_in_sim_bounds(
 
         # Do a strict check, unless simulation is 0D along a dimension
         strict_ineq = [size != 0 and strict_inequality for size in sim_size]
-
         with log as consolidated_logger:
             for position_index, geometric_object in enumerate(val):
-                if not sim_box.contains(geometric_object.geometry, strict_inequality=strict_ineq):
-                    message = (
-                        f"'simulation.{field_name}[{position_index}]' "
-                        "is not completely inside the simulation domain."
-                    )
+                geo_strict_ineq = list(strict_ineq)
+                # Optionally ensure that zero size dimensions are strictly contained
+                if strict_for_zero_size_dim:
+                    zero_dims = geometric_object.geometry.zero_dims
+                    for zero_dim in zero_dims:
+                        geo_strict_ineq[zero_dim] = True
+                if not sim_box.contains(
+                    geometric_object.geometry, strict_inequality=geo_strict_ineq
+                ):
+                    obj_descr = named_obj_descr(geometric_object, field_name, position_index)
+                    message = f"{obj_descr} is not completely inside the simulation domain."
                     custom_loc = [field_name, position_index]
-
                     if error:
                         raise SetupError(message)
                     consolidated_logger.warning(message, custom_loc=custom_loc)
@@ -321,9 +338,9 @@ def assert_single_freq_in_range(field_name: str):
 def _warn_potential_error(
     field_name: str,
     base_value: float,
-    val_change_range: Tuple[float, float],
-    allowed_real_range: Tuple[float, float],
-    allowed_imag_range: Tuple[float, float],
+    val_change_range: tuple[float, float],
+    allowed_real_range: tuple[float, float],
+    allowed_imag_range: tuple[float, float],
 ):
     """Basic validation that perturbations do not drive a parameter out of physical bounds."""
 
@@ -356,8 +373,8 @@ def _warn_potential_error(
 def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
-    allowed_real_range: Tuple[Tuple[float, float], ...],
-    allowed_imag_range: Tuple[Tuple[float, float], ...] = None,
+    allowed_real_range: tuple[tuple[float, float], ...],
+    allowed_imag_range: Optional[tuple[tuple[float, float], ...]] = None,
     allowed_complex: bool = True,
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""
@@ -448,19 +465,32 @@ def validate_freqs_not_empty():
     return freqs_not_empty
 
 
-def validate_mode_plane_radius(mode_spec: ModeSpec, plane: Box, msg_prefix: str = ""):
-    """Validate that the radius of a mode spec with a bend is not smaller than half the size of
-    the plane along the radial direction."""
+def validate_freqs_unique():
+    """Validate that the array of frequencies does not have duplicate entries."""
 
-    if not mode_spec.bend_radius:
-        return
+    @pydantic.validator("freqs", always=True, allow_reuse=True)
+    def freqs_unique(cls, val):
+        """Raise validation error if ``freqs`` has duplicate entries."""
+        if len(set(val)) != len(val):
+            raise ValidationError(f"'{cls.__name__}.freqs' must not contain duplicate entries.")
+        return val
 
-    # radial axis is the plane axis that is not the bend axis
-    _, plane_axs = plane.pop_axis([0, 1, 2], plane.size.index(0.0))
-    radial_ax = plane_axs[(mode_spec.bend_axis + 1) % 2]
+    return freqs_unique
 
-    if np.abs(mode_spec.bend_radius) < plane.size[radial_ax] / 2:
-        raise ValueError(
-            f"{msg_prefix} bend radius is smaller than half the mode plane size "
-            "along the radial axis, which can produce wrong results."
-        )
+
+def _warn_unsupported_traced_argument(name: str):
+    @pydantic.validator(name, always=True, allow_reuse=True)
+    def _warn_traced_arg(cls, val, values):
+        if isbox(val):
+            log.warning(
+                f"Field '{name}' of '{cls.__name__}' received an autograd tracer "
+                f"(i.e., a value being tracked for automatic differentiation). "
+                f"Automatic differentiation through this field is unsupported, "
+                f"so the tracer has been converted to its static value. "
+                f"If you want to avoid this warning, you manually unbox the value "
+                f"using the 'autograd.tracer.getval' function before passing it to Tidy3D."
+            )
+            return get_static(val)
+        return val
+
+    return _warn_traced_arg

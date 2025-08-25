@@ -4,17 +4,27 @@ from __future__ import annotations
 
 from enum import Enum
 from math import isclose
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
 import numpy as np
-import pydantic as pydantic
+import pydantic
 
-from ...constants import fp_eps
-from ...exceptions import SetupError, Tidy3dError
-from ..base import Tidy3dBaseModel
-from ..geometry.base import Box
-from ..grid.grid import Grid
-from ..types import ArrayFloat2D, Axis, Coordinate, MatrixReal4x4, PlanePosition, Shapely
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.grid.grid import Grid
+from tidy3d.components.types import (
+    ArrayFloat2D,
+    Axis,
+    Bound,
+    Coordinate,
+    Direction,
+    MatrixReal4x4,
+    PlanePosition,
+    Shapely,
+)
+from tidy3d.constants import fp_eps
+from tidy3d.exceptions import SetupError, Tidy3dError
+
 from . import base, mesh, polyslab, primitives
 
 GeometryType = Union[
@@ -31,10 +41,10 @@ GeometryType = Union[
 
 
 def merging_geometries_on_plane(
-    geometries: List[GeometryType],
+    geometries: list[GeometryType],
     plane: Box,
-    property_list: List[Any],
-) -> List[Tuple[Any, Shapely]]:
+    property_list: list[Any],
+) -> list[tuple[Any, Shapely]]:
     """Compute list of shapes on plane. Overlaps are removed or merged depending on
     provided property_list.
 
@@ -191,7 +201,7 @@ def traverse_geometries(geometry: GeometryType) -> GeometryType:
 def from_shapely(
     shape: Shapely,
     axis: Axis,
-    slab_bounds: Tuple[float, float],
+    slab_bounds: tuple[float, float],
     dilation: float = 0.0,
     sidewall_angle: float = 0,
     reference_plane: PlanePosition = "middle",
@@ -284,7 +294,7 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
     if shape.geom_type == "LinearRing":
         return [(shape.coords[:-1],)]
     if shape.geom_type == "Polygon":
-        return [(shape.exterior.coords[:-1],) + tuple(hole.coords[:-1] for hole in shape.interiors)]
+        return [(shape.exterior.coords[:-1], *tuple(hole.coords[:-1] for hole in shape.interiors))]
     if shape.geom_type in {"MultiPolygon", "GeometryCollection"}:
         return sum(vertices_from_shapely(geo) for geo in shape.geoms)
 
@@ -478,3 +488,77 @@ def snap_point_to_grid(
         snapped_point[axis] = get_closest_value(point[axis], snap_coords, min_upper_bound_idx)
 
     return tuple(snapped_point)
+
+
+def _shift_value_signed(
+    obj: Box,
+    grid: Grid,
+    bounds: Bound,
+    direction: Direction,
+    shift: int,
+    name: Optional[str] = None,
+) -> float:
+    """Calculate the signed distance corresponding to moving the object by ``shift`` number
+    of cells in the positive or negative ``direction`` along the dimension given by
+    ``obj._normal_axis``.
+    """
+    if name is None:
+        name = f"A '{obj.type}'"
+
+    # get the grid boundaries and sizes along obj normal from the simulation
+    normal_axis = obj._normal_axis
+    grid_boundaries = grid.boundaries.to_list[normal_axis]
+    grid_centers = grid.centers.to_list[normal_axis]
+
+    # get the index of the grid cell where the obj lies
+    obj_position = obj.center[normal_axis]
+    obj_pos_gt_grid_bounds = np.argwhere(obj_position > grid_boundaries)
+
+    # no obj index can be determined
+    if len(obj_pos_gt_grid_bounds) == 0 or obj_position > grid_boundaries[-1]:
+        raise SetupError(
+            f"{name} position '{obj_position}' is outside of simulation bounds '({grid_boundaries[0]}, {grid_boundaries[-1]})' along dimension '{'xyz'[normal_axis]}'."
+        )
+    obj_index = obj_pos_gt_grid_bounds[-1]
+
+    # shift the obj to the left
+    signed_shift = shift if direction == "+" else -shift
+    if signed_shift < 0:
+        shifted_index = obj_index + signed_shift
+        if shifted_index < 0 or grid_centers[shifted_index] <= bounds[0][normal_axis]:
+            raise SetupError(
+                f"{name} normal is less than 2 cells to the boundary "
+                f"on -{'xyz'[normal_axis]} side. "
+                "Please either increase the mesh resolution near the obj or "
+                "move the obj away from the boundary."
+            )
+
+    # shift the obj to the right
+    else:
+        shifted_index = obj_index + signed_shift
+        if (
+            shifted_index >= len(grid_centers)
+            or grid_centers[shifted_index] >= bounds[1][normal_axis]
+        ):
+            raise SetupError(
+                f"{name} normal is less than 2 cells to the boundary "
+                f"on +{'xyz'[normal_axis]} side."
+                "Please either increase the mesh resolution near the obj or "
+                "move the obj away from the boundary."
+            )
+
+    new_pos = grid_centers[shifted_index]
+    return new_pos - obj_position
+
+
+def _shift_object(obj: Box, grid: Grid, bounds: Bound, direction: Direction, shift: int) -> Box:
+    """Move a plane-like object by ``shift`` number
+    of cells in the positive or negative ``direction`` along the dimension given by
+    ``obj._normal_axis``.
+    """
+    shift = _shift_value_signed(obj=obj, grid=grid, bounds=bounds, direction=direction, shift=shift)
+    new_center = np.array(obj.center)
+    new_center[obj._normal_axis] += shift
+    # note: if this needs to be generalized beyond absorber, one would probably
+    # slightly adjust the code below regarding grid_shift
+    return obj.updated_copy(center=tuple(new_center), grid_shift=0)

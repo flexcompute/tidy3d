@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple, Union
+from typing import Union
 
+import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, skip_if_fields_missing
+from tidy3d.components.geometry.base import Box
+from tidy3d.components.types import Coordinate, annotate_type
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import ValidationError
 
@@ -52,12 +55,98 @@ class UniformUnstructuredGrid(UnstructuredGrid):
         description="Enforced minimum number of mesh segments per any side of an object.",
     )
 
-    non_refined_structures: Tuple[str, ...] = pd.Field(
+    non_refined_structures: tuple[str, ...] = pd.Field(
         (),
         title="Structures Without Refinement",
         description="List of structures for which ``min_edges_per_circumference`` and "
         "``min_edges_per_side`` will not be enforced. The original ``dl`` is used instead.",
     )
+
+
+class GridRefinementRegion(Box):
+    """Refinement region for the unstructured mesh. The cell size is enforced to be constant inside the region.
+    The cell size outside of the region depends on the distance from the region."""
+
+    dl_internal: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Internal mesh cell size",
+        description="Mesh cell size inside the refinement region",
+        units=MICROMETER,
+    )
+
+    transition_thickness: pd.NonNegativeFloat = pd.Field(
+        ...,
+        title="Interface Distance",
+        description="Thickness of a transition layer outside the box where the mesh cell size changes from the"
+        "internal size to the external one.",
+        units=MICROMETER,
+    )
+
+
+class GridRefinementLine(Tidy3dBaseModel, ABC):
+    """Refinement line for the unstructured mesh. The cell size depends on the distance from the line."""
+
+    r1: Coordinate = pd.Field(
+        ...,
+        title="Start point of the line",
+        description="Start point of the line in x, y, and z.",
+        units=MICROMETER,
+    )
+
+    r2: Coordinate = pd.Field(
+        ...,
+        title="End point of the line",
+        description="End point of the line in x, y, and z.",
+        units=MICROMETER,
+    )
+
+    @pd.validator("r1", always=True)
+    def _r1_not_inf(cls, val):
+        """Make sure the point is not infinitiy."""
+        if any(np.isinf(v) for v in val):
+            raise ValidationError("Point can not contain td.inf terms.")
+        return val
+
+    @pd.validator("r2", always=True)
+    def _r2_not_inf(cls, val):
+        """Make sure the point is not infinitiy."""
+        if any(np.isinf(v) for v in val):
+            raise ValidationError("Point can not contain td.inf terms.")
+        return val
+
+    dl_near: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Mesh cell size near the line",
+        description="Mesh cell size near the line",
+        units=MICROMETER,
+    )
+
+    distance_near: pd.NonNegativeFloat = pd.Field(
+        ...,
+        title="Near distance",
+        description="Distance from the line within which ``dl_near`` is enforced."
+        "Typically the same as ``dl_near`` or its multiple.",
+        units=MICROMETER,
+    )
+
+    distance_bulk: pd.NonNegativeFloat = pd.Field(
+        ...,
+        title="Bulk distance",
+        description="Distance from the line outside of which ``dl_bulk`` is enforced."
+        "Typically twice of ``dl_bulk`` or its multiple. Use larger values for a smoother "
+        "transition from ``dl_near`` to ``dl_bulk``.",
+        units=MICROMETER,
+    )
+
+    @pd.validator("distance_bulk", always=True)
+    @skip_if_fields_missing(["distance_near"])
+    def names_exist_bcs(cls, val, values):
+        """Error if distance_bulk is less than distance_near"""
+        distance_near = values.get("distance_near")
+        if distance_near > val:
+            raise ValidationError("'distance_bulk' cannot be smaller than 'distance_near'.")
+
+        return val
 
 
 class DistanceUnstructuredGrid(UnstructuredGrid):
@@ -112,18 +201,26 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         "surface when computing distance values.",
     )
 
-    uniform_grid_mediums: Tuple[str, ...] = pd.Field(
+    uniform_grid_mediums: tuple[str, ...] = pd.Field(
         (),
         title="Mediums With Uniform Refinement",
         description="List of mediums for which ``dl_interface`` will be enforced everywhere "
         "in the volume.",
     )
 
-    non_refined_structures: Tuple[str, ...] = pd.Field(
+    non_refined_structures: tuple[str, ...] = pd.Field(
         (),
         title="Structures Without Refinement",
         description="List of structures for which ``dl_interface`` will not be enforced. "
         "``dl_bulk`` is used instead.",
+    )
+
+    mesh_refinements: tuple[annotate_type(Union[GridRefinementRegion, GridRefinementLine]), ...] = (
+        pd.Field(
+            (),
+            title="Mesh refinement structures",
+            description="List of regions/lines for which the mesh refinement will be applied",
+        )
     )
 
     @pd.validator("distance_bulk", always=True)

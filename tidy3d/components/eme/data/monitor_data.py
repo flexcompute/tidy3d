@@ -6,9 +6,18 @@ from typing import Union
 
 import pydantic.v1 as pd
 
-from ...base_sim.data.monitor_data import AbstractMonitorData
-from ...data.monitor_data import ElectromagneticFieldData, ModeSolverData
-from ..monitor import EMECoefficientMonitor, EMEFieldMonitor, EMEModeSolverMonitor
+from tidy3d.components.base_sim.data.monitor_data import AbstractMonitorData
+from tidy3d.components.data.monitor_data import (
+    ElectromagneticFieldData,
+    ModeSolverData,
+    PermittivityData,
+)
+from tidy3d.components.eme.monitor import (
+    EMECoefficientMonitor,
+    EMEFieldMonitor,
+    EMEModeSolverMonitor,
+)
+
 from .dataset import EMECoefficientDataset, EMEFieldDataset, EMEModeSolverDataset
 
 
@@ -40,4 +49,6 @@ class EMECoefficientData(AbstractMonitorData, EMECoefficientDataset):
     )
 
 
-EMEMonitorDataType = Union[EMEModeSolverData, EMEFieldData, EMECoefficientData, ModeSolverData]
+EMEMonitorDataType = Union[
+    EMEModeSolverData, EMEFieldData, EMECoefficientData, ModeSolverData, PermittivityData
+]

@@ -18,6 +18,7 @@ Mobility
    :toctree: ../_autosummary/
    :template: module.rst
 
+   tidy3d.ConstantMobilityModel
    tidy3d.CaugheyThomasMobility
 
 

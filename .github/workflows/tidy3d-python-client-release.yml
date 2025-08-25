@@ -1,0 +1,125 @@
+name: "public/tidy3d/python-client-release"
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  test-latest-submodules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          # This fetches only a single branch by default, so additional fetch is needed
+          fetch-depth: 0 # Optionally, set to 0 to fetch all history for all branches and tags
+
+      - name: Initialize and update submodule
+        run: |
+          git submodule update --init --recursive
+
+      - name: Check if submodules are up to date
+        shell: bash
+        run: |
+          NOTEBOOKS_PATH=docs/notebooks
+          FAQ_PATH=docs/faq
+
+          # Checking out Notebooks submodule with the same branch as the main project/develop
+          echo "Checking $NOTEBOOKS_PATH for updates..."
+          cd $NOTEBOOKS_PATH
+          NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
+          echo $(git fetch --all --verbose)
+          echo $(git remote get-url origin)
+          if git show-ref --verify refs/remotes/origin/develop; then
+           echo "Branch develop exists."
+          else
+            echo "::error::Branch develop does not exist on remote."
+            exit 1
+          fi
+          NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
+          echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
+          echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
+
+
+          cd ../..
+          if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
+            echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the develop branch. Please update it."
+            exit 1
+          else
+            echo "Submodule $NOTEBOOKS_PATH is up to date with the develop branch."
+          fi
+
+          # Checking FAQs only on the develop branch.
+          echo "Checking $FAQ_PATH for updates..."
+          cd $FAQ_PATH
+          FAQ_CURRENT_COMMIT=$(git rev-parse HEAD)
+          echo $(git fetch --all --verbose)
+          echo $(git remote get-url origin)
+          FAQ_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
+          echo "FAQ_LATEST_COMMIT: $FAQ_LATEST_COMMIT"
+          echo "FAQ_CURRENT_COMMIT: $FAQ_CURRENT_COMMIT"
+          cd ../..
+          if [ "$FAQ_LATEST_COMMIT" != "$FAQ_CURRENT_COMMIT" ]; then
+            echo "::error ::Submodule $FAQ_PATH is not up to date. Please update it."
+            exit 1
+          else
+            echo "Submodule $FAQ_PATH is up to date."
+          fi
+
+  github-release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+    - name: Exit if any RC release
+      if: contains(github.ref, 'rc') == false
+      uses: everlytic/branch-merge@1.1.2
+      with:
+        github_token: ${{ secrets.GH_PAT }}
+        source_ref: ${{ github.ref }}
+        target_branch: "latest"
+        commit_message_template: ':tada: RELEASE: Merged {source_ref} into target {target_branch}'
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        generate_release_notes: true      
+      env:
+        GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+  pypi-release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
+    - uses: actions/setup-python@v2
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install setuptools wheel twine build
+    - name: Build and publish
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        python -m build
+        python -m twine upload --repository pypi dist/*
+  sync_to_develop:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: "latest"
+    - name: Exit if any RC release
+      if: contains(github.ref, 'rc') == false
+      uses: everlytic/branch-merge@1.1.2
+      with:
+        github_token: ${{ secrets.GH_PAT }}
+        source_ref: "latest"
+        target_branch: "develop"
+        commit_message_template: ':tada: RELEASE: Synced latest into develop'

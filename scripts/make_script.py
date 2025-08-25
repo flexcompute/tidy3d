@@ -8,6 +8,8 @@ to turn existing `simulation.json` into a script `simulation.py`
 
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import re
@@ -83,11 +85,11 @@ def main(args):
         # read the formatted content back
         with open(temp_file_path, encoding="utf-8") as temp_file:
             sim_string = temp_file.read()
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
         raise RuntimeError(
             "Ruff formatting failed. Your script might not be compatible with make_script.py. "
             "This could be due to unsupported features like CustomMedium."
-        )
+        ) from exc
     finally:
         # remove the temporary file
         os.remove(temp_file_path)

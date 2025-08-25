@@ -1,17 +1,20 @@
 """Defines the methods used for parameter sweep."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Literal, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
-import scipy.stats.qmc as qmc
 
-from ...components.base import Tidy3dBaseModel
-from ...constants import inf
+from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.constants import inf
+
 from .parameter import ParameterAny, ParameterFloat, ParameterInt, ParameterType
 
-DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube
+if TYPE_CHECKING:
+    from scipy.stats import qmc as qmc_type
 
 
 class Method(Tidy3dBaseModel, ABC):
@@ -20,11 +23,11 @@ class Method(Tidy3dBaseModel, ABC):
     name: str = pd.Field(None, title="Name", description="Optional name for the sweep method.")
 
     @abstractmethod
-    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
+    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable) -> tuple[Any]:
         """Defines the search algorithm."""
 
     @abstractmethod
-    def _get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: Optional[list] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
 
     def _force_int(self, next_point: dict, parameters: list) -> None:
@@ -36,7 +39,7 @@ class Method(Tidy3dBaseModel, ABC):
                 next_point[param.name] = int(round(next_point[param.name], 0))
 
     @staticmethod
-    def _extract_output(output: list, sampler: bool = False) -> Tuple:
+    def _extract_output(output: list, sampler: bool = False) -> tuple:
         """Format the user function output for further optimization and result storage."""
 
         # Light check if all the outputs are the same type
@@ -57,7 +60,7 @@ class Method(Tidy3dBaseModel, ABC):
             none_aux = [None for _ in range(len(output))]
             return (output, none_aux)
 
-        if all(isinstance(val, (list, Tuple)) for val in output):
+        if all(isinstance(val, (list, tuple)) for val in output):
             if all(isinstance(val[0], (float, int)) for val in output):
                 float_out = []
                 aux_out = []
@@ -73,15 +76,13 @@ class Method(Tidy3dBaseModel, ABC):
                 # Float with aux_out
                 return (float_out, aux_out)
 
-            else:
-                raise ValueError(
-                    "Unrecognized output from supplied post function. The first element in the iterable object should be a 'float'."
-                )
-
-        else:
             raise ValueError(
-                "Unrecognized output from supplied post function. Output should be a 'float' or an iterable object."
+                "Unrecognized output from supplied post function. The first element in the iterable object should be a 'float'."
             )
+
+        raise ValueError(
+            "Unrecognized output from supplied post function. Output should be a 'float' or an iterable object."
+        )
 
     @staticmethod
     def _flatten_and_append(list_of_lists: list[list], append_target: list) -> None:
@@ -95,13 +96,13 @@ class MethodSample(Method, ABC):
     """A sweep method where all points are independently computed in one iteration."""
 
     @abstractmethod
-    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs) -> dict[str, Any]:
         """Defines how the design parameters are sampled."""
 
     def _assemble_args(
         self,
-        parameters: Tuple[ParameterType, ...],
-    ) -> Tuple[dict, int]:
+        parameters: tuple[ParameterType, ...],
+    ) -> tuple[dict, int]:
         """Sample design parameters, check the args are hashable and compute number of points."""
 
         fn_args = self.sample(parameters)
@@ -109,7 +110,7 @@ class MethodSample(Method, ABC):
             self._force_int(arg_dict, parameters)
         return fn_args
 
-    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
         """Defines the search algorithm."""
 
         # get all function inputs
@@ -139,7 +140,7 @@ class MethodGrid(MethodSample):
         return len(self.sample(parameters))
 
     @staticmethod
-    def sample(parameters: Tuple[ParameterType, ...]) -> Dict[str, Any]:
+    def sample(parameters: tuple[ParameterType, ...]) -> dict[str, Any]:
         """Defines how the design parameters are sampled on the grid."""
 
         # sample each dimension individually
@@ -230,11 +231,11 @@ class MethodBayOpt(MethodOptimize, ABC):
         description="The Xi coefficient used by the ``ei`` and ``poi`` acquisition functions. More detail available in the `package docs <https://bayesian-optimization.github.io/BayesianOptimization/exploitation_vs_exploration.html>`_.",
     )
 
-    def _get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: Optional[list] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.initial_iter + self.n_iter
 
-    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
         """Defines the Bayesian optimization search algorithm for the method.
 
         Uses the ``bayes_opt`` package to carry out a Bayesian optimization. Utilizes the ``.suggest`` and ``.register`` methods instead of
@@ -247,7 +248,7 @@ class MethodBayOpt(MethodOptimize, ABC):
             raise ImportError(
                 "Cannot run Bayesian optimization as 'bayes_opt' module not found. "
                 "Please check installation or run 'pip install bayesian-optimization==1.5.1'."
-            )
+            ) from None
 
         # Identify non-numeric params and define boundaries for Bay-opt
         param_converter = {}
@@ -429,13 +430,13 @@ class MethodGenAlg(MethodOptimize, ABC):
 
     # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
 
-    def _get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: Optional[list] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         # +1 to generations as pygad creates an initial population which is effectively "Generation 0"
         run_count = self.solutions_per_pop * (self.n_generations + 1)
         return run_count
 
-    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
         """Defines the genetic algorithm for the method.
 
         Uses the ``pygad`` package to carry out a particle search optimization. Additional development has ensured that
@@ -447,7 +448,7 @@ class MethodGenAlg(MethodOptimize, ABC):
         except ImportError:
             raise ImportError(
                 "Cannot run genetic algorithm optimization as 'pygad' module not found. Please check installation or run 'pip install pygad'."
-            )
+            ) from None
 
         # Make param names available to the fitness function
         param_keys = [param.name for param in parameters]
@@ -475,7 +476,7 @@ class MethodGenAlg(MethodOptimize, ABC):
                 # Designed for str in ParameterAny but may work for anything
                 param_converter[param.name] = self.any_to_int_param(param)
 
-                gene_spaces.append(range(0, len(param.allowed_values)))
+                gene_spaces.append(range(len(param.allowed_values)))
                 gene_types.append(int)
 
         def capture_aux(sol_dict_list: list[dict]) -> None:
@@ -680,11 +681,11 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         description="Set the initial positions of the swarm using a numpy array of appropriate size.",
     )
 
-    def _get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: Optional[list] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.n_particles * self.n_iter
 
-    def _run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable, console) -> Tuple[Any]:
+    def _run(self, parameters: tuple[ParameterType, ...], run_fn: Callable, console) -> tuple[Any]:
         """Defines the particle search optimization algorithm for the method.
 
         Uses the ``pyswarms`` package to carry out a particle search optimization.
@@ -695,7 +696,7 @@ class MethodParticleSwarm(MethodOptimize, ABC):
         except ImportError:
             raise ImportError(
                 "Cannot run particle swarm optimization as 'pyswarms' module not found. Please check installation or run 'pip install pyswarms'."
-            )
+            ) from None
 
         # Pyswarms doesn't have a seed set outside of numpy std method
         if self.seed is not None:
@@ -785,14 +786,14 @@ class AbstractMethodRandom(MethodSample, ABC):
     )
 
     @abstractmethod
-    def _get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
+    def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
-    def _get_run_count(self, parameters: list = None) -> int:
+    def _get_run_count(self, parameters: Optional[list] = None) -> int:
         """Return the maximum number of runs for the method based on current method arguments."""
         return self.num_points
 
-    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
+    def sample(self, parameters: tuple[ParameterType, ...], **kwargs) -> list[dict[str, Any]]:
         """Defines how the design parameters are sampled on grid."""
 
         sampler = self._get_sampler(parameters)
@@ -822,11 +823,12 @@ class MethodMonteCarlo(AbstractMethodRandom):
     >>> method = tdd.MethodMonteCarlo(num_points=20)
     """
 
-    def _get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
+    def _get_sampler(self, parameters: tuple[ParameterType, ...]) -> qmc_type.QMCEngine:
         """Sampler for this ``Method`` class."""
+        from scipy.stats import qmc
 
         d = len(parameters)
-        return DEFAULT_MONTE_CARLO_SAMPLER_TYPE(d=d, seed=self.seed)
+        return qmc.LatinHypercube(d=d, seed=self.seed)
 
 
 MethodType = Union[

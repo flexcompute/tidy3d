@@ -60,6 +60,7 @@ List of Monitor Data Types
    tidy3d.FieldProjectionKSpaceData
    tidy3d.DiffractionData
    tidy3d.DirectivityData
+   tidy3d.AuxFieldTimeData
 
 
 ~~~~
