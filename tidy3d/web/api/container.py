@@ -227,21 +227,28 @@ class Job(WebContainer):
         self = self.updated_copy(task_id_cached=task_id_cached)
         super(Job, self).to_file(fname=fname)  # noqa: UP008
 
-    def run(self, path: str = DEFAULT_DATA_PATH) -> WorkflowDataType:
+    def run(
+        self, path: str = DEFAULT_DATA_PATH, priority: Optional[int] = None
+    ) -> WorkflowDataType:
         """Run :class:`Job` all the way through and return data.
 
         Parameters
         ----------
-        path_dir : str = "./simulation_data.hdf5"
-            Base directory where data will be downloaded, by default current working directory.
-
+        path : str = "./simulation_data.hdf5"
+            Path to download results file (.hdf5), including filename.
+        priority: int = None
+            Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+            It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+        :class:`WorkflowDataType`
             Object containing simulation results.
         """
         self.upload()
-        self.start()
+        if priority is None:
+            self.start()
+        else:
+            self.start(priority=priority)
         self.monitor()
         return self.load(path=path)
 
@@ -280,14 +287,25 @@ class Job(WebContainer):
         """Return current status of :class:`Job`."""
         return self.get_info().status
 
-    def start(self) -> None:
+    def start(self, priority: Optional[int] = None) -> None:
         """Start running a :class:`Job`.
 
+        Parameters
+        ----------
+
+        priority: int = None
+            Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+            It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         Note
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id, solver_version=self.solver_version, pay_type=self.pay_type)
+        web.start(
+            self.task_id,
+            solver_version=self.solver_version,
+            pay_type=self.pay_type,
+            priority=priority,
+        )
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -581,14 +599,20 @@ class Batch(WebContainer):
 
     _job_type = Job
 
-    def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
+    def run(
+        self,
+        path_dir: str = DEFAULT_DATA_DIR,
+        priority: Optional[int] = None,
+    ) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
         Parameters
         ----------
         path_dir : str
             Base directory where data will be downloaded, by default current working directory.
-
+        priority: int = None
+            Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+            It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         Returns
         ------
         :class:`BatchData`
@@ -612,7 +636,10 @@ class Batch(WebContainer):
         self._check_path_dir(path_dir)
         self.upload()
         self.to_file(self._batch_path(path_dir=path_dir))
-        self.start()
+        if priority is None:
+            self.start()
+        else:
+            self.start(priority=priority)
         self.monitor()
         return self.load(path_dir=path_dir)
 
@@ -715,9 +742,18 @@ class Batch(WebContainer):
             info_dict[task_name] = task_info
         return info_dict
 
-    def start(self) -> None:
+    def start(
+        self,
+        priority: Optional[int] = None,
+    ) -> None:
         """Start running all tasks in the :class:`Batch`.
 
+        Parameters
+        ----------
+
+        priority: int = None
+            Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+            It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
         Note
         ----
         To monitor the running simulations, can call :meth:`Batch.monitor`.
@@ -728,7 +764,10 @@ class Batch(WebContainer):
 
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             for _, job in self.jobs.items():
-                executor.submit(job.start)
+                if priority is None:
+                    executor.submit(job.start)
+                else:
+                    executor.submit(job.start, priority=priority)
 
     def get_run_info(self) -> dict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.

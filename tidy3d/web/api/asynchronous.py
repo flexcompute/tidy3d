@@ -23,6 +23,7 @@ def run_async(
     parent_tasks: Optional[dict[str, list[str]]] = None,
     reduce_simulation: Literal["auto", True, False] = "auto",
     pay_type: Union[PayType, str] = PayType.AUTO,
+    priority: Optional[int] = None,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -52,7 +53,9 @@ def run_async(
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: Union[PayType, str] = PayType.AUTO
         Specify the payment method.
-
+    priority: int = None
+        Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+        It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
     Returns
     ------
     :class:`BatchData`
@@ -90,5 +93,5 @@ def run_async(
         pay_type=pay_type,
     )
 
-    batch_data = batch.run(path_dir=path_dir)
+    batch_data = batch.run(path_dir=path_dir, priority=priority)
     return batch_data

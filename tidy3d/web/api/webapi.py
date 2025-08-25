@@ -137,9 +137,10 @@ def run(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Whether to reduce structures in the simulation to the simulation domain only. Note: currently only implemented for the mode solver.
     pay_type: Union[PayType, str] = PayType.AUTO
-       Which method to pay the simulation.
+        Which method to pay the simulation.
     priority: int = None
-        Task priority for vGPU queue (1=lowest, 10=highest).
+        Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+        It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
     Returns
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
@@ -450,7 +451,8 @@ def start(
     pay_type: Union[PayType, str] = PayType.AUTO
         Which method to pay the simulation
     priority: int = None
-        Task priority for vGPU queue (1=lowest, 10=highest).
+        Priority of the simulation in the Virtual GPU (vGPU) queue (1 = lowest, 10 = highest).
+        It affects only simulations from vGPU licenses and does not impact simulations using FlexCredits.
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
