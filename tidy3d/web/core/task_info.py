@@ -173,21 +173,20 @@ class RunInfo(TaskBase):
 
 
 class BatchStatus(str, Enum):
-    Created = "Created"
-    Preprocess = "Preprocess"
-    Validating = "Validating"
-    Validate_Success = "Validate_Success"
-    Validate_Warn = "Validate_Warn"
-    Validate_Failed = "Validate_Failed"
-    Blocked = "Blocked"
-    Running = "Running"
-    Aborting = "Aborting"
-    Run_Success = "Run_Success"
-    Postprocess = "Postprocess"
-    Run_Failed = "Run_Failed"
-    Run_Diverged = "Run_Diverged"
-    Abort = "Abort"
-    Aborted = "Aborted"
+    draft = "draft"
+    preprocess = "preprocess"
+    validating = "validating"
+    validate_success = "validate_success"
+    validate_warn = "validate_warn"
+    validate_fail = "validate_fail"
+    blocked = "blocked"
+    running = "running"
+    aborting = "aborting"
+    run_success = "run_success"
+    postprocess = "postprocess"
+    run_failed = "run_failed"
+    diverged = "diverged"
+    aborted = "aborted"
 
 
 class BatchTaskBlockInfo(TaskBlockInfo):
