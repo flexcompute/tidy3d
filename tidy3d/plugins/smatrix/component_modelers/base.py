@@ -228,7 +228,7 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
         solver_version: Optional[str] = None,
         local_gradient: bool = False,
         max_num_adjoint_per_fwd: int = MAX_NUM_ADJOINT_PER_FWD,
-        pay_type: str | PayType = PayType.AUTO,
+        pay_type: Union[PayType, str] = PayType.AUTO,
         deprecation_warning: bool = True,
     ):
         """Run component modeler locally, with autograd support."""
