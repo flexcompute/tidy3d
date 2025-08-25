@@ -196,6 +196,7 @@ class BatchTaskBlockInfo(TaskBlockInfo):
     taskBlockMsg: str = None
     taskBlockType: str = None
     blockStatus: str = None
+    taskStatus: str = None
 
 
 class BatchMember(TaskBase):
@@ -227,7 +228,8 @@ class BatchDetail(TaskBase):
     optimizationId: str = None
     groupId: str = None
     name: str = None
-    status: BatchStatus = None
+    status: str = None
+    totalStatus: BatchStatus = None
     totalTask: int = 0
     preprocessSuccess: int = 0
     validateSuccess: int = 0

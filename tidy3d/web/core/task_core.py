@@ -838,7 +838,7 @@ class BatchTask:
         start = datetime.now().timestamp()
         while True:
             d = self.detail(batch_type=batch_type)
-            status = d.status
+            status = d.totalStatus
             if status in ("validate_success", "validate_warn", "validate_fail"):
                 return d
             if status in ("blocked", "aborting", "aborted"):
@@ -851,7 +851,7 @@ class BatchTask:
         start = datetime.now().timestamp()
         while True:
             d = self.detail(batch_type=batch_type)
-            status = d.status
+            status = d.totalStatus
             if status in (
                 "run_success",
                 "run_failed",

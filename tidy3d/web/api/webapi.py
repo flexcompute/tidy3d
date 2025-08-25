@@ -497,7 +497,7 @@ def start(
         batch = BatchTask(task_id)
         check_resp = batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
         detail = batch.wait_for_validate(batch_type="RF_SWEEP")
-        status = detail.status
+        status = detail.totalStatus
         if status not in ("validate_success", "validate_warn"):
             # Surface server-provided reason if available
             reason = None
@@ -822,7 +822,7 @@ def download(
                 resp = BatchTask(task_id).detail(batch_type="RF_SWEEP")
                 total = resp.totalTask or 0
                 post_succ = resp.postprocessSuccess or 0
-                status = resp.status
+                status = resp.totalStatus
                 if status in {"error", "diverged", "blocked", "aborted", "aborting"}:
                     raise WebError(
                         f"Batch task {task_id} failed during postprocess: {status}"
@@ -1062,7 +1062,7 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
             postprocess_triggered = False
             while True:
                 detail = _batch_detail(batch_id)
-                status = detail.status
+                status = detail.totalStatus
                 total = detail.totalTask or 0
                 v = detail.validateSuccess or 0
                 r = detail.runSuccess or 0
@@ -1123,7 +1123,7 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
         postprocess_triggered = False
         while True:
             d = _batch_detail(batch_id)
-            s = d.status
+            s = d.totalStatus
             total = d.totalTask or 0
             p = d.postprocessSuccess or 0
             r = d.runSuccess or 0
