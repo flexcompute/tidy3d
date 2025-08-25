@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types.base import TYPE_TAG_STR
+from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.plugins.autograd.functions import convolve
 from tidy3d.plugins.autograd.types import KernelType, PaddingType
 from tidy3d.plugins.autograd.utilities import get_kernel_size_px, make_kernel

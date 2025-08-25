@@ -12,7 +12,7 @@ from tidy3d.components.geometry.utils_2d import snap_coordinate_to_grid
 from tidy3d.components.monitor import DirectivityMonitor
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types.base import Ax
+from tidy3d.components.types import Ax
 from tidy3d.components.viz import add_ax_if_none, equal_aspect
 from tidy3d.constants import C_0, OHM
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError

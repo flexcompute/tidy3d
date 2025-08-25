@@ -7,7 +7,7 @@ from typing import Optional
 import numpy as np
 from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 
-from tidy3d.components.types.base import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
+from tidy3d.components.types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
 from tidy3d.constants import fp_eps
 from tidy3d.exceptions import ValidationError
 from tidy3d.log import Progress, get_logging_console, log

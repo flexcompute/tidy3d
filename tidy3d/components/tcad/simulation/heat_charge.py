@@ -80,7 +80,7 @@ from tidy3d.components.tcad.viz import (
     plot_params_heat_bc,
     plot_params_heat_source,
 )
-from tidy3d.components.types.base import (
+from tidy3d.components.types import (
     TYPE_TAG_STR,
     Ax,
     Bound,

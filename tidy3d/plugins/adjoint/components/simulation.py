@@ -24,7 +24,7 @@ from tidy3d.components.monitor import (
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.structure import Structure
 from tidy3d.components.subpixel_spec import Staircasing, SubpixelSpec
-from tidy3d.components.types.base import Ax, annotate_type
+from tidy3d.components.types import Ax, annotate_type
 from tidy3d.constants import HERTZ, SECOND
 from tidy3d.exceptions import AdjointError
 from tidy3d.log import log

@@ -13,7 +13,7 @@ from rich.progress import Progress
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from tidy3d.components.medium import AbstractMedium, PoleResidue
-from tidy3d.components.types.base import ArrayFloat1D, Ax
+from tidy3d.components.types import ArrayFloat1D, Ax
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import C_0, HBAR, MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError, WebError

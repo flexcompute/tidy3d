@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 import numpy as np
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.types.base import EpsSpecType, ModeSolverType, Numpy
+from tidy3d.components.types import EpsSpecType, ModeSolverType, Numpy
 from tidy3d.constants import C_0, ETA_0, fp_eps, pec_val
 
 from .derivatives import create_d_matrices as d_mats

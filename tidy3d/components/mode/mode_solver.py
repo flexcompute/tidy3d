@@ -39,7 +39,7 @@ from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import SourceTime
 from tidy3d.components.structure import Structure
 from tidy3d.components.subpixel_spec import SurfaceImpedance
-from tidy3d.components.types.base import (
+from tidy3d.components.types import (
     TYPE_TAG_STR,
     ArrayComplex3D,
     ArrayComplex4D,

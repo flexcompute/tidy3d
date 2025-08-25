@@ -20,7 +20,7 @@ from tidy3d.components.simulation import (
     validate_boundaries_for_zero_dims,
 )
 from tidy3d.components.source.field import ModeSource
-from tidy3d.components.types.base import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Direction, EMField, FreqArray
 from tidy3d.constants import C_0
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log

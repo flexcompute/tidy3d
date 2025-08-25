@@ -13,7 +13,7 @@ from tidy3d.components.data.monitor_data import FieldData, ModeData, ModeSolverD
 from tidy3d.components.data.sim_data import AbstractYeeGridSimulationData
 from tidy3d.components.eme.simulation import EMESimulation
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types.base import annotate_type
+from tidy3d.components.types import annotate_type
 from tidy3d.exceptions import SetupError
 from tidy3d.log import log
 

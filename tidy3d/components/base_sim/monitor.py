@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property
 from tidy3d.components.geometry.base import Box
-from tidy3d.components.types.base import ArrayFloat1D, Axis, Numpy
+from tidy3d.components.types import ArrayFloat1D, Axis, Numpy
 from tidy3d.components.validators import _warn_unsupported_traced_argument
 from tidy3d.components.viz import PlotParams, plot_params_monitor
 

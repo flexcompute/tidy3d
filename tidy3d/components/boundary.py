@@ -8,7 +8,7 @@ from typing import Optional, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types.base import TYPE_TAG_STR, Ax, Axis, Complex, Direction
+from tidy3d.components.types import TYPE_TAG_STR, Ax, Axis, Complex, Direction
 from tidy3d.components.validators import assert_plane
 from tidy3d.components.viz import (
     ARROW_ALPHA,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types.base import ArrayFloat1D, Ax
+from tidy3d.components.types import ArrayFloat1D, Ax
 from tidy3d.constants import SECOND
 from tidy3d.exceptions import SetupError
 

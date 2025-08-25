@@ -20,7 +20,7 @@ from tidy3d.components.simulation import Simulation
 from tidy3d.components.source.field import ModeSource
 from tidy3d.components.source.time import GaussianPulse
 from tidy3d.components.structure import Structure
-from tidy3d.components.types.base import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Size1D
+from tidy3d.components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Size1D
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.constants import C_0, MICROMETER, RADIAN, inf
 from tidy3d.exceptions import Tidy3dError, ValidationError

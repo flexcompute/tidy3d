@@ -8,7 +8,7 @@ import pydantic.v1 as pd
 import xarray as xr
 
 from tidy3d.components.monitor import ModeMonitor
-from tidy3d.components.types.base import Direction, FreqArray
+from tidy3d.components.types import Direction, FreqArray
 
 from .base import Expression
 from .types import NumberType

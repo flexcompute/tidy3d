@@ -13,7 +13,7 @@ from tidy3d.components.geometry.utils import GeometryType
 from tidy3d.components.medium import MediumType
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.structure import Structure
-from tidy3d.components.types.base import TYPE_TAG_STR, Bound
+from tidy3d.components.types import TYPE_TAG_STR, Bound
 from tidy3d.constants import C_0
 
 from .base import JaxObject

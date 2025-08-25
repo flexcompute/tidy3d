@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Annotated, Union
 
 from pydantic.v1 import Field
 
-from tidy3d.components.types.base import TYPE_TAG_STR, ArrayLike, Complex
+from tidy3d.components.types import TYPE_TAG_STR, ArrayLike, Complex
 
 if TYPE_CHECKING:
     from .functions import Cos, Exp, Log, Log10, Sin, Sqrt, Tan

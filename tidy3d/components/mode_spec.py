@@ -8,7 +8,7 @@ from typing import Literal, Union
 import numpy as np
 import pydantic.v1 as pd
 
-from tidy3d.components.types.base import Axis2D, TrackFreq
+from tidy3d.components.types import Axis2D, TrackFreq
 from tidy3d.constants import GLANCING_CUTOFF, MICROMETER, RADIAN, fp_eps
 from tidy3d.exceptions import SetupError, ValidationError
 from tidy3d.log import log

@@ -13,7 +13,7 @@ from jax.tree_util import register_pytree_node_class
 from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.geometry.base import Geometry
 from tidy3d.components.medium import AnisotropicMedium, CustomMedium, Medium
-from tidy3d.components.types.base import Bound
+from tidy3d.components.types import Bound
 from tidy3d.constants import CONDUCTIVITY
 from tidy3d.exceptions import SetupError
 

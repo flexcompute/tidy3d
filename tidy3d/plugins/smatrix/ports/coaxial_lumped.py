@@ -18,7 +18,7 @@ from tidy3d.components.lumped_element import CoaxialLumpedResistor
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.source.current import CustomCurrentSource
 from tidy3d.components.source.time import GaussianPulse
-from tidy3d.components.types.base import Axis, Coordinate, Direction, FreqArray, Size
+from tidy3d.components.types import Axis, Coordinate, Direction, FreqArray, Size
 from tidy3d.components.validators import skip_if_fields_missing
 from tidy3d.constants import MICROMETER
 from tidy3d.exceptions import SetupError, ValidationError

@@ -10,7 +10,7 @@ from typing import Union
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.types.base import Coordinate2D
+from tidy3d.components.types import Coordinate2D
 from tidy3d.exceptions import FileError
 
 # Types for DRC markers

@@ -12,7 +12,7 @@ from tidy3d.components.geometry.base import Box, ClipOperation
 from tidy3d.components.geometry.utils import merging_geometries_on_plane
 from tidy3d.components.medium import PEC, LossyMetalMedium
 from tidy3d.components.structure import Structure
-from tidy3d.components.types.base import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
+from tidy3d.components.types import ArrayFloat1D, ArrayFloat2D, Axis, Shapely
 from tidy3d.constants import inf
 
 CORNER_ANGLE_THRESOLD = 0.1 * np.pi
