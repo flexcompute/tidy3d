@@ -88,6 +88,20 @@ Performance Metrics Data
    tidy3d.AntennaMetricsData
 
 
+Utilities
+------------------------
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.components.microwave.formulas.circuit_parameters.inductance_straight_rectangular_wire
+   tidy3d.components.microwave.formulas.circuit_parameters.mutual_inductance_colinear_wire_segments
+   tidy3d.components.microwave.formulas.circuit_parameters.total_inductance_colinear_rectangular_wire_segments
+
+.. TODO chat Damian this is in or not
+
+
 Migration 2.9 -> 2.10 onwards
 -----------------------------
 
@@ -95,7 +109,14 @@ Migration 2.9 -> 2.10 onwards
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.plugins.smatrix.run.
-   tidy3d.plugins.smatrix.TerminalPortDataArray
-
-
+   tidy3d.plugins.smatrix.run.run
+   tidy3d.plugins.smatrix.run.create_batch
+   tidy3d.plugins.smatrix.run.compose_modeler_data_from_batch_data
+   tidy3d.plugins.smatrix.run.compose_component_modeler_data_from_batch_data
+   tidy3d.plugins.smatrix.run.compose_terminal_modeler_data_from_batch_data
+   tidy3d.plugins.smatrix.run.compose_modeler_data
+   tidy3d.plugins.smatrix.run.compose_modeler
+   tidy3d.plugins.smatrix.run.compose_modeler_data
+   tidy3d.plugins.smatrix.run.compose_component_modeler_data
+   tidy3d.plugins.smatrix.run.compose_terminal_modeler_data
+   tidy3d.plugins.smatrix.run.compose_simulation_data_index
