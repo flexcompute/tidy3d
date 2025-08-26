@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Callable, Optional, Union
+from typing import Callable, Literal, Optional, Union
 
 import autograd.numpy as np
 
@@ -80,7 +80,6 @@ from .types import (
     Complex,
     FreqBound,
     InterpMethod,
-    Literal,
     PermittivityComponent,
     PoleAndResidue,
     TensorReal,

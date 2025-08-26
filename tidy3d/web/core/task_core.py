@@ -418,21 +418,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-            # RF modeler compatibility: some backends expect the artifact under the group id as well
-            if (self.task_type == "RF") and (remote_sim_file.endswith("modeler.hdf5.gz")):
-                group_id = getattr(self, "groupId", None) or getattr(self, "group_id", None)
-                if group_id:
-                    try:
-                        upload_file(
-                            group_id,
-                            file_name,
-                            remote_sim_file,
-                            verbose=False,
-                            progress_callback=None,
-                        )
-                    except Exception:
-                        # Best-effort: ignore if group upload path not supported
-                        pass
         finally:
             os.unlink(file_name)
 
@@ -713,7 +698,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
 
     def abort(self):
-        """Abort current task from server."""
+        """Aborting current task from server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
         return http.put(
@@ -838,10 +823,10 @@ class BatchTask:
         start = datetime.now().timestamp()
         while True:
             d = self.detail(batch_type=batch_type)
-            status = d.status
-            if status in ("Validate_Success", "Validate_Warn", "Validate_Failed"):
+            status = d.totalStatus
+            if status in ("validate_success", "validate_warn", "validate_fail"):
                 return d
-            if status in ("Blocked", "Abort", "Aborted"):
+            if status in ("blocked", "aborting", "aborted"):
                 return d
             if timeout is not None and (datetime.now().timestamp() - start) > timeout:
                 return d
@@ -851,14 +836,14 @@ class BatchTask:
         start = datetime.now().timestamp()
         while True:
             d = self.detail(batch_type=batch_type)
-            status = d.status
+            status = d.totalStatus
             if status in (
-                "Run_Success",
-                "Run_Failed",
-                "Run_Diverged",
-                "Blocked",
-                "Abort",
-                "Aborted",
+                "run_success",
+                "run_failed",
+                "diverged",
+                "blocked",
+                "aborting",
+                "aborted",
             ):
                 return d
             if timeout is not None and (datetime.now().timestamp() - start) > timeout:

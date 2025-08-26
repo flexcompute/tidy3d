@@ -489,47 +489,28 @@ def start(
             "protocolVersion": _get_protocol_version(),
         }
         resp = http.post(split_path, payload)
+
         console.log(
             f"Child simulation subtasks are being uploaded to \n{dict_to_bullet_list(resp)}"
         )
-        # give the storage a brief moment before validation
-        time.sleep(0.5)
+
         batch = BatchTask(task_id)
-        check_resp = batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
+        # Kick off server-side validation for the RF batch.
+        batch.check(solver_version=solver_version, batch_type="RF_SWEEP")
+        # Validation phase
+        console.log("Validating RF batch...")
         detail = batch.wait_for_validate(batch_type="RF_SWEEP")
-        status = detail.status
-        if status not in ("Validate_Success", "Validate_Warn"):
-            # Surface server-provided reason if available
-            reason = None
-            try:
-                reason = getattr(detail, "message", None)
-                if not reason and getattr(detail, "taskBlockInfo", None) is not None:
-                    tbi = detail.taskBlockInfo
-                    reason = getattr(tbi, "taskBlockMsg", None) or getattr(
-                        tbi, "taskBlockType", None
-                    )
-                if not reason:
-                    # fall back to member validateInfo if present
-                    for m in getattr(detail, "tasks", []) or []:
-                        if getattr(m, "validateInfo", None):
-                            reason = m.validateInfo
-                            break
-                # last resort: extract from check response (if present)
-                if not reason and isinstance(check_resp, dict):
-                    cd = check_resp.get("checkDataList")
-                    if isinstance(cd, list):
-                        msgs = []
-                        for item in cd:
-                            v = item.get("validateData") or item.get("validateInfo")
-                            if v:
-                                msgs.append(str(v))
-                        if msgs:
-                            reason = "; ".join(msgs)
-            except Exception:
-                reason = None
-            if reason:
-                raise WebError(f"Batch task {task_id} is blocked: {status} - {reason}")
-            raise WebError(f"Batch task {task_id} is blocked: {status}")
+        status = detail.totalStatus
+        status_str = status.value
+        if status_str in ("validate_success", "validate_warn"):
+            console.log("Batch validation completed.")
+
+        # Show estimated FlexCredit cost from batch detail
+        est_fc = detail.estFlexUnit
+        console.log(f"Estimated FlexCredit cost: {est_fc:1.3f} for RF batch.")
+        if status_str not in ("validate_success", "validate_warn"):
+            raise WebError(f"Batch task {task_id} is blocked: {status_str}")
+        # Submit batch to start runs after validation
         batch.submit(solver_version=solver_version, batch_type="RF_SWEEP")
         return
 
@@ -802,6 +783,11 @@ def download(
     """
     # Component modeler batch download path
     if _is_modeler_batch(task_id):
+        # Use a more descriptive default filename for component modeler downloads.
+        # If the caller left the default as 'simulation_data.hdf5', prefer 'cm_data.hdf5'.
+        if os.path.basename(path) == "simulation_data.hdf5":
+            base_dir = os.path.dirname(path) or "."
+            path = os.path.join(base_dir, "cm_data.hdf5")
 
         def _download_cm() -> bool:
             try:
@@ -822,10 +808,11 @@ def download(
                 resp = BatchTask(task_id).detail(batch_type="RF_SWEEP")
                 total = resp.totalTask or 0
                 post_succ = resp.postprocessSuccess or 0
-                status = resp.status
-                if status in {"Run_Failed", "Run_Diverged", "Blocked", "Aborted", "Abort"}:
+                status = resp.totalStatus
+                status_str = status.value
+                if status_str in {"error", "diverged", "blocked", "aborted", "aborting"}:
                     raise WebError(
-                        f"Batch task {task_id} failed during postprocess: {status}"
+                        f"Batch task {task_id} failed during postprocess: {status_str}"
                     ) from None
                 if total > 0 and post_succ >= total:
                     break
@@ -973,12 +960,20 @@ def load(
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
+    # For component modeler batches, default to a clearer filename if the default was used.
+    if _is_modeler_batch(task_id) and os.path.basename(path) == "simulation_data.hdf5":
+        base_dir = os.path.dirname(path) or "."
+        path = os.path.join(base_dir, "cm_data.hdf5")
+
     if not os.path.exists(path) or replace_existing:
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
     if verbose:
         console = get_logging_console()
-        console.log(f"loading simulation from {path}")
+        if _is_modeler_batch(task_id):
+            console.log(f"loading component modeler data from {path}")
+        else:
+            console.log(f"loading simulation from {path}")
 
     stub_data = Tidy3dStubData.postprocess(path)
     return stub_data
@@ -989,156 +984,165 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
     console = get_logging_console() if verbose else None
 
     def _status_to_stage(status: str) -> tuple[str, int]:
-        if status in ("Created",):
-            return ("Created", 0)
-        if status in ("Preprocess",):
-            return ("Preprocess", 1)
-        if status in ("Validating",):
-            return ("Validating", 2)
-        if status in ("Validate_Success", "Validate_Warn"):
+        s = (status or "").lower()
+        # Map a broader set of statuses to monotonic stages for progress bars
+        if s in ("draft", "created"):
+            return ("draft", 0)
+        if s in ("queue", "queued"):
+            return ("queued", 1)
+        if s in ("preprocess",):
+            return ("preprocess", 1)
+        if s in ("validating",):
+            return ("validating", 2)
+        if s in ("validate_success", "validate_warn"):
             return ("Validate", 3)
-        if status in ("Running",):
-            return ("Running", 4)
-        if status in ("Postprocess",):
-            return ("Postprocess", 5)
-        if status in ("Run_Success",):
+        if s in ("running",):
+            return ("running", 4)
+        if s in ("postprocess",):
+            return ("postprocess", 5)
+        if s in ("run_success", "success"):
             return ("Success", 6)
-        return (status, 6)
+        # Unknown statuses map to earliest stage to avoid showing 100% prematurely
+        return (s or "unknown", 0)
 
     detail = _batch_detail(batch_id)
     name = detail.name or "modeler_batch"
     group_id = detail.groupId
 
-    if verbose:
-        header = f"Modeler Batch: {name}"
-        if group_id:
-            header += f" (group {group_id})"
+    header = f"Modeler Batch: {name}"
+    if group_id:
+        header += f" (group {group_id})"
+    if console is not None:
         console.log(header)
 
-    if verbose:
-        progress_columns = (
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(bar_width=25),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-        )
-        with Progress(*progress_columns, console=console, transient=False) as progress:
-            p_validate = progress.add_task("Validate", total=1.0)
-            p_run = progress.add_task("Run", total=1.0)
-            p_post = progress.add_task("Postprocess", total=1.0)
-
-            task_bars = {}
-            total_task = detail.totalTask or 0
-            if total_task and total_task <= max_detail_tasks:
-                run_statuses = [
-                    "Created",
-                    "Preprocess",
-                    "Validating",
-                    "Validate",
-                    "Running",
-                    "Postprocess",
-                    "Success",
-                ]
-                for t in detail.tasks or []:
-                    tname = t.taskName or t.taskId
-                    status = t.status or "Created"
-                    _, idx = _status_to_stage(status)
-                    pbar = progress.add_task(
-                        f"{tname}",
-                        total=len(run_statuses) - 1,
-                        completed=min(idx, len(run_statuses) - 1),
-                    )
-                    task_bars[tname] = pbar
-
-            terminal_errors = {
-                "Validate_Failed",
-                "Run_Failed",
-                "Run_Diverged",
-                "Blocked",
-                "Abort",
-                "Aborted",
-            }
-
-            postprocess_triggered = False
-            while True:
-                detail = _batch_detail(batch_id)
-                status = detail.status
-                total = detail.totalTask or 0
-                v = detail.validateSuccess or 0
-                r = detail.runSuccess or 0
-                p = detail.postprocessSuccess or 0
-
-                progress.update(p_validate, completed=(v / total) if total else 0.0)
-                progress.update(p_run, completed=(r / total) if total else 0.0)
-                progress.update(p_post, completed=(p / total) if total else 0.0)
-
-                block = detail.taskBlockInfo
-                if block is not None:
-                    charge = (getattr(block, "chargeType", None) or "").lower()
-                    if charge == ChargeType.FREE.value:
-                        grid = getattr(block, "maxGridPoints", None)
-                        steps = getattr(block, "maxTimeSteps", None)
-                        console.log(
-                            f"FREE tier active: up to {grid} grid points / {steps} time steps"
-                        )
-
-                if task_bars:
-                    for t in detail.tasks or []:
-                        tname = t.taskName or t.taskId
-                        status = t.status or "Created"
-                        _, idx = _status_to_stage(status)
-                        pbar = task_bars.get(tname)
-                        if pbar is not None:
-                            progress.update(pbar, completed=min(idx, 6), refresh=False)
-
-                # If run succeeded but postprocess not yet complete, trigger it and keep waiting
-                if status in ("Run_Success", "Postprocess") or r >= total:
-                    if not postprocess_triggered:
-                        # Kick off postprocess once
-                        try:
-                            BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
-                            # TODO FIXME
-                        except Exception:
-                            pass
-                        postprocess_triggered = True
-
-                if status in ("success",):
-                    console.log("Completed modeler run.")
-                    break
-
-                if status in terminal_errors:
-                    raise WebError(f"Batch {batch_id} terminated: {status}")
-
-                progress.refresh()
-                time.sleep(REFRESH_TIME)
-    else:
+    # Non-verbose path: poll without progress bars then return
+    if not verbose:
         terminal_errors = {
-            "Validate_Failed",
-            "Run_Failed",
-            "Run_Diverged",
-            "Blocked",
-            "Abort",
-            "Aborted",
+            "validate_fail",
+            "error",
+            "diverged",
+            "blocked",
+            "aborting",
+            "aborted",
         }
-        postprocess_triggered = False
+        # Run phase
         while True:
             d = _batch_detail(batch_id)
-            s = d.status
+            s = d.totalStatus.value
             total = d.totalTask or 0
-            p = d.postprocessSuccess or 0
             r = d.runSuccess or 0
-            if (s in ("Run_Success", "Postprocess") or r >= total) and total:
-                if p < total and not postprocess_triggered:
-                    try:
-                        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
-                    except Exception:
-                        pass
-                    postprocess_triggered = True
-                if p >= total:
-                    break
             if s in terminal_errors:
                 raise WebError(f"Batch {batch_id} terminated: {s}")
+            if total and r >= total:
+                break
             time.sleep(REFRESH_TIME)
+        # Postprocess phase
+        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
+        while True:
+            d = _batch_detail(batch_id)
+            s = d.totalStatus.value
+            total = d.totalTask or 0
+            p = d.postprocessSuccess or 0
+            if s in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {s}")
+            if total and p >= total:
+                break
+            time.sleep(REFRESH_TIME)
+        return
+
+    progress_columns = (
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(bar_width=25),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+    )
+    with Progress(*progress_columns, console=console, transient=False) as progress:
+        terminal_errors = {"validate_fail", "error", "diverged", "blocked", "aborting", "aborted"}
+
+        # Phase: Run (aggregate + per-task)
+        p_run = progress.add_task("Run", total=1.0)
+        task_bars: dict[str, int] = {}
+        run_statuses = [
+            "draft",
+            "preprocess",
+            "validating",
+            "Validate",
+            "running",
+            "postprocess",
+            "Success",
+        ]
+
+        while True:
+            detail = _batch_detail(batch_id)
+            status = detail.totalStatus.value
+            total = detail.totalTask or 0
+            r = detail.runSuccess or 0
+
+            # Create per-task bars as soon as tasks appear
+            if total and total <= max_detail_tasks and detail.tasks:
+                name_to_task = {(t.taskName or t.taskId): t for t in (detail.tasks or [])}
+                for name, t in name_to_task.items():
+                    if name not in task_bars:
+                        tstatus = (t.status or "draft").lower()
+                        _, idx = _status_to_stage(tstatus)
+                        pbar = progress.add_task(
+                            f"  {name}",
+                            total=len(run_statuses) - 1,
+                            completed=min(idx, len(run_statuses) - 1),
+                        )
+                        task_bars[name] = pbar
+
+            # Aggregate run progress: average stage fraction across tasks
+            if detail.tasks:
+                acc = 0.0
+                n_members = 0
+                for t in detail.tasks or []:
+                    n_members += 1
+                    tstatus = (t.status or "draft").lower()
+                    _, idx = _status_to_stage(tstatus)
+                    acc += max(0.0, min(1.0, idx / 6.0))
+                run_frac = (acc / float(n_members)) if n_members else 0.0
+            else:
+                run_frac = (r / total) if total else 0.0
+            progress.update(p_run, completed=run_frac)
+
+            # Update per-task bars
+            if task_bars and detail.tasks:
+                name_to_task = {(t.taskName or t.taskId): t for t in (detail.tasks or [])}
+                for tname, pbar in task_bars.items():
+                    t = name_to_task.get(tname)
+                    if not t:
+                        continue
+                    tstatus = (t.status or "draft").lower()
+                    _, idx = _status_to_stage(tstatus)
+                    completed = min(idx, 6)
+                    desc = f"  {tname} [{tstatus or 'draft'}]"
+                    progress.update(pbar, completed=completed, description=desc, refresh=False)
+
+            if total and r >= total:
+                break
+            if status in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {status}")
+            progress.refresh()
+            time.sleep(REFRESH_TIME)
+
+        # Phase: Postprocess
+        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
+        p_post = progress.add_task("Postprocess", total=1.0)
+        while True:
+            detail = _batch_detail(batch_id)
+            status = detail.totalStatus.value
+            total = detail.totalTask or 0
+            p = detail.postprocessSuccess or 0
+            progress.update(p_post, completed=(p / total) if total else 0.0)
+            if total and p >= total:
+                break
+            if status in terminal_errors:
+                raise WebError(f"Batch {batch_id} terminated: {status}")
+            progress.refresh()
+            time.sleep(REFRESH_TIME)
+        if console is not None:
+            console.log("Postprocess completed.")
 
 
 @wait_for_connection
