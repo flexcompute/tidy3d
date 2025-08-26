@@ -642,6 +642,10 @@ class EigSolver(Tidy3dBaseModel):
                 M=generalized_M,
                 basis_vecs=basis_vecs,
             )
+
+        # Identify and post-process degenerate modes
+        degenerate_groups = cls.identify_degenerate_eigenvalues(vals)
+        cls.make_orthonormal_basis_for_degenerate_modes(degenerate_groups, vecs)
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
         # Sort by descending neff
@@ -786,6 +790,9 @@ class EigSolver(Tidy3dBaseModel):
             guess_value=eig_guess,
             mode_solver_type=mode_solver_type,
         )
+        # Identify and post-process degenerate modes
+        degenerate_groups = cls.identify_degenerate_eigenvalues(vals)
+        cls.make_orthonormal_basis_for_degenerate_modes(degenerate_groups, vecs)
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
         # Sort by descending real part
         sort_inds = np.argsort(neff)[::-1]
@@ -1056,6 +1063,46 @@ class EigSolver(Tidy3dBaseModel):
         if material_response is None:
             return False
         return np.any(np.abs(material_response) > GOOD_CONDUCTOR_THRESHOLD * np.abs(pec_val))
+
+    @staticmethod
+    def identify_degenerate_eigenvalues(
+        mode_indexes: np.ndarray,
+        tol=TOL_EIGS,
+    ) -> list[tuple[int]]:
+        """Inspects mode indices to find groups of degenerate modes."""
+        num_modes = len(mode_indexes)
+        ungrouped = set(range(num_modes))
+        degenerate_groups = []
+
+        while ungrouped:
+            # Start a new group with an ungrouped column
+            seed = ungrouped.pop()
+            current_group = [seed]
+            # Find all columns similar to the seed of the current group
+            for col in list(ungrouped):
+                if np.isclose(mode_indexes[col], mode_indexes[seed], rtol=tol, atol=tol):
+                    current_group.append(col)
+                    ungrouped.remove(col)
+                    break
+
+            # Only keep groups with more than one mode
+            if len(current_group) >= 2:
+                degenerate_groups.append(sorted(current_group))
+
+        return degenerate_groups
+
+    @staticmethod
+    def make_orthonormal_basis_for_degenerate_modes(
+        degenerate_groups: list[tuple[int]],
+        vecs: np.ndarray,
+    ):
+        """Ensures that groups of degenerate modes are orthonormal, which is not guaranteed by the eigenvalue solvers."""
+        import scipy.linalg as linalg
+
+        for degenerate_group in degenerate_groups:
+            matrix = vecs[:, degenerate_group]
+            Q = linalg.orth(matrix)
+            vecs[:, degenerate_group] = Q
 
 
 def compute_modes(*args, **kwargs) -> tuple[Numpy, Numpy, str]:
