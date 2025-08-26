@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+
+# DO NOT import from web if it can be avoided, to avoid circular imports
+# from tidy3d.web.core.types import PayType
+from enum import Enum
 from typing import Generic, Optional, TypeVar, Union, get_args
 
 import numpy as np
@@ -27,8 +31,11 @@ from tidy3d.plugins.smatrix.ports.modal import Port
 from tidy3d.plugins.smatrix.ports.types import TerminalPortType
 from tidy3d.plugins.smatrix.ports.wave import WavePort
 
-# DO NOT import from web if it can be avoided, to avoid circular imports
-from tidy3d.web.core.types import PayType
+
+class PayType(str, Enum):
+    CREDITS = "FLEX_CREDIT"
+    AUTO = "AUTO"
+
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
