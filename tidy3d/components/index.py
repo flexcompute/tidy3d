@@ -6,6 +6,7 @@ a set of Tidy3D simulations, allowing them to be accessed by name.
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from typing import Any
 
 import pydantic.v1 as pd
 
@@ -14,13 +15,13 @@ from tidy3d.components.base import Tidy3dBaseModel
 from .types.simulation import SimulationType
 
 
-class SimulationMap(Tidy3dBaseModel, Mapping[str, SimulationType]):
+class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
     """An immutable dictionary-like container for simulations.
 
-    This class maps unique string keys to corresponding `Simulation` objects.
+    This class maps unique string keys to corresponding value objects.
     By inheriting from `collections.abc.Mapping`, it provides standard dictionary
-    behaviors like item access (`sims["sim_A"]`), iteration (`for name in sims`), and
-    length checking (`len(sims)`).
+    behaviors like item access (`my_dict["my_key"]`), iteration (`for name in my_dict`), and
+    length checking (`len(my_dict)`).
 
     It automatically validates that the `keys` and `values`
     tuples have matching lengths upon instantiation.
@@ -29,9 +30,9 @@ class SimulationMap(Tidy3dBaseModel, Mapping[str, SimulationType]):
     ----------
     keys : tuple[str, ...]
         A tuple of unique string identifiers for each simulation.
-    values : tuple[SimulationType, ...]
-        A tuple of `Simulation` objects, each corresponding to a key at the
-        same index.
+    values : tuple[Any, ...]
+        A tuple of `Any`-type objects, each corresponding to a key at the
+        same index. Should be overwritten by the subclass instantiation
 
     Example
     -------
@@ -54,7 +55,7 @@ class SimulationMap(Tidy3dBaseModel, Mapping[str, SimulationType]):
     keys_tuple: tuple[str, ...] = pd.Field(
         description="A tuple of unique string identifiers for each simulation.", alias="keys"
     )
-    values_tuple: tuple[SimulationType, ...] = pd.Field(
+    values_tuple: tuple[Any, ...] = pd.Field(
         description=(
             "A tuple of `Simulation` objects, each corresponding to a key at the same index."
         ),
@@ -134,3 +135,51 @@ class SimulationMap(Tidy3dBaseModel, Mapping[str, SimulationType]):
         """
         assert len(self.keys_tuple) == len(self.values_tuple), "Internal state mismatch."
         return len(self.keys_tuple)
+
+
+class SimulationMap(ValueMap, Mapping[str, SimulationType]):
+    """An immutable dictionary-like container for simulations.
+
+    This class maps unique string keys to corresponding `Simulation` objects.
+    By inheriting from `collections.abc.Mapping`, it provides standard dictionary
+    behaviors like item access (`sims["sim_A"]`), iteration (`for name in sims`), and
+    length checking (`len(sims)`).
+
+    It automatically validates that the `keys` and `values`
+    tuples have matching lengths upon instantiation.
+
+    Attributes
+    ----------
+    keys : tuple[str, ...]
+        A tuple of unique string identifiers for each simulation.
+    values : tuple[SimulationType, ...]
+        A tuple of `Simulation` objects, each corresponding to a key at the
+        same index.
+
+    Example
+    -------
+    >>> from tidy3d import Simulation
+    >>>
+    >>> # Create a few simple simulations
+    >>> sim1 = Simulation(...)
+    >>> sim2 = Simulation(...)
+    >>>
+    >>> # Instantiate the map
+    >>> simulation_map = SimulationMap(
+    ...     keys=("simulation_1", "simulation_2"),
+    ...     values=(sim1, sim2),
+    ... )
+    >>>
+    >>> # Access a simulation like a dictionary
+    >>> print(simulation_map["simulation_1"])
+    """
+
+    keys_tuple: tuple[str, ...] = pd.Field(
+        description="A tuple of unique string identifiers for each simulation.", alias="keys"
+    )
+    values_tuple: tuple[SimulationType, ...] = pd.Field(
+        description=(
+            "A tuple of `Simulation` objects, each corresponding to a key at the same index."
+        ),
+        alias="values",
+    )

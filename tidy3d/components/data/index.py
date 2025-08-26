@@ -5,15 +5,15 @@ accessing simulation data results from a Tidy3D simulation.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 
 import pydantic.v1 as pd
 
-from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.index import ValueMap
 from tidy3d.components.types.simulation import SimulationDataType
 
 
-class SimulationDataMap(Tidy3dBaseModel, Mapping[str, SimulationDataType]):
+class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
     """An immutable dictionary-like container for simulation data.
 
     Iit provides standard dictionary
@@ -60,77 +60,3 @@ class SimulationDataMap(Tidy3dBaseModel, Mapping[str, SimulationDataType]):
         ),
         alias="values",
     )
-
-    @pd.root_validator(skip_on_failure=True)
-    def _validate_lengths_match(cls, data: dict) -> dict:
-        """Pydantic root validator to ensure 'keys' and 'values' have the same length.
-
-        Parameters
-        ----------
-        data : dict
-            The dictionary of field values for the model provided by Pydantic.
-
-        Returns
-        -------
-        dict
-            The validated dictionary of field values.
-
-        Raises
-        ------
-        ValueError
-            If the lengths of the 'keys' and 'values' tuples are not equal.
-        """
-        keys, values = data.get("keys_tuple"), data.get("values_tuple")
-        if len(keys) != len(values):
-            raise ValueError("Length of 'keys_tuple' and 'values_tuple' must be the same.")
-        return data
-
-    def __getitem__(self, key: str) -> SimulationDataType:
-        """Retrieves a `SimulationDataType` object by its corresponding key.
-
-        This allows for dictionary-style access, e.g., `my_map["monitor_name"]`.
-
-        Parameters
-        ----------
-        key : str
-            The string name of the simulation data to retrieve.
-
-        Returns
-        -------
-        SimulationDataType
-            The `SimulationDataType` object corresponding to the given key.
-
-        Raises
-        ------
-        KeyError
-            If no simulation data with the given key is found in the map.
-        """
-        for i, current_key in enumerate(self.keys_tuple):
-            if current_key == key:
-                return self.values_tuple[i]
-        raise KeyError(f"Key '{key}' not found in the SimulationDataMap.")
-
-    def __iter__(self) -> Iterator[str]:
-        """Returns an iterator over the string keys of the map.
-
-        This allows for standard iteration, e.g., `for key in my_map:`.
-
-        Yields
-        ------
-        str
-            The next key in the map.
-        """
-        return iter(self.keys_tuple)
-
-    def __len__(self) -> int:
-        """Returns the number of key-value pairs stored in the map.
-
-        This allows for using the built-in `len()` function, e.g., `len(my_map)`.
-
-        Returns
-        -------
-        int
-            The total number of items in the map.
-        """
-        assert len(self.keys_tuple) == len(self.values_tuple), "Internal state mismatch."
-        return len(self.keys_tuple)
