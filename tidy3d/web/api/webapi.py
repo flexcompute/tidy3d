@@ -1045,7 +1045,7 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
             p = d.postprocessSuccess or 0
             if s in terminal_errors:
                 raise WebError(f"Batch {batch_id} terminated: {s}")
-            if total and p >= total:
+            if p:
                 break
             time.sleep(REFRESH_TIME)
         return
