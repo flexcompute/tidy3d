@@ -418,21 +418,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-            # RF modeler compatibility: some backends expect the artifact under the group id as well
-            if (self.task_type == "RF") and (remote_sim_file.endswith("modeler.hdf5.gz")):
-                group_id = getattr(self, "groupId", None) or getattr(self, "group_id", None)
-                if group_id:
-                    try:
-                        upload_file(
-                            group_id,
-                            file_name,
-                            remote_sim_file,
-                            verbose=False,
-                            progress_callback=None,
-                        )
-                    except Exception:
-                        # Best-effort: ignore if group upload path not supported
-                        pass
         finally:
             os.unlink(file_name)
 
