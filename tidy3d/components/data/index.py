@@ -16,7 +16,7 @@ from tidy3d.components.types.simulation import SimulationDataType
 class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
     """An immutable dictionary-like container for simulation data.
 
-    Iit provides standard dictionary
+    It provides standard dictionary
     behaviors like item access (`data["key"]`), iteration (`for key in data`), and
     length checking (`len(data)`).
 
