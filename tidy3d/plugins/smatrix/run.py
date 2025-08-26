@@ -2,32 +2,40 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Optional
+from typing import Optional, Union
 
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.plugins.smatrix.component_modelers.modal import ModalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.terminal import TerminalComponentModeler
 from tidy3d.plugins.smatrix.component_modelers.types import (
     ComponentModelerType,
 )
-from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData, SimulationDataMap
+from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 from tidy3d.plugins.smatrix.data.types import ComponentModelerDataType
 from tidy3d.web import Batch, BatchData
+from tidy3d.web.api.autograd.autograd import DEFAULT_DATA_DIR, _run_async
+from tidy3d.web.core.types import PayType
 
-DEFAULT_DATA_DIR = "."
+
+def compose_simulation_data_map(sim_data_map: dict) -> SimulationDataMap:
+    # preserve mapping order
+    index = tuple(sim_data_map.keys())
+    data = tuple(sim_data_map.values())
+    indexed = SimulationDataMap(keys=index, values=data)
+    return indexed
 
 
-def compose_simulation_data_index(port_task_map: dict[str, str]) -> SimulationDataMap:
-    port_data_dict = {}
-    for _, _ in port_task_map.items():
-        pass
-        # FIXME: get simulationdata for each port
-        # port_data_dict[port] = sim_data_i
-
-    return SimulationDataMap(
-        keys=tuple(port_data_dict.keys()), values=tuple(port_data_dict.values())
-    )
+def _compose_modeler_data_from_sim_map(
+    modeler: ComponentModelerType, sim_data_map: dict
+) -> ComponentModelerDataType:
+    """Create ComponentModelerDataType from a dict of SimulationData keyed by task name."""
+    indexed = compose_simulation_data_map(sim_data_map)
+    if isinstance(modeler, ModalComponentModeler):
+        return ModalComponentModelerData(modeler=modeler, data=indexed)
+    if isinstance(modeler, TerminalComponentModeler):
+        return TerminalComponentModelerData(modeler=modeler, data=indexed)
 
 
 def compose_terminal_modeler_data(
@@ -45,7 +53,7 @@ def compose_terminal_modeler_data(
         A `TerminalComponentModelerData` object containing the results mapped to
         their respective ports.
     """
-    port_simulation_data = compose_simulation_data_index(port_task_map)
+    port_simulation_data = compose_simulation_data_map(port_task_map)
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
@@ -65,7 +73,7 @@ def compose_component_modeler_data(
         A `ModalComponentModelerData` object containing the results mapped to
         their respective ports.
     """
-    port_simulation_data = compose_simulation_data_index(port_task_map)
+    port_simulation_data = compose_simulation_data_map(port_task_map)
     return ModalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
@@ -98,7 +106,7 @@ def compose_modeler(
     elif modeler_type == "TerminalComponentModeler":
         modeler = TerminalComponentModeler.from_file(modeler_file)
     else:
-        raise TypeError(f"Unsupported modeler type: {type(modeler).__name__}")
+        raise TypeError(f"Unsupported modeler type: {modeler_type}")
     return modeler
 
 
@@ -273,3 +281,39 @@ def run(
     batch_data = batch.run()
     modeler_data = compose_modeler_data_from_batch_data(modeler=modeler, batch_data=batch_data)
     return modeler_data
+
+
+def _run_component_modeler(
+    modeler: ComponentModelerType,
+    task_name: str,
+    folder_name: str,
+    path: str,
+    callback_url: Optional[str],
+    verbose: bool,
+    solver_version: Optional[str],
+    local_gradient: bool,
+    max_num_adjoint_per_fwd: int,
+    pay_type: Union[PayType, str],
+) -> ComponentModelerDataType:
+    """Run a Component Modeler via autograd by batching its underlying simulations."""
+    path_dir = os.dirname(path) if path else DEFAULT_DATA_DIR
+    if not path_dir:
+        path_dir = DEFAULT_DATA_DIR
+
+    sims = modeler.sim_dict
+
+    sim_data_map = _run_async(
+        simulations=sims,
+        folder_name=folder_name,
+        path_dir=path_dir,
+        callback_url=callback_url,
+        verbose=verbose,
+        simulation_type="tidy3d_autograd_async",
+        solver_version=solver_version,
+        parent_tasks=None,
+        local_gradient=local_gradient,
+        max_num_adjoint_per_fwd=max_num_adjoint_per_fwd,
+        pay_type=pay_type,
+    )
+
+    return _compose_modeler_data_from_sim_map(modeler=modeler, sim_data_map=sim_data_map)
