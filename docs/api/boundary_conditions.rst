@@ -147,11 +147,13 @@ Absorbing
    tidy3d.StablePML
    tidy3d.Boundary.stable_pml
    tidy3d.Absorber
-   tidy3d.InternalAbsorber
-   tidy3d.Boundary.absorber
    tidy3d.AbsorberParams
+   tidy3d.Boundary.absorber
+   tidy3d.InternalAbsorber
    tidy3d.ABCBoundary
    tidy3d.ModeABCBoundary
+   tidy3d.BroadbandModeABCSpec
+   tidy3d.BroadbandModeABCFitterParam
 
 For simulations with radiative modes, it is recommended to surround the simulation domain with absorbing boundary conditions, i.e. either the Perfectly Matched Layer ``PML`` type, or the ``Absorber`` type.
 
@@ -170,4 +172,3 @@ The ``Absorber`` boundary type uses a fictitious lossy medium with ramped conduc
    + `Introduction to perfectly matched layer (PML) <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`_
 
 ~~~~
-
