@@ -912,6 +912,14 @@ def setup_adj(
         k: get_static(v) for k, v in data_fields_vjp.items() if not np.allclose(v, 0)
     }
 
+    for k, v in data_fields_vjp.items():
+        if np.any(np.isnan(v)):
+            raise AdjointError(
+                f"NaN values detected for data field {k} in the adjoint pipeline. This may be "
+                f"due to NaN values in the simulation data or the computed value of your "
+                f"objective function."
+            )
+
     # if all entries are zero, there is no adjoint sim to run
     if not data_fields_vjp:
         return []
