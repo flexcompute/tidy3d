@@ -30,7 +30,7 @@ def compose_simulation_data_index(port_task_map: dict[str, str]) -> SimulationDa
     )
 
 
-def compose_terminal_modeler_data(
+def compose_terminal_component_modeler_data(
     modeler: TerminalComponentModeler, port_task_map: dict[str, str]
 ) -> TerminalComponentModelerData:
     """Assemble `TerminalComponentModelerData` from simulation results.
@@ -54,7 +54,7 @@ def compose_terminal_modeler_data(
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
-def compose_component_modeler_data(
+def compose_modal_component_modeler_data(
     modeler: ModalComponentModeler, port_task_map: dict[str, str]
 ) -> ModalComponentModelerData:
     """Assemble `ModalComponentModelerData` from simulation results.
@@ -111,7 +111,7 @@ def compose_modeler(
     elif modeler_type == "TerminalComponentModeler":
         modeler = TerminalComponentModeler.from_file(modeler_file)
     else:
-        raise TypeError(f"Unsupported modeler type: {type(modeler).__name__}")
+        raise TypeError(f"Unsupported modeler type: {type(modeler_type).__name__}")
     return modeler
 
 
@@ -178,7 +178,7 @@ def compose_terminal_modeler_data_from_batch_data(
     return TerminalComponentModelerData(modeler=modeler, data=port_simulation_data)
 
 
-def compose_component_modeler_data_from_batch_data(
+def compose_modal_modeler_data_from_batch_data(
     modeler: ModalComponentModeler,
     batch_data: Optional[BatchData] = None,
 ) -> ModalComponentModelerData:
@@ -234,7 +234,7 @@ def compose_modeler_data_from_batch_data(
         If the provided `modeler` is not a recognized type.
     """
     if isinstance(modeler, ModalComponentModeler):
-        modeler_data = compose_component_modeler_data_from_batch_data(
+        modeler_data = compose_modal_modeler_data_from_batch_data(
             modeler=modeler, batch_data=batch_data
         )
     elif isinstance(modeler, TerminalComponentModeler):
