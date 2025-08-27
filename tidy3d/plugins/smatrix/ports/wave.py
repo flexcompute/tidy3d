@@ -8,7 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import cached_property, skip_if_fields_missing
-from tidy3d.components.boundary import InternalAbsorber, ModeABCBoundary
+from tidy3d.components.boundary import ABCBoundary, InternalAbsorber, ModeABCBoundary
 from tidy3d.components.data.data_array import FreqDataArray, FreqModeDataArray
 from tidy3d.components.data.monitor_data import ModeData
 from tidy3d.components.data.sim_data import SimulationData
@@ -91,10 +91,11 @@ class WavePort(AbstractTerminalPort, Box):
         description="Add a thin frame around the source during FDTD run for an improved injection.",
     )
 
-    absorber: bool = pd.Field(
+    absorber: Union[bool, ABCBoundary, ModeABCBoundary] = pd.Field(
         True,
         title="Absorber.",
-        description="Place a mode absorber in the port.",
+        description="Place a mode absorber in the port. If ``True``, an automatically generated mode absorber is placed in the port. "
+        "If ``ABCBoundary`` or ``ModeABCBoundary``, a mode absorber is placed in the port with the specified boundary conditions.",
     )
 
     def _mode_voltage_coefficients(self, mode_data: ModeData) -> FreqModeDataArray:
@@ -193,21 +194,25 @@ class WavePort(AbstractTerminalPort, Box):
         return mode_solver
 
     def to_absorber(
-        self, snap_center: Optional[float] = None, frequency: Optional[pd.NonNegativeFloat] = None
+        self, snap_center: Optional[float] = None, freq_spec: Optional[pd.NonNegativeFloat] = None
     ) -> InternalAbsorber:
         """Create an internal absorber from the wave port."""
         center = list(self.center)
         if snap_center:
             center[self.injection_axis] = snap_center
+        if isinstance(self.absorber, (ABCBoundary, ModeABCBoundary)):
+            boundary_spec = self.absorber
+        else:
+            boundary_spec = ModeABCBoundary(
+                mode_spec=self.mode_spec,
+                mode_index=self.mode_index,
+                plane=self.geometry,
+                freq_spec=freq_spec,
+            )
         return InternalAbsorber(
             center=center,
             size=self.size,
-            boundary_spec=ModeABCBoundary(
-                mode_spec=self.mode_spec,
-                mode_index=self.mode_index,
-                plane=self.bounding_box,
-                frequency=frequency,
-            ),
+            boundary_spec=boundary_spec,
             direction="-"
             if self.direction == "+"
             else "+",  # absorb in the opposite direction of source

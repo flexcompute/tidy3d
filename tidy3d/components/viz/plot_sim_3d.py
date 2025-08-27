@@ -5,8 +5,63 @@ from html import escape
 from tidy3d.exceptions import SetupError
 
 
-def plot_sim_3d(sim, width=800, height=800) -> None:
-    """Make 3D display of simulation in ipyython notebook."""
+def plot_scene_3d(scene, width=800, height=800) -> None:
+    import gzip
+    import json
+    from base64 import b64encode
+    from io import BytesIO
+
+    import h5py
+
+    # Serialize scene to HDF5 in-memory
+    buffer = BytesIO()
+    scene.to_hdf5(buffer)
+    buffer.seek(0)
+
+    # Open source HDF5 for reading and prepare modified copy
+    with h5py.File(buffer, "r") as src:
+        buffer2 = BytesIO()
+        with h5py.File(buffer2, "w") as dst:
+
+            def copy_item(name, obj):
+                if isinstance(obj, h5py.Group):
+                    dst.create_group(name)
+                    for k, v in obj.attrs.items():
+                        dst[name].attrs[k] = v
+                elif isinstance(obj, h5py.Dataset):
+                    data = obj[()]
+                    if name == "JSON_STRING":
+                        # Parse and update JSON string
+                        json_str = (
+                            data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else data
+                        )
+                        json_data = json.loads(json_str)
+                        json_data["size"] = list(scene.size)
+                        json_data["center"] = list(scene.center)
+                        json_data["grid_spec"] = {}
+                        new_str = json.dumps(json_data)
+                        dst.create_dataset(name, data=new_str.encode("utf-8"))
+                    else:
+                        dst.create_dataset(name, data=data)
+                        for k, v in obj.attrs.items():
+                            dst[name].attrs[k] = v
+
+            src.visititems(copy_item)
+        buffer2.seek(0)
+
+    # Gzip the modified HDF5
+    gz_buffer = BytesIO()
+    with gzip.GzipFile(fileobj=gz_buffer, mode="wb") as gz:
+        gz.write(buffer2.read())
+    gz_buffer.seek(0)
+
+    # Base64 encode and display with gzipped flag
+    sim_base64 = b64encode(gz_buffer.read()).decode("utf-8")
+    plot_sim_3d(sim_base64, width=width, height=height, is_gz_base64=True)
+
+
+def plot_sim_3d(sim, width=800, height=800, is_gz_base64=False) -> None:
+    """Make 3D display of simulation in ipython notebook."""
 
     try:
         from IPython.display import HTML, display
@@ -19,10 +74,14 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     from base64 import b64encode
     from io import BytesIO
 
-    buffer = BytesIO()
-    sim.to_hdf5_gz(buffer)
-    buffer.seek(0)
-    base64 = b64encode(buffer.read()).decode("utf-8")
+    if not is_gz_base64:
+        buffer = BytesIO()
+        sim.to_hdf5_gz(buffer)
+        buffer.seek(0)
+        base64 = b64encode(buffer.read()).decode("utf-8")
+    else:
+        base64 = sim
+
     js_code = """
         /**
         * Simulation Viewer Injector

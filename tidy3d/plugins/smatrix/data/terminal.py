@@ -81,8 +81,8 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
 
     data: SimulationDataMap = pd.Field(
         ...,
-        title="Port-Simulation Data",
-        description="Stores raw simulation data from each microwave port-specific simulation.",
+        title="Port-Simulation Data Map",
+        description="A read-only dictionary that maps simulation data to each microwave port name",
     )
 
     log: str = pd.Field(

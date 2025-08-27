@@ -84,13 +84,32 @@ class SteadyCapacitanceMonitor(HeatChargeMonitor):
 
 class SteadyElectricFieldMonitor(HeatChargeMonitor):
     """
-    Electric field monitor for Charge simulations.
+    Electric field monitor for Charge/Conduction simulations.
 
     Example
     -------
     >>> import tidy3d as td
     >>> electric_field_monitor_z0 = td.SteadyElectricFieldMonitor(
     ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="electric_field_z0",
+    ... )
+    """
+
+    unstructured: Literal[True] = pd.Field(
+        True,
+        title="Unstructured Grid",
+        description="Return data on the original unstructured grid.",
+    )
+
+
+class SteadyCurrentDensityMonitor(HeatChargeMonitor):
+    """
+    Current density monitor for Charge/Conduction simulations.
+
+    Example
+    -------
+    >>> import tidy3d as td
+    >>> current_density_monitor_z0 = td.SteadyCurrentDensityMonitor(
+    ... center=(0, 0.14, 0), size=(0.6, 0.3, 0), name="current_density_z0",
     ... )
     """
 

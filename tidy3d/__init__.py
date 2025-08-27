@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tidy3d.components.boundary import BroadbandModeABCFitterParam, BroadbandModeABCSpec
 from tidy3d.components.data.index import SimulationDataMap
 from tidy3d.components.index import SimulationMap
 from tidy3d.components.material.multi_physics import MultiPhysicsMedium
@@ -26,6 +27,7 @@ from tidy3d.components.spice.analysis.dc import (
 from tidy3d.components.spice.sources.dc import DCCurrentSource, DCVoltageSource
 from tidy3d.components.spice.sources.types import VoltageSourceType
 from tidy3d.components.tcad.analysis.heat_simulation_type import UnsteadyHeatAnalysis, UnsteadySpec
+from tidy3d.components.tcad.boundary.heat import VerticalNaturalConvectionCoeffModel
 from tidy3d.components.tcad.boundary.specification import (
     HeatBoundarySpec,
     HeatChargeBoundarySpec,
@@ -39,6 +41,7 @@ from tidy3d.components.tcad.data.sim_data import (
 )
 from tidy3d.components.tcad.data.types import (
     SteadyCapacitanceData,
+    SteadyCurrentDensityData,
     SteadyElectricFieldData,
     SteadyEnergyBandData,
     SteadyFreeCarrierData,
@@ -56,6 +59,7 @@ from tidy3d.components.tcad.grid import (
 from tidy3d.components.tcad.mesher import VolumeMesher
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
+    SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
@@ -449,6 +453,8 @@ __all__ = [
     "BoundaryEdgeType",
     "BoundarySpec",
     "Box",
+    "BroadbandModeABCFitterParam",
+    "BroadbandModeABCSpec",
     "CaugheyThomasMobility",
     "CellDataArray",
     "ChargeConductorMedium",
@@ -678,6 +684,8 @@ __all__ = [
     "Staircasing",
     "SteadyCapacitanceData",
     "SteadyCapacitanceMonitor",
+    "SteadyCurrentDensityData",
+    "SteadyCurrentDensityMonitor",
     "SteadyElectricFieldData",
     "SteadyElectricFieldMonitor",
     "SteadyEnergyBandData",
@@ -709,6 +717,7 @@ __all__ = [
     "UnsteadyHeatAnalysis",
     "UnsteadySpec",
     "Updater",
+    "VerticalNaturalConvectionCoeffModel",
     "VisualizationSpec",
     "VoltageBC",
     "VoltageSourceType",

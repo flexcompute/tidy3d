@@ -18,6 +18,7 @@ from tidy3d.components.tcad.types import (
     HeatChargeMonitorType,
 )
 from tidy3d.components.types import Coordinate, ScalarSymmetry, annotate_type
+from tidy3d.log import log
 
 FieldDataset = Union[
     SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
@@ -47,15 +48,31 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
     )
 
     @abstractmethod
+    def field_components(self) -> dict:
+        """Maps the field components to their associated data."""
+
+    def field_name(self, val: str = "") -> str:
+        """Gets the name of the fields to be plot."""
+        fields = self.field_components.keys()
+        name = ""
+        for field in fields:
+            if val == "abs^2":
+                name = f"{field}²"
+            else:
+                name = f"{field}"
+        return name
+
+    @property
     def symmetry_expanded_copy(self) -> HeatChargeMonitorData:
         """Return copy of self with symmetry applied."""
 
-    @abstractmethod
-    def field_name(self, val: str) -> str:
-        """Gets the name of the fields to be plot."""
+        new_field_components = {}
+        for field, val in self.field_components.items():
+            new_field_components[field] = self._symmetry_expanded_copy_base(property=val)
 
-    # def _symmetry_expanded_copy(self, property):
-    def _symmetry_expanded_copy(self, property: FieldDataset) -> FieldDataset:
+        return self.updated_copy(symmetry=(0, 0, 0), **new_field_components)
+
+    def _symmetry_expanded_copy_base(self, property: FieldDataset) -> FieldDataset:
         """Return the property with symmetry applied."""
 
         # no symmetry
@@ -118,3 +135,13 @@ class HeatChargeMonitorData(AbstractMonitorData, ABC):
                 new_property = new_property.box_clip(bounds=clip_bounds)
 
         return new_property
+
+    def _post_init_validators(self):
+        """Call validators taking ``self`` that get run after init."""
+        # validate that data exists for all fields
+        for field_name, field in self.field_components.items():
+            if field is None:
+                log.warning(
+                    f"No data is available for monitor '{self.monitor.name}' field '{field_name}'. "
+                    "This is typically caused by monitor not intersecting any solid medium."
+                )
