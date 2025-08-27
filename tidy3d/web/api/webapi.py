@@ -511,7 +511,9 @@ def start(
         if status_str not in ("validate_success", "validate_warn"):
             raise WebError(f"Batch task {task_id} is blocked: {status_str}")
         # Submit batch to start runs after validation
-        batch.submit(solver_version=solver_version, batch_type="RF_SWEEP")
+        batch.submit(
+            solver_version=solver_version, batch_type="RF_SWEEP", worker_group=worker_group
+        )
         return
 
     if priority is not None and (priority < 1 or priority > 10):
@@ -578,7 +580,7 @@ def get_status(task_id) -> str:
     return status
 
 
-def monitor(task_id: TaskId, verbose: bool = True) -> None:
+def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] = None) -> None:
     """
     Print the real time task progress until completion.
 
@@ -605,7 +607,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     # Batch/modeler monitoring path
     if _is_modeler_batch(task_id):
-        _monitor_modeler_batch(task_id, verbose=verbose)
+        _monitor_modeler_batch(task_id, verbose=verbose, worker_group=worker_group)
         return
 
     console = get_logging_console() if verbose else None
@@ -979,7 +981,12 @@ def load(
     return stub_data
 
 
-def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks: int = 20) -> None:
+def _monitor_modeler_batch(
+    batch_id: str,
+    verbose: bool = True,
+    max_detail_tasks: int = 20,
+    worker_group: Optional[str] = None,
+) -> None:
     """Monitor modeler batch progress with aggregate and per-task views."""
     console = get_logging_console() if verbose else None
 
@@ -1037,7 +1044,7 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
                 break
             time.sleep(REFRESH_TIME)
         # Postprocess phase
-        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
+        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP", worker_group=worker_group)
         while True:
             d = _batch_detail(batch_id)
             s = d.totalStatus.value
@@ -1127,7 +1134,7 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
             time.sleep(REFRESH_TIME)
 
         # Phase: Postprocess
-        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP")
+        BatchTask(batch_id).postprocess(batch_type="RF_SWEEP", worker_group=worker_group)
         p_post = progress.add_task("Postprocess", total=1.0)
         while True:
             detail = _batch_detail(batch_id)

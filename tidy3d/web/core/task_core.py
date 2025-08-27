@@ -787,6 +787,7 @@ class BatchTask:
         self,
         solver_version: Optional[str] = None,
         protocol_version: Optional[str] = None,
+        worker_group: Optional[str] = None,
         batch_type: str = "",
     ):
         if protocol_version is None:
@@ -797,6 +798,7 @@ class BatchTask:
                 "batchType": batch_type,
                 "solverVersion": solver_version,
                 "protocolVersion": protocol_version,
+                "workerGroup": worker_group,
             },
         )
 
@@ -804,6 +806,7 @@ class BatchTask:
         self,
         solver_version: Optional[str] = None,
         protocol_version: Optional[str] = None,
+        worker_group: Optional[str] = None,
         batch_type: str = "",
     ):
         if protocol_version is None:
@@ -814,6 +817,7 @@ class BatchTask:
                 "batchType": batch_type,
                 "solverVersion": solver_version,
                 "protocolVersion": protocol_version,
+                "workerGroup": worker_group,
             },
         )
 

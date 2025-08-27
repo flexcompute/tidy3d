@@ -82,7 +82,7 @@ class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
             If the lengths of the 'keys' and 'values' tuples are not equal.
         """
         keys, values = data.get("keys"), data.get("values")
-        if keys is not None and values is not None and len(keys) != len(values):
+        if len(keys) != len(values):
             raise ValueError("Length of 'keys' and 'values' must be the same.")
         return data
 
