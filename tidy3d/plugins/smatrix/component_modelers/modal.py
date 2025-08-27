@@ -30,29 +30,6 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
     derive the scattering matrix (S-matrix) of a component. It uses modal
     sources and monitors defined by a set of ports.
 
-    Parameters
-    ----------
-    ports : Tuple[Port, ...]
-        A collection of ports that define the inputs and outputs of the
-        device. For each input mode, a separate simulation is run with a
-        modal source exciting that mode.
-
-    Attributes
-    ----------
-    sim_dict : Dict[str, Simulation]
-        A dictionary mapping a task name to a :class:`.Simulation` object.
-        Each simulation corresponds to exciting a specific mode at a
-        specific port.
-    matrix_indices_monitor : Tuple[MatrixIndex, ...]
-        A tuple of all possible matrix indices, which are pairs of
-        (port_name, mode_index), for the monitoring ports.
-    port_names : Tuple[List[str], List[str]]
-        A tuple containing two lists of port names: the first for output
-        ports and the second for input ports.
-    max_mode_index : Tuple[int, int]
-        A tuple containing the maximum mode indices for the output and
-        input ports, respectively.
-
     See Also
     --------
     **Notebooks**
