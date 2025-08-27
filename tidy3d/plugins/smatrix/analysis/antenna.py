@@ -11,6 +11,28 @@ from tidy3d.plugins.smatrix.analysis.terminal import (
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray
 from tidy3d.plugins.smatrix.data.terminal import TerminalComponentModelerData
 
+# def _monitor_data_at_port_amplitude(
+#         modeler_data: TerminalComponentModelerData,
+#         port: TerminalPortType,
+#         sim_data: SimulationData,
+#         monitor_data: MonitorData,
+#         a_port: Union[FreqDataArray, complex],
+# ) -> MonitorData:
+#     """Normalize the monitor data to a desired complex amplitude of a port,
+#     represented by ``a_port``, where :math:`\\frac{1}{2}|a|^2` is the power
+#     incident from the port into the system.
+#     """
+#     a_raw, _ = compute_power_wave_amplitudes_at_each_port(
+#         modeler_data=modeler_data, port_reference_impedances=modeler_data.port_reference_impedances, sim_data=sim_data
+#     )
+#     a_raw_port = a_raw.sel(port=modeler_data.modeler.network_index(port))
+#     if not isinstance(a_port, FreqDataArray):
+#         freqs = list(monitor_data.monitor.freqs)
+#         array_vals = a_port * np.ones(len(freqs))
+#         a_port = FreqDataArray(array_vals, coords={"f": freqs})
+#     scale_array = a_port / a_raw_port
+#     return monitor_data.scale_fields_by_freq_array(scale_array, method="nearest")
+
 
 def get_antenna_metrics_data(
     terminal_component_modeler_data: TerminalComponentModelerData,

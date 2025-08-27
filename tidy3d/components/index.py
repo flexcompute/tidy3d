@@ -33,23 +33,6 @@ class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
     values : tuple[Any, ...]
         A tuple of `Any`-type objects, each corresponding to a key at the
         same index. Should be overwritten by the subclass instantiation
-
-    Example
-    -------
-    >>> from tidy3d import Simulation
-    >>>
-    >>> # Create a few simple simulations
-    >>> sim1 = Simulation(...)
-    >>> sim2 = Simulation(...)
-    >>>
-    >>> # Instantiate the map
-    >>> simulation_map = SimulationMap(
-    ...     keys=("simulation_1", "simulation_2"),
-    ...     values=(sim1, sim2),
-    ... )
-    >>>
-    >>> # Access a simulation like a dictionary
-    >>> print(simulation_map["simulation_1"])
     """
 
     keys_tuple: tuple[str, ...] = pd.Field(
