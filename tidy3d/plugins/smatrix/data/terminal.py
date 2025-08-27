@@ -126,7 +126,11 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
             assume_ideal_excitation=assume_ideal_excitation,
             s_param_def=s_param_def,
         )
-        smatrix_data = MicrowaveSMatrixData(data=terminal_port_data)
+        smatrix_data = MicrowaveSMatrixData(
+            data=terminal_port_data,
+            port_reference_impedances=self.port_reference_impedances,
+            s_param_def=s_param_def,
+        )
         return smatrix_data
 
     @pd.root_validator(pre=False)
