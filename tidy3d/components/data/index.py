@@ -33,69 +33,20 @@ class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
 
     Example
     -------
-    >>> from tidy3d import (
-    ...     Simulation,
-    ...     SimulationData,
-    ...     SimulationDataMap,
-    ...     Structure,
-    ...     Box,
-    ...     Medium,
-    ...     UniformCurrentSource,
-    ...     GaussianPulse,
-    ...     FieldMonitor,
-    ...     GridSpec,
-    ...     BoundarySpec,
-    ...     Boundary,
-    ...     PML,
-    ... )
-    >>> import tidy3d as td
-    >>> # Simple minimal simulation
-    >>> sim1 = Simulation(
-    ...     size=(4, 3, 3),
-    ...     grid_spec=GridSpec.auto(min_steps_per_wvl=25),
-    ...     structures=[
-    ...         Structure(
-    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
-    ...             medium=Medium(permittivity=2.0),
-    ...         ),
-    ...     ],
-    ...     sources=[
-    ...         UniformCurrentSource(
-    ...             size=(0, 0, 0),
-    ...             center=(0, 0.5, 0),
-    ...             polarization="Hx",
-    ...             source_time=GaussianPulse(freq0=2e14, fwidth=4e13),
-    ...         )
-    ...     ],
-    ...     monitors=[
-    ...         FieldMonitor(
-    ...             size=(1, 1, 0),
-    ...             center=(0, 0, 0),
-    ...             freqs=[2e14],
-    ...             name='field'
-    ...         ),
-    ...     ],
-    ...     run_time=1e-12,
-    ...     boundary_spec=BoundarySpec.all_sides(boundary=PML()),
-    ... )
-    >>> sim2 = sim1.updated_copy(run_time=2e-12)
+    >>> from tidy3d import FieldData, FluxData
+    >>> import numpy as np
+    >>> # Create some dummy simulation data
+    >>> field_data = FieldData(data=np.random.rand(2, 2, 2, 3, 2), f="field")
+    >>> flux_data = FluxData(data=np.random.rand(10), f="flux")
     >>>
-    >>> sim_data_1 = td.SimulationData(
-    ...     simulation=sim1,
-    ...     data=()  # Empty tuple for minimal case
-    ... )
-    >>> sim_data_2 = td.SimulationData(
-    ...     simulation=sim2,
-    ...     data=()  # Empty tuple for minimal case
-    ... )
     >>> # Instantiate the map
-    >>> simulation_data_map = SimulationDataMap(
-    ...     keys=("data_1", "data_2"),
-    ...     values=(sim_data_1, sim_data_2),
+    >>> sim_data_map = SimulationDataMap(
+    ...     keys=("field_monitor", "flux_monitor"),
+    ...     values=(field_data, flux_data),
     ... )
     >>>
-    >>> # Access a simulation data like a dictionary
-    >>> # print(simulation_data_map["data_2"])
+    >>> # Access data like a dictionary
+    >>> print(sim_data_map["field_monitor"])
     """
 
     keys_tuple: tuple[str, ...] = pd.Field(

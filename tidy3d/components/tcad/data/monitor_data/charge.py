@@ -7,6 +7,7 @@ from typing import Union
 import numpy as np
 import pydantic.v1 as pd
 
+from tidy3d.components.base import skip_if_fields_missing
 from tidy3d.components.data.data_array import (
     DataArray,
     IndexedFieldVoltageDataArray,
@@ -19,7 +20,6 @@ from tidy3d.components.data.utils import TetrahedralGridDataset, TriangularGridD
 from tidy3d.components.tcad.data.monitor_data.abstract import HeatChargeMonitorData
 from tidy3d.components.tcad.monitors.charge import (
     SteadyCapacitanceMonitor,
-    SteadyCurrentDensityMonitor,
     SteadyElectricFieldMonitor,
     SteadyEnergyBandMonitor,
     SteadyFreeCarrierMonitor,
@@ -28,6 +28,7 @@ from tidy3d.components.tcad.monitors.charge import (
 from tidy3d.components.types import TYPE_TAG_STR, Ax, annotate_type
 from tidy3d.components.viz import add_ax_if_none
 from tidy3d.exceptions import DataError
+from tidy3d.log import log
 
 FieldDataset = Union[
     SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
@@ -55,6 +56,35 @@ class SteadyPotentialData(HeatChargeMonitorData):
     def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
         return {"potential": self.potential}
+
+    @pd.validator("potential", always=True)
+    @skip_if_fields_missing(["monitor"])
+    def warn_no_data(cls, val, values):
+        """Warn if no data provided."""
+
+        mnt = values.get("monitor")
+
+        if val is None:
+            log.warning(
+                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
+                "monitor not intersecting any solid medium."
+            )
+
+        return val
+
+    @property
+    def symmetry_expanded_copy(self) -> SteadyPotentialData:
+        """Return copy of self with symmetry applied."""
+
+        new_potential = self._symmetry_expanded_copy(property=self.potential)
+        return self.updated_copy(potential=new_potential, symmetry=(0, 0, 0))
+
+    def field_name(self, val: str) -> str:
+        """Gets the name of the fields to be plotted."""
+        if val == "abs^2":
+            return "|V|²"
+        else:
+            return "V"
 
 
 class SteadyFreeCarrierData(HeatChargeMonitorData):
@@ -111,6 +141,42 @@ class SteadyFreeCarrierData(HeatChargeMonitorData):
                     )
 
         return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def warn_no_data(cls, values):
+        """Warn if no data provided."""
+
+        mnt = values.get("monitor")
+        electrons = values.get("electrons")
+        holes = values.get("holes")
+
+        if electrons is None or holes is None:
+            log.warning(
+                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
+                "monitor not intersecting any solid medium."
+            )
+
+        return values
+
+    @property
+    def symmetry_expanded_copy(self) -> SteadyFreeCarrierData:
+        """Return copy of self with symmetry applied."""
+
+        new_electrons = self._symmetry_expanded_copy(property=self.electrons)
+        new_holes = self._symmetry_expanded_copy(property=self.holes)
+
+        return self.updated_copy(
+            electrons=new_electrons,
+            holes=new_holes,
+            symmetry=(0, 0, 0),
+        )
+
+    def field_name(self, val: str = "") -> str:
+        """Gets the name of the fields to be plotted."""
+        if val == "abs^2":
+            return "Electrons², Holes²"
+        else:
+            return "Electrons, Holes"
 
 
 class SteadyEnergyBandData(HeatChargeMonitorData):
@@ -191,6 +257,49 @@ class SteadyEnergyBandData(HeatChargeMonitorData):
                     )
 
         return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def warn_no_data(cls, values):
+        """Warn if no data provided."""
+
+        mnt = values.get("monitor")
+        fields = ["Ec", "Ev", "Ei", "Efn", "Efp"]
+        for field_name in fields:
+            field_data = values.get(field_name)
+
+            if field_data is None:
+                log.warning(
+                    f"No data is available for monitor '{mnt.name}'. This is typically caused by "
+                    "monitor not intersecting any solid medium."
+                )
+
+        return values
+
+    @property
+    def symmetry_expanded_copy(self) -> SteadyEnergyBandData:
+        """Return copy of self with symmetry applied."""
+
+        new_Ec = self._symmetry_expanded_copy(property=self.Ec)
+        new_Ev = self._symmetry_expanded_copy(property=self.Ev)
+        new_Ei = self._symmetry_expanded_copy(property=self.Ei)
+        new_Efn = self._symmetry_expanded_copy(property=self.Efn)
+        new_Efp = self._symmetry_expanded_copy(property=self.Efp)
+
+        return self.updated_copy(
+            Ec=new_Ec,
+            Ev=new_Ev,
+            Ei=new_Ei,
+            Efn=new_Efn,
+            Efp=new_Efp,
+            symmetry=(0, 0, 0),
+        )
+
+    def field_name(self, val: str = "") -> str:
+        """Gets the name of the fields to be plotted."""
+        if val == "abs^2":
+            return "|Ec|², |Ev|², |Ei|², |Efn|², |Efp|²"
+        else:
+            return "Ec, Ev, Ei, Efn, Efp"
 
     @add_ax_if_none
     def plot(self, ax: Ax = None, **sel_kwargs) -> Ax:
@@ -308,10 +417,24 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
     )
     # C_n = electron_capacitance
 
-    @property
-    def field_components(self) -> dict[str, UnstructuredFieldType]:
-        """Maps the field components to their associated data."""
-        return {}
+    @pd.validator("hole_capacitance", always=True)
+    @skip_if_fields_missing(["monitor"])
+    def warn_no_data(cls, val, values):
+        """Warn if no data provided."""
+
+        mnt = values.get("monitor")
+
+        if val is None:
+            log.warning(
+                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
+                "monitor not intersecting any solid medium."
+            )
+
+        return val
+
+    def field_name(self, val: str) -> str:
+        """Gets the name of the fields to be plotted."""
+        return ""
 
     @property
     def symmetry_expanded_copy(self) -> SteadyCapacitanceData:
@@ -344,7 +467,7 @@ class SteadyCapacitanceData(HeatChargeMonitorData):
 
 class SteadyElectricFieldData(HeatChargeMonitorData):
     """
-    Stores electric field :math:`\\vec{E}` from a Charge/Conduction simulation.
+    Stores electric field :math:`\\vec{E}` from a charge simulation.
 
     Notes
     -----
@@ -355,7 +478,7 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
     monitor: SteadyElectricFieldMonitor = pd.Field(
         ...,
         title="Electric field monitor",
-        description="Electric field data associated with a Charge/Conduction simulation.",
+        description="Electric field data associated with a Charge simulation.",
     )
 
     E: UnstructuredFieldType = pd.Field(
@@ -369,6 +492,21 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
     def field_components(self) -> dict[str, UnstructuredFieldType]:
         """Maps the field components to their associated data."""
         return {"E": self.E}
+
+    @pd.root_validator(skip_on_failure=True)
+    def warn_no_data(cls, values):
+        """Warn if no data provided."""
+
+        mnt = values.get("monitor")
+        E = values.get("E")
+
+        if E is None:
+            log.warning(
+                f"No data is available for monitor '{mnt.name}'. This is typically caused by "
+                "monitor not intersecting any solid medium."
+            )
+
+        return values
 
     @pd.root_validator(skip_on_failure=True)
     def check_correct_data_type(cls, values):
@@ -387,44 +525,20 @@ class SteadyElectricFieldData(HeatChargeMonitorData):
 
         return values
 
-
-class SteadyCurrentDensityData(HeatChargeMonitorData):
-    """
-    Stores current density :math:`\\vec{J}` from a Charge/Conduction simulation. It is given in
-    units of :math:`A/\\mu m^2`
-    """
-
-    monitor: SteadyCurrentDensityMonitor = pd.Field(
-        ...,
-        title="Current density monitor",
-        description="Current density data associated with a Charge/Conduction simulation.",
-    )
-
-    J: UnstructuredFieldType = pd.Field(
-        None,
-        title="Current density",
-        description=r"Contains the computed current density in :math:`A/\\mu m^2`.",
-        discriminator=TYPE_TAG_STR,
-    )
-
     @property
-    def field_components(self) -> dict[str, UnstructuredFieldType]:
-        """Maps the field components to their associated data."""
-        return {"J": self.J}
+    def symmetry_expanded_copy(self) -> SteadyElectricFieldData:
+        """Return copy of self with symmetry applied."""
 
-    @pd.root_validator(skip_on_failure=True)
-    def check_correct_data_type(cls, values):
-        """Issue error if incorrect data type is used"""
+        new_E = self._symmetry_expanded_copy(property=self.E)
 
-        mnt = values.get("monitor")
-        J = values.get("J")
+        return self.updated_copy(
+            E=new_E,
+            symmetry=(0, 0, 0),
+        )
 
-        if isinstance(J, TetrahedralGridDataset) or isinstance(J, TriangularGridDataset):
-            AcceptedTypes = (IndexedFieldVoltageDataArray, PointDataArray)
-            if not isinstance(J.values, AcceptedTypes):
-                raise ValueError(
-                    f"In the data associated with monitor {mnt}, must contain a field. This can be "
-                    "defined with IndexedFieldVoltageDataArray or PointDataArray."
-                )
-
-        return values
+    def field_name(self, val: str = "") -> str:
+        """Gets the name of the fields to be plotted."""
+        if val == "abs^2":
+            return "E²"
+        else:
+            return "E"

@@ -69,7 +69,6 @@ from .viz import (
     equal_aspect,
     plot_params_fluid,
     plot_params_structure,
-    plot_scene_3d,
     polygon_path,
 )
 
@@ -1956,15 +1955,3 @@ class Scene(Tidy3dBaseModel):
             alpha=alpha,
             clip_box=ax.bbox,
         )
-
-    def plot_3d(self, width=800, height=800) -> None:
-        """Render 3D plot of ``Scene`` (in jupyter notebook only).
-        Parameters
-        ----------
-        width : float = 800
-            width of the 3d view dom's size
-        height : float = 800
-            height of the 3d view dom's size
-
-        """
-        return plot_scene_3d(self, width=width, height=height)
