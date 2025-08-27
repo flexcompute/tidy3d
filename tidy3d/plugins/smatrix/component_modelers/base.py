@@ -5,11 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Generic, Optional, TypeVar, Union, get_args
 
-import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel, cached_property
-from tidy3d.components.data.data_array import DataArray
 from tidy3d.components.geometry.utils import _shift_value_signed
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.types import Complex, FreqArray
@@ -194,11 +192,6 @@ class AbstractComponentModeler(ABC, Generic[IndexType, ElementType], Tidy3dBaseM
                 source_indices_needed.append(col_index)
 
         return source_indices_needed
-
-    @staticmethod
-    def inv(matrix: DataArray):
-        """Helper to invert a port matrix."""
-        return np.linalg.inv(matrix)
 
     def _shift_value_signed(self, port: Union[Port, WavePort]) -> float:
         """How far (signed) to shift the source from the monitor."""

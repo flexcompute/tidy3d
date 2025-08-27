@@ -1,3 +1,17 @@
+"""Terminal component modeler analysis functions.
+
+This module contains functions for constructing S-matrices and computing wave amplitudes
+for terminal-based component modeling in electromagnetic simulations.
+
+References
+----------
+.. [1]  R. B. Marks and D. F. Williams, "A general waveguide circuit theory,"
+        J. Res. Natl. Inst. Stand. Technol., vol. 97, pp. 533, 1992.
+
+.. [2]  D. M. Pozar, Microwave Engineering, 4th ed. Hoboken, NJ, USA:
+        John Wiley & Sons, 2012.
+"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -240,7 +254,7 @@ def compute_power_wave_amplitudes_at_each_port(
     """Compute the incident and reflected power wave amplitudes at each port.
 
     This is a convenience function that calls
-    :meth:`.compute_wave_amplitudes_at_each_port` with ``s_param_def="power"``.
+    :func:`.compute_wave_amplitudes_at_each_port` with ``s_param_def="power"``.
     The computed amplitudes have not been normalized.
 
     Parameters

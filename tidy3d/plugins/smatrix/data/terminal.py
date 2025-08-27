@@ -47,7 +47,7 @@ class MicrowaveSMatrixData(Tidy3dBaseModel):
     s_param_def: SParamDef = pd.Field(
         "pseudo",
         title="Scattering Parameter Definition",
-        description="Whether to scattering parameters are defined using the 'pseudo' or 'power' wave definitions.",
+        description="Whether scattering parameters are defined using the 'pseudo' or 'power' wave definitions.",
     )
 
 
@@ -57,6 +57,17 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
 
     This class serves as a data container for the results of a component modeler simulation,
     with the original simulation definition, and port simulation data, and the solver log.
+
+    Notes
+    -----
+
+    **References**
+
+    .. [1]  R. B. Marks and D. F. Williams, "A general waveguide circuit theory,"
+            J. Res. Natl. Inst. Stand. Technol., vol. 97, pp. 533, 1992.
+
+    .. [2]  D. M. Pozar, Microwave Engineering, 4th ed. Hoboken, NJ, USA:
+            John Wiley & Sons, 2012.
 
     See Also
     --------
@@ -93,8 +104,21 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
         assume_ideal_excitation: bool = False,
         s_param_def: SParamDef = "pseudo",
     ) -> MicrowaveSMatrixData:
-        """Stores the computed S-matrix and reference impedances
-        for the terminal ports"""
+        """Computes and returns the S-matrix and port reference impedances.
+
+        Parameters
+        ----------
+        assume_ideal_excitation: If ``True``, assumes that exciting one port
+            does not produce incident waves at other ports. This simplifies the
+            S-matrix calculation and is required if not all ports are excited.
+        s_param_def: The definition of S-parameters to use, determining whether
+            "pseudo waves" or "power waves" are calculated.
+
+        Returns
+        -------
+        :class:`.MicrowaveSMatrixData`
+            Container with the computed S-parameters and the port reference impedances.
+        """
         from tidy3d.plugins.smatrix.analysis.terminal import terminal_construct_smatrix
 
         terminal_port_data = terminal_construct_smatrix(
