@@ -14,7 +14,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.exceptions import WebError
+from tidy3d.exceptions import WebError, WebNotFoundError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
@@ -755,11 +755,43 @@ def monitor(task_id: TaskId, verbose: bool = True, worker_group: Optional[str] =
 
 
 @wait_for_connection
-def abort(task_id: TaskId) -> TaskInfo:
-    """Abort a running task without deleting it."""
-    task = SimulationTask(taskId=task_id)
-    task.abort()
-    return get_info(task_id)
+def abort(task_id: TaskId):
+    """Abort server-side data associated with task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Returns
+    -------
+    TaskInfo
+        Object containing information about status, size, credits of task.
+    """
+    console = get_logging_console()
+    try:
+        task = SimulationTask.get(task_id, verbose=False)
+        if task:
+            task.abort()
+            url = _get_url(task.task_id)
+            console.log(
+                f"Task is aborting. View task using web UI at [link={url}]'{url}'[/link] to check the result."
+            )
+            return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    except WebNotFoundError:
+        pass  # Task not found, might be a batch task
+
+    is_batch = BatchTask.is_batch(task_id, batch_type="RF_SWEEP")
+    if is_batch:
+        url = _get_url_rf(task_id)
+        console.log(
+            f"Batch task abortion is not yet supported, contact customer support."
+            f" View task using web UI at [link={url}]'{url}'[/link]."
+        )
+        return
+
+    console.log("Task ID cannot be found to be aborted.")
+    return
 
 
 @wait_for_connection
@@ -1213,21 +1245,18 @@ def download_simulation(
 
 @wait_for_connection
 def get_tasks(
-    folder: str = "default",
-    *,
-    order: str = "new",
-    num_tasks: Optional[int] = None,
+    num_tasks: Optional[int] = None, order: Literal["new", "old"] = "new", folder: str = "default"
 ) -> list[dict]:
-    """Get list of task info from folder.
+    """Get a list with the metadata of the last ``num_tasks`` tasks.
 
     Parameters
     ----------
-    folder : str = "default"
-        The folder from which to get the tasks.
-    order : str = "new"
-        If ``'new'``, sorts tasks by newest first. If ``'old'``, sorts by oldest first.
     num_tasks : int = None
-        If specified, return only the last ``num_tasks`` tasks.
+        The number of tasks to return, or, if ``None``, return all.
+    order : Literal["new", "old"] = "new"
+        Return the tasks in order of newest-first or oldest-first.
+    folder: str = "default"
+        Folder from which to get the tasks.
 
     Returns
     -------
