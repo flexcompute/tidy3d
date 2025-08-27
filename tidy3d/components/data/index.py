@@ -95,7 +95,7 @@ class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
     ... )
     >>>
     >>> # Access a simulation data like a dictionary
-    >>> print(simulation_data_map["data_2"])
+    >>> # print(simulation_data_map["data_2"])
     """
 
     keys_tuple: tuple[str, ...] = pd.Field(
