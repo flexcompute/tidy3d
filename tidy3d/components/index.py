@@ -141,20 +141,58 @@ class SimulationMap(ValueMap, Mapping[str, SimulationType]):
 
     Example
     -------
-    >>> from tidy3d import Simulation
-    >>>
-    >>> # Create a few simple simulations
-    >>> sim1 = Simulation(...)
-    >>> sim2 = Simulation(...)
+    >>> from tidy3d import (
+    ...     Simulation,
+    ...     SimulationMap,
+    ...     Structure,
+    ...     Box,
+    ...     Medium,
+    ...     UniformCurrentSource,
+    ...     GaussianPulse,
+    ...     FieldMonitor,
+    ...     GridSpec,
+    ...     BoundarySpec,
+    ...     PML,
+    ... )
+    >>> # Simple minimal simulation
+    >>> sim1 = Simulation(
+    ...     size=(4, 3, 3),
+    ...     grid_spec=GridSpec.auto(min_steps_per_wvl=25),
+    ...     structures=[
+    ...         Structure(
+    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+    ...             medium=Medium(permittivity=2.0),
+    ...         ),
+    ...     ],
+    ...     sources=[
+    ...         UniformCurrentSource(
+    ...             size=(0, 0, 0),
+    ...             center=(0, 0.5, 0),
+    ...             polarization="Hx",
+    ...             source_time=GaussianPulse(freq0=2e14, fwidth=4e13),
+    ...         )
+    ...     ],
+    ...     monitors=[
+    ...         FieldMonitor(
+    ...             size=(1, 1, 0),
+    ...             center=(0, 0, 0),
+    ...             freqs=[2e14],
+    ...             name='field'
+    ...         ),
+    ...     ],
+    ...     run_time=1e-12,
+    ...     boundary_spec=BoundarySpec.all_sides(boundary=PML()),
+    ... )
+    >>> sim2 = sim1.updated_copy(run_time=2e-12)
     >>>
     >>> # Instantiate the map
     >>> simulation_map = SimulationMap(
-    ...     keys=("simulation_1", "simulation_2"),
+    ...     keys=("sim_1", "sim_2"),
     ...     values=(sim1, sim2),
     ... )
     >>>
     >>> # Access a simulation like a dictionary
-    >>> print(simulation_map["simulation_1"])
+    >>> print(simulation_map["sim_1"])
     """
 
     keys_tuple: tuple[str, ...] = pd.Field(

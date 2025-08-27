@@ -33,8 +33,22 @@ class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
 
     Example
     -------
-    >>> from tidy3d import Simulation, SimulationData, SimulationDataMap, Structure, Box, Medium, UniformCurrentSource
-    >>> from tidy3d import GaussianPulse, FieldMonitor, GridSpec, BoundarySpec, Boundary
+    >>> from tidy3d import (
+    ...     Simulation,
+    ...     SimulationData,
+    ...     SimulationDataMap,
+    ...     Structure,
+    ...     Box,
+    ...     Medium,
+    ...     UniformCurrentSource,
+    ...     GaussianPulse,
+    ...     FieldMonitor,
+    ...     GridSpec,
+    ...     BoundarySpec,
+    ...     Boundary,
+    ...     PML,
+    ... )
+    >>> import tidy3d as td
     >>> # Simple minimal simulation
     >>> sim1 = Simulation(
     ...     size=(4, 3, 3),
@@ -62,26 +76,26 @@ class SimulationDataMap(ValueMap, Mapping[str, SimulationDataType]):
     ...         ),
     ...     ],
     ...     run_time=1e-12,
-    ...     boundary_spec=BoundarySpec.all_sides(boundary=Boundary.pml()),
+    ...     boundary_spec=BoundarySpec.all_sides(boundary=PML()),
     ... )
     >>> sim2 = sim1.updated_copy(run_time=2e-12)
     >>>
     >>> sim_data_1 = td.SimulationData(
-    ...     simulation=sim_1,
+    ...     simulation=sim1,
     ...     data=()  # Empty tuple for minimal case
     ... )
     >>> sim_data_2 = td.SimulationData(
-    ...     simulation=sim_2,
+    ...     simulation=sim2,
     ...     data=()  # Empty tuple for minimal case
     ... )
     >>> # Instantiate the map
     >>> simulation_data_map = SimulationDataMap(
     ...     keys=("data_1", "data_2"),
-    ...     values=(sim1, sim2),
+    ...     values=(sim_data_1, sim_data_2),
     ... )
     >>>
-    >>> # Access a simulation like a dictionary
-    >>> print(simulation_map["data_2"])
+    >>> # Access a simulation data like a dictionary
+    >>> print(simulation_data_map["data_2"])
     """
 
     keys_tuple: tuple[str, ...] = pd.Field(
