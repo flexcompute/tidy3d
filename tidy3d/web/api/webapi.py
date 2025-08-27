@@ -14,7 +14,7 @@ from rich.progress import BarColumn, Progress, TaskProgressColumn, TextColumn, T
 from tidy3d.components.medium import AbstractCustomMedium
 from tidy3d.components.mode.mode_solver import ModeSolver
 from tidy3d.components.mode.simulation import ModeSimulation
-from tidy3d.exceptions import WebError, WebNotFoundError
+from tidy3d.exceptions import WebError
 from tidy3d.log import get_logging_console, log
 from tidy3d.web.core.account import Account
 from tidy3d.web.core.constants import (
@@ -28,6 +28,7 @@ from tidy3d.web.core.constants import (
     TaskId,
 )
 from tidy3d.web.core.environment import Env
+from tidy3d.web.core.exceptions import WebNotFoundError
 from tidy3d.web.core.http_util import get_version as _get_protocol_version
 from tidy3d.web.core.http_util import http
 from tidy3d.web.core.task_core import BatchTask, Folder, SimulationTask
