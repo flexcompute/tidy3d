@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -28,6 +28,9 @@ from tidy3d.plugins.smatrix.utils import (
     s_to_z,
 )
 
+# The definition of wave amplitudes used to construct scattering matrix
+SParamDef = Literal["pseudo", "power"]
+
 
 class MicrowaveSMatrixData(Tidy3dBaseModel):
     """Stores the computed S-matrix and reference impedances for the terminal ports."""
@@ -42,6 +45,12 @@ class MicrowaveSMatrixData(Tidy3dBaseModel):
         ...,
         title="S-Matrix Data",
         description="An array containing the computed S-matrix of the device. The data is organized by terminal ports, representing the scattering parameters between them.",
+    )
+
+    s_param_def: SParamDef = pd.Field(
+        "pseudo",
+        title="Scattering Parameter Definition",
+        description="Whether to scattering parameters are defined using the 'pseudo' or 'power' wave definitions.",
     )
 
 

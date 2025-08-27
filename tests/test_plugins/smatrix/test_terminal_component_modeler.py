@@ -20,7 +20,6 @@ from tidy3d.plugins.microwave import (
     VoltageIntegralAxisAligned,
 )
 from tidy3d.plugins.smatrix import (
-    AbstractComponentModeler,
     CoaxialLumpedPort,
     LumpedPort,
     PortDataArray,
@@ -48,7 +47,9 @@ def run_component_modeler(
         values=tuple(batch_data.values()),
     )
     modeler_data = TerminalComponentModelerData(modeler=modeler, data=port_data)
-    monkeypatch.setattr(AbstractComponentModeler, "inv", lambda matrix: np.eye(len(modeler.ports)))
+    monkeypatch.setattr(
+        td.plugins.smatrix.utils, "port_array_inv", lambda matrix: np.eye(len(modeler.ports))
+    )
     monkeypatch.setattr(
         td.plugins.smatrix.utils,
         "compute_F",
