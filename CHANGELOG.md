@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Selective simulation capabilities to `TerminalComponentModeler` via `run_only` and `element_mappings` fields, allowing users to run fewer simulations and extract only needed scattering matrix elements.
 - Added KLayout plugin, with DRC functionality for running design rule checks in `plugins.klayout.drc`. Supports running DRC on GDS files as well as `Geometry`, `Structure`, and `Simulation` objects.
 - Added "mil" and "in" (inch) units to `plot_length_units`.
-- Objective functions that involve running `tidy3d.plugins.smatrix.ModalComponentModeler` can be differentiated with autograd.
+- Objective functions that involve running `tidy3d.plugins.smatrix.ComponentModeler` can be differentiated with autograd.
 - Access field decay values in `SimulationData` via `sim_data.field_decay` as `TimeDataArray`.
 - Added ability to set first-order absorbing boundary conditions on simulation domain boundaries using either `ABCBoundary` or `ModeABCBoundary` classes.
 - Added `frame` field to `ModeSource` (default: `None`) and `WavePort` (default: `PECFrame()`). Setting this to `PECFrame(length=...)` automatically places a thin PEC frame of specified length around the source/port. The automatically created frames can be inspected using `Simulation._finalized` property.
@@ -34,11 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved the robustness of batch jobs. The batch state, including all `task_ids`, is now saved to `batch.hdf5` immediately after upload. This fixes an issue where an interrupted batch (e.g., due to a kernel crash or network loss) would be unrecoverable.
 - Fixed warning for running symmetric adjoint simulations by port to not trigger when there is a single port.
 - Bug in `CoaxialLumpedPort` where source injection is off when the `normal_axis` is not `z`.
-- Validation of `freqs` in the `ModalComponentModeler` and `TerminalComponentModeler`.
+- Validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Calculation of voltage and current in the `WavePort`, when one type of path integral is supplied and the transmission line mode is lossy.
 - Polygon vertices cleanup in `ClipOperation.intersections_plane`.
 - Removed sources from `sim_inf_structure` simulation object in `postprocess_adj` to avoid source and background medium validation errors.
-- Revert overly restrictive validation of `freqs` in the `ModalComponentModeler` and `TerminalComponentModeler`.
+- Revert overly restrictive validation of `freqs` in the `ComponentModeler` and `TerminalComponentModeler`.
 - Fixed `ElectromagneticFieldData.to_zbf()` to support single frequency monitors and apply the correct flattening order.
 - Bug in `TerminalComponentModeler.get_antenna_metrics_data` when port amplitudes are set to zero.
 - Added missing `solver_version` keyword argument to `run_async`.
@@ -242,7 +242,7 @@ with fewer layers than recommended.
 - Added `WavePort` to the `TerminalComponentModeler` which is the suggested port type for exciting transmission lines.
 - Added plotting functionality to voltage and current path integrals in the `microwave` plugin.
 - Added convenience functions `from_terminal_positions` and `from_circular_path` to simplify setup of `VoltageIntegralAxisAligned` and `CustomCurrentIntegral2D`, respectively.
-`ModalComponentModeler.batch_data` convenience property to access the `BatchData` corresponding to the component modeler run.
+`ComponentModeler.batch_data` convenience property to access the `BatchData` corresponding to the component modeler run.
 - Added optimization methods to the Design plugin. The plugin has been expanded to include Bayesian optimization, genetic algorithms and particle swarm optimization. Explanations of these methods are available in new and updated notebooks.
 - Added new support functions for the Design plugin: automated batching of `Simulation` objects, and summary functions with `DesignSpace.estimate_cost` and `DesignSpace.summarize`.
 - Added validation and repair methods for `TriangleMesh` with inward-facing normals.
@@ -285,7 +285,7 @@ with fewer layers than recommended.
 
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
 - Gradients for autograd are computed server-side by default. They can be computed locally (requiring more data download) by passing `local_gradient=True` to the `web.run()` and related functions.
-- Passing `path_dir` to `ModalComponentModeler` methods is deprecated in favor of setting `ModalComponentModeler.path_dir` and will result in an error if the two don't match.
+- Passing `path_dir` to `ComponentModeler` methods is deprecated in favor of setting `ComponentModeler.path_dir` and will result in an error if the two don't match.
 - `BatchData` is now a mapping and can be accessed and iterated over like a Python dictionary (`.keys()`, `.values()`, `.items()`).
 - `MethodRandom` and `MethodRandomCustom` have been removed from the Design plugin, and `DesignSpace.run_batch` has been superseded by `.run`.
 - Design plugin has been significantly reworked to improve ease of use and allow for new optimization methods.
@@ -343,7 +343,7 @@ with fewer layers than recommended.
 - Bug in `Batch`, where duplicate folders might be created in the Web UI if the folder did not already exist.
 - Make gauge selection for non-converged modes more robust.
 - Fixed extremely long runtime generated by `RunTimeSpec` in the presence of `LossyMetalMedium`.
-- Fixed `ModalComponentModeler.to_file` when its batch is empty.
+- Fixed `ComponentModeler.to_file` when its batch is empty.
 - In web api, mode solver is patched with remote data so that certain methods like `plot_field` show remote data.
 - Fixed common cross-referencing typo in docstrings.
 - Added `viz_spec` property to `AbstractStructure` to fix error when plotting structures that have no `medium`.
@@ -474,7 +474,7 @@ with fewer layers than recommended.
 - Improve accuracy in `Box` shifting boundary gradients.
 - Improve accuracy in `FieldData` operations involving H fields (like `.flux`).
 - Better error and warning handling in autograd pipeline.
-- Added the option to specify the `num_freqs` argument and `kwargs` to the `.to_source` method for both `ModeSolver` and `ModalComponentModeler`.
+- Added the option to specify the `num_freqs` argument and `kwargs` to the `.to_source` method for both `ModeSolver` and `ComponentModeler`.
 - Fixes to TFSF source in some 2D simulations, and in some cases when the injection plane is close to the simulation domain boundaries.
 
 ## [2.7.2] - 2024-08-07
@@ -496,7 +496,7 @@ with fewer layers than recommended.
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` or `FieldProjectionCartesianMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
 
 ### Fixed
-- Error when loading a previously run `Batch` or `ModalComponentModeler` containing custom data.
+- Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.
 - Error when plotting mode plane PML and the simulation has symmetry.
 - Validators using `TriangleMesh.intersections_plane` will fall back on bounding box in case the method fails for a non-watertight mesh.
 - Bug when running the same `ModeSolver` first locally then remotely, or vice versa, in which case the cached data from the first run is always returned.
@@ -724,7 +724,7 @@ with fewer layers than recommended.
 - Support for an anisotropic medium containing PEC components.
 - `SimulationData.mnt_data_from_file()` method to load only a single monitor data object from a simulation data `.hdf5` file.
 - `_hash_self` to base model, uses `hashlib` to hash a Tidy3D component the same way every session.
-- `ModalComponentModeler.plot_sim_eps()` method to plot the simulation permittivity and ports.
+- `ComponentModeler.plot_sim_eps()` method to plot the simulation permittivity and ports.
 - Support for 2D PEC materials.
 - Ability to downsample recorded near fields to speed up server-side far field projections.
 - `FieldData.apply_phase(phase)` to multiply field data by a phase.
@@ -771,8 +771,8 @@ with fewer layers than recommended.
 - Improved error handling if file can not be downloaded from server.
 - Fix for detection of file extensions for file names with dots.
 - Restrict to `matplotlib` >= 3.5, avoiding bug in plotting `CustomMedium`.
-- Fixes `ModalComponentModeler` batch file being different in different sessions by use of deterministic hash function for computing batch filename.
-- Can pass `kwargs` to `ModalComponentModeler.plot_sim()` to use in `Simulation.plot()`.
+- Fixes `ComponentModeler` batch file being different in different sessions by use of deterministic hash function for computing batch filename.
+- Can pass `kwargs` to `ComponentModeler.plot_sim()` to use in `Simulation.plot()`.
 - Ensure that mode solver fields are returned in single precision if `ModeSolver.ModeSpec.precision == "single"`.
 - If there are no adjoint sources for a simulation involved in an objective function, make a mock source with zero amplitude and warn user.
 
@@ -871,7 +871,7 @@ the difference that can be observed when slightly modifying the grid resolution.
 - Uses `ruff` for linting instead of `pylint`.
 - Added lower bound validator to `freqs` in mode solver.
 - Added lower bound validator to `group_index_step` in `ModeSpec`.
-- `ModalComponentModeler.freqs` now a `FreqArray`, so it can be initialized from numpy, list or tuple.
+- `ComponentModeler.freqs` now a `FreqArray`, so it can be initialized from numpy, list or tuple.
 
 ### Fixed
 - Handles `TIDY3D_ENV` properly when set to `prod`.
@@ -922,7 +922,7 @@ the difference that can be observed when slightly modifying the grid resolution.
 ### Changed
 - Source validation happens before simulation upload and raises an error if no source is present.
 - Warning instead of error if structure out of simulation bounds.
-- Internal refactor of `ModalComponentModeler` to simplify logic.
+- Internal refactor of `ComponentModeler` to simplify logic.
 - (Changed effective 2.3.0) Backward-direction mode amplitudes from `ModeMonitors` have a flipped sign compared to previous versions. 
 Previously, the amplitudes were computed directly through the dot product ``amp = (mode, field)``, while, since 2.3.0, we use ``amp = (mode, field) / (mode, mode)`` instead.
 The modes are already normalized to unit directed flux, such that ``(mode, mode) = 1`` for forward modes, and ``(mode, mode) = -1`` for backward modes
@@ -1443,7 +1443,7 @@ which fields are to be projected is now determined automatically based on the me
 ### Changed
 - `Batch` objects automatically download their json file upon `download` and `load`.
 - Uses `shapely` instead of `gdspy` to merge polygons from a gds cell.
-- `ModalComponentModeler` (S matrix tool) stores the `Batch` rather than the `BatchData`.
+- `ComponentModeler` (S matrix tool) stores the `Batch` rather than the `BatchData`.
 - Custom caching of properties to speed up subsequent calculations.
 - Tidy3D configuration now done through setting attributes of `tidy3d.config` object.
 
@@ -1580,7 +1580,7 @@ which fields are to be projected is now determined automatically based on the me
 
 - `Simulation` symmetries now fully functional.
 - Ability to perform near-to-far transformations from multiple surface monitors oriented along the x, y or z directions using `tidy3d.plugins.Near2Far`.
-- `tidy3d.plugins.ModalComponentModeler` tool for scattering matrix calculations.
+- `tidy3d.plugins.ComponentModeler` tool for scattering matrix calculations.
 
 ### Changed
 
