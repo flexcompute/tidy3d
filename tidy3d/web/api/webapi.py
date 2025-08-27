@@ -1132,10 +1132,11 @@ def _monitor_modeler_batch(batch_id: str, verbose: bool = True, max_detail_tasks
         while True:
             detail = _batch_detail(batch_id)
             status = detail.totalStatus.value
+            postprocess_status = detail.postprocessStatus
             total = detail.totalTask or 0
             p = detail.postprocessSuccess or 0
             progress.update(p_post, completed=(p / total) if total else 0.0)
-            if total and p >= total:
+            if postprocess_status == "completed":
                 break
             if status in terminal_errors:
                 raise WebError(f"Batch {batch_id} terminated: {status}")
