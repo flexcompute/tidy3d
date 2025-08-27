@@ -11,8 +11,7 @@ from typing import Any
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-
-from .types.simulation import SimulationType
+from tidy3d.components.types.simulation import SimulationType
 
 
 class ValueMap(Tidy3dBaseModel, Mapping[str, Any]):
