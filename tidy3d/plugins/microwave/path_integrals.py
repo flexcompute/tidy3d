@@ -16,6 +16,9 @@ from tidy3d.components.data.data_array import (
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,
     VoltageIntegralResultTypes,
+    _make_base_result_data_array,
+    _make_current_data_array,
+    _make_voltage_data_array,
 )
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, ModeData, ModeSolverData
 from tidy3d.components.geometry.base import Box, Geometry
@@ -101,9 +104,6 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
 
     def compute_integral(self, scalar_field: EMScalarFieldType) -> IntegralResultTypes:
         """Computes the defined integral given the input ``scalar_field``."""
-        from tidy3d.plugins.smatrix.utils import (
-            _make_base_result_data_array,
-        )
 
         if not scalar_field.does_cover(self.bounds, fp_eps, np.finfo(np.float32).smallest_normal):
             raise DataError("Scalar field does not cover the integration domain.")
@@ -218,9 +218,6 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
 
     def compute_voltage(self, em_field: MonitorDataTypes) -> VoltageIntegralResultTypes:
         """Compute voltage along path defined by a line."""
-        from tidy3d.plugins.smatrix.utils import (
-            _make_voltage_data_array,
-        )
 
         self._check_monitor_data_supported(em_field=em_field)
         e_component = "xyz"[self.main_axis]
@@ -371,9 +368,6 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
 
     def compute_current(self, em_field: MonitorDataTypes) -> CurrentIntegralResultTypes:
         """Compute current flowing in loop defined by the outer edge of a rectangle."""
-        from tidy3d.plugins.smatrix.utils import (
-            _make_current_data_array,
-        )
 
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         ax1 = self.remaining_axes[0]

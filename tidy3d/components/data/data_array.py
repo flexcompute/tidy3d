@@ -1500,6 +1500,46 @@ class ImpedanceFreqModeDataArray(ImpedanceArray, FreqModeDataArray):
     __slots__ = ()
 
 
+def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
+    """Helper for creating the proper base result type."""
+    cls = FreqDataArray
+    if "t" in result.coords:
+        cls = TimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = FreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
+
+
+def _make_voltage_data_array(result: DataArray) -> VoltageIntegralResultTypes:
+    """Helper for creating the proper voltage array type."""
+    cls = VoltageFreqDataArray
+    if "t" in result.coords:
+        cls = VoltageTimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = VoltageFreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
+
+
+def _make_current_data_array(result: DataArray) -> CurrentIntegralResultTypes:
+    """Helper for creating the proper current array type."""
+    cls = CurrentFreqDataArray
+    if "t" in result.coords:
+        cls = CurrentTimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = CurrentFreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
+
+
+def _make_impedance_data_array(result: DataArray) -> ImpedanceResultTypes:
+    """Helper for creating the proper impedance array type."""
+    cls = ImpedanceFreqDataArray
+    if "t" in result.coords:
+        cls = ImpedanceTimeDataArray
+    if "f" in result.coords and "mode_index" in result.coords:
+        cls = ImpedanceFreqModeDataArray
+    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,

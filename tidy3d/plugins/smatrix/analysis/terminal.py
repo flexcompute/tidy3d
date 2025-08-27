@@ -48,19 +48,25 @@ def terminal_construct_smatrix(
     S-matrix is computed more efficiently by scaling the 'b' matrix. This
     is also necessary when only a subset of ports are excited.
 
-    Args:
-        modeler_data: Data object containing the modeler definition and the raw
-            results from each port simulation run.
-        assume_ideal_excitation: If ``True``, assumes that exciting one port
-            does not produce incident waves at other ports. This simplifies the
-            S-matrix calculation and is required if not all ports are excited.
-        s_param_def: The definition of S-parameters to use, determining whether
-            "pseudo waves" or "power waves" are calculated.
+    Parameters
+    ----------
+    modeler_data : TerminalComponentModelerData
+        Data object containing the modeler definition and the raw
+        results from each port simulation run.
+    assume_ideal_excitation : bool, optional
+        If ``True``, assumes that exciting one port
+        does not produce incident waves at other ports. This simplifies the
+        S-matrix calculation and is required if not all ports are excited.
+        By default False.
+    s_param_def : SParamDef, optional
+        The definition of S-parameters to use, determining whether
+        "pseudo waves" or "power waves" are calculated. By default "pseudo".
 
-    Returns:
-        TerminalPortDataArray
-            The computed S-matrix as a ``TerminalPortDataArray`` with dimensions
-            for frequency, output port, and input port.
+    Returns
+    -------
+    TerminalPortDataArray
+        The computed S-matrix as a ``TerminalPortDataArray`` with dimensions
+        for frequency, output port, and input port.
     """
     monitor_indices = list(modeler_data.modeler.matrix_indices_monitor)
     source_indices = list(modeler_data.modeler.matrix_indices_source)
@@ -128,14 +134,17 @@ def port_reference_impedances(modeler_data: TerminalComponentModelerData) -> Por
     modal properties, while for other types like :class:`.LumpedPort`, the
     impedance is a user-defined constant value.
 
-    Args:
-        modeler_data: Data object containing the modeler definition and the raw
-            simulation data needed for :class:`.WavePort` impedance calculations.
+    Parameters
+    ----------
+    modeler_data : TerminalComponentModelerData
+        Data object containing the modeler definition and the raw
+        simulation data needed for :class:`.WavePort` impedance calculations.
 
-    Returns:
-        PortDataArray
-            A ``PortDataArray`` containing the complex impedance for each port at each
-            frequency.
+    Returns
+    -------
+    PortDataArray
+        A ``PortDataArray`` containing the complex impedance for each port at each
+        frequency.
     """
     values = np.zeros(
         (len(modeler_data.modeler.freqs), len(modeler_data.modeler.matrix_indices_monitor)),

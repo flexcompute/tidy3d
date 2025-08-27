@@ -1,4 +1,4 @@
-"""Tool for generating an S matrix automatically from a Tidy3d simulation and lumped port definitions."""
+"""Data structures for post-processing modal component simulations to calculate S-matrices."""
 
 from __future__ import annotations
 

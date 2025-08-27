@@ -23,6 +23,9 @@ from .path_integrals import (
     IntegralResultTypes,
     MonitorDataTypes,
     VoltageIntegralResultTypes,
+    _make_base_result_data_array,
+    _make_current_data_array,
+    _make_voltage_data_array,
 )
 from .viz import (
     ARROW_CURRENT,
@@ -88,10 +91,6 @@ class CustomPathIntegral2D(AbstractAxesRH):
         :class:`.IntegralResultTypes`
             Result of integral over remaining dimensions (frequency, time, mode indices).
         """
-
-        from tidy3d.plugins.smatrix.utils import (
-            _make_base_result_data_array,
-        )
 
         (dim1, dim2, dim3) = self.local_dims
 
@@ -260,9 +259,6 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
         :class:`.VoltageIntegralResultTypes`
             Result of voltage computation over remaining dimensions (frequency, time, mode indices).
         """
-        from tidy3d.plugins.smatrix.utils import (
-            _make_voltage_data_array,
-        )
 
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         voltage = -1.0 * self.compute_integral(field="E", em_field=em_field)
@@ -336,9 +332,6 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
         :class:`.CurrentIntegralResultTypes`
             Result of current computation over remaining dimensions (frequency, time, mode indices).
         """
-        from tidy3d.plugins.smatrix.utils import (
-            _make_current_data_array,
-        )
 
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
         current = self.compute_integral(field="H", em_field=em_field)

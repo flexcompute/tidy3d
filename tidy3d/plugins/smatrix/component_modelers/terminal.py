@@ -1,4 +1,4 @@
-"""Tool for generating an S matrix automatically from a Tidy3d simulation and lumped port definitions."""
+"""Tool for generating an S matrix automatically from a Tidy3d simulation and terminal port definitions."""
 
 from __future__ import annotations
 

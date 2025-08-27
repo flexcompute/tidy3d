@@ -1,5 +1,3 @@
-"""Tool for generating an S matrix automatically from a Tidy3d simulation and lumped port definitions."""
-
 from __future__ import annotations
 
 from typing import Literal

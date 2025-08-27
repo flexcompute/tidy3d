@@ -1,3 +1,10 @@
+"""Utility functions for S-matrix calculations and conversions.
+
+This module provides helper functions for scattering matrix computations,
+impedance conversions, and wave amplitude calculations in electromagnetic
+simulations.
+"""
+
 from __future__ import annotations
 
 from typing import Union
@@ -5,34 +12,35 @@ from typing import Union
 import numpy as np
 
 from tidy3d.components.data.data_array import (
-    CurrentFreqDataArray,
-    CurrentFreqModeDataArray,
-    CurrentIntegralResultTypes,
-    CurrentTimeDataArray,
     DataArray,
     FreqDataArray,
-    FreqModeDataArray,
-    ImpedanceFreqDataArray,
-    ImpedanceFreqModeDataArray,
-    ImpedanceResultTypes,
-    ImpedanceTimeDataArray,
-    IntegralResultTypes,
-    TimeDataArray,
-    VoltageFreqDataArray,
-    VoltageFreqModeDataArray,
-    VoltageIntegralResultTypes,
-    VoltageTimeDataArray,
 )
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.network import SParamDef
-from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
+from tidy3d.plugins.smatrix.ports.types import (
+    LumpedPortType,
+    PortCurrentType,
+    PortVoltageType,
+    TerminalPortType,
+)
 
 
 def port_array_inv(matrix: DataArray):
-    """Helper to invert a port matrix."""
+    """Helper to invert a port matrix.
+
+    Parameters
+    ----------
+    matrix : DataArray
+        The matrix to invert.
+
+    Returns
+    -------
+    np.ndarray
+        The inverted matrix.
+    """
     return np.linalg.inv(matrix)
 
 
@@ -41,11 +49,16 @@ def ab_to_s(
 ) -> TerminalPortDataArray:
     """Get the scattering matrix given the wave amplitude matrices.
 
-    Args:
-        a_matrix: Matrix of incident power wave amplitudes.
-        b_matrix: Matrix of reflected power wave amplitudes.
+    Parameters
+    ----------
+    a_matrix : TerminalPortDataArray
+        Matrix of incident power wave amplitudes.
+    b_matrix : TerminalPortDataArray
+        Matrix of reflected power wave amplitudes.
 
-    Returns:
+    Returns
+    -------
+    TerminalPortDataArray
         The computed scattering (S) matrix.
     """
     validate_square_matrix(a_matrix, "ab_to_s")
@@ -70,12 +83,16 @@ def check_port_impedance_sign(Z_numpy: np.ndarray):
     part of its impedance does not change across all frequencies. A sign change
     can indicate an unphysical result or numerical instability.
 
-    Args:
-        Z_numpy: NumPy array of impedance values with shape (num_freqs, num_ports).
+    Parameters
+    ----------
+    Z_numpy : np.ndarray
+        NumPy array of impedance values with shape (num_freqs, num_ports).
 
-    Raises:
-        Tidy3dError: If an inconsistent sign of the real part of the impedance
-            is detected for any port.
+    Raises
+    ------
+    Tidy3dError
+        If an inconsistent sign of the real part of the impedance
+        is detected for any port.
     """
     for port_idx in range(Z_numpy.shape[1]):
         port_Z = Z_numpy[:, port_idx]
@@ -96,10 +113,16 @@ def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
     with differing port impedances. Its diagonal elements are defined as
     :math:`F_{kk} = 1 / (2 * \sqrt{Re(Z_k)})`.
 
-    Args:
-        Z_numpy: NumPy array of complex port impedances.
+    Parameters
+    ----------
+    Z_numpy : ArrayFloat1D
+        NumPy array of complex port impedances.
+    s_param_def : SParamDef, optional
+        The type of wave amplitudes, by default "pseudo".
 
-    Returns:
+    Returns
+    -------
+    ArrayFloat1D
         NumPy array containing the computed F values.
     """
     # Defined in [2] after equation 4.67
@@ -111,7 +134,7 @@ def compute_F(Z_numpy: ArrayFloat1D, s_param_def: SParamDef = "pseudo"):
 
 def compute_port_VI(
     port_out: TerminalPortType, sim_data: SimulationData
-) -> tuple[FreqDataArray, FreqDataArray]:
+) -> tuple[PortVoltageType, PortCurrentType]:
     """Compute the port voltages and currents.
 
     Parameters
@@ -123,7 +146,7 @@ def compute_port_VI(
 
     Returns
     -------
-    tuple[FreqDataArray, FreqDataArray]
+    tuple[PortVoltageType, PortCurrentType]
         Voltage and current values at the port as frequency arrays.
     """
     voltage = port_out.compute_voltage(sim_data)
@@ -190,8 +213,7 @@ def s_to_z(
     reference: Union[complex, PortDataArray],
     s_param_def: SParamDef = "pseudo",
 ) -> DataArray:
-    """
-    Get the impedance matrix given the scattering matrix and a reference impedance.
+    """Get the impedance matrix given the scattering matrix and a reference impedance.
 
     This function converts an S-matrix to a Z-matrix. It handles both a single
     uniform reference impedance and generalized per-port reference impedances.
@@ -202,9 +224,15 @@ def s_to_z(
         Scattering matrix computed using either the pseudo or power wave formulation.
     reference : Union[complex, :class:`.PortDataArray`]
         The reference impedance used at each port.
-    s_param_def : SParamDef
+    s_param_def : SParamDef, optional
         The type of wave amplitudes used for computing the scattering matrix, either pseudo waves
         defined by Equation 53 and Equation 54 in [1] or power waves defined by Equation 4.67 in [2].
+        By default "pseudo".
+
+    Returns
+    -------
+    DataArray
+        The computed impedance (Z) matrix.
     """
     validate_square_matrix(s_matrix, "s_to_z")
     # Ensure dimensions are ordered properly
@@ -252,7 +280,7 @@ def validate_square_matrix(matrix: TerminalPortDataArray, method_name: str) -> N
 
     Raises
     ------
-    DataError
+    Tidy3dError
         If the matrix is not square (unequal input/output dimensions).
     """
     n_out = len(matrix.port_out)
@@ -264,43 +292,3 @@ def validate_square_matrix(matrix: TerminalPortDataArray, method_name: str) -> N
             "was run with only a subset of port excitations. Please ensure that the `run_only` field in "
             "the 'TerminalComponentModeler' is not being used."
         )
-
-
-def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
-    """Helper for creating the proper base result type."""
-    cls = FreqDataArray
-    if "t" in result.coords:
-        cls = TimeDataArray
-    if "f" in result.coords and "mode_index" in result.coords:
-        cls = FreqModeDataArray
-    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
-
-
-def _make_voltage_data_array(result: DataArray) -> CurrentIntegralResultTypes:
-    """Helper for creating the proper voltage array type."""
-    cls = CurrentFreqDataArray
-    if "t" in result.coords:
-        cls = CurrentTimeDataArray
-    if "f" in result.coords and "mode_index" in result.coords:
-        cls = CurrentFreqModeDataArray
-    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
-
-
-def _make_current_data_array(result: DataArray) -> VoltageIntegralResultTypes:
-    """Helper for creating the proper current array type."""
-    cls = VoltageFreqDataArray
-    if "t" in result.coords:
-        cls = VoltageTimeDataArray
-    if "f" in result.coords and "mode_index" in result.coords:
-        cls = VoltageFreqModeDataArray
-    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))
-
-
-def _make_impedance_data_array(result: DataArray) -> ImpedanceResultTypes:
-    """Helper for creating the proper impedance array type."""
-    cls = ImpedanceFreqDataArray
-    if "t" in result.coords:
-        cls = ImpedanceTimeDataArray
-    if "f" in result.coords and "mode_index" in result.coords:
-        cls = ImpedanceFreqModeDataArray
-    return cls.assign_data_attrs(cls(data=result.data, coords=result.coords))

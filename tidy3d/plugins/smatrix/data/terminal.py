@@ -1,4 +1,4 @@
-"""Tool for generating an S matrix automatically from a Tidy3d simulation and lumped port definitions."""
+"""Data structures for post-processing terminal component simulations to calculate S-matrices."""
 
 from __future__ import annotations
 
@@ -144,16 +144,17 @@ class TerminalComponentModelerData(Tidy3dBaseModel):
     def _monitor_data_at_port_amplitude(
         self,
         port: TerminalPortType,
-        sim_data: SimulationData,
-        monitor_data: MonitorData,
+        monitor_name: str,
         a_port: Union[FreqDataArray, complex],
     ) -> MonitorData:
         """Normalize the monitor data to a desired complex amplitude of a port,
         represented by ``a_port``, where :math:`\\frac{1}{2}|a|^2` is the power
         incident from the port into the system.
         """
+        sim_data_port = self.data[self.modeler.get_task_name(port)]
+        monitor_data = sim_data_port[monitor_name]
         a_raw, _ = self.compute_power_wave_amplitudes_at_each_port(
-            self.port_reference_impedances, sim_data=sim_data
+            self.port_reference_impedances, sim_data=sim_data_port
         )
         a_raw_port = a_raw.sel(port=self.modeler.network_index(port))
         if not isinstance(a_port, FreqDataArray):

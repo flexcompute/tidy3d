@@ -1016,10 +1016,10 @@ def test_antenna_helpers(monkeypatch, tmp_path):
     # Test monitor data normalization with different amplitude types
     a_array = FreqDataArray(np.ones(len(modeler.freqs)), {"f": modeler.freqs})
     normalized_data_array = modeler_data._monitor_data_at_port_amplitude(
-        modeler.ports[0], sim_data, rad_mon_data, a_array
+        modeler.ports[0], radiation_monitor.name, a_array
     )
     normalized_data_const = modeler_data._monitor_data_at_port_amplitude(
-        modeler.ports[0], sim_data, rad_mon_data, 1.0
+        modeler.ports[0], radiation_monitor.name, 1.0
     )
     assert isinstance(normalized_data_array, td.DirectivityData)
     assert isinstance(normalized_data_const, td.DirectivityData)
@@ -1277,7 +1277,7 @@ def test_internal_construct_smatrix_with_port_vi(monkeypatch):
     monkeypatch.setattr(
         tidy3d.plugins.smatrix.analysis.terminal,
         "compute_port_VI",
-        staticmethod(mock_compute_port_vi),
+        mock_compute_port_vi,
     )
     monkeypatch.setattr(
         tidy3d.plugins.smatrix.analysis.terminal, "port_reference_impedances", mock_port_impedances

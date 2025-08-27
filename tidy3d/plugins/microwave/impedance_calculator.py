@@ -8,7 +8,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.components.data.data_array import ImpedanceResultTypes
+from tidy3d.components.data.data_array import ImpedanceResultTypes, _make_impedance_data_array
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.monitor import ModeMonitor, ModeSolverMonitor
 from tidy3d.exceptions import ValidationError
@@ -57,7 +57,6 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         :class:`.ImpedanceResultTypes`
             Result of impedance computation over remaining dimensions (frequency, time, mode indices).
         """
-        from tidy3d.plugins.smatrix.utils import _make_impedance_data_array
 
         AxisAlignedPathIntegral._check_monitor_data_supported(em_field=em_field)
 

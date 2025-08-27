@@ -1,4 +1,4 @@
-"""Class and custom data array for representing a scattering matrix wave port."""
+"""Class for representing a scattering matrix wave port."""
 
 from __future__ import annotations
 
