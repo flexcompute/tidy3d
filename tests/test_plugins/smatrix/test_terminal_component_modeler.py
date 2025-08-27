@@ -57,10 +57,20 @@ def run_component_modeler(
         lambda Z_numpy, s_param_def: 1.0 / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
     )
     monkeypatch.setattr(
-        td.plugins.smatrix.utils,
+        td.plugins.smatrix.analysis.terminal,
         "check_port_impedance_sign",
         lambda Z_numpy: np.ndarray([]),
     )
+    # monkeypatch.setattr(
+    #     TerminalComponentModelerData,
+    #     "compute_F",
+    #     lambda Z_numpy, s_param_def: 1.0 / (2.0 * np.sqrt(np.abs(Z_numpy) + 1e-4)),
+    # )
+    # monkeypatch.setattr(
+    #     TerminalComponentModelerData,
+    #     "check_port_impedance_sign",
+    #     lambda Z_numpy: np.ndarray([]),
+    # )
 
     return modeler_data
 

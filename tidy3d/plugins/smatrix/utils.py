@@ -26,9 +26,6 @@ from tidy3d.components.data.data_array import (
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
-from tidy3d.plugins.smatrix.component_modelers.base import (
-    AbstractComponentModeler,
-)
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.network import SParamDef
 from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
@@ -60,7 +57,7 @@ def ab_to_s(
     a_vals = s_matrix.copy(deep=True).values
     b_vals = b_matrix.copy(deep=True).values
 
-    s_vals = np.matmul(b_vals, AbstractComponentModeler.inv(a_vals))
+    s_vals = np.matmul(b_vals, port_array_inv(a_vals))
 
     s_matrix.data = s_vals
     return s_matrix
