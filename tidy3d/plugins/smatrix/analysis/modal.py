@@ -11,7 +11,22 @@ from tidy3d.plugins.smatrix.data.modal import ModalComponentModelerData
 
 
 def modal_construct_smatrix(modeler_data: ModalComponentModelerData) -> ModalPortDataArray:
-    """Post process :class:`.BatchData` to generate scattering matrix, for internal use only."""
+    """Constructs the S-matrix from the data of a :class:`.ModalComponentModeler`.
+
+    This function post-processes the :class:`.SimulationData` from a series of
+    simulations to compute the scattering matrix (S-matrix).
+
+    Parameters
+    ----------
+    modeler_data : ModalComponentModelerData
+        The data from the :class:`.ModalComponentModeler` run, containing
+        the modeler and the simulation data.
+
+    Returns
+    -------
+    ModalPortDataArray
+        The computed S-matrix.
+    """
 
     max_mode_index_out, max_mode_index_in = modeler_data.modeler.max_mode_index
     num_modes_out = max_mode_index_out + 1

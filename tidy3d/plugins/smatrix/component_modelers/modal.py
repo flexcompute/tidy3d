@@ -24,14 +24,37 @@ Element = tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij
 
 
 class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
-    """
-    Tool for modeling devices and computing scattering matrix elements.
+    """A tool for modeling devices and computing scattering matrix elements.
 
-    .. TODO missing basic example
+    This class orchestrates the process of running multiple simulations to
+    derive the scattering matrix (S-matrix) of a component. It uses modal
+    sources and monitors defined by a set of ports.
+
+    Parameters
+    ----------
+    ports : Tuple[Port, ...]
+        A collection of ports that define the inputs and outputs of the
+        device. For each input mode, a separate simulation is run with a
+        modal source exciting that mode.
+
+    Attributes
+    ----------
+    sim_dict : Dict[str, Simulation]
+        A dictionary mapping a task name to a :class:`.Simulation` object.
+        Each simulation corresponds to exciting a specific mode at a
+        specific port.
+    matrix_indices_monitor : Tuple[MatrixIndex, ...]
+        A tuple of all possible matrix indices, which are pairs of
+        (port_name, mode_index), for the monitoring ports.
+    port_names : Tuple[List[str], List[str]]
+        A tuple containing two lists of port names: the first for output
+        ports and the second for input ports.
+    max_mode_index : Tuple[int, int]
+        A tuple containing the maximum mode indices for the output and
+        input ports, respectively.
 
     See Also
     --------
-
     **Notebooks**
         * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
     """
@@ -45,7 +68,16 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
 
     @cached_property
     def sim_dict(self) -> dict[str, Simulation]:
-        """Generate all the :class:`.Simulation` objects for the S matrix calculation."""
+        """Generates all :class:`.Simulation` objects for the S-matrix calculation.
+
+        Returns
+        -------
+        Dict[str, Simulation]
+            A dictionary where keys are task names and values are the
+            corresponding :class:`.Simulation` objects. Each simulation is
+            configured to excite a specific mode at a specific port and
+            includes all necessary monitors.
+        """
 
         sim_dict = {}
         mode_monitors = [self.to_monitor(port=port) for port in self.ports]
@@ -64,7 +96,15 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
 
     @cached_property
     def matrix_indices_monitor(self) -> tuple[MatrixIndex, ...]:
-        """Tuple of all the possible matrix indices (port, mode_index) in the Component Modeler."""
+        """Returns a tuple of all possible matrix indices for monitoring.
+
+        Each matrix index is a tuple of (port_name, mode_index).
+
+        Returns
+        -------
+        Tuple[MatrixIndex, ...]
+            A tuple of all possible matrix indices for the monitoring ports.
+        """
         matrix_indices = []
         for port in self.ports:
             for mode_index in range(port.mode_spec.num_modes):
@@ -73,7 +113,14 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
 
     @cached_property
     def port_names(self) -> tuple[list[str], list[str]]:
-        """List of port names for inputs and outputs, respectively."""
+        """Returns lists of port names for inputs and outputs.
+
+        Returns
+        -------
+        Tuple[List[str], List[str]]
+            A tuple containing two lists: the first with the names of the
+            output ports, and the second with the names of the input ports.
+        """
 
         def get_port_names(matrix_elements: tuple[str, int]) -> list[str]:
             """Get the port names from a list of (port name, mode index)."""
@@ -89,7 +136,21 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
         return port_names_out, port_names_in
 
     def to_monitor(self, port: Port) -> ModeMonitor:
-        """Creates a mode monitor from a given port."""
+        """Creates a mode monitor from a given port.
+
+        This monitor is used to measure the mode amplitudes at the port.
+
+        Parameters
+        ----------
+        port : Port
+            The port to convert into a monitor.
+
+        Returns
+        -------
+        ModeMonitor
+            A :class:`.ModeMonitor` configured to match the port's
+            properties.
+        """
         return ModeMonitor(
             center=port.center,
             size=port.size,
@@ -101,7 +162,25 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
     def to_source(
         self, port: Port, mode_index: int, num_freqs: int = 1, **kwargs
     ) -> list[ModeSource]:
-        """Creates a list of mode sources from a given port."""
+        """Creates a mode source from a given port.
+
+        This source is used to excite a specific mode at the port.
+
+        Parameters
+        ----------
+        port : Port
+            The port to convert into a source.
+        mode_index : int
+            The index of the mode to excite.
+        num_freqs : int, optional
+            The number of frequency points for the source, by default 1.
+
+        Returns
+        -------
+        List[ModeSource]
+            A list containing a single :class:`.ModeSource` configured to
+            excite the specified mode at the port.
+        """
         freq0 = np.mean(self.freqs)
         fdiff = max(self.freqs) - min(self.freqs)
         fwidth = max(fdiff, freq0 * FWIDTH_FRAC)
@@ -118,7 +197,21 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
         )
 
     def shift_port(self, port: Port) -> Port:
-        """Generate a new port shifted by the shift amount in normal direction."""
+        """Generates a new port shifted slightly in the normal direction.
+
+        This is to ensure that the source is placed just inside the
+        simulation domain, away from the PML.
+
+        Parameters
+        ----------
+        port : Port
+            The port to shift.
+
+        Returns
+        -------
+        Port
+            A new :class:`.Port` object with its center shifted.
+        """
 
         shift_value = self._shift_value_signed(port=port)
         center_shifted = list(port.center)
@@ -135,7 +228,27 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
         z: Optional[float] = None,
         ax: Ax = None,
     ) -> Ax:
-        """Plot a :class:`.Simulation` with all sources added for each port, for troubleshooting."""
+        """Plots the simulation with all sources added for troubleshooting.
+
+        This method creates a temporary simulation with all mode sources
+        activated to help visualize the setup.
+
+        Parameters
+        ----------
+        x : float, optional
+            The x-coordinate of the cross-section, by default None.
+        y : float, optional
+            The y-coordinate of the cross-section, by default None.
+        z : float, optional
+            The z-coordinate of the cross-section, by default None.
+        ax : Ax, optional
+            The matplotlib axes to plot on, by default None.
+
+        Returns
+        -------
+        Ax
+            The matplotlib axes with the plot.
+        """
 
         plot_sources = []
         for port_source in self.ports:
@@ -154,7 +267,29 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
         ax: Ax = None,
         **kwargs,
     ) -> Ax:
-        """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
+        """Plots the permittivity of the simulation with all sources.
+
+        This method is useful for visualizing the device geometry along
+        with the placement of the sources.
+
+        Parameters
+        ----------
+        x : float, optional
+            The x-coordinate of the cross-section, by default None.
+        y : float, optional
+            The y-coordinate of the cross-section, by default None.
+        z : float, optional
+            The z-coordinate of the cross-section, by default None.
+        ax : Ax, optional
+            The matplotlib axes to plot on, by default None.
+        **kwargs
+            Additional keyword arguments passed to the plotter.
+
+        Returns
+        -------
+        Ax
+            The matplotlib axes with the plot.
+        """
 
         plot_sources = []
         for port_source in self.ports:
@@ -164,7 +299,22 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
-        """Compute the normalization amplitude based on the measured input mode amplitude."""
+        """Computes the normalization amplitude for the input mode.
+
+        This is used to normalize the S-matrix elements.
+
+        Parameters
+        ----------
+        port_source : Port
+            The port that was excited.
+        sim_data : SimulationData
+            The data from the simulation run.
+
+        Returns
+        -------
+        complex
+            The complex amplitude of the input mode.
+        """
 
         port_monitor_data = sim_data[port_source.name]
         mode_index = sim_data.simulation.sources[0].mode_index
@@ -179,7 +329,14 @@ class ModalComponentModeler(AbstractComponentModeler[MatrixIndex, Element]):
 
     @cached_property
     def max_mode_index(self) -> tuple[int, int]:
-        """maximum mode indices for the smatrix dataset for the in and out ports, respectively."""
+        """Returns the maximum mode indices for the in and out ports.
+
+        Returns
+        -------
+        Tuple[int, int]
+            A tuple containing the maximum mode index for the output ports
+            and the maximum mode index for the input ports.
+        """
 
         def get_max_mode_indices(matrix_elements: tuple[str, int]) -> int:
             """Get the maximum mode index for a list of (port name, mode index)."""
