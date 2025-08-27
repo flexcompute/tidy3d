@@ -61,10 +61,3 @@ class VolumeMeshData(HeatChargeMonitorData):
     def field_name(self, val: str) -> str:
         """Gets the name of the fields to be plot."""
         return "Mesh"
-
-    @property
-    def symmetry_expanded_copy(self) -> VolumeMeshData:
-        """Return copy of self with symmetry applied."""
-
-        new_mesh = self._symmetry_expanded_copy(property=self.mesh)
-        return self.updated_copy(mesh=new_mesh, symmetry=(0, 0, 0))
