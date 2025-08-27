@@ -2813,3 +2813,24 @@ def test_custom_medium_conductivity_only_gradient(rng, use_emulated_run, tmp_pat
     val, grad = ag.value_and_grad(objective)(params0)
 
     assert anp.all(grad != 0.0), "some gradients are 0 for conductivity-only test"
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", args)
+def test_vjp_nan(use_emulated_run, structure_key, monitor_key):
+    """Test vjp data that has nan in it is flagged as an error."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        if PLOT_SIM:
+            plot_sim(sim, plot_eps=True)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        value = (postprocess(data) + float("nan")) ** 2
+        return value
+
+    with pytest.raises(AdjointError, match="aN values detected for data field"):
+        grad = ag.grad(objective)(params0)
