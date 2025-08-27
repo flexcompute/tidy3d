@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional, Union
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -27,9 +27,6 @@ from tidy3d.plugins.smatrix.utils import (
     compute_power_wave_amplitudes,
     s_to_z,
 )
-
-# The definition of wave amplitudes used to construct scattering matrix
-SParamDef = Literal["pseudo", "power"]
 
 
 class MicrowaveSMatrixData(Tidy3dBaseModel):

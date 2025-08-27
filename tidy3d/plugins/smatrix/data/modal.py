@@ -16,20 +16,6 @@ class ModalComponentModelerData(Tidy3dBaseModel):
     This class stores the original modeler and the simulation data obtained
     from running the simulations it defines. It also provides a method to
     compute the S-matrix from the simulation data.
-
-    Parameters
-    ----------
-    modeler : ModalComponentModeler
-        The original :class:`.ModalComponentModeler` object that defines the
-        simulation setup.
-    data : SimulationDataMap
-        A mapping from task names to :class:`.SimulationData` objects,
-        containing the results of each simulation run.
-
-    Attributes
-    ----------
-    smatrix : ModalPortDataArray
-        The computed S-matrix.
     """
 
     modeler: ModalComponentModeler = pd.Field(

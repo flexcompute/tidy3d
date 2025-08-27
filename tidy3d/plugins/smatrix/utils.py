@@ -28,13 +28,9 @@ from tidy3d.components.types import ArrayFloat1D
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.plugins.smatrix.component_modelers.base import (
     AbstractComponentModeler,
-    TerminalPortType,
 )
 from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.network import SParamDef
-from tidy3d.plugins.smatrix.ports.coaxial_lumped import CoaxialLumpedPort
-from tidy3d.plugins.smatrix.ports.rectangular_lumped import LumpedPort
-from tidy3d.plugins.smatrix.data.data_array import PortDataArray, TerminalPortDataArray
 from tidy3d.plugins.smatrix.ports.types import LumpedPortType, TerminalPortType
 
 
@@ -271,6 +267,7 @@ def validate_square_matrix(matrix: TerminalPortDataArray, method_name: str) -> N
             "was run with only a subset of port excitations. Please ensure that the `run_only` field in "
             "the 'TerminalComponentModeler' is not being used."
         )
+
 
 def _make_base_result_data_array(result: DataArray) -> IntegralResultTypes:
     """Helper for creating the proper base result type."""

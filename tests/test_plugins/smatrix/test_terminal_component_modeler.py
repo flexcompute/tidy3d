@@ -1317,9 +1317,7 @@ def test_wave_port_to_absorber(tmp_path):
     """Test that wave port absorber can be specified as a boolean, ABCBoundary, or ModeABCBoundary."""
 
     # test automatic absorber
-    modeler = make_coaxial_component_modeler(
-        path_dir=str(tmp_path), port_types=(WavePort, WavePort)
-    )
+    modeler = make_coaxial_component_modeler(port_types=(WavePort, WavePort))
     sim = list(modeler.sim_dict.values())[0]
 
     absorber = sim.internal_absorbers[0]
